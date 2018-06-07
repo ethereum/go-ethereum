@@ -71,25 +71,25 @@ func newTestSyncDb(priority, bufferSize, batchSize int, dbdir string, t *testing
 
 }
 
-func (self *testSyncDb) close() {
-	self.db.Close()
-	os.RemoveAll(self.dbdir)
+func (d *testSyncDb) close() {
+	d.db.Close()
+	os.RemoveAll(d.dbdir)
 }
 
-func (self *testSyncDb) push(n int) {
+func (d *testSyncDb) push(n int) {
 	for i := 0; i < n; i++ {
-		self.buffer <- storage.Key(crypto.Keccak256([]byte{byte(self.c)}))
-		self.sent = append(self.sent, self.c)
-		self.c++
+		d.buffer <- storage.Key(crypto.Keccak256([]byte{byte(d.c)}))
+		d.sent = append(d.sent, d.c)
+		d.c++
 	}
 	log.Debug(fmt.Sprintf("pushed %v requests", n))
 }
 
-func (self *testSyncDb) draindb() {
-	it := self.db.NewIterator()
+func (d *testSyncDb) draindb() {
+	it := d.db.NewIterator()
 	defer it.Release()
 	for {
-		it.Seek(self.start)
+		it.Seek(d.start)
 		if !it.Valid() {
 			return
 		}
@@ -98,44 +98,44 @@ func (self *testSyncDb) draindb() {
 			return
 		}
 		it.Release()
-		it = self.db.NewIterator()
+		it = d.db.NewIterator()
 	}
 }
 
-func (self *testSyncDb) deliver(req interface{}, quit chan bool) bool {
+func (d *testSyncDb) deliver(req interface{}, quit chan bool) bool {
 	_, db := req.(*syncDbEntry)
 	key, _, _, _, err := parseRequest(req)
 	if err != nil {
-		self.t.Fatalf("unexpected error of key %v: %v", key, err)
+		d.t.Fatalf("unexpected error of key %v: %v", key, err)
 	}
-	self.delivered = append(self.delivered, key)
+	d.delivered = append(d.delivered, key)
 	select {
-	case self.fromDb <- db:
+	case d.fromDb <- db:
 		return true
 	case <-quit:
 		return false
 	}
 }
 
-func (self *testSyncDb) expect(n int, db bool) {
+func (d *testSyncDb) expect(n int, db bool) {
 	var ok bool
 	// for n items
 	for i := 0; i < n; i++ {
-		ok = <-self.fromDb
-		if self.at+1 > len(self.delivered) {
-			self.t.Fatalf("expected %v, got %v", self.at+1, len(self.delivered))
+		ok = <-d.fromDb
+		if d.at+1 > len(d.delivered) {
+			d.t.Fatalf("expected %v, got %v", d.at+1, len(d.delivered))
 		}
-		if len(self.sent) > self.at && !bytes.Equal(crypto.Keccak256([]byte{byte(self.sent[self.at])}), self.delivered[self.at]) {
-			self.t.Fatalf("expected delivery %v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db)
-			log.Debug(fmt.Sprintf("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db))
+		if len(d.sent) > d.at && !bytes.Equal(crypto.Keccak256([]byte{byte(d.sent[d.at])}), d.delivered[d.at]) {
+			d.t.Fatalf("expected delivery %v/%v/%v to be hash of  %v, from db: %v = %v", i, n, d.at, d.sent[d.at], ok, db)
+			log.Debug(fmt.Sprintf("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, d.at, d.sent[d.at], ok, db))
 		}
 		if !ok && db {
-			self.t.Fatalf("expected delivery %v/%v/%v from db", i, n, self.at)
+			d.t.Fatalf("expected delivery %v/%v/%v from db", i, n, d.at)
 		}
 		if ok && !db {
-			self.t.Fatalf("expected delivery %v/%v/%v from cache", i, n, self.at)
+			d.t.Fatalf("expected delivery %v/%v/%v from cache", i, n, d.at)
 		}
-		self.at++
+		d.at++
 	}
 }
 

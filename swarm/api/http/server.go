@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-A simple http server interface to Swarm
+Package http is a simple http server interface to Swarm.
 */
 package http
 
@@ -78,8 +78,8 @@ type ServerConfig struct {
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
-// starts up http server
-func StartHttpServer(api *api.Api, config *ServerConfig) {
+// StartHTTPServer starts up http server
+func StartHTTPServer(api *api.Api, config *ServerConfig) {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -371,7 +371,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 				return nil
 			}
 
-			return api.SkipManifest
+			return api.ErrSkipManifest
 		})
 		if entry == nil {
 			getFail.Inc(1)
@@ -572,14 +572,14 @@ func (s *Server) getManifestList(key storage.Key, prefix string) (list api.Manif
 			suffix := strings.TrimPrefix(entry.Path, prefix)
 			if index := strings.Index(suffix, "/"); index > -1 {
 				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return api.SkipManifest
+				return api.ErrSkipManifest
 			}
 			return nil
 		}
 
 		// the manifest neither has the prefix or needs recursing in to
 		// so just skip it
-		return api.SkipManifest
+		return api.ErrSkipManifest
 	})
 
 	return list, nil
@@ -695,9 +695,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, req, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
 			return
-		} else {
-			s.HandlePostFiles(w, req)
 		}
+		s.HandlePostFiles(w, req)
 
 	case "DELETE":
 		if uri.Raw() || uri.DeprecatedRaw() {

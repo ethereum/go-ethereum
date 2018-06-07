@@ -45,12 +45,12 @@ type chunkerTester struct {
 	t      test
 }
 
-func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key, err error) {
+func (t *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key, err error) {
 	// reset
-	self.chunks = make(map[string]*Chunk)
+	t.chunks = make(map[string]*Chunk)
 
-	if self.inputs == nil {
-		self.inputs = make(map[uint64][]byte)
+	if t.inputs == nil {
+		t.inputs = make(map[uint64][]byte)
 	}
 
 	quitC := make(chan bool)
@@ -64,8 +64,8 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 				case <-quitC:
 					return nil
 				case chunk := <-chunkC:
-					// self.chunks = append(self.chunks, chunk)
-					self.chunks[chunk.Key.String()] = chunk
+					// t.chunks = append(t.chunks, chunk)
+					t.chunks[chunk.Key.String()] = chunk
 					if chunk.wg != nil {
 						chunk.wg.Done()
 					}
@@ -89,7 +89,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 	return key, err
 }
 
-func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key, err error) {
+func (t *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key, err error) {
 	quitC := make(chan bool)
 	timeout := time.After(60 * time.Second)
 	if chunkC != nil {
@@ -102,10 +102,10 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 					return nil
 				case chunk := <-chunkC:
 					if chunk != nil {
-						stored, success := self.chunks[chunk.Key.String()]
+						stored, success := t.chunks[chunk.Key.String()]
 						if !success {
 							// Requesting data
-							self.chunks[chunk.Key.String()] = chunk
+							t.chunks[chunk.Key.String()] = chunk
 							if chunk.wg != nil {
 								chunk.wg.Done()
 							}
@@ -135,7 +135,7 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 	return key, err
 }
 
-func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
+func (t *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
 	// reset but not the chunks
 
 	reader := chunker.Join(key, chunkC)
@@ -153,7 +153,7 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 					return nil
 				}
 				// this just mocks the behaviour of a chunk store retrieval
-				stored, success := self.chunks[chunk.Key.String()]
+				stored, success := t.chunks[chunk.Key.String()]
 				if !success {
 					return errors.New("Not found")
 				}

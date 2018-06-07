@@ -63,7 +63,7 @@ const (
 	Version            = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
-	NetworkId          = 3
+	NetworkID          = 3
 )
 
 // bzz represents the swarm wire protocol
@@ -78,7 +78,7 @@ type bzz struct {
 	rw         p2p.MsgReadWriter    // messageReadWriter to send messages to
 	backend    chequebook.Backend
 	lastActive time.Time
-	NetworkId  uint64
+	NetworkID  uint64
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
@@ -89,7 +89,7 @@ type bzz struct {
 	syncState   *syncState          // outgoing syncronisation state (contains reference to remote peers db counter)
 }
 
-// interface type for handler of storage/retrieval related requests coming
+// StorageHandler is the interface type for handler of storage/retrieval related requests coming
 // via the bzz wire protocol
 // messages: UnsyncedKeys, DeliveryRequest, StoreRequest, RetrieveRequest
 type StorageHandler interface {
@@ -100,7 +100,7 @@ type StorageHandler interface {
 }
 
 /*
-main entrypoint, wrappers starting a server that will run the bzz protocol
+Bzz is the main entrypoint. Wrappers starting a server that will run the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 This is done by node.Node#Register(func(node.ServiceContext) (Service, error))
 Service implements Protocols() which is an array of protocol constructors
@@ -110,7 +110,7 @@ on each peer connection
 The Run function of the Bzz protocol class creates a bzz instance
 which will represent the peer for the swarm hive and all peer-aware components
 */
-func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64) (p2p.Protocol, error) {
+func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkID uint64) (p2p.Protocol, error) {
 
 	// a single global request db is created for all peer connections
 	// this is to persist delivery backlog and aid syncronisation
@@ -118,15 +118,15 @@ func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess 
 	if err != nil {
 		return p2p.Protocol{}, fmt.Errorf("error setting up request db: %v", err)
 	}
-	if networkId == 0 {
-		networkId = NetworkId
+	if networkID == 0 {
+		networkID = NetworkID
 	}
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return run(requestDb, cloud, backend, hive, dbaccess, sp, sy, networkId, p, rw)
+			return run(requestDb, cloud, backend, hive, dbaccess, sp, sy, networkID, p, rw)
 		},
 	}, nil
 }
@@ -143,7 +143,7 @@ the main protocol loop that
  * whenever the loop terminates, the peer will disconnect with Subprotocol error
  * whenever handlers return an error the loop terminates
 */
-func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkID uint64, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzz{
 		storage:     depo,
@@ -157,7 +157,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook
 		syncParams:  sy,
 		swapEnabled: hive.swapEnabled,
 		syncEnabled: true,
-		NetworkId:   networkId,
+		NetworkID:   networkID,
 	}
 
 	// handle handshake
@@ -193,13 +193,13 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook
 
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
-func (self *bzz) Drop() {
-	self.peer.Disconnect(p2p.DiscSubprotocolError)
+func (b *bzz) Drop() {
+	b.peer.Disconnect(p2p.DiscSubprotocolError)
 }
 
 // one cycle of the main forever loop that handles and dispatches incoming messages
-func (self *bzz) handle() error {
-	msg, err := self.rw.ReadMsg()
+func (b *bzz) handle() error {
+	msg, err := b.rw.ReadMsg()
 	log.Debug(fmt.Sprintf("<- %v", msg))
 	if err != nil {
 		return err
@@ -229,10 +229,10 @@ func (self *bzz) handle() error {
 			return fmt.Errorf("<- %v: Data too short (%v)", msg, n)
 		}
 		// last Active time is set only when receiving chunks
-		self.lastActive = time.Now()
+		b.lastActive = time.Now()
 		log.Trace(fmt.Sprintf("incoming store request: %s", req.String()))
 		// swap accounting is done within forwarding
-		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})
+		b.storage.HandleStoreRequestMsg(&req, &peer{bzz: b})
 
 	case retrieveRequestMsg:
 		// retrieve Requests are dispatched to netStore
@@ -241,18 +241,18 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
-		req.from = &peer{bzz: self}
+		req.from = &peer{bzz: b}
 		// if request is lookup and not to be delivered
 		if req.isLookup() {
-			log.Trace(fmt.Sprintf("self lookup for %v: responding with peers only...", req.from))
+			log.Trace(fmt.Sprintf("b lookup for %v: responding with peers only...", req.from))
 		} else if req.Key == nil {
 			return fmt.Errorf("protocol handler: req.Key == nil || req.Timeout == nil")
 		} else {
 			// swap accounting is done within netStore
-			self.storage.HandleRetrieveRequestMsg(&req, &peer{bzz: self})
+			b.storage.HandleRetrieveRequestMsg(&req, &peer{bzz: b})
 		}
 		// direct response with peers, TODO: sort this out
-		self.hive.peers(&req)
+		b.hive.peers(&req)
 
 	case peersMsg:
 		// response to lookups and immediate response to retrieve requests
@@ -262,9 +262,9 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
-		req.from = &peer{bzz: self}
+		req.from = &peer{bzz: b}
 		log.Trace(fmt.Sprintf("<- peer addresses: %v", req))
-		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
+		b.hive.HandlePeersMsg(&req, &peer{bzz: b})
 
 	case syncRequestMsg:
 		syncRequestMsgCounter.Inc(1)
@@ -273,8 +273,8 @@ func (self *bzz) handle() error {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 		log.Debug(fmt.Sprintf("<- sync request: %v", req))
-		self.lastActive = time.Now()
-		self.sync(req.SyncState)
+		b.lastActive = time.Now()
+		b.sync(req.SyncState)
 
 	case unsyncedKeysMsg:
 		// coming from parent node offering
@@ -284,8 +284,8 @@ func (self *bzz) handle() error {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
 		log.Debug(fmt.Sprintf("<- unsynced keys : %s", req.String()))
-		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
-		self.lastActive = time.Now()
+		err := b.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: b})
+		b.lastActive = time.Now()
 		if err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
@@ -299,8 +299,8 @@ func (self *bzz) handle() error {
 			return fmt.Errorf("<-msg %v: %v", msg, err)
 		}
 		log.Debug(fmt.Sprintf("<- delivery request: %s", req.String()))
-		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
-		self.lastActive = time.Now()
+		err := b.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: b})
+		b.lastActive = time.Now()
 		if err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
 		}
@@ -308,13 +308,13 @@ func (self *bzz) handle() error {
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
 		paymentMsgCounter.Inc(1)
-		if self.swapEnabled {
+		if b.swapEnabled {
 			var req paymentMsgData
 			if err := msg.Decode(&req); err != nil {
 				return fmt.Errorf("<- %v: %v", msg, err)
 			}
 			log.Debug(fmt.Sprintf("<- payment: %s", req.String()))
-			self.swap.Receive(int(req.Units), req.Promise)
+			b.swap.Receive(int(req.Units), req.Promise)
 		}
 
 	default:
@@ -325,27 +325,27 @@ func (self *bzz) handle() error {
 	return nil
 }
 
-func (self *bzz) handleStatus() (err error) {
+func (b *bzz) handleStatus() (err error) {
 
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
-		Addr:      self.selfAddr(),
-		NetworkId: self.NetworkId,
+		Addr:      b.bAddr(),
+		NetworkID: b.NetworkID,
 		Swap: &bzzswap.SwapProfile{
-			Profile:    self.swapParams.Profile,
-			PayProfile: self.swapParams.PayProfile,
+			Profile:    b.swapParams.Profile,
+			PayProfile: b.swapParams.PayProfile,
 		},
 	}
 
-	err = p2p.Send(self.rw, statusMsg, handshake)
+	err = p2p.Send(b.rw, statusMsg, handshake)
 	if err != nil {
 		return err
 	}
 
 	// read and handle remote status
 	var msg p2p.Msg
-	msg, err = self.rw.ReadMsg()
+	msg, err = b.rw.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -365,52 +365,52 @@ func (self *bzz) handleStatus() (err error) {
 		return fmt.Errorf("<- %v: %v", msg, err)
 	}
 
-	if status.NetworkId != self.NetworkId {
-		return fmt.Errorf("network id mismatch: %d (!= %d)", status.NetworkId, self.NetworkId)
+	if status.NetworkID != b.NetworkID {
+		return fmt.Errorf("network id mismatch: %d (!= %d)", status.NetworkID, b.NetworkID)
 	}
 
 	if Version != status.Version {
 		return fmt.Errorf("protocol version mismatch: %d (!= %d)", status.Version, Version)
 	}
 
-	self.remoteAddr = self.peerAddr(status.Addr)
-	log.Trace(fmt.Sprintf("self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr()))
+	b.remoteAddr = b.peerAddr(status.Addr)
+	log.Trace(fmt.Sprintf("b: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", b.bAddr(), b.remoteAddr, b.peer.LocalAddr(), status.Addr.IP, b.peer.RemoteAddr()))
 
-	if self.swapEnabled {
+	if b.swapEnabled {
 		// set remote profile for accounting
-		self.swap, err = bzzswap.NewSwap(self.swapParams, status.Swap, self.backend, self)
+		b.swap, err = bzzswap.NewSwap(b.swapParams, status.Swap, b.backend, b)
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Info(fmt.Sprintf("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId))
-	err = self.hive.addPeer(&peer{bzz: self})
+	log.Info(fmt.Sprintf("Peer %08x is capable (%d/%d)", b.remoteAddr.Addr[:4], status.Version, status.NetworkID))
+	err = b.hive.addPeer(&peer{bzz: b})
 	if err != nil {
 		return err
 	}
 
 	// hive sets syncstate so sync should start after node added
-	log.Info(fmt.Sprintf("syncronisation request sent with %v", self.syncState))
-	self.syncRequest()
+	log.Info(fmt.Sprintf("syncronisation request sent with %v", b.syncState))
+	b.syncRequest()
 
 	return nil
 }
 
-func (self *bzz) sync(state *syncState) error {
+func (b *bzz) sync(state *syncState) error {
 	// syncer setup
-	if self.syncer != nil {
+	if b.syncer != nil {
 		return errors.New("sync request can only be sent once")
 	}
 
-	cnt := self.dbAccess.counter()
-	remoteaddr := self.remoteAddr.Addr
-	start, stop := self.hive.kad.KeyRange(remoteaddr)
+	cnt := b.dbAccess.counter()
+	remoteaddr := b.remoteAddr.Addr
+	start, stop := b.hive.kad.KeyRange(remoteaddr)
 
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
-		self.syncEnabled = false
-		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", self))
+		b.syncEnabled = false
+		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", n))
 		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
@@ -419,31 +419,31 @@ func (self *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
-		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", self, state))
+		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", n, state))
 	}
 	var err error
-	self.syncer, err = newSyncer(
-		self.requestDb,
+	b.syncer, err = newSyncer(
+		b.requestDb,
 		storage.Key(remoteaddr[:]),
-		self.dbAccess,
-		self.unsyncedKeys, self.store,
-		self.syncParams, state, func() bool { return self.syncEnabled },
+		b.dbAccess,
+		b.unsyncedKeys, b.store,
+		b.syncParams, state, func() bool { return b.syncEnabled },
 	)
 	if err != nil {
 		return nil
 	}
-	log.Trace(fmt.Sprintf("syncer set for peer %v", self))
+	log.Trace(fmt.Sprintf("syncer set for peer %v", n))
 	return nil
 }
 
-func (self *bzz) String() string {
-	return self.remoteAddr.String()
+func (b *bzz) String() string {
+	return b.remoteAddr.String()
 }
 
 // repair reported address if IP missing
-func (self *bzz) peerAddr(base *peerAddr) *peerAddr {
+func (b *bzz) peerAddr(base *peerAddr) *peerAddr {
 	if base.IP.IsUnspecified() {
-		host, _, _ := net.SplitHostPort(self.peer.RemoteAddr().String())
+		host, _, _ := net.SplitHostPort(b.peer.RemoteAddr().String())
 		base.IP = net.ParseIP(host)
 	}
 	return base
@@ -452,12 +452,12 @@ func (self *bzz) peerAddr(base *peerAddr) *peerAddr {
 // returns self advertised node connection info (listening address w enodes)
 // IP will get repaired on the other end if missing
 // or resolved via ID by discovery at dialout
-func (self *bzz) selfAddr() *peerAddr {
-	id := self.hive.id
-	host, port, _ := net.SplitHostPort(self.hive.listenAddr())
+func (b *bzz) selfAddr() *peerAddr {
+	id := b.hive.id
+	host, port, _ := net.SplitHostPort(b.hive.listenAddr())
 	intport, _ := strconv.Atoi(port)
 	addr := &peerAddr{
-		Addr: self.hive.addr,
+		Addr: b.hive.addr,
 		ID:   id[:],
 		IP:   net.ParseIP(host),
 		Port: uint16(intport),
@@ -467,68 +467,68 @@ func (self *bzz) selfAddr() *peerAddr {
 
 // outgoing messages
 // send retrieveRequestMsg
-func (self *bzz) retrieve(req *retrieveRequestMsgData) error {
-	return self.send(retrieveRequestMsg, req)
+func (b *bzz) retrieve(req *retrieveRequestMsgData) error {
+	return b.send(retrieveRequestMsg, req)
 }
 
 // send storeRequestMsg
-func (self *bzz) store(req *storeRequestMsgData) error {
-	return self.send(storeRequestMsg, req)
+func (b *bzz) store(req *storeRequestMsgData) error {
+	return b.send(storeRequestMsg, req)
 }
 
-func (self *bzz) syncRequest() error {
+func (b *bzz) syncRequest() error {
 	req := &syncRequestMsgData{}
-	if self.hive.syncEnabled {
-		log.Debug(fmt.Sprintf("syncronisation request to peer %v at state %v", self, self.syncState))
-		req.SyncState = self.syncState
+	if b.hive.syncEnabled {
+		log.Debug(fmt.Sprintf("syncronisation request to peer %v at state %v", b, b.syncState))
+		req.SyncState = b.syncState
 	}
-	if self.syncState == nil {
-		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v at state %v", self, self.syncState))
+	if b.syncState == nil {
+		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v at state %v", b, b.syncState))
 	}
-	return self.send(syncRequestMsg, req)
+	return b.send(syncRequestMsg, req)
 }
 
 // queue storeRequestMsg in request db
-func (self *bzz) deliveryRequest(reqs []*syncRequest) error {
+func (b *bzz) deliveryRequest(reqs []*syncRequest) error {
 	req := &deliveryRequestMsgData{
 		Deliver: reqs,
 	}
-	return self.send(deliveryRequestMsg, req)
+	return b.send(deliveryRequestMsg, req)
 }
 
 // batch of syncRequests to send off
-func (self *bzz) unsyncedKeys(reqs []*syncRequest, state *syncState) error {
+func (b *bzz) unsyncedKeys(reqs []*syncRequest, state *syncState) error {
 	req := &unsyncedKeysMsgData{
 		Unsynced: reqs,
 		State:    state,
 	}
-	return self.send(unsyncedKeysMsg, req)
+	return b.send(unsyncedKeysMsg, req)
 }
 
 // send paymentMsg
-func (self *bzz) Pay(units int, promise swap.Promise) {
+func (b *bzz) Pay(units int, promise swap.Promise) {
 	req := &paymentMsgData{uint(units), promise.(*chequebook.Cheque)}
-	self.payment(req)
+	b.payment(req)
 }
 
 // send paymentMsg
-func (self *bzz) payment(req *paymentMsgData) error {
-	return self.send(paymentMsg, req)
+func (b *bzz) payment(req *paymentMsgData) error {
+	return b.send(paymentMsg, req)
 }
 
 // sends peersMsg
-func (self *bzz) peers(req *peersMsgData) error {
-	return self.send(peersMsg, req)
+func (b *bzz) peers(req *peersMsgData) error {
+	return b.send(peersMsg, req)
 }
 
-func (self *bzz) send(msg uint64, data interface{}) error {
-	if self.hive.blockWrite {
+func (b *bzz) send(msg uint64, data interface{}) error {
+	if b.hive.blockWrite {
 		return fmt.Errorf("network write blocked")
 	}
-	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, self))
-	err := p2p.Send(self.rw, msg, data)
+	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, b))
+	err := p2p.Send(b.rw, msg, data)
 	if err != nil {
-		self.Drop()
+		b.Drop()
 	}
 	return err
 }

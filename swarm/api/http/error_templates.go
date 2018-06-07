@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-We use html templates to handle simple but as informative as possible error pages.
+Package http uses html templates to handle simple but as informative as possible error pages.
 
 To eliminate circular dependency in case of an error, we don't store error pages on swarm.
 We can't save the error pages as html files on disk, or when deploying compiled binaries
@@ -26,7 +26,7 @@ parsed by Go's html/template package
 */
 package http
 
-//This returns the HTML for generic errors
+// GetGenericErrorPage returns the HTML for generic errors
 func GetGenericErrorPage() string {
 	page := `
 <html>
@@ -206,7 +206,7 @@ func GetGenericErrorPage() string {
 	return page
 }
 
-//This returns the HTML for a 404 Not Found error
+// GetNotFoundErrorPage returns the HTML for a 404 Not Found error
 func GetNotFoundErrorPage() string {
 	page := `
 <html>
@@ -386,9 +386,9 @@ func GetNotFoundErrorPage() string {
 	return page
 }
 
-//This returns the HTML for a page listing disambiguation options
-//i.e. if user requested bzz:/<hash>/read and the manifest contains "readme.md" and "readinglist.txt",
-//this page is returned with a clickable list the existing disambiguation links in the manifest
+// GetMultipleChoicesErrorPage returns the HTML for a page listing disambiguation options
+// i.e. if user requested bzz:/<hash>/read and the manifest contains "readme.md" and "readinglist.txt",
+// this page is returned with a clickable list the existing disambiguation links in the manifest
 func GetMultipleChoicesErrorPage() string {
 	page := `
 <html>

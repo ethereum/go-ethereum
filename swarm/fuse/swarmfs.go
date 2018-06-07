@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	Swarmfs_Version = "0.1"
+	SwarmfsVersion = "0.1"
 	mountTimeout    = time.Second * 5
 	unmountTimeout  = time.Second * 10
 	maxFuseMounts   = 5
@@ -39,7 +39,7 @@ var (
 )
 
 type SwarmFS struct {
-	swarmApi     *api.Api
+	swarmAPI     *api.Api
 	activeMounts map[string]*MountInfo
 	swarmFsLock  *sync.RWMutex
 }
@@ -47,7 +47,7 @@ type SwarmFS struct {
 func NewSwarmFS(api *api.Api) *SwarmFS {
 	swarmfsLock.Do(func() {
 		swarmfs = &SwarmFS{
-			swarmApi:     api,
+			swarmAPI:     api,
 			swarmFsLock:  &sync.RWMutex{},
 			activeMounts: map[string]*MountInfo{},
 		}
@@ -56,10 +56,11 @@ func NewSwarmFS(api *api.Api) *SwarmFS {
 
 }
 
-// Inode numbers need to be unique, they are used for caching inside fuse
+// NewInode increments the Inode, which needs to be unique. 
+// They are used for caching inside fuse
 func NewInode() uint64 {
 	inodeLock.Lock()
 	defer inodeLock.Unlock()
-	inode += 1
+	inode++
 	return inode
 }

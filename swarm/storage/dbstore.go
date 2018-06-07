@@ -201,13 +201,11 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 	pivotIndex = gcListPartition(list, left, right, pivotIndex)
 	if n == pivotIndex {
 		return n
-	} else {
-		if n < pivotIndex {
-			return gcListSelect(list, left, pivotIndex-1, n)
-		} else {
-			return gcListSelect(list, pivotIndex+1, right, n)
-		}
 	}
+	if n < pivotIndex {
+		return gcListSelect(list, left, pivotIndex-1, n)
+	}
+	return gcListSelect(list, pivotIndex+1, right, n)
 }
 
 func (s *DbStore) collectGarbage(ratio float32) {
@@ -539,7 +537,7 @@ func (s *DbStore) Close() {
 	s.db.Close()
 }
 
-//  describes a section of the DbStore representing the unsynced
+// DbSyncState describes a section of the DbStore representing the unsynced
 // domain relevant to a peer
 // Start - Stop designate a continuous area Keys in an address space
 // typically the addresses closer to us than to the peer but not closer
@@ -558,43 +556,43 @@ type dbSyncIterator struct {
 	DbSyncState
 }
 
-// initialises a sync iterator from a syncToken (passed in with the handshake)
-func (self *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
+// NewSyncIterator initialises a sync iterator from a syncToken (passed in with the handshake)
+func (s *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
 	if state.First > state.Last {
 		return nil, fmt.Errorf("no entries found")
 	}
 	si = &dbSyncIterator{
-		it:          self.db.NewIterator(),
+		it:          s.db.NewIterator(),
 		DbSyncState: state,
 	}
 	si.it.Seek(getIndexKey(state.Start))
 	return si, nil
 }
 
-// walk the area from Start to Stop and returns items within time interval
+// Next walks the area from Start to Stop and returns items within time interval
 // First to Last
-func (self *dbSyncIterator) Next() (key Key) {
-	for self.it.Valid() {
-		dbkey := self.it.Key()
+func (i *dbSyncIterator) Next() (key Key) {
+	for i.it.Valid() {
+		dbkey := i.it.Key()
 		if dbkey[0] != 0 {
 			break
 		}
 		key = Key(make([]byte, len(dbkey)-1))
 		copy(key[:], dbkey[1:])
-		if bytes.Compare(key[:], self.Start) <= 0 {
-			self.it.Next()
+		if bytes.Compare(key[:], i.Start) <= 0 {
+			i.it.Next()
 			continue
 		}
-		if bytes.Compare(key[:], self.Stop) > 0 {
+		if bytes.Compare(key[:], i.Stop) > 0 {
 			break
 		}
 		var index dpaDBIndex
-		decodeIndex(self.it.Value(), &index)
-		self.it.Next()
-		if (index.Idx >= self.First) && (index.Idx < self.Last) {
+		decodeIndex(i.it.Value(), &index)
+		i.it.Next()
+		if (index.Idx >= i.First) && (index.Idx < i.Last) {
 			return
 		}
 	}
-	self.it.Release()
+	i.it.Release()
 	return nil
 }

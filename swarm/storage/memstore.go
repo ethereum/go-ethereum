@@ -141,7 +141,7 @@ func (s *MemStore) Counter() uint {
 	return s.entryCnt
 }
 
-// entry (not its copy) is going to be in MemStore
+// Put entry (not its copy) is going to be in MemStore
 func (s *MemStore) Put(entry *Chunk) {
 	if s.capacity == 0 {
 		return

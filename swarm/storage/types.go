@@ -38,35 +38,35 @@ type Peer interface{}
 
 type Key []byte
 
-func (x Key) Size() uint {
-	return uint(len(x))
+func (k Key) Size() uint {
+	return uint(len(k))
 }
 
-func (x Key) isEqual(y Key) bool {
-	return bytes.Equal(x, y)
+func (k Key) isEqual(y Key) bool {
+	return bytes.Equal(k, y)
 }
 
-func (h Key) bits(i, j uint) uint {
+func (k Key) bits(i, j uint) uint {
 	ii := i >> 3
 	jj := i & 7
-	if ii >= h.Size() {
+	if ii >= k.Size() {
 		return 0
 	}
 
 	if jj+j <= 8 {
-		return uint((h[ii] >> jj) & ((1 << j) - 1))
+		return uint((k[ii] >> jj) & ((1 << j) - 1))
 	}
 
-	res := uint(h[ii] >> jj)
+	res := uint(k[ii] >> jj)
 	jj = 8 - jj
 	j -= jj
 	for j != 0 {
 		ii++
 		if j < 8 {
-			res += uint(h[ii]&((1<<j)-1)) << jj
+			res += uint(k[ii]&((1<<j)-1)) << jj
 			return res
 		}
-		res += uint(h[ii]) << jj
+		res += uint(k[ii]) << jj
 		jj += 8
 		j -= 8
 	}
@@ -95,30 +95,30 @@ func MakeHashFunc(hash string) SwarmHasher {
 	return nil
 }
 
-func (key Key) Hex() string {
-	return fmt.Sprintf("%064x", []byte(key[:]))
+func (k Key) Hex() string {
+	return fmt.Sprintf("%064x", []byte(k[:]))
 }
 
-func (key Key) Log() string {
-	if len(key[:]) < 4 {
-		return fmt.Sprintf("%x", []byte(key[:]))
+func (k Key) Log() string {
+	if len(k[:]) < 4 {
+		return fmt.Sprintf("%x", []byte(k[:]))
 	}
-	return fmt.Sprintf("%08x", []byte(key[:4]))
+	return fmt.Sprintf("%08x", []byte(k[:4]))
 }
 
-func (key Key) String() string {
-	return fmt.Sprintf("%064x", []byte(key)[:])
+func (k Key) String() string {
+	return fmt.Sprintf("%064x", []byte(k)[:])
 }
 
-func (key Key) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + key.String() + `"`), nil
+func (k Key) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + k.String() + `"`), nil
 }
 
-func (key *Key) UnmarshalJSON(value []byte) error {
+func (k *Key) UnmarshalJSON(value []byte) error {
 	s := string(value)
-	*key = make([]byte, 32)
+	*k = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*key, h)
+	copy(*k, h)
 	return nil
 }
 
@@ -231,7 +231,7 @@ type Chunker interface {
 	// KeySize() int64
 }
 
-// Size, Seek, Read, ReadAt
+// LazySectionReader interface implements Size, Seek, Read, and ReadAt.
 type LazySectionReader interface {
 	Size(chan bool) (int64, error)
 	io.Seeker
@@ -243,6 +243,6 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
-	return self.SectionReader.Size(), nil
+func (r *LazyTestSectionReader) Size(chan bool) (int64, error) {
+	return r.SectionReader.Size(), nil
 }

@@ -34,7 +34,7 @@ type LocalStore struct {
 	DbStore  ChunkStore
 }
 
-// This constructor uses MemStore and DbStore as components
+// NewLocalStore is a constructor that uses MemStore and DbStore as components.
 func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 	dbStore, err := NewDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius)
 	if err != nil {
@@ -46,48 +46,48 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 	}, nil
 }
 
-func (self *LocalStore) CacheCounter() uint64 {
-	return uint64(self.memStore.(*MemStore).Counter())
+func (s *LocalStore) CacheCounter() uint64 {
+	return uint64(s.memStore.(*MemStore).Counter())
 }
 
-func (self *LocalStore) DbCounter() uint64 {
-	return self.DbStore.(*DbStore).Counter()
+func (s *LocalStore) DbCounter() uint64 {
+	return s.DbStore.(*DbStore).Counter()
 }
 
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
-func (self *LocalStore) Put(chunk *Chunk) {
+func (s *LocalStore) Put(chunk *Chunk) {
 	chunk.dbStored = make(chan bool)
-	self.memStore.Put(chunk)
+	s.memStore.Put(chunk)
 	if chunk.wg != nil {
 		chunk.wg.Add(1)
 	}
 	go func() {
 		dbStorePutCounter.Inc(1)
-		self.DbStore.Put(chunk)
+		s.DbStore.Put(chunk)
 		if chunk.wg != nil {
 			chunk.wg.Done()
 		}
 	}()
 }
 
-// Get(chunk *Chunk) looks up a chunk in the local stores
+// Get looks up a chunk in the local stores
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
-	chunk, err = self.memStore.Get(key)
+func (s *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+	chunk, err = s.memStore.Get(key)
 	if err == nil {
 		return
 	}
-	chunk, err = self.DbStore.Get(key)
+	chunk, err = s.DbStore.Get(key)
 	if err != nil {
 		return
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	self.memStore.Put(chunk)
+	s.memStore.Put(chunk)
 	return
 }
 
 // Close local store
-func (self *LocalStore) Close() {}
+func (s *LocalStore) Close() {}

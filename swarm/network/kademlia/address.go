@@ -39,7 +39,7 @@ func (a *Address) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// the string form of the binary representation of an address (only first 8 bits)
+// Bin returns the string form of the binary representation of an address (only first 8 bits).
 func (a Address) Bin() string {
 	var bs []string
 	for _, b := range a[:] {
@@ -75,23 +75,23 @@ func proximity(one, other Address) (ret int) {
 	return len(one) * 8
 }
 
-// Address.ProxCmp compares the distances a->target and b->target.
-// Returns -1 if a is closer to target, 1 if b is closer to target
+// ProxCmp compares the distances x->a and y->a.
+// Returns -1 if x is closer to a, 1 if y is closer to a
 // and 0 if they are equal.
-func (target Address) ProxCmp(a, b Address) int {
-	for i := range target {
-		da := a[i] ^ target[i]
-		db := b[i] ^ target[i]
-		if da > db {
+func (a Address) ProxCmp(x, y Address) int {
+	for i := range a {
+		dx := x[i] ^ a[i]
+		dy := y[i] ^ a[i]
+		if dx > dy {
 			return 1
-		} else if da < db {
+		} else if dx < dy {
 			return -1
 		}
 	}
 	return 0
 }
 
-// randomAddressAt(address, prox) generates a random address
+// RandomAddressAt with params (address, prox) generates a random address
 // at proximity order prox relative to address
 // if prox is negative a random address is generated
 func RandomAddressAt(self Address, prox int) (addr Address) {
@@ -116,7 +116,7 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	return
 }
 
-// KeyRange(a0, a1, proxLimit) returns the address inclusive address
+// KeyRange with params (a0, a1, proxLimit) returns the address inclusive address
 // range that contain addresses closer to one than other
 func KeyRange(one, other Address, proxLimit int) (start, stop Address) {
 	prox := proximity(one, other)
@@ -167,7 +167,7 @@ func CommonBitsAddrByte(self, other Address, b byte, prox int) (addr Address) {
 	return CommonBitsAddrF(self, other, func() byte { return b }, prox)
 }
 
-// randomAddressAt() generates a random address
+// RandomAddress generates a random address
 func RandomAddress() Address {
 	return RandomAddressAt(Address{}, -1)
 }
