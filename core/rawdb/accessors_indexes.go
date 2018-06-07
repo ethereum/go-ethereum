@@ -26,7 +26,7 @@ import (
 // ReadTxLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
 func ReadTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64, uint64) {
-	data, _ := db.Get(txLookupKey(hash.Bytes()))
+	data, _ := db.Get(txLookupKey(hash))
 	if len(data) == 0 {
 		return common.Hash{}, 0, 0
 	}
@@ -51,7 +51,7 @@ func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
 		if err != nil {
 			log.Crit("Failed to encode transaction lookup entry", "err", err)
 		}
-		if err := db.Put(txLookupKey(tx.Hash().Bytes()), data); err != nil {
+		if err := db.Put(txLookupKey(tx.Hash()), data); err != nil {
 			log.Crit("Failed to store transaction lookup entry", "err", err)
 		}
 	}
@@ -59,7 +59,7 @@ func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
 
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
 func DeleteTxLookupEntry(db DatabaseDeleter, hash common.Hash) {
-	db.Delete(txLookupKey(hash.Bytes()))
+	db.Delete(txLookupKey(hash))
 }
 
 // ReadTransaction retrieves a specific transaction from the database, along with
@@ -95,13 +95,13 @@ func ReadReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Ha
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
 func ReadBloomBits(db DatabaseReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
-	return db.Get(bloomBitsKey(bit, section, head.Bytes()))
+	return db.Get(bloomBitsKey(bit, section, head))
 }
 
 // WriteBloomBits stores the compressed bloom bits vector belonging to the given
 // section and bit index.
 func WriteBloomBits(db DatabaseWriter, bit uint, section uint64, head common.Hash, bits []byte) {
-	if err := db.Put(bloomBitsKey(bit, section, head.Bytes()), bits); err != nil {
+	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
 		log.Crit("Failed to store bloom bits", "err", err)
 	}
 }
