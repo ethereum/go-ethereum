@@ -361,30 +361,25 @@ type BadBlockArgs struct {
 
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]BadBlockArgs, error) {
+func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
 	blocks := api.eth.BlockChain().BadBlocks()
-	responseBlocks := make([]BadBlockArgs, 0, len(blocks))
-	for _, block := range blocks {
-		rlpData, err := rlp.EncodeToBytes(block)
-		if err != nil {
-			return responseBlocks, err
+	results := make([]*BadBlockArgs, len(blocks))
+
+	var err error
+	for i, block := range blocks {
+		results[i] = &BadBlockArgs{
+			Hash: block.Hash(),
 		}
-		var (
-			blockdata map[string]interface{}
-			berr      error
-		)
-		// A bad block may be so malformed that it the expanded format fails to generate
-		// correctly. If so, provide the caller with error message and RLP anyway
-		if blockdata, berr = ethapi.RpcMarshalBlock(block, true, true); berr != nil {
-			blockdata["error"] = berr.Error()
+		if rlpBytes, err := rlp.EncodeToBytes(block); err != nil {
+			results[i].RLP = err.Error() // Hacky, but hey, it works
+		} else {
+			results[i].RLP = fmt.Sprintf("0x%x", rlpBytes)
 		}
-		responseBlocks = append(responseBlocks, BadBlockArgs{
-			Hash:  block.Hash(),
-			Block: blockdata,
-			RLP:   fmt.Sprintf("%x", rlpData),
-		})
+		if results[i].Block, err = ethapi.RPCMarshalBlock(block, true, true); err != nil {
+			results[i].Block = map[string]interface{}{"error": err.Error()}
+		}
 	}
-	return responseBlocks, nil
+	return results, nil
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
