@@ -601,9 +601,8 @@ func (e *discoveredEntry) Weight() int64 {
 	t := time.Duration(mclock.Now() - e.lastDiscovered)
 	if t <= discoverExpireStart {
 		return 1000000000
-	} else {
-		return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
 	}
+	return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
 }
 
 // knownEntry implements wrsItem

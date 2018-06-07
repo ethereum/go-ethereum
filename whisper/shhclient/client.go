@@ -67,7 +67,6 @@ func (sc *Client) SetMaxMessageSize(ctx context.Context, size uint32) error {
 }
 
 // SetMinimumPoW (experimental) sets the minimal PoW required by this node.
-
 // This experimental function was introduced for the future dynamic adjustment of
 // PoW requirement. If the node is overwhelmed with messages, it should raise the
 // PoW requirement and notify the peers. The new value should be set relative to
@@ -77,7 +76,7 @@ func (sc *Client) SetMinimumPoW(ctx context.Context, pow float64) error {
 	return sc.c.CallContext(ctx, &ignored, "shh_setMinPoW", pow)
 }
 
-// Marks specific peer trusted, which will allow it to send historic (expired) messages.
+// MarkTrustedPeer marks specific peer trusted, which will allow it to send historic (expired) messages.
 // Note This function is not adding new nodes, the node needs to exists as a peer.
 func (sc *Client) MarkTrustedPeer(ctx context.Context, enode string) error {
 	var ignored bool
@@ -136,9 +135,9 @@ func (sc *Client) AddSymmetricKey(ctx context.Context, key []byte) (string, erro
 }
 
 // GenerateSymmetricKeyFromPassword generates the key from password, stores it, and returns its identifier.
-func (sc *Client) GenerateSymmetricKeyFromPassword(ctx context.Context, passwd []byte) (string, error) {
+func (sc *Client) GenerateSymmetricKeyFromPassword(ctx context.Context, passwd string) (string, error) {
 	var id string
-	return id, sc.c.CallContext(ctx, &id, "shh_generateSymKeyFromPassword", hexutil.Bytes(passwd))
+	return id, sc.c.CallContext(ctx, &id, "shh_generateSymKeyFromPassword", passwd)
 }
 
 // HasSymmetricKey returns an indication if the key associated with the given id is stored in the node.
@@ -160,9 +159,9 @@ func (sc *Client) DeleteSymmetricKey(ctx context.Context, id string) error {
 }
 
 // Post a message onto the network.
-func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) error {
-	var ignored bool
-	return sc.c.CallContext(ctx, &ignored, "shh_post", message)
+func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) (string, error) {
+	var hash string
+	return hash, sc.c.CallContext(ctx, &hash, "shh_post", message)
 }
 
 // SubscribeMessages subscribes to messages that match the given criteria. This method

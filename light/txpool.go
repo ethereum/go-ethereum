@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -88,7 +89,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:      config,
-		signer:      types.NewEIP155Signer(config.ChainId),
+		signer:      types.NewEIP155Signer(config.ChainID),
 		nonce:       make(map[common.Address]uint64),
 		pending:     make(map[common.Hash]*types.Transaction),
 		mined:       make(map[common.Hash][]*types.Transaction),
@@ -183,9 +184,8 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
 			return err
 		}
-		if err := core.WriteTxLookupEntries(pool.chainDb, block); err != nil {
-			return err
-		}
+		rawdb.WriteTxLookupEntries(pool.chainDb, block)
+
 		// Update the transaction pool's state
 		for _, tx := range list {
 			delete(pool.pending, tx.Hash())
@@ -202,7 +202,7 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			core.DeleteTxLookupEntry(pool.chainDb, txHash)
+			rawdb.DeleteTxLookupEntry(pool.chainDb, txHash)
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}
@@ -258,7 +258,7 @@ func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header)
 		idx2 := idx - txPermanent
 		if len(pool.mined) > 0 {
 			for i := pool.clearIdx; i < idx2; i++ {
-				hash := core.GetCanonicalHash(pool.chainDb, i)
+				hash := rawdb.ReadCanonicalHash(pool.chainDb, i)
 				if list, ok := pool.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
 					for i, tx := range list {
@@ -321,9 +321,9 @@ func (pool *TxPool) Stop() {
 	log.Info("Transaction pool stopped")
 }
 
-// SubscribeTxPreEvent registers a subscription of core.TxPreEvent and
+// SubscribeNewTxsEvent registers a subscription of core.NewTxsEvent and
 // starts sending event to the given channel.
-func (pool *TxPool) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
@@ -412,7 +412,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
-		go self.txFeed.Send(core.TxPreEvent{Tx: tx})
+		go self.txFeed.Send(core.NewTxsEvent{Txs: types.Transactions{tx}})
 	}
 
 	// Print a log message if low enough level is set

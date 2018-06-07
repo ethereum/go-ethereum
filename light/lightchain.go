@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -142,7 +143,7 @@ func (self *LightChain) Odr() OdrBackend {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (self *LightChain) loadLastState() error {
-	if head := core.GetHeadHeaderHash(self.chainDb); head == (common.Hash{}) {
+	if head := rawdb.ReadHeadHeaderHash(self.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		self.Reset()
 	} else {
@@ -189,12 +190,9 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	defer bc.mu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	if err := core.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		log.Crit("Failed to write genesis block TD", "err", err)
-	}
-	if err := core.WriteBlock(bc.chainDb, genesis); err != nil {
-		log.Crit("Failed to write genesis block", "err", err)
-	}
+	rawdb.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteBlock(bc.chainDb, genesis)
+
 	bc.genesisBlock = genesis
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
@@ -223,7 +221,11 @@ func (self *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.B
 		body := cached.(*types.Body)
 		return body, nil
 	}
-	body, err := GetBody(ctx, self.odr, hash, self.hc.GetBlockNumber(hash))
+	number := self.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	body, err := GetBody(ctx, self.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +241,11 @@ func (self *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.R
 	if cached, ok := self.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue), nil
 	}
-	body, err := GetBodyRLP(ctx, self.odr, hash, self.hc.GetBlockNumber(hash))
+	number := self.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	body, err := GetBodyRLP(ctx, self.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +280,11 @@ func (self *LightChain) GetBlock(ctx context.Context, hash common.Hash, number u
 // GetBlockByHash retrieves a block from the database or ODR service by hash,
 // caching it if found.
 func (self *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return self.GetBlock(ctx, hash, self.hc.GetBlockNumber(hash))
+	number := self.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	return self.GetBlock(ctx, hash, *number)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by
