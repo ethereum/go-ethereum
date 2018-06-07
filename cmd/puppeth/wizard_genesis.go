@@ -103,6 +103,10 @@ func (w *wizard) makeGenesis() {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
 
+		fmt.Println()
+		fmt.Println("How many blocks per checkpoint? (default = 990)")
+		genesis.Config.Clique.RewardCheckpoint = uint64(w.readDefaultInt(990))
+
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
 	}
