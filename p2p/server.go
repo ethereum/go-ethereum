@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -187,7 +188,7 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int
+type connFlag int32
 
 const (
 	dynDialedConn connFlag = 1 << iota
@@ -252,7 +253,18 @@ func (f connFlag) String() string {
 }
 
 func (c *conn) is(f connFlag) bool {
-	return c.flags&f != 0
+	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	return flags&f != 0
+}
+
+func (c *conn) set(f connFlag, val bool) {
+	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	if val {
+		flags |= f
+	} else {
+		flags &= ^f
+	}
+	atomic.StoreInt32((*int32)(&c.flags), int32(flags))
 }
 
 // Peers returns all connected peers.
@@ -632,7 +644,7 @@ running:
 			trusted[n.ID] = true
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID]; ok {
-				p.rw.flags |= trustedConn
+				p.rw.set(trustedConn, true)
 			}
 		case n := <-srv.removetrusted:
 			// This channel is used by RemoveTrustedPeer to remove an enode
@@ -643,7 +655,7 @@ running:
 			}
 			// Unmark any already-connected peer as trusted
 			if p, ok := peers[n.ID]; ok {
-				p.rw.flags &= ^trustedConn
+				p.rw.set(trustedConn, false)
 			}
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.

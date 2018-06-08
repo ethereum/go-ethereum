@@ -95,11 +95,10 @@ type PeerEvent struct {
 
 // Peer represents a connected remote node.
 type Peer struct {
-	rw        *conn
-	isInbound bool // Cached from rw.flags to avoid a race condition
-	running   map[string]*protoRW
-	log       log.Logger
-	created   mclock.AbsTime
+	rw      *conn
+	running map[string]*protoRW
+	log     log.Logger
+	created mclock.AbsTime
 
 	wg       sync.WaitGroup
 	protoErr chan error
@@ -161,20 +160,19 @@ func (p *Peer) String() string {
 
 // Inbound returns true if the peer is an inbound connection
 func (p *Peer) Inbound() bool {
-	return p.isInbound
+	return p.rw.is(inboundConn)
 }
 
 func newPeer(conn *conn, protocols []Protocol) *Peer {
 	protomap := matchProtocols(protocols, conn.caps, conn)
 	p := &Peer{
-		rw:        conn,
-		isInbound: conn.is(inboundConn),
-		running:   protomap,
-		created:   mclock.Now(),
-		disc:      make(chan DiscReason),
-		protoErr:  make(chan error, len(protomap)+1), // protocols + pingLoop
-		closed:    make(chan struct{}),
-		log:       log.New("id", conn.id, "conn", conn.flags),
+		rw:       conn,
+		running:  protomap,
+		created:  mclock.Now(),
+		disc:     make(chan DiscReason),
+		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
+		closed:   make(chan struct{}),
+		log:      log.New("id", conn.id, "conn", conn.flags),
 	}
 	return p
 }

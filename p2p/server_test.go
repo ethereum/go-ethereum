@@ -189,12 +189,10 @@ func TestServerDial(t *testing.T) {
 				}
 				done <- true
 			}()
-
 			// Trigger potential race conditions
 			peer = srv.Peers()[0]
 			_ = peer.Inbound()
 			_ = peer.Info()
-
 			<-done
 		case <-time.After(1 * time.Second):
 			t.Error("server did not launch peer within one second")
