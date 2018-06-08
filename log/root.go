@@ -61,7 +61,10 @@ func Crit(msg string, ctx ...interface{}) {
 }
 
 // Output is a convenient alias for write, allowing for the modification of
-// the skip step (number of stack frames to skip)
-func Output(msg string, lvl Lvl, skip int, ctx ...interface{}) {
-	root.write(msg, lvl, ctx, skip+skipLevel)
+// the calldepth (number of stack frames to skip).
+// calldepth influences the reported line number of the log message.
+// A calldepth of zero reports the immediate caller of Output.
+// Non-zero calldepth skips as many stack frames.
+func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
+	root.write(msg, lvl, ctx, calldepth+skipLevel)
 }
