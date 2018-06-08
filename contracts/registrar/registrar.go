@@ -32,18 +32,13 @@ import (
 var (
 	// registrar contract address for mainnet and testnet.
 	RegistrarAddr = map[common.Hash]common.Address{
-		params.MainnetGenesisHash: common.HexToAddress(""),
-		params.TestnetGenesisHash: common.HexToAddress(""),
+		// params.MainnetGenesisHash: common.HexToAddress(""),
+		// params.TestnetGenesisHash: common.HexToAddress(""),
 		params.RinkebyGenesisHash: common.HexToAddress("0xe3f2686a5d0c56a2d853c19c46b173a755263be8"),
 	}
 )
 
 var errEventNotFound = errors.New("contract event not found")
-
-const (
-	sectionSize            = 32768 // The frequency for creating a checkpoint
-	checkpointConfirmation = 500   // The number of confirmations needed before a checkpoint can be accepted
-)
 
 type Registrar struct {
 	contract *contract.Contract
@@ -67,15 +62,14 @@ func (registrar *Registrar) WatchNewCheckpointEvent(sink chan<- *contract.Contra
 }
 
 // FilterNewCheckpointEvent filters out NewCheckpointEvent for specific section number.
-func (registrar *Registrar) FilterNewCheckpointEvent(head uint64, section uint64) (*contract.ContractNewCheckpointEventIterator, error) {
-	start := (section + 1) * sectionSize
-	end := head - checkpointConfirmation
-	if end < start {
+func (registrar *Registrar) FilterNewCheckpointEvent(head, section, sectionSize, processConfirm uint64) (*contract.ContractNewCheckpointEventIterator, error) {
+	start := (section+1)*sectionSize + processConfirm
+	if head < start {
 		return nil, errEventNotFound
 	}
 	opt := &bind.FilterOpts{
 		Start: start,
-		End:   &end,
+		End:   &head,
 	}
 	return registrar.contract.FilterNewCheckpointEvent(opt, []*big.Int{big.NewInt(int64(section))})
 }

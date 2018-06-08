@@ -20,16 +20,26 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	// checkpointKey tracks the latest stable checkpoint.
-	checkpointKey = []byte("Checkpoint")
+const (
+	// CheckpointFrequency is the block frequency for creating checkpoint
+	CheckpointFrequency = 32768
+
+	// CheckpointProcessConfirmations is the number before a checkpoint is generated
+	CheckpointProcessConfirmations = 256
+
+	// CheckpointConfirmations is the number of confirmations before a checkpoint is stable
+	CheckpointConfirmations = 8192
 )
+
+// checkpointKey tracks the latest stable checkpoint.
+var checkpointKey = []byte("Checkpoint")
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash.
@@ -66,6 +76,15 @@ func (c *TrustedCheckpoint) DecodeRLP(s *rlp.Stream) error {
 	}
 	c.SectionIdx, c.SectionHead, c.ChtRoot, c.BloomTrieRoot = dec.SectionIdx, dec.SectionHead, dec.ChtRoot, dec.BloomTrieRoot
 	return nil
+}
+
+// HashEqual returns an indicator comparing the itself hash with given one.
+// A nil argument is equivalent to an empty slice.
+func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
+	if c.SectionHead == (common.Hash{}) && c.ChtRoot == (common.Hash{}) && c.BloomTrieRoot == (common.Hash{}) {
+		return hash == common.Hash{}
+	}
+	return crypto.Keccak256Hash(c.SectionHead.Bytes(), c.ChtRoot.Bytes(), c.BloomTrieRoot.Bytes()) == hash
 }
 
 var (

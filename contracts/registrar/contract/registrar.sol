@@ -209,6 +209,6 @@ contract Registrar {
     // The number of confirmations needed before a checkpoint can be registered.
     // We have to make sure the checkpoint registered will not be invalid due to
     // chain reorg.
-    uint constant confirmations = 500;
+    uint constant confirmations = 256;
 }
 

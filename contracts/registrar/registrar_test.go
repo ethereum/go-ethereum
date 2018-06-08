@@ -213,9 +213,27 @@ func TestCheckpointRegister(t *testing.T) {
 		return nil
 	}, "register unstable checkpoint")
 
+	contractBackend.ShiftBlocks(light.CheckpointFrequency + light.CheckpointProcessConfirmations)
+
+	// Register by unauthorized user
+	validateOperation(t, c, contractBackend, func() {
+		user2, _ := crypto.GenerateKey()
+		unauthorized := bind.NewKeyedTransactor(user2)
+		c.SetCheckpoint(unauthorized, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
+			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != emptyHash {
+			return errors.New("unstable checkpoint should be banned")
+		}
+		return nil
+	}, "register by unauthorized user")
+
 	// Register a stable checkpoint
 	validateOperation(t, c, contractBackend, func() {
-		contractBackend.ShiftBlocks(sectionSize + checkpointConfirmation)
 		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
 			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
 	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
@@ -223,7 +241,7 @@ func TestCheckpointRegister(t *testing.T) {
 		if err != nil {
 			return errors.New("get checkpoint failed")
 		}
-		if common.Hash(hash).Hex() != crypto.Keccak256Hash(trustedCheckpoint.SectionHead.Bytes(), trustedCheckpoint.ChtRoot.Bytes(), trustedCheckpoint.BloomTrieRoot.Bytes()).Hex() {
+		if !trustedCheckpoint.HashEqual(common.Hash(hash)) {
 			return errors.New("register stable checkpoint failed")
 		}
 		if !validateEvents(1, events) {
@@ -242,7 +260,7 @@ func TestCheckpointRegister(t *testing.T) {
 		if err != nil {
 			return errors.New("get checkpoint failed")
 		}
-		if common.Hash(hash).Hex() != crypto.Keccak256Hash(trustedCheckpoint.SectionHead.Bytes(), trustedCheckpoint.ChtRoot.Bytes(), trustedCheckpoint.BloomTrieRoot.Bytes()).Hex() {
+		if !trustedCheckpoint.HashEqual(common.Hash(hash)) {
 			return errors.New("register stable checkpoint failed")
 		}
 		if !validateEvents(1, events) {
