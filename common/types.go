@@ -30,7 +30,9 @@ import (
 )
 
 const (
-	HashLength    = 32
+	// HashLength is the expected length of the hash
+	HashLength = 32
+	// AddressLength is the expected length of the adddress
 	AddressLength = 20
 )
 
