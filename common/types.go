@@ -17,6 +17,7 @@
 package common
 
 import (
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -119,6 +120,30 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 		h[i] = byte(rand.Uint32())
 	}
 	return reflect.ValueOf(h)
+}
+
+// Scan implements Scanner for database/sql
+func (h *Hash) Scan(src interface{}) error {
+	srcB, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("Hash Scan: couldn't scan %v into Hash", src)
+	}
+
+	if len(srcB) != HashLength {
+		return fmt.Errorf(
+			"Hash Scan: len %d instead of expected %d",
+			len(srcB),
+			HashLength,
+		)
+	}
+
+	*h = BytesToHash(srcB)
+	return nil
+}
+
+// Value implements valuer for database/sql
+func (h Hash) Value() (driver.Value, error) {
+	return h.Bytes(), nil
 }
 
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
