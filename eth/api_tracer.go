@@ -532,6 +532,11 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
+	fmt.Println("\n\n\t[API LOG]", api, "\n")
+	fmt.Printf("%+v\n", api.config)
+	fmt.Println("\n")
+	fmt.Printf("%+v\n", api.eth)
+	fmt.Println("\n")
 	// Retrieve the transaction and assemble its EVM context
 	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {
@@ -546,6 +551,9 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 		return nil, err
 	}
 	// Trace the transaction and return
+	//fmt.Println("\n\n\t\tRETURN")
+	//fmt.Println(api.traceTx(ctx, msg, vmctx, statedb, config))
+	//fmt.Println("RETURN FINISHED")
 	return api.traceTx(ctx, msg, vmctx, statedb, config)
 }
 

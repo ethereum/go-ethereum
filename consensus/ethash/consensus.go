@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/log"
 	set "gopkg.in/fatih/set.v0"
 )
 
@@ -565,6 +564,5 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	if (config.IsShyftNetwork(header.Number)) {
 		state.AddBalance(ShyftNetworkConduitAddress, ShyftNetworkBlockReward)
-		log.Info("ShyftNetwork")
 	}
 }
