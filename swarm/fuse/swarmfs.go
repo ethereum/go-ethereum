@@ -25,9 +25,9 @@ import (
 
 const (
 	SwarmfsVersion = "0.1"
-	mountTimeout    = time.Second * 5
-	unmountTimeout  = time.Second * 10
-	maxFuseMounts   = 5
+	mountTimeout   = time.Second * 5
+	unmountTimeout = time.Second * 10
+	maxFuseMounts  = 5
 )
 
 var (
@@ -56,7 +56,7 @@ func NewSwarmFS(api *api.API) *SwarmFS {
 
 }
 
-// NewInode increments the Inode, which needs to be unique. 
+// NewInode increments the Inode, which needs to be unique.
 // They are used for caching inside fuse
 func NewInode() uint64 {
 	inodeLock.Lock()

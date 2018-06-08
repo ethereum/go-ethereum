@@ -59,7 +59,7 @@ type Params struct {
 // serialisable to send with Protocol.
 type Promise interface{}
 
-// Protocol is the interface for the peer protocol for testing or external 
+// Protocol is the interface for the peer protocol for testing or external
 // alternative payment.
 type Protocol interface {
 	Pay(int, Promise) // units, payment proof
@@ -112,7 +112,7 @@ func New(local *Params, pm Payment, proto Protocol) (self *Swap, err error) {
 	return
 }
 
-// SetRemote is the entry point for setting remote swap profile 
+// SetRemote is the entry point for setting remote swap profile
 // (e.g from handshake or other message).
 func (s *Swap) SetRemote(remote *Profile) {
 	defer s.lock.Unlock()

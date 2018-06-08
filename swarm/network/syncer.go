@@ -66,7 +66,7 @@ type syncState struct {
 	synced     chan bool   // signal that sync stage finished
 }
 
-// DbAccess is the wrapper of db-s to provide mockable custom 
+// DbAccess is the wrapper of db-s to provide mockable custom
 // local chunk store access to syncer.
 type DbAccess struct {
 	db  *storage.DbStore

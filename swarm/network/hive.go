@@ -223,7 +223,6 @@ func (h *Hive) keepAlive() {
 	}
 }
 
-
 func (h *Hive) Stop() error {
 	// closing toggle channel quits the updateloop
 	close(h.quit)

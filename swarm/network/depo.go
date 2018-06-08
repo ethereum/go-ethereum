@@ -83,8 +83,8 @@ func (d *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error {
 }
 
 // HandleDeliveryRequestMsg 1) serves actual chunks asked by the remote peer
-// by pushing to the delivery queue (sync db) of the correct priority 
-// (remote peer is free to reprioritize), 2) the message implies remote peer 
+// by pushing to the delivery queue (sync db) of the correct priority
+// (remote peer is free to reprioritize), 2) the message implies remote peer
 // wants more, so trigger for 3) new outgoing unsynced keys message is fired.
 func (d *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer) error {
 	deliver := req.Deliver

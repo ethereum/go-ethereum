@@ -93,7 +93,7 @@ type Node interface {
 	Drop()
 }
 
-// New is a public constructor. Addr  is the base address of the table 
+// New is a public constructor. Addr  is the base address of the table
 // and params is KadParams configuration.
 func New(addr Address, params *KadParams) *Kademlia {
 	buckets := make([][]Node, params.MaxProx+1)
