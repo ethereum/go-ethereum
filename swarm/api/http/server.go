@@ -79,7 +79,7 @@ type ServerConfig struct {
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // StartHTTPServer starts up http server
-func StartHTTPServer(api *api.Api, config *ServerConfig) {
+func StartHTTPServer(api *api.API, config *ServerConfig) {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -95,12 +95,12 @@ func StartHTTPServer(api *api.Api, config *ServerConfig) {
 	go http.ListenAndServe(config.Addr, hdlr)
 }
 
-func NewServer(api *api.Api) *Server {
+func NewServer(api *api.API) *Server {
 	return &Server{api}
 }
 
 type Server struct {
-	api *api.Api
+	api *api.API
 }
 
 // Request wraps http.Request and also includes the parsed bzz URI

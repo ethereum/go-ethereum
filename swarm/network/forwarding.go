@@ -70,7 +70,7 @@ OUT:
 		}
 		req := &retrieveRequestMsgData{
 			Key: chunk.Key,
-			Id:  generateID(),
+			ID:  generateID(),
 		}
 		var err error
 		if p.swap != nil {
@@ -123,8 +123,8 @@ func (f *forwarder) Deliver(chunk *storage.Chunk) {
 		for id, r := range requesters {
 			req = r.(*retrieveRequestMsgData)
 			if req.timeout == nil || req.timeout.After(time.Now()) {
-				log.Trace(fmt.Sprintf("forwarder.Deliver: %v -> %v", req.Id, req.from))
-				msg.Id = uint64(id)
+				log.Trace(fmt.Sprintf("forwarder.Deliver: %v -> %v", req.ID, req.from))
+				msg.ID = uint64(id)
 				Deliver(req.from, msg, DeliverReq)
 				n++
 				counter--

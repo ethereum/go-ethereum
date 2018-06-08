@@ -330,7 +330,7 @@ func (b *bzz) handleStatus() (err error) {
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
-		Addr:      b.bAddr(),
+		Addr:      b.selfAddr(),
 		NetworkID: b.NetworkID,
 		Swap: &bzzswap.SwapProfile{
 			Profile:    b.swapParams.Profile,
@@ -374,7 +374,7 @@ func (b *bzz) handleStatus() (err error) {
 	}
 
 	b.remoteAddr = b.peerAddr(status.Addr)
-	log.Trace(fmt.Sprintf("b: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", b.bAddr(), b.remoteAddr, b.peer.LocalAddr(), status.Addr.IP, b.peer.RemoteAddr()))
+	log.Trace(fmt.Sprintf("b: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", b.selfAddr(), b.remoteAddr, b.peer.LocalAddr(), status.Addr.IP, b.peer.RemoteAddr()))
 
 	if b.swapEnabled {
 		// set remote profile for accounting
@@ -410,7 +410,7 @@ func (b *bzz) sync(state *syncState) error {
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		b.syncEnabled = false
-		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", n))
+		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", b))
 		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
@@ -419,7 +419,7 @@ func (b *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
-		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", n, state))
+		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", b, state))
 	}
 	var err error
 	b.syncer, err = newSyncer(
@@ -432,7 +432,7 @@ func (b *bzz) sync(state *syncState) error {
 	if err != nil {
 		return nil
 	}
-	log.Trace(fmt.Sprintf("syncer set for peer %v", n))
+	log.Trace(fmt.Sprintf("syncer set for peer %v", b))
 	return nil
 }
 

@@ -495,7 +495,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		}
 		decodeData(data, chunk)
 	} else {
-		err = notFound
+		err = errNotFound
 	}
 
 	return

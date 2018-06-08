@@ -358,13 +358,13 @@ func (d *syncDb) newSyncDbEntry(req interface{}, counter uint64) (entry *syncDbE
 	var sreq *storeRequestMsgData
 
 	if key, ok = req.(storage.Key); ok {
-		id = generateId()
+		id = generateID()
 	} else if chunk, ok = req.(*storage.Chunk); ok {
 		key = chunk.Key
-		id = generateId()
+		id = generateID()
 	} else if sreq, ok = req.(*storeRequestMsgData); ok {
 		key = sreq.Key
-		id = sreq.Id
+		id = sreq.ID
 	} else if entry, ok = req.(*syncDbEntry); !ok {
 		return nil, fmt.Errorf("type not allowed: %v (%T)", req, req)
 	}

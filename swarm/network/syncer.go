@@ -738,7 +738,7 @@ func (s *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgData, 
 		}
 
 		sreq = &storeRequestMsgData{
-			Id:    id,
+			ID:    id,
 			Key:   chunk.Key,
 			SData: chunk.SData,
 		}
@@ -759,7 +759,7 @@ func parseRequest(req interface{}) (storage.Key, uint64, *storage.Chunk, *storeR
 	var err error
 
 	if key, ok = req.(storage.Key); ok {
-		id = generateId()
+		id = generateID()
 
 	} else if entry, ok = req.(*syncDbEntry); ok {
 		id = binary.BigEndian.Uint64(entry.val[32:])
@@ -767,7 +767,7 @@ func parseRequest(req interface{}) (storage.Key, uint64, *storage.Chunk, *storeR
 
 	} else if chunk, ok = req.(*storage.Chunk); ok {
 		key = chunk.Key
-		id = generateId()
+		id = generateID()
 
 	} else if sreq, ok = req.(*storeRequestMsgData); ok {
 		key = sreq.Key

@@ -66,8 +66,8 @@ func TestDbStoreNotFound(t *testing.T) {
 	m := initDbStore(t)
 	defer m.Close()
 	_, err := m.Get(ZeroKey)
-	if err != notFound {
-		t.Errorf("Expected notFound, got %v", err)
+	if err != errNotFound {
+		t.Errorf("Expected errNotFound, got %v", err)
 	}
 }
 

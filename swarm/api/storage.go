@@ -30,10 +30,10 @@ type Response struct {
 //
 // DEPRECATED: Use the HTTP API instead
 type Storage struct {
-	api *Api
+	api *API
 }
 
-func NewStorage(api *Api) *Storage {
+func NewStorage(api *API) *Storage {
 	return &Storage{api}
 }
 

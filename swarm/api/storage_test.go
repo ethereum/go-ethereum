@@ -21,7 +21,7 @@ import (
 )
 
 func testStorage(t *testing.T, f func(*Storage)) {
-	testApi(t, func(api *Api) {
+	testAPI(t, func(api *API) {
 		f(NewStorage(api))
 	})
 }

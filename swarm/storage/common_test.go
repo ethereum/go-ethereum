@@ -90,7 +90,7 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 		for ch := range chunkC {
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
-				if err == notFound {
+				if err == errNotFound {
 					log.Trace(fmt.Sprintf("chunk '%v' not found", chunk.Key.Log()))
 				} else if err != nil {
 					log.Trace(fmt.Sprintf("error retrieving chunk %v: %v", chunk.Key.Log(), err))

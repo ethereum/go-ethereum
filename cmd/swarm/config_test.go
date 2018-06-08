@@ -120,8 +120,8 @@ func TestCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 42 {
-		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkId)
+	if info.NetworkID != 42 {
+		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
 	}
 
 	if !info.SyncEnabled {
@@ -148,7 +148,7 @@ func TestFileOverrides(t *testing.T) {
 	defaultConf := api.NewDefaultConfig()
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = true
-	defaultConf.NetworkId = 54
+	defaultConf.NetworkID = 54
 	defaultConf.Port = httpPort
 	defaultConf.StoreParams.DbCapacity = 9000000
 	defaultConf.ChunkerParams.Branches = 64
@@ -215,8 +215,8 @@ func TestFileOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 54 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+	if info.NetworkID != 54 {
+		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
 	if !info.SyncEnabled {
@@ -224,7 +224,7 @@ func TestFileOverrides(t *testing.T) {
 	}
 
 	if info.StoreParams.DbCapacity != 9000000 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
 	if info.ChunkerParams.Branches != 64 {
@@ -326,8 +326,8 @@ func TestEnvVars(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 999 {
-		t.Fatalf("Expected network ID to be %d, got %d", 999, info.NetworkId)
+	if info.NetworkID != 999 {
+		t.Fatalf("Expected network ID to be %d, got %d", 999, info.NetworkID)
 	}
 
 	if info.Cors != "*" {
@@ -355,7 +355,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 	defaultConf := api.NewDefaultConfig()
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = false
-	defaultConf.NetworkId = 54
+	defaultConf.NetworkID = 54
 	defaultConf.Port = "8588"
 	defaultConf.StoreParams.DbCapacity = 9000000
 	defaultConf.ChunkerParams.Branches = 64
@@ -427,8 +427,8 @@ func TestCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != expectNetworkId {
-		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
+	if info.NetworkID != expectNetworkId {
+		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkID)
 	}
 
 	if !info.SyncEnabled {
@@ -436,7 +436,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 	}
 
 	if info.StoreParams.DbCapacity != 9000000 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
 	if info.ChunkerParams.Branches != 64 {

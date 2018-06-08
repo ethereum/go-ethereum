@@ -21,11 +21,11 @@ import (
 )
 
 type Control struct {
-	api  *Api
+	api  *API
 	hive *network.Hive
 }
 
-func NewControl(api *Api, hive *network.Hive) *Control {
+func NewControl(api *API, hive *network.Hive) *Control {
 	return &Control{api, hive}
 }
 

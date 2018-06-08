@@ -34,10 +34,10 @@ import (
 const maxParallelFiles = 5
 
 type FileSystem struct {
-	api *Api
+	api *API
 }
 
-func NewFileSystem(api *Api) *FileSystem {
+func NewFileSystem(api *API) *FileSystem {
 	return &FileSystem{api}
 }
 

@@ -439,7 +439,7 @@ func bzzd(ctx *cli.Context) error {
 		bootnodes := strings.Split(bzzconfig.BootNodes, ",")
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
-		if bzzconfig.NetworkId == 3 {
+		if bzzconfig.NetworkID == 3 {
 			injectBootnodes(stack.Server(), testbetBootNodes)
 		}
 	}
@@ -454,11 +454,11 @@ func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
 		var swapClient *ethclient.Client
 		var err error
-		if bzzconfig.SwapApi != "" {
-			log.Info("connecting to SWAP API", "url", bzzconfig.SwapApi)
-			swapClient, err = ethclient.Dial(bzzconfig.SwapApi)
+		if bzzconfig.SwapAPI != "" {
+			log.Info("connecting to SWAP API", "url", bzzconfig.SwapAPI)
+			swapClient, err = ethclient.Dial(bzzconfig.SwapAPI)
 			if err != nil {
-				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", bzzconfig.SwapApi, err)
+				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", bzzconfig.SwapAPI, err)
 			}
 		}
 

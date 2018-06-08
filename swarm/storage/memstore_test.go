@@ -44,7 +44,7 @@ func TestMemStore2_100(t *testing.T) {
 func TestMemStoreNotFound(t *testing.T) {
 	m := NewMemStore(nil, defaultCacheCapacity)
 	_, err := m.Get(ZeroKey)
-	if err != notFound {
-		t.Errorf("Expected notFound, got %v", err)
+	if err != errNotFound {
+		t.Errorf("Expected errNotFound, got %v", err)
 	}
 }

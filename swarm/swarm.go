@@ -60,7 +60,7 @@ var (
 // Swarm is the swarm stack.
 type Swarm struct {
 	config      *api.Config            // swarm configuration
-	api         *api.Api               // high level api layer (fs/manifest)
+	api         *api.API               // high level api layer (fs/manifest)
 	dns         api.Resolver           // DNS registrar
 	dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
 	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
@@ -77,14 +77,14 @@ type Swarm struct {
 }
 
 type SwarmAPI struct {
-	Api     *api.Api
+	API     *api.API
 	Backend chequebook.Backend
 	PrvKey  *ecdsa.PrivateKey
 }
 
 func (s *Swarm) API() *SwarmAPI {
 	return &SwarmAPI{
-		Api:     s.api,
+		API:     s.api,
 		Backend: s.backend,
 		PrvKey:  s.privateKey,
 	}
@@ -162,7 +162,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		self.dns = api.NewMultiResolver(opts...)
 	}
 
-	self.api = api.NewApi(self.dpa, self.dns)
+	self.api = api.NewAPI(self.dpa, self.dns)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -360,14 +360,14 @@ func (s *Swarm) Stop() error {
 
 // Protocols implements the node.Service interface
 func (s *Swarm) Protocols() []p2p.Protocol {
-	proto, err := network.Bzz(s.depo, s.backend, s.hive, s.dbAccess, s.config.Swap, s.config.SyncParams, s.config.NetworkId)
+	proto, err := network.Bzz(s.depo, s.backend, s.hive, s.dbAccess, s.config.Swap, s.config.SyncParams, s.config.NetworkID)
 	if err != nil {
 		return nil
 	}
 	return []p2p.Protocol{proto}
 }
 
-// APIs implements node.Service returns the RPC Api descriptors the Swarm implementation offers.
+// APIs implements node.Service returns the RPC API descriptors the Swarm implementation offers.
 func (s *Swarm) APIs() []rpc.API {
 	return []rpc.API{
 		// public APIs
@@ -414,7 +414,7 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 }
 
-func (s *Swarm) Api() *api.Api {
+func (s *Swarm) Api() *api.API {
 	return s.api
 }
 
@@ -448,7 +448,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    api.NewApi(dpa, nil),
+		api:    api.NewAPI(dpa, nil),
 		config: config,
 	}
 

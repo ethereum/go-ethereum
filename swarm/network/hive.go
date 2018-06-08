@@ -386,12 +386,12 @@ func (h *Hive) peers(req *retrieveRequestMsgData) {
 			for _, peer := range h.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			log.Debug(fmt.Sprintf("Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %v", len(addrs), req.from, req.Id, req.Key.Log()))
+			log.Debug(fmt.Sprintf("Hive sending %d peer addresses to %v. req.ID: %v, req.Key: %v", len(addrs), req.from, req.ID, req.Key.Log()))
 
 			peersData := &peersMsgData{
 				Peers: addrs,
 				Key:   req.Key,
-				Id:    req.Id,
+				ID:    req.ID,
 			}
 			peersData.setTimeout(req.timeout)
 			req.from.peers(peersData)

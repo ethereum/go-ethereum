@@ -88,7 +88,7 @@ type Kademlia struct {
 
 type Node interface {
 	Addr() Address
-	Url() string
+	URL() string
 	LastActive() time.Time
 	Drop()
 }
@@ -132,7 +132,7 @@ func (k *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
 	k.lock.Lock()
 
 	index := k.proximityBin(node.Addr())
-	record := k.db.findOrCreate(index, node.Addr(), node.Url())
+	record := k.db.findOrCreate(index, node.Addr(), node.URL())
 
 	if cb != nil {
 		err = cb(record, node)
