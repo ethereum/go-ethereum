@@ -104,8 +104,14 @@ type SendAndReceive struct {
 }
 
 //WriteBlock writes to block info to sql db
-func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) error {
-	rewards := WriteMinerRewards(sqldb,block)
+func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
+
+	sqldb, err := DBConnection()
+	if (err != nil) {
+		panic(err)
+	}
+
+	rewards := writeMinerRewards(sqldb,block)
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
@@ -132,21 +138,21 @@ func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) er
 
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
-			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
+			writeTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
 			if block.Transactions()[0].To() != nil {
-				WriteFromBalance(sqldb, tx)
+				writeFromBalance(sqldb, tx)
 			}
 			if block.Transactions()[0].To() == nil {
-				WriteContractBalance(sqldb, tx)
-				WriteContractsTxHashReferences(sqldb, tx)
+				writeContractBalance(sqldb, tx)
+				writeContractsTxHashReferences(sqldb, tx)
 			}
 		}
 	}
 	return nil
 }
 
-//WriteTransactions writes to sqldb
-func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
+//writeTransactions writes to sqldb
+func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
 		From:      tx.From(),
@@ -217,7 +223,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	return nil
 }
 
-func WriteContractsTxHashReferences(sqldb *sql.DB, tx *types.Transaction) error {
+func writeContractsTxHashReferences(sqldb *sql.DB, tx *types.Transaction) error {
 	txHash := tx.Hash().Hex()
 
 	sqlStatement := `INSERT INTO contracts(txHash) VALUES(($1)) RETURNING txHash`
@@ -228,8 +234,8 @@ func WriteContractsTxHashReferences(sqldb *sql.DB, tx *types.Transaction) error 
 	return nil
 }
 
-func WriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData,balanceSen,accountNonceSen := WriteContractBalanceHelper(sqldb, tx)
+func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	sendAndReceiveData,balanceSen,accountNonceSen := writeContractBalanceHelper(sqldb, tx)
 	fromAddr := sendAndReceiveData.From
 	amount := sendAndReceiveData.Amount
 	balanceSender := balanceSen
@@ -275,7 +281,7 @@ func WriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-func WriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
+func writeContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		From: tx.From().Hex(),
 		Amount: tx.Value().String(),
@@ -294,9 +300,9 @@ func WriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndRe
 	return sendAndReceiveData, balanceSender, accountNonceSender
 }
 
-//WriteFromBalance writes senders balance to accounts db
-func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := WriteBalanceHelper(sqldb, tx)
+//writeFromBalance writes senders balance to accounts db
+func writeFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := writeBalanceHelper(sqldb, tx)
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
 	amount := sendAndReceiveData.Amount
@@ -370,7 +376,7 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
+func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		To: tx.To().Hex(),
 		From: tx.From().Hex(),
@@ -406,7 +412,7 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
 // @TODO: Calculate reorg
-func WriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
+func writeMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	minerAddr := block.Coinbase().String()
 	shyftConduitAddress := Rewards.ShyftNetworkConduitAddress.String()
 	// Calculate the total gas used in the block
@@ -436,13 +442,13 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 		uncleAddrs = append(uncleAddrs, uncle.Coinbase.String())
 	}
 
-	StoreReward(sqldb, minerAddr, totalMinerReward)
-	StoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
+	storeReward(sqldb, minerAddr, totalMinerReward)
+	storeReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
 	var uncRewards = new(big.Int)
 	for i := 0; i < len(uncleAddrs); i++ {
 		uncRewards := uncleRewards[i]
 		fmt.Println(uncRewards)
-		StoreReward(sqldb, uncleAddrs[i], uncleRewards[i])
+		storeReward(sqldb, uncleAddrs[i], uncleRewards[i])
 	}
 
 	fullRewardValue := new(big.Int)
@@ -452,7 +458,7 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	return fullRewardValue.String()
 }
 
-func StoreReward(sqldb *sql.DB, address string, reward *big.Int) {
+func storeReward(sqldb *sql.DB, address string, reward *big.Int) {
 	// Check if address exists
 	var addressBalance string
 	addressExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`

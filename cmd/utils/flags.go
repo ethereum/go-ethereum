@@ -57,9 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
-	
-	// @shyft
-	"database/sql"
 )
 
 var (
@@ -1219,7 +1216,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
-	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx), nil)
+	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
 	}
@@ -1252,14 +1249,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 	
-	// @NOTE:shyft instantiate BlockExplorerDB here?
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, nil
-	}
 	fmt.Println("Calling NewBlock CHAIN in flags.go ******************************")
-	chain, err = core.NewBlockChain(chainDb, blockExplorerDb,cache, config, engine, vmcfg)
+	chain, err = core.NewBlockChain(chainDb,cache, config, engine, vmcfg)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

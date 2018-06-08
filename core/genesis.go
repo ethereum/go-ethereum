@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/shyftdb"
 	"database/sql"
 	"strconv"
 	"time"
@@ -142,13 +143,9 @@ func (e *GenesisMismatchError) Error() string {
 
 //WriteShyftGen writes the genesis block to Shyft db
 //@NOTE:SHYFT
-func WriteShyftGen(sqldb *sql.DB, gen *Genesis, block *types.Block) {
-	if sqldb == nil {
-		log.Info("Initializing Shyft Postgres DB")
-		connStr := "user=postgres dbname=shyftdb sslmode=disable"
-		blockExplorerDb, _ := sql.Open("postgres", connStr)
-		sqldb = blockExplorerDb
-	}
+func WriteShyftGen(gen *Genesis, block *types.Block) {
+
+	sqldb, _ := shyftdb.DBConnection()
 
 	for k := range gen.Alloc {
 		addr := k.String()
@@ -196,13 +193,9 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis, block *types.Block) {
 		log.Info("Found Genesis Block")
 }}}
 
-func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block, gen *Genesis) error {
-	if sqldb == nil {
-		log.Info("Initializing Shyft Postgres DB")
-		connStr := "user=postgres dbname=shyftdb sslmode=disable"
-		blockExplorerDb, _ := sql.Open("postgres", connStr)
-		sqldb = blockExplorerDb
-	}
+func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
+	
+	sqldb, _ := shyftdb.DBConnection()
 
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
@@ -252,7 +245,7 @@ func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block, gen *Genesis) error 
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -267,9 +260,9 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*par
 		}
 		block, err := genesis.Commit(db)
 		//@NOTE:SHYFT WRITE TO BLOCK ZERO DB
-		WriteShyftBlockZero(sqldb, block, genesis)
+		WriteShyftBlockZero(block, genesis)
 		//@NOTE:SHYFT WRITE TO DB
-		WriteShyftGen(sqldb, genesis, block)
+		WriteShyftGen(genesis, block)
 
 		return genesis.Config, block.Hash(), err
 	}
