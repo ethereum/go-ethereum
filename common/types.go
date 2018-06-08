@@ -255,6 +255,30 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
 }
 
+// Scan implements Scanner for database/sql
+func (a *Address) Scan(src interface{}) error {
+	srcB, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("Address Scan: couldn't scan %v into Address", src)
+	}
+
+	if len(srcB) != AddressLength {
+		return fmt.Errorf(
+			"Address Scan: len %d instead of expected %d",
+			len(srcB),
+			AddressLength,
+		)
+	}
+
+	*a = BytesToAddress(srcB)
+	return nil
+}
+
+// Value implements valuer for database/sql
+func (a Address) Value() (driver.Value, error) {
+	return a.Bytes(), nil
+}
+
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
