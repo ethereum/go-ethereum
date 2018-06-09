@@ -211,13 +211,20 @@ type PrivateAccountAPI struct {
 
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
-	extapi, _ := NewExternalSigner()
-	return &PrivateAccountAPI{
+	p := &PrivateAccountAPI{
 		am:        b.AccountManager(),
 		nonceLock: nonceLock,
 		b:         b,
-		extapi:    extapi,
 	}
+	if b.ExternalSigner() != "" {
+		extapi, err := NewExternalSigner(b.ExternalSigner())
+		if err == nil {
+			p.extapi = extapi
+		} else {
+			log.Error("Error initializing external signer", "url", b.ExternalSigner(), "error", err)
+		}
+	}
+	return p
 }
 
 // ListAccounts will return a list of addresses for accounts this node manages.
@@ -984,7 +991,18 @@ type PublicTransactionPoolAPI struct {
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
-	return &PublicTransactionPoolAPI{b, nonceLock, nil}
+	var (
+		extapi *ExternalSignerAPI
+		err    error
+	)
+	if b.ExternalSigner() != "" {
+		extapi, err = NewExternalSigner(b.ExternalSigner())
+		if err != nil {
+			log.Error("Error initializing external signer", "url", b.ExternalSigner(), "error", err)
+		}
+
+	}
+	return &PublicTransactionPoolAPI{b, nonceLock, extapi}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
@@ -1534,8 +1552,8 @@ type ExternalSignerAPI struct {
 	client *rpc.Client
 }
 
-func NewExternalSigner() (*ExternalSignerAPI, error) {
-	client, err := rpc.DialHTTP("http://localhost:8550")
+func NewExternalSigner(endpoint string) (*ExternalSignerAPI, error) {
+	client, err := rpc.DialHTTP(endpoint)
 	if err != nil {
 		return nil, err
 	}

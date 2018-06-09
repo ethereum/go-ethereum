@@ -41,6 +41,7 @@ type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 	config   *Config
 	accman   *accounts.Manager
+	extapi   string // If non-empty, the ipc-path or http(s)-url to an external signer
 
 	ephemeralKeystore string         // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
@@ -99,9 +100,15 @@ func New(conf *Config) (*Node, error) {
 	}
 	// Ensure that the AccountManager method works before the node has started.
 	// We rely on this in cmd/geth.
-	am, ephemeralKeystore, err := makeAccountManager(conf)
-	if err != nil {
-		return nil, err
+	var (
+		am                *accounts.Manager
+		ephemeralKeystore string
+	)
+	if conf.ExternalSigner != "" {
+		var err error
+		if am, ephemeralKeystore, err = makeAccountManager(conf); err != nil {
+			return nil, err
+		}
 	}
 	if conf.Logger == nil {
 		conf.Logger = log.New()
@@ -110,6 +117,7 @@ func New(conf *Config) (*Node, error) {
 	// in the data directory or instance directory is delayed until Start.
 	return &Node{
 		accman:            am,
+		extapi:            conf.ExternalSigner,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},

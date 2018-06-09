@@ -73,6 +73,7 @@ type LightEthereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
+	externalSigner string
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI

@@ -261,15 +261,7 @@ func geth(ctx *cli.Context) error {
 	return nil
 }
 
-// startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
-// miner.
-func startNode(ctx *cli.Context, stack *node.Node) {
-	debug.Memsize.Add("node", stack)
-
-	// Start up the node itself
-	utils.StartNode(stack)
-
+func startInternalAccountManagement(ctx *cli.Context, stack *node.Node) {
 	// Unlock any account specifically requested
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
@@ -283,7 +275,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	// Register wallet event handlers to open and auto-derive wallets
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
-
 	go func() {
 		// Create a chain state reader for self-derivation
 		rpcClient, err := stack.Attach()
@@ -321,6 +312,25 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 	}()
+}
+
+// startNode boots up the system node and all registered protocols, after which
+// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
+// miner.
+func startNode(ctx *cli.Context, stack *node.Node) {
+	debug.Memsize.Add("node", stack)
+
+	// Start up the node itself
+	utils.StartNode(stack)
+
+	// Start account management
+	if ctx.IsSet(utils.ExternalSignerFlag.Name){
+		extApi := ctx.GlobalString(utils.ExternalSignerFlag.Name)
+
+	}else{
+		startInternalAccountManagement(ctx, stack)
+	}
+
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running

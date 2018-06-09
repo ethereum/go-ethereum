@@ -355,6 +355,11 @@ var (
 		Usage: "Password file to use for non-interactive password input",
 		Value: "",
 	}
+	ExternalSignerFlag = cli.StringFlag{
+		Name:  "signer",
+		Usage: "External signer (url or path to ipc file)",
+		Value: "",
+	}
 
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
