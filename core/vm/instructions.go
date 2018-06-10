@@ -570,9 +570,9 @@ func opMstore8(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 }
 
 func opSload(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	loc := common.BigToHash(stack.pop())
-	val := evm.StateDB.GetState(contract.Address(), loc).Big()
-	stack.push(val)
+	loc := stack.peek()
+	val := evm.StateDB.GetState(contract.Address(), common.BigToHash(loc))
+	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
 
