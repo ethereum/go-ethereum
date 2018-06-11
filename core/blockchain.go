@@ -901,7 +901,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	// @NOTE:SHYFT - Write block data for block explorer
+	// NOTE:SHYFT - Write block data for block explorer
+	fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
 	if err := shyftdb.WriteBlock(block, receipts); err != nil {
 		return NonStatTy, err
 	}
