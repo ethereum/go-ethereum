@@ -883,7 +883,11 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			}
 			// Postpone any invalidated transactions
 			for _, tx := range invalids {
-				pool.enqueueTx(tx.Hash(), tx)
+				if _, err := pool.enqueueTx(tx.Hash(), tx); err != nil {
+					pool.all.Remove(tx.Hash())
+					pool.priced.Removed()
+					log.Trace("Remove invalid pending transaction", "hash", tx.Hash())
+				}
 			}
 			// Update the account nonce if needed
 			if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
@@ -997,13 +1001,17 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 						list := pool.pending[offenders[i]]
 						for _, tx := range list.Cap(list.Len() - 1) {
 							// Re-enqueue transaction to future queue.
-							pool.enqueueTx(tx.Hash(), tx)
-
+							if _, err := pool.enqueueTx(tx.Hash(), tx); err != nil {
+								pool.all.Remove(tx.Hash())
+								pool.priced.Removed()
+								log.Trace("Remove fairness-exceeding pending transaction", "hash", tx.Hash())
+							} else {
+								log.Trace("Postpone fairness-exceeding pending transaction", "hash", tx.Hash())
+							}
 							// Update the account nonce to the dropped transaction
 							if nonce := tx.Nonce(); pool.pendingState.GetNonce(offenders[i]) > nonce {
 								pool.pendingState.SetNonce(offenders[i], nonce)
 							}
-							log.Trace("Re-enqueue fairness-exceeding pending transaction", "hash", tx.Hash())
 						}
 						pending--
 					}
@@ -1017,13 +1025,17 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 					list := pool.pending[addr]
 					for _, tx := range list.Cap(list.Len() - 1) {
 						// Re-enqueue transaction to future queue.
-						pool.enqueueTx(tx.Hash(), tx)
-
+						if _, err := pool.enqueueTx(tx.Hash(), tx); err != nil {
+							pool.all.Remove(tx.Hash())
+							pool.priced.Removed()
+							log.Trace("Remove fairness-exceeding pending transaction", "hash", tx.Hash())
+						} else {
+							log.Trace("Postpone fairness-exceeding pending transaction", "hash", tx.Hash())
+						}
 						// Update the account nonce to the dropped transaction
 						if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
 							pool.pendingState.SetNonce(addr, nonce)
 						}
-						log.Trace("Re-enqueue fairness-exceeding pending transaction", "hash", tx.Hash())
 					}
 					pending--
 				}
@@ -1099,15 +1111,25 @@ func (pool *TxPool) demoteUnexecutables() {
 		}
 		for _, tx := range invalids {
 			hash := tx.Hash()
-			log.Trace("Demoting pending transaction", "hash", hash)
-			pool.enqueueTx(hash, tx)
+			if _, err := pool.enqueueTx(hash, tx); err != nil {
+				pool.all.Remove(hash)
+				pool.priced.Removed()
+				log.Trace("Removing pending transaction", "hash", hash)
+			} else {
+				log.Trace("Demoting pending transaction", "hash", hash)
+			}
 		}
 		// If there's a gap in front, warn (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
 			for _, tx := range list.Cap(0) {
 				hash := tx.Hash()
-				log.Error("Demoting invalidated transaction", "hash", hash)
-				pool.enqueueTx(hash, tx)
+				if _, err := pool.enqueueTx(hash, tx); err != nil {
+					pool.all.Remove(hash)
+					pool.priced.Removed()
+					log.Error("Removing invalidated transaction", "hash", hash)
+				} else {
+					log.Error("Demoting invalidated transaction", "hash", hash)
+				}
 			}
 		}
 		// Delete the entire queue entry if it became empty.
