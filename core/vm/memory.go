@@ -35,15 +35,14 @@ func NewMemory() *Memory {
 
 // Set sets offset + size to value
 func (m *Memory) Set(offset, size uint64, value []byte) {
-	// length of store may never be less than offset + size.
-	// The store should be resized PRIOR to setting the memory
-	if size > uint64(len(m.store)) {
-		panic("INVALID memory: store empty")
-	}
-
 	// It's possible the offset is greater than 0 and size equals 0. This is because
 	// the calcMemSize (common.go) could potentially return 0 when size is zero (NO-OP)
 	if size > 0 {
+		// length of store may never be less than offset + size.
+		// The store should be resized PRIOR to setting the memory
+		if offset+size > uint64(len(m.store)) {
+			panic("invalid memory: store empty")
+		}
 		copy(m.store[offset:offset+size], value)
 	}
 }
@@ -53,8 +52,8 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 func (m *Memory) Set32(offset uint64, val *big.Int) {
 	// length of store may never be less than offset + size.
 	// The store should be resized PRIOR to setting the memory
-	if 32 > uint64(len(m.store)) {
-		panic("INVALID memory: store empty")
+	if offset+32 > uint64(len(m.store)) {
+		panic("invalid memory: store empty")
 	}
 	// Zero the memory area
 	copy(m.store[offset:offset+32], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
