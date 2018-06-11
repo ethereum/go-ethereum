@@ -58,7 +58,11 @@ type NilResettingTimer struct {
 func (NilResettingTimer) Values() []int64 { return nil }
 
 // Snapshot is a no-op.
-func (NilResettingTimer) Snapshot() ResettingTimer { return NilResettingTimer{} }
+func (NilResettingTimer) Snapshot() ResettingTimer {
+	return &ResettingTimerSnapshot{
+		values: []int64{},
+	}
+}
 
 // Time is a no-op.
 func (NilResettingTimer) Time(func()) {}
