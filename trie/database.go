@@ -297,7 +297,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	// db.nodesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	size := db.nodesSize + common.StorageSize(len(db.nodes)*2*common.HashLength)
+	size := db.nodesSize + common.StorageSize((len(db.nodes)-1)*2*common.HashLength)
 
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
@@ -512,6 +512,6 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	// db.nodesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	var flushlistSize = common.StorageSize(len(db.nodes) * 2 * common.HashLength)
+	var flushlistSize = common.StorageSize((len(db.nodes) - 1) * 2 * common.HashLength)
 	return db.nodesSize + flushlistSize, db.preimagesSize
 }
