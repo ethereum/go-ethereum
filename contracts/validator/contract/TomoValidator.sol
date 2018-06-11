@@ -8,13 +8,13 @@ contract TomoValidator is IValidator {
 
     event Vote(address _voter, address _candidate, uint256 _cap);
     event Unvote(address _voter, address _candidate, uint256 _cap);
-    event Propose(address _backer, address _candidate, uint256 _cap);
-    event Resign(address _backer, address _candidate);
-    event SetNodeUrl(address _backer, address _candidate, string _nodeUrl);
-    event Withdraw(address _backer, address _candidate, uint256 _cap);
+    event Propose(address _owner, address _candidate, uint256 _cap);
+    event Resign(address _owner, address _candidate);
+    event SetNodeUrl(address _owner, address _candidate, string _nodeUrl);
+    event Withdraw(address _owner, address _candidate, uint256 _cap);
 
     struct ValidatorState {
-        address backer;
+        address owner;
         string nodeUrl;
         bool isCandidate;
         uint256 cap;
@@ -28,15 +28,16 @@ contract TomoValidator is IValidator {
     uint256 candidateCount = 0;
     uint256 public constant minCandidateCap = 50000 ether;
     uint256 public constant maxValidatorNumber = 99;
+    uint256 public constant candidateWithdrawDelay = 100; // blocks
 
     modifier onlyValidCandidateCap {
-        // anyone can deposit 10000 TOMO to become a candidate
+        // anyone can deposit X TOMO to become a candidate
         require(msg.value >= minCandidateCap);
         _;
     }
 
-    modifier onlyBacker(address _candidate) {
-        require(validatorsState[_candidate].backer == msg.sender);
+    modifier onlyOwner(address _candidate) {
+        require(validatorsState[_candidate].owner == msg.sender);
         _;
     }
 
@@ -71,7 +72,7 @@ contract TomoValidator is IValidator {
         
         for (uint256 i = 0; i < _candidates.length; i++) {
             validatorsState[_candidates[i]] = ValidatorState({
-                backer: msg.sender,
+                owner: msg.sender,
                 nodeUrl: '',
                 isCandidate: true,
                 withdrawBlockNumber: 0,
@@ -85,7 +86,7 @@ contract TomoValidator is IValidator {
     function propose(address _candidate, string _nodeUrl) external payable onlyValidCandidateCap onlyNotCandidate(_candidate) {
         candidates.push(_candidate);
         validatorsState[_candidate] = ValidatorState({
-            backer: msg.sender,
+            owner: msg.sender,
             nodeUrl: _nodeUrl,
             isCandidate: true,
             withdrawBlockNumber: 0,
@@ -117,8 +118,8 @@ contract TomoValidator is IValidator {
         return validatorsState[_candidate].nodeUrl;
     }
 
-    function getCandidateBacker(address _candidate) public view returns(address) {
-        return validatorsState[_candidate].backer;
+    function getCandidateOwner(address _candidate) public view returns(address) {
+        return validatorsState[_candidate].owner;
     }
 
     function getCandidateWithdrawBlockNumber(address _candidate) public view returns(uint256) {
@@ -145,12 +146,12 @@ contract TomoValidator is IValidator {
         emit Unvote(msg.sender, _candidate, _cap);
     }
 
-    function setNodeUrl(address _candidate, string _nodeUrl) public onlyBacker(_candidate) {
+    function setNodeUrl(address _candidate, string _nodeUrl) public onlyOwner(_candidate) {
         validatorsState[_candidate].nodeUrl = _nodeUrl;
         emit SetNodeUrl(msg.sender, _candidate, _nodeUrl);
     }
 
-    function resign(address _candidate) public onlyBacker(_candidate) onlyCandidate(_candidate) {
+    function resign(address _candidate) public onlyOwner(_candidate) onlyCandidate(_candidate) {
         validatorsState[_candidate].isCandidate = false;
         candidateCount = candidateCount - 1;
         for (uint256 i = 0; i < candidates.length; i++) {
@@ -159,12 +160,12 @@ contract TomoValidator is IValidator {
                 break;
             }
         }
-        // refunding after retiring 100 blocks
-        validatorsState[_candidate].withdrawBlockNumber = validatorsState[_candidate].withdrawBlockNumber.add(block.number).add(100);
+        // refunding after retiring X blocks
+        validatorsState[_candidate].withdrawBlockNumber = validatorsState[_candidate].withdrawBlockNumber.add(block.number).add(candidateWithdrawDelay);
         emit Resign(msg.sender, _candidate);
     }
 
-    function withdraw(address _candidate) public onlyBacker(_candidate) onlyNotCandidate(_candidate) onlyAlreadyResigned(_candidate) {
+    function withdraw(address _candidate) public onlyOwner(_candidate) onlyNotCandidate(_candidate) onlyAlreadyResigned(_candidate) {
         uint256 cap = validatorsState[_candidate].voters[msg.sender];
         validatorsState[_candidate].cap = validatorsState[_candidate].cap.sub(cap);
         validatorsState[_candidate].voters[msg.sender] = 0;

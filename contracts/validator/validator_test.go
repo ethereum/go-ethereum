@@ -33,8 +33,8 @@ func TestValidator(t *testing.T) {
 	for _, it := range candidates {
 		cap, _ := validator.GetCandidateCap(it)
 		t.Log("candidate", it.String(), "cap", cap)
-		backer, _ := validator.GetCandidateBacker(it)
-		t.Log("candidate", it.String(), "backer", backer.String())
+		owner, _ := validator.GetCandidateOwner(it)
+		t.Log("candidate", it.String(), "validator owner", owner.String())
 	}
 	contractBackend.Commit()
 }
