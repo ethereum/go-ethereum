@@ -50,6 +50,7 @@ type Receipt struct {
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
 	Logs              []*Log `json:"logs"              gencodec:"required"`
+	BlockNumber       uint64 `json:"blockNumber"       gencodec:"required"`
 
 	// Implementation fields (don't reorder!)
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
@@ -61,6 +62,7 @@ type receiptMarshaling struct {
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
+	BlockNumber       hexutil.Uint64
 	GasUsed           hexutil.Uint64
 }
 
@@ -70,6 +72,7 @@ type receiptRLP struct {
 	CumulativeGasUsed uint64
 	Bloom             Bloom
 	Logs              []*Log
+	BlockNumber       uint64
 }
 
 type receiptStorageRLP struct {
@@ -79,6 +82,7 @@ type receiptStorageRLP struct {
 	TxHash            common.Hash
 	ContractAddress   common.Address
 	Logs              []*LogForStorage
+	BlockNumber       uint64
 	GasUsed           uint64
 }
 
@@ -96,7 +100,7 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs})
+	return rlp.Encode(w, &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs, r.BlockNumber})
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
