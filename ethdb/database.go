@@ -141,6 +141,7 @@ func (db *LDBDatabase) Close() {
 		if err := <-errc; err != nil {
 			db.log.Error("Metrics collection failed", "err", err)
 		}
+		db.quitChan = nil
 	}
 	err := db.db.Close()
 	if err == nil {
@@ -189,7 +190,7 @@ func (db *LDBDatabase) Meter(prefix string) {
 //      3   |        570 |    1113.18458 |       0.00000 |       0.00000 |       0.00000
 //
 // This is how the write delay look like (currently):
-// DelayN:5 Delay:406.604657ms
+// DelayN:5 Delay:406.604657ms Paused: false
 //
 // This is how the iostats look like (currently):
 // Read(MB):3895.04860 Write(MB):3654.64712
@@ -210,13 +211,19 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		lastWritePaused time.Time
 	)
 
+	var (
+		errc chan error
+		merr error
+	)
+
 	// Iterate ad infinitum and collect the stats
-	for i := 1; ; i++ {
+	for i := 1; errc == nil && merr == nil; i++ {
 		// Retrieve the database stats
 		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
 			db.log.Error("Failed to read database stats", "err", err)
-			return
+			merr = err
+			continue
 		}
 		// Find the compaction table, skip the header
 		lines := strings.Split(stats, "\n")
@@ -225,7 +232,8 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 		if len(lines) <= 3 {
 			db.log.Error("Compaction table not found")
-			return
+			merr = errors.New("compaction table not found")
+			continue
 		}
 		lines = lines[3:]
 
@@ -242,7 +250,8 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
 					db.log.Error("Compaction entry parsing failed", "err", err)
-					return
+					merr = err
+					continue
 				}
 				compactions[i%2][idx] += value
 			}
@@ -262,7 +271,8 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {
 			db.log.Error("Failed to read database write delay statistic", "err", err)
-			return
+			merr = err
+			continue
 		}
 		var (
 			delayN        int64
@@ -272,12 +282,14 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		)
 		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
 			db.log.Error("Write delay statistic not found")
-			return
+			merr = err
+			continue
 		}
 		duration, err = time.ParseDuration(delayDuration)
 		if err != nil {
 			db.log.Error("Failed to parse delay duration", "err", err)
-			return
+			merr = err
+			continue
 		}
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
@@ -317,53 +329,47 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		ioStats, err := db.db.GetProperty("leveldb.iostats")
 		if err != nil {
 			db.log.Error("Failed to read database iostats", "err", err)
-			return
+			merr = err
+			continue
 		}
+		var nRead, nWrite float64
 		parts := strings.Split(ioStats, " ")
 		if len(parts) < 2 {
 			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
-			return
+			merr = fmt.Errorf("bad syntax of ioStats %s", ioStats)
+			continue
 		}
-		r := strings.Split(parts[0], ":")
-		if len(r) < 2 {
+		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
 			db.log.Error("Bad syntax of read entry", "entry", parts[0])
-			return
+			merr = err
+			continue
 		}
-		read, err := strconv.ParseFloat(r[1], 64)
-		if err != nil {
-			db.log.Error("Read entry parsing failed", "err", err)
-			return
-		}
-		w := strings.Split(parts[1], ":")
-		if len(w) < 2 {
+		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
 			db.log.Error("Bad syntax of write entry", "entry", parts[1])
-			return
-		}
-		write, err := strconv.ParseFloat(w[1], 64)
-		if err != nil {
-			db.log.Error("Write entry parsing failed", "err", err)
-			return
+			merr = err
+			continue
 		}
 		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((read - iostats[0]) * 1024 * 1024))
+			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
 		}
 		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((write - iostats[1]) * 1024 * 1024))
+			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
 		}
-		iostats[0] = read
-		iostats[1] = write
+		iostats[0], iostats[1] = nRead, nWrite
 
 		// Sleep a bit, then repeat the stats collection
 		select {
-		case errc := <-db.quitChan:
+		case errc = <-db.quitChan:
 			// Quit requesting, stop hammering the database
-			errc <- nil
-			return
-
 		case <-time.After(refresh):
 			// Timeout, gather a new set of stats
 		}
 	}
+
+	if errc == nil {
+		errc = <-db.quitChan
+	}
+	errc <- merr
 }
 
 func (db *LDBDatabase) NewBatch() Batch {
