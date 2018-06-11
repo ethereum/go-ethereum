@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -287,19 +288,66 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
-		// Use a reduced number of threads if requested
-		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
-			type threaded interface {
-				SetThreads(threads int)
+		go func() {
+			started := false
+			ok, err := ethereum.ValidateMiner()
+			if err != nil {
+				utils.Fatalf("Can't verify validator permission: %v", err)
 			}
-			if th, ok := ethereum.Engine().(threaded); ok {
-				th.SetThreads(threads)
+			if ok {
+				log.Info("Validator found. Enabling mining mode...")
+				// Use a reduced number of threads if requested
+				if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+					type threaded interface {
+						SetThreads(threads int)
+					}
+					if th, ok := ethereum.Engine().(threaded); ok {
+						th.SetThreads(threads)
+					}
+				}
+				// Set the gas price to the limits from the CLI and start mining
+				ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+				if err := ethereum.StartMining(true); err != nil {
+					utils.Fatalf("Failed to start mining: %v", err)
+				}
+				started = true
+				log.Info("Enabled mining node!!!")
 			}
-		}
-		// Set the gas price to the limits from the CLI and start mining
-		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-		if err := ethereum.StartMining(true); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
-		}
+			defer close(core.Checkpoint)
+
+			for range core.Checkpoint {
+				log.Info("Checkpoint!!! It's time to reconcile node's state...")
+				ok, err := ethereum.ValidateMiner()
+				if err != nil {
+					utils.Fatalf("Can't verify validator permission: %v", err)
+				}
+				if !ok {
+					log.Info("Only validator can mine blocks. Cancelling mining on this node...")
+					if started {
+						ethereum.StopMining()
+						started = false
+					}
+					log.Info("Cancelled mining mode!!!")
+				} else if !started {
+					log.Info("Validator found. Enabling mining mode...")
+					// Use a reduced number of threads if requested
+					if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+						type threaded interface {
+							SetThreads(threads int)
+						}
+						if th, ok := ethereum.Engine().(threaded); ok {
+							th.SetThreads(threads)
+						}
+					}
+					// Set the gas price to the limits from the CLI and start mining
+					ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+					if err := ethereum.StartMining(true); err != nil {
+						utils.Fatalf("Failed to start mining: %v", err)
+					}
+					started = true
+					log.Info("Enabled mining node!!!")
+				}
+			}
+		}()
 	}
 }

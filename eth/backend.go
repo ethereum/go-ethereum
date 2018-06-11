@@ -334,6 +334,29 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
+// ValidateMiner checks if node's address is in set of validators
+func (s *Ethereum) ValidateMiner() (bool, error) {
+	eb, err := s.Etherbase()
+	if err != nil {
+		return false, err
+	}
+	if s.chainConfig.Clique != nil {
+		//check if miner's wallet is in set of validators
+		c := s.engine.(*clique.Clique)
+		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
+		if err != nil {
+			return false, fmt.Errorf("Can't verify miner: %v", err)
+		}
+		if _, authorized := snap.Signers[eb]; !authorized {
+			//This miner doesn't belong to set of validators
+			return false, nil
+		}
+	} else {
+		return false, fmt.Errorf("Only verify miners in Clique protocol")
+	}
+	return true, nil
+}
+
 func (s *Ethereum) StartMining(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {

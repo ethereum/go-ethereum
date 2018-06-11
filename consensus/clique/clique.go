@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -47,7 +48,8 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime      = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	genesisCoinBase = "0x0000000000000000000000000000000000000000"
 )
 
 // Clique proof-of-authority protocol constants.
@@ -277,9 +279,6 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
 	checkpoint := (number % c.config.Epoch) == 0
-	if checkpoint && header.Coinbase != (common.Address{}) {
-		return errInvalidCheckpointBeneficiary
-	}
 	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
 	if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
 		return errInvalidVote
@@ -365,6 +364,41 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 	}
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents)
+}
+
+func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
+	number := header.Number.Uint64()
+	log.Trace("take snapshot", "number", number, "hash", header.Hash())
+	snap, err := c.snapshot(chain, number, header.Hash(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return snap, nil
+}
+
+func position(list []common.Address, x common.Address) int {
+	for i, item := range list {
+		if item == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+	if header.Number.Uint64() == 0 {
+		// Not check signer for genesis block.
+		return true, nil
+	}
+
+	pre, err := ecrecover(header, snap.sigcache)
+	if err != nil {
+		return false, err
+	}
+	preIndex := position(snap.signers(), pre)
+	curIndex := position(snap.signers(), cur)
+	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	return (preIndex+1)%len(snap.signers()) == curIndex, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -572,10 +606,9 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
 	// FIXME: unit Ether could be too plump
-	chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
-
-	reward := new(big.Int).Set(chainReward)
-	state.AddBalance(header.Coinbase, reward)
+	if err := c.accumulateRewards(chain, state, header); err != nil {
+		return nil, err
+	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -689,4 +722,56 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 		Service:   &API{chain: chain, clique: c},
 		Public:    false,
 	}}
+}
+
+func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
+	type rewardLog struct {
+		Sign   uint64  `json:"sign"`
+		Reward float64 `json:"reward"`
+	}
+
+	number := header.Number.Uint64()
+	rCheckpoint := chain.Config().Clique.RewardCheckpoint
+
+	if number > 0 && rCheckpoint > 0 && number%rCheckpoint == 0 {
+		// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+		parentHeader := chain.GetHeaderByHash(header.ParentHash)
+		startBlockNumber := number - rCheckpoint + 1
+		endBlockNumber := parentHeader.Number.Uint64()
+		signers := make(map[common.Address]*rewardLog)
+		totalSigner := uint64(0)
+
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+			blockHeader := chain.GetHeaderByNumber(i)
+			if signer, err := ecrecover(blockHeader, c.signatures); err != nil {
+				return err
+			} else {
+				_, exist := signers[signer]
+				if exist {
+					signers[signer].Sign++
+				} else {
+					signers[signer] = &rewardLog{1, 0}
+				}
+				totalSigner++
+			}
+		}
+
+		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+		// Update balance reward.
+		calcReward := new(big.Int)
+		for signer, rLog := range signers {
+			calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
+			calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+			rLog.Reward = float64(calcReward.Int64())
+
+			state.AddBalance(signer, calcReward)
+		}
+		jsonSigners, err := json.Marshal(signers)
+		if err != nil {
+			return err
+		}
+		log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
+	}
+
+	return nil
 }

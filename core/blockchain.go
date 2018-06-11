@@ -47,8 +47,8 @@ import (
 
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
-
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	Checkpoint       = make(chan int)
+	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
 const (
@@ -1185,6 +1185,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
+		if i == len(chain)-1 {
+			if (bc.chainConfig.Clique != nil) && (chain[i].NumberU64()%bc.chainConfig.Clique.Epoch) == 0 {
+				Checkpoint <- 1
+			}
+		}
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -397,6 +398,29 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 
+	// Only try to commit new work if we are mining
+	if atomic.LoadInt32(&self.mining) == 1 {
+		// check if we are right after parent's coinbase in the list
+		// only go with Clique
+		if self.config.Clique != nil {
+			c := self.engine.(*clique.Clique)
+			snap, err := c.GetSnapshot(self.chain, parent.Header())
+			if err != nil {
+				log.Error("Failed when trying to commit new work", "err", err)
+				return
+			}
+			ok, err := clique.YourTurn(snap, parent.Header(), self.coinbase)
+			if err != nil {
+				log.Error("Failed when trying to commit new work", "err", err)
+				return
+			}
+			if !ok {
+				log.Info("Not our turn to commit block. Wait for next time")
+				return
+			}
+		}
+	}
+
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
 		tstamp = parent.Time().Int64() + 1
@@ -487,6 +511,9 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
+	}
+	if (work.config.Clique != nil) && (work.Block.NumberU64()%work.config.Clique.Epoch) == 0 {
+		core.Checkpoint <- 1
 	}
 	self.push(work)
 }
