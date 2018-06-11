@@ -24,6 +24,7 @@ import (
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/core/rawdb"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
@@ -81,7 +82,7 @@ func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block   { panic
 func (r *testerChainReader) GetHeaderByHash(common.Hash) *types.Header   { panic("not supported") }
 func (r *testerChainReader) GetHeaderByNumber(number uint64) *types.Header {
 	if number == 0 {
-		return core.GetHeader(r.db, core.GetCanonicalHash(r.db, 0), 0)
+		return rawdb.ReadHeader(r.db, rawdb.ReadCanonicalHash(r.db, 0), 0)
 	}
 	panic("not supported")
 }
@@ -351,7 +352,7 @@ func TestVoting(t *testing.T) {
 			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
 		}
 		// Create a pristine blockchain with the genesis injected
-		db, _ := ethdb.NewMemDatabase()
+		db := ethdb.NewMemDatabase()
 		genesis.Commit(db)
 
 		// Assemble a chain of headers from the cast votes

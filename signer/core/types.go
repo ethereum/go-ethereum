@@ -73,8 +73,8 @@ type SendTxArgs struct {
 	Input *hexutil.Bytes `json:"input"`
 }
 
-func (t SendTxArgs) String() string {
-	s, err := json.Marshal(t)
+func (args SendTxArgs) String() string {
+	s, err := json.Marshal(args)
 	if err == nil {
 		return string(s)
 	}

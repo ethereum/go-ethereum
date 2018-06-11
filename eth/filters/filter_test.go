@@ -26,6 +26,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/core/rawdb"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
@@ -84,16 +85,10 @@ func BenchmarkFilters(b *testing.B) {
 		}
 	})
 	for i, block := range chain {
-		core.WriteBlock(db, block)
-		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-			b.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
-			b.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
-			b.Fatal("error writing block receipts:", err)
-		}
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 	b.ResetTimer()
 
@@ -174,16 +169,10 @@ func TestFilters(t *testing.T) {
 		}
 	})
 	for i, block := range chain {
-		core.WriteBlock(db, block)
-		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
-			t.Fatal("error writing block receipts:", err)
-		}
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
 	filter := New(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})

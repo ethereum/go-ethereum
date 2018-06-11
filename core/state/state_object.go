@@ -178,9 +178,7 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 		}
 		value.SetBytes(content)
 	}
-	if (value != common.Hash{}) {
-		self.cachedStorage[key] = value
-	}
+	self.cachedStorage[key] = value
 	return value
 }
 
@@ -197,7 +195,6 @@ func (self *stateObject) SetState(db Database, key, value common.Hash) {
 func (self *stateObject) setState(key, value common.Hash) {
 	self.cachedStorage[key] = value
 	self.dirtyStorage[key] = value
-
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.

@@ -207,6 +207,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		delaystats      [2]int64
 		lastWriteDelay  time.Time
 		lastWriteDelayN time.Time
+		lastWritePaused time.Time
 	)
 
 	// Iterate ad infinitum and collect the stats
@@ -267,8 +268,9 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			delayN        int64
 			delayDuration string
 			duration      time.Duration
+			paused        bool
 		)
-		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s", &delayN, &delayDuration); n != 2 || err != nil {
+		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
 			db.log.Error("Write delay statistic not found")
 			return
 		}
@@ -301,6 +303,14 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 				lastWriteDelay = time.Now()
 			}
 		}
+		// If a warning that db is performing compaction has been displayed, any subsequent
+		// warnings will be withheld for one minute not to overwhelm the user.
+		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
+			time.Now().After(lastWritePaused.Add(writeDelayWarningThrottler)) {
+			db.log.Warn("Database compacting, degraded performance")
+			lastWritePaused = time.Now()
+		}
+
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
 		// Retrieve the database iostats.

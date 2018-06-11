@@ -59,7 +59,7 @@ using the same data directory will store this information in different subdirect
 the data directory.
 
 LevelDB databases are also stored within the instance subdirectory. If multiple node
-instances use the same data directory, openening the databases with identical names will
+instances use the same data directory, opening the databases with identical names will
 create one database for each instance.
 
 The account key store is shared among all node instances using the same data directory
@@ -84,7 +84,7 @@ directory. Mode instance A opens the database "db", node instance B opens the da
             static-nodes.json  -- devp2p static node list of instance B
             db/                -- LevelDB content for "db"
             db-2/              -- LevelDB content for "db-2"
-        B.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance A
+        B.ipc                  -- JSON-RPC UNIX domain socket endpoint of instance B
         keystore/              -- account key store, used by both instances
 */
 package node
