@@ -214,11 +214,10 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	var (
 		errc chan error
 		merr error
-		i    int = 1
 	)
 
 	// Iterate ad infinitum and collect the stats
-	for errc == nil && merr == nil {
+	for i := 1; errc == nil && merr == nil; i++ {
 		// Retrieve the database stats
 		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
@@ -356,8 +355,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		if db.diskWriteMeter != nil {
 			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
 		}
-		iostats[0] = nRead
-		iostats[1] = nWrite
+		iostats[0], iostats[1] = nRead, nWrite
 
 		// Sleep a bit, then repeat the stats collection
 		select {
@@ -366,7 +364,6 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		case <-time.After(refresh):
 			// Timeout, gather a new set of stats
 		}
-		i += 1
 	}
 
 	if errc == nil {
