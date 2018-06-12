@@ -68,8 +68,8 @@ func CollectProcessMetrics(refresh time.Duration) {
 	}
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {
-		location1 := i%2
-		location2 := (i-1)%2
+		location1 := i % 2
+		location2 := (i - 1) % 2
 
 		runtime.ReadMemStats(memstats[location1])
 		memAllocs.Mark(int64(memstats[location1].Mallocs - memstats[location2].Mallocs))
