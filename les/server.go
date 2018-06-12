@@ -62,27 +62,27 @@ type LesServer struct {
 	bloomTrieIndexer *core.ChainIndexer // Indexers for creating bloom trie root for each block section
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
-	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, ServerProtocolVersions, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, nil, quitSync, new(sync.WaitGroup))
+	pm, err := NewProtocolManager(e.BlockChain().Config(), false, ServerProtocolVersions, config.NetworkId, e.EventMux(), e.Engine(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
 
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
+		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
 	}
 
 	srv := &LesServer{
 		config:           config,
-		backend:          eth.APIBackend,
-		chaindb:          eth.ChainDb(),
+		backend:          e.APIBackend,
+		chaindb:          e.ChainDb(),
 		protocolManager:  pm,
 		quitSync:         quitSync,
 		lesTopics:        lesTopics,
-		chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false),
+		chtIndexer:       light.NewChtIndexer(e.ChainDb(), false),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), false),
 	}
 	logger := log.New()
 
@@ -105,7 +105,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		logger.Info("Loaded bloom trie", "section", bloomTrieLastSection, "head", bloomTrieSectionHead, "root", bloomTrieRoot)
 	}
 
-	srv.chtIndexer.Start(eth.BlockChain())
+	srv.chtIndexer.Start(e.BlockChain())
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -113,9 +113,9 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		MinRecharge: 50000,
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
-	srv.fcCostStats = newCostStats(eth.ChainDb())
-	if addr, ok := registrar.RegistrarAddr[eth.BlockChain().Genesis().Hash()]; ok {
-		registrar, err := registrar.NewRegistrar(addr, eth.APIBackend, false)
+	srv.fcCostStats = newCostStats(e.ChainDb())
+	if addr, ok := registrar.RegistrarAddr[e.BlockChain().Genesis().Hash()]; ok {
+		registrar, err := registrar.NewRegistrar(addr, eth.NewContractBackend(e.APIBackend, e.APIBackend, false))
 		if err != nil {
 			return nil, err
 		}

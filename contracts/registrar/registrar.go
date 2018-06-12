@@ -23,9 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -34,7 +32,7 @@ var (
 	RegistrarAddr = map[common.Hash]common.Address{
 		// params.MainnetGenesisHash: common.HexToAddress(""),
 		// params.TestnetGenesisHash: common.HexToAddress(""),
-		params.RinkebyGenesisHash: common.HexToAddress("0xe3f2686a5d0c56a2d853c19c46b173a755263be8"),
+		params.RinkebyGenesisHash: common.HexToAddress("0xaefc742121f79ce9d0953fea7c9cd10f6586179b"),
 	}
 )
 
@@ -45,8 +43,8 @@ type Registrar struct {
 }
 
 // NewRegistrar binds checkpoint contract and returns a registrar instance.
-func NewRegistrar(contractAddr common.Address, backend ethapi.Backend, lightMode bool) (*Registrar, error) {
-	contract, err := contract.NewContract(contractAddr, eth.NewContractBackend(backend, lightMode))
+func NewRegistrar(contractAddr common.Address, backend bind.ContractBackend) (*Registrar, error) {
+	contract, err := contract.NewContract(contractAddr, backend)
 	if err != nil {
 		return nil, err
 	}

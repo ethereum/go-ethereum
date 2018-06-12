@@ -39,20 +39,22 @@ import (
 // object. These should be rewritten to internal Go method calls when the Go API
 // is refactored to support a clean library use.
 type ContractBackend struct {
-	eapi      *ethapi.PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
-	bcapi     *ethapi.PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
-	txapi     *ethapi.PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
-	filterapi *filters.PublicFilterAPI         // Wrapper around the filter to watch and retrieve contract logs
+	filterBackend filters.Backend                  // Backend used for filter vm logs.
+	events        *filters.EventSystem             // Event system used to watch new fired vm logs.
+	eapi          *ethapi.PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
+	bcapi         *ethapi.PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
+	txapi         *ethapi.PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
 }
 
 // NewContractBackend creates a new native contract backend using an existing
 // Ethereum object.
-func NewContractBackend(apiBackend ethapi.Backend, lightMode bool) *ContractBackend {
+func NewContractBackend(apiBackend ethapi.Backend, filterBackend filters.Backend, lightMode bool) *ContractBackend {
 	return &ContractBackend{
-		eapi:      ethapi.NewPublicEthereumAPI(apiBackend),
-		bcapi:     ethapi.NewPublicBlockChainAPI(apiBackend),
-		txapi:     ethapi.NewPublicTransactionPoolAPI(apiBackend, new(ethapi.AddrLocker)),
-		filterapi: filters.NewPublicFilterAPI(apiBackend.(filters.Backend), lightMode),
+		filterBackend: filterBackend,
+		events:        filters.NewEventSystem(apiBackend.EventMux(), filterBackend, lightMode),
+		eapi:          ethapi.NewPublicEthereumAPI(apiBackend),
+		bcapi:         ethapi.NewPublicBlockChainAPI(apiBackend),
+		txapi:         ethapi.NewPublicTransactionPoolAPI(apiBackend, new(ethapi.AddrLocker)),
 	}
 }
 
@@ -93,7 +95,7 @@ func (b *ContractBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error)
 	if err != nil {
 		return nil, err
 	}
-	return (*big.Int)(price), nil
+	return price.ToInt(), nil
 }
 
 // EstimateGasLimit implements bind.ContractTransactor trying to estimate the gas
@@ -117,23 +119,34 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 // FilterLogs implements bind.ContractFilterer returning logs matching the given argument
 // that are stored within the state.
 func (b *ContractBackend) FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
-	ret, err := b.filterapi.GetLogs(ctx, filters.FilterCriteria(query))
+	// Initialize unset filter boundaried to run from genesis to chain head
+	from := int64(0)
+	if query.FromBlock != nil {
+		from = query.FromBlock.Int64()
+	}
+	to := int64(-1)
+	if query.ToBlock != nil {
+		to = query.ToBlock.Int64()
+	}
+	// Construct and execute the filter
+	filter := filters.New(b.filterBackend, from, to, query.Addresses, query.Topics)
+
+	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	logs := make([]types.Log, len(ret))
-	for idx, log := range ret {
-		logs[idx] = *log
+	res := make([]types.Log, len(logs))
+	for i, log := range logs {
+		res[i] = *log
 	}
-	return logs, nil
+	return res, nil
 }
 
 // SubscribeFilterLogs implements bind.ContractFilterer watching new fired logs matching the given argument.
 func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
 	// Subscribe to contract events
 	sink := make(chan []*types.Log)
-
-	sub, err := b.filterapi.EventSystem().SubscribeLogs(query, sink)
+	sub, err := b.events.SubscribeLogs(query, sink)
 	if err != nil {
 		return nil, err
 	}

@@ -43,6 +43,7 @@ var (
 		ChtRoot:       common.HexToHash("cf92fd2a79464354e8dae4d589ae92acdf90a3a4f8f7d8a3ec5fb9c114ae81cd"),
 		BloomTrieRoot: common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	}
+	checkpointHash = crypto.Keccak256Hash(trustedCheckpoint.SectionHead.Bytes(), trustedCheckpoint.ChtRoot.Bytes(), trustedCheckpoint.BloomTrieRoot.Bytes())
 )
 
 // validateOperation executes the operation, watches and delivers all events fired by the backend and ensures the
@@ -200,8 +201,7 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Register unstable checkpoint
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
-			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
+		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), checkpointHash)
 	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
 		hash, err := c.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 		if err != nil {
@@ -219,29 +219,27 @@ func TestCheckpointRegister(t *testing.T) {
 	validateOperation(t, c, contractBackend, func() {
 		user2, _ := crypto.GenerateKey()
 		unauthorized := bind.NewKeyedTransactor(user2)
-		c.SetCheckpoint(unauthorized, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
-			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
+		c.SetCheckpoint(unauthorized, big.NewInt(int64(trustedCheckpoint.SectionIdx)), checkpointHash)
 	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
 		hash, err := c.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 		if err != nil {
 			return errors.New("get checkpoint failed")
 		}
 		if hash != emptyHash {
-			return errors.New("unstable checkpoint should be banned")
+			return errors.New("checkpoint from unauthorized user should be banned")
 		}
 		return nil
 	}, "register by unauthorized user")
 
 	// Register a stable checkpoint
 	validateOperation(t, c, contractBackend, func() {
-		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
-			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
+		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), checkpointHash)
 	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
 		hash, err := c.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 		if err != nil {
 			return errors.New("get checkpoint failed")
 		}
-		if !trustedCheckpoint.HashEqual(common.Hash(hash)) {
+		if hash != checkpointHash {
 			return errors.New("register stable checkpoint failed")
 		}
 		if !validateEvents(1, events) {
@@ -250,17 +248,16 @@ func TestCheckpointRegister(t *testing.T) {
 		return nil
 	}, "register stable checkpoint")
 
+	fakeHash := crypto.Keccak256Hash([]byte("dead"), []byte("beef"), []byte("deadbeef"))
 	// Modify the latest checkpoint
 	validateOperation(t, c, contractBackend, func() {
-		trustedCheckpoint.SectionHead = common.HexToHash("dead")
-		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
-			trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
+		c.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), fakeHash)
 	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
 		hash, err := c.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 		if err != nil {
 			return errors.New("get checkpoint failed")
 		}
-		if !trustedCheckpoint.HashEqual(common.Hash(hash)) {
+		if hash != fakeHash {
 			return errors.New("register stable checkpoint failed")
 		}
 		if !validateEvents(1, events) {

@@ -86,16 +86,12 @@ contract Registrar {
      * Note we trust the given information here provided by foundation,
      * need a trust less version for future.
      * @param _sectionIndex section index
-     * @param _sectionHead section header
-     * @param _chtRoot cht root hash
-     * @param _bloomTrieRoot bloom trie root hash
+     * @param _hash checkpoint hash calculated in the client side
      * @return indicator whether set checkpoint successfully
      */
     function SetCheckpoint(
         uint _sectionIndex,
-        bytes32 _sectionHead,
-        bytes32 _chtRoot,
-        bytes32 _bloomTrieRoot
+        bytes32 _hash
     )
     OnlyAuthorized
     public
@@ -111,10 +107,10 @@ contract Registrar {
             return false;
         }
 
-        checkpoints[_sectionIndex] = keccak256(abi.encodePacked(_sectionHead, _chtRoot, _bloomTrieRoot));
+        checkpoints[_sectionIndex] = _hash;
         latest = _sectionIndex;
 
-        emit NewCheckpointEvent(_sectionIndex, msg.sender, checkpoints[_sectionIndex]);
+        emit NewCheckpointEvent(_sectionIndex, msg.sender, _hash);
     }
 
     /**
