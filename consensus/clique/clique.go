@@ -39,8 +39,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/params"
 	"github.com/EthereumCommonwealth/go-callisto/rlp"
 	"github.com/EthereumCommonwealth/go-callisto/rpc"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -571,7 +570,7 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, and returns the final block.
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	ethash.InvokeAccumulateRewards(chain.Config(), state, header, uncles)
+	// ethash.InvokeAccumulateRewards(chain.Config(), state, header, uncles) Removed to Parity compatibility
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
