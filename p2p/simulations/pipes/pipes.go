@@ -17,10 +17,7 @@
 package pipes
 
 import (
-	"crypto/rand"
 	"net"
-	"os"
-	"syscall"
 )
 
 // NetPipe wraps net.Pipe in a signature returning an error
@@ -55,32 +52,4 @@ func TCPPipe() (net.Conn, net.Conn, error) {
 		return nil, nil, err
 	}
 	return aconn, dconn, nil
-}
-
-// SocketPipe creates an in process full duplex pipe based on OS sockets
-// credit to @lmars & Flynn
-// https://github.com/flynn/flynn/blob/master/host/containerinit/init.go#L743-L749
-// using this in large simulations requires raising OS's max open file limit
-func SocketPipe() (net.Conn, net.Conn, error) {
-	pair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	nameb := make([]byte, 8)
-	_, err = rand.Read(nameb)
-	if err != nil {
-		return nil, nil, err
-	}
-	f1 := os.NewFile(uintptr(pair[0]), string(nameb)+".out")
-	f2 := os.NewFile(uintptr(pair[1]), string(nameb)+".in")
-	pipe1, err := net.FileConn(f1)
-	if err != nil {
-		return nil, nil, err
-	}
-	pipe2, err := net.FileConn(f2)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return pipe1, pipe2, nil
 }

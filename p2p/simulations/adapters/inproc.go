@@ -33,7 +33,7 @@ import (
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
-// connects them using net.Pipe or OS socket connections
+// connects them using net.Pipe
 type SimAdapter struct {
 	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
@@ -48,18 +48,6 @@ type SimAdapter struct {
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     pipes.NetPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
-		services: services,
-	}
-}
-
-// NewSocketAdapter creates a SimAdapter which is capable of running in-memory
-// simulation nodes running any of the given services (the services to run on a
-// particular node are passed to the NewNode function in the NodeConfig)
-// the adapter uses a OS socketpairs for in-memory simulated network connections
-func NewSocketAdapter(services map[string]ServiceFunc) *SimAdapter {
-	return &SimAdapter{
-		pipe:     pipes.SocketPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -126,7 +114,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 }
 
 // Dial implements the p2p.NodeDialer interface by connecting to the node using
-// an in-memory net.Pipe or OS socket connection
+// an in-memory net.Pipe
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	node, ok := s.GetNode(dest.ID)
 	if !ok {
@@ -136,7 +124,7 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	if srv == nil {
 		return nil, fmt.Errorf("node not running: %s", dest.ID)
 	}
-	// SimAdapter.pipe is either net.Pipe (NewSimAdapter) or socketPipe (NewSocketAdapter)
+	// SimAdapter.pipe is net.Pipe (NewSimAdapter)
 	pipe1, pipe2, err := s.pipe()
 	if err != nil {
 		return nil, err
@@ -171,8 +159,8 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 }
 
 // SimNode is an in-memory simulation node which connects to other nodes using
-// net.Pipe or OS socket connection (see SimAdapter.Dial), running devp2p
-// protocols directly over that pipe
+// net.Pipe (see SimAdapter.Dial), running devp2p protocols directly over that
+// pipe
 type SimNode struct {
 	lock         sync.RWMutex
 	ID           discover.NodeID
