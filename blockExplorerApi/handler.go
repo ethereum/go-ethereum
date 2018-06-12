@@ -273,12 +273,10 @@ func BroadcastTx(w http.ResponseWriter, r *http.Request) {
 	}
 	tx_hash := dat["result"]
 	if(tx_hash == nil) {
-		errObj := dat["error"]
-		errObj2 := errObj.(map[string]interface{})
-		fmt.Println()
+		errMap := dat["error"].(map[string]interface{})
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "ERROR:", errObj2["message"])
+		fmt.Fprintln(w, "ERROR:", errMap["message"])
 	} else {
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusOK)
