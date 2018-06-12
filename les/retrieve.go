@@ -71,6 +71,7 @@ type sentReq struct {
 
 	reqQueued    bool // a request has been queued but not sent
 	reqSent      bool // a request has been sent but not timed out
+	delivered    bool // requested data has passed the validation and cached
 	reqSrtoCount int  // number of requests that reached soft (but not hard) timeout
 }
 
@@ -363,7 +364,15 @@ func (r *sentReq) deliver(peer distPeer, msg *Msg) error {
 	if !ok || s.delivered {
 		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 	}
-	valid := r.validate(peer, msg) == nil
+	valid := false
+	if r.delivered {
+		valid = true
+	} else {
+		valid = r.validate(peer, msg) == nil
+		if valid {
+			r.delivered = true
+		}
+	}
 	r.sentTo[peer] = sentReqToPeer{true, s.valid}
 	s.valid <- valid
 	if !valid {
