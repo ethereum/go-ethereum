@@ -1524,6 +1524,12 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 	return bc.hc.GetBlockHashesFromHash(hash, max)
 }
 
+// GetAncestorBlockHashFromHash retrieves the block hash for the ancestor of a given
+// hash, fetching towards the genesis block.
+func (bc *BlockChain) GetAncestorBlockHashFromHash(hash common.Hash, max uint64) common.Hash {
+	return bc.hc.GetAncestorBlockHashFromHash(hash, max)
+}
+
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {

@@ -75,6 +75,11 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 1},
 			[]common.Hash{bc.GetBlockByNumber(limit / 2).Hash()},
 		},
+		// Overflow attack
+		{
+			&getBlockHeadersData{Origin: hashOrNumber{Hash:bc.GetBlockByNumber(1).Hash()}, Amount: 1,Skip:0xFFFFFFFFFFFFFFFF},
+				[]common.Hash{},
+		},
 		// Multiple headers should be retrievable in both directions
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Number: limit / 2}, Amount: 3},
