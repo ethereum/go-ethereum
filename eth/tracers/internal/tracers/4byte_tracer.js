@@ -60,7 +60,7 @@
 			return;
 		}
 		// Skip any pre-compile invocations, those are just fancy opcodes
-		if (isPrecompiled(toAddress(log.stack.peek(1)))) {
+		if (isPrecompiled(toAddress(log.stack.peek(1).toString(16)))) {
 			return;
 		}
 		// Gather internal call details
