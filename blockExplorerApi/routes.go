@@ -87,4 +87,10 @@ var routes = Routes{
 		"/api/get_internal_transactions_hash/{transactions_hash}",
 		GetInternalTransactionsHash,
 	},
+	Route{
+		"BroadcastTx",
+		"GET",
+		"/api/broadcast_tx/{transaction_hash}",
+		BroadcastTx,
+	},
 }
