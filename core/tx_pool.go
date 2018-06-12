@@ -1111,7 +1111,7 @@ func (pool *TxPool) demoteUnexecutables() {
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
 			for _, tx := range list.Cap(0) {
 				hash := tx.Hash()
-				log.Error("Demoting invalidated transaction", "hash", hash)
+				log.Warn("Demoting invalidated transaction", "hash", hash)
 				pool.enqueueTx(hash, tx)
 			}
 		}
