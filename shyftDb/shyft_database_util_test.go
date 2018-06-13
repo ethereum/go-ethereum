@@ -101,8 +101,6 @@ func TestBlockToReturnBlock(t *testing.T) {
 }
 
 func TestGetRecentBlock(t *testing.T) {
-	db := InitTestDB()
-
 	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	signer   := types.NewEIP155Signer(big.NewInt(2147483647))
 
@@ -140,7 +138,12 @@ func TestGetRecentBlock(t *testing.T) {
 		}
 	}
 
-	response := GetRecentBlock(db)
+	sqldb, err := DBConnection()
+	if (err != nil) {
+		panic(err)
+	}
+
+	response := GetRecentBlock(sqldb)
 	byteRes := []byte(response)
 	var recentBlock SBlock
 	json.Unmarshal(byteRes, &recentBlock)
@@ -179,7 +182,7 @@ func TestGetRecentBlock(t *testing.T) {
 		t.Fatalf("Block nonce [%v]: Block nonce not found", block.Nonce())
 	}
 
-	if allTxsFromBlock:= GetAllTransactionsFromBlock(db, block2.Number().String()); len(allTxsFromBlock) == 0 {
+	if allTxsFromBlock:= GetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
 		t.Fatalf("GetAllTransactionsFromBlock [%v]: GetAllTransactionsFromBlock did not return correctly", allTxsFromBlock)
 	}
 	ClearTables()
@@ -389,8 +392,6 @@ func TestTransactionsToReturnTransactions(t *testing.T) {
 }
 
 func TestAccountsToReturnAccounts(t *testing.T) {
-	db := InitTestDB()
-
 	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	signer  := types.NewEIP155Signer(big.NewInt(2147483647))
 
@@ -421,8 +422,14 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 			t.Fatalf("Failed to write block into database: %v", err)
 		}
 
+	sqldb, err := DBConnection()
+	if (err != nil) {
+		panic(err)
+	}
+
+
 	for _, tx := range txs {
-			accountAddrTo := GetAccount(db, tx.To().String())
+			accountAddrTo := GetAccount(sqldb, tx.To().String())
 			byts := []byte(accountAddrTo)
 			var accountDataTo SAccounts
 			json.Unmarshal(byts, &accountDataTo)
@@ -436,12 +443,12 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 		if strconv.FormatUint(tx.Nonce(), 10) != accountDataTo.TxCountAccount {
 			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataTo.TxCountAccount)
 		}
-		if getAllAccountTxs := GetAccountTxs(db, tx.To().String()); len(getAllAccountTxs) == 0 {
+		if getAllAccountTxs := GetAccountTxs(sqldb, tx.To().String()); len(getAllAccountTxs) == 0 {
 			t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
 		}
 	}
 
-	if getAllAccounts := GetAllAccounts(db); len(getAllAccounts) == 0 {
+	if getAllAccounts := GetAllAccounts(sqldb); len(getAllAccounts) == 0 {
 		t.Fatalf("GetAllAccounts [%v]: GetAllAccounts did not return correctly", getAllAccounts)
 	}
 	ClearTables()
