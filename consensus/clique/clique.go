@@ -775,3 +775,7 @@ func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.Sta
 
 	return nil
 }
+
+func (c *Clique) RecoverSigner(header *types.Header) (common.Address, error) {
+	return ecrecover(header, c.signatures)
+}
