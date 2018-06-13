@@ -442,7 +442,7 @@ func (w *Whisper) Send(envelope *Envelope) error {
 	if !ok {
 		return fmt.Errorf("failed to add envelope")
 	}
-	return err
+	return nil
 }
 
 // Start implements node.Service, starting the background data propagation thread
