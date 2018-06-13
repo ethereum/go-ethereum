@@ -299,7 +299,7 @@ func TestReturnDataFilter(t *testing.T) {
 		firstRetData          = common.Hex2Bytes("535353535353535353535353535353535353535353535353535353")
 		secondRetData         = common.Hex2Bytes("8888888888888888888888888888888888888888888888888888888888888888888888888888888888888")
 		thirdRetData   []byte = nil // no return data for this tx
-		forthRetData          = common.Hex2Bytes("0x77")
+		forthRetData          = common.Hex2Bytes("77")
 		backend               = &testBackend{mux, db, 0, txPreFeed, txPostFeed, rmLogsFeed, logsFeed, chainFeed}
 		api                   = NewPublicFilterAPI(backend, false)
 	)
@@ -320,24 +320,33 @@ func TestReturnDataFilter(t *testing.T) {
 		{TxHash: retData[4].TxHash, RetData: &retData[4], From: &firstFromAddr, To: &secondToAddr},
 	}
 
+	makeMap := func(addressList ...common.Address) map[common.Address]struct{} {
+		addressSet := make(map[common.Address]struct{})
+		for _, address := range addressList {
+			addressSet[address] = struct{}{}
+		}
+		return addressSet
+	}
+
 	testCases := []struct {
 		crit     TxFilterCriteria
 		expected []types.ReturnData
 		id       rpc.ID
 	}{
-		0:  {TxFilterCriteria{From: []common.Address{secondFromAddr}}, []types.ReturnData{retData[1], retData[3]}, ""},
-		1:  {TxFilterCriteria{From: []common.Address{firstFromAddr}}, []types.ReturnData{retData[0], retData[2], retData[4]}, ""},
-		2:  {TxFilterCriteria{From: []common.Address{notUsedAddr}}, []types.ReturnData{}, ""},
-		3:  {TxFilterCriteria{From: []common.Address{notUsedAddr, secondFromAddr}}, []types.ReturnData{retData[1], retData[3]}, ""},
-		4:  {TxFilterCriteria{From: []common.Address{notUsedAddr, firstFromAddr, secondFromAddr}}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
-		5:  {TxFilterCriteria{To: []common.Address{firstToAddr}}, []types.ReturnData{retData[0], retData[3]}, ""},
-		6:  {TxFilterCriteria{To: []common.Address{secondToAddr}}, []types.ReturnData{retData[1], retData[2], retData[4]}, ""},
-		7:  {TxFilterCriteria{To: []common.Address{firstToAddr, secondToAddr}}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
-		8:  {TxFilterCriteria{To: []common.Address{notUsedAddr}}, []types.ReturnData{}, ""},
-		9:  {TxFilterCriteria{From: []common.Address{firstFromAddr}, To: []common.Address{secondToAddr}}, []types.ReturnData{retData[2], retData[4]}, ""},
-		10: {TxFilterCriteria{From: []common.Address{notUsedAddr}, To: []common.Address{secondToAddr}}, []types.ReturnData{}, ""},
-		11: {TxFilterCriteria{From: []common.Address{secondFromAddr}, To: []common.Address{secondToAddr, notUsedAddr}}, []types.ReturnData{retData[1]}, ""},
+		0:  {TxFilterCriteria{From: makeMap(secondFromAddr)}, []types.ReturnData{retData[1], retData[3]}, ""},
+		1:  {TxFilterCriteria{From: makeMap(firstFromAddr)}, []types.ReturnData{retData[0], retData[2], retData[4]}, ""},
+		2:  {TxFilterCriteria{From: makeMap(notUsedAddr)}, []types.ReturnData{}, ""},
+		3:  {TxFilterCriteria{From: makeMap(notUsedAddr, secondFromAddr)}, []types.ReturnData{retData[1], retData[3]}, ""},
+		4:  {TxFilterCriteria{From: makeMap(notUsedAddr, firstFromAddr, secondFromAddr)}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
+		5:  {TxFilterCriteria{To: makeMap(firstToAddr)}, []types.ReturnData{retData[0], retData[3]}, ""},
+		6:  {TxFilterCriteria{To: makeMap(secondToAddr)}, []types.ReturnData{retData[1], retData[2], retData[4]}, ""},
+		7:  {TxFilterCriteria{To: makeMap(firstToAddr, secondToAddr)}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
+		8:  {TxFilterCriteria{To: makeMap(notUsedAddr)}, []types.ReturnData{}, ""},
+		9:  {TxFilterCriteria{From: makeMap(firstFromAddr), To: makeMap(secondToAddr)}, []types.ReturnData{retData[2], retData[4]}, ""},
+		10: {TxFilterCriteria{From: makeMap(notUsedAddr), To: makeMap(secondToAddr)}, []types.ReturnData{}, ""},
+		11: {TxFilterCriteria{From: makeMap(secondFromAddr), To: makeMap(secondToAddr, notUsedAddr)}, []types.ReturnData{retData[1]}, ""},
 		12: {TxFilterCriteria{}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
+		13: {TxFilterCriteria{HasReturnData: true}, []types.ReturnData{retData[0], retData[1], retData[3]}, ""},
 	}
 
 	// create all filters
@@ -373,8 +382,7 @@ func TestReturnDataFilter(t *testing.T) {
 		}
 
 		if len(fetched) != len(tt.expected) {
-			t.Errorf("invalid number of return data events for case %d, want %d events, got %d", i, len(tt.expected), len(fetched))
-			//return
+			t.Fatalf("invalid number of return data events for case %d, want %d events, got %d", i, len(tt.expected), len(fetched))
 		}
 
 		for j := range fetched {

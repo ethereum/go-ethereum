@@ -88,7 +88,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan common.Hash
 	headers   chan *types.Header
-	txCrit    ethereum.TxFilterQuery
+	txCrit    TxFilterCriteria
 	retData   chan []*types.ReturnData
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
@@ -328,7 +328,7 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 
 // SubscribeReturnData creates a subscription that captures return data for transactions
 //  executed by a particular rpc client
-func (es *EventSystem) SubscribeReturnData(retCh chan []*types.ReturnData, crit ethereum.TxFilterQuery) *Subscription {
+func (es *EventSystem) SubscribeReturnData(retCh chan []*types.ReturnData, crit TxFilterCriteria) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       ReturnDataSubscription,
@@ -382,7 +382,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 	case []*core.TransactionEvent:
 		if len(e) > 0 {
 			for _, f := range filters[ReturnDataSubscription] {
-				if matchedTxs := filterTxs(e, f.txCrit.From, f.txCrit.To); len(matchedTxs) > 0 {
+				if matchedTxs := filterTxs(e, f.txCrit); len(matchedTxs) > 0 {
 					f.retData <- matchedTxs
 				}
 			}

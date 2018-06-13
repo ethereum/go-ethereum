@@ -150,8 +150,9 @@ type FilterQuery struct {
 }
 
 type TxFilterQuery struct {
-	From []common.Address // restricts matches to transactions originating from specific addresses
-	To   []common.Address // restricts matches to transactions sent to specific addresses
+	From          map[common.Address]struct{} // restricts matches to transactions originating from specific addresses
+	To            map[common.Address]struct{} // restricts matches to transactions sent to specific addresses
+	HasReturnData bool                        // restricts matches to transactions which executed a contract function returning data.
 }
 
 // LogFilterer provides access to contract log events using a one-off query or continuous

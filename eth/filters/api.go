@@ -234,7 +234,7 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 func (api *PublicFilterAPI) NewReturnDataFilter(crit TxFilterCriteria) rpc.ID {
 	var (
 		retCh  = make(chan []*types.ReturnData)
-		retSub = api.events.SubscribeReturnData(retCh, ethereum.TxFilterQuery(crit))
+		retSub = api.events.SubscribeReturnData(retCh, crit)
 	)
 
 	api.filtersMu.Lock()
@@ -280,7 +280,7 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context, crit TxFilterCriteri
 
 	go func() {
 		retCh := make(chan []*types.ReturnData)
-		retSub := api.events.SubscribeReturnData(retCh, ethereum.TxFilterQuery(crit))
+		retSub := api.events.SubscribeReturnData(retCh, crit)
 
 		for {
 			select {
@@ -623,10 +623,16 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 // UnmarshalJSON sets *args fields with given data.
 func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
-	var err error
+	var (
+		err  error
+		from []common.Address
+		to   []common.Address
+	)
+
 	type input struct {
-		From interface{} `json:"from"`
-		To   interface{} `json:"to"`
+		From          interface{} `json:"from"`
+		To            interface{} `json:"to"`
+		HasReturnData interface{} `json:"hasReturnData"`
 	}
 
 	var raw input
@@ -638,16 +644,33 @@ func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
 	args.To = nil
 
 	if raw.From != nil {
-		args.From, err = decodeAddresses(raw.From, "from")
+		args.From = make(map[common.Address]struct{})
+		from, err = decodeAddresses(raw.From, "from")
 		if err != nil {
 			return err
+		}
+		for _, addr := range from {
+			args.From[addr] = struct{}{}
 		}
 	}
 
 	if raw.To != nil {
-		args.To, err = decodeAddresses(raw.To, "to")
+		args.To = make(map[common.Address]struct{})
+		to, err = decodeAddresses(raw.To, "to")
 		if err != nil {
 			return err
+		}
+		for _, addr := range to {
+			args.To[addr] = struct{}{}
+		}
+	}
+
+	if raw.HasReturnData != nil {
+		switch hasReturnData := raw.HasReturnData.(type) {
+		case bool:
+			args.HasReturnData = hasReturnData
+		default:
+			return fmt.Errorf("Invalid HasReturnData field specified--must be true or false")
 		}
 	}
 
@@ -656,7 +679,7 @@ func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
 
 // Decodes address field from JSON, which could be either
 // a single common.Address or an array []common.Address.
-// second arg is the name of the field being decoded, for error reporting.
+// Second arg is the name of the field being decoded, for error reporting.
 func decodeAddresses(addresses interface{}, field string) ([]common.Address, error) {
 	decoded := []common.Address{}
 

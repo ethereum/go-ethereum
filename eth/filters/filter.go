@@ -276,34 +276,35 @@ Logs:
 	return ret
 }
 
-func filterTxs(txEvents []*core.TransactionEvent, from []common.Address, to []common.Address) (retData []*types.ReturnData) {
+func filterTxs(txEvents []*core.TransactionEvent, crit TxFilterCriteria) (retData []*types.ReturnData) {
 	for _, ev := range txEvents {
-		// check that From and To fields each match one address in the lists from and to, if specified
-
-		if from != nil {
-			for _, addr := range from {
-				if ev.From != nil && addr == *ev.From {
-					goto checkRecipient
-				}
+		// if HasReturnData is true, filter out any transactions with no return data
+		if crit.HasReturnData {
+			if len(ev.RetData.Data) == 0 {
+				continue
 			}
-			continue
 		}
 
-	checkRecipient:
-		if to != nil {
-			for _, addr := range to {
-				ev_to := ev.To
-				if ev_to == nil { // contract creation
-					ev_to = &common.Address{}
-				}
-				if addr == *ev_to {
-					goto bothMatch
-				}
+		// check that From field of event matches an address in From, if specified
+		if crit.From != nil && ev.From != nil {
+			_, found := crit.From[*ev.From]
+			if !found {
+				continue
 			}
-			continue
 		}
 
-	bothMatch:
+		// check that To field of event matches an address in To, if specified
+		if crit.To != nil {
+			ev_to := ev.To
+			if ev_to == nil {
+				ev_to = &common.Address{}
+			}
+			_, found := crit.To[*ev.To]
+			if !found {
+				continue
+			}
+		}
+
 		retData = append(retData, ev.RetData)
 	}
 
