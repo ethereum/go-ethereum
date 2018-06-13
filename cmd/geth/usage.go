@@ -117,7 +117,6 @@ var AppHelpFlagGroups = []flagGroup{
 	//		utils.StatethDashboardsFolderFlag,
 	//		utils.StatethGrafanaPortFlag,
 	//		utils.StatethInfluxdbPortFlag,
-	//		utils.StatethRmFlag,
 	//	},
 	//},
 	{

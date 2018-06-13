@@ -26,7 +26,6 @@ var DefaultConfig = Config{
 	DashboardsFolder: os.Getenv("GOPATH") + "/src/github.com/ethereum/go-ethereum/stateth/grafana_dashboards",
 	GrafanaPort:      3000,
 	InfluxDBPort:     8086,
-	Rm:               false,
 }
 
 // Config contains the configuration parameters of the dashboard.
@@ -42,8 +41,4 @@ type Config struct {
 
 	// InfluxDBPort is the expose port for the InfluxDB HTTP interface.
 	InfluxDBPort int `toml:",omitempty"`
-
-	// Rm removes existing stateth network and stateth containers upon startup if true.
-	// Makes sure that the start up works every time, even if the service wasn't shut down gracefully.
-	Rm bool `toml:",omitempty"`
 }

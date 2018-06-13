@@ -66,17 +66,13 @@ func main() {
 	app.Action = func(ctx *cli.Context) error {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-		se, err := stateth.New(ctx, &stateth.Config{
+		se := stateth.New(ctx, &stateth.Config{
 			DockerPrefix:     ctx.String("docker-prefix"),
 			GrafanaPort:      ctx.Int("grafana-http-port"),
 			InfluxDBPort:     ctx.Int("influxdb-http-port"),
 			DashboardsFolder: ctx.String("grafana-dashboards-folder"),
-			Rm:               ctx.Bool("rm"),
 		})
-		if err != nil {
-			return err
-		}
-		if err = se.StartExternal(); err != nil {
+		if err := se.StartExternal(ctx.Bool("rm")); err != nil {
 			return err
 		}
 

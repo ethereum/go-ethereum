@@ -66,7 +66,6 @@ var (
 		utils.StatethDashboardsFolderFlag,
 		utils.StatethGrafanaPortFlag,
 		utils.StatethInfluxdbPortFlag,
-		utils.StatethRmFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,

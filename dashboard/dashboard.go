@@ -83,7 +83,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.LightEthereum, logdir string) (*Dashboard, error) {
+func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.LightEthereum, logdir string) *Dashboard {
 	now := time.Now()
 	versionMeta := ""
 	if len(params.VersionMeta) > 0 {
@@ -112,7 +112,7 @@ func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.Ligh
 		ethServ: ethServ,
 		lesServ: lesServ,
 		logdir:  logdir,
-	}, nil
+	}
 }
 
 // emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
@@ -263,8 +263,8 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	}
 }
 
-// metricCollector returns a function, which retrieves a specific metric.
-func metricCollector(name string) func() int64 {
+// meterCollector returns a function, which retrieves a specific meter.
+func meterCollector(name string) func() int64 {
 	if metric := metrics.DefaultRegistry.Get(name); metric != nil {
 		m := metric.(metrics.Meter)
 		return func() int64 {
@@ -285,10 +285,10 @@ func (db *Dashboard) collectData() {
 	var (
 		mem runtime.MemStats
 
-		collectNetworkIngress = metricCollector("p2p/InboundTraffic")
-		collectNetworkEgress  = metricCollector("p2p/OutboundTraffic")
-		collectDiskRead       = metricCollector("eth/db/chaindata/disk/read")
-		collectDiskWrite      = metricCollector("eth/db/chaindata/disk/write")
+		collectNetworkIngress = meterCollector("p2p/InboundTraffic")
+		collectNetworkEgress  = meterCollector("p2p/OutboundTraffic")
+		collectDiskRead       = meterCollector("eth/db/chaindata/disk/read")
+		collectDiskWrite      = meterCollector("eth/db/chaindata/disk/write")
 
 		prevNetworkIngress = collectNetworkIngress()
 		prevNetworkEgress  = collectNetworkEgress()

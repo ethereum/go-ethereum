@@ -230,12 +230,8 @@ var (
 	}
 	StatethInfluxdbPortFlag = cli.IntFlag{
 		Name:  "stateth.influxdbport",
-		Usage: "Influxdb http port",
+		Usage: "InfluxDB http port",
 		Value: stateth.DefaultConfig.InfluxDBPort,
-	}
-	StatethRmFlag = cli.BoolFlag{
-		Name:  "stateth.rm",
-		Usage: "Remove existing stateth network and stateth containers upon startup. Make sure that the start up works every time, even if the service wasn't shut down gracefully.",
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -1188,7 +1184,6 @@ func SetStatethConfig(ctx *cli.Context, cfg *stateth.Config) {
 	cfg.DashboardsFolder = ctx.GlobalString(StatethDashboardsFolderFlag.Name)
 	cfg.GrafanaPort = ctx.GlobalInt(StatethGrafanaPortFlag.Name)
 	cfg.InfluxDBPort = ctx.GlobalInt(StatethInfluxdbPortFlag.Name)
-	cfg.Rm = ctx.GlobalBool(StatethRmFlag.Name)
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
@@ -1223,13 +1218,13 @@ func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit st
 		var lesServ *les.LightEthereum
 		ctx.Service(&lesServ)
 
-		return dashboard.New(cfg, commit, ethServ, lesServ, ctx.ResolvePath("logs"))
+		return dashboard.New(cfg, commit, ethServ, lesServ, ctx.ResolvePath("logs")), nil
 	})
 }
 
 func RegisterStatethService(stack *node.Node, cfg *stateth.Config, cliCtx *cli.Context) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return stateth.New(cliCtx, cfg)
+		return stateth.New(cliCtx, cfg), nil
 	})
 }
 
