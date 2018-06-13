@@ -60,11 +60,11 @@ type Config struct {
 	Preload  []string     // Absolute paths to JavaScript files to preload
 }
 
-// Console is a JavaScript interpreted runtime environment. It is a fully fleged
+// Console is a JavaScript interpreted runtime environment. It is a fully fledged
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
+	client   *rpc.Client  // RPC client to execute Ethereum requests through rpc
 	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
 	prompt   string       // Input prompt prefix string
 	prompter UserPrompter // Input prompter to allow interactive user feedback
@@ -74,7 +74,7 @@ type Console struct {
 }
 
 func New(config Config) (*Console, error) {
-	// Handle unset config values gracefully
+	// Handle unset config values with default value
 	if config.Prompter == nil {
 		config.Prompter = Stdin
 	}
@@ -82,7 +82,7 @@ func New(config Config) (*Console, error) {
 		config.Prompt = DefaultPrompt
 	}
 	if config.Printer == nil {
-		config.Printer = colorable.NewColorableStdout()
+		config.Printer = colorable.NewColorableStdout() // colorful standard output
 	}
 	// Initialize the console and return
 	console := &Console{
