@@ -22,6 +22,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -210,22 +211,32 @@ func initialize(t *testing.T) {
 			},
 		}
 
-		err = node.server.Start()
-		if err != nil {
-			t.Fatalf("failed to start server %d.", i)
-		}
+		go startServer(t, node.server)
 
+		nodes[i] = &node
+	}
+
+	waitForServersToStart(t)
+
+	for i := 0; i < NumNodes; i++ {
 		for j := 0; j < i; j++ {
 			peerNodeId := nodes[j].id
 			address, _ := net.ResolveTCPAddr("tcp", nodes[j].server.ListenAddr)
 			peerPort := uint16(address.Port)
 			peerNode := discover.PubkeyID(&peerNodeId.PublicKey)
 			peer := discover.NewNode(peerNode, address.IP, peerPort, peerPort)
-			node.server.AddPeer(peer)
+			nodes[i].server.AddPeer(peer)
 		}
-
-		nodes[i] = &node
 	}
+}
+
+func startServer(t *testing.T, s *p2p.Server) {
+	err := s.Start()
+	if err != nil {
+		t.Fatalf("failed to start the fisrt server.")
+	}
+
+	atomic.AddInt64(&result.started, 1)
 }
 
 func stopServers() {
@@ -482,4 +493,17 @@ func checkBloomFilterExchange(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+func waitForServersToStart(t *testing.T) {
+	const iterations = 200
+	var started int64
+	for j := 0; j < iterations; j++ {
+		time.Sleep(50 * time.Millisecond)
+		started = atomic.LoadInt64(&result.started)
+		if started == NumNodes {
+			return
+		}
+	}
+	t.Fatalf("Failed to start all the servers, running: %d", started)
 }
