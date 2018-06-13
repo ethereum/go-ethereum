@@ -22,16 +22,16 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/accounts"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 	"math/big"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 )
 
 const (

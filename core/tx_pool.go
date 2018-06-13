@@ -107,10 +107,10 @@ var (
 type TxStatus uint
 
 const (
-	TxStatusUnknown  TxStatus = iota
-	TxStatusQueued   
-	TxStatusPending  
-	TxStatusIncluded 
+	TxStatusUnknown TxStatus = iota
+	TxStatusQueued
+	TxStatusPending
+	TxStatusIncluded
 )
 
 // blockChain provides the state of blockchain and current gas limit to do
