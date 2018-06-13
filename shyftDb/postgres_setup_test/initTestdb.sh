@@ -1,0 +1,1 @@
+psql -U postgres -f create_shyftdb_test.psql

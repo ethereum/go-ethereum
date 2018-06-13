@@ -1,0 +1,3 @@
+DROP TABLE txs;
+DROP TABLE blocks;
+DROP TABLE accounts;

@@ -1,7 +1,7 @@
 package main
 
 //@NOTE SHYFT main func for api, sets up router and spins up a server
-//to run server 'go run blockExplorerApi/*.go'
+//to run server 'go run shyftBlockExplorerApi/*.go'
 import (
 	"log"
 	"net/http"
