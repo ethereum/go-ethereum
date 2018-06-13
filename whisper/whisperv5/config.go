@@ -16,11 +16,13 @@
 
 package whisperv5
 
+// Config is used to map unambiguously to values in the doc.go file.
 type Config struct {
 	MaxMessageSize     uint32  `toml:",omitempty"`
 	MinimumAcceptedPOW float64 `toml:",omitempty"`
 }
 
+// DefaultConfig values are set by the doc.go file within this package.
 var DefaultConfig = Config{
 	MaxMessageSize:     DefaultMaxMessageSize,
 	MinimumAcceptedPOW: DefaultMinimumPoW,

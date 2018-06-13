@@ -37,6 +37,7 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
+// Statistics is used to store useful information regarding whisper node usage.
 type Statistics struct {
 	messagesCleared      int
 	memoryCleared        int
@@ -121,6 +122,7 @@ func New(cfg *Config) *Whisper {
 	return whisper
 }
 
+// MinPow returns the minimal PoW required by this node.
 func (w *Whisper) MinPow() float64 {
 	val, _ := w.settings.Load(minPowIdx)
 	return val.(float64)
@@ -842,7 +844,7 @@ func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error
 
 // GenerateRandomID generates a random string, which is then returned to be used as a key id
 func GenerateRandomID() (id string, err error) {
-	buf := make([]byte, keyIdSize)
+	buf := make([]byte, keyIDSize)
 	_, err = crand.Read(buf)
 	if err != nil {
 		return "", err

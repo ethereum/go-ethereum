@@ -1025,6 +1025,7 @@ func isFullNode(bloom []byte) bool {
 	return true
 }
 
+// BloomFilterMatch compares the values of filter and sample, returning a boolean.
 func BloomFilterMatch(filter, sample []byte) bool {
 	if filter == nil {
 		return true

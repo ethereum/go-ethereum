@@ -10,6 +10,7 @@ import (
 
 var _ = (*newMessageOverride)(nil)
 
+// MarshalJSON implements the json.Marshaller interface.
 func (n NewMessage) MarshalJSON() ([]byte, error) {
 	type NewMessage struct {
 		SymKeyID   string        `json:"symKeyID"`
@@ -37,6 +38,7 @@ func (n NewMessage) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface and maps input to n.
 func (n *NewMessage) UnmarshalJSON(input []byte) error {
 	type NewMessage struct {
 		SymKeyID   *string        `json:"symKeyID"`

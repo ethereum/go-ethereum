@@ -10,6 +10,7 @@ import (
 
 var _ = (*messageOverride)(nil)
 
+// MarshalJSON implements the json.Marshaller interface.
 func (m Message) MarshalJSON() ([]byte, error) {
 	type Message struct {
 		Sig       hexutil.Bytes `json:"sig,omitempty"`
@@ -35,6 +36,7 @@ func (m Message) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface and maps input to m.
 func (m *Message) UnmarshalJSON(input []byte) error {
 	type Message struct {
 		Sig       *hexutil.Bytes `json:"sig,omitempty"`

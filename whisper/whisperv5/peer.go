@@ -156,10 +156,9 @@ func (peer *Peer) broadcast() error {
 			err := p2p.Send(peer.ws, messagesCode, envelope)
 			if err != nil {
 				return err
-			} else {
-				peer.mark(envelope)
-				cnt++
 			}
+			peer.mark(envelope)
+			cnt++
 		}
 	}
 	if cnt > 0 {
@@ -168,6 +167,7 @@ func (peer *Peer) broadcast() error {
 	return nil
 }
 
+// ID returns the peers peer.ID in a byte slice.
 func (peer *Peer) ID() []byte {
 	id := peer.peer.ID()
 	return id[:]

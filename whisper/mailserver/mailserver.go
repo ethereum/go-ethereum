@@ -29,6 +29,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+// WMailServer stores the leveldb instance containing an archive of messages
+// as well as the whisper instance.
 type WMailServer struct {
 	db  *leveldb.DB
 	w   *whisper.Whisper
@@ -42,6 +44,7 @@ type DBKey struct {
 	raw       []byte
 }
 
+// NewDbKey creates a new DBKey with a new raw hash based on the current time.
 func NewDbKey(t uint32, h common.Hash) *DBKey {
 	const sz = common.HashLength + 4
 	var k DBKey
@@ -53,6 +56,7 @@ func NewDbKey(t uint32, h common.Hash) *DBKey {
 	return &k
 }
 
+// Init assigns initial values for the WMailServer.
 func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) error {
 	var err error
 	if len(path) == 0 {
@@ -82,12 +86,14 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	return nil
 }
 
+// Close shutdowns the connection to the levelDB instance of s
 func (s *WMailServer) Close() {
 	if s.db != nil {
 		s.db.Close()
 	}
 }
 
+// Archive maps the message in bytes to a new raw key hash.
 func (s *WMailServer) Archive(env *whisper.Envelope) {
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
@@ -101,6 +107,7 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	}
 }
 
+// DeliverMail will send a message via the p2p protocol.
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
 		log.Error("Whisper peer is nil")
@@ -177,15 +184,16 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 
 	var bloom []byte
 	payloadSize := len(decrypted.Payload)
-	if payloadSize < 8 {
+	switch {
+	case (payloadSize < 8):
 		log.Warn(fmt.Sprintf("Undersized p2p request"))
 		return false, 0, 0, nil
-	} else if payloadSize == 8 {
+	case (payloadSize == 8):
 		bloom = whisper.MakeFullNodeBloom()
-	} else if payloadSize < 8+whisper.BloomFilterSize {
+	case (payloadSize < 8+whisper.BloomFilterSize):
 		log.Warn(fmt.Sprintf("Undersized bloom filter in p2p request"))
 		return false, 0, 0, nil
-	} else {
+	default:
 		bloom = decrypted.Payload[8 : 8+whisper.BloomFilterSize]
 	}
 
