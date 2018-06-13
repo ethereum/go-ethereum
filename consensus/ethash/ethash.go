@@ -64,6 +64,8 @@ func isLittleEndian() bool {
 }
 
 // memoryMap tries to memory map a file of uint32s for read only access.
+// mmap is a portable memory map package which would enable direct access for 
+// memory mapping files
 func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY, 0644)
 	if err != nil {
@@ -346,7 +348,8 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 	})
 }
 
-// finalizer closes any file handlers and memory maps open.
+// finalizer closes any file handlers and use Unmap() to deletes the memory mapped region,
+// flushes any remaining changes.
 func (d *dataset) finalizer() {
 	if d.mmap != nil {
 		d.mmap.Unmap()
