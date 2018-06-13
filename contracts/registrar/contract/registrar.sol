@@ -103,8 +103,12 @@ contract Registrar {
             return false;
         }
         // Ensure the checkpoint is stable enough to be registered.
-        if (block.number < (_sectionIndex+1)*sectionSize+confirmations) {
+        if (block.number < (_sectionIndex+1)*sectionSize+processConfirmations) {
             return false;
+        }
+        // Ensure the modification for registered checkpoint within the allowed time range
+        if (latest != 0 && _sectionIndex == latest && block.number >= (_sectionIndex+1)*sectionSize+confirmations) {
+            return false; 
         }
 
         checkpoints[_sectionIndex] = _hash;
@@ -205,6 +209,9 @@ contract Registrar {
     // The number of confirmations needed before a checkpoint can be registered.
     // We have to make sure the checkpoint registered will not be invalid due to
     // chain reorg.
-    uint constant confirmations = 256;
+    uint constant processConfirmations = 256;
+
+    // The number of confirmations when a registered checkpoint can not be modified.
+    uint constant confirmations = 8192;
 }
 
