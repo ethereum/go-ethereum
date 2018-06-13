@@ -48,8 +48,9 @@ type Node struct {
 	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
 
-	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
-	services     map[reflect.Type]Service // Currently running services
+	serviceFuncs []ServiceConstructor               // Service constructors (in dependency order)
+	callbacks    map[reflect.Type][]ServiceCallback // Service callback functions
+	services     map[reflect.Type]Service           // Currently running services
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -113,6 +114,7 @@ func New(conf *Config) (*Node, error) {
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},
+		callbacks:         make(map[reflect.Type][]ServiceCallback),
 		ipcEndpoint:       conf.IPCEndpoint(),
 		httpEndpoint:      conf.HTTPEndpoint(),
 		wsEndpoint:        conf.WSEndpoint(),
@@ -131,6 +133,18 @@ func (n *Node) Register(constructor ServiceConstructor) error {
 		return ErrNodeRunning
 	}
 	n.serviceFuncs = append(n.serviceFuncs, constructor)
+	return nil
+}
+
+// RegisterCallback injects a callback function associated with the specified service.
+func (n *Node) RegisterCallback(typ reflect.Type, callback ServiceCallback) error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.server != nil {
+		return ErrNodeRunning
+	}
+	n.callbacks[typ] = append(n.callbacks[typ], callback)
 	return nil
 }
 
@@ -211,7 +225,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
-	// Lastly start the configured RPC interfaces
+	// Start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
 			service.Stop()
@@ -223,7 +237,21 @@ func (n *Node) Start() error {
 	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
-
+	// Lastly invokes all registered services callbacks after server is started.
+	for typ, callbacks := range n.callbacks {
+		if service, ok := services[typ]; ok {
+			for _, callback := range callbacks {
+				if err := callback(service); err != nil {
+					for _, service := range services {
+						service.Stop()
+					}
+					running.Stop()
+					n.services, n.server, n.stop = nil, nil, nil
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -480,7 +508,12 @@ func (n *Node) Restart() error {
 func (n *Node) Attach() (*rpc.Client, error) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
+	return n.AttachLocked()
+}
 
+// AttachLocked creates an RPC client attached to an in-process API handler.
+// Note, this function assumes the lock of node is held.
+func (n *Node) AttachLocked() (*rpc.Client, error) {
 	if n.server == nil {
 		return nil, ErrNodeStopped
 	}

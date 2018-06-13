@@ -37,8 +37,8 @@ var (
 	addr      = crypto.PubkeyToAddress(key.PublicKey)
 	emptyHash = [32]byte{}
 
-	checkpointHash0 = crypto.Keccak256Hash(common.Hex2Bytes("dead0"), common.Hex2Bytes("beef0"), common.Hex2Bytes("deadbeef0"))
-	checkpointHash1 = crypto.Keccak256Hash(common.Hex2Bytes("dead1"), common.Hex2Bytes("beef1"), common.Hex2Bytes("deadbeef1"))
+	checkpointHash0 = crypto.Keccak256Hash(common.FromHex("dead0"), common.FromHex("beef0"), common.FromHex("deadbeef0"))
+	checkpointHash1 = crypto.Keccak256Hash(common.FromHex("dead1"), common.FromHex("beef1"), common.FromHex("deadbeef1"))
 )
 
 // validateOperation executes the operation, watches and delivers all events fired by the backend and ensures the
@@ -243,7 +243,7 @@ func TestCheckpointRegister(t *testing.T) {
 		return nil
 	}, "register stable checkpoint")
 
-	newHash := crypto.Keccak256Hash([]byte("dead00"), []byte("beef00"), []byte("deadbeef00"))
+	newHash := crypto.Keccak256Hash(common.FromHex("dead00"), common.FromHex("beef00"), common.FromHex("deadbeef00"))
 	// Modify the latest checkpoint
 	validateOperation(t, c, contractBackend, func() {
 		c.SetCheckpoint(transactOpts, big.NewInt(0), newHash)
@@ -280,7 +280,7 @@ func TestCheckpointRegister(t *testing.T) {
 	}, "register stable checkpoint 1")
 
 	contractBackend.ShiftBlocks(light.CheckpointConfirmations)
-	newHash1 := crypto.Keccak256Hash([]byte("dead11"), []byte("beef11"), []byte("deadbeef11"))
+	newHash1 := crypto.Keccak256Hash(common.FromHex("dead11"), common.FromHex("beef11"), common.FromHex("deadbeef11"))
 	// Modify the registered checkpoint after a very long time
 	validateOperation(t, c, contractBackend, func() {
 		c.SetCheckpoint(transactOpts, big.NewInt(1), newHash1)

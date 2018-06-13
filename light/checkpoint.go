@@ -84,7 +84,12 @@ func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
 	if c.SectionHead == (common.Hash{}) && c.ChtRoot == (common.Hash{}) && c.BloomTrieRoot == (common.Hash{}) {
 		return hash == common.Hash{}
 	}
-	return crypto.Keccak256Hash(c.SectionHead.Bytes(), c.ChtRoot.Bytes(), c.BloomTrieRoot.Bytes()) == hash
+	return c.Hash() == hash
+}
+
+// Hash returns the hash of checkpoint three key fields(sectionHead, chtRoot and bloomTrieRoot).
+func (c *TrustedCheckpoint) Hash() common.Hash {
+	return crypto.Keccak256Hash(c.SectionHead.Bytes(), c.ChtRoot.Bytes(), c.BloomTrieRoot.Bytes())
 }
 
 var (

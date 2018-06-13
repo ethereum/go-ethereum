@@ -21,6 +21,8 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/registrar"
@@ -29,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
@@ -53,9 +56,10 @@ type LesServer struct {
 	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
 
-	// Checkpoint relative fields
-	registrar        *registrar.Registrar     // Handler for checkpoint contract
-	stableCheckpoint *light.TrustedCheckpoint // The nearest stable checkpoint
+	// Checkpoint contract relative fields
+	genesis   common.Hash          // Genesis block hash for contract address detection
+	registrar *registrar.Registrar // Handler for checkpoint contract, initialized after server is started.
+	watching  int32                // Indicator whether the checkpoint contract is being watched
 
 	// Indexers
 	chtIndexer       *core.ChainIndexer // Indexers for creating cht root for each block section
@@ -83,6 +87,7 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		lesTopics:        lesTopics,
 		chtIndexer:       light.NewChtIndexer(e.ChainDb(), false),
 		bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), false),
+		genesis:          e.BlockChain().Genesis().Hash(),
 	}
 	logger := log.New()
 
@@ -114,13 +119,6 @@ func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
 	srv.fcCostStats = newCostStats(e.ChainDb())
-	if addr, ok := registrar.RegistrarAddr[e.BlockChain().Genesis().Hash()]; ok {
-		registrar, err := registrar.NewRegistrar(addr, eth.NewContractBackend(e.APIBackend, e.APIBackend, false))
-		if err != nil {
-			return nil, err
-		}
-		srv.registrar = registrar
-	}
 	return srv, nil
 }
 
@@ -145,14 +143,26 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	}
 	s.privateKey = srvr.PrivateKey
 	s.protocolManager.blockLoop()
-	if s.registrar != nil {
-		s.stableCheckpoint = s.recoverCheckpoint()
-		go s.checkpointLoop()
-	}
 }
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
+}
+
+// SetClient sets the rpc client and starts watching checkpoint contract if it is not yet watched.
+func (s *LesServer) SetClient(client *ethclient.Client) {
+	if addr, ok := registrar.RegistrarAddr[s.genesis]; ok {
+		if !atomic.CompareAndSwapInt32(&s.watching, 0, 1) {
+			return
+		}
+		registrar, err := registrar.NewRegistrar(addr, client)
+		if err != nil {
+			atomic.StoreInt32(&s.watching, 0)
+			return
+		}
+		s.registrar = registrar
+		go s.checkpointLoop(s.recoverCheckpoint())
+	}
 }
 
 // Stop stops the LES service
@@ -165,6 +175,7 @@ func (s *LesServer) Stop() {
 		<-s.protocolManager.noMorePeers
 	}()
 	s.protocolManager.Stop()
+	atomic.StoreInt32(&s.watching, 0)
 }
 
 // APIs implements LesServer, returns all API service provided by les server.
@@ -215,7 +226,7 @@ func (s *LesServer) getCheckpoint(index uint64) (common.Hash, common.Hash, commo
 }
 
 // checkpointLoop starts a standalone goroutine to watch new checkpoint events and updates local's stable checkpoint.
-func (s *LesServer) checkpointLoop() (err error) {
+func (s *LesServer) checkpointLoop(checkpoint *light.TrustedCheckpoint) (err error) {
 	var (
 		eventCh      = make(chan *contract.ContractNewCheckpointEvent)
 		headCh       = make(chan core.ChainHeadEvent, SubscribeChainHeadEvent)
@@ -230,9 +241,12 @@ func (s *LesServer) checkpointLoop() (err error) {
 		eventSub.Unsubscribe()
 		return errors.New("subscribe head event failed")
 	}
+
+	ticker := time.NewTicker(5 * time.Minute)
 	defer func() {
 		eventSub.Unsubscribe()
 		headSub.Unsubscribe()
+		ticker.Stop()
 	}()
 
 	for {
@@ -243,8 +257,9 @@ func (s *LesServer) checkpointLoop() (err error) {
 				log.Info("Ignore empty checkpoint event")
 				continue
 			}
-			// Note several duplicate events may be received because of chain reorg and the modification of the latest checkpoint.
-			if s.stableCheckpoint == nil || event.Index.Uint64() >= s.stableCheckpoint.SectionIdx {
+			// Note several events have same index may be received because of chain reorg and
+			// the modification of the latest checkpoint.
+			if checkpoint == nil || event.Index.Uint64() > checkpoint.SectionIdx {
 				log.Info("Receive new checkpoint event", "section", event.Index, "hash", common.Hash(event.CheckpointHash).Hex(),
 					"grantor", event.Grantor.Hex())
 				announcement[event.Index.Uint64()] = common.Hash(event.CheckpointHash)
@@ -255,22 +270,29 @@ func (s *LesServer) checkpointLoop() (err error) {
 				continue
 			}
 			idx := (number-light.CheckpointConfirmations)/light.CheckpointFrequency - 1
-			if s.stableCheckpoint == nil || idx > s.stableCheckpoint.SectionIdx {
+			if checkpoint == nil || idx > checkpoint.SectionIdx {
 				hash, ok := announcement[idx]
 				if !ok {
 					continue
 				}
 				sectionHead := s.bloomTrieIndexer.SectionHead(idx)
-				checkpoint := &light.TrustedCheckpoint{
+				c := &light.TrustedCheckpoint{
 					SectionIdx:    idx,
 					SectionHead:   sectionHead,
 					ChtRoot:       light.GetChtV2Root(s.chaindb, idx, sectionHead),
 					BloomTrieRoot: light.GetBloomTrieRoot(s.chaindb, idx, sectionHead),
 				}
-				if checkpoint.HashEqual(common.Hash(hash)) {
-					light.WriteTrustedCheckpoint(s.chaindb, checkpoint)
-					s.stableCheckpoint = checkpoint
-					log.Info("Update stable checkpoint", "section", checkpoint.SectionIdx)
+				if c.HashEqual(common.Hash(hash)) {
+					light.WriteTrustedCheckpoint(s.chaindb, c)
+					checkpoint = c
+					delete(announcement, idx)
+					log.Info("Update stable checkpoint", "section", checkpoint.SectionIdx, "hash", checkpoint.Hash().Hex())
+				}
+			}
+		case <-ticker.C:
+			// Evict useless announcement every 5 minutes.
+			for idx := range announcement {
+				if checkpoint != nil && checkpoint.SectionIdx >= idx {
 					delete(announcement, idx)
 				}
 			}
@@ -286,13 +308,13 @@ func (s *LesServer) recoverCheckpoint() *light.TrustedCheckpoint {
 	var (
 		sectionCnt, _, _ = s.bloomTrieIndexer.Sections()
 		stable           = light.ReadTrustedCheckpoint(s.chaindb)
-		unstableIdx      = sectionCnt - 1
 		headHash         = rawdb.ReadHeadHeaderHash(s.chaindb)
 		headNumber       = rawdb.ReadHeaderNumber(s.chaindb, headHash)
 	)
-	if headNumber == nil {
+	if headNumber == nil || sectionCnt == 0 {
 		return nil
 	}
+	unstableIdx := sectionCnt - 1
 	for stable == nil || stable.SectionIdx < unstableIdx {
 		if (unstableIdx+1)*light.CheckpointFrequency+light.CheckpointConfirmations <= *headNumber {
 			iter, err := s.registrar.FilterNewCheckpointEvent(*headNumber, unstableIdx, light.CheckpointFrequency, light.CheckpointProcessConfirmations)
@@ -308,7 +330,7 @@ func (s *LesServer) recoverCheckpoint() *light.TrustedCheckpoint {
 					if checkpoint.HashEqual(common.Hash(iter.Event.CheckpointHash)) {
 						light.WriteTrustedCheckpoint(s.chaindb, checkpoint)
 						iter.Close()
-						log.Info("Recover checkpoint", "index", checkpoint.SectionIdx)
+						log.Info("Recover checkpoint", "index", checkpoint.SectionIdx, "hash", checkpoint.Hash().Hex())
 						return checkpoint
 					}
 				}
@@ -323,7 +345,7 @@ func (s *LesServer) recoverCheckpoint() *light.TrustedCheckpoint {
 	if stable == nil {
 		log.Info("No stable checkpoint")
 	} else {
-		log.Info("Recover checkpoint", "index", stable.SectionIdx)
+		log.Info("Recover checkpoint", "index", stable.SectionIdx, "hash", stable.Hash().Hex())
 	}
 	return stable
 }

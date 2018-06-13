@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -57,6 +58,7 @@ type LesServer interface {
 	APIs() []rpc.API
 	Protocols() []p2p.Protocol
 	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
+	SetClient(*ethclient.Client)
 }
 
 // Ethereum implements the Ethereum full node service.
@@ -98,6 +100,14 @@ type Ethereum struct {
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
+}
+
+// SetClient sets a rpc client which connecting to our local node.
+func (s *Ethereum) SetClient(client *ethclient.Client) {
+	// Pass the rpc client to les server if it is enabled.
+	if s.lesServer != nil {
+		s.lesServer.SetClient(client)
+	}
 }
 
 // New creates a new Ethereum object (including the

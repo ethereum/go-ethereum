@@ -32,7 +32,7 @@ var (
 	RegistrarAddr = map[common.Hash]common.Address{
 		// params.MainnetGenesisHash: common.HexToAddress(""),
 		// params.TestnetGenesisHash: common.HexToAddress(""),
-		params.RinkebyGenesisHash: common.HexToAddress("0xaefc742121f79ce9d0953fea7c9cd10f6586179b"),
+		params.RinkebyGenesisHash: common.HexToAddress("0xc72f57e41e2498ad3dab92f665b0f21e2c4f4b79"),
 	}
 )
 
