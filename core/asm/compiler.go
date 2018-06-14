@@ -162,7 +162,7 @@ func (c *Compiler) compileNumber(element token) (int, error) {
 }
 
 // compileElement compiles the element (push & label or both)
-// to a binary representation and return error if incorrect statements
+// to a binary representation and may error if incorrect statements
 // where fed.
 func (c *Compiler) compileElement(element token) error {
 	// check for a jump. jumps must be read and compiled
