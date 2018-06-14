@@ -23,10 +23,10 @@ import (
 	"github.com/aristanetworks/goarista/monotime"
 )
 
-// AbsTime will convert an integer number of units to a Duration in hours.
-type AbsTime time.Duration // absolute monotonic time
+// AbsTime represents absolute monotonic time.
+type AbsTime time.Duration
 
-// Now returns the current time, as a Duration, in nanoseconds from a monotonic clock
+// Now returns the current absolute monotonic time.
 func Now() AbsTime {
 	return AbsTime(monotime.Now())
 }
