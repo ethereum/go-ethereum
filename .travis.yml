@@ -28,7 +28,6 @@ matrix:
     script:
     - unset -f cd
     - brew update
-    - brew install caskroom/cask/brew-cask
     - brew cask install osxfuse
     - go run build/ci.go install
     - go run build/ci.go test -coverage
