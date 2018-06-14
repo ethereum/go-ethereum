@@ -311,7 +311,7 @@ func (self *worker) wait() {
 			}
 			fmt.Printf("\n\t[WORKER.GO self.eth]    %+v\n", self.eth)
 			// NOTE:SHYFT Added eth to writeBlockWithState
-			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state, self.eth)
+			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
