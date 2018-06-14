@@ -87,6 +87,26 @@ const (
 	initStatsWeight = 1
 )
 
+// connReq represents a request for peer connection.
+type connReq struct {
+	p    *peer
+	ip   net.IP
+	port uint16
+	cont chan *poolEntry
+}
+
+// discReq represents a request for peer disconnection.
+type discReq struct {
+	entry *poolEntry
+	cont  chan struct{}
+}
+
+// registerReq represents a request for peer registration.
+type registerReq struct {
+	entry *poolEntry
+	cont  chan struct{}
+}
+
 // serverPool implements a pool for storing and selecting newly discovered and already
 // known light server nodes. It received discovered nodes, stores statistics about
 // known nodes and takes care of always having enough good quality servers connected.
@@ -109,6 +129,10 @@ type serverPool struct {
 	timeout, enableRetry chan *poolEntry
 	adjustStats          chan poolStatAdjust
 
+	connCh     chan *connReq
+	discCh     chan *discReq
+	registerCh chan *registerReq
+
 	knownQueue, newQueue       poolEntryQueue
 	knownSelect, newSelect     *weightedRandomSelect
 	knownSelected, newSelected int
@@ -125,6 +149,9 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *s
 		timeout:      make(chan *poolEntry, 1),
 		adjustStats:  make(chan poolStatAdjust, 100),
 		enableRetry:  make(chan *poolEntry, 1),
+		connCh:       make(chan *connReq),
+		discCh:       make(chan *discReq),
+		registerCh:   make(chan *registerReq),
 		knownSelect:  newWeightedRandomSelect(),
 		newSelect:    newWeightedRandomSelect(),
 		fastDiscover: true,
@@ -158,46 +185,27 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 // Note that whenever a connection has been accepted and a pool entry has been returned,
 // disconnect should also always be called.
 func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
-	pool.lock.Lock()
-	defer pool.lock.Unlock()
-	entry := pool.entries[p.ID()]
-	if entry == nil {
-		entry = pool.findOrNewNode(p.ID(), ip, port)
-	}
-	p.Log().Debug("Connecting to new peer", "state", entry.state)
-	if entry.state == psConnected || entry.state == psRegistered {
+	log.Debug("Connect new entry", "enode", p.id)
+	req := &connReq{p: p, ip: ip, port: port, cont: make(chan *poolEntry, 1)}
+	select {
+	case pool.connCh <- req:
+	case <-pool.quit:
 		return nil
 	}
-	pool.connWg.Add(1)
-	entry.peer = p
-	entry.state = psConnected
-	addr := &poolEntryAddress{
-		ip:       ip,
-		port:     port,
-		lastSeen: mclock.Now(),
-	}
-	entry.lastConnected = addr
-	entry.addr = make(map[string]*poolEntryAddress)
-	entry.addr[addr.strKey()] = addr
-	entry.addrSelect = *newWeightedRandomSelect()
-	entry.addrSelect.update(addr)
-	return entry
+	return <-req.cont
 }
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
 	log.Debug("Registered new entry", "enode", entry.id)
-	pool.lock.Lock()
-	defer pool.lock.Unlock()
-
-	entry.state = psRegistered
-	entry.regTime = mclock.Now()
-	if !entry.known {
-		pool.newQueue.remove(entry)
-		entry.known = true
+	req := &registerReq{entry: entry, cont: make(chan struct{})}
+	select {
+	case pool.registerCh <- req:
+	case <-pool.quit:
+		return
 	}
-	pool.knownQueue.setLatest(entry)
-	entry.shortRetry = shortRetryCnt
+	<-req.cont
+	return
 }
 
 // disconnect should be called when ending a connection. Service quality statistics
@@ -205,36 +213,45 @@ func (pool *serverPool) registered(entry *poolEntry) {
 // only connection statistics are updated, just like in case of timeout)
 func (pool *serverPool) disconnect(entry *poolEntry) {
 	log.Debug("Disconnected old entry", "enode", entry.id)
-	pool.lock.Lock()
-	defer pool.lock.Unlock()
+	stopped := false
+	select {
+	case <-pool.quit:
+		stopped = true
+	default:
+	}
 
-	if entry.state == psRegistered {
-		connTime := mclock.Now() - entry.regTime
-		connAdjust := float64(connTime) / float64(targetConnTime)
-		if connAdjust > 1 {
-			connAdjust = 1
-		}
-		stopped := false
-		select {
-		case <-pool.quit:
-			stopped = true
-		default:
-		}
-		if stopped {
+	if stopped {
+		// Request is emitted by ourselves, handle the logic here since eventloop doesn't
+		// serve requests anymore.
+		pool.lock.Lock()
+		defer pool.lock.Unlock()
+
+		if entry.state == psRegistered {
+			connTime := mclock.Now() - entry.regTime
+			connAdjust := float64(connTime) / float64(targetConnTime)
+			if connAdjust > 1 {
+				connAdjust = 1
+			}
 			entry.connectStats.add(1, connAdjust)
-		} else {
-			entry.connectStats.add(connAdjust, 1)
 		}
-	}
-
-	entry.state = psNotConnected
-	if entry.knownSelected {
-		pool.knownSelected--
+		entry.state = psNotConnected
+		if entry.knownSelected {
+			pool.knownSelected--
+		} else {
+			pool.newSelected--
+		}
+		pool.setRetryDial(entry)
+		pool.connWg.Done()
 	} else {
-		pool.newSelected--
+		// Request is emitted by the server side
+		req := &discReq{entry: entry, cont: make(chan struct{})}
+		select {
+		case pool.discCh <- req:
+		case <-pool.quit:
+			return
+		}
+		<-req.cont
 	}
-	pool.setRetryDial(entry)
-	pool.connWg.Done()
 }
 
 const (
@@ -327,6 +344,67 @@ func (pool *serverPool) eventLoop() {
 				}
 			}
 
+		case req := <-pool.connCh:
+			// Handle peer connection requests.
+			entry := pool.entries[req.p.ID()]
+			if entry == nil {
+				entry = pool.findOrNewNode(req.p.ID(), req.ip, req.port)
+			}
+			req.p.Log().Debug("Connecting to new peer", "state", entry.state)
+			if entry.state == psConnected || entry.state == psRegistered {
+				req.cont <- nil
+				continue
+			}
+			pool.connWg.Add(1)
+			entry.peer = req.p
+			entry.state = psConnected
+			addr := &poolEntryAddress{
+				ip:       req.ip,
+				port:     req.port,
+				lastSeen: mclock.Now(),
+			}
+			entry.lastConnected = addr
+			entry.addr = make(map[string]*poolEntryAddress)
+			entry.addr[addr.strKey()] = addr
+			entry.addrSelect = *newWeightedRandomSelect()
+			entry.addrSelect.update(addr)
+			req.cont <- entry
+
+		case req := <-pool.registerCh:
+			// Handle peer registration requests.
+			entry := req.entry
+			entry.state = psRegistered
+			entry.regTime = mclock.Now()
+			if !entry.known {
+				pool.newQueue.remove(entry)
+				entry.known = true
+			}
+			pool.knownQueue.setLatest(entry)
+			entry.shortRetry = shortRetryCnt
+			close(req.cont)
+
+		case req := <-pool.discCh:
+			// Handle peer disconnection requests.
+			entry := req.entry
+			if entry.state == psRegistered {
+				connTime := mclock.Now() - entry.regTime
+				connAdjust := float64(connTime) / float64(targetConnTime)
+				if connAdjust > 1 {
+					connAdjust = 1
+				}
+				entry.connectStats.add(connAdjust, 1)
+			}
+
+			entry.state = psNotConnected
+			if entry.knownSelected {
+				pool.knownSelected--
+			} else {
+				pool.newSelected--
+			}
+			pool.setRetryDial(entry)
+			pool.connWg.Done()
+			close(req.cont)
+
 		case <-pool.quit:
 			if pool.discSetPeriod != nil {
 				close(pool.discSetPeriod)
@@ -335,7 +413,6 @@ func (pool *serverPool) eventLoop() {
 			pool.saveNodes()
 			pool.wg.Done()
 			return
-
 		}
 	}
 }
