@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -268,7 +269,7 @@ func importGrafanaDashboards(c *cli.Context) error {
 		if strings.Contains(name, "json") {
 			log.Info("importing dashboard", "dashboard", name)
 
-			blob, err := ioutil.ReadFile(dashboardsFolder + "/" + name)
+			blob, err := ioutil.ReadFile(filepath.Join(dashboardsFolder, name))
 			if err != nil {
 				log.Warn(err.Error())
 				return nil
