@@ -3,12 +3,18 @@ package shyftdb
 import (
   	"fmt"
   	"database/sql"
+	"os"
 )
 
 var blockExplorerDb *sql.DB
 
 func InitDB() (*sql.DB, error){
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	var connStr string
+	if "test" == os.Getenv("SHYFT_ENV") {
+		connStr = "user=postgres dbname=shyftdbtest sslmode=disable"
+	} else {
+		connStr = "user=postgres dbname=shyftdb sslmode=disable"
+	}
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")

@@ -38,4 +38,3 @@ CREATE TABLE IF NOT EXISTS accounts (
   balance numeric,
   txCountAccount numeric
 );
-

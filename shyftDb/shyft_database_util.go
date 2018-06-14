@@ -20,16 +20,16 @@ type SBlock struct {
 	Hash     string
 	Coinbase string
 	Number   string
-	GasUsed	 string
-	GasLimit string
-	TxCount  string
-	UncleCount string
+	GasUsed	 uint64
+	GasLimit uint64
+	TxCount  int
+	UncleCount int
 	Age        string
 	ParentHash string
 	UncleHash string
 	Difficulty string
 	Size string
-	Nonce string
+	Nonce uint64
 	Rewards string
 }
 
@@ -80,7 +80,7 @@ type ShyftTxEntryPretty struct {
 	Amount   string
 	GasPrice  uint64
 	Gas       uint64
-	GasLimit  string
+	GasLimit  uint64
 	Cost	  uint64
 	Nonce     uint64
 	Status	  string
@@ -144,7 +144,6 @@ func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
 			}
 			if block.Transactions()[0].To() == nil {
 				writeContractBalance(sqldb, tx)
-				writeContractsTxHashReferences(sqldb, tx)
 			}
 		}
 	}
@@ -223,22 +222,15 @@ func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	return nil
 }
 
-func writeContractsTxHashReferences(sqldb *sql.DB, tx *types.Transaction) error {
-	txHash := tx.Hash().Hex()
-
-	sqlStatement := `INSERT INTO contracts(txHash) VALUES(($1)) RETURNING txHash`
-	insertErr := sqldb.QueryRow(sqlStatement, txHash).Scan(&txHash)
-	if insertErr != nil {
-		panic(insertErr)
-	}
-	return nil
-}
-
 func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData,balanceSen,accountNonceSen := writeContractBalanceHelper(sqldb, tx)
+	sendAndReceiveData := SendAndReceive{
+		From:   tx.From().Hex(),
+		Amount: tx.Value().String(),
+	}
+
 	fromAddr := sendAndReceiveData.From
 	amount := sendAndReceiveData.Amount
-	balanceSender := balanceSen
+	accountNonceSen := tx.Nonce()
 
 	var response string
 	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
@@ -250,9 +242,14 @@ func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 		if insertErr != nil {
 			panic(insertErr)
 		}
-	case err != nil:
-		log.Fatal(err)
 	default:
+		getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+		var senderBalance SendAndReceive
+		if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
+			log.Fatal(err)
+		}
+
+		balanceSender := senderBalance.Balance
 		var newBalanceSender big.Int
 		var newAccountNonceSender big.Int
 		var nonceIncrement = big.NewInt(1)
@@ -264,40 +261,17 @@ func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 			log.Println("error scanning value:", error)
 		}
 
-		accountS := new(big.Int)
-		_, errors := fmt.Sscan(accountNonceSen, accountS)
-		if errors != nil {
-			log.Println("error scanning value:", error)
-		}
+		senderAccountNonce := new(big.Int).SetUint64(accountNonceSen)
 
 		newBalanceSender.Sub(s, tx.Value())
-		newAccountNonceSender.Add(accountS, nonceIncrement)
+		newAccountNonceSender.Add(senderAccountNonce, nonceIncrement)
 
-		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
+		_, err := sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
 		if err != nil {
 			panic(err)
 		}
 	}
 	return nil
-}
-
-func writeContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
-	sendAndReceiveData := SendAndReceive{
-		From: tx.From().Hex(),
-		Amount: tx.Value().String(),
-	}
-
-	fromAddr := sendAndReceiveData.From
-	getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
-
-	var senderBalance SendAndReceive
-	if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
-		log.Fatal(err)
-	}
-	balanceSender := senderBalance.Balance
-	accountNonceSender := senderBalance.TxCountAccount
-
-	return sendAndReceiveData, balanceSender, accountNonceSender
 }
 
 //writeFromBalance writes senders balance to accounts db
@@ -312,14 +286,12 @@ func writeFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	var response string
 	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
 	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
+
 	switch {
 	case err == sql.ErrNoRows:
-		i, err := strconv.Atoi(accountNonceRec)
-		if err !=  nil {
-			fmt.Println(err)
-		}
+		txCountAccount := strconv.FormatUint(tx.Nonce(), 10)
 		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, i).Scan(&toAddr)
+		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, txCountAccount).Scan(&toAddr)
 		if insertErr != nil {
 			panic(insertErr)
 		}
@@ -385,7 +357,6 @@ func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
-
 	getAccountBalanceReceiver := GetAccount(sqldb, toAddr)
 	getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
 
@@ -401,7 +372,6 @@ func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 
 	balanceReceiver := receiverBalance.Balance
 	balanceSender := senderBalance.Balance
-
 	accountNonceReceiver := receiverBalance.TxCountAccount
 	accountNonceSender := senderBalance.TxCountAccount
 
@@ -503,6 +473,10 @@ func storeReward(sqldb *sql.DB, address string, reward *big.Int) {
 // Getters
 //////////
 //GetAllBlocks returns []SBlock blocks for API
+
+//Look into postgres functions array_to_json(array_agg(lap))
+//Example select array_to_json(array_agg(lap))
+//from ( select * from blocks)lap;
 func GetAllBlocks(sqldb *sql.DB) string {
 	var arr blockRes
 	var blockArr string
@@ -516,16 +490,16 @@ func GetAllBlocks(sqldb *sql.DB) string {
 	for rows.Next() {
 		var hash string
 		var coinbase string
-		var gasUsed string
-		var gasLimit string
-		var txCount string
-		var uncleCount string
+		var gasUsed uint64
+		var gasLimit uint64
+		var txCount int
+		var uncleCount int
 		var age string
 		var parentHash string
 		var uncleHash string
 		var difficulty string
 		var size string
-		var nonce string
+		var nonce uint64
 		var rewards string
 		var num string
 
@@ -576,16 +550,16 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 	row := sqldb.QueryRow(sqlStatement, blockNumber)
 	var hash string
 	var coinbase string
-	var gasUsed string
-	var gasLimit string
-	var txCount string
-	var uncleCount string
+	var gasUsed uint64
+	var gasLimit uint64
+	var txCount int
+	var uncleCount int
 	var age string
 	var parentHash string
 	var uncleHash string
 	var difficulty string
 	var size string
-	var nonce string
+	var nonce uint64
 	var rewards string
 	var num string
 	row.Scan(
@@ -629,16 +603,16 @@ func GetRecentBlock(sqldb *sql.DB) string {
 	row := sqldb.QueryRow(sqlStatement)
 	var hash string
 	var coinbase string
-	var gasUsed string
-	var gasLimit string
-	var txCount string
-	var uncleCount string
+	var gasUsed uint64
+	var gasLimit uint64
+	var txCount int
+	var uncleCount int
 	var age string
 	var parentHash string
 	var uncleHash string
 	var difficulty string
 	var size string
-	var nonce string
+	var nonce uint64
 	var rewards string
 	var num string
 	row.Scan(
@@ -695,7 +669,7 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit string
+		var gasLimit uint64
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -758,16 +732,16 @@ func GetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
 	for rows.Next() {
 		var hash string
 		var coinbase string
-		var gasUsed string
-		var gasLimit string
-		var txCount string
-		var uncleCount string
+		var gasUsed uint64
+		var gasLimit uint64
+		var txCount int
+		var uncleCount int
 		var age string
 		var parentHash string
 		var uncleHash string
 		var difficulty string
 		var size string
-		var nonce string
+		var nonce uint64
 		var rewards string
 		var num string
 
@@ -830,7 +804,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit string
+		var gasLimit uint64
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -892,7 +866,7 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 	var amount string
 	var gasprice uint64
 	var gas uint64
-	var gasLimit string
+	var gasLimit uint64
 	var txfee uint64
 	var nonce uint64
 	var status string
@@ -1017,7 +991,7 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit string
+		var gasLimit uint64
 		var txfee uint64
 		var nonce uint64
 		var status string
