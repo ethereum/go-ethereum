@@ -100,10 +100,7 @@ func (w *keystoreWallet) SignHash(account accounts.Account, hash []byte) ([]byte
 // be able to sign via our shared keystore backend).
 func (w *keystoreWallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	// Make sure the requested account is contained within
-	if account.Address != w.account.Address {
-		return nil, accounts.ErrUnknownAccount
-	}
-	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
+	if account.Address != w.account.Address || (account.URL != (accounts.URL{}) && account.URL != w.account.URL) {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
@@ -114,10 +111,7 @@ func (w *keystoreWallet) SignTx(account accounts.Account, tx *types.Transaction,
 // given hash with the given account using passphrase as extra authentication.
 func (w *keystoreWallet) SignHashWithPassphrase(account accounts.Account, passphrase string, hash []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
-	if account.Address != w.account.Address {
-		return nil, accounts.ErrUnknownAccount
-	}
-	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
+	if account.Address != w.account.Address || (account.URL != (accounts.URL{}) && account.URL != w.account.URL) {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
@@ -128,10 +122,7 @@ func (w *keystoreWallet) SignHashWithPassphrase(account accounts.Account, passph
 // transaction with the given account using passphrase as extra authentication.
 func (w *keystoreWallet) SignTxWithPassphrase(account accounts.Account, passphrase string, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	// Make sure the requested account is contained within
-	if account.Address != w.account.Address {
-		return nil, accounts.ErrUnknownAccount
-	}
-	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
+	if account.Address != w.account.Address || (account.URL != (accounts.URL{}) && account.URL != w.account.URL) {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
