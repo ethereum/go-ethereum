@@ -587,20 +587,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if bytes >= softResponseLimit {
 				break
 			}
-			// Retrieve the requested block's receipts, skipping if unknown to us
-			var results types.Receipts
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-				results = rawdb.ReadReceipts(pm.chainDb, hash, *number)
-			}
-			if results == nil {
-				if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-					continue
-				}
-			}
-			// If known, encode and queue for response packet
-			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				log.Error("Failed to encode receipt", "err", err)
-			} else {
+
+			if encoded := eth.ServeBlockReceipts(pm.blockchain.(*core.BlockChain), hash); encoded != nil {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
 			}

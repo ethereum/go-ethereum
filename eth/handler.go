@@ -505,17 +505,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-			// Retrieve the requested block's receipts, skipping if unknown to us
-			results := pm.blockchain.GetReceiptsByHash(hash)
-			if results == nil {
-				if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-					continue
-				}
-			}
-			// If known, encode and queue for response packet
-			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				log.Error("Failed to encode receipt", "err", err)
-			} else {
+
+			if encoded := ServeBlockReceipts(pm.blockchain, hash); encoded != nil {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
 			}
@@ -692,6 +683,25 @@ func ServeBlockHeaders(blockchain *core.BlockChain, peer *p2p.Peer, originHash c
 		}
 	}
 	return headers
+}
+
+// ServeBlockReceipts fetches and encodes the block receipts of a single block,
+// returning nil if unknown
+func ServeBlockReceipts(blockchain *core.BlockChain, hash common.Hash) rlp.RawValue {
+	// Retrieve the requested block's receipts, skipping if unknown to us
+	results := blockchain.GetReceiptsByHash(hash)
+	if results == nil {
+		if header := blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
+			return nil
+		}
+	}
+	// If known, encode and queue for response packet
+	if encoded, err := rlp.EncodeToBytes(results); err != nil {
+		log.Error("Failed to encode receipt", "err", err)
+		return nil
+	} else {
+		return encoded
+	}
 }
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
