@@ -101,24 +101,24 @@ func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Pe
 }
 
 // Stop stops the p2p server
-func (self *ProtocolTester) Stop() error {
-	self.Server.Stop()
+func (t *ProtocolTester) Stop() error {
+	t.Server.Stop()
 	return nil
 }
 
 // Connect brings up the remote peer node and connects it using the
 // p2p/simulations network connection with the in memory network adapter
-func (self *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
+func (t *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.ID))
-		if _, err := self.network.NewNodeWithConfig(peer); err != nil {
+		if _, err := t.network.NewNodeWithConfig(peer); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
-		if err := self.network.Start(peer.ID); err != nil {
+		if err := t.network.Start(peer.ID); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
 		log.Trace(fmt.Sprintf("connect to %v", peer.ID))
-		if err := self.network.Connect(selfID, peer.ID); err != nil {
+		if err := t.network.Connect(selfID, peer.ID); err != nil {
 			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.ID, err))
 		}
 	}

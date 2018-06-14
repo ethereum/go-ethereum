@@ -196,16 +196,16 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 	buf.WriteByte('\n')
 }
 
-// JsonFormat formats log records as JSON objects separated by newlines.
-// It is the equivalent of JsonFormatEx(false, true).
-func JsonFormat() Format {
-	return JsonFormatEx(false, true)
+// JSONFormat formats log records as JSON objects separated by newlines.
+// It is the equivalent of JSONFormatEx(false, true).
+func JSONFormat() Format {
+	return JSONFormatEx(false, true)
 }
 
-// JsonFormatEx formats log records as JSON objects. If pretty is true,
+// JSONFormatEx formats log records as JSON objects. If pretty is true,
 // records will be pretty-printed. If lineSeparated is true, records
 // will be logged with a new line between each record.
-func JsonFormatEx(pretty, lineSeparated bool) Format {
+func JSONFormatEx(pretty, lineSeparated bool) Format {
 	jsonMarshal := json.Marshal
 	if pretty {
 		jsonMarshal = func(v interface{}) ([]byte, error) {
@@ -225,7 +225,7 @@ func JsonFormatEx(pretty, lineSeparated bool) Format {
 			if !ok {
 				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
 			}
-			props[k] = formatJsonValue(r.Ctx[i+1])
+			props[k] = formatJSONValue(r.Ctx[i+1])
 		}
 
 		b, err := jsonMarshal(props)
@@ -270,7 +270,7 @@ func formatShared(value interface{}) (result interface{}) {
 	}
 }
 
-func formatJsonValue(value interface{}) interface{} {
+func formatJSONValue(value interface{}) interface{} {
 	value = formatShared(value)
 	switch value.(type) {
 	case int, int8, int16, int32, int64, float32, float64, uint, uint8, uint16, uint32, uint64, string:

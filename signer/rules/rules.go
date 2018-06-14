@@ -46,17 +46,17 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 	return otto.Value{}
 }
 
-// rulesetUi provides an implementation of SignerUI that evaluates a javascript
+// rulesetUI provides an implementation of SignerUI that evaluates a javascript
 // file for each defined UI-method
-type rulesetUi struct {
+type rulesetUI struct {
 	next        core.SignerUI // The next handler, for manual processing
 	storage     storage.Storage
 	credentials storage.Storage
 	jsRules     string // The rules to use
 }
 
-func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.Storage) (*rulesetUi, error) {
-	c := &rulesetUi{
+func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.Storage) (*rulesetUI, error) {
+	c := &rulesetUI{
 		next:        next,
 		storage:     jsbackend,
 		credentials: credentialsBackend,
@@ -66,11 +66,11 @@ func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.
 	return c, nil
 }
 
-func (r *rulesetUi) Init(javascriptRules string) error {
+func (r *rulesetUI) Init(javascriptRules string) error {
 	r.jsRules = javascriptRules
 	return nil
 }
-func (r *rulesetUi) execute(jsfunc string, jsarg interface{}) (otto.Value, error) {
+func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error) {
 
 	// Instantiate a fresh vm engine every time
 	vm := otto.New()
@@ -115,7 +115,7 @@ func (r *rulesetUi) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 	return vm.Run(call)
 }
 
-func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) (bool, error) {
+func (r *rulesetUI) checkApproval(jsfunc string, jsarg []byte, err error) (bool, error) {
 	if err != nil {
 		return false, err
 	}
@@ -139,7 +139,7 @@ func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) (bool,
 	return false, fmt.Errorf("Unknown response")
 }
 
-func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
+func (r *rulesetUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveTx", jsonreq, err)
 	if err != nil {
@@ -158,11 +158,11 @@ func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 	return core.SignTxResponse{Approved: false}, err
 }
 
-func (r *rulesetUi) lookupPassword(address common.Address) string {
+func (r *rulesetUI) lookupPassword(address common.Address) string {
 	return r.credentials.Get(strings.ToLower(address.String()))
 }
 
-func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
+func (r *rulesetUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveSignData", jsonreq, err)
 	if err != nil {
@@ -175,7 +175,7 @@ func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDat
 	return core.SignDataResponse{Approved: false, Password: ""}, err
 }
 
-func (r *rulesetUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
+func (r *rulesetUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveExport", jsonreq, err)
 	if err != nil {
@@ -188,13 +188,13 @@ func (r *rulesetUi) ApproveExport(request *core.ExportRequest) (core.ExportRespo
 	return core.ExportResponse{Approved: false}, err
 }
 
-func (r *rulesetUi) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
+func (r *rulesetUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
 	// This cannot be handled by rules, requires setting a password
 	// dispatch to next
 	return r.next.ApproveImport(request)
 }
 
-func (r *rulesetUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+func (r *rulesetUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
 	if err != nil {
@@ -207,22 +207,22 @@ func (r *rulesetUi) ApproveListing(request *core.ListRequest) (core.ListResponse
 	return core.ListResponse{}, err
 }
 
-func (r *rulesetUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
+func (r *rulesetUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
 	// This cannot be handled by rules, requires setting a password
 	// dispatch to next
 	return r.next.ApproveNewAccount(request)
 }
 
-func (r *rulesetUi) ShowError(message string) {
+func (r *rulesetUI) ShowError(message string) {
 	log.Error(message)
 	r.next.ShowError(message)
 }
 
-func (r *rulesetUi) ShowInfo(message string) {
+func (r *rulesetUI) ShowInfo(message string) {
 	log.Info(message)
 	r.next.ShowInfo(message)
 }
-func (r *rulesetUi) OnSignerStartup(info core.StartupInfo) {
+func (r *rulesetUI) OnSignerStartup(info core.StartupInfo) {
 	jsonInfo, err := json.Marshal(info)
 	if err != nil {
 		log.Warn("failed marshalling data", "data", info)
@@ -235,7 +235,7 @@ func (r *rulesetUi) OnSignerStartup(info core.StartupInfo) {
 	}
 }
 
-func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
+func (r *rulesetUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	jsonTx, err := json.Marshal(tx)
 	if err != nil {
 		log.Warn("failed marshalling transaction", "tx", tx)

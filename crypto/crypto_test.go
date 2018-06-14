@@ -154,7 +154,7 @@ func TestValidateSignatureValues(t *testing.T) {
 	minusOne := big.NewInt(-1)
 	one := common.Big1
 	zero := common.Big0
-	secp256k1nMinus1 := new(big.Int).Sub(secp256k1_N, common.Big1)
+	secp256k1nMinus1 := new(big.Int).Sub(secp256k1N, common.Big1)
 
 	// correct v,r,s
 	check(true, 0, one, one)
@@ -181,9 +181,9 @@ func TestValidateSignatureValues(t *testing.T) {
 	// correct sig with max r,s
 	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 0, secp256k1_N, secp256k1nMinus1)
-	check(false, 0, secp256k1nMinus1, secp256k1_N)
-	check(false, 0, secp256k1_N, secp256k1_N)
+	check(false, 0, secp256k1N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1N)
+	check(false, 0, secp256k1N, secp256k1N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone

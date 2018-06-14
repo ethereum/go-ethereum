@@ -53,7 +53,7 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
-		db, _  = ethdb.NewMemDatabase()
+		db     = ethdb.NewMemDatabase()
 		gspec  = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
@@ -124,7 +124,7 @@ func (p *testTxPool) Pending() (map[common.Address]types.Transactions, error) {
 	return batches, nil
 }
 
-func (p *testTxPool) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
 

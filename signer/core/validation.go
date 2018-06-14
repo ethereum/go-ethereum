@@ -128,7 +128,7 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 		if len(data) == 0 {
 			if txargs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
 				// Sending ether into black hole
-				return errors.New(`Tx will create contract with value but empty code!`)
+				return errors.New("Tx will create contract with value but empty code!")
 			}
 			// No value submitted at least
 			msgs.crit("Tx will create contract with empty code!")

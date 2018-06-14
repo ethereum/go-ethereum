@@ -27,7 +27,7 @@ import (
 
 	ethereum "github.com/EthereumCommonwealth/go-callisto"
 	"github.com/EthereumCommonwealth/go-callisto/common"
-	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/core/rawdb"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
 	"github.com/EthereumCommonwealth/go-callisto/event"
@@ -224,7 +224,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		stateCh:        make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
-			processed: core.GetTrieSyncProgress(stateDb),
+			processed: rawdb.ReadFastTrieProgress(stateDb),
 		},
 		trackStateReq: make(chan *stateReq),
 	}

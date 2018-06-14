@@ -17,7 +17,6 @@
 package adapters
 
 import (
-	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -29,7 +28,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -150,10 +148,6 @@ func (n *ExecNode) Client() (*rpc.Client, error) {
 	return n.client, nil
 }
 
-// wsAddrPattern is a regex used to read the WebSocket address from the node's
-// log
-var wsAddrPattern = regexp.MustCompile(`ws://[\d.:]+`)
-
 // Start exec's the node passing the ID and service as command line arguments
 // and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
 // variable
@@ -196,23 +190,9 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	n.Cmd = cmd
 
 	// read the WebSocket address from the stderr logs
-	var wsAddr string
-	wsAddrC := make(chan string)
-	go func() {
-		s := bufio.NewScanner(stderrR)
-		for s.Scan() {
-			if strings.Contains(s.Text(), "WebSocket endpoint opened:") {
-				wsAddrC <- wsAddrPattern.FindString(s.Text())
-			}
-		}
-	}()
-	select {
-	case wsAddr = <-wsAddrC:
-		if wsAddr == "" {
-			return errors.New("failed to read WebSocket address from stderr")
-		}
-	case <-time.After(10 * time.Second):
-		return errors.New("timed out waiting for WebSocket address on stderr")
+	wsAddr, err := findWSAddr(stderrR, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("error getting WebSocket address: %s", err)
 	}
 
 	// create the RPC client and load the node info

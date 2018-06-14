@@ -94,13 +94,12 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	for n, argument := range method.Inputs {
 		if err != nil {
 			return nil, fmt.Errorf("Failed to decode argument %d (signature %v): %v", n, method.Sig(), err)
-		} else {
-			decodedArg := decodedArgument{
-				soltype: argument,
-				value:   v[n],
-			}
-			decoded.inputs = append(decoded.inputs, decodedArg)
 		}
+		decodedArg := decodedArgument{
+			soltype: argument,
+			value:   v[n],
+		}
+		decoded.inputs = append(decoded.inputs, decodedArg)
 	}
 
 	// We're finished decoding the data. At this point, we encode the decoded data to see if it matches with the
@@ -240,7 +239,7 @@ func (db *AbiDb) saveCustomAbi(selector, signature string) error {
 	return err
 }
 
-// Adds a signature to the database, if custom database saving is enabled.
+// AddSignature to the database, if custom database saving is enabled.
 // OBS: This method does _not_ validate the correctness of the data,
 // it is assumed that the caller has already done so
 func (db *AbiDb) AddSignature(selector string, data []byte) error {
