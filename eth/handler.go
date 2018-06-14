@@ -339,85 +339,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&query); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		hashMode := query.Origin.Hash != (common.Hash{})
-		first := true
-		maxNonCanonical := uint64(100)
-
-		// Gather headers until the fetch or network limits is reached
-		var (
-			bytes   common.StorageSize
-			headers []*types.Header
-			unknown bool
-		)
-		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
-			// Retrieve the next header satisfying the query
-			var origin *types.Header
-			if hashMode {
-				if first {
-					first = false
-					origin = pm.blockchain.GetHeaderByHash(query.Origin.Hash)
-					if origin != nil {
-						query.Origin.Number = origin.Number.Uint64()
-					}
-				} else {
-					origin = pm.blockchain.GetHeader(query.Origin.Hash, query.Origin.Number)
-				}
-			} else {
-				origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
-			}
-			if origin == nil {
-				break
-			}
-			headers = append(headers, origin)
-			bytes += estHeaderRlpSize
-
-			// Advance to the next header of the query
-			switch {
-			case hashMode && query.Reverse:
-				// Hash based traversal towards the genesis block
-				ancestor := query.Skip + 1
-				if ancestor == 0 {
-					unknown = true
-				} else {
-					query.Origin.Hash, query.Origin.Number = pm.blockchain.GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
-					unknown = (query.Origin.Hash == common.Hash{})
-				}
-			case hashMode && !query.Reverse:
-				// Hash based traversal towards the leaf block
-				var (
-					current = origin.Number.Uint64()
-					next    = current + query.Skip + 1
-				)
-				if next <= current {
-					infos, _ := json.MarshalIndent(p.Peer.Info(), "", "  ")
-					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
-					unknown = true
-				} else {
-					if header := pm.blockchain.GetHeaderByNumber(next); header != nil {
-						nextHash := header.Hash()
-						expOldHash, _ := pm.blockchain.GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
-						if expOldHash == query.Origin.Hash {
-							query.Origin.Hash, query.Origin.Number = nextHash, next
-						} else {
-							unknown = true
-						}
-					} else {
-						unknown = true
-					}
-				}
-			case query.Reverse:
-				// Number based traversal towards the genesis block
-				if query.Origin.Number >= query.Skip+1 {
-					query.Origin.Number -= query.Skip + 1
-				} else {
-					unknown = true
-				}
-
-			case !query.Reverse:
-				// Number based traversal towards the leaf block
-				query.Origin.Number += query.Skip + 1
-			}
-		}
+		headers := ServeBlockHeaders(pm.blockchain, p.Peer, query.Origin.Hash, query.Origin.Number, query.Amount, query.Skip, query.Reverse)
 		return p.SendBlockHeaders(headers)
 
 	case msg.Code == BlockHeadersMsg:
@@ -686,6 +608,90 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	return nil
+}
+
+// ServeBlockHeaders collects the block headers for serving a GetBlockHeadersMsg
+func ServeBlockHeaders(blockchain *core.BlockChain, peer *p2p.Peer, originHash common.Hash, originNumber, amount, skip uint64, reverse bool) []*types.Header {
+	hashMode := originHash != (common.Hash{})
+	first := true
+	maxNonCanonical := uint64(100)
+
+	// Gather headers until the fetch or network limits is reached
+	var (
+		bytes   common.StorageSize
+		headers []*types.Header
+		unknown bool
+	)
+	for !unknown && len(headers) < int(amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
+		// Retrieve the next header satisfying the query
+		var origin *types.Header
+		if hashMode {
+			if first {
+				first = false
+				origin = blockchain.GetHeaderByHash(originHash)
+				if origin != nil {
+					originNumber = origin.Number.Uint64()
+				}
+			} else {
+				origin = blockchain.GetHeader(originHash, originNumber)
+			}
+		} else {
+			origin = blockchain.GetHeaderByNumber(originNumber)
+		}
+		if origin == nil {
+			break
+		}
+		headers = append(headers, origin)
+		bytes += estHeaderRlpSize
+
+		// Advance to the next header of the query
+		switch {
+		case hashMode && reverse:
+			// Hash based traversal towards the genesis block
+			ancestor := skip + 1
+			if ancestor == 0 {
+				unknown = true
+			} else {
+				originHash, originNumber = blockchain.GetAncestor(originHash, originNumber, ancestor, &maxNonCanonical)
+				unknown = (originHash == common.Hash{})
+			}
+		case hashMode && !reverse:
+			// Hash based traversal towards the leaf block
+			var (
+				current = origin.Number.Uint64()
+				next    = current + skip + 1
+			)
+			if next <= current {
+				infos, _ := json.MarshalIndent(peer.Info(), "", "  ")
+				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", skip, "next", next, "attacker", infos)
+				unknown = true
+			} else {
+				if header := blockchain.GetHeaderByNumber(next); header != nil {
+					nextHash := header.Hash()
+					expOldHash, _ := blockchain.GetAncestor(nextHash, next, skip+1, &maxNonCanonical)
+					if expOldHash == originHash {
+						originHash, originNumber = nextHash, next
+					} else {
+						unknown = true
+					}
+				} else {
+					unknown = true
+				}
+			}
+		case reverse:
+			// Number based traversal towards the genesis block
+			if originNumber >= skip+1 {
+				originNumber -= skip + 1
+			} else {
+				unknown = true
+			}
+
+		case !reverse:
+			// Number based traversal towards the leaf block
+			originNumber += skip + 1
+		}
+	}
+	return headers
 }
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
