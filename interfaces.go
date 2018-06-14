@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// NotFound is returned by API methods if the requested item does not exist.
-var NotFound = errors.New("not found")
+// ErrNotFound is returned by API methods if the requested item does not exist.
+var ErrNotFound = errors.New("not found")
 
 // TODO: move subscription to package event
 
