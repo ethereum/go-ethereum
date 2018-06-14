@@ -84,35 +84,43 @@ var (
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
 		{
-			Name:        "abigen",
+			BinaryName:  "abigen",
+			PackageName: "abigen",
 			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
-			Name:        "bootnode",
+			BinaryName:  "bootnode",
+			PackageName: "bootnode",
 			Description: "Ethereum bootnode.",
 		},
 		{
-			Name:        "evm",
+			BinaryName:  "evm",
+			PackageName: "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			Name:        "geth",
+			BinaryName:  "geth",
+			PackageName: "geth",
 			Description: "Ethereum CLI client.",
 		},
 		{
-			Name:        "puppeth",
+			BinaryName:  "puppeth",
+			PackageName: "puppeth",
 			Description: "Ethereum private network manager.",
 		},
 		{
-			Name:        "rlpdump",
+			BinaryName:  "rlpdump",
+			PackageName: "rlpdump",
 			Description: "Developer utility tool that prints RLP structures.",
 		},
 		{
-			Name:        "swarm",
+			BinaryName:  "swarm",
+			PackageName: "ethereum-swarm",
 			Description: "Ethereum Swarm daemon and tools",
 		},
 		{
-			Name:        "wnode",
+			BinaryName:  "wnode",
+			PackageName: "wnode",
 			Description: "Ethereum Whisper diagnostic tool",
 		},
 	}
@@ -539,7 +547,9 @@ type debMetadata struct {
 }
 
 type debExecutable struct {
-	Name, Description string
+	PackageName string
+	BinaryName  string
+	Description string
 }
 
 func newDebMetadata(distro, author string, env build.Environment, t time.Time) debMetadata {
@@ -590,9 +600,9 @@ func (meta debMetadata) ExeList() string {
 // ExeName returns the package name of an executable package.
 func (meta debMetadata) ExeName(exe debExecutable) string {
 	if isUnstableBuild(meta.Env) {
-		return exe.Name + "-unstable"
+		return exe.PackageName + "-unstable"
 	}
-	return exe.Name
+	return exe.PackageName
 }
 
 // ExeConflicts returns the content of the Conflicts field
@@ -607,7 +617,7 @@ func (meta debMetadata) ExeConflicts(exe debExecutable) string {
 		// be preferred and the conflicting files should be handled via
 		// alternates. We might do this eventually but using a conflict is
 		// easier now.
-		return "ethereum, " + exe.Name
+		return "ethereum, " + exe.PackageName
 	}
 	return ""
 }
