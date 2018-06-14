@@ -38,4 +38,4 @@ CREATE TABLE IF NOT EXISTS accounts (
   balance numeric,
   txCountAccount numeric
 );
-shyft-cli/postgres_setup/create_tables.psql
+
