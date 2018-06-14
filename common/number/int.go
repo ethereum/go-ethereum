@@ -22,9 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var tt256 = new(big.Int).Lsh(big.NewInt(1), 256)
-var tt256m1 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
-var tt255 = new(big.Int).Lsh(big.NewInt(1), 255)
+var (
+	tt256   = new(big.Int).Lsh(big.NewInt(1), 256)
+	tt256m1 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	tt255   = new(big.Int).Lsh(big.NewInt(1), 255)
+)
 
 func limitUnsigned256(x *Number) *Number {
 	x.num.And(x.num, tt256m1)
@@ -181,7 +183,6 @@ func (i *Number) FirstBitSet() int {
 }
 
 // Variables
-
 var (
 	Zero       = Uint(0)
 	One        = Uint(1)
