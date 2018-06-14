@@ -261,10 +261,7 @@ func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *B
 	}
 	// Header-only chain requested
 	headers := makeHeaderChain(genesis.Header(), n, engine, db, canonicalSeed)
-	foo, err := blockchain.InsertHeaderChain(headers, 1)
-	// foo is so the compiler doesn't complain
-	// @NOTE:SHYFT @TODO: remove this.
-	fmt.Println(foo)
+	_, err := blockchain.InsertHeaderChain(headers, 1)
 	return db, blockchain, err
 }
 
