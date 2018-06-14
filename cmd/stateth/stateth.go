@@ -38,6 +38,7 @@ var (
 	dashboardsFolder string // folder containing all dashboards to be imported in Grafana
 	grafanaPort      int    // expose port for the Grafana HTTP interface
 	influxdbPort     int    // expose port for the InfluxDB HTTP interface
+	rm               bool   // remove stateth containers and stateth network upon startup
 )
 
 const (
@@ -78,6 +79,10 @@ func main() {
 			Value: "stateth",
 			Usage: "prefix to be used for docker network and containers. must be unique.",
 		},
+		cli.BoolFlag{
+			Name:  "rm",
+			Usage: "remove existing stateth network and stateth containers upon startup.",
+		},
 	}
 	app.Action = func(c *cli.Context) error {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
@@ -86,6 +91,11 @@ func main() {
 		grafanaPort = c.Int("grafana-http-port")
 		influxdbPort = c.Int("influxdb-http-port")
 		dashboardsFolder = c.String("grafana-dashboards-folder")
+		rm = c.Bool("rm")
+
+		if rm {
+			cleanupContainers(c)
+		}
 
 		if err := runNetwork(c); err != nil {
 			return err
@@ -123,7 +133,9 @@ func main() {
 		fmt.Println("waiting for SIGINT or SIGTERM (CTRL^C) to stop service and remove containers...")
 		<-done
 
-		return cleanupContainers(c)
+		cleanupContainers(c)
+
+		return nil
 	}
 
 	app.Run(os.Args)
@@ -169,7 +181,7 @@ func runGrafana(c *cli.Context) error {
 	}
 
 	log.Info("running grafana docker container", "container", fmt.Sprintf("%s_grafana", dockerPrefix))
-	command = strings.Split(fmt.Sprintf("docker run --network %s --name=%s_grafana -p %d:3000 -d grafana/grafana:5.1.3", dockerPrefix, dockerPrefix, grafanaPort), " ")
+	command = strings.Split(fmt.Sprintf("docker run --network %s --name=%s_grafana -p %d:3000 -e GF_AUTH_ANONYMOUS_ENABLED=true -d grafana/grafana:5.1.3", dockerPrefix, dockerPrefix, grafanaPort), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Error(string(r))
@@ -178,7 +190,7 @@ func runGrafana(c *cli.Context) error {
 	return nil
 }
 
-func cleanupContainers(c *cli.Context) error {
+func cleanupContainers(c *cli.Context) {
 	log.Info("removing influxdb container")
 	command := strings.Split(fmt.Sprintf("docker rm -f %s_influxdb", dockerPrefix), " ")
 	r, err := exec.Command(command[0], command[1:]...).CombinedOutput()
@@ -199,8 +211,6 @@ func cleanupContainers(c *cli.Context) error {
 	if err != nil {
 		log.Warn(string(r))
 	}
-
-	return nil
 }
 
 func importGrafanaDatasource(c *cli.Context) error {
