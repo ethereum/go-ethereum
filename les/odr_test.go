@@ -184,11 +184,11 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := rawdb.ReadCanonicalHash(db, i)
-			b1 := fn(light.NoOdr, db, pm.chainConfig, pm.blockchain.(*core.BlockChain), nil, bhash)
+			b1 := fn(light.NoOdr, db, pm.chainConfig, pm.blockchain, nil, bhash)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
-			b2 := fn(ctx, ldb, lpm.chainConfig, nil, lpm.blockchain.(*light.LightChain), bhash)
+			b2 := fn(ctx, ldb, lpm.chainConfig, nil, lpm.lightchain, bhash)
 
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
