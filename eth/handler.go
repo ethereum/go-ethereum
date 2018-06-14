@@ -407,7 +407,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			bytes  int
 			bodies []rlp.RawValue
 		)
-		for bytes < softResponseLimit && len(bodies) < downloader.MaxBlockFetch {
+		for bytes < softResponseLimit && len(bodies) < downloader.MaxBodyFetch {
 			// Retrieve the hash of the next block
 			if err := msgStream.Decode(&hash); err == rlp.EOL {
 				break

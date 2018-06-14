@@ -469,11 +469,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 			// Retrieve the requested block body, stopping if enough was found
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-				if data := rawdb.ReadBodyRLP(pm.chainDb, hash, *number); len(data) != 0 {
-					bodies = append(bodies, data)
-					bytes += len(data)
-				}
+			if data := pm.blockchain.(*core.BlockChain).GetBodyRLP(hash); len(data) != 0 {
+				bodies = append(bodies, data)
+				bytes += len(data)
 			}
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
