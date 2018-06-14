@@ -1392,27 +1392,21 @@ func (bc *BlockChain) update() {
 	}
 }
 
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash   common.Hash   `json:"hash"`
-	Header *types.Header `json:"header"`
-}
-
 // BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
-	headers := make([]BadBlockArgs, 0, bc.badBlocks.Len())
+func (bc *BlockChain) BadBlocks() []*types.Block {
+	blocks := make([]*types.Block, 0, bc.badBlocks.Len())
 	for _, hash := range bc.badBlocks.Keys() {
-		if hdr, exist := bc.badBlocks.Peek(hash); exist {
-			header := hdr.(*types.Header)
-			headers = append(headers, BadBlockArgs{header.Hash(), header})
+		if blk, exist := bc.badBlocks.Peek(hash); exist {
+			block := blk.(*types.Block)
+			blocks = append(blocks, block)
 		}
 	}
-	return headers, nil
+	return blocks
 }
 
 // addBadBlock adds a bad block to the bad-block LRU cache
 func (bc *BlockChain) addBadBlock(block *types.Block) {
-	bc.badBlocks.Add(block.Header().Hash(), block.Header())
+	bc.badBlocks.Add(block.Hash(), block)
 }
 
 // reportBlock logs a bad block error.
@@ -1528,6 +1522,18 @@ func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
 // hash, fetching towards the genesis block.
 func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
 	return bc.hc.GetBlockHashesFromHash(hash, max)
+}
+
+// GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
+// a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
+// number of blocks to be individually checked before we reach the canonical chain.
+//
+// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,

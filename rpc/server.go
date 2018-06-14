@@ -145,7 +145,7 @@ func (s *Server) serveRequest(ctx context.Context, codec ServerCodec, singleShot
 	defer cancel()
 
 	// if the codec supports notification include a notifier that callbacks can use
-	// to send notification to clients. It is thight to the codec/connection. If the
+	// to send notification to clients. It is tied to the codec/connection. If the
 	// connection is closed the notifier will stop and cancels all active subscriptions.
 	if options&OptionSubscriptions == OptionSubscriptions {
 		ctx = context.WithValue(ctx, notifierKey{}, newNotifier(codec))
@@ -313,7 +313,6 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 	if len(reply) == 0 {
 		return codec.CreateResponse(req.id, nil), nil
 	}
-
 	if req.callb.errPos >= 0 { // test if method returned an error
 		if !reply[req.callb.errPos].IsNil() {
 			e := reply[req.callb.errPos].Interface().(error)
