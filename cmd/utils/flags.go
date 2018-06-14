@@ -362,10 +362,6 @@ var (
 		Name:  "ethstats",
 		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
 	}
-	MetricsEnabledFlag = cli.BoolFlag{
-		Name:  metrics.MetricsEnabledFlag,
-		Usage: "Enable metrics collection and reporting",
-	}
 	FakePoWFlag = cli.BoolFlag{
 		Name:  "fakepow",
 		Usage: "Disables proof-of-work verification",
@@ -536,28 +532,32 @@ var (
 	}
 
 	// Metrics flags
-	MetricsEnableInfluxDBExportFlag = cli.BoolFlag{
-		Name:  "metrics.influxdb.export",
+	MetricsEnabledFlag = cli.BoolFlag{
+		Name:  metrics.MetricsEnabledFlag,
+		Usage: "Enable metrics collection and reporting",
+	}
+	MetricsEnableInfluxDBFlag = cli.BoolFlag{
+		Name:  "metrics.influxdb",
 		Usage: "Enable metrics export/push to an external InfluxDB database",
 	}
 	MetricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
-		Usage: "Metrics InfluxDB endpoint",
+		Usage: "InfluxDB API endpoint to report metrics to",
 		Value: "http://localhost:8086",
 	}
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
-		Usage: "Metrics InfluxDB database",
-		Value: "metrics",
+		Usage: "InfluxDB database name to push reported metrics to",
+		Value: "geth",
 	}
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
-		Usage: "Metrics InfluxDB username",
+		Usage: "Username to authorize access to the database",
 		Value: "test",
 	}
 	MetricsInfluxDBPasswordFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.password",
-		Usage: "Metrics InfluxDB password",
+		Usage: "Password to authorize access to the database",
 		Value: "test",
 	}
 	// The `host` tag is part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
@@ -566,7 +566,7 @@ var (
 	// https://docs.influxdata.com/influxdb/v1.4/concepts/key_concepts/#tag-key
 	MetricsInfluxDBHostTagFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.host.tag",
-		Usage: "Metrics InfluxDB `host` tag attached to all measurements",
+		Usage: "InfluxDB `host` tag attached to all measurements",
 		Value: "localhost",
 	}
 )
@@ -1222,7 +1222,7 @@ func SetupMetrics(ctx *cli.Context) {
 	if metrics.Enabled {
 		log.Info("Enabling metrics collection")
 		var (
-			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name)
+			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBFlag.Name)
 			endpoint     = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
 			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
 			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)

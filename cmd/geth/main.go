@@ -146,7 +146,7 @@ var (
 	}
 
 	metricsFlags = []cli.Flag{
-		utils.MetricsEnableInfluxDBExportFlag,
+		utils.MetricsEnableInfluxDBFlag,
 		utils.MetricsInfluxDBEndpointFlag,
 		utils.MetricsInfluxDBDatabaseFlag,
 		utils.MetricsInfluxDBUsernameFlag,
