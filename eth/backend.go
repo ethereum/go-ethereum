@@ -215,14 +215,14 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 		return clique.New(chainConfig.Clique, db)
 	}
 	// Otherwise assume proof-of-work
-	switch {
-	case config.PowMode == ethash.ModeFake:
+	switch config.PowMode {
+	case ethash.ModeFake:
 		log.Warn("Ethash used in fake mode")
 		return ethash.NewFaker()
-	case config.PowMode == ethash.ModeTest:
+	case ethash.ModeTest:
 		log.Warn("Ethash used in test mode")
 		return ethash.NewTester()
-	case config.PowMode == ethash.ModeShared:
+	case ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
 	default:
@@ -239,7 +239,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 	}
 }
 
-// APIs returns the collection of RPC services the ethereum package offers.
+// APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)

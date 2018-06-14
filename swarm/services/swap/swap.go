@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -134,6 +135,11 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 		out *chequebook.Outbox
 	)
 
+	remotekey, err := crypto.UnmarshalPubkey(common.FromHex(remote.PublicKey))
+	if err != nil {
+		return nil, errors.New("invalid remote public key")
+	}
+
 	// check if remote chequebook is valid
 	// insolvent chequebooks suicide so will signal as invalid
 	// TODO: monitoring a chequebooks events
@@ -142,7 +148,7 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 		log.Info(fmt.Sprintf("invalid contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 	} else {
 		// remote contract valid, create inbox
-		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), backend)
+		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, remotekey, backend)
 		if err != nil {
 			log.Warn(fmt.Sprintf("unable to set up inbox for chequebook contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 		}
