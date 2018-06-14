@@ -293,11 +293,11 @@ func (pool *TxPool) loop() {
 
 				pool.mu.Unlock()
 			}
-		// Be unsubscribed due to system stopped
+			// Be unsubscribed due to system stopped
 		case <-pool.chainHeadSub.Err():
 			return
 
-		// Handle stats reporting ticks
+			// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
 			pending, queued := pool.stats()
@@ -309,7 +309,7 @@ func (pool *TxPool) loop() {
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 
-		// Handle inactive account transaction eviction
+			// Handle inactive account transaction eviction
 		case <-evict.C:
 			pool.mu.Lock()
 			for addr := range pool.queue {
@@ -326,7 +326,7 @@ func (pool *TxPool) loop() {
 			}
 			pool.mu.Unlock()
 
-		// Handle local transaction journal rotation
+			// Handle local transaction journal rotation
 		case <-journal.C:
 			if pool.journal != nil {
 				pool.mu.Lock()
@@ -586,13 +586,17 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
-	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
-	if err != nil {
-		return err
+	if tx.To().String() != common.BlockSigners {
+		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+		if err != nil {
+			return err
+		}
+		// Exclude check smart contract sign address.
+		if tx.Gas() < intrGas {
+			return ErrIntrinsicGas
+		}
 	}
-	if tx.Gas() < intrGas {
-		return ErrIntrinsicGas
-	}
+
 	return nil
 }
 
@@ -611,6 +615,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		return false, fmt.Errorf("known transaction: %x", hash)
 	}
+
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
