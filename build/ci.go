@@ -85,32 +85,26 @@ var (
 	debExecutables = []debExecutable{
 		{
 			BinaryName:  "abigen",
-			PackageName: "abigen",
 			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			BinaryName:  "bootnode",
-			PackageName: "bootnode",
 			Description: "Ethereum bootnode.",
 		},
 		{
 			BinaryName:  "evm",
-			PackageName: "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
 			BinaryName:  "geth",
-			PackageName: "geth",
 			Description: "Ethereum CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",
-			PackageName: "puppeth",
 			Description: "Ethereum private network manager.",
 		},
 		{
 			BinaryName:  "rlpdump",
-			PackageName: "rlpdump",
 			Description: "Developer utility tool that prints RLP structures.",
 		},
 		{
@@ -120,7 +114,6 @@ var (
 		},
 		{
 			BinaryName:  "wnode",
-			PackageName: "wnode",
 			Description: "Ethereum Whisper diagnostic tool",
 		},
 	}
@@ -552,6 +545,15 @@ type debExecutable struct {
 	Description string
 }
 
+// Package returns the name of the package if present, or
+// fallbacks to BinaryName
+func (d debExecutable) Package() string {
+	if d.PackageName != "" {
+		return d.PackageName
+	}
+	return d.BinaryName
+}
+
 func newDebMetadata(distro, author string, env build.Environment, t time.Time) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
@@ -600,9 +602,9 @@ func (meta debMetadata) ExeList() string {
 // ExeName returns the package name of an executable package.
 func (meta debMetadata) ExeName(exe debExecutable) string {
 	if isUnstableBuild(meta.Env) {
-		return exe.PackageName + "-unstable"
+		return exe.Package() + "-unstable"
 	}
-	return exe.PackageName
+	return exe.Package()
 }
 
 // ExeConflicts returns the content of the Conflicts field
@@ -617,7 +619,7 @@ func (meta debMetadata) ExeConflicts(exe debExecutable) string {
 		// be preferred and the conflicting files should be handled via
 		// alternates. We might do this eventually but using a conflict is
 		// easier now.
-		return "ethereum, " + exe.PackageName
+		return "ethereum, " + exe.Package()
 	}
 	return ""
 }
