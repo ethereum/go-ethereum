@@ -24,20 +24,23 @@ import (
 	"strings"
 )
 
+// derivationPathBase represents the base index of DerivationPath
+const derivationPathBase = 0x80000000
+
 // DefaultRootDerivationPath is the root path to which custom derivation endpoints
 // are appended. As such, the first account will be at m/44'/60'/0'/0, the second
 // at m/44'/60'/0'/1, etc.
-var DefaultRootDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
+var DefaultRootDerivationPath = DerivationPath{derivationPathBase + 44, derivationPathBase + 60, derivationPathBase + 0, 0}
 
 // DefaultBaseDerivationPath is the base path from which custom derivation endpoints
 // are incremented. As such, the first account will be at m/44'/60'/0'/0, the second
 // at m/44'/60'/0'/1, etc.
-var DefaultBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0, 0}
+var DefaultBaseDerivationPath = DerivationPath{derivationPathBase + 44, derivationPathBase + 60, derivationPathBase + 0, 0, 0}
 
 // DefaultLedgerBaseDerivationPath is the base path from which custom derivation endpoints
 // are incremented. As such, the first account will be at m/44'/60'/0'/0, the second
 // at m/44'/60'/0'/1, etc.
-var DefaultLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
+var DefaultLedgerBaseDerivationPath = DerivationPath{derivationPathBase + 44, derivationPathBase + 60, derivationPathBase + 0, 0}
 
 // DerivationPath represents the computer friendly version of a hierarchical
 // deterministic wallet account derivaion path.
@@ -93,7 +96,7 @@ func ParseDerivationPath(path string) (DerivationPath, error) {
 
 		// Handle hardened paths
 		if strings.HasSuffix(component, "'") {
-			value = 0x80000000
+			value = derivationPathBase
 			component = strings.TrimSpace(strings.TrimSuffix(component, "'"))
 		}
 		// Handle the non hardened component
@@ -122,8 +125,8 @@ func (path DerivationPath) String() string {
 	result := "m"
 	for _, component := range path {
 		var hardened bool
-		if component >= 0x80000000 {
-			component -= 0x80000000
+		if component >= derivationPathBase {
+			component -= derivationPathBase
 			hardened = true
 		}
 		result = fmt.Sprintf("%s/%d", result, component)
