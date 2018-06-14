@@ -31,23 +31,23 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// Custom type which is registered in the flags library which cli uses for
-// argument parsing. This allows us to expand Value to an absolute path when
-// the argument is parsed
+// DirectoryString is a custom type that is registered in the flags library which cli
+// uses for argument parsing. This allows us to expand Value to an absolute path when
+// the argument is parsed.
 type DirectoryString struct {
 	Value string
 }
 
-func (self *DirectoryString) String() string {
-	return self.Value
+func (ds *DirectoryString) String() string {
+	return ds.Value
 }
 
-func (self *DirectoryString) Set(value string) error {
-	self.Value = expandPath(value)
+func (ds *DirectoryString) Set(value string) error {
+	ds.Value = expandPath(value)
 	return nil
 }
 
-// Custom cli.Flag type which expand the received string to an absolute path.
+// DirectoryFlag is a custom cli.Flag type that expands the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
 	Name  string
@@ -55,12 +55,12 @@ type DirectoryFlag struct {
 	Usage string
 }
 
-func (self DirectoryFlag) String() string {
+func (df DirectoryFlag) String() string {
 	fmtString := "%s %v\t%v"
-	if len(self.Value.Value) > 0 {
+	if len(df.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
 	}
-	return fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage)
+	return fmt.Sprintf(fmtString, prefixedNames(df.Name), df.Value.Value, df.Usage)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -71,11 +71,11 @@ func eachName(longName string, fn func(string)) {
 	}
 }
 
-// called by cli library, grabs variable from environment (if in env)
-// and adds variable to flag set for parsing.
-func (self DirectoryFlag) Apply(set *flag.FlagSet) {
-	eachName(self.Name, func(name string) {
-		set.Var(&self.Value, self.Name, self.Usage)
+// Apply grabs variable from environment (if in env) and adds the variable to flagSet for parsing.
+// It is called by cli library.
+func (df DirectoryFlag) Apply(set *flag.FlagSet) {
+	eachName(df.Name, func(name string) {
+		set.Var(&df.Value, df.Name, df.Usage)
 	})
 }
 
@@ -207,12 +207,12 @@ func prefixedNames(fullName string) (prefixed string) {
 	return
 }
 
-func (self DirectoryFlag) GetName() string {
-	return self.Name
+func (df DirectoryFlag) GetName() string {
+	return df.Name
 }
 
-func (self *DirectoryFlag) Set(value string) {
-	self.Value.Value = value
+func (df *DirectoryFlag) Set(value string) {
+	df.Value.Value = value
 }
 
 // Expands a file path
