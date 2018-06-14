@@ -144,15 +144,6 @@ var (
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
 	}
-
-	metricsFlags = []cli.Flag{
-		utils.MetricsEnableInfluxDBExportFlag,
-		utils.MetricsInfluxDBEndpointFlag,
-		utils.MetricsInfluxDBDatabaseFlag,
-		utils.MetricsInfluxDBUsernameFlag,
-		utils.MetricsInfluxDBPasswordFlag,
-		utils.MetricsInfluxDBHostTagFlag,
-	}
 )
 
 func init() {
@@ -195,7 +186,6 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, whisperFlags...)
-	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -217,9 +207,6 @@ func init() {
 
 		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 		godebug.SetGCPercent(int(gogc))
-
-		// Start metrics export if enabled
-		utils.SetupMetrics(ctx)
 
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)

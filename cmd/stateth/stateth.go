@@ -38,6 +38,7 @@ var (
 	dashboardsFolder string // folder containing all dashboards to be imported in Grafana
 	grafanaPort      int    // expose port for the Grafana HTTP interface
 	influxdbPort     int    // expose port for the InfluxDB HTTP interface
+	influxdbDatabase string // name of database to provision on InfluxDB
 	rm               bool   // remove stateth containers and stateth network upon startup
 )
 
@@ -70,6 +71,11 @@ func main() {
 			Usage: "default grafana http port",
 		},
 		cli.StringFlag{
+			Name:  "influxdb-database",
+			Value: "geth",
+			Usage: "default influxdb database to provision",
+		},
+		cli.StringFlag{
 			Name:  "grafana-dashboards-folder",
 			Value: os.Getenv("GOPATH") + "/src/github.com/ethereum/go-ethereum/cmd/stateth/grafana_dashboards",
 			Usage: "default grafana dashboards folder",
@@ -91,6 +97,7 @@ func main() {
 		grafanaPort = c.Int("grafana-http-port")
 		influxdbPort = c.Int("influxdb-http-port")
 		dashboardsFolder = c.String("grafana-dashboards-folder")
+		influxdbDatabase = c.String("influxdb-database")
 		rm = c.Bool("rm")
 
 		if rm {
@@ -162,7 +169,7 @@ func runInfluxDB(c *cli.Context) error {
 	}
 
 	log.Info("running influxdb docker container", "container", fmt.Sprintf("%s_influxdb", dockerPrefix))
-	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=metrics -e INFLUXDB_ADMIN_USER=%s -e INFLUXDB_ADMIN_PASSWORD=%s -p %d:8086 -d influxdb:1.5.2", dockerPrefix, dockerPrefix, influxdbAdminUser, influxdbAdminPass, influxdbPort), " ")
+	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=%s -e INFLUXDB_ADMIN_USER=%s -e INFLUXDB_ADMIN_PASSWORD=%s -p %d:8086 -d influxdb:1.5.2", dockerPrefix, dockerPrefix, influxdbDatabase, influxdbAdminUser, influxdbAdminPass, influxdbPort), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Error(string(r))
@@ -222,11 +229,11 @@ func importGrafanaDatasource(c *cli.Context) error {
 	}
 
 	dataSource := &gapi.DataSource{
-		Name:      "metrics",
+		Name:      influxdbDatabase,
 		Type:      "influxdb",
 		URL:       fmt.Sprintf("http://%s_influxdb:%d", dockerPrefix, influxdbPort),
 		Access:    "proxy",
-		Database:  "metrics",
+		Database:  influxdbDatabase,
 		User:      influxdbAdminUser,
 		Password:  influxdbAdminPass,
 		IsDefault: true,
