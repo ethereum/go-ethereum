@@ -25,19 +25,24 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -180,6 +185,103 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// Inject hook for send tx sign to smartcontract after insert block into chain.
 	eth.protocolManager.fetcher.CreateTransactionSign(eth.chainConfig, eth.txPool, eth.accountManager, eth.engine)
+
+	if eth.chainConfig.Clique != nil {
+		c := eth.engine.(*clique.Clique)
+		// Hook reward for clique validator.
+		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
+			type rewardLog struct {
+				Sign   uint64  `json:"sign"`
+				Reward float64 `json:"reward"`
+			}
+
+			// Call to smart contract signer.
+			config := ctx.GetConfig()
+			client, err := ethclient.Dial(config.IPCEndpoint())
+			if err != nil {
+				log.Error("TOMO - Fail to connect RPC", "error", err)
+			}
+			addr := common.HexToAddress(common.BlockSigners)
+			blockSigner, err := contract.NewBlockSigner(addr, client)
+			if err != nil {
+				log.Error("TOMO - Fail get block signer", "error", err)
+			}
+			opts := new(bind.CallOpts)
+
+			number := header.Number.Uint64()
+			rCheckpoint := chain.Config().Clique.RewardCheckpoint
+			prevCheckpoint := number - rCheckpoint
+
+			if number > 0 && prevCheckpoint > 0 && number%rCheckpoint == 0 {
+				// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+				startBlockNumber := number - (rCheckpoint * 2) + 1
+				endBlockNumber := startBlockNumber + rCheckpoint - 2
+				signers := make(map[common.Address]*rewardLog)
+				validators := make(map[common.Address]*rewardLog)
+				totalSigner := uint64(0)
+
+				for i := startBlockNumber; i <= endBlockNumber; i++ {
+					blockHeader := chain.GetHeaderByNumber(i)
+					if signer, err := c.RecoverSigner(blockHeader); err != nil {
+						return err
+					} else {
+						_, exist := signers[signer]
+						if exist {
+							signers[signer].Sign++
+						} else {
+							signers[signer] = &rewardLog{1, 0}
+						}
+						totalSigner++
+					}
+
+					// Get validator in blockSigner smartcontract.
+					addrs, _ := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					if len(addrs) > 0 {
+						for j := 0; j < len(addrs); j++ {
+							_, exist := validators[addrs[j]]
+							if exist {
+								validators[addrs[j]].Sign++
+							} else {
+								validators[addrs[j]] = &rewardLog{1, 0}
+							}
+							totalSigner++
+						}
+					}
+				}
+
+				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+				// Add reward for signer.
+				calcReward := new(big.Int)
+				for signer, rLog := range signers {
+					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
+					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+					rLog.Reward = float64(calcReward.Int64())
+
+					state.AddBalance(signer, calcReward)
+				}
+				// Add reward for validators.
+				for validator, rLog := range validators {
+					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
+					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+					rLog.Reward = float64(calcReward.Int64())
+
+					state.AddBalance(validator, calcReward)
+				}
+				jsonSigners, err := json.Marshal(signers)
+				if err != nil {
+					return err
+				}
+				jsonValidators, err := json.Marshal(validators)
+				if err != nil {
+					return err
+				}
+
+				log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward, "validators", string(jsonValidators))
+			}
+
+			return nil
+		}
+	}
 
 	return eth, nil
 }
