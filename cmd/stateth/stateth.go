@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// puppeth is a command to assemble and maintain private networks.
+// stateth is a command to orchestrate influxdb/grafana setup using
+// docker containers in order to visualize stats from Geth for
+// development purposes.
 package main
 
 import (
