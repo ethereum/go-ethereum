@@ -45,7 +45,7 @@ func WriteDatabaseVersion(db DatabaseWriter, version int) {
 
 // ReadChainConfig retrieves the consensus settings based on the given genesis hash.
 func ReadChainConfig(db DatabaseReader, hash common.Hash) *params.ChainConfig {
-	data, _ := db.Get(append(configPrefix, hash[:]...))
+	data, _ := db.Get(configKey(hash))
 	if len(data) == 0 {
 		return nil
 	}
@@ -66,14 +66,14 @@ func WriteChainConfig(db DatabaseWriter, hash common.Hash, cfg *params.ChainConf
 	if err != nil {
 		log.Crit("Failed to JSON encode chain config", "err", err)
 	}
-	if err := db.Put(append(configPrefix, hash[:]...), data); err != nil {
+	if err := db.Put(configKey(hash), data); err != nil {
 		log.Crit("Failed to store chain config", "err", err)
 	}
 }
 
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db DatabaseReader, hash common.Hash) []byte {
-	data, _ := db.Get(append(preimagePrefix, hash.Bytes()...))
+	data, _ := db.Get(preimageKey(hash))
 	return data
 }
 
@@ -81,7 +81,7 @@ func ReadPreimage(db DatabaseReader, hash common.Hash) []byte {
 // current block number, and is used for debug messages only.
 func WritePreimages(db DatabaseWriter, number uint64, preimages map[common.Hash][]byte) {
 	for hash, preimage := range preimages {
-		if err := db.Put(append(preimagePrefix, hash.Bytes()...), preimage); err != nil {
+		if err := db.Put(preimageKey(hash), preimage); err != nil {
 			log.Crit("Failed to store trie preimage", "err", err)
 		}
 	}

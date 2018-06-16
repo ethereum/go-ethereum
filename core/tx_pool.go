@@ -222,7 +222,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:      config,
 		chainconfig: chainconfig,
 		chain:       chain,
-		signer:      types.NewEIP155Signer(chainconfig.ChainId),
+		signer:      types.NewEIP155Signer(chainconfig.ChainID),
 		pending:     make(map[common.Address]*txList),
 		queue:       make(map[common.Address]*txList),
 		beats:       make(map[common.Address]time.Time),
@@ -411,6 +411,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
+	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
 
 	// validate the pool of pending transactions, this will remove

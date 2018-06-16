@@ -77,3 +77,58 @@ func encodeBlockNumber(number uint64) []byte {
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
 }
+
+// headerKey = headerPrefix + num (uint64 big endian) + hash
+func headerKey(number uint64, hash common.Hash) []byte {
+	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
+func headerTDKey(number uint64, hash common.Hash) []byte {
+	return append(headerKey(number, hash), headerTDSuffix...)
+}
+
+// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
+func headerHashKey(number uint64) []byte {
+	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+}
+
+// headerNumberKey = headerNumberPrefix + hash
+func headerNumberKey(hash common.Hash) []byte {
+	return append(headerNumberPrefix, hash.Bytes()...)
+}
+
+// blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
+func blockBodyKey(number uint64, hash common.Hash) []byte {
+	return append(append(blockBodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
+func blockReceiptsKey(number uint64, hash common.Hash) []byte {
+	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// txLookupKey = txLookupPrefix + hash
+func txLookupKey(hash common.Hash) []byte {
+	return append(txLookupPrefix, hash.Bytes()...)
+}
+
+// bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
+func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
+	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
+
+	binary.BigEndian.PutUint16(key[1:], uint16(bit))
+	binary.BigEndian.PutUint64(key[3:], section)
+
+	return key
+}
+
+// preimageKey = preimagePrefix + hash
+func preimageKey(hash common.Hash) []byte {
+	return append(preimagePrefix, hash.Bytes()...)
+}
+
+// configKey = configPrefix + hash
+func configKey(hash common.Hash) []byte {
+	return append(configPrefix, hash.Bytes()...)
+}
