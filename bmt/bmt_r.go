@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// simple nonconcurrent reference implementation for hashsize segment based
+// Package bmt is a simple nonconcurrent reference implementation for hashsize segment based
 // Binary Merkle tree hash on arbitrary but fixed maximum chunksize
 //
 // This implementation does not take advantage of any paralellisms and uses
