@@ -51,7 +51,7 @@ var (
 
 	// EllaismChainConfig is the chain parameters to run a node on the Ellaism main network.
 	EllaismChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(64),
+		ChainID:             big.NewInt(64),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -70,7 +70,7 @@ var (
 
 	// ClassicChainConfig is the chain parameters to run a node on the Ellaism main network.
 	ClassicChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(61),
+		ChainID:             big.NewInt(61),
 		HomesteadBlock:      big.NewInt(1150000),
 		DAOForkBlock:        big.NewInt(1920000),
 		DAOForkSupport:      false,
@@ -91,7 +91,7 @@ var (
 
 	// SocialChainConfig is the chain parameters to run a node on the Ethereum Social main network.
 	SocialChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(28),
+		ChainID:             big.NewInt(28),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
