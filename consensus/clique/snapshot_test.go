@@ -37,6 +37,9 @@ type testerVote struct {
 	auth   bool
 }
 
+// blockPeriod is the default minimum difference between two consecutive block's timestamps
+var blockPeriod = uint64(15)
+
 // testerAccountPool is a pool to maintain currently active tester accounts,
 // mapped from textual names used in the tests below to actual Ethereum private
 // keys capable of signing transactions.
