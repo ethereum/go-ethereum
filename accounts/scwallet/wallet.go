@@ -907,7 +907,11 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 			return accounts.Account{}, err
 		}
 	}
-	return s.Wallet.makeAccount(crypto.PubkeyToAddress(*crypto.ToECDSAPub(pubkey)), path), nil
+	pub, err := crypto.UnmarshalPubkey(pubkey)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+	return s.Wallet.makeAccount(crypto.PubkeyToAddress(*pub), path), nil
 }
 
 // keyDerivationInfo contains information on the current key derivation step.
