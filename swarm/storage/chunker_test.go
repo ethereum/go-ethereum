@@ -113,7 +113,9 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 							// getting data
 							chunk.SData = stored.SData
 							chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-							close(chunk.C)
+							if c := chunk.C; c != nil {
+								close(c)
+							}
 						}
 					}
 				}
@@ -159,7 +161,9 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 				}
 				chunk.SData = stored.SData
 				chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-				close(chunk.C)
+				if c := chunk.C; c != nil {
+					close(c)
+				}
 				i++
 			}
 		}
