@@ -382,6 +382,15 @@ func (net *Network) GetNodeByName(name string) *Node {
 	return net.getNodeByName(name)
 }
 
+// GetNodes returns the existing nodes
+func (net *Network) GetNodes() (nodes []*Node) {
+	net.lock.Lock()
+	defer net.lock.Unlock()
+
+	nodes = append(nodes, net.Nodes...)
+	return nodes
+}
+
 func (net *Network) getNode(id discover.NodeID) *Node {
 	i, found := net.nodeMap[id]
 	if !found {
@@ -397,15 +406,6 @@ func (net *Network) getNodeByName(name string) *Node {
 		}
 	}
 	return nil
-}
-
-// GetNodes returns the existing nodes
-func (net *Network) GetNodes() (nodes []*Node) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
-
-	nodes = append(nodes, net.Nodes...)
-	return nodes
 }
 
 // GetConn returns the connection which exists between "one" and "other"
