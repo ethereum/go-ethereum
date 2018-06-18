@@ -266,7 +266,14 @@ func GetBlockReceipts(db DatabaseReader, hash common.Hash, number uint64) types.
 // hash to allow retrieving the transaction or receipt by hash.
 func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64, uint64) {
 	// Load the positional metadata from disk and bail if it fails
+	fmt.Println("INSIDE GetTxLookupEntry  ")
+	fmt.Println("the db is ")
+	fmt.Println(db)
+	fmt.Println("the hash is")
+	fmt.Println(hash)
 	data, _ := db.Get(append(lookupPrefix, hash.Bytes()...))
+	fmt.Println("the data is ")
+	fmt.Println(data)
 	if len(data) == 0 {
 		return common.Hash{}, 0, 0
 	}
@@ -283,7 +290,13 @@ func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64,
 // its added positional metadata.
 func GetTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	// Retrieve the lookup metadata and resolve the transaction from the body
+	//fmt.Println("INSIDE GET TRANSACTION ++++++++")
+	//fmt.Println("The hash and db reader are")
+	//fmt.Println(hash)
+	//fmt.Println(db)
 	blockHash, blockNumber, txIndex := GetTxLookupEntry(db, hash)
+	//fmt.Println(blockHash)
+	//fmt.Println(blockNumber)
 
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)

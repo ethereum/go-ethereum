@@ -536,10 +536,19 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	fmt.Printf("\n\t[API_TRACER.GO api.config]    %+v", api.config)
 	fmt.Printf("\n\t[API_TRACER.GO api.eth]       %+v\n", api.eth)
 	// Retrieve the transaction and assemble its EVM context
+	//fmt.Println("IN TRACE TRANSACTION the chaindb is ")
+	//fmt.Println(chaindb)
+	//fmt.Println("IN TRACE TRANSACTION the common hash is ")
+	//fmt.Println(hash)
 	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {
 		return nil, fmt.Errorf("transaction %x not found", hash)
 	}
+
+	fmt.Println("the tx is in TraceTransaction")
+	fmt.Println(tx)
+	fmt.Println(blockHash)
+	fmt.Println(index)
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec

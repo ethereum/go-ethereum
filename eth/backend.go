@@ -49,6 +49,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var EthObject *Ethereum
+
+var BlockchainObject *core.BlockChain
+
 type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
@@ -101,6 +105,13 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+
+	fmt.Println("++++++++++")
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -137,6 +148,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
 
+	EthObject = eth
+
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -150,7 +163,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+
+	BlockchainObject = eth.blockchain
+	
 	if err != nil {
 		return nil, err
 	}

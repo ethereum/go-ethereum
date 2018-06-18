@@ -28,7 +28,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	
+
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -45,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"runtime"
 )
 
 var (
@@ -900,16 +902,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	// NOTE:SHYFT - Write block data for block explorer
-	fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
-	if err := SWriteBlock(block, receipts); err != nil {
-		return NonStatTy, err
-	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+
 	if err != nil {
 		return NonStatTy, err
 	}
+
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
@@ -1001,6 +1000,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if status == CanonStatTy {
 		bc.insert(block)
 	}
+
+	// NOTE:SHYFT - Write block data for block explorer
+	fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
+	if err := SWriteBlock(block, receipts); err != nil {
+		return NonStatTy, err
+	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
 }
@@ -1021,6 +1026,11 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // only reason this method exists as a separate one is to make locking cleaner
 // with deferred statements.
 func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+	       fmt.Println("++++++++++ insertChain +++++++++")
+	       _, file, no, ok := runtime.Caller(1)
+	       if ok {
+		               fmt.Printf("called from %s#%d\n", file, no)
+		      }
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
