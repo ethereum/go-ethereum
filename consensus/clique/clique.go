@@ -367,6 +367,16 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 	return c.verifySeal(chain, header, parents)
 }
 
+func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
+	number := header.Number.Uint64()
+	log.Trace("take snapshot", "number", number, "hash", header.Hash())
+	snap, err := c.snapshot(chain, number, header.Hash(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return snap, nil
+}
+
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
@@ -575,8 +585,8 @@ func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, sta
 	chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
 
 	reward := new(big.Int).Set(chainReward)
-    state.AddBalance(header.Coinbase, reward)
-	
+	state.AddBalance(header.Coinbase, reward)
+
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)

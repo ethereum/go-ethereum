@@ -294,9 +294,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if ok, err := ethereum.ValidateMiner(); err != nil {
 			utils.Fatalf("Can't verify validator permission: %v", err)
 		} else if !ok {
-			utils.Fatalf("Only validator can mine blocks")
+			log.Info("Only validator can mine blocks. Cancel mining on this node")
+			return
 		}
-		
+
 		// Use a reduced number of threads if requested
 		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
 			type threaded interface {
