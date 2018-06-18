@@ -20,7 +20,7 @@ package geth
 
 import (
 	"github.com/ethereum/go-ethereum/whisper/shhclient"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 // WhisperClient provides access to the Ethereum APIs.
@@ -53,7 +53,6 @@ func (wc *WhisperClient) SetMaxMessageSize(ctx *Context, size int32) error {
 }
 
 // SetMinimumPoW (experimental) sets the minimal PoW required by this node.
-
 // This experimental function was introduced for the future dynamic adjustment of
 // PoW requirement. If the node is overwhelmed with messages, it should raise the
 // PoW requirement and notify the peers. The new value should be set relative to
@@ -132,7 +131,7 @@ func (wc *WhisperClient) DeleteSymmetricKey(ctx *Context, id string) error {
 }
 
 // Post a message onto the network.
-func (wc *WhisperClient) Post(ctx *Context, message *NewMessage) error {
+func (wc *WhisperClient) Post(ctx *Context, message *NewMessage) (string, error) {
 	return wc.client.Post(ctx.context, *message.newMessage)
 }
 
