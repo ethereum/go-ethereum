@@ -1,18 +1,18 @@
-package shyftdb
+package core
 
 import (
-	"encoding/json"
-	"fmt"
-	"math/big"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"time"
-	"strconv"
-	"database/sql"
-	"log"
+"encoding/json"
+"fmt"
+"math/big"
+"github.com/ethereum/go-ethereum/common"
+"github.com/ethereum/go-ethereum/core/types"
+"time"
+"strconv"
+"database/sql"
+"log"
 
-	_ "github.com/lib/pq"
-	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
+_ "github.com/lib/pq"
+Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 )
 
 //SBlock type
@@ -104,7 +104,7 @@ type SendAndReceive struct {
 }
 
 //WriteBlock writes to block info to sql db
-func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
+func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 
 	sqldb, err := DBConnection()
 	if (err != nil) {
@@ -138,7 +138,7 @@ func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
 
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
-			writeTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
+			SwriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
 			if block.Transactions()[0].To() != nil {
 				writeFromBalance(sqldb, tx)
 			}
@@ -151,7 +151,7 @@ func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
 }
 
 //writeTransactions writes to sqldb
-func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
+func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
 		From:      tx.From(),
@@ -165,6 +165,7 @@ func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		Data:      tx.Data(),
 	}
 	txHash := txData.TxHash.Hex()
+	MyTraceTransaction(txHash) //.chaindb_global
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()
@@ -545,7 +546,7 @@ func GetAllBlocks(sqldb *sql.DB) string {
 
 //GetBlock queries to send single block info
 //TODO provide blockHash arg passed from handler.go
-func GetBlock(sqldb *sql.DB, blockNumber string) string {
+func SGetBlock(sqldb *sql.DB, blockNumber string) string {
 	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
 	row := sqldb.QueryRow(sqlStatement, blockNumber)
 	var hash string
@@ -855,7 +856,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 }
 
 //GetTransaction fn returns single tx
-func GetTransaction(sqldb *sql.DB, txHash string) string {
+func SGetTransaction(sqldb *sql.DB, txHash string) string {
 	sqlStatement := `SELECT * FROM txs WHERE txhash=$1;`
 	row := sqldb.QueryRow(sqlStatement, txHash)
 	var txhash string

@@ -1,4 +1,4 @@
-package shyftdb
+package core
 
 import (
   	"fmt"
