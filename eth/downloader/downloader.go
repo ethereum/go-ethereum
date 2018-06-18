@@ -128,6 +128,7 @@ type Downloader struct {
 	bodyWakeCh    chan bool            // [eth/62] Channel to signal the block body fetcher of new tasks
 	receiptWakeCh chan bool            // [eth/63] Channel to signal the receipt fetcher of new tasks
 	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
+	SyncedCh      chan bool
 
 	// for stateFetcher
 	stateSyncStart chan *stateSync
@@ -220,6 +221,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		bodyWakeCh:     make(chan bool, 1),
 		receiptWakeCh:  make(chan bool, 1),
 		headerProcCh:   make(chan []*types.Header, 1),
+		SyncedCh:       make(chan bool, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
@@ -317,6 +319,10 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	err := d.synchronise(id, head, td, mode)
 	switch err {
 	case nil:
+		select {
+		case d.SyncedCh <- true:
+		default:
+		}
 	case errBusy:
 
 	case errTimeout, errBadPeer, errStallingPeer,
