@@ -22,12 +22,13 @@ import (
 	"math/big"
 )
 
+// Various big integer limit values.
 var (
 	tt255     = BigPow(2, 255)
 	tt256     = BigPow(2, 256)
 	tt256m1   = new(big.Int).Sub(tt256, big.NewInt(1))
-	MaxBig256 = new(big.Int).Set(tt256m1)
 	tt63      = BigPow(2, 63)
+	MaxBig256 = new(big.Int).Set(tt256m1)
 	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
 )
 
@@ -78,7 +79,7 @@ func ParseBig256(s string) (*big.Int, bool) {
 	return bigint, ok
 }
 
-// MustParseBig parses s as a 256 bit big integer and panics if the string is invalid.
+// MustParseBig256 parses s as a 256 bit big integer and panics if the string is invalid.
 func MustParseBig256(s string) *big.Int {
 	v, ok := ParseBig256(s)
 	if !ok {
@@ -186,9 +187,8 @@ func U256(x *big.Int) *big.Int {
 func S256(x *big.Int) *big.Int {
 	if x.Cmp(tt255) < 0 {
 		return x
-	} else {
-		return new(big.Int).Sub(x, tt256)
 	}
+	return new(big.Int).Sub(x, tt256)
 }
 
 // Exp implements exponentiation by squaring.

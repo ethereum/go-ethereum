@@ -198,7 +198,7 @@ func (info *nodeInfos) Report() map[string]string {
 	return report
 }
 
-// checkNode does a health-check against an boot or seal node server to verify
+// checkNode does a health-check against a boot or seal node server to verify
 // whether it's running, and if yes, whether it's responsive.
 func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error) {
 	kind := "bootnode"

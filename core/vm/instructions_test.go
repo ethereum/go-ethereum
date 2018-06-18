@@ -32,7 +32,7 @@ type twoOperandTest struct {
 
 func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		pc    = uint64(0)
 	)
@@ -68,7 +68,7 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 
 func TestByteOp(t *testing.T) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 	)
 	tests := []struct {
@@ -198,7 +198,7 @@ func TestSLT(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 	)
 	// convert args
@@ -424,4 +424,43 @@ func BenchmarkOpSAR(b *testing.B) {
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)
+}
+
+func TestOpMstore(t *testing.T) {
+	var (
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+	mem.Resize(64)
+	pc := uint64(0)
+	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
+	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
+	opMstore(&pc, env, nil, mem, stack)
+	if got := common.Bytes2Hex(mem.Get(0, 32)); got != v {
+		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
+	}
+	stack.pushN(big.NewInt(0x1), big.NewInt(0))
+	opMstore(&pc, env, nil, mem, stack)
+	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("Mstore failed to overwrite previous value")
+	}
+}
+
+func BenchmarkOpMstore(bench *testing.B) {
+	var (
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack = newstack()
+		mem   = NewMemory()
+	)
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := big.NewInt(0)
+	value := big.NewInt(0x1337)
+
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		stack.pushN(value, memStart)
+		opMstore(&pc, env, nil, mem, stack)
+	}
 }
