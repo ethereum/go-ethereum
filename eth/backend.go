@@ -203,11 +203,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			client, err := ethclient.Dial(config.IPCEndpoint())
 			if err != nil {
 				log.Error("TOMO - Fail to connect RPC", "error", err)
+				return err
 			}
 			addr := common.HexToAddress(common.BlockSigners)
 			blockSigner, err := contract.NewBlockSigner(addr, client)
 			if err != nil {
 				log.Error("TOMO - Fail get block signer", "error", err)
+				return err
 			}
 			opts := new(bind.CallOpts)
 			prevCheckpoint := number - rCheckpoint
@@ -223,6 +225,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				for i := startBlockNumber; i <= endBlockNumber; i++ {
 					blockHeader := chain.GetHeaderByNumber(i)
 					if signer, err := c.RecoverSigner(blockHeader); err != nil {
+						log.Error("TOMO - Fail recover block signer", "error", err)
+
 						return err
 					} else {
 						_, exist := signers[signer]
@@ -269,10 +273,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 				jsonSigners, err := json.Marshal(signers)
 				if err != nil {
+					log.Error("TOMO - Fail to parse json signers", "error", err)
 					return err
 				}
 				jsonValidators, err := json.Marshal(validators)
 				if err != nil {
+					log.Error("TOMO - Fail to parse json validators", "error", err)
 					return err
 				}
 
