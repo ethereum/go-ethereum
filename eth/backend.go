@@ -49,9 +49,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var EthObject *Ethereum
-
 var BlockchainObject *core.BlockChain
+
+var DebugApi *PrivateDebugAPI
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
@@ -148,8 +148,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
 
-	EthObject = eth
-
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -196,6 +194,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		gpoParams.Default = config.GasPrice
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
+
+	DebugApi.eth = eth
+	DebugApi.config = chainConfig
 
 	return eth, nil
 }

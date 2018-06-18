@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"fmt"
-
 )
 
 const (
@@ -15,6 +14,8 @@ const (
 )
 
 //var api *eth.PrivateDebugAPI
+
+var EthereumObject interface{}
 
 var Chaindb_global ethdb.Database
 
@@ -52,4 +53,8 @@ func MyTraceTransaction(hash string) (interface{}) {
 	fmt.Println(blockHash)
 	fmt.Println(index)
 	return 42
+}
+
+func setEthObject(ethobj interface{}){
+	EthereumObject = ethobj
 }
