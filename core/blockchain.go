@@ -1294,8 +1294,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		return fmt.Errorf("Invalid new chain")
 	}
 
-	blockLookup := make(map[common.Hash]*big.Int)
-
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
@@ -1306,10 +1304,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		collectLogs(oldBlock.Hash())
-		// save block # of each deleted transaction; will need this to deduce signer for TransactionEvent
-		for _, tx := range oldBlock.Transactions() {
-			blockLookup[tx.Hash()] = oldBlock.Number()
-		}
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
@@ -1339,23 +1333,28 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
 	}
+
+	for i := len(oldChain) - 1; i >= 0; i-- {
+		for _, tx := range oldChain[i].Transactions() {
+			// Construct TransactionEvent for subscribers of txPostFeed
+			from, _ := types.Sender(types.MakeSigner(bc.chainConfig, oldChain[i].Number()), tx)
+			data := types.ReturnData{TxHash: tx.Hash(), Removed: true}
+			txEvent := TransactionEvent{
+				TxHash:  tx.Hash(),
+				From:    &from,
+				To:      tx.To(),
+				RetData: &data,
+			}
+			txPostEvents = append(txPostEvents, &txEvent)
+		}
+	}
+
 	// calculate the difference between deleted and added transactions
 	diff := types.TxDifference(deletedTxs, addedTxs)
 	for _, tx := range diff {
 		// When transactions get deleted from the database that means the
 		// receipts that were created in the fork must also be deleted
 		rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
-
-		// Construct TransactionEvent for subscribers of txPostFeed
-		from, _ := types.Sender(types.MakeSigner(bc.chainConfig, blockLookup[tx.Hash()]), tx)
-
-		data := types.ReturnData{TxHash: tx.Hash(), Removed: true}
-		txEvent := TransactionEvent{TxHash: tx.Hash(),
-			From:    &from,
-			To:      tx.To(),
-			RetData: &data,
-		}
-		txPostEvents = append(txPostEvents, &txEvent)
 	}
 
 	// Let subscribers know when a transaction is removed from canonical chain
