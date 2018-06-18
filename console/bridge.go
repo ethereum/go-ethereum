@@ -29,7 +29,7 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-// bridge is a collection of JavaScript utility methods to bride the .js runtime
+// bridge is a collection of JavaScript utility methods to bridge the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
 	client   *rpc.Client  // RPC client to execute Ethereum requests through
@@ -56,7 +56,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		err      error
 	)
 	switch {
-	// No password was specified, prompt the user for it
+	// No password was specified, prompt the user for it.
 	case len(call.ArgumentList) == 0:
 		if password, err = b.prompter.PromptPassword("Passphrase: "); err != nil {
 			throwJSException(err.Error())
@@ -68,7 +68,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 			throwJSException("passphrases don't match!")
 		}
 
-	// A single string password was specified, use that
+	// A single string password was specified, use that.
 	case len(call.ArgumentList) == 1 && call.Argument(0).IsString():
 		password, _ = call.Argument(0).ToString()
 
@@ -76,7 +76,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	default:
 		throwJSException("expected 0 or 1 string argument")
 	}
-	// Password acquired, execute the call and return
+	// Password acquired, execute the call and return.
 	ret, err := call.Otto.Call("jeth.newAccount", nil, password)
 	if err != nil {
 		throwJSException(err.Error())
@@ -87,18 +87,21 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 // OpenWallet is a wrapper around personal.openWallet which can interpret and
 // react to certain error messages, such as the Trezor PIN matrix request.
 func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
-	// Make sure we have a wallet specified to open
+	// Make sure we have a wallet specified to open.
 	if !call.Argument(0).IsString() {
 		throwJSException("first argument must be the wallet URL to open")
 	}
 	wallet := call.Argument(0)
 
+	// If password is not given or is the null value, set the password to
+	// blank which is digestible by otto/JavaScript.
 	var passwd otto.Value
 	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
 		passwd, _ = otto.ToValue("")
 	} else {
 		passwd = call.Argument(1)
 	}
+
 	// Open the wallet and return if successful in itself
 	val, err := call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
 	if err == nil {
@@ -162,7 +165,7 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		}
 		duration = call.Argument(2)
 	}
-	// Send the request to the backend and return
+	// Send the request to the backend and return.
 	val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, duration)
 	if err != nil {
 		throwJSException(err.Error())
@@ -180,6 +183,7 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 		passwd  = call.Argument(2)
 	)
 
+	// Make sure the first and second arguments are strings.
 	if !message.IsString() {
 		throwJSException("first argument must be the message to sign")
 	}
@@ -187,7 +191,7 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 		throwJSException("second argument must be the account to sign with")
 	}
 
-	// if the password is not given or null ask the user and ensure password is a string
+	// If the password is not given or null ask the user and ensure password is a string
 	if passwd.IsUndefined() || passwd.IsNull() {
 		fmt.Fprintf(b.printer, "Give password for account %s\n", account)
 		if input, err := b.prompter.PromptPassword("Passphrase: "); err != nil {
@@ -271,7 +275,7 @@ func (b *bridge) SleepBlocks(call otto.FunctionCall) (response otto.Value) {
 }
 
 type jsonrpcCall struct {
-	ID     int64
+	Id     int64
 	Method string
 	Params []interface{}
 }
@@ -304,7 +308,7 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	resps, _ := call.Otto.Object("new Array()")
 	for _, req := range reqs {
 		resp, _ := call.Otto.Object(`({"jsonrpc":"2.0"})`)
-		resp.Set("id", req.ID)
+		resp.Set("id", req.Id)
 		var result json.RawMessage
 		err = b.client.Call(&result, req.Method, req.Params...)
 		switch err := err.(type) {
