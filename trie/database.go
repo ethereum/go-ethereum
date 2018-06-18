@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -92,6 +94,40 @@ func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end u
 func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
 func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 
+// rawFullNode represents only the useful data content of a full node, with the
+// caches and flags stripped out to minimize its data storage. This type honors
+// the same RLP encoding as the original parent.
+type rawFullNode [17]node
+
+func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
+func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
+func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+
+func (n rawFullNode) EncodeRLP(w io.Writer) error {
+	var nodes [17]node
+
+	for i, child := range n {
+		if child != nil {
+			nodes[i] = child
+		} else {
+			nodes[i] = nilValueNode
+		}
+	}
+	return rlp.Encode(w, nodes)
+}
+
+// rawShortNode represents only the useful data content of a short node, with the
+// caches and flags stripped out to minimize its data storage. This type honors
+// the same RLP encoding as the original parent.
+type rawShortNode struct {
+	Key []byte
+	Val node
+}
+
+func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
+func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
+func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
 type cachedNode struct {
@@ -124,7 +160,7 @@ func (n *cachedNode) obj(hash common.Hash, cachegen uint16) node {
 	if node, ok := n.node.(rawNode); ok {
 		return mustDecodeNode(hash[:], node, cachegen)
 	}
-	return expandNode(n.node, cachegen)
+	return expandNode(hash[:], n.node, cachegen)
 }
 
 // childs returns all the tracked children of this node, both the implicit ones
@@ -134,8 +170,9 @@ func (n *cachedNode) childs() []common.Hash {
 	for child := range n.children {
 		children = append(children, child)
 	}
-	gatherChildren(n.node, &children)
-
+	if _, ok := n.node.(rawNode); !ok {
+		gatherChildren(n.node, &children)
+	}
 	return children
 }
 
@@ -143,59 +180,84 @@ func (n *cachedNode) childs() []common.Hash {
 // retrieves all the hashnode children.
 func gatherChildren(n node, children *[]common.Hash) {
 	switch n := n.(type) {
-	case *shortNode:
+	case *rawShortNode:
 		gatherChildren(n.Val, children)
 
-	case *fullNode:
+	case rawFullNode:
 		for i := 0; i < 16; i++ {
-			gatherChildren(n.Children[i], children)
+			gatherChildren(n[i], children)
 		}
 	case hashNode:
 		*children = append(*children, common.BytesToHash(n))
+
+	case valueNode, nil:
+
+	default:
+		panic(fmt.Sprintf("unknown node type: %T", n))
+	}
+}
+
+// simplifyNode traverses the hierarchy of an expanded memory node and discards
+// all the internal caches, returning a node that only contains the raw data.
+func simplifyNode(n node) node {
+	switch n := n.(type) {
+	case *shortNode:
+		// Short nodes discard the flags and cascade
+		return &rawShortNode{Key: n.Key, Val: simplifyNode(n.Val)}
+
+	case *fullNode:
+		// Full nodes discard the flags and cascade
+		node := rawFullNode(n.Children)
+		for i := 0; i < len(node); i++ {
+			if node[i] != nil {
+				node[i] = simplifyNode(node[i])
+			}
+		}
+		return node
+
+	case valueNode, hashNode, rawNode:
+		return n
+
+	default:
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
 }
 
 // expandNode traverses the node hierarchy of a collapsed storage node and converts
 // all fields and keys into expanded memory form.
-func expandNode(n node, cachegen uint16) node {
+func expandNode(hash hashNode, n node, cachegen uint16) node {
 	switch n := n.(type) {
-	case *shortNode:
+	case *rawShortNode:
 		// Short nodes need key and child expansion
 		return &shortNode{
 			Key: compactToHex(n.Key),
-			Val: expandNode(n.Val, cachegen),
+			Val: expandNode(nil, n.Val, cachegen),
 			flags: nodeFlag{
-				hash: n.flags.hash,
+				hash: hash,
 				gen:  cachegen,
 			},
 		}
 
-	case *fullNode:
+	case rawFullNode:
 		// Full nodes need child expansion
 		node := &fullNode{
 			flags: nodeFlag{
-				hash: n.flags.hash,
+				hash: hash,
 				gen:  cachegen,
 			},
 		}
-		for i := 0; i < 17; i++ { // expand the term too (17)
-			node.Children[i] = expandNode(n.Children[i], cachegen)
+		for i := 0; i < len(node.Children); i++ {
+			if n[i] != nil {
+				node.Children[i] = expandNode(nil, n[i], cachegen)
+			}
 		}
 		return node
 
-	case valueNode:
-		// Values need to convert from "" to nil
-		if n == nil {
-			return nil
-		}
-		return n
-
-	case hashNode:
-		// Hashes are left as is
+	case valueNode, hashNode:
 		return n
 
 	default:
-		panic("unknown node type")
+		panic(fmt.Sprintf("unknown node type: %T", n))
 	}
 }
 
@@ -236,7 +298,7 @@ func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	}
 	// Create the cached entry for this node
 	entry := &cachedNode{
-		node:      node,
+		node:      simplifyNode(node),
 		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
