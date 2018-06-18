@@ -290,7 +290,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 		go func() {
 			started := false
-			ok, err := ethereum.ValidateMiner()
+			ok, err := ethereum.ValidateStaker()
 			if err != nil {
 				utils.Fatalf("Can't verify validator permission: %v", err)
 			}
@@ -307,8 +307,8 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 				// Set the gas price to the limits from the CLI and start mining
 				ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-				if err := ethereum.StartMining(true); err != nil {
-					utils.Fatalf("Failed to start mining: %v", err)
+				if err := ethereum.StartStaking(true); err != nil {
+					utils.Fatalf("Failed to start staking: %v", err)
 				}
 				started = true
 				log.Info("Enabled mining node!!!")
@@ -317,7 +317,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 			for range core.Checkpoint {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
-				ok, err := ethereum.ValidateMiner()
+				ok, err := ethereum.ValidateStaker()
 				if err != nil {
 					utils.Fatalf("Can't verify validator permission: %v", err)
 				}
@@ -341,7 +341,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					}
 					// Set the gas price to the limits from the CLI and start mining
 					ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-					if err := ethereum.StartMining(true); err != nil {
+					if err := ethereum.StartStaking(true); err != nil {
 						utils.Fatalf("Failed to start mining: %v", err)
 					}
 					started = true
