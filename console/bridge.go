@@ -37,7 +37,7 @@ type bridge struct {
 	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
-// newBridge creates a new JavaScript wrapper around an RPC client.
+// newBridge creates a new JavaScript wrapper around an RPC client
 func newBridge(client *rpc.Client, prompter UserPrompter, printer io.Writer) *bridge {
 	return &bridge{
 		client:   client,
@@ -87,7 +87,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 // OpenWallet is a wrapper around personal.openWallet which can interpret and
 // react to certain error messages, such as the Trezor PIN matrix request.
 func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
-	// Make sure we have a wallet specified to open.
+	// Make sure we have a wallet specified to open
 	if !call.Argument(0).IsString() {
 		throwJSException("first argument must be the wallet URL to open")
 	}
@@ -157,7 +157,7 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		}
 		passwd = call.Argument(1)
 	}
-	// Third argument is the duration how long the account must be unlocked.
+	// Third argument is the duration how long the account must be unlocked
 	duration := otto.NullValue()
 	if call.Argument(2).IsDefined() && !call.Argument(2).IsNull() {
 		if !call.Argument(2).IsNumber() {
@@ -165,7 +165,7 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		}
 		duration = call.Argument(2)
 	}
-	// Send the request to the backend and return.
+	// Send the request to the backend and return
 	val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, duration)
 	if err != nil {
 		throwJSException(err.Error())
@@ -183,7 +183,7 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 		passwd  = call.Argument(2)
 	)
 
-	// Make sure the first and second arguments are strings.
+	// Make sure the first and second arguments are strings
 	if !message.IsString() {
 		throwJSException("first argument must be the message to sign")
 	}
@@ -280,7 +280,7 @@ type jsonrpcCall struct {
 	Params []interface{}
 }
 
-// Send implements the web3 provider "send" method.
+// Send implements the web3 provider "send" method
 func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	// Remarshal the request into a Go value.
 	JSON, _ := call.Otto.Object("JSON")
