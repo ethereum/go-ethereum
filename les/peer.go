@@ -281,7 +281,6 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 	default:
 		panic(nil)
 	}
-
 }
 
 // RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
@@ -291,12 +290,12 @@ func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq)
 	case lpv1:
 		reqsV1 := make([]ChtReq, len(reqs))
 		for i, req := range reqs {
-			if req.HelperTrieType != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
+			if req.Type != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
 				return fmt.Errorf("Request invalid in LES/1 mode")
 			}
 			blockNum := binary.BigEndian.Uint64(req.Key)
 			// convert HelperTrie request to old CHT request
-			reqsV1[i] = ChtReq{ChtNum: (req.TrieIdx+1)*(light.ChtFrequency/light.ChtV1Frequency) - 1, BlockNum: blockNum, FromLevel: req.FromLevel}
+			reqsV1[i] = ChtReq{ChtNum: (req.TrieIdx + 1) * (light.CHTFrequencyClient / light.CHTFrequencyServer), BlockNum: blockNum, FromLevel: req.FromLevel}
 		}
 		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqsV1)
 	case lpv2:
@@ -546,9 +545,11 @@ func (ps *peerSet) notify(n peerSetNotify) {
 func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
 	if ps.closed {
+		ps.lock.Unlock()
 		return errClosed
 	}
 	if _, ok := ps.peers[p.id]; ok {
+		ps.lock.Unlock()
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p

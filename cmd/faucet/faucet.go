@@ -18,10 +18,10 @@
 package main
 
 //go:generate go-bindata -nometadata -o website.go faucet.html
+//go:generate gofmt -w -s website.go
 
 import (
 	"bytes"
-	"compress/zlib"
 	"context"
 	"encoding/json"
 	"errors"
@@ -76,9 +76,6 @@ var (
 
 	accJSONFlag = flag.String("account.json", "", "Key json file to fund user requests with")
 	accPassFlag = flag.String("account.pass", "", "Decryption password to access faucet funds")
-
-	githubUser  = flag.String("github.user", "", "GitHub user to authenticate with for Gist access")
-	githubToken = flag.String("github.token", "", "GitHub personal token to access Gists with")
 
 	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
 	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
@@ -223,7 +220,6 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
 			ListenAddr:       fmt.Sprintf(":%d", port),
-			DiscoveryV5Addr:  fmt.Sprintf(":%d", port+1),
 			MaxPeers:         25,
 			BootstrapNodesV5: enodes,
 		},
@@ -474,8 +470,8 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
-			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, big.NewInt(21000), f.price, nil)
-			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainId)
+			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, 21000, f.price, nil)
+			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainID)
 			if err != nil {
 				f.lock.Unlock()
 				if err = sendError(conn, err); err != nil {
@@ -534,9 +530,11 @@ func (f *faucet) loop() {
 	}
 	defer sub.Unsubscribe()
 
-	for {
-		select {
-		case head := <-heads:
+	// Start a goroutine to update the state from head notifications in the background
+	update := make(chan *types.Header)
+
+	go func() {
+		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
 			var (
 				balance *big.Int
@@ -589,6 +587,17 @@ func (f *faucet) loop() {
 				}
 			}
 			f.lock.RUnlock()
+		}
+	}()
+	// Wait for various events and assing to the appropriate background threads
+	for {
+		select {
+		case head := <-heads:
+			// New head arrived, send if for state update if there's none running
+			select {
+			case update <- head:
+			default:
+			}
 
 		case <-f.update:
 			// Pending requests updated, stream to clients
@@ -626,59 +635,6 @@ func sendSuccess(conn *websocket.Conn, msg string) error {
 	return send(conn, map[string]string{"success": msg}, time.Second)
 }
 
-// authGitHub tries to authenticate a faucet request using GitHub gists, returning
-// the username, avatar URL and Ethereum address to fund on success.
-func authGitHub(url string) (string, string, common.Address, error) {
-	// Retrieve the gist from the GitHub Gist APIs
-	parts := strings.Split(url, "/")
-	req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
-	if *githubUser != "" {
-		req.SetBasicAuth(*githubUser, *githubToken)
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	var gist struct {
-		Owner struct {
-			Login string `json:"login"`
-		} `json:"owner"`
-		Files map[string]struct {
-			Content string `json:"content"`
-		} `json:"files"`
-	}
-	err = json.NewDecoder(res.Body).Decode(&gist)
-	res.Body.Close()
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	if gist.Owner.Login == "" {
-		return "", "", common.Address{}, errors.New("Anonymous Gists not allowed")
-	}
-	// Iterate over all the files and look for Ethereum addresses
-	var address common.Address
-	for _, file := range gist.Files {
-		content := strings.TrimSpace(file.Content)
-		if len(content) == 2+common.AddressLength*2 {
-			address = common.HexToAddress(content)
-		}
-	}
-	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
-	}
-	// Validate the user's existence since the API is unhelpful here
-	if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
-		return "", "", common.Address{}, err
-	}
-	res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return "", "", common.Address{}, errors.New("Invalid user... boom!")
-	}
-	// Everything passed validation, return the gathered infos
-	return gist.Owner.Login + "@github", fmt.Sprintf("https://github.com/%s.png?size=64", gist.Owner.Login), address, nil
-}
-
 // authTwitter tries to authenticate a faucet request using Twitter posts, returning
 // the username, avatar URL and Ethereum address to fund on success.
 func authTwitter(url string) (string, string, common.Address, error) {
@@ -687,8 +643,6 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	if len(parts) < 4 || parts[len(parts)-2] != "status" {
 		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
-	username := parts[len(parts)-3]
-
 	// Twitter's API isn't really friendly with direct links. Still, we don't
 	// want to do ask read permissions from users, so just load the public posts and
 	// scrape it for the Ethereum address and profile URL.
@@ -698,11 +652,14 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	}
 	defer res.Body.Close()
 
-	reader, err := zlib.NewReader(res.Body)
-	if err != nil {
-		return "", "", common.Address{}, err
+	// Resolve the username from the final redirect, no intermediate junk
+	parts = strings.Split(res.Request.URL.String(), "/")
+	if len(parts) < 4 || parts[len(parts)-2] != "status" {
+		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
-	body, err := ioutil.ReadAll(reader)
+	username := parts[len(parts)-3]
+
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", "", common.Address{}, err
 	}

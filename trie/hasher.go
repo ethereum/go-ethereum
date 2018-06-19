@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"bytes"
 	"hash"
 	"sync"
 
@@ -26,51 +25,56 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// calculator is a utility used by the hasher to calculate the hash value of the tree node.
-type calculator struct {
-	sha    hash.Hash
-	buffer *bytes.Buffer
+type hasher struct {
+	tmp        sliceBuffer
+	sha        keccakState
+	cachegen   uint16
+	cachelimit uint16
+	onleaf     LeafCallback
 }
 
-// calculatorPool is a set of temporary calculators that may be individually saved and retrieved.
-var calculatorPool = sync.Pool{
+// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type sliceBuffer []byte
+
+func (b *sliceBuffer) Write(data []byte) (n int, err error) {
+	*b = append(*b, data...)
+	return len(data), nil
+}
+
+func (b *sliceBuffer) Reset() {
+	*b = (*b)[:0]
+}
+
+// hashers live in a global db.
+var hasherPool = sync.Pool{
 	New: func() interface{} {
-		return &calculator{buffer: new(bytes.Buffer), sha: sha3.NewKeccak256()}
+		return &hasher{
+			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			sha: sha3.NewKeccak256().(keccakState),
+		}
 	},
 }
 
-// hasher hasher is used to calculate the hash value of the whole tree.
-type hasher struct {
-	cachegen   uint16
-	cachelimit uint16
-	threaded   bool
-	mu         sync.Mutex
-}
-
-func newHasher(cachegen, cachelimit uint16) *hasher {
-	h := &hasher{
-		cachegen:   cachegen,
-		cachelimit: cachelimit,
-	}
+func newHasher(cachegen, cachelimit uint16, onleaf LeafCallback) *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.cachegen, h.cachelimit, h.onleaf = cachegen, cachelimit, onleaf
 	return h
 }
 
-// newCalculator retrieves a cleaned calculator from calculator pool.
-func (h *hasher) newCalculator() *calculator {
-	calculator := calculatorPool.Get().(*calculator)
-	calculator.buffer.Reset()
-	calculator.sha.Reset()
-	return calculator
-}
-
-// returnCalculator returns a no longer used calculator to the pool.
-func (h *hasher) returnCalculator(calculator *calculator) {
-	calculatorPool.Put(calculator)
+func returnHasherToPool(h *hasher) {
+	hasherPool.Put(h)
 }
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error) {
+func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		if db == nil {
@@ -117,7 +121,7 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, error) {
+func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -142,48 +146,15 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 		// Hash the full node's children, caching the newly hashed subtrees
 		collapsed, cached := n.copy(), n.copy()
 
-		// hashChild is a helper to hash a single child, which is called either on the
-		// same thread as the caller or in a goroutine for the toplevel branching.
-		hashChild := func(index int, wg *sync.WaitGroup) {
-			if wg != nil {
-				defer wg.Done()
+		for i := 0; i < 16; i++ {
+			if n.Children[i] != nil {
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
+				if err != nil {
+					return original, original, err
+				}
+			} else {
+				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 			}
-			// Ensure that nil children are encoded as empty strings.
-			if collapsed.Children[index] == nil {
-				collapsed.Children[index] = valueNode(nil)
-				return
-			}
-			// Hash all other children properly
-			var herr error
-			collapsed.Children[index], cached.Children[index], herr = h.hash(n.Children[index], db, false)
-			if herr != nil {
-				h.mu.Lock() // rarely if ever locked, no congenstion
-				err = herr
-				h.mu.Unlock()
-			}
-		}
-		// If we're not running in threaded mode yet, span a goroutine for each child
-		if !h.threaded {
-			// Disable further threading
-			h.threaded = true
-
-			// Hash all the children concurrently
-			var wg sync.WaitGroup
-			for i := 0; i < 16; i++ {
-				wg.Add(1)
-				go hashChild(i, &wg)
-			}
-			wg.Wait()
-
-			// Reenable threading for subsequent hash calls
-			h.threaded = false
-		} else {
-			for i := 0; i < 16; i++ {
-				hashChild(i, nil)
-			}
-		}
-		if err != nil {
-			return original, original, err
 		}
 		cached.Children[16] = n.Children[16]
 		if collapsed.Children[16] == nil {
@@ -197,34 +168,71 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 	}
 }
 
-func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
+// store hashes the node n and if we have a storage layer specified, it writes
+// the key/value pair to it and tracks any node->child references as well as any
+// node->external trie references.
+func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		return n, nil
 	}
-	calculator := h.newCalculator()
-	defer h.returnCalculator(calculator)
-
 	// Generate the RLP encoding of the node
-	if err := rlp.Encode(calculator.buffer, n); err != nil {
+	h.tmp.Reset()
+	if err := rlp.Encode(&h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
-	if calculator.buffer.Len() < 32 && !force {
+	if len(h.tmp) < 32 && !force {
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
 	if hash == nil {
-		calculator.sha.Write(calculator.buffer.Bytes())
-		hash = hashNode(calculator.sha.Sum(nil))
+		hash = h.makeHashNode(h.tmp)
 	}
-	if db != nil {
-		// db might be a leveldb batch, which is not safe for concurrent writes
-		h.mu.Lock()
-		err := db.Put(hash, calculator.buffer.Bytes())
-		h.mu.Unlock()
 
-		return hash, err
+	if db != nil {
+		// We are pooling the trie nodes into an intermediate memory cache
+		db.lock.Lock()
+		hash := common.BytesToHash(hash)
+		db.insert(hash, h.tmp)
+		// Track all direct parent->child node references
+		switch n := n.(type) {
+		case *shortNode:
+			if child, ok := n.Val.(hashNode); ok {
+				db.reference(common.BytesToHash(child), hash)
+			}
+		case *fullNode:
+			for i := 0; i < 16; i++ {
+				if child, ok := n.Children[i].(hashNode); ok {
+					db.reference(common.BytesToHash(child), hash)
+				}
+			}
+		}
+		db.lock.Unlock()
+
+		// Track external references from account->storage trie
+		if h.onleaf != nil {
+			switch n := n.(type) {
+			case *shortNode:
+				if child, ok := n.Val.(valueNode); ok && child != nil {
+					h.onleaf(child, hash)
+				}
+			case *fullNode:
+				for i := 0; i < 16; i++ {
+					if child, ok := n.Children[i].(valueNode); ok && child != nil {
+						h.onleaf(child, hash)
+					}
+				}
+			}
+		}
 	}
 	return hash, nil
+}
+
+func (h *hasher) makeHashNode(data []byte) hashNode {
+	n := make(hashNode, h.sha.Size())
+	h.sha.Reset()
+	h.sha.Write(data)
+	h.sha.Read(n)
+	return n
 }

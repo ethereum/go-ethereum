@@ -44,7 +44,7 @@ type cppEthereumGenesisSpec struct {
 		MaximumExtraDataSize    hexutil.Uint64 `json:"maximumExtraDataSize"`
 		MinGasLimit             hexutil.Uint64 `json:"minGasLimit"`
 		MaxGasLimit             hexutil.Uint64 `json:"maxGasLimit"`
-		GasLimitBoundDivisor    *hexutil.Big   `json:"gasLimitBoundDivisor"`
+		GasLimitBoundDivisor    hexutil.Uint64 `json:"gasLimitBoundDivisor"`
 		MinimumDifficulty       *hexutil.Big   `json:"minimumDifficulty"`
 		DifficultyBoundDivisor  *hexutil.Big   `json:"difficultyBoundDivisor"`
 		DurationLimit           *hexutil.Big   `json:"durationLimit"`
@@ -103,15 +103,15 @@ func newCppEthereumGenesisSpec(network string, genesis *core.Genesis) (*cppEther
 	spec.Params.ByzantiumForkBlock = (hexutil.Uint64)(genesis.Config.ByzantiumBlock.Uint64())
 	spec.Params.ConstantinopleForkBlock = (hexutil.Uint64)(math.MaxUint64)
 
-	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainId.Uint64())
-	spec.Params.ChainID = (hexutil.Uint64)(genesis.Config.ChainId.Uint64())
+	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
+	spec.Params.ChainID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
-	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit.Uint64())
+	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
 	spec.Params.MaxGasLimit = (hexutil.Uint64)(math.MaxUint64)
 	spec.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 	spec.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Params.GasLimitBoundDivisor = (*hexutil.Big)(params.GasLimitBoundDivisor)
+	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
 	spec.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 
@@ -170,7 +170,6 @@ type parityChainSpec struct {
 			Params struct {
 				MinimumDifficulty      *hexutil.Big `json:"minimumDifficulty"`
 				DifficultyBoundDivisor *hexutil.Big `json:"difficultyBoundDivisor"`
-				GasLimitBoundDivisor   *hexutil.Big `json:"gasLimitBoundDivisor"`
 				DurationLimit          *hexutil.Big `json:"durationLimit"`
 				BlockReward            *hexutil.Big `json:"blockReward"`
 				HomesteadTransition    uint64       `json:"homesteadTransition"`
@@ -187,7 +186,8 @@ type parityChainSpec struct {
 
 	Params struct {
 		MaximumExtraDataSize hexutil.Uint64 `json:"maximumExtraDataSize"`
-		MinGasLimit          *hexutil.Big   `json:"minGasLimit"`
+		MinGasLimit          hexutil.Uint64 `json:"minGasLimit"`
+		GasLimitBoundDivisor hexutil.Uint64 `json:"gasLimitBoundDivisor"`
 		NetworkID            hexutil.Uint64 `json:"networkID"`
 		MaxCodeSize          uint64         `json:"maxCodeSize"`
 		EIP155Transition     uint64         `json:"eip155Transition"`
@@ -270,7 +270,6 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	}
 	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Engine.Ethash.Params.GasLimitBoundDivisor = (*hexutil.Big)(params.GasLimitBoundDivisor)
 	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
 	spec.Engine.Ethash.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 	spec.Engine.Ethash.Params.HomesteadTransition = genesis.Config.HomesteadBlock.Uint64()
@@ -283,8 +282,9 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	spec.Engine.Ethash.Params.EIP649Transition = genesis.Config.ByzantiumBlock.Uint64()
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
-	spec.Params.MinGasLimit = (*hexutil.Big)(params.MinGasLimit)
-	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainId.Uint64())
+	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
+	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
+	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainID.Uint64())
 	spec.Params.MaxCodeSize = params.MaxCodeSize
 	spec.Params.EIP155Transition = genesis.Config.EIP155Block.Uint64()
 	spec.Params.EIP98Transition = math.MaxUint64

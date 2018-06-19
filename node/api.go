@@ -24,10 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/rcrowley/go-metrics"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only
@@ -114,7 +114,7 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string) (bool, error) {
+func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -141,6 +141,14 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
+	allowedVHosts := api.node.config.HTTPVirtualHosts
+	if vhosts != nil {
+		allowedVHosts = nil
+		for _, vhost := range strings.Split(*host, ",") {
+			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
+		}
+	}
+
 	modules := api.node.httpWhitelist
 	if apis != nil {
 		modules = nil
@@ -149,7 +157,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -209,7 +217,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	return true, nil
 }
 
-// StopRPC terminates an already running websocket RPC API endpoint.
+// StopWS terminates an already running websocket RPC API endpoint.
 func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
@@ -300,6 +308,11 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 		// Fill the counter with the metric details, formatting if requested
 		if raw {
 			switch metric := metric.(type) {
+			case metrics.Counter:
+				root[name] = map[string]interface{}{
+					"Overall": float64(metric.Count()),
+				}
+
 			case metrics.Meter:
 				root[name] = map[string]interface{}{
 					"AvgRate01Min": metric.Rate1(),
@@ -325,11 +338,31 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 					},
 				}
 
+			case metrics.ResettingTimer:
+				t := metric.Snapshot()
+				ps := t.Percentiles([]float64{5, 20, 50, 80, 95})
+				root[name] = map[string]interface{}{
+					"Measurements": len(t.Values()),
+					"Mean":         time.Duration(t.Mean()).String(),
+					"Percentiles": map[string]interface{}{
+						"5":  time.Duration(ps[0]).String(),
+						"20": time.Duration(ps[1]).String(),
+						"50": time.Duration(ps[2]).String(),
+						"80": time.Duration(ps[3]).String(),
+						"95": time.Duration(ps[4]).String(),
+					},
+				}
+
 			default:
 				root[name] = "Unknown metric type"
 			}
 		} else {
 			switch metric := metric.(type) {
+			case metrics.Counter:
+				root[name] = map[string]interface{}{
+					"Overall": float64(metric.Count()),
+				}
+
 			case metrics.Meter:
 				root[name] = map[string]interface{}{
 					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),
@@ -352,6 +385,21 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 						"50": time.Duration(metric.Percentile(0.5)).String(),
 						"80": time.Duration(metric.Percentile(0.8)).String(),
 						"95": time.Duration(metric.Percentile(0.95)).String(),
+					},
+				}
+
+			case metrics.ResettingTimer:
+				t := metric.Snapshot()
+				ps := t.Percentiles([]float64{5, 20, 50, 80, 95})
+				root[name] = map[string]interface{}{
+					"Measurements": len(t.Values()),
+					"Mean":         time.Duration(t.Mean()).String(),
+					"Percentiles": map[string]interface{}{
+						"5":  time.Duration(ps[0]).String(),
+						"20": time.Duration(ps[1]).String(),
+						"50": time.Duration(ps[2]).String(),
+						"80": time.Duration(ps[3]).String(),
+						"95": time.Duration(ps[4]).String(),
 					},
 				}
 

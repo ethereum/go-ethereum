@@ -63,6 +63,9 @@ const (
 	XOR
 	NOT
 	BYTE
+	SHL
+	SHR
+	SAR
 
 	SHA3 = 0x20
 )
@@ -234,6 +237,9 @@ var opCodeToString = map[OpCode]string{
 	OR:     "OR",
 	XOR:    "XOR",
 	BYTE:   "BYTE",
+	SHL:    "SHL",
+	SHR:    "SHR",
+	SAR:    "SAR",
 	ADDMOD: "ADDMOD",
 	MULMOD: "MULMOD",
 
@@ -369,10 +375,10 @@ var opCodeToString = map[OpCode]string{
 	SWAP: "SWAP",
 }
 
-func (o OpCode) String() string {
-	str := opCodeToString[o]
+func (op OpCode) String() string {
+	str := opCodeToString[op]
 	if len(str) == 0 {
-		return fmt.Sprintf("Missing opcode 0x%x", int(o))
+		return fmt.Sprintf("Missing opcode 0x%x", int(op))
 	}
 
 	return str
@@ -400,6 +406,9 @@ var stringToOp = map[string]OpCode{
 	"OR":             OR,
 	"XOR":            XOR,
 	"BYTE":           BYTE,
+	"SHL":            SHL,
+	"SHR":            SHR,
+	"SAR":            SAR,
 	"ADDMOD":         ADDMOD,
 	"MULMOD":         MULMOD,
 	"SHA3":           SHA3,

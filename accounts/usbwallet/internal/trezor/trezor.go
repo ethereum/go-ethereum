@@ -18,7 +18,7 @@
 // wallets. The wire protocol spec can be found on the SatoshiLabs website:
 // https://doc.satoshilabs.com/trezor-tech/api-protobuf.html
 
-//go:generate protoc --go_out=Mgoogle/protobuf/descriptor.proto=github.com/golang/protobuf/protoc-gen-go/descriptor,import_path=trezor:. types.proto messages.proto
+//go:generate protoc --go_out=import_path=trezor:. types.proto messages.proto
 
 // Package trezor contains the wire protocol wrapper in Go.
 package trezor
@@ -36,7 +36,7 @@ func Type(msg proto.Message) uint16 {
 }
 
 // Name returns the friendly message type name of a specific protocol buffer
-// type numbers.
+// type number.
 func Name(kind uint16) string {
 	name := MessageType_name[int32(kind)]
 	if len(name) < 12 {

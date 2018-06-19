@@ -22,7 +22,6 @@ package storage
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/compression/rle"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -31,8 +30,7 @@ import (
 const openFileLimit = 128
 
 type LDBDatabase struct {
-	db   *leveldb.DB
-	comp bool
+	db *leveldb.DB
 }
 
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
@@ -42,16 +40,12 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 		return nil, err
 	}
 
-	database := &LDBDatabase{db: db, comp: false}
+	database := &LDBDatabase{db: db}
 
 	return database, nil
 }
 
 func (self *LDBDatabase) Put(key []byte, value []byte) {
-	if self.comp {
-		value = rle.Compress(value)
-	}
-
 	err := self.db.Put(key, value, nil)
 	if err != nil {
 		fmt.Println("Error put", err)
@@ -63,11 +57,6 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if self.comp {
-		return rle.Decompress(dat)
-	}
-
 	return dat, nil
 }
 

@@ -13,18 +13,19 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package adapters
 
 type SimStateStore struct {
 	m map[string][]byte
 }
 
-func (self *SimStateStore) Load(s string) ([]byte, error) {
-	return self.m[s], nil
+func (st *SimStateStore) Load(s string) ([]byte, error) {
+	return st.m[s], nil
 }
 
-func (self *SimStateStore) Save(s string, data []byte) error {
-	self.m[s] = data
+func (st *SimStateStore) Save(s string, data []byte) error {
+	st.m[s] = data
 	return nil
 }
 

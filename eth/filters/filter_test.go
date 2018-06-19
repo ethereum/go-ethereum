@@ -24,7 +24,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -33,7 +35,7 @@ import (
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
-	receipt := types.NewReceipt(nil, false, new(big.Int))
+	receipt := types.NewReceipt(nil, false, 0)
 	receipt.Logs = []*types.Log{
 		{Address: addr},
 	}
@@ -65,7 +67,7 @@ func BenchmarkFilters(b *testing.B) {
 	defer db.Close()
 
 	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 100010, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 100010, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -83,16 +85,10 @@ func BenchmarkFilters(b *testing.B) {
 		}
 	})
 	for i, block := range chain {
-		core.WriteBlock(db, block)
-		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-			b.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
-			b.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
-			b.Fatal("error writing block receipts:", err)
-		}
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 	b.ResetTimer()
 
@@ -132,10 +128,10 @@ func TestFilters(t *testing.T) {
 	defer db.Close()
 
 	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
-	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 1000, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, false, new(big.Int))
+			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -144,7 +140,7 @@ func TestFilters(t *testing.T) {
 			}
 			gen.AddUncheckedReceipt(receipt)
 		case 2:
-			receipt := types.NewReceipt(nil, false, new(big.Int))
+			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -153,7 +149,7 @@ func TestFilters(t *testing.T) {
 			}
 			gen.AddUncheckedReceipt(receipt)
 		case 998:
-			receipt := types.NewReceipt(nil, false, new(big.Int))
+			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -162,7 +158,7 @@ func TestFilters(t *testing.T) {
 			}
 			gen.AddUncheckedReceipt(receipt)
 		case 999:
-			receipt := types.NewReceipt(nil, false, new(big.Int))
+			receipt := types.NewReceipt(nil, false, 0)
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -173,16 +169,10 @@ func TestFilters(t *testing.T) {
 		}
 	})
 	for i, block := range chain {
-		core.WriteBlock(db, block)
-		if err := core.WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteHeadBlockHash(db, block.Hash()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := core.WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
-			t.Fatal("error writing block receipts:", err)
-		}
+		rawdb.WriteBlock(db, block)
+		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+		rawdb.WriteHeadBlockHash(db, block.Hash())
+		rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 	}
 
 	filter := New(backend, 0, -1, []common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}})

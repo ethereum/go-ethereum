@@ -49,7 +49,7 @@ const (
 	// history request.
 	historyUpdateRange = 50
 
-	// txChanSize is the size of channel listening to TxPreEvent.
+	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
@@ -57,9 +57,9 @@ const (
 )
 
 type txPool interface {
-	// SubscribeTxPreEvent should return an event subscription of
-	// TxPreEvent and send events to the given channel.
-	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+	// SubscribeNewTxsEvent should return an event subscription of
+	// NewTxsEvent and send events to the given channel.
+	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 }
 
 type blockChain interface {
@@ -150,8 +150,8 @@ func (s *Service) loop() {
 	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
-	txEventCh := make(chan core.TxPreEvent, txChanSize)
-	txSub := txpool.SubscribeTxPreEvent(txEventCh)
+	txEventCh := make(chan core.NewTxsEvent, txChanSize)
+	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
@@ -362,7 +362,7 @@ type nodeInfo struct {
 
 // authMsg is the authentication infos needed to login to a monitoring server.
 type authMsg struct {
-	Id     string   `json:"id"`
+	ID     string   `json:"id"`
 	Info   nodeInfo `json:"info"`
 	Secret string   `json:"secret"`
 }
@@ -374,16 +374,16 @@ func (s *Service) login(conn *websocket.Conn) error {
 
 	var network, protocol string
 	if info := infos.Protocols["eth"]; info != nil {
-		network = fmt.Sprintf("%d", info.(*eth.EthNodeInfo).Network)
+		network = fmt.Sprintf("%d", info.(*eth.NodeInfo).Network)
 		protocol = fmt.Sprintf("eth/%d", eth.ProtocolVersions[0])
 	} else {
-		network = fmt.Sprintf("%d", infos.Protocols["les"].(*eth.EthNodeInfo).Network)
+		network = fmt.Sprintf("%d", infos.Protocols["les"].(*les.NodeInfo).Network)
 		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
 	}
 	node := strings.Replace(infos.Name, "Geth", "Geth+EVMJIT", 1)
 	log.Warn("Node name: " + node)
 	auth := &authMsg{
-		Id: s.node,
+		ID: s.node,
 		Info: nodeInfo{
 			Name:     s.node,
 			Node:     node,
@@ -475,8 +475,8 @@ type blockStats struct {
 	ParentHash common.Hash    `json:"parentHash"`
 	Timestamp  *big.Int       `json:"timestamp"`
 	Miner      common.Address `json:"miner"`
-	GasUsed    *big.Int       `json:"gasUsed"`
-	GasLimit   *big.Int       `json:"gasLimit"`
+	GasUsed    uint64         `json:"gasUsed"`
+	GasLimit   uint64         `json:"gasLimit"`
 	Diff       string         `json:"difficulty"`
 	TotalDiff  string         `json:"totalDifficulty"`
 	Txs        []txStats      `json:"transactions"`
@@ -561,8 +561,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		ParentHash: header.ParentHash,
 		Timestamp:  header.Time,
 		Miner:      author,
-		GasUsed:    new(big.Int).Set(header.GasUsed),
-		GasLimit:   new(big.Int).Set(header.GasLimit),
+		GasUsed:    header.GasUsed,
+		GasLimit:   header.GasLimit,
 		Diff:       header.Difficulty.String(),
 		TotalDiff:  td.String(),
 		Txs:        txs,
@@ -615,6 +615,7 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 		}
 		// Ran out of blocks, cut the report short and send
 		history = history[len(history)-i:]
+		break
 	}
 	// Assemble the history report and send it to the server
 	if len(history) > 0 {
@@ -690,7 +691,7 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 		sync := s.eth.Downloader().Progress()
 		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		price, _ := s.eth.ApiBackend.SuggestPrice(context.Background())
+		price, _ := s.eth.APIBackend.SuggestPrice(context.Background())
 		gasprice = int(price.Uint64())
 	} else {
 		sync := s.les.Downloader().Progress()

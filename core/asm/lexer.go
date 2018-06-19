@@ -48,7 +48,7 @@ const (
 	lineEnd                           // emitted when a line ends
 	invalidStatement                  // any invalid statement
 	element                           // any element during element parsing
-	label                             // label is emitted when a labal is found
+	label                             // label is emitted when a label is found
 	labelDef                          // label definition is emitted when a new label is found
 	number                            // number is emitted when a number is found
 	stringValue                       // stringValue is emitted when a string has been found
@@ -206,7 +206,7 @@ func lexLine(l *lexer) stateFn {
 			return lexComment
 		case isSpace(r):
 			l.ignore()
-		case isAlphaNumeric(r) || r == '_':
+		case isLetter(r) || r == '_':
 			return lexElement
 		case isNumber(r):
 			return lexNumber
@@ -242,7 +242,7 @@ func lexLabel(l *lexer) stateFn {
 }
 
 // lexInsideString lexes the inside of a string until
-// until the state function finds the closing quote.
+// the state function finds the closing quote.
 // It returns the lex text state function.
 func lexInsideString(l *lexer) stateFn {
 	if l.acceptRunUntil('"') {
@@ -278,7 +278,7 @@ func lexElement(l *lexer) stateFn {
 	return lexLine
 }
 
-func isAlphaNumeric(t rune) bool {
+func isLetter(t rune) bool {
 	return unicode.IsLetter(t)
 }
 

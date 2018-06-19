@@ -197,26 +197,6 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'traceBlock',
-			call: 'debug_traceBlock',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockFromFile',
-			call: 'debug_traceBlockFromFile',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByNumber',
-			call: 'debug_traceBlockByNumber',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByHash',
-			call: 'debug_traceBlockByHash',
-			params: 1
-		}),
-		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1
@@ -328,9 +308,48 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'mutexProfile',
+			call: 'debug_mutexProfile',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setMutexProfileFraction',
+			call: 'debug_setMutexProfileFraction',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'writeMutexProfile',
+			call: 'debug_writeMutexProfile',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'writeMemProfile',
 			call: 'debug_writeMemProfile',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'traceBlock',
+			call: 'debug_traceBlock',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockFromFile',
+			call: 'debug_traceBlockFromFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByNumber',
+			call: 'debug_traceBlockByNumber',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByHash',
+			call: 'debug_traceBlockByHash',
+			params: 2,
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'traceTransaction',
@@ -512,6 +531,12 @@ web3._extend({
 			name: 'deriveAccount',
 			call: 'personal_deriveAccount',
 			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'signTransaction',
+			call: 'personal_signTransaction',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 	],
 	properties: [

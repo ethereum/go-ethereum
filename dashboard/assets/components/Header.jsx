@@ -1,3 +1,5 @@
+// @flow
+
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -15,73 +17,57 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import PropTypes from 'prop-types';
-import classNames from 'classnames';
-import {withStyles} from 'material-ui/styles';
+
+import withStyles from 'material-ui/styles/withStyles';
 import AppBar from 'material-ui/AppBar';
 import Toolbar from 'material-ui/Toolbar';
-import Typography from 'material-ui/Typography';
 import IconButton from 'material-ui/IconButton';
+import Icon from 'material-ui/Icon';
 import MenuIcon from 'material-ui-icons/Menu';
+import Typography from 'material-ui/Typography';
 
-import {DRAWER_WIDTH} from './Common.jsx';
-
-// Styles for the Header component.
-const styles = theme => ({
-    appBar: {
-        position:   'absolute',
-        transition: theme.transitions.create(['margin', 'width'], {
-            easing:   theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-        }),
-    },
-    appBarShift: {
-        marginLeft: DRAWER_WIDTH,
-        width:      `calc(100% - ${DRAWER_WIDTH}px)`,
-        transition: theme.transitions.create(['margin', 'width'], {
-            easing:   theme.transitions.easing.easeOut,
-            duration: theme.transitions.duration.enteringScreen,
-        }),
-    },
-    menuButton: {
-        marginLeft:  12,
-        marginRight: 20,
-    },
-    hide: {
-        display: 'none',
-    },
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles = (theme: Object) => ({
+	header: {
+		backgroundColor: theme.palette.grey[900],
+		color:           theme.palette.getContrastText(theme.palette.grey[900]),
+		zIndex:          theme.zIndex.appBar,
+	},
+	toolbar: {
+		paddingLeft:  theme.spacing.unit,
+		paddingRight: theme.spacing.unit,
+	},
+	title: {
+		paddingLeft: theme.spacing.unit,
+		fontSize:    3 * theme.spacing.unit,
+	},
 });
 
-// Header renders a header, which contains a sidebar opener icon when that is closed.
-class Header extends Component {
-    render() {
-        // The classes property is injected by withStyles().
-        const {classes} = this.props;
-
-        return (
-            <AppBar className={classNames(classes.appBar, this.props.opened && classes.appBarShift)}>
-                <Toolbar disableGutters={!this.props.opened}>
-                    <IconButton
-                        color="contrast"
-                        aria-label="open drawer"
-                        onClick={this.props.open}
-                        className={classNames(classes.menuButton, this.props.opened && classes.hide)}
-                    >
-                        <MenuIcon />
-                    </IconButton>
-                    <Typography type="title" color="inherit" noWrap>
-                        Go Ethereum Dashboard
-                    </Typography>
-                </Toolbar>
-            </AppBar>
-        );
-    }
-}
-
-Header.propTypes = {
-    classes: PropTypes.object.isRequired,
-    opened:  PropTypes.bool.isRequired,
-    open:    PropTypes.func.isRequired,
+export type Props = {
+	classes: Object, // injected by withStyles()
+	switchSideBar: () => void,
 };
 
-export default withStyles(styles)(Header);
+// Header renders the header of the dashboard.
+class Header extends Component<Props> {
+	render() {
+		const {classes} = this.props;
+
+		return (
+			<AppBar position='static' className={classes.header}>
+				<Toolbar className={classes.toolbar}>
+					<IconButton onClick={this.props.switchSideBar}>
+						<Icon>
+							<MenuIcon />
+						</Icon>
+					</IconButton>
+					<Typography type='title' color='inherit' noWrap className={classes.title}>
+						Go Ethereum Dashboard
+					</Typography>
+				</Toolbar>
+			</AppBar>
+		);
+	}
+}
+
+export default withStyles(themeStyles)(Header);

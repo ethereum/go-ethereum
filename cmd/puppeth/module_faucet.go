@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// faucetDockerfile is the Dockerfile required to build an faucet container to
+// faucetDockerfile is the Dockerfile required to build a faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
 FROM ethereum/client-go:alltools-latest
@@ -38,6 +38,8 @@ FROM ethereum/client-go:alltools-latest
 ADD genesis.json /genesis.json
 ADD account.json /account.json
 ADD account.pass /account.pass
+
+EXPOSE 8080 30303 30303/udp
 
 ENTRYPOINT [ \
 	"faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",     \
@@ -91,7 +93,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"NetworkID":     config.node.network,
 		"Bootnodes":     strings.Join(bootnodes, ","),
 		"Ethstats":      config.node.ethstats,
-		"EthPort":       config.node.portFull,
+		"EthPort":       config.node.port,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
 		"FaucetName":    strings.Title(network),
@@ -108,7 +110,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"Datadir":       config.node.datadir,
 		"VHost":         config.host,
 		"ApiPort":       config.port,
-		"EthPort":       config.node.portFull,
+		"EthPort":       config.node.port,
 		"EthName":       config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
@@ -136,7 +138,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
-// faucetInfos is returned from an faucet status check to allow reporting various
+// faucetInfos is returned from a faucet status check to allow reporting various
 // configuration parameters.
 type faucetInfos struct {
 	node          *nodeInfos
@@ -156,7 +158,7 @@ func (info *faucetInfos) Report() map[string]string {
 	report := map[string]string{
 		"Website address":              info.host,
 		"Website listener port":        strconv.Itoa(info.port),
-		"Ethereum listener port":       strconv.Itoa(info.node.portFull),
+		"Ethereum listener port":       strconv.Itoa(info.node.port),
 		"Funding amount (base tier)":   fmt.Sprintf("%d Ethers", info.amount),
 		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
 		"Funding tiers":                strconv.Itoa(info.tiers),
@@ -179,7 +181,7 @@ func (info *faucetInfos) Report() map[string]string {
 	return report
 }
 
-// checkFaucet does a health-check against an faucet server to verify whether
+// checkFaucet does a health-check against a faucet server to verify whether
 // it's running, and if yes, gathering a collection of useful infos about it.
 func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	// Inspect a possible faucet container on the host
@@ -226,7 +228,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	return &faucetInfos{
 		node: &nodeInfos{
 			datadir:  infos.volumes["/root/.faucet"],
-			portFull: infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
+			port:     infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
 			ethstats: infos.envvars["ETH_NAME"],
 			keyJSON:  keyJSON,
 			keyPass:  keyPass,

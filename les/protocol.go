@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -41,8 +42,9 @@ const (
 
 // Supported versions of the les protocol (first is primary)
 var (
-	ClientProtocolVersions = []uint{lpv2, lpv1}
-	ServerProtocolVersions = []uint{lpv2, lpv1}
+	ClientProtocolVersions    = []uint{lpv2, lpv1}
+	ServerProtocolVersions    = []uint{lpv2, lpv1}
+	AdvertiseProtocolVersions = []uint{lpv2} // clients are searching for the first advertised protocol in the list
 )
 
 // Number of implemented message corresponding to different protocol versions.
@@ -159,9 +161,8 @@ func (a *announceData) checkSignature(pubKey *ecdsa.PublicKey) error {
 	pbytes := elliptic.Marshal(pubKey.Curve, pubKey.X, pubKey.Y)
 	if bytes.Equal(pbytes, recPubkey) {
 		return nil
-	} else {
-		return errors.New("Wrong signature")
 	}
+	return errors.New("Wrong signature")
 }
 
 type blockInfo struct {
@@ -223,6 +224,6 @@ type proofsData [][]rlp.RawValue
 
 type txStatus struct {
 	Status core.TxStatus
-	Lookup *core.TxLookupEntry
-	Error  error
+	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
+	Error  string
 }

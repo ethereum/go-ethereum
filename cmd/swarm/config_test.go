@@ -457,3 +457,98 @@ func TestCmdLineOverridesFile(t *testing.T) {
 
 	node.Shutdown()
 }
+
+func TestValidateConfig(t *testing.T) {
+	for _, c := range []struct {
+		cfg *api.Config
+		err string
+	}{
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"/data/testnet/geth.ipc",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"http://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"ws://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"test:/data/testnet/geth.ipc",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"test:ws://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"314159265dD8dbb310642f98f50C066173C1259b@/data/testnet/geth.ipc",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"314159265dD8dbb310642f98f50C066173C1259b@http://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"314159265dD8dbb310642f98f50C066173C1259b@ws://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"test:314159265dD8dbb310642f98f50C066173C1259b@/data/testnet/geth.ipc",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"eth:314159265dD8dbb310642f98f50C066173C1259b@http://127.0.0.1:1234",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"eth:314159265dD8dbb310642f98f50C066173C1259b@ws://127.0.0.1:12344",
+			}},
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"eth:",
+			}},
+			err: "invalid format [tld:][contract-addr@]url for ENS API endpoint configuration \"eth:\": missing url",
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"314159265dD8dbb310642f98f50C066173C1259b@",
+			}},
+			err: "invalid format [tld:][contract-addr@]url for ENS API endpoint configuration \"314159265dD8dbb310642f98f50C066173C1259b@\": missing url",
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				":314159265dD8dbb310642f98f50C066173C1259",
+			}},
+			err: "invalid format [tld:][contract-addr@]url for ENS API endpoint configuration \":314159265dD8dbb310642f98f50C066173C1259\": missing tld",
+		},
+		{
+			cfg: &api.Config{EnsAPIs: []string{
+				"@/data/testnet/geth.ipc",
+			}},
+			err: "invalid format [tld:][contract-addr@]url for ENS API endpoint configuration \"@/data/testnet/geth.ipc\": missing contract address",
+		},
+	} {
+		err := validateConfig(c.cfg)
+		if c.err != "" && err.Error() != c.err {
+			t.Errorf("expected error %q, got %q", c.err, err)
+		}
+		if c.err == "" && err != nil {
+			t.Errorf("unexpected error %q", err)
+		}
+	}
+}

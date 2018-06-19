@@ -40,8 +40,7 @@ import (
 // between sessions.
 type config struct {
 	path      string   // File containing the configuration values
-	bootFull  []string // Bootnodes to always connect to by full nodes
-	bootLight []string // Bootnodes to always connect to by light nodes
+	bootnodes []string // Bootnodes to always connect to by all nodes
 	ethstats  string   // Ethstats settings to cache for node deploys
 
 	Genesis *core.Genesis     `json:"genesis,omitempty"` // Genesis block to cache for node deploys

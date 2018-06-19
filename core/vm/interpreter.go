@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -30,17 +28,11 @@ import (
 type Config struct {
 	// Debug enabled debugging Interpreter options
 	Debug bool
-	// EnableJit enabled the JIT VM
-	EnableJit bool
-	// ForceJit forces the JIT VM
-	ForceJit bool
 	// Tracer is the op code logger
 	Tracer Tracer
 	// NoRecursion disabled Interpreter call, callcode,
 	// delegate call and create.
 	NoRecursion bool
-	// Disable gas metering
-	DisableGasMetering bool
 	// Enable recording of SHA3/keccak preimages
 	EnablePreimageRecording bool
 	// JumpTable contains the EVM instruction table. This
@@ -50,8 +42,8 @@ type Config struct {
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
-// passed evmironment to query external sources for state information.
-// The Interpreter will run the byte code VM or JIT VM based on the passed
+// passed environment to query external sources for state information.
+// The Interpreter will run the byte code VM based on the passed
 // configuration.
 type Interpreter struct {
 	evm      *EVM
@@ -70,6 +62,8 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
 		switch {
+		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
+			cfg.JumpTable = constantinopleInstructionSet
 		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
 			cfg.JumpTable = byzantiumInstructionSet
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
@@ -123,11 +117,6 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		return nil, nil
 	}
 
-	codehash := contract.CodeHash // codehash is used when doing jump dest caching
-	if codehash == (common.Hash{}) {
-		codehash = crypto.Keccak256Hash(contract.Code)
-	}
-
 	var (
 		op    OpCode        // current opcode
 		mem   = NewMemory() // bound memory
@@ -144,12 +133,17 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	)
 	contract.Input = input
 
-	defer func() {
-		if err != nil && !logged && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
-		}
-	}()
-
+	if in.cfg.Debug {
+		defer func() {
+			if err != nil {
+				if !logged {
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				}
+			}
+		}()
+	}
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
@@ -189,14 +183,11 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 				return nil, errGasUintOverflow
 			}
 		}
-
-		if !in.cfg.DisableGasMetering {
-			// consume the gas and return an error if not enough gas is available.
-			// cost is explicitly set so that the capture state defer method cas get the proper cost
-			cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-			if err != nil || !contract.UseGas(cost) {
-				return nil, ErrOutOfGas
-			}
+		// consume the gas and return an error if not enough gas is available.
+		// cost is explicitly set so that the capture state defer method can get the proper cost
+		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
+		if err != nil || !contract.UseGas(cost) {
+			return nil, ErrOutOfGas
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)

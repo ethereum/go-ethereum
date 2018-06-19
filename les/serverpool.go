@@ -73,7 +73,6 @@ const (
 	// and a short term value which is adjusted exponentially with a factor of
 	// pstatRecentAdjust with each dial/connection and also returned exponentially
 	// to the average with the time constant pstatReturnToMeanTC
-	pstatRecentAdjust   = 0.1
 	pstatReturnToMeanTC = time.Hour
 	// node address selection weight is dropped by a factor of exp(-addrFailDropLn) after
 	// each unsuccessful connection (restored after a successful one)
@@ -83,9 +82,6 @@ const (
 	responseScoreTC = time.Millisecond * 100
 	delayScoreTC    = time.Second * 5
 	timeoutPow      = 10
-	// peerSelectMinWeight is added to calculated weights at request peer selection
-	// to give poorly performing peers a little chance of coming back
-	peerSelectMinWeight = 0.005
 	// initStatsWeight is used to initialize previously unknown peers with good
 	// statistics to give a chance to prove themselves
 	initStatsWeight = 1
@@ -605,9 +601,8 @@ func (e *discoveredEntry) Weight() int64 {
 	t := time.Duration(mclock.Now() - e.lastDiscovered)
 	if t <= discoverExpireStart {
 		return 1000000000
-	} else {
-		return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
 	}
+	return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
 }
 
 // knownEntry implements wrsItem
@@ -618,7 +613,7 @@ func (e *knownEntry) Weight() int64 {
 	if e.state != psNotConnected || !e.known || e.delayedRetry {
 		return 0
 	}
-	return int64(1000000000 * e.connectStats.recentAvg() * math.Exp(-float64(e.lastConnected.fails)*failDropLn-e.responseStats.recentAvg()/float64(responseScoreTC)-e.delayStats.recentAvg()/float64(delayScoreTC)) * math.Pow((1-e.timeoutStats.recentAvg()), timeoutPow))
+	return int64(1000000000 * e.connectStats.recentAvg() * math.Exp(-float64(e.lastConnected.fails)*failDropLn-e.responseStats.recentAvg()/float64(responseScoreTC)-e.delayStats.recentAvg()/float64(delayScoreTC)) * math.Pow(1-e.timeoutStats.recentAvg(), timeoutPow))
 }
 
 // poolEntryAddress is a separate object because currently it is necessary to remember
