@@ -56,7 +56,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		err      error
 	)
 	switch {
-	// No password was specified, prompt the user for it.
+	// No password was specified, prompt the user for it
 	case len(call.ArgumentList) == 0:
 		if password, err = b.prompter.PromptPassword("Passphrase: "); err != nil {
 			throwJSException(err.Error())
@@ -68,7 +68,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 			throwJSException("passphrases don't match!")
 		}
 
-	// A single string password was specified, use that.
+	// A single string password was specified, use that
 	case len(call.ArgumentList) == 1 && call.Argument(0).IsString():
 		password, _ = call.Argument(0).ToString()
 
@@ -76,7 +76,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	default:
 		throwJSException("expected 0 or 1 string argument")
 	}
-	// Password acquired, execute the call and return.
+	// Password acquired, execute the call and return
 	ret, err := call.Otto.Call("jeth.newAccount", nil, password)
 	if err != nil {
 		throwJSException(err.Error())
