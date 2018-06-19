@@ -134,7 +134,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
         max-height: 60vh;
         padding: 50px 20px;
         opacity: 0.6;
-        background-color: #A9F5BF;
+        background-color: #FCEFD3;
       }
 
       table {
