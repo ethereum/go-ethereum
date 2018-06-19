@@ -35,15 +35,6 @@ var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 )
 
-// deriveSigner makes a *best* guess about which signer to use.
-func deriveSigner(V *big.Int) Signer {
-	if V.Sign() != 0 && isProtectedV(V) {
-		return NewEIP155Signer(deriveChainId(V))
-	} else {
-		return HomesteadSigner{}
-	}
-}
-
 type Transaction struct {
 	data txdata
 	// caches
