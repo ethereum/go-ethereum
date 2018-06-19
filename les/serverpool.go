@@ -125,7 +125,6 @@ type serverPool struct {
 	discLookups   chan bool
 
 	entries              map[discover.NodeID]*poolEntry
-	lock                 sync.Mutex
 	timeout, enableRetry chan *poolEntry
 	adjustStats          chan poolStatAdjust
 
@@ -174,9 +173,8 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 		pool.discLookups = make(chan bool, 100)
 		go pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
 	}
-
-	go pool.eventLoop()
 	pool.checkDial()
+	go pool.eventLoop()
 }
 
 // connect should be called upon any incoming connection. If the connection has been
@@ -223,24 +221,14 @@ func (pool *serverPool) disconnect(entry *poolEntry) {
 	if stopped {
 		// Request is emitted by ourselves, handle the logic here since eventloop doesn't
 		// serve requests anymore.
-		pool.lock.Lock()
-		defer pool.lock.Unlock()
-
 		if entry.state == psRegistered {
-			connTime := mclock.Now() - entry.regTime
-			connAdjust := float64(connTime) / float64(targetConnTime)
+			connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
 			if connAdjust > 1 {
 				connAdjust = 1
 			}
 			entry.connectStats.add(1, connAdjust)
 		}
 		entry.state = psNotConnected
-		if entry.knownSelected {
-			pool.knownSelected--
-		} else {
-			pool.newSelected--
-		}
-		pool.setRetryDial(entry)
 		pool.connWg.Done()
 	} else {
 		// Request is emitted by the server side
@@ -297,22 +285,17 @@ func (pool *serverPool) eventLoop() {
 	for {
 		select {
 		case entry := <-pool.timeout:
-			pool.lock.Lock()
 			if !entry.removed {
 				pool.checkDialTimeout(entry)
 			}
-			pool.lock.Unlock()
 
 		case entry := <-pool.enableRetry:
-			pool.lock.Lock()
 			if !entry.removed {
 				entry.delayedRetry = false
 				pool.updateCheckDial(entry)
 			}
-			pool.lock.Unlock()
 
 		case adj := <-pool.adjustStats:
-			pool.lock.Lock()
 			switch adj.adjustType {
 			case pseBlockDelay:
 				adj.entry.delayStats.add(float64(adj.time), 1)
@@ -322,13 +305,10 @@ func (pool *serverPool) eventLoop() {
 			case pseResponseTimeout:
 				adj.entry.timeoutStats.add(1, 1)
 			}
-			pool.lock.Unlock()
 
 		case node := <-pool.discNodes:
-			pool.lock.Lock()
 			entry := pool.findOrNewNode(discover.NodeID(node.ID), node.IP, node.TCP)
 			pool.updateCheckDial(entry)
-			pool.lock.Unlock()
 
 		case conv := <-pool.discLookups:
 			if conv {
@@ -350,7 +330,6 @@ func (pool *serverPool) eventLoop() {
 			if entry == nil {
 				entry = pool.findOrNewNode(req.p.ID(), req.ip, req.port)
 			}
-			req.p.Log().Debug("Connecting to new peer", "state", entry.state)
 			if entry.state == psConnected || entry.state == psRegistered {
 				req.cont <- nil
 				continue
@@ -387,15 +366,14 @@ func (pool *serverPool) eventLoop() {
 			// Handle peer disconnection requests.
 			entry := req.entry
 			if entry.state == psRegistered {
-				connTime := mclock.Now() - entry.regTime
-				connAdjust := float64(connTime) / float64(targetConnTime)
+				connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
 				if connAdjust > 1 {
 					connAdjust = 1
 				}
 				entry.connectStats.add(connAdjust, 1)
 			}
-
 			entry.state = psNotConnected
+
 			if entry.knownSelected {
 				pool.knownSelected--
 			} else {
