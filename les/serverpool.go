@@ -89,22 +89,23 @@ const (
 
 // connReq represents a request for peer connection.
 type connReq struct {
-	p    *peer
-	ip   net.IP
-	port uint16
-	cont chan *poolEntry
+	p      *peer
+	ip     net.IP
+	port   uint16
+	result chan *poolEntry
 }
 
-// discReq represents a request for peer disconnection.
-type discReq struct {
-	entry *poolEntry
-	cont  chan struct{}
+// disconnReq represents a request for peer disconnection.
+type disconnReq struct {
+	entry   *poolEntry
+	stopped bool
+	done    chan struct{}
 }
 
 // registerReq represents a request for peer registration.
 type registerReq struct {
 	entry *poolEntry
-	cont  chan struct{}
+	done  chan struct{}
 }
 
 // serverPool implements a pool for storing and selecting newly discovered and already
@@ -129,7 +130,7 @@ type serverPool struct {
 	adjustStats          chan poolStatAdjust
 
 	connCh     chan *connReq
-	discCh     chan *discReq
+	disconnCh  chan *disconnReq
 	registerCh chan *registerReq
 
 	knownQueue, newQueue       poolEntryQueue
@@ -149,7 +150,7 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *s
 		adjustStats:  make(chan poolStatAdjust, 100),
 		enableRetry:  make(chan *poolEntry, 1),
 		connCh:       make(chan *connReq),
-		discCh:       make(chan *discReq),
+		disconnCh:    make(chan *disconnReq),
 		registerCh:   make(chan *registerReq),
 		knownSelect:  newWeightedRandomSelect(),
 		newSelect:    newWeightedRandomSelect(),
@@ -184,62 +185,43 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 // disconnect should also always be called.
 func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	log.Debug("Connect new entry", "enode", p.id)
-	req := &connReq{p: p, ip: ip, port: port, cont: make(chan *poolEntry, 1)}
+	req := &connReq{p: p, ip: ip, port: port, result: make(chan *poolEntry, 1)}
 	select {
 	case pool.connCh <- req:
 	case <-pool.quit:
 		return nil
 	}
-	return <-req.cont
+	return <-req.result
 }
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
 	log.Debug("Registered new entry", "enode", entry.id)
-	req := &registerReq{entry: entry, cont: make(chan struct{})}
+	req := &registerReq{entry: entry, done: make(chan struct{})}
 	select {
 	case pool.registerCh <- req:
 	case <-pool.quit:
 		return
 	}
-	<-req.cont
-	return
+	<-req.done
 }
 
 // disconnect should be called when ending a connection. Service quality statistics
 // can be updated optionally (not updated if no registration happened, in this case
 // only connection statistics are updated, just like in case of timeout)
 func (pool *serverPool) disconnect(entry *poolEntry) {
-	log.Debug("Disconnected old entry", "enode", entry.id)
 	stopped := false
 	select {
 	case <-pool.quit:
 		stopped = true
 	default:
 	}
+	log.Debug("Disconnected old entry", "enode", entry.id)
+	req := &disconnReq{entry: entry, stopped: stopped, done: make(chan struct{})}
 
-	if stopped {
-		// Request is emitted by ourselves, handle the logic here since eventloop doesn't
-		// serve requests anymore.
-		if entry.state == psRegistered {
-			connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
-			if connAdjust > 1 {
-				connAdjust = 1
-			}
-			entry.connectStats.add(1, connAdjust)
-		}
-		entry.state = psNotConnected
-		pool.connWg.Done()
-	} else {
-		// Request is emitted by the server side
-		req := &discReq{entry: entry, cont: make(chan struct{})}
-		select {
-		case pool.discCh <- req:
-		case <-pool.quit:
-			return
-		}
-		<-req.cont
-	}
+	// Block until disconnection request be served.
+	pool.disconnCh <- req
+	<-req.done
 }
 
 const (
@@ -282,6 +264,37 @@ func (pool *serverPool) eventLoop() {
 	if pool.discSetPeriod != nil {
 		pool.discSetPeriod <- time.Millisecond * 100
 	}
+
+	// disconnect updates service quality statistics depending on the connection time
+	// and disconnection initiator.
+	disconnect := func(req *disconnReq, stopped bool) {
+		// Handle peer disconnection requests.
+		entry := req.entry
+		if entry.state == psRegistered {
+			connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
+			if connAdjust > 1 {
+				connAdjust = 1
+			}
+			if stopped {
+				// disconnect requested by ourselves.
+				entry.connectStats.add(1, connAdjust)
+			} else {
+				// disconnect requested by server side.
+				entry.connectStats.add(connAdjust, 1)
+			}
+		}
+		entry.state = psNotConnected
+
+		if entry.knownSelected {
+			pool.knownSelected--
+		} else {
+			pool.newSelected--
+		}
+		pool.setRetryDial(entry)
+		pool.connWg.Done()
+		close(req.done)
+	}
+
 	for {
 		select {
 		case entry := <-pool.timeout:
@@ -331,7 +344,7 @@ func (pool *serverPool) eventLoop() {
 				entry = pool.findOrNewNode(req.p.ID(), req.ip, req.port)
 			}
 			if entry.state == psConnected || entry.state == psRegistered {
-				req.cont <- nil
+				req.result <- nil
 				continue
 			}
 			pool.connWg.Add(1)
@@ -347,7 +360,7 @@ func (pool *serverPool) eventLoop() {
 			entry.addr[addr.strKey()] = addr
 			entry.addrSelect = *newWeightedRandomSelect()
 			entry.addrSelect.update(addr)
-			req.cont <- entry
+			req.result <- entry
 
 		case req := <-pool.registerCh:
 			// Handle peer registration requests.
@@ -360,34 +373,27 @@ func (pool *serverPool) eventLoop() {
 			}
 			pool.knownQueue.setLatest(entry)
 			entry.shortRetry = shortRetryCnt
-			close(req.cont)
+			close(req.done)
 
-		case req := <-pool.discCh:
+		case req := <-pool.disconnCh:
 			// Handle peer disconnection requests.
-			entry := req.entry
-			if entry.state == psRegistered {
-				connAdjust := float64(mclock.Now()-entry.regTime) / float64(targetConnTime)
-				if connAdjust > 1 {
-					connAdjust = 1
-				}
-				entry.connectStats.add(connAdjust, 1)
-			}
-			entry.state = psNotConnected
-
-			if entry.knownSelected {
-				pool.knownSelected--
-			} else {
-				pool.newSelected--
-			}
-			pool.setRetryDial(entry)
-			pool.connWg.Done()
-			close(req.cont)
+			disconnect(req, req.stopped)
 
 		case <-pool.quit:
 			if pool.discSetPeriod != nil {
 				close(pool.discSetPeriod)
 			}
-			pool.connWg.Wait()
+
+			// Spawn a goroutine to close the disconnCh until all connections are disconnected.
+			go func() {
+				pool.connWg.Wait()
+				close(pool.disconnCh)
+			}()
+
+			// Handle all remain disconnection requests before exit.
+			for req := range pool.disconnCh {
+				disconnect(req, true)
+			}
 			pool.saveNodes()
 			pool.wg.Done()
 			return
