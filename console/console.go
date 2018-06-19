@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
@@ -73,6 +72,8 @@ type Console struct {
 	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
+//  New initializes a JavaScript interpreted runtime environment and sets defaults
+//  with the config struct.
 func New(config Config) (*Console, error) {
 	// Handle unset config values gracefully
 	if config.Prompter == nil {
