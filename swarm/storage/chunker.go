@@ -184,8 +184,6 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 
 func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reader, size int64, jobC chan *hashJob, chunkC chan *Chunk, errC chan error, quitC chan bool, parentWg, swg, wwg *sync.WaitGroup) {
 
-	//
-
 	for depth > 0 && size < treeSize {
 		treeSize /= self.branches
 		depth--
@@ -482,7 +480,6 @@ func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
 	}
 	// waiting for the chunk retrieval
 	select { // chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-
 	case <-quitC:
 		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
 		return nil
