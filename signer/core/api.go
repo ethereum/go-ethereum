@@ -189,15 +189,6 @@ type (
 
 var ErrRequestDenied = errors.New("Request denied")
 
-type errorWrapper struct {
-	msg string
-	err error
-}
-
-func (ew errorWrapper) String() string {
-	return fmt.Sprintf("%s\n%s", ew.msg, ew.err)
-}
-
 // NewSignerAPI creates a new API that can be used for Account management.
 // ksLocation specifies the directory where to store the password protected private
 // key that is generated when a new Account is created.
