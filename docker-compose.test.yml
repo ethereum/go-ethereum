@@ -5,7 +5,7 @@ services:
   sut:
     build: .
     volumes:
-      - "./docker/run_tests.sh:/test/run_tests.sh"
+      - "./docker/docker_tests.sh:/test/docker_tests.sh"
     entrypoint:
       - /bin/sh
-      - /test/run_tests.sh
+      - /test/docker_tests.sh
