@@ -1,0 +1,11 @@
+version: "3.4"
+
+services:
+
+  sut:
+    build: .
+    volumes:
+      - "./docker/run_tests.sh:/test/run_tests.sh"
+    entrypoint:
+      - /bin/sh
+      - /test/run_tests.sh
