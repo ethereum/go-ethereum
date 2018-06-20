@@ -32,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const Version = 4
-
 // Errors
 var (
 	errPacketTooSmall   = errors.New("too small")
@@ -272,21 +270,33 @@ func (t *udp) close() {
 
 // ping sends a ping message to the given node and waits for a reply.
 func (t *udp) ping(toid NodeID, toaddr *net.UDPAddr) error {
+	return <-t.sendPing(toid, toaddr, nil)
+}
+
+// sendPing sends a ping message to the given node and invokes the callback
+// when the reply arrives.
+func (t *udp) sendPing(toid NodeID, toaddr *net.UDPAddr, callback func()) <-chan error {
 	req := &ping{
-		Version:    Version,
+		Version:    4,
 		From:       t.ourEndpoint,
 		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	}
 	packet, hash, err := encodePacket(t.priv, pingPacket, req)
 	if err != nil {
-		return err
+		errc := make(chan error, 1)
+		errc <- err
+		return errc
 	}
 	errc := t.pending(toid, pongPacket, func(p interface{}) bool {
-		return bytes.Equal(p.(*pong).ReplyTok, hash)
+		ok := bytes.Equal(p.(*pong).ReplyTok, hash)
+		if ok && callback != nil {
+			callback()
+		}
+		return ok
 	})
 	t.write(toaddr, req.name(), packet)
-	return <-errc
+	return errc
 }
 
 func (t *udp) waitping(from NodeID) error {
@@ -296,6 +306,12 @@ func (t *udp) waitping(from NodeID) error {
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
 func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+	// Ensure bond exists before attempting findnode.
+	if time.Since(t.db.lastPingReceived(toid)) > nodeDBNodeExpiration {
+		t.ping(toid, toaddr)
+		t.waitping(toid)
+	}
+
 	nodes := make([]*Node, 0, bucketSize)
 	nreceived := 0
 	errc := t.pending(toid, neighborsPacket, func(r interface{}) bool {
@@ -315,8 +331,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	err := <-errc
-	return nodes, err
+	return nodes, <-errc
 }
 
 // pending adds a reply callback to the pending reply queue.
@@ -587,10 +602,19 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 		ReplyTok:   mac,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
-	if !t.handleReply(fromID, pingPacket, req) {
-		// Note: we're ignoring the provided IP address right now
-		go t.bond(true, fromID, from, req.From.TCP)
+	t.handleReply(fromID, pingPacket, req)
+
+	n := NewNode(fromID, from.IP, uint16(from.Port), req.From.TCP)
+	if time.Since(t.db.lastPingReceived(fromID)) > nodeDBNodeExpiration {
+		// We haven't answered the senders ping since a long time.
+		// Verify their endpoint by pinging back. If they manage to reply
+		// their endpoint is legit and can be added to the table.
+		t.sendPing(fromID, from, func() { t.addThroughPing(n) })
+	} else {
+		// Add immediately because bond exists.
+		t.addThroughPing(n)
 	}
+	t.db.updateLastPingReceived(fromID, time.Now())
 	return nil
 }
 
@@ -603,6 +627,7 @@ func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	if !t.handleReply(fromID, pongPacket, req) {
 		return errUnsolicitedReply
 	}
+	t.db.updateLastPongReceived(fromID, time.Now())
 	return nil
 }
 
