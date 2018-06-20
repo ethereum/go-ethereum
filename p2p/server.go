@@ -141,6 +141,10 @@ type Config struct {
 
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
+
+	EnableNodePermission bool `toml:",omitempty"`
+
+	DataDir string `toml:",omitempty"`
 }
 
 // Server manages all peer connections.
@@ -820,6 +824,38 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return err
 	}
+
+	//START Permissioning
+	currentNode := srv.NodeInfo().ID
+	cnodeName := srv.NodeInfo().Name
+	log.Trace("Quorum permissioning",
+		"EnableNodePermission", srv.EnableNodePermission,
+		"DataDir", srv.DataDir,
+		"Current Node ID", currentNode,
+		"Node Name", cnodeName,
+		"Dialed Dest", dialDest,
+		"Connection ID", c.id,
+		"Connection String", c.id.String())
+
+
+		log.Trace("Node Permissioning is Enabled.")
+		node := c.id.String()
+		direction := "INCOMING"
+		if dialDest != nil {
+			node = dialDest.ID.String()
+			direction = "OUTGOING"
+			log.Trace("Node Permissioning", "Connection Direction", direction)
+		}
+
+		//log.Error("entry permission check.")
+		if !isNodePermissioned(node, currentNode, srv.DataDir, direction) {
+			//log.Error("permission check failed.")
+			return DiscPermissionFailed
+		}
+
+
+	//END Permissioning
+
 	clog := srv.log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// For dialed connections, check that the remote public key matches.
 	if dialDest != nil && c.id != dialDest.ID {
