@@ -275,9 +275,8 @@ func createNode(ctx *cli.Context) error {
 	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	config := &adapters.NodeConfig{
-		Name: ctx.String("name"),
-	}
+	config := adapters.RandomNodeConfig()
+	config.Name = ctx.String("name")
 	if key := ctx.String("key"); key != "" {
 		privKey, err := crypto.HexToECDSA(key)
 		if err != nil {
