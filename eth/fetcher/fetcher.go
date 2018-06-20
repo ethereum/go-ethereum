@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -743,8 +742,6 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 // Create tx for sign to smartcontract after import block into chain.
 func (f *Fetcher) CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, engine consensus.Engine) {
 	if chainConfig.Clique != nil {
-		c := engine.(*clique.Clique)
-
 		f.importedHook = func(block *types.Block) {
 			// Find active account.
 			account := accounts.Account{}
@@ -756,30 +753,20 @@ func (f *Fetcher) CreateTransactionSign(chainConfig *params.ChainConfig, pool *c
 				}
 			}
 
-			// Get block signer.
-			signer, err := c.RecoverSigner(block.Header())
+			// Create and send tx to smart contract for sign validate block.
+			blockHex := common.LeftPadBytes(block.Number().Bytes(), 32)
+			data := common.Hex2Bytes("2fb1b25f")
+			inputData := append(data, blockHex...)
+			nonce := pool.State().GetNonce(account.Address)
+			tx := types.NewTransaction(nonce, common.HexToAddress(common.BlockSigners), big.NewInt(0), 100000, big.NewInt(0), inputData)
+			txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 			if err != nil {
-				log.Error("TOMO - Fail to get signer", "error", err)
+				log.Error("TOMO - Fail to create tx sign", "error", err)
 				return
 			}
 
-			// Not send tx sign when this node is current block miner.
-			if signer != account.Address {
-				// Create and send tx to smartcontract for sign validate block.
-				blockHex := common.LeftPadBytes(block.Number().Bytes(), 32)
-				data := common.Hex2Bytes("2fb1b25f")
-				inputData := append(data, blockHex...)
-				nonce := pool.State().GetNonce(account.Address)
-				tx := types.NewTransaction(nonce, common.HexToAddress(common.BlockSigners), big.NewInt(0), 100000, big.NewInt(0), inputData)
-				txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
-				if err != nil {
-					log.Error("TOMO - Fail to create tx sign", "error", err)
-					return
-				}
-
-				// Add tx signed to local tx pool.
-				pool.AddLocal(txSigned)
-			}
+			// Add tx signed to local tx pool.
+			pool.AddLocal(txSigned)
 		}
 	}
 }

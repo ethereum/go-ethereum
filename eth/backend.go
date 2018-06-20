@@ -219,7 +219,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				startBlockNumber := number - (rCheckpoint * 2) + 1
 				endBlockNumber := startBlockNumber + rCheckpoint - 1
 				signers := make(map[common.Address]*rewardLog)
-				validators := make(map[common.Address]*rewardLog)
 				totalSigner := uint64(0)
 
 				for i := startBlockNumber; i <= endBlockNumber; i++ {
@@ -239,14 +238,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 
 					// Get validator in blockSigner smartcontract.
-					addrs, _ := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					if err != nil {
+						log.Error("TOMO - Fail to get signers from smartcontract.", "error", err)
+						return err
+					}
 					if len(addrs) > 0 {
 						for j := 0; j < len(addrs); j++ {
-							_, exist := validators[addrs[j]]
+							_, exist := signers[addrs[j]]
 							if exist {
-								validators[addrs[j]].Sign++
+								signers[addrs[j]].Sign++
 							} else {
-								validators[addrs[j]] = &rewardLog{1, 0}
+								signers[addrs[j]] = &rewardLog{1, 0}
 							}
 							totalSigner++
 						}
@@ -256,6 +259,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
 				// Add reward for signer.
 				calcReward := new(big.Int)
+				// Add reward for validators.
 				for signer, rLog := range signers {
 					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
 					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
@@ -263,26 +267,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 					state.AddBalance(signer, calcReward)
 				}
-				// Add reward for validators.
-				for validator, rLog := range validators {
-					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
-					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
-					rLog.Reward = float64(calcReward.Int64())
-
-					state.AddBalance(validator, calcReward)
-				}
 				jsonSigners, err := json.Marshal(signers)
 				if err != nil {
 					log.Error("TOMO - Fail to parse json signers", "error", err)
 					return err
 				}
-				jsonValidators, err := json.Marshal(validators)
-				if err != nil {
-					log.Error("TOMO - Fail to parse json validators", "error", err)
-					return err
-				}
 
-				log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward, "validators", string(jsonValidators))
+				log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 			}
 
 			return nil
