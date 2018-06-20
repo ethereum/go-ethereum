@@ -69,6 +69,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
+	DiscPermissionFailed
 	DiscSubprotocolError = 0x10
 )
 
