@@ -101,7 +101,6 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
-	wg           sync.WaitGroup
 
 	agents map[Agent]struct{}
 	recv   chan *Result
@@ -127,8 +126,7 @@ type worker struct {
 	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 
 	// atomic status counters
-	running int32
-	atWork  int32
+	atWork int32 // The number of in-flight consensus engine work.
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
@@ -175,60 +173,38 @@ func (self *worker) setExtra(extra []byte) {
 }
 
 func (self *worker) pending() (*types.Block, *state.StateDB) {
-	if atomic.LoadInt32(&self.running) == 0 {
-		// return a snapshot to avoid contention on currentMu mutex
-		self.snapshotMu.RLock()
-		defer self.snapshotMu.RUnlock()
-		return self.snapshotBlock, self.snapshotState.Copy()
-	}
-
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
-	return self.current.Block, self.current.state.Copy()
+	// return a snapshot to avoid contention on currentMu mutex
+	self.snapshotMu.RLock()
+	defer self.snapshotMu.RUnlock()
+	return self.snapshotBlock, self.snapshotState.Copy()
 }
 
 func (self *worker) pendingBlock() *types.Block {
-	if atomic.LoadInt32(&self.running) == 0 {
-		// return a snapshot to avoid contention on currentMu mutex
-		self.snapshotMu.RLock()
-		defer self.snapshotMu.RUnlock()
-		return self.snapshotBlock
-	}
-
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
-	return self.current.Block
+	// return a snapshot to avoid contention on currentMu mutex
+	self.snapshotMu.RLock()
+	defer self.snapshotMu.RUnlock()
+	return self.snapshotBlock
 }
 
 func (self *worker) start() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	atomic.StoreInt32(&self.running, 1)
-
-	// spin up agents
+	self.engine.Start()
 	for agent := range self.agents {
 		agent.Start()
 	}
 }
 
 func (self *worker) stop() {
-	self.wg.Wait()
-
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	if atomic.LoadInt32(&self.running) == 1 {
-		for agent := range self.agents {
-			agent.Stop()
-		}
-	}
-	atomic.StoreInt32(&self.running, 0)
-	atomic.StoreInt32(&self.atWork, 0)
-}
 
-// isRunning returns an indicator whether worker is currently running or not.
-func (self *worker) isRunning() bool {
-	return atomic.LoadInt32(&self.running) > 0
+	self.engine.Stop()
+	for agent := range self.agents {
+		agent.Stop()
+	}
+	atomic.StoreInt32(&self.atWork, 0)
 }
 
 func (self *worker) register(agent Agent) {
@@ -276,7 +252,7 @@ func (self *worker) update() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if atomic.LoadInt32(&self.running) == 0 {
+			if !self.engine.IsRunning() {
 				self.currentMu.Lock()
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
@@ -364,6 +340,11 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
+	// Never send task to consensus engine if the etherbase is not specified.
+	if self.engine.IsRunning() && work.header.Coinbase == (common.Address{}) {
+		log.Info("Please explicitly specifies the etherbase")
+		return
+	}
 	for agent := range self.agents {
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
@@ -547,10 +528,19 @@ func (self *worker) updateSnapshot() {
 	self.snapshotMu.Lock()
 	defer self.snapshotMu.Unlock()
 
+	var uncles []*types.Header
+	self.current.uncles.Each(func(item interface{}) bool {
+		if header, ok := item.(*types.Header); ok {
+			uncles = append(uncles, header)
+			return true
+		}
+		return false
+	})
+
 	self.snapshotBlock = types.NewBlock(
 		self.current.header,
 		self.current.txs,
-		nil,
+		uncles,
 		self.current.receipts,
 	)
 	self.snapshotState = self.current.state.Copy()

@@ -508,7 +508,6 @@ func NewFaker() *Ethash {
 		config: Config{
 			PowMode: ModeFake,
 		},
-		exitCh: make(chan chan error),
 	}
 }
 
@@ -521,7 +520,6 @@ func NewFakeFailer(fail uint64) *Ethash {
 			PowMode: ModeFake,
 		},
 		fakeFail: fail,
-		exitCh:   make(chan chan error),
 	}
 }
 
@@ -534,7 +532,6 @@ func NewFakeDelayer(delay time.Duration) *Ethash {
 			PowMode: ModeFake,
 		},
 		fakeDelay: delay,
-		exitCh:    make(chan chan error),
 	}
 }
 
@@ -545,30 +542,27 @@ func NewFullFaker() *Ethash {
 		config: Config{
 			PowMode: ModeFullFake,
 		},
-		exitCh: make(chan chan error),
 	}
 }
 
 // NewShared creates a full sized ethash PoW shared between all requesters running
 // in the same process.
 func NewShared() *Ethash {
-	return &Ethash{
-		shared: sharedEthash,
-		exitCh: make(chan chan error),
-	}
+	return &Ethash{shared: sharedEthash}
 }
 
 // Close closes the exit channel to notify all backend threads exiting.
 func (ethash *Ethash) Close() error {
 	var err error
 	ethash.closeOnce.Do(func() {
-		var errCh = make(chan error)
-		select {
-		case ethash.exitCh <- errCh:
-			err = <-errCh
-			close(ethash.exitCh)
-		default:
+		// Short circuit if the exit channel is not allocated.
+		if ethash.exitCh == nil {
+			return
 		}
+		errCh := make(chan error)
+		ethash.exitCh <- errCh
+		err = <-errCh
+		close(ethash.exitCh)
 	})
 	return err
 }
@@ -648,6 +642,10 @@ func (ethash *Ethash) SetThreads(threads int) {
 // Note the returned hashrate includes local hashrate, but also includes the total
 // hashrate of all remote miner.
 func (ethash *Ethash) Hashrate() float64 {
+	// Short circuit if we are run the ethash in normal/test mode.
+	if ethash.config.PowMode != ModeNormal && ethash.config.PowMode != ModeTest {
+		return ethash.hashrate.Rate1()
+	}
 	var resCh = make(chan uint64, 1)
 
 	select {

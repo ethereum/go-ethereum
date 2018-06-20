@@ -109,21 +109,11 @@ func (self *Miner) Start(coinbase common.Address) {
 		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	if !self.engine.IsRunning() {
-		self.engine.Start()
-	}
-	if !self.worker.isRunning() {
-		self.worker.start()
-	}
+	self.worker.start()
 }
 
 func (self *Miner) Stop() {
-	if self.engine.IsRunning() {
-		self.engine.Stop()
-	}
-	if self.worker.isRunning() {
-		self.worker.stop()
-	}
+	self.worker.stop()
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
@@ -139,11 +129,11 @@ func (self *Miner) Mining() bool {
 	return self.engine.IsRunning()
 }
 
-func (self *Miner) HashRate() (tot uint64) {
+func (self *Miner) HashRate() uint64 {
 	if pow, ok := self.engine.(consensus.PoW); ok {
-		tot += uint64(pow.Hashrate())
+		return uint64(pow.Hashrate())
 	}
-	return
+	return 0
 }
 
 func (self *Miner) SetExtra(extra []byte) error {

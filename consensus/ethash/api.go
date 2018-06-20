@@ -24,11 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-var errEthashStopped = errors.New("ethash stopped")
+var (
+	errEthashStopped   = errors.New("ethash stopped")
+	errAPINotSupported = errors.New("the current ethash running mode does not support this API")
+)
 
 // API exposes ethash related methods for the RPC interface.
 type API struct {
-	ethash *Ethash
+	ethash *Ethash // Make sure the mode of ethash is normal.
 }
 
 // GetWork returns a work package for external miner.
@@ -38,6 +41,10 @@ type API struct {
 //   result[1] - 32 bytes hex encoded seed hash used for DAG
 //   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 func (api *API) GetWork() ([3]string, error) {
+	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
+		return [3]string{}, errAPINotSupported
+	}
+
 	var (
 		workCh = make(chan [3]string, 1)
 		errCh  = make(chan error, 1)
@@ -66,6 +73,10 @@ func (api *API) GetWork() ([3]string, error) {
 // It returns an indication if the work was accepted.
 // Note either an invalid solution, a stale work a non-existent work will return false.
 func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) bool {
+	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
+		return false
+	}
+
 	var errCh = make(chan error, 1)
 
 	select {
@@ -90,6 +101,10 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 // It accepts the miner hash rate and an identifier which must be unique
 // between nodes.
 func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
+	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
+		return false
+	}
+
 	var doneCh = make(chan struct{}, 1)
 
 	select {

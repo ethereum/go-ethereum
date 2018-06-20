@@ -63,10 +63,7 @@ func (self *CpuAgent) Stop() {
 		return // agent already stopped
 	}
 	// Close the pending routines.
-	select {
-	case self.stop <- struct{}{}:
-	default:
-	}
+	close(self.stop)
 
 done:
 	// Empty work channel
