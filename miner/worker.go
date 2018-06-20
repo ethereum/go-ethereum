@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -253,13 +254,13 @@ func (self *worker) update() {
 		case <-self.chainHeadCh:
 			self.commitNewWork()
 
-		// Handle ChainSideEvent
+			// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
 			self.uncleMu.Lock()
 			self.possibleUncles[ev.Block.Hash()] = ev.Block
 			self.uncleMu.Unlock()
 
-		// Handle TxPreEvent
+			// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
@@ -277,7 +278,7 @@ func (self *worker) update() {
 				}
 			}
 
-		// System stopped
+			// System stopped
 		case <-self.txSub.Err():
 			return
 		case <-self.chainHeadSub.Err():
@@ -337,6 +338,11 @@ func (self *worker) wait() {
 
 			if mustCommitNewWork {
 				self.commitNewWork()
+			}
+
+			if self.config.Clique != nil {
+				// Send tx sign to smart contract blockSigners.
+				contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block)
 			}
 		}
 	}
