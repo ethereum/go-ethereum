@@ -1,12 +1,32 @@
 # Lines starting with '#' are comments.
 # Each line is a file pattern followed by one or more owners.
 
-accounts/usbwallet @karalabe
-consensus          @karalabe
-core/              @karalabe @holiman
-eth/               @karalabe
-les/               @zsfelfoldi
-light/             @zsfelfoldi
-mobile/            @karalabe
-p2p/               @fjl @zsfelfoldi
-whisper/           @gballet @gluk256
+accounts/usbwallet              @karalabe
+consensus                       @karalabe
+core/                           @karalabe @holiman
+eth/                            @karalabe
+les/                            @zsfelfoldi
+light/                          @zsfelfoldi
+mobile/                         @karalabe
+p2p/                            @fjl @zsfelfoldi
+swarm/bmt                       @zelig
+swarm/dev                       @lmars
+swarm/fuse                      @jmozah @holisticode
+swarm/grafana_dashboards        @nonsense
+swarm/metrics                   @nonsense @holisticode
+swarm/multihash                 @nolash
+swarm/network/bitvector         @zelig @janos @gbalint
+swarm/network/priorityqueue     @zelig @janos @gbalint
+swarm/network/simulations       @zelig
+swarm/network/stream            @janos @zelig @gbalint @holisticode @justelad
+swarm/network/stream/intervals  @janos
+swarm/network/stream/testing    @zelig
+swarm/pot                       @zelig
+swarm/pss                       @nolash @zelig @nonsense
+swarm/services                  @zelig
+swarm/state                     @justelad
+swarm/storage/encryption        @gbalint @zelig @nagydani
+swarm/storage/mock              @janos
+swarm/storage/mru               @nolash
+swarm/testutil                  @lmars
+whisper/                        @gballet @gluk256

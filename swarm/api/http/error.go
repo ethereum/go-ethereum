@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	l "github.com/ethereum/go-ethereum/swarm/log"
 )
 
 //templateMap holds a mapping of an HTTP error code to a template
@@ -44,7 +45,7 @@ var (
 )
 
 //parameters needed for formatting the correct HTML page
-type ErrorParams struct {
+type ResponseParams struct {
 	Msg       string
 	Code      int
 	Timestamp string
@@ -113,45 +114,49 @@ func ValidateCaseErrors(r *Request) string {
 //For example, if the user requests bzz:/<hash>/read and that manifest contains entries
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
-func ShowMultipleChoices(w http.ResponseWriter, r *Request, list api.ManifestList) {
+func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestList) {
 	msg := ""
 	if list.Entries == nil {
-		ShowError(w, r, "Could not resolve", http.StatusInternalServerError)
+		Respond(w, req, "Could not resolve", http.StatusInternalServerError)
 		return
 	}
 	//make links relative
 	//requestURI comes with the prefix of the ambiguous path, e.g. "read" for "readme.md" and "readinglist.txt"
 	//to get clickable links, need to remove the ambiguous path, i.e. "read"
-	idx := strings.LastIndex(r.RequestURI, "/")
+	idx := strings.LastIndex(req.RequestURI, "/")
 	if idx == -1 {
-		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		Respond(w, req, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	//remove ambiguous part
-	base := r.RequestURI[:idx+1]
+	base := req.RequestURI[:idx+1]
 	for _, e := range list.Entries {
 		//create clickable link for each entry
 		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
 	}
-	respond(w, &r.Request, &ErrorParams{
-		Code:      http.StatusMultipleChoices,
-		Details:   template.HTML(msg),
-		Timestamp: time.Now().Format(time.RFC1123),
-		template:  getTemplate(http.StatusMultipleChoices),
-	})
+	Respond(w, req, msg, http.StatusMultipleChoices)
 }
 
-//ShowError is used to show an HTML error page to a client.
+//Respond is used to show an HTML page to a client.
 //If there is an `Accept` header of `application/json`, JSON will be returned instead
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-func ShowError(w http.ResponseWriter, r *Request, msg string, code int) {
-	additionalMessage := ValidateCaseErrors(r)
-	if code == http.StatusInternalServerError {
-		log.Error(msg)
+func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
+	additionalMessage := ValidateCaseErrors(req)
+	switch code {
+	case http.StatusInternalServerError:
+		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.ruid, "code", code)
+	default:
+		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
 	}
-	respond(w, &r.Request, &ErrorParams{
+
+	if code >= 400 {
+		w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
+		w.Header().Del("ETag")
+	}
+
+	respond(w, &req.Request, &ResponseParams{
 		Code:      code,
 		Msg:       msg,
 		Details:   template.HTML(additionalMessage),
@@ -161,17 +166,17 @@ func ShowError(w http.ResponseWriter, r *Request, msg string, code int) {
 }
 
 //evaluate if client accepts html or json response
-func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
+func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
-		respondJson(w, params)
+		respondJSON(w, params)
 	} else {
-		respondHtml(w, params)
+		respondHTML(w, params)
 	}
 }
 
 //return a HTML page
-func respondHtml(w http.ResponseWriter, params *ErrorParams) {
+func respondHTML(w http.ResponseWriter, params *ResponseParams) {
 	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
@@ -180,7 +185,7 @@ func respondHtml(w http.ResponseWriter, params *ErrorParams) {
 }
 
 //return JSON
-func respondJson(w http.ResponseWriter, params *ErrorParams) {
+func respondJSON(w http.ResponseWriter, params *ResponseParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
@@ -190,7 +195,6 @@ func respondJson(w http.ResponseWriter, params *ErrorParams) {
 func getTemplate(code int) *template.Template {
 	if val, tmpl := templateMap[code]; tmpl {
 		return val
-	} else {
-		return templateMap[0]
 	}
+	return templateMap[0]
 }

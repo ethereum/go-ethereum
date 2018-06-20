@@ -17,33 +17,34 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func testApi(t *testing.T, f func(*Api)) {
+func testAPI(t *testing.T, f func(*API, bool)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}
-	os.RemoveAll(datadir)
 	defer os.RemoveAll(datadir)
-	dpa, err := storage.NewLocalDPA(datadir)
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
 	if err != nil {
 		return
 	}
-	api := NewApi(dpa, nil)
-	dpa.Start()
-	f(api)
-	dpa.Stop()
+	api := NewAPI(fileStore, nil, nil)
+	f(api, false)
+	f(api, true)
 }
 
 type testResponse struct {
@@ -82,10 +83,9 @@ func expResponse(content string, mimeType string, status int) *Response {
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
-// func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
-func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
-	key := storage.Key(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, err := api.Get(key, path)
+func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
+	addr := storage.Address(common.Hex2Bytes(bzzhash))
+	reader, mimeType, status, _, err := api.Get(addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,27 +106,28 @@ func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
 }
 
 func TestApiPut(t *testing.T) {
-	testApi(t, func(api *Api) {
+	testAPI(t, func(api *API, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		key, err := api.Put(content, exp.MimeType)
+		addr, wait, err := api.Put(content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		resp := testGet(t, api, key.String(), "")
+		wait()
+		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 	})
 }
 
 // testResolver implements the Resolver interface and either returns the given
 // hash if it is set, or returns a "name not found" error
-type testResolver struct {
+type testResolveValidator struct {
 	hash *common.Hash
 }
 
-func newTestResolver(addr string) *testResolver {
-	r := &testResolver{}
+func newTestResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
 	if addr != "" {
 		hash := common.HexToHash(addr)
 		r.hash = &hash
@@ -134,11 +135,18 @@ func newTestResolver(addr string) *testResolver {
 	return r
 }
 
-func (t *testResolver) Resolve(addr string) (common.Hash, error) {
+func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 	if t.hash == nil {
 		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
 	}
 	return *t.hash, nil
+}
+
+func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
+	return
+}
+func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
+	return
 }
 
 // TestAPIResolve tests resolving URIs which can either contain content hashes
@@ -147,8 +155,8 @@ func TestAPIResolve(t *testing.T) {
 	ensAddr := "swarm.eth"
 	hashAddr := "1111111111111111111111111111111111111111111111111111111111111111"
 	resolvedAddr := "2222222222222222222222222222222222222222222222222222222222222222"
-	doesResolve := newTestResolver(resolvedAddr)
-	doesntResolve := newTestResolver("")
+	doesResolve := newTestResolveValidator(resolvedAddr)
+	doesntResolve := newTestResolveValidator("")
 
 	type test struct {
 		desc      string
@@ -213,7 +221,7 @@ func TestAPIResolve(t *testing.T) {
 	}
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := &Api{dns: x.dns}
+			api := &API{dns: x.dns}
 			uri := &URI{Addr: x.addr, Scheme: "bzz"}
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
@@ -239,15 +247,15 @@ func TestAPIResolve(t *testing.T) {
 }
 
 func TestMultiResolver(t *testing.T) {
-	doesntResolve := newTestResolver("")
+	doesntResolve := newTestResolveValidator("")
 
 	ethAddr := "swarm.eth"
 	ethHash := "0x2222222222222222222222222222222222222222222222222222222222222222"
-	ethResolve := newTestResolver(ethHash)
+	ethResolve := newTestResolveValidator(ethHash)
 
 	testAddr := "swarm.test"
 	testHash := "0x1111111111111111111111111111111111111111111111111111111111111111"
-	testResolve := newTestResolver(testHash)
+	testResolve := newTestResolveValidator(testHash)
 
 	tests := []struct {
 		desc   string
