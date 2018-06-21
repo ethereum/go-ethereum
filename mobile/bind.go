@@ -75,6 +75,7 @@ type TransactOpts struct {
 
 func (opts *TransactOpts) GetFrom() *Address    { return &Address{opts.opts.From} }
 func (opts *TransactOpts) GetNonce() int64      { return opts.opts.Nonce.Int64() }
+func (opts *TransactOpts) GetChainId() *BigInt  { return &BigInt{opts.opts.ChainId} }
 func (opts *TransactOpts) GetValue() *BigInt    { return &BigInt{opts.opts.Value} }
 func (opts *TransactOpts) GetGasPrice() *BigInt { return &BigInt{opts.opts.GasPrice} }
 func (opts *TransactOpts) GetGasLimit() int64   { return int64(opts.opts.GasLimit) }
@@ -97,6 +98,7 @@ func (opts *TransactOpts) SetSigner(s Signer) {
 		return sig.tx, nil
 	}
 }
+func (opts *TransactOpts) SetChainId(chainId *BigInt)  { opts.opts.ChainId = chainId.bigint }
 func (opts *TransactOpts) SetValue(value *BigInt)      { opts.opts.Value = value.bigint }
 func (opts *TransactOpts) SetGasPrice(price *BigInt)   { opts.opts.GasPrice = price.bigint }
 func (opts *TransactOpts) SetGasLimit(limit int64)     { opts.opts.GasLimit = uint64(limit) }
