@@ -227,3 +227,7 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+func (b *EthAPIBackend) TxStatusByHash(ctx context.Context, hash common.Hash) (core.TxStatus, error) {
+	return core.TxStatusUnknown, errors.New("Not Support")
+}

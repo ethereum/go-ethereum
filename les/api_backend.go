@@ -197,3 +197,7 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+func (b *LesApiBackend) TxStatusByHash(ctx context.Context, hash common.Hash) (core.TxStatus, error) {
+	return light.GetTxStatus(ctx, b.eth.odr, hash)
+}
