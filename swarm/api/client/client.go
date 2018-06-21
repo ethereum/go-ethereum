@@ -30,6 +30,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -52,12 +53,17 @@ type Client struct {
 	Gateway string
 }
 
-// UploadRaw uploads raw data to swarm and returns the resulting hash
-func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
+// UploadRaw uploads raw data to swarm and returns the resulting hash. If toEncrypt is true it
+// uploads encrypted data
+func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, error) {
 	if size <= 0 {
 		return "", errors.New("data size must be greater than zero")
 	}
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/", r)
+	addr := ""
+	if toEncrypt {
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/"+addr, r)
 	if err != nil {
 		return "", err
 	}
@@ -77,18 +83,20 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 	return string(data), nil
 }
 
-// DownloadRaw downloads raw data from swarm
-func (c *Client) DownloadRaw(hash string) (io.ReadCloser, error) {
+// DownloadRaw downloads raw data from swarm and it returns a ReadCloser and a bool whether the
+// content was encrypted
+func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 	uri := c.Gateway + "/bzz-raw:/" + hash
 	res, err := http.DefaultClient.Get(uri)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
-		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
+		return nil, false, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	return res.Body, nil
+	isEncrypted := (res.Header.Get("X-Decrypted") == "true")
+	return res.Body, isEncrypted, nil
 }
 
 // File represents a file in a swarm manifest and is used for uploading and
@@ -125,11 +133,11 @@ func Open(path string) (*File, error) {
 // (if the manifest argument is non-empty) or creates a new manifest containing
 // the file, returning the resulting manifest hash (the file will then be
 // available at bzz:/<hash>/<path>)
-func (c *Client) Upload(file *File, manifest string) (string, error) {
+func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, error) {
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file})
+	return c.TarUpload(manifest, &FileUploader{file}, toEncrypt)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -159,14 +167,14 @@ func (c *Client) Download(hash, path string) (*File, error) {
 // directory will then be available at bzz:/<hash>/path/to/file), with
 // the file specified in defaultPath being uploaded to the root of the manifest
 // (i.e. bzz:/<hash>/)
-func (c *Client) UploadDirectory(dir, defaultPath, manifest string) (string, error) {
+func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bool) (string, error) {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", err
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath})
+	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath}, toEncrypt)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
@@ -228,27 +236,109 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	}
 }
 
+// DownloadFile downloads a single file into the destination directory
+// if the manifest entry does not specify a file name - it will fallback
+// to the hash of the file as a filename
+func (c *Client) DownloadFile(hash, path, dest string) error {
+	hasDestinationFilename := false
+	if stat, err := os.Stat(dest); err == nil {
+		hasDestinationFilename = !stat.IsDir()
+	} else {
+		if os.IsNotExist(err) {
+			// does not exist - should be created
+			hasDestinationFilename = true
+		} else {
+			return fmt.Errorf("could not stat path: %v", err)
+		}
+	}
+
+	manifestList, err := c.List(hash, path)
+	if err != nil {
+		return fmt.Errorf("could not list manifest: %v", err)
+	}
+
+	switch len(manifestList.Entries) {
+	case 0:
+		return fmt.Errorf("could not find path requested at manifest address. make sure the path you've specified is correct")
+	case 1:
+		//continue
+	default:
+		return fmt.Errorf("got too many matches for this path")
+	}
+
+	uri := c.Gateway + "/bzz:/" + hash + "/" + path
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
+	}
+	filename := ""
+	if hasDestinationFilename {
+		filename = dest
+	} else {
+		// try to assert
+		re := regexp.MustCompile("[^/]+$") //everything after last slash
+
+		if results := re.FindAllString(path, -1); len(results) > 0 {
+			filename = results[len(results)-1]
+		} else {
+			if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
+				filename = entry.Path
+			} else {
+				// assume hash as name if there's nothing from the command line
+				filename = hash
+			}
+		}
+		filename = filepath.Join(dest, filename)
+	}
+	filePath, err := filepath.Abs(filename)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	dst, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, res.Body)
+	return err
+}
+
 // UploadManifest uploads the given manifest to swarm
-func (c *Client) UploadManifest(m *api.Manifest) (string, error) {
+func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}
-	return c.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 }
 
 // DownloadManifest downloads a swarm manifest
-func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
-	res, err := c.DownloadRaw(hash)
+func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
+	res, isEncrypted, err := c.DownloadRaw(hash)
 	if err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
 	defer res.Close()
 	var manifest api.Manifest
 	if err := json.NewDecoder(res).Decode(&manifest); err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
-	return &manifest, nil
+	return &manifest, isEncrypted, nil
 }
 
 // List list files in a swarm manifest which have the given prefix, grouping
@@ -350,10 +440,19 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+hash, reqR)
+	addr := hash
+
+	// If there is a hash already (a manifest), then that manifest will determine if the upload has
+	// to be encrypted or not. If there is no manifest then the toEncrypt parameter decides if
+	// there is encryption or not.
+	if hash == "" && toEncrypt {
+		// This is the built-in address for the encrypted upload endpoint
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+addr, reqR)
 	if err != nil {
 		return "", err
 	}
