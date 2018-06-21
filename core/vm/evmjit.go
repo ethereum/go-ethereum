@@ -18,8 +18,9 @@ package vm
 
 /*
 
-#include <libaleth-interpreter/interpreter.h>
+#include <evmc/evmc.h>
 #include <stdlib.h>
+#include <dlfcn.h>
 
 
 static const struct evmc_context_fn_table* get_context_fn_table()
@@ -80,8 +81,16 @@ static void add_result_releaser(struct evmc_result* result)
 	result->release = free_result_output;
 }
 
-#cgo CFLAGS:  -I/home/chfast/Projects/ethereum/cpp-ethereum -I/home/chfast/Projects/ethereum/cpp-ethereum/evmc/include
-#cgo LDFLAGS: -laleth-interpreter -lstdc++ -lm -ldl -L/home/chfast/Projects/ethereum/cpp-ethereum/build/interpreter/libaleth-interpreter
+typedef struct evmc_instance* (*evmc_create_fn)();
+
+static struct evmc_instance* create(void* create_symbol)
+{
+	evmc_create_fn fn = (evmc_create_fn)create_symbol;
+	return fn();
+}
+
+#cgo CFLAGS:  -I/home/chfast/Projects/ethereum/cpp-ethereum/evmc/include
+#cgo LDFLAGS: -ldl
 */
 import "C"
 
@@ -96,6 +105,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type EVMJIT struct {
@@ -116,9 +126,47 @@ type ContextWrapper struct {
 	index int
 }
 
+var loadMu sync.Mutex
+var createSymbol unsafe.Pointer
+var loaded = false
+
+func loadVM(path string) {
+	if len(path) == 0 {
+		panic("EVMC path not provided, use --vm flag")
+	}
+
+	loadMu.Lock()
+	defer loadMu.Unlock()
+
+	if loaded {
+		return
+	}
+
+	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+	handle := C.dlopen(cpath, C.RTLD_LAZY)
+	if handle == nil {
+		panic(fmt.Sprintf("cannot open %s", path))
+	}
+
+	centrypoint := C.CString("evmc_create")
+	defer C.free(unsafe.Pointer((centrypoint)))
+
+	C.dlerror()
+	createSymbol = C.dlsym(handle, centrypoint)
+	err := C.dlerror()
+	if err != nil {
+		panic(fmt.Sprintf("cannot find evmc_create in %s", path))
+	}
+	loaded = true
+	log.Info("EVMC VM loaded", "path", path)
+}
+
 func NewJit(env *EVM, cfg Config) *EVMJIT {
-	// FIXME: Destroy the jit later.
-	return &EVMJIT{C.evmc_create_interpreter(), env, nil, false, nil}
+	loadVM(cfg.EVMCPath)
+	// FIXME: Destroy the instance later.
+	// FIXME: Create the instance once.
+	return &EVMJIT{C.create(createSymbol), env, nil, false, nil}
 }
 
 
