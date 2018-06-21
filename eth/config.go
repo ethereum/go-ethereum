@@ -112,6 +112,9 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
+	// Path to EVMC VM module
+	EVMCPath string
+
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
 }

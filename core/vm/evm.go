@@ -101,7 +101,7 @@ type EVM struct {
 	vmConfig Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
-	interpreter *Interpreter
+	interpreter *EVMJIT
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
@@ -122,7 +122,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		chainRules:  chainConfig.Rules(ctx.BlockNumber),
 	}
 
-	evm.interpreter = NewInterpreter(evm, vmConfig)
+	evm.interpreter = NewJit(evm, vmConfig)
 	return evm
 }
 
@@ -400,4 +400,4 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter
-func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
+func (evm *EVM) Interpreter() *EVMJIT { return evm.interpreter }
