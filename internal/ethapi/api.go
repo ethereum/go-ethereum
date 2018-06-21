@@ -1090,6 +1090,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	return fields, nil
 }
 
+// GetTransactionStatus returns current status of the transaction given hash
+func (s *PublicTransactionPoolAPI) GetTransactionStatus(ctx context.Context, hash common.Hash) (core.TxStatus, error) {
+	return s.b.TxStatusByHash(ctx, hash)
+}
+
 // sign is a helper function that signs a transaction with the private key of the given address.
 func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 	// Look up the wallet containing the requested signer
