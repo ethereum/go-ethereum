@@ -1313,8 +1313,8 @@ func TestTrieForkGC(t *testing.T) {
 	}
 	// Dereference all the recent tries and ensure no past trie is left in
 	for i := 0; i < triesInMemory; i++ {
-		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root(), common.Hash{})
-		chain.stateCache.TrieDB().Dereference(forks[len(blocks)-1-i].Root(), common.Hash{})
+		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
+		chain.stateCache.TrieDB().Dereference(forks[len(blocks)-1-i].Root())
 	}
 	if len(chain.stateCache.TrieDB().Nodes()) > 0 {
 		t.Fatalf("stale tries still alive after garbase collection")
