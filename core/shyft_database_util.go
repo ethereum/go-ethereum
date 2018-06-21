@@ -13,7 +13,14 @@ import (
 
 _ "github.com/lib/pq"
 Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/shyfttracerinterface"
 )
+
+var IShyftTracer shyfttracerinterface.IShyftTracer
+
+func SetIShyftTracer(st shyfttracerinterface.IShyftTracer) {
+	IShyftTracer = st
+}
 
 //SBlock type
 type SBlock struct {
@@ -165,7 +172,7 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		Data:      tx.Data(),
 	}
 	txHash := txData.TxHash.Hex()
-	MyTraceTransaction(txHash) //.chaindb_global
+	IShyftTracer.MyTraceTransaction(txHash) //.chaindb_global
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()

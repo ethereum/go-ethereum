@@ -231,6 +231,10 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if ipAddr := net.ParseIP(host); ipAddr != nil {
 		// It's an IP address, we can serve that
+		fmt.Println("THE write is ")
+		fmt.Println(w)
+		fmt.Println("The read is ")
+		fmt.Println(r)
 		h.next.ServeHTTP(w, r)
 		return
 

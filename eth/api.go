@@ -330,7 +330,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 
 // PrivateDebugAPI is the collection of Ethereum full node APIs exposed over
 // the private debugging endpoint.
-type 	PrivateDebugAPI struct {
+type PrivateDebugAPI struct {
 	config *params.ChainConfig
 	eth    *Ethereum
 }

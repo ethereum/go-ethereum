@@ -51,7 +51,7 @@ import (
 
 var BlockchainObject *core.BlockChain
 
-var DebugApi *PrivateDebugAPI
+var DebugApi PrivateDebugAPI
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
@@ -105,6 +105,9 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+
+	shyft_tracer := new(ShyftTracer)
+	core.SetIShyftTracer(shyft_tracer)
 
 	fmt.Println("++++++++++")
 	_, file, no, ok := runtime.Caller(1)
