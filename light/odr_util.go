@@ -230,3 +230,42 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 		return result, nil
 	}
 }
+
+//GetTxStatus requests full nodes to retrieve the status of transaction corresponding to the hash.
+//Message of the LES/2 protocol version (LPV2)
+func GetTxStatus(ctx context.Context, odr OdrBackend, txHash common.Hash) (core.TxStatus, error) {
+
+  // Return "Included" status if query success from database
+  bHash, bIndex, _ := rawdb.ReadTxLookupEntry(odr.Database(), txHash)
+  if bHash != (common.Hash{}) {
+		return core.TxStatusIncluded, nil
+  }
+
+  // Send on-demand request message
+	r := &TxStatusRequest{TxHash: txHash}
+	if err := odr.Retrieve(ctx, r); err != nil {
+		return core.TxStatusUnknown, err
+	}
+
+  if r.TxStatus != core.TxStatusIncluded {
+		return r.TxStatus, nil
+	}
+
+	// Another on-demand request message for retrieve block body, verify block body internally
+	bHash, bIndex, _ = r.TxEntry.BlockHash, r.TxEntry.BlockIndex, r.TxEntry.Index
+  bBody, err := GetBody(ctx, odr, bHash, bIndex)
+	if err != nil {
+		return r.TxStatus, err
+	}
+
+  // Try to find matched transaction by given hash, verifying transaction by given hash whether exist
+	for _, tx := range bBody.Transactions {
+		if tx.Hash() == r.TxHash {
+				// Write into database if hash matched, link given hash to verified block hash and index
+				r.StoreResult(odr.Database())
+				break
+		}
+	}
+
+	return r.TxStatus, nil
+}
