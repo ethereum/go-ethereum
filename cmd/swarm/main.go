@@ -155,7 +155,7 @@ var (
 	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
-		Usage: "force mime type on upload",
+		Usage: "Manually specify MIME type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
 		Name:  "encrypt",
