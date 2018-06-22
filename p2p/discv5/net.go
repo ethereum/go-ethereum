@@ -46,8 +46,6 @@ const (
 	lowPort               = 1024
 )
 
-const testTopic = "foo"
-
 const (
 	printTestImgLogs = false
 )
@@ -577,16 +575,6 @@ loop:
 
 		case <-statsDump.C:
 			log.Trace("<-statsDump.C")
-			/*r, ok := net.ticketStore.radius[testTopic]
-			if !ok {
-				fmt.Printf("(%x) no radius @ %v\n", net.tab.self.ID[:8], time.Now())
-			} else {
-				topics := len(net.ticketStore.tickets)
-				tickets := len(net.ticketStore.nodes)
-				rad := r.radius / (maxRadius/10000+1)
-				fmt.Printf("(%x) topics:%d radius:%d tickets:%d @ %v\n", net.tab.self.ID[:8], topics, rad, tickets, time.Now())
-			}*/
-
 			tm := mclock.Now()
 			for topic, r := range net.ticketStore.radius {
 				if printTestImgLogs {
