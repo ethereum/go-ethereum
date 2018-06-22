@@ -59,12 +59,12 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
 	}
 
 	cleanup := func() {
-		if err != nil {
+		if db != nil {
 			db.Close()
 		}
 		err = os.RemoveAll(dir)
 		if err != nil {
-			panic("db cleanup failed")
+			panic(fmt.Sprintf("db cleanup failed: %v", err))
 		}
 	}
 

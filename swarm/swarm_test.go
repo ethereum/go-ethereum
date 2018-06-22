@@ -17,10 +17,12 @@
 package swarm
 
 import (
+	"encoding/hex"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +43,13 @@ func TestNewSwarm(t *testing.T) {
 
 	// a simple rpc endpoint for testing dialing
 	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+
+	// windows namedpipes are not on filesystem but on NPFS
+	if runtime.GOOS == "windows" {
+		b := make([]byte, 8)
+		rand.Read(b)
+		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
+	}
 
 	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
 	if err != nil {
