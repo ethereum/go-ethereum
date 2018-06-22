@@ -52,10 +52,26 @@ type SecureTrie struct {
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
 func NewSecure(root common.Hash, db *Database, cachelimit uint16) (*SecureTrie, error) {
+	return NewSecureWithOwner(common.Hash{}, root, db, cachelimit)
+}
+
+// NewSecureWithOwner creates a trie with an existing root node from a backing
+// database with an assigned owner for storage proximity and optional intermediate
+// in-memory node pool.
+//
+// If root is the zero hash or the sha3 hash of an empty string, the
+// trie is initially empty. Otherwise, New will panic if db is nil
+// and returns MissingNodeError if the root node cannot be found.
+//
+// Accessing the trie loads nodes from the database or node pool on demand.
+// Loaded nodes are kept around until their 'cache generation' expires.
+// A new cache generation is created by each call to Commit.
+// cachelimit sets the number of past cache generations to keep.
+func NewSecureWithOwner(owner common.Hash, root common.Hash, db *Database, cachelimit uint16) (*SecureTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
 	}
-	trie, err := New(root, db)
+	trie, err := NewWithOwner(owner, root, db)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +199,7 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
-	h := newHasher(0, 0, nil)
+	h := newHasher(t.trie.owner, 0, 0, nil)
 	h.sha.Reset()
 	h.sha.Write(key)
 	buf := h.sha.Sum(t.hashKeyBuf[:0])
