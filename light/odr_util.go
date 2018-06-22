@@ -262,7 +262,7 @@ func GetTxStatus(ctx context.Context, odr OdrBackend, txHash common.Hash) (core.
 	for _, tx := range bBody.Transactions {
 		if tx.Hash() == r.TxHash {
 				// Write into database if hash matched, link given hash to verified block hash and index
-				r.StoreResult(odr.Database())
+				rawdb.WriteTxLookupEntry(odr.Database(), r.TxEntry, r.TxHash)
 				break
 		}
 	}
