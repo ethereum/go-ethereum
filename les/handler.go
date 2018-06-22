@@ -1109,6 +1109,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
+                deliverMsg = &Msg{
+			MsgType: MsgTxStatus,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Status,
+		}
+
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
