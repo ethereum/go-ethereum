@@ -580,10 +580,7 @@ func (r *TxStatusRequest) CanSend(peer *peer) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	if peer.version < lpv2 {
-		return false
-	}
-	return true
+  return peer.version > lpv1
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
