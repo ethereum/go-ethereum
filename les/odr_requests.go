@@ -68,6 +68,8 @@ func LesRequest(req light.OdrRequest) LesOdrRequest {
 		return (*ChtRequest)(r)
 	case *light.BloomRequest:
 		return (*BloomRequest)(r)
+	case *light.TxStatusRequest:
+		return (*TxStatusRequest)(r)
 	default:
 		return nil
 	}
@@ -563,4 +565,61 @@ func (db *readTraceDB) Get(k []byte) ([]byte, error) {
 func (db *readTraceDB) Has(key []byte) (bool, error) {
 	_, err := db.Get(key)
 	return err == nil, nil
+}
+
+type TxStatusRequest light.TxStatusRequest
+
+// GetCost returns the cost of the given ODR request according to the serving
+// peer's cost table (implementation of LesOdrRequest)
+func (r *TxStatusRequest) GetCost(peer *peer) uint64 {
+	return peer.GetRequestCost(GetTxStatusMsg, 1)
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (r *TxStatusRequest) CanSend(peer *peer) bool {
+	peer.lock.RLock()
+	defer peer.lock.RUnlock()
+
+	if peer.version < lpv2 {
+		return false
+	}
+	return true
+}
+
+// Request sends an ODR request to the LES network (implementation of LesOdrRequest)
+func (r *TxStatusRequest) Request(reqID uint64, peer *peer) error {
+	peer.Log().Debug("Requesting transaction status corresponding block", "TxHash", r.TxHash)
+	return peer.RequestTxStatus(reqID, r.GetCost(peer), []common.Hash{r.TxHash})
+}
+
+// Valid processes an ODR request reply message from the LES network
+// returns true and stores results in memory if the message was a valid reply
+// to the request (implementation of LesOdrRequest)
+func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
+	log.Debug("Validating transaction status corresponding block", "TxHash", r.TxHash)
+
+	// Ensure we have a correct message with a single block receipt
+	if msg.MsgType != MsgTxStatus {
+		return errInvalidMessageType
+	}
+
+	if len(msg.Obj.([]txStatus)) != 1 {
+		return errInvalidEntryCount
+	}
+
+	//We retrieve transaction status, block hash and block index from a full node by a given transaction hash
+	//These information retrieve from full node is lacking of relevant data to verify
+	//My current solution is (Code at odr_util.go):
+  //Only start verification after it's been "included", to proof a transaction is valid:
+  //Retrieve BlockHash/BlockIndex -> Retrieve and verify BlockBody -> Verify given transaction hash whether included
+
+  //Need support verify through pending transactions
+  //Share your ideas!
+
+  status := msg.Obj.([]txStatus)[0]
+
+	r.TxStatus = status.Status
+	r.TxEntry = status.Lookup
+
+	return nil
 }
