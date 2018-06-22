@@ -17,8 +17,8 @@
 package eth
 
 import (
-        "errors"
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"

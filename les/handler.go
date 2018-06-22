@@ -1109,7 +1109,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
-                deliverMsg = &Msg{
+		deliverMsg = &Msg{
 			MsgType: MsgTxStatus,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Status,

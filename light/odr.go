@@ -174,8 +174,8 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 type TxStatusRequest struct {
 	OdrRequest
 	TxHash   common.Hash
-        TxStatus core.TxStatus
-	TxEntry *rawdb.TxLookupEntry
+	TxStatus core.TxStatus
+	TxEntry  *rawdb.TxLookupEntry
 }
 
 func (req *TxStatusRequest) StoreResult(db ethdb.Database) {

@@ -66,7 +66,7 @@ type Backend interface {
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
-        TxStatusByHash(ctx context.Context, hash common.Hash) (core.TxStatus, error)
+	TxStatusByHash(ctx context.Context, hash common.Hash) (core.TxStatus, error)
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block

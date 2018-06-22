@@ -610,13 +610,13 @@ func (r *TxStatusRequest) Validate(db ethdb.Database, msg *Msg) error {
 	//We retrieve transaction status, block hash and block index from a full node by a given transaction hash
 	//These information retrieve from full node is lacking of relevant data to verify
 	//My current solution is (Code at odr_util.go):
-  //Only start verification after it's been "included", to proof a transaction is valid:
-  //Retrieve BlockHash/BlockIndex -> Retrieve and verify BlockBody -> Verify given transaction hash whether included
+	//Only start verification after it's been "included", to proof a transaction is valid:
+	//Retrieve BlockHash/BlockIndex -> Retrieve and verify BlockBody -> Verify given transaction hash whether included
 
-  //Need support verify through pending transactions
-  //Share your ideas!
+	//Need support verify through pending transactions
+	//Share your ideas!
 
-  status := msg.Obj.([]txStatus)[0]
+	status := msg.Obj.([]txStatus)[0]
 
 	r.TxStatus = status.Status
 	r.TxEntry = status.Lookup

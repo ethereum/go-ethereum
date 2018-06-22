@@ -58,13 +58,13 @@ func WriteTxLookupEntries(db DatabaseWriter, block *types.Block) {
 }
 
 func WriteTxLookupEntry(db DatabaseWriter, entry *TxLookupEntry, txHash common.Hash) {
-		data, err := rlp.EncodeToBytes(entry)
-		if err != nil {
-			log.Crit("Failed to encode transaction lookup entry", "err", err)
-		}
-		if err := db.Put(txLookupKey(txHash), data); err != nil {
-			log.Crit("Failed to store transaction lookup entry", "err", err)
-		}
+	data, err := rlp.EncodeToBytes(entry)
+	if err != nil {
+		log.Crit("Failed to encode transaction lookup entry", "err", err)
+	}
+	if err := db.Put(txLookupKey(txHash), data); err != nil {
+		log.Crit("Failed to store transaction lookup entry", "err", err)
+	}
 }
 
 // DeleteTxLookupEntry removes all transaction data associated with a hash.
