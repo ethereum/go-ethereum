@@ -57,7 +57,7 @@ func CacheUnloads() int64 {
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
 // node. It's used by state sync and commit to allow handling external references
 // between account and storage tries.
-type LeafCallback func(leaf []byte, parent common.Hash) error
+type LeafCallback func(owner common.Hash, leaf []byte, parent common.Hash) error
 
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
@@ -65,8 +65,9 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db   *Database
-	root node
+	db    *Database
+	root  node
+	owner common.Hash
 
 	// Cache generation values.
 	// cachegen increases by one with each commit operation.
@@ -93,11 +94,23 @@ func (t *Trie) newFlag() nodeFlag {
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(root common.Hash, db *Database) (*Trie, error) {
+	return NewWithOwner(common.Hash{}, root, db)
+}
+
+// NewWithOwner creates a trie with an existing root node from db and an assigned
+// owner for storage proximity.
+//
+// If root is the zero hash or the sha3 hash of an empty string, the
+// trie is initially empty and does not require a database. Otherwise,
+// New will panic if db is nil and returns a MissingNodeError if root does
+// not exist in the database. Accessing the trie loads nodes from db on demand.
+func NewWithOwner(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 	if db == nil {
 		panic("trie.New called without a database")
 	}
 	trie := &Trie{
-		db: db,
+		db:    db,
+		owner: owner,
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
@@ -431,9 +444,10 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	cacheMissCounter.Inc(1)
 
 	hash := common.BytesToHash(n)
-	if node := t.db.node(hash, t.cachegen); node != nil {
+	if node := t.db.node(t.owner, hash, t.cachegen); node != nil {
 		return node, nil
 	}
+	log.Warn("Missing trie node", "owner", t.owner.Hex(), "hash", hash.Hex(), "path", fmt.Sprintf("%x", prefix))
 	return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 }
 
@@ -468,7 +482,7 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	h := newHasher(t.cachegen, t.cachelimit, onleaf)
+	h := newHasher(t.owner, t.cachegen, t.cachelimit, onleaf)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	return h.hash(nil, t.root, db, true)
 }

@@ -17,10 +17,12 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -84,7 +86,7 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            trie.NewDatabaseWithCache(db, cache),
+		db:            trie.NewDatabaseWithCache(db, cache, true),
 		codeSizeCache: csc,
 	}
 }
@@ -127,7 +129,7 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	return trie.NewSecureWithOwner(addrHash, root, db.db, 0)
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -144,11 +146,11 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, err := db.db.Node(codeHash)
-	if err == nil {
+	if code := rawdb.ReadCode(db.db.DiskDB().(ethdb.Database), codeHash); code != nil {
 		db.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
 	}
-	return code, err
+	return nil, errors.New("not found")
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.

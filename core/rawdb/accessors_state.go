@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,29 +14,30 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package state
+package rawdb
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-// NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Reader) *trie.Sync {
-	var syncer *trie.Sync
-	callback := func(owner common.Hash, leaf []byte, parent common.Hash) error {
-		var obj Account
-		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
-			return err
-		}
-		syncer.AddSubTrie(obj.Root, 64, parent, nil)
-		syncer.AddRawEntry(common.BytesToHash(obj.CodeHash), 64, parent)
-		return nil
+// ReadCode retrieves the bytecode associated with a given hash.
+func ReadCode(db ethdb.Reader, hash common.Hash) []byte {
+	code, _ := db.Get(codeKey(hash))
+	return code
+}
+
+// WriteCode stores the bytecode associated with a given hash.
+func WriteCode(db ethdb.Writer, hash common.Hash, code []byte) {
+	if err := db.Put(codeKey(hash), code); err != nil {
+		log.Crit("Failed to store bytecode", "err", err)
 	}
-	syncer = trie.NewSync(root, database, callback)
-	return syncer
+}
+
+// DeleteCode removes the bytecode associated with a given hash.
+func DeleteCode(db ethdb.Deleter, hash common.Hash) {
+	if err := db.Delete(codeKey(hash)); err != nil {
+		log.Crit("Failed to delete bytecode", "err", err)
+	}
 }

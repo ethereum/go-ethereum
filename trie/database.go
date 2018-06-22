@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/allegro/bigcache"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -52,26 +55,71 @@ var (
 // secureKeyPrefix is the database key prefix used to store trie node preimages.
 var secureKeyPrefix = []byte("secure-key-")
 
-// secureKeyLength is the length of the above prefix + 32byte hash.
-const secureKeyLength = 11 + 32
+// metaRoot is the identifier of the global memcache root that anchors the block
+// accounts tries for garbage collection.
+const metaRoot = ""
+
+// DatabaseReader wraps the Get and Has method of a backing store for the trie.
+type DatabaseReader interface {
+	// Get retrieves the value associated with key from the database.
+	Get(key []byte) (value []byte, err error)
+
+	// Has retrieves whether a key is present in the database.
+	Has(key []byte) (bool, error)
+}
+
+// makeNodeKey returns the database key for a trie node.
+func makeNodeKey(owner common.Hash, hash common.Hash) string {
+	if hash == (common.Hash{}) {
+		return metaRoot
+	}
+	if owner == (common.Hash{}) {
+		return string(hash[:])
+	}
+	return string(append(hash[:], owner[:]...))
+}
+
+// splitNodeKey returns the composing hashes of a trie node key.
+func splitNodeKey(key string) (common.Hash, common.Hash) {
+	switch len(key) {
+	case 0:
+		return common.Hash{}, common.Hash{}
+
+	case common.HashLength:
+		return common.Hash{}, common.BytesToHash([]byte(key))
+
+	case 2 * common.HashLength:
+		return common.BytesToHash([]byte(key[common.HashLength:])), common.BytesToHash([]byte(key[:common.HashLength]))
+
+	default:
+		panic(fmt.Sprintf("invalid node key: %s", key))
+	}
+}
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb ethdb.KeyValueStore // Persistent storage for matured trie nodes
+	diskdb  ethdb.KeyValueStore      // Persistent storage for matured trie nodes
+	noprune map[common.Hash]struct{} // Root hashes of the tries that aren't prunable
 
-	cleans  *bigcache.BigCache          // GC friendly memory cache of clean node RLPs
-	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty nodes
-	oldest  common.Hash                 // Oldest tracked node, flush-list head
-	newest  common.Hash                 // Newest tracked node, flush-list tail
+	pruner  *pruner // Background pruner to remove unreferenced trie nodes
+	pruning uint32  // Flag whether the pruner is running (sanity checks)
+
+	cleans  *bigcache.BigCache     // GC friendly memory cache of clean node RLPs
+	dirties map[string]*cachedNode // Data and references relationships of dirty nodes
+	oldest  string                 // Oldest tracked node, flush-list head
+	newest  string                 // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
-	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
 	gcsize  common.StorageSize // Data storage garbage collected since last commit
+
+	prunetime  time.Duration      // Time spent on disk pruning since last commit
+	prunenodes uint64             // Nodes pruned from disk since last commit
+	prunesize  common.StorageSize // Data storage pruned from disk since last commit
 
 	flushtime  time.Duration      // Time spent on data flushing since last commit
 	flushnodes uint64             // Nodes flushed since last commit
@@ -99,7 +147,6 @@ type rawFullNode [17]node
 
 func (n rawFullNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
 func (n rawFullNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawFullNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
 
 func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	var nodes [17]node
@@ -114,6 +161,20 @@ func (n rawFullNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, nodes)
 }
 
+func (n rawFullNode) String() string { return n.fstring("") }
+
+func (n rawFullNode) fstring(ind string) string {
+	resp := fmt.Sprintf("[\n%s  ", ind)
+	for i, node := range n {
+		if node == nil {
+			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+		} else {
+			resp += fmt.Sprintf("%s: %v", indices[i], node.fstring(ind+"  "))
+		}
+	}
+	return resp + fmt.Sprintf("\n%s] ", ind)
+}
+
 // rawShortNode represents only the useful data content of a short node, with the
 // caches and flags stripped out to minimize its data storage. This type honors
 // the same RLP encoding as the original parent.
@@ -122,9 +183,20 @@ type rawShortNode struct {
 	Val node
 }
 
-func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n *rawShortNode) canUnload(uint16, uint16) bool {
+	panic("this should never end up in a live trie")
+}
+func (n *rawShortNode) cache() (hashNode, bool) { panic("this should never end up in a live trie") }
+
+func (n *rawShortNode) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &shortNode{Key: hexToCompact(n.Key), Val: n.Val})
+}
+
+func (n *rawShortNode) String() string { return n.fstring("") }
+
+func (n *rawShortNode) fstring(ind string) string {
+	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
+}
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
@@ -132,11 +204,11 @@ type cachedNode struct {
 	node node   // Cached collapsed trie node, or raw rlp data
 	size uint16 // Byte size of the useful cached data
 
-	parents  uint32                 // Number of live nodes referencing this one
-	children map[common.Hash]uint16 // External children referenced by this node
+	parents  uint32            // Number of live nodes referencing this one
+	children map[string]uint16 // External children referenced by this node
 
-	flushPrev common.Hash // Previous node in the flush-list
-	flushNext common.Hash // Next node in the flush-list
+	flushPrev string // Previous node in the flush-list
+	flushNext string // Next node in the flush-list
 }
 
 // rlp returns the raw rlp encoded blob of the cached node, either directly from
@@ -161,34 +233,46 @@ func (n *cachedNode) obj(hash common.Hash, cachegen uint16) node {
 	return expandNode(hash[:], n.node, cachegen)
 }
 
-// childs returns all the tracked children of this node, both the implicit ones
-// from inside the node as well as the explicit ones from outside the node.
-func (n *cachedNode) childs() []common.Hash {
-	children := make([]common.Hash, 0, 16)
-	for child := range n.children {
-		children = append(children, child)
+// iterateRefs walks the embedded children of the cached node, tracking the
+// internal path and invoking the provided callback on all hash nodes.
+func (n *cachedNode) iterateRefs(path []byte, onHashNode func([]byte, common.Hash) error) error {
+	if _, ok := n.node.(rawNode); ok {
+		return nil
 	}
-	if _, ok := n.node.(rawNode); !ok {
-		gatherChildren(n.node, &children)
-	}
-	return children
+	return iterateRefs(n.node, path, onHashNode)
 }
 
-// gatherChildren traverses the node hierarchy of a collapsed storage node and
-// retrieves all the hashnode children.
-func gatherChildren(n node, children *[]common.Hash) {
+// iterateRefs traverses the node hierarchy of a cached node and invokes the
+// provided callback on all hash nodes.
+func iterateRefs(n node, path []byte, onHashNode func([]byte, common.Hash) error) error {
 	switch n := n.(type) {
 	case *rawShortNode:
-		gatherChildren(n.Val, children)
+		return iterateRefs(n.Val, append(path, n.Key...), onHashNode)
+
+	case *shortNode:
+		return iterateRefs(n.Val, append(path, n.Key...), onHashNode)
 
 	case rawFullNode:
 		for i := 0; i < 16; i++ {
-			gatherChildren(n[i], children)
+			if err := iterateRefs(n[i], append(path, byte(i)), onHashNode); err != nil {
+				return err
+			}
 		}
+		return nil
+
+	case *fullNode:
+		for i := 0; i < 16; i++ {
+			if err := iterateRefs(n.Children[i], append(path, byte(i)), onHashNode); err != nil {
+				return err
+			}
+		}
+		return nil
+
 	case hashNode:
-		*children = append(*children, common.BytesToHash(n))
+		return onHashNode(path, common.BytesToHash(n))
 
 	case valueNode, nil:
+		return nil
 
 	default:
 		panic(fmt.Sprintf("unknown node type: %T", n))
@@ -201,7 +285,7 @@ func simplifyNode(n node) node {
 	switch n := n.(type) {
 	case *shortNode:
 		// Short nodes discard the flags and cascade
-		return &rawShortNode{Key: n.Key, Val: simplifyNode(n.Val)}
+		return &rawShortNode{Key: compactToHex(n.Key), Val: simplifyNode(n.Val)}
 
 	case *fullNode:
 		// Full nodes discard the flags and cascade
@@ -228,7 +312,7 @@ func expandNode(hash hashNode, n node, cachegen uint16) node {
 	case *rawShortNode:
 		// Short nodes need key and child expansion
 		return &shortNode{
-			Key: compactToHex(n.Key),
+			Key: n.Key,
 			Val: expandNode(nil, n.Val, cachegen),
 			flags: nodeFlag{
 				hash: hash,
@@ -262,14 +346,14 @@ func expandNode(hash hashNode, n node, cachegen uint16) node {
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
-func NewDatabase(diskdb ethdb.KeyValueStore) *Database {
-	return NewDatabaseWithCache(diskdb, 0)
+func NewDatabase(diskdb ethdb.KeyValueStore, prune bool) *Database {
+	return NewDatabaseWithCache(diskdb, 0, prune)
 }
 
 // NewDatabaseWithCache creates a new trie database to store ephemeral trie content
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
+func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int, prune bool) *Database {
 	var cleans *bigcache.BigCache
 	if cache > 0 {
 		cleans, _ = bigcache.NewBigCache(bigcache.Config{
@@ -280,59 +364,122 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 			HardMaxCacheSize:   cache,
 		})
 	}
-	return &Database{
+	db := &Database{
 		diskdb:    diskdb,
+		noprune:   make(map[common.Hash]struct{}),
 		cleans:    cleans,
-		dirties:   map[common.Hash]*cachedNode{{}: {}},
+		dirties:   map[string]*cachedNode{metaRoot: {}},
 		preimages: make(map[common.Hash][]byte),
+	}
+	if prune {
+		db.pruner = newPruner(db)
+	}
+	return db
+}
+
+// ResumePruning permits the pruner to continue deleting unreferenced trie nodes.
+// It is essential to only ever resume pruning after all data is commited, capped
+// and properly referenced, otherwise the pruner might delete data that's *going-
+// to-be* referenced.
+func (db *Database) ResumePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 1)
+		db.pruner.resume()
 	}
 }
 
-// DiskDB retrieves the persistent storage backing the trie database.
-func (db *Database) DiskDB() ethdb.Reader {
-	return db.diskdb
+// PausePruning waits until the pruner is done with processing its current task
+// and then pauses it so a new trie might be properly integrated into the dirty
+// caches and reference counts.
+func (db *Database) PausePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 0)
+		db.pruner.pause()
+	}
 }
 
-// InsertBlob writes a new reference tracked blob to the memory database if it's
-// yet unknown. This method should only be used for non-trie nodes that require
-// reference counting, since trie nodes are garbage collected directly through
-// their embedded children.
-func (db *Database) InsertBlob(hash common.Hash, blob []byte) {
+// TerminatePruning waits until the pruner is done with processing all its queued
+// tasls and then permanently terminates it.
+func (db *Database) TerminatePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 0)
+		db.pruner.terminate()
+		db.pruner = nil // TODO(karalabe): raceyyyy....
+	}
+}
+
+// ForbidPrune adds a root hash to the list of tries that are disallowed from
+// being pruned. The only two ever to be used are the genesis trie and the last
+// committed trie (snapshot).
+func (db *Database) ForbidPrune(root common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.insert(hash, blob, rawNode(blob))
+	log.Debug("Forbidding pruner to delete trie", "root", root)
+	db.noprune[root] = struct{}{}
+}
+
+// PermitPrune allows a particular trie to be pruned from the disk database. To
+// actually run the pruner, please call a dereference on the root hash.
+func (db *Database) PermitPrune(root common.Hash) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	log.Debug("Permitting pruner to delete trie", "root", root)
+	delete(db.noprune, root)
+}
+
+// DiskDB retrieves the persistent storage backing the trie database.
+func (db *Database) DiskDB() DatabaseReader {
+	return db.diskdb
 }
 
 // insert inserts a collapsed trie node into the memory database. This method is
 // a more generic version of InsertBlob, supporting both raw blob insertions as
 // well ex trie node insertions. The blob must always be specified to allow proper
 // size tracking.
-func (db *Database) insert(hash common.Hash, blob []byte, node node) {
+func (db *Database) insert(owner common.Hash, hash common.Hash, blob []byte, node node) {
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Inserting sensitive dex trie node", "owner", owner, "hash", hash)
+	}
 	// If the node's already cached, skip
-	if _, ok := db.dirties[hash]; ok {
+	key := makeNodeKey(owner, hash)
+	if _, ok := db.dirties[key]; ok {
 		return
 	}
+	// If the node is already on disk, skip as well
+	/*if blob, err := db.diskdb.Get([]byte(key)); blob != nil && err == nil {
+		return
+	}*/
 	// Create the cached entry for this node
 	entry := &cachedNode{
 		node:      simplifyNode(node),
 		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
-	for _, child := range entry.childs() {
-		if c := db.dirties[child]; c != nil {
+	// Track all the implicit references (explicits must be empty)
+	entry.iterateRefs(nil, func(path []byte, child common.Hash) error {
+		if c := db.dirties[makeNodeKey(owner, child)]; c != nil {
 			c.parents++
+			if owner == faultyOwner && child == faultyHash {
+				log.Error("Inc. refcount on sensitive dex trie node", "parent", hexutil.Encode(entry.rlp()), "owner", owner, "hash", child, "parents", fmt.Sprintf("%d->%d", c.parents-1, c.parents))
+			}
 		}
-	}
-	db.dirties[hash] = entry
+		return nil
+	})
+	db.dirties[key] = entry
 
 	// Update the flush-list endpoints
-	if db.oldest == (common.Hash{}) {
-		db.oldest, db.newest = hash, hash
+	if db.oldest == metaRoot {
+		db.oldest, db.newest = key, key
 	} else {
-		db.dirties[db.newest].flushNext, db.newest = hash, hash
+		db.dirties[db.newest].flushNext, db.newest = key, key
 	}
 	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
+
+	if owner == faultyOwner && hash == faultyHash {
+		log.Error("Inserted sensitive dex trie node", "owner", owner, "hash", hash)
+	}
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
@@ -349,7 +496,9 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 
 // node retrieves a cached trie node from memory, or returns nil if none can be
 // found in the memory cache.
-func (db *Database) node(hash common.Hash, cachegen uint16) node {
+func (db *Database) node(owner common.Hash, hash common.Hash, cachegen uint16) node {
+	key := makeNodeKey(owner, hash)
+
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
@@ -360,14 +509,14 @@ func (db *Database) node(hash common.Hash, cachegen uint16) node {
 	}
 	// Retrieve the node from the dirty cache if available
 	db.lock.RLock()
-	dirty := db.dirties[hash]
+	dirty := db.dirties[key]
 	db.lock.RUnlock()
 
 	if dirty != nil {
 		return dirty.obj(hash, cachegen)
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
+	enc, err := db.diskdb.Get([]byte(key))
 	if err != nil || enc == nil {
 		return nil
 	}
@@ -390,24 +539,34 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
-	// Retrieve the node from the dirty cache if available
-	db.lock.RLock()
-	dirty := db.dirties[hash]
-	db.lock.RUnlock()
+	// TODO(karalabe): We need 2 new retrieval mechanisms:
+	//   - We need to retrieve from the dirty cache, needs some data struct extension (no owner)
+	//   - We need to retrieve from the database, needs prefix iteration support (just needs the interface ext)
+	//
+	// The code below is what's needed to work, just without the 'owner' being available
+	/*
+		// Retrieve the node from the dirty cache if available
+		key := makeNodeKey(owner, hash)
 
-	if dirty != nil {
-		return dirty.rlp(), nil
-	}
-	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get(hash[:])
-	if err == nil && enc != nil {
-		if db.cleans != nil {
-			db.cleans.Set(string(hash[:]), enc)
-			memcacheCleanMissMeter.Mark(1)
-			memcacheCleanWriteMeter.Mark(int64(len(enc)))
+		db.lock.RLock()
+		dirty := db.dirties[key]
+		db.lock.RUnlock()
+
+		if dirty != nil {
+			return dirty.rlp(), nil
 		}
-	}
-	return enc, err
+		// Content unavailable in memory, attempt to retrieve from disk
+		enc, err := db.diskdb.Get([]byte(key))
+		if err == nil && enc != nil {
+			if db.cleans != nil {
+				db.cleans.Set(string(hash[:]), enc)
+				memcacheCleanMissMeter.Mark(1)
+				memcacheCleanWriteMeter.Mark(int64(len(enc)))
+			}
+		}
+		return enc, err
+	*/
+	return nil, nil
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
@@ -422,72 +581,83 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 		return preimage, nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(db.secureKey(hash[:]))
+	return db.diskdb.Get(db.preimageKey(hash[:]))
 }
 
-// secureKey returns the database key for the preimage of key, as an ephemeral
-// buffer. The caller must not hold onto the return value because it will become
-// invalid on the next call.
-func (db *Database) secureKey(key []byte) []byte {
-	buf := append(db.seckeybuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
-	return buf
+// preimageKey returns the database key for the preimage of key.
+func (db *Database) preimageKey(key []byte) []byte {
+	return append(secureKeyPrefix, key...)
 }
 
 // Nodes retrieves the hashes of all the nodes cached within the memory database.
 // This method is extremely expensive and should only be used to validate internal
 // states in test code.
-func (db *Database) Nodes() []common.Hash {
+func (db *Database) Nodes() []string {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var hashes = make([]common.Hash, 0, len(db.dirties))
-	for hash := range db.dirties {
-		if hash != (common.Hash{}) { // Special case for "root" references/nodes
-			hashes = append(hashes, hash)
+	var keys = make([]string, 0, len(db.dirties))
+	for key := range db.dirties {
+		if key != metaRoot { // Special case for "root" references/nodes
+			keys = append(keys, key)
 		}
 	}
-	return hashes
+	return keys
 }
 
-// Reference adds a new reference from a parent node to a child node.
-func (db *Database) Reference(child common.Hash, parent common.Hash) {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	db.reference(child, parent)
-}
-
-// reference is the private locked version of Reference.
-func (db *Database) reference(child common.Hash, parent common.Hash) {
-	// If the node does not exist, it's a node pulled from disk, skip
-	node, ok := db.dirties[child]
-	if !ok {
-		return
-	}
-	// If the reference already exists, only duplicate for roots
-	if db.dirties[parent].children == nil {
-		db.dirties[parent].children = make(map[common.Hash]uint16)
-	} else if _, ok = db.dirties[parent].children[child]; ok && parent != (common.Hash{}) {
-		return
-	}
-	node.parents++
-	db.dirties[parent].children[child]++
-}
-
-// Dereference removes an existing reference from a root node.
-func (db *Database) Dereference(root common.Hash) {
-	// Sanity check to ensure that the meta-root is not removed
-	if root == (common.Hash{}) {
-		log.Error("Attempted to dereference the trie cache meta root")
-		return
+// Reference adds a new reference from a parent node to a child node. We're going
+// to break genericity here and assume that parent nodes are not owned (account
+// trie) whereas child nodes may be owned (storage trie or bytecode).
+func (db *Database) Reference(owner common.Hash, child common.Hash, parent common.Hash) {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during referencing")
 	}
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	db.dereference(root, common.Hash{})
+	// If the node does not exist, it's a node pulled from disk, skip
+	childKey := makeNodeKey(owner, child)
+	node, ok := db.dirties[childKey]
+	if !ok {
+		return
+	}
+	// If the reference already exists, only duplicate for roots
+	parentKey := makeNodeKey(common.Hash{}, parent)
+	if db.dirties[parentKey].children == nil {
+		db.dirties[parentKey].children = make(map[string]uint16)
+	} else if _, ok = db.dirties[parentKey].children[childKey]; ok && parent != (common.Hash{}) {
+		return
+	}
+	node.parents++
+	db.dirties[parentKey].children[childKey]++
+}
 
+// Dereference removes an existing reference from a root node.
+func (db *Database) Dereference(root common.Hash) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during dereferencing")
+	}
+	// Sanity check to ensure that the meta-root is not removed
+	if root == (common.Hash{}) {
+		log.Error("Attempted to dereference the trie cache meta root")
+		return nil
+	}
+	// Obtain the write lock and garbage collect in-memory
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	// Dereference the trie and accumulate prune targets if needed
+	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
+
+	derefs := new([]*prunerTarget)
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil, derefs); err != nil {
+		return err
+	}
+	if db.pruner != nil {
+		db.pruner.enqueue(*derefs)
+	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
 	db.gcsize += storage - db.dirtiesSize
 	db.gctime += time.Since(start)
@@ -496,59 +666,87 @@ func (db *Database) Dereference(root common.Hash) {
 	memcacheGCSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheGCNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	return nil
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(child common.Hash, parent common.Hash) {
+func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte, derefs *[]*prunerTarget) error {
+	if childOwner == faultyOwner && childHash == faultyHash {
+		log.Error("Dereferencing sensitive dex trie node", "owner", childOwner, "hash", childHash)
+	}
 	// Dereference the parent-child
-	node := db.dirties[parent]
+	parentKey := makeNodeKey(parentOwner, parentHash)
+	parent := db.dirties[parentKey]
 
-	if node.children != nil && node.children[child] > 0 {
-		node.children[child]--
-		if node.children[child] == 0 {
-			delete(node.children, child)
+	childKey := makeNodeKey(childOwner, childHash)
+	if parent.children != nil && parent.children[childKey] > 0 {
+		parent.children[childKey]--
+		if parent.children[childKey] == 0 {
+			delete(parent.children, childKey)
 		}
 	}
 	// If the child does not exist, it's a previously committed node.
-	node, ok := db.dirties[child]
+	child, ok := db.dirties[childKey]
 	if !ok {
-		return
+		if db.pruner != nil {
+			*derefs = append(*derefs, &prunerTarget{
+				owner: childOwner,
+				hash:  childHash,
+				path:  common.CopyBytes(path),
+			})
+		}
+		return nil
+	}
+	if childOwner == faultyOwner && childHash == faultyHash {
+		log.Error("Dec. refcount on sensitive dex trie node", "rhash", crypto.Keccak256Hash(parent.rlp()).Hex(), "parent", hexutil.Encode(parent.rlp()), "owner", childOwner, "hash", childHash, "parents", fmt.Sprintf("%d->%d", child.parents, child.parents-1))
 	}
 	// If there are no more references to the child, delete it and cascade
-	if node.parents > 0 {
+	if child.parents > 0 {
 		// This is a special cornercase where a node loaded from disk (i.e. not in the
 		// memcache any more) gets reinjected as a new node (short node split into full,
 		// then reverted into short), causing a cached node to have no parents. That is
 		// no problem in itself, but don't make maxint parents out of it.
-		node.parents--
+		child.parents--
 	}
-	if node.parents == 0 {
+	if child.parents == 0 {
 		// Remove the node from the flush-list
-		switch child {
+		switch childKey {
 		case db.oldest:
-			db.oldest = node.flushNext
-			db.dirties[node.flushNext].flushPrev = common.Hash{}
+			db.oldest = child.flushNext
+			db.dirties[child.flushNext].flushPrev = metaRoot
 		case db.newest:
-			db.newest = node.flushPrev
-			db.dirties[node.flushPrev].flushNext = common.Hash{}
+			db.newest = child.flushPrev
+			db.dirties[child.flushPrev].flushNext = metaRoot
 		default:
-			db.dirties[node.flushPrev].flushNext = node.flushNext
-			db.dirties[node.flushNext].flushPrev = node.flushPrev
+			db.dirties[child.flushPrev].flushNext = child.flushNext
+			db.dirties[child.flushNext].flushPrev = child.flushPrev
 		}
 		// Dereference all children and delete the node
-		for _, hash := range node.childs() {
-			db.dereference(hash, child)
+		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
+			db.dereference(childOwner, hash, childOwner, childHash, path, derefs)
+			return nil
+		})
+		for key := range child.children {
+			owner, hash := splitNodeKey(key)
+			db.dereference(owner, hash, childOwner, childHash, nil, derefs)
 		}
-		delete(db.dirties, child)
-		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		delete(db.dirties, childKey)
+		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))
+
+		if childOwner == faultyOwner && childHash == faultyHash {
+			log.Error("Dereferenced sensitive dex trie node", "owner", childOwner, "hash", childHash)
+		}
 	}
+	return nil
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
 // memory usage goes below the given threshold.
 func (db *Database) Cap(limit common.StorageSize) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during capping")
+	}
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -568,7 +766,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	flushPreimages := db.preimagesSize > 4*1024*1024
 	if flushPreimages {
 		for hash, preimage := range db.preimages {
-			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+			if err := batch.Put(db.preimageKey(hash[:]), preimage); err != nil {
 				log.Error("Failed to commit preimage from trie database", "err", err)
 				db.lock.RUnlock()
 				return err
@@ -584,12 +782,15 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	}
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
-	for size > limit && oldest != (common.Hash{}) {
+	for size > limit && oldest != metaRoot {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
-		if err := batch.Put(oldest[:], node.rlp()); err != nil {
+		if err := batch.Put([]byte(oldest), node.rlp()); err != nil {
 			db.lock.RUnlock()
 			return err
+		}
+		if oldest == makeNodeKey(faultyOwner, faultyHash) {
+			log.Error("Flush sensitive dex trie node", "owner", faultyOwner, "hash", faultyHash)
 		}
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
@@ -630,8 +831,8 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	}
-	if db.oldest != (common.Hash{}) {
-		db.dirties[db.oldest].flushPrev = common.Hash{}
+	if db.oldest != metaRoot {
+		db.dirties[db.oldest].flushPrev = metaRoot
 	}
 	db.flushnodes += uint64(nodes - len(db.dirties))
 	db.flushsize += storage - db.dirtiesSize
@@ -641,8 +842,8 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
-		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", common.PrettyDuration(time.Since(start)),
+		"flnodes", db.flushnodes, "flsize", db.flushsize, "fltime", common.PrettyDuration(db.flushtime), "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
 
 	return nil
 }
@@ -652,6 +853,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // As a side effect, all pre-images accumulated up to this point are also written.
 func (db *Database) Commit(node common.Hash, report bool) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during committing")
+	}
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -663,7 +868,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 
 	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
-		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+		if err := batch.Put(db.preimageKey(hash[:]), preimage); err != nil {
 			log.Error("Failed to commit preimage from trie database", "err", err)
 			db.lock.RUnlock()
 			return err
@@ -678,7 +883,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.dirties), db.dirtiesSize
-	if err := db.commit(node, batch); err != nil {
+	if err := db.commit(common.Hash{}, node, batch); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		db.lock.RUnlock()
 		return err
@@ -698,7 +903,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	db.preimages = make(map[common.Hash][]byte)
 	db.preimagesSize = 0
 
-	db.uncache(node)
+	db.uncache(common.Hash{}, node)
 
 	memcacheCommitTimeTimer.Update(time.Since(start))
 	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
@@ -708,29 +913,39 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	if !report {
 		logger = log.Debug
 	}
-	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", common.PrettyDuration(time.Since(start)+db.flushtime),
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", common.PrettyDuration(db.gctime), "prnodes", db.prunenodes, "prsize", db.prunesize, "prtime", common.PrettyDuration(db.prunetime),
+		"linodes", len(db.dirties), "lisize", db.dirtiesSize)
 
 	// Reset the garbage collection statistics
 	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0
+	db.prunenodes, db.prunesize, db.prunetime = 0, 0, 0
 	db.flushnodes, db.flushsize, db.flushtime = 0, 0, 0
 
 	return nil
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
+func (db *Database) commit(owner common.Hash, hash common.Hash, batch ethdb.Batch) error {
 	// If the node does not exist, it's a previously committed node
-	node, ok := db.dirties[hash]
+	key := makeNodeKey(owner, hash)
+
+	node, ok := db.dirties[key]
 	if !ok {
 		return nil
 	}
-	for _, child := range node.childs() {
-		if err := db.commit(child, batch); err != nil {
+	if err := node.iterateRefs(nil, func(path []byte, child common.Hash) error {
+		return db.commit(owner, child, batch)
+	}); err != nil {
+		return err
+	}
+	for child := range node.children {
+		owner, hash := splitNodeKey(child)
+		if err := db.commit(owner, hash, batch); err != nil {
 			return err
 		}
 	}
-	if err := batch.Put(hash[:], node.rlp()); err != nil {
+	if err := batch.Put([]byte(key), node.rlp()); err != nil {
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
@@ -747,29 +962,35 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 // persisted trie is removed from the cache. The reason behind the two-phase
 // commit is to ensure consistent data availability while moving from memory
 // to disk.
-func (db *Database) uncache(hash common.Hash) {
+func (db *Database) uncache(owner common.Hash, hash common.Hash) {
 	// If the node does not exist, we're done on this path
-	node, ok := db.dirties[hash]
+	key := makeNodeKey(owner, hash)
+
+	node, ok := db.dirties[key]
 	if !ok {
 		return
 	}
 	// Node still exists, remove it from the flush-list
-	switch hash {
+	switch key {
 	case db.oldest:
 		db.oldest = node.flushNext
-		db.dirties[node.flushNext].flushPrev = common.Hash{}
+		db.dirties[node.flushNext].flushPrev = metaRoot
 	case db.newest:
 		db.newest = node.flushPrev
-		db.dirties[node.flushPrev].flushNext = common.Hash{}
+		db.dirties[node.flushPrev].flushNext = metaRoot
 	default:
 		db.dirties[node.flushPrev].flushNext = node.flushNext
 		db.dirties[node.flushNext].flushPrev = node.flushPrev
 	}
 	// Uncache the node's subtries and remove the node itself too
-	for _, child := range node.childs() {
-		db.uncache(child)
+	node.iterateRefs(nil, func(path []byte, child common.Hash) error {
+		db.uncache(owner, child)
+		return nil
+	})
+	for child := range node.children {
+		db.uncache(splitNodeKey(child))
 	}
-	delete(db.dirties, hash)
+	delete(db.dirties, key)
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 }
 
@@ -794,17 +1015,18 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 // This method is extremely CPU and memory intensive, only use when must.
 func (db *Database) verifyIntegrity() {
 	// Iterate over all the cached nodes and accumulate them into a set
-	reachable := map[common.Hash]struct{}{{}: {}}
+	reachable := map[string]struct{}{metaRoot: struct{}{}}
 
-	for child := range db.dirties[common.Hash{}].children {
-		db.accumulate(child, reachable)
+	for key := range db.dirties[metaRoot].children {
+		_, root := splitNodeKey(key)
+		db.accumulate(common.Hash{}, root, reachable)
 	}
 	// Find any unreachable but cached nodes
 	var unreachable []string
-	for hash, node := range db.dirties {
-		if _, ok := reachable[hash]; !ok {
+	for key, node := range db.dirties {
+		if _, ok := reachable[key]; !ok {
 			unreachable = append(unreachable, fmt.Sprintf("%x: {Node: %v, Parents: %d, Prev: %x, Next: %x}",
-				hash, node.node, node.parents, node.flushPrev, node.flushNext))
+				key, node.node, node.parents, node.flushPrev, node.flushNext))
 		}
 	}
 	if len(unreachable) != 0 {
@@ -812,18 +1034,25 @@ func (db *Database) verifyIntegrity() {
 	}
 }
 
-// accumulate iterates over the trie defined by hash and accumulates all the
-// cached children found in memory.
-func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struct{}) {
+// accumulate iterates over the trie defined by owner:hash and accumulates all
+// the cached children found in memory.
+func (db *Database) accumulate(owner common.Hash, hash common.Hash, reachable map[string]struct{}) {
 	// Mark the node reachable if present in the memory cache
-	node, ok := db.dirties[hash]
+	key := makeNodeKey(owner, hash)
+
+	node, ok := db.dirties[key]
 	if !ok {
 		return
 	}
-	reachable[hash] = struct{}{}
+	reachable[key] = struct{}{}
 
 	// Iterate over all the children and accumulate them too
-	for _, child := range node.childs() {
-		db.accumulate(child, reachable)
+	node.iterateRefs(nil, func(path []byte, hash common.Hash) error {
+		db.accumulate(owner, hash, reachable)
+		return nil
+	})
+	for key := range node.children {
+		owner, hash := splitNodeKey(key)
+		db.accumulate(owner, hash, reachable)
 	}
 }

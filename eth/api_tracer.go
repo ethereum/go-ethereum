@@ -304,10 +304,10 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
-			// Reference the trie twice, once for us, once for the tracer
-			database.TrieDB().Reference(root, common.Hash{})
+			// Reference the trie twice, once for us, once for the trancer
+			database.TrieDB().Reference(common.Hash{}, root, common.Hash{})
 			if number >= origin {
-				database.TrieDB().Reference(root, common.Hash{})
+				database.TrieDB().Reference(common.Hash{}, root, common.Hash{})
 			}
 			// Dereference all past tries we ourselves are done working with
 			if proot != (common.Hash{}) {
@@ -688,7 +688,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if err := statedb.Reset(root); err != nil {
 			return nil, fmt.Errorf("state reset after block %d failed: %v", block.NumberU64(), err)
 		}
-		database.TrieDB().Reference(root, common.Hash{})
+		database.TrieDB().Reference(common.Hash{}, root, common.Hash{})
 		if proot != (common.Hash{}) {
 			database.TrieDB().Dereference(proot)
 		}
