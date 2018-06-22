@@ -17,6 +17,7 @@
 package eth
 
 import (
+        "errors"
 	"context"
 	"math/big"
 
