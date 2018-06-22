@@ -17,6 +17,7 @@
 package eth
 
 import (
+        "errors"
 	"context"
 	"math/big"
 
@@ -226,4 +227,8 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+func (b *EthAPIBackend) TxStatusByHash(ctx context.Context, hash common.Hash) (core.TxStatus, error) {
+	return core.TxStatusUnknown, errors.New("Not Support")
 }
