@@ -29,8 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Storage represents a contract's storage
 type Storage map[common.Hash]common.Hash
 
+// Copy duplicates the current storage
 func (s Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range s {
@@ -76,10 +78,12 @@ type structLogMarshaling struct {
 	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
 
+// OpName formats the
 func (s *StructLog) OpName() string {
 	return s.Op.String()
 }
 
+// ErrorString formats the log's error as a string
 func (s *StructLog) ErrorString() string {
 	if s.Err != nil {
 		return s.Err.Error()
@@ -124,6 +128,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
+// CaptureStart logs the start of a contract
 func (l *StructLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
 	return nil
 }
@@ -178,10 +183,12 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	return nil
 }
 
+// CaptureFault logs a fault in the execution
 func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	return nil
 }
 
+// CaptureEnd logs the end of a contract
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	l.output = output
 	l.err = err
