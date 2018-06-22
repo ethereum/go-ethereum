@@ -20,13 +20,9 @@
 package discv5
 
 import (
-	"fmt"
 	"net"
 	"sort"
-	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -41,27 +37,6 @@ type durationSlice []time.Duration
 func (s durationSlice) Len() int           { return len(s) }
 func (s durationSlice) Less(i, j int) bool { return s[i] < s[j] }
 func (s durationSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-// checkClockDrift queries an NTP server for clock drifts and warns the user if
-// one large enough is detected.
-func checkClockDrift() {
-	drift, err := sntpDrift(ntpChecks)
-	if err != nil {
-		return
-	}
-	if drift < -driftThreshold || drift > driftThreshold {
-		warning := fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift)
-		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
-		separator := strings.Repeat("-", len(warning))
-
-		log.Warn(separator)
-		log.Warn(warning)
-		log.Warn(howtofix)
-		log.Warn(separator)
-	} else {
-		log.Debug(fmt.Sprintf("Sanity NTP check reported %v drift, all ok", drift))
-	}
-}
 
 // sntpDrift does a naive time resolution against an NTP server and returns the
 // measured drift. This method uses the simple version of NTP. It's not precise

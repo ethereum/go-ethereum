@@ -267,24 +267,6 @@ func TestNodeID_logdistEqual(t *testing.T) {
 	}
 }
 
-func TestNodeID_hashAtDistance(t *testing.T) {
-	// we don't use quick.Check here because its output isn't
-	// very helpful when the test fails.
-	cfg := quickcfg()
-	for i := 0; i < cfg.MaxCount; i++ {
-		a := gen(common.Hash{}, cfg.Rand).(common.Hash)
-		dist := cfg.Rand.Intn(len(common.Hash{}) * 8)
-		result := hashAtDistance(a, dist)
-		actualdist := logdist(result, a)
-
-		if dist != actualdist {
-			t.Log("a:     ", a)
-			t.Log("result:", result)
-			t.Fatalf("#%d: distance of result is %d, want %d", i, actualdist, dist)
-		}
-	}
-}
-
 func quickcfg() *quick.Config {
 	return &quick.Config{
 		MaxCount: 5000,

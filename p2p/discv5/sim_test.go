@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const testTopic = "foo"
+
 // In this test, nodes try to randomly resolve each other.
 func TestSimRandomResolve(t *testing.T) {
 	t.Skip("boring")

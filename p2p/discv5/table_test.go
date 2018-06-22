@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+var errTimeout = errors.New("RPC timeout")
+
 type nullTransport struct{}
 
 func (nullTransport) sendPing(remote *Node, remoteAddr *net.UDPAddr) []byte { return []byte{1} }
@@ -148,15 +150,6 @@ func fillBucket(tab *Table, ld int) (last *Node) {
 		b.entries = append(b.entries, nodeAtDistance(tab.self.sha, ld))
 	}
 	return b.entries[bucketSize-1]
-}
-
-// nodeAtDistance creates a node for which logdist(base, n.sha) == ld.
-// The node's ID does not correspond to n.sha.
-func nodeAtDistance(base common.Hash, ld int) (n *Node) {
-	n = new(Node)
-	n.sha = hashAtDistance(base, ld)
-	copy(n.ID[:], n.sha[:]) // ensure the node still has a unique ID
-	return n
 }
 
 type pingRecorder struct{ responding, pinged map[NodeID]bool }
