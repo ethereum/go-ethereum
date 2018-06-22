@@ -170,3 +170,14 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }
+
+type TxStatusRequest struct {
+	OdrRequest
+	TxHash   common.Hash
+        TxStatus core.TxStatus
+	TxEntry *rawdb.TxLookupEntry
+}
+
+func (req *TxStatusRequest) StoreResult(db ethdb.Database) {
+
+}
