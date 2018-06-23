@@ -43,13 +43,17 @@ import (
 )
 
 const (
-	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
-	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
+	checkpointInterval = 1024                   // Number of blocks after which to save the vote snapshot to the database
+	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
+	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
+	wiggleTime         = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 
-	wiggleTime      = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-	genesisCoinBase = "0x0000000000000000000000000000000000000000"
 )
+
+type Masternode struct {
+	Address common.Address
+	Stake   int64
+}
 
 // Clique proof-of-authority protocol constants.
 var (
@@ -375,6 +379,10 @@ func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) 
 		return nil, err
 	}
 	return snap, nil
+}
+
+func (c *Clique) StoreSnapshot(snap *Snapshot) error {
+	return snap.store(c.db)
 }
 
 func position(list []common.Address, x common.Address) int {
