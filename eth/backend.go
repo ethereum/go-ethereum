@@ -238,7 +238,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 			}
-
 			return nil
 		}
 	}
