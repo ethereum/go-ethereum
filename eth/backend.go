@@ -353,7 +353,13 @@ func (s *Ethereum) ValidateMiner() (bool, error) {
 	} else {
 		return false, fmt.Errorf("Only verify miners in Clique protocol")
 	}
+	
 	return true, nil
+}
+
+func (s *Ethereum) Checkpoint() bool {
+	number := s.blockchain.CurrentHeader().Number.Uint64()
+	return number%s.chainConfig.Clique.Epoch == 1 || number == 0
 }
 
 func (s *Ethereum) Checkpoint() bool {
