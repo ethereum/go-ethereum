@@ -189,13 +189,14 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		if err != nil || !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
 		}
-		if memorySize > 0 {
-			mem.Resize(memorySize)
-		}
 
 		if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
 			logged = true
+		}
+
+		if memorySize > 0 {
+			mem.Resize(memorySize)
 		}
 
 		// execute the operation
