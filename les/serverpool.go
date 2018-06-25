@@ -219,7 +219,7 @@ func (pool *serverPool) disconnect(entry *poolEntry) {
 	log.Debug("Disconnected old entry", "enode", entry.id)
 	req := &disconnReq{entry: entry, stopped: stopped, done: make(chan struct{})}
 
-	// Block until disconnection request be served.
+	// Block until disconnection request is served.
 	pool.disconnCh <- req
 	<-req.done
 }
@@ -384,13 +384,13 @@ func (pool *serverPool) eventLoop() {
 				close(pool.discSetPeriod)
 			}
 
-			// Spawn a goroutine to close the disconnCh until all connections are disconnected.
+			// Spawn a goroutine to close the disconnCh after all connections are disconnected.
 			go func() {
 				pool.connWg.Wait()
 				close(pool.disconnCh)
 			}()
 
-			// Handle all remain disconnection requests before exit.
+			// Handle all remaining disconnection requests before exit.
 			for req := range pool.disconnCh {
 				disconnect(req, true)
 			}
