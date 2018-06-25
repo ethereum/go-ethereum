@@ -48,7 +48,7 @@ jobs:
       submodules: false
     script:
     - go run build/ci.go lint
-  - stage: Push Docker image
+  - stage: Build and push Docker image
     services:
       - docker
     before_install:
