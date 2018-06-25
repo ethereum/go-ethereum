@@ -14,16 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !ios
-
 // Package usbwallet implements support for USB hardware wallets.
 package usbwallet
-
-import "github.com/karalabe/gousb/usb"
 
 // deviceID is a combined vendor/product identifier to uniquely identify a USB
 // hardware device.
 type deviceID struct {
-	Vendor  usb.ID // The Vendor identifer
-	Product usb.ID // The Product identifier
+	Vendor  uint16 // The Vendor identifer
+	Product uint16 // The Product identifier
 }
