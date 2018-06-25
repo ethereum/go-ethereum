@@ -4,7 +4,6 @@ language: go
 go_import_path: github.com/ethereum/go-ethereum
 
 services: skip
-
 before_install: skip
 
 jobs:
@@ -52,8 +51,8 @@ jobs:
     services:
       - docker
     before_install:
-      - docker build -t etiennenapoleone/tomochain .
-      - docker run etiennenapoleone/tomochain
+      - docker build -t tomochain/tomochain .
+      - docker run tomochain/tomochain
     deploy:
       provider: script
       script: bash docker_push.sh
