@@ -32,7 +32,7 @@ func newstack() *Stack {
 	return &Stack{data: make([]*big.Int, 0, 1024)}
 }
 
-// Data returns the underlying big.Int array
+// Data returns the underlying big.Int array.
 func (st *Stack) Data() []*big.Int {
 	return st.data
 }
@@ -81,7 +81,7 @@ func (st *Stack) require(n int) error {
 	return nil
 }
 
-// Print displays the content of the stack
+// Print dumps the content of the stack
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
