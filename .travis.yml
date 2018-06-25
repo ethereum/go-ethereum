@@ -1,9 +1,19 @@
+sudo: required
+
 language: go
 go_import_path: github.com/ethereum/go-ethereum
-sudo: false
-matrix:
+
+services:
+  - docker
+
+before_install:
+  - docker build -t enapoleone/tomochain .
+  - docker run enapoleone/tomochain
+
+jobs:
   include:
-  - os: linux
+  - stage: Build and test
+    os: linux
     dist: trusty
     sudo: required
     go: 1.9.x
@@ -31,7 +41,8 @@ matrix:
     - brew cask install osxfuse
     - go run build/ci.go install
     - go run build/ci.go test -coverage
-  - os: linux
+  - stage: Lint
+    os: linux
     dist: trusty
     go: '1.10'
     env:
@@ -40,10 +51,9 @@ matrix:
       submodules: false
     script:
     - go run build/ci.go lint
-
-notifications:
-  slack:
-    rooms:
-      secure: DoWVSWEKZre0rsYvHPqOBpYa5hL7DagVCP7eGR+2dluzsyUOTW58uiaezaZMAPPG6k7i1TC9CufONkFRwH6kqLrFtAFd+t3sKb3X4D9/PSa9k88uBuNfsX+JhUzEMT53pfLO9NTBbZs3M6bOuZDP7GddWWnMZpO6Mu7RzZtVxyqbZIcNu3nxsmLkoaQ8726npaHrxhO1Ab+3rgR4dkNFLgl9/CnPwvuv/j24dsKzly6tF+4Ms9Fz5O0Te8zK5d/UWZN50e+uDnbzcIvbY2VHOYXchXZRbfKO8/M2TIXLPKbLc3alCw1ZvpFZqiMYK3SnGNby4FLp8RlC6H4sv52YeNq3fHH8SgOJ3xTL8m6ejIlqoKnUNsJ1lwtfiEVu5D1b8FRKTPqoh+cjadJxsF9dO0xZsf1d5Pmq6Ncr0j6di1ZMjCc6TPFERxkdA48+PzQY4TqfBpM4E5RnJuX9O9MJFbA1fZo2xhHcy0LlkslZMpSwiv/YO4bCJZPmxvHtruqELJXxjYyC67UbzSzrBVE1g1bXy0V5xyxPIEA38jzlNczhq6fg2gyEc+6JCbzN2gFoAS5uFWQHpUhXHc7zNB5Jyi7GPQv6cfHYcedjn9In9/bNDqqGexGX4Ih/cb6W1GOHC7c2A/AsfTa9KWmsyj7YwBRXFIXfme7bBh6VGuRqU3Y=
-    on_success: change
-    on_failure: always
+  - stage: Push Docker image
+    deploy:
+      provider: script
+      script: bash docker_push
+      on:
+        branch: travis
