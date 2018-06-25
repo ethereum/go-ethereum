@@ -77,7 +77,6 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 		evm:      evm,
 		cfg:      cfg,
 		gasTable: evm.ChainConfig().GasTable(evm.BlockNumber),
-		intPool:  newIntPool(),
 	}
 }
 
@@ -112,6 +111,14 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	// as every returning call will return new data anyway.
 	in.returnData = nil
 
+	if in.intPool == nil {
+		in.intPool = poolOfIntPools.get()
+		defer func() {
+			poolOfIntPools.put(in.intPool)
+			in.intPool = nil
+		}()
+	}
+
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil
@@ -132,6 +139,9 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		logged  bool   // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
+
+	// Reclaim the stack as an int pool when the execution stops
+	defer in.intPool.put(stack.data...)
 
 	if in.cfg.Debug {
 		defer func() {
