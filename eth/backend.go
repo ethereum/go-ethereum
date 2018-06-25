@@ -27,13 +27,12 @@ import (
 
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
+	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -42,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -199,21 +197,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Clique.RewardCheckpoint
-
-			// Call to smart contract signer.
-			config := ctx.GetConfig()
-			client, err := ethclient.Dial(config.IPCEndpoint())
-			if err != nil {
-				log.Error("Fail to connect RPC", "error", err)
-				return err
-			}
-			addr := common.HexToAddress(common.BlockSigners)
-			blockSigner, err := contract.NewBlockSigner(addr, client)
-			if err != nil {
-				log.Error("Fail get block signer", "error", err)
-				return err
-			}
-			opts := new(bind.CallOpts)
 			prevCheckpoint := number - rCheckpoint
 
 			if number > 0 && prevCheckpoint > 0 {
@@ -225,9 +208,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				for i := startBlockNumber; i <= endBlockNumber; i++ {
 					// Get signers in blockSigner smartcontract.
-					addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					client, err := contracts.GetEthClient(ctx)
 					if err != nil {
-						log.Error("Fail to get signers from smartcontract.", "error", err)
+						log.Error("Fail to connect IPC from blockSigner", "error", err)
+						return err
+					}
+					addrs, err := contracts.GetSignersFromContract(client, i)
+					if err != nil {
+						log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
 						return err
 					}
 					// Filter duplicate address.
