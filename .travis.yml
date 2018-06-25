@@ -55,7 +55,15 @@ jobs:
       provider: script
       script: bash docker_push.sh
       on:
-        branch: travis
+        branch: master
   - stage: Trigger rebuild of infrastructure image
     sudo: false
     script: bash docker_rebuild.sh
+
+stages:
+  - name: Build and test
+  - name: Lint
+  - name: Build and push Docker image
+    if: type != pull_request AND branch = master
+  - name: Trigger rebuild of infrastructure image
+    if: type != pull_request AND branch = master
