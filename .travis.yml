@@ -3,9 +3,9 @@ sudo: required
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 
-services: true
+services: skip
 
-before_install: true
+before_install: skip
 
 jobs:
   include:
