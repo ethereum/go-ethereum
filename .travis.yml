@@ -25,15 +25,6 @@ jobs:
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
     - go run build/ci.go test -coverage
-  - os: osx
-    sudo: false
-    go: '1.10'
-    script:
-    - unset -f cd
-    - brew update
-    - brew cask install osxfuse
-    - go run build/ci.go install
-    - go run build/ci.go test -coverage
   - stage: Lint
     os: linux
     sudo: false
