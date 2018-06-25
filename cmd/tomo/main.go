@@ -358,17 +358,17 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					// get masternodes information from smart contract
 					client, err := ethclient.Dial(stack.IPCEndpoint())
 					if err != nil {
-						utils.Fatalf("Fail to connect RPC", "error", err)
+						utils.Fatalf("Fail to connect RPC: %v", err)
 					}
 					addr := common.HexToAddress(common.Validator)
 					validator, err := validatorContract.NewTomoValidator(addr, client)
 					if err != nil {
-						utils.Fatalf("Fail to get validator smc", "error", err)
+						utils.Fatalf("Fail to get validator smc: %v", err)
 					}
 					opts := new(bind.CallOpts)
 					candidates, err := validator.GetCandidates(opts)
 					if err != nil {
-						utils.Fatalf("Can't get list of candidates", "error", err)
+						utils.Fatalf("Can't get list of candidates: %v", err)
 					}
 
 					var ms []clique.Masternode
@@ -377,7 +377,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						if err != nil {
 							log.Warn("Can't get cap of a candidate. Will ignore him", "address", candidate, "error", err)
 						}
-						ms = append(ms, clique.Masternode{candidate, v.Int64()})
+						ms = append(ms, clique.Masternode{Address: candidate, Stake: v.Int64()})
 					}
 					// order by cap
 					sort.Slice(ms, func(i, j int) bool {
@@ -386,7 +386,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					// update masternodes
 					err = ethereum.UpdateMasternodes(ms)
 					if err != nil {
-						utils.Fatalf("Can't update masternodes", "error", err)
+						utils.Fatalf("Can't update masternodes: %v", err)
 					}
 					log.Info("Masternodes are ready for the next epoch")
 				}
