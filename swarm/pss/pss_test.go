@@ -56,6 +56,7 @@ var (
 	initOnce       = sync.Once{}
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
+	longrunning    = flag.Bool("longrunning", false, "do run long-running tests")
 	w              *whisper.Whisper
 	wapi           *whisper.PublicWhisperAPI
 	psslogmain     log.Logger
@@ -949,12 +950,19 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 	}
 }
 
+func TestNetwork(t *testing.T) {
+	t.Run("16/1000/4/sim", testNetwork)
+}
+
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/2000/4/sim", testNetwork)
 	t.Run("4/2000/4/sim", testNetwork)
 	t.Run("8/2000/4/sim", testNetwork)
@@ -964,6 +972,9 @@ func TestNetwork2000(t *testing.T) {
 func TestNetwork5000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/5000/4/sim", testNetwork)
 	t.Run("4/5000/4/sim", testNetwork)
 	t.Run("8/5000/4/sim", testNetwork)
@@ -973,6 +984,9 @@ func TestNetwork5000(t *testing.T) {
 func TestNetwork10000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/10000/4/sim", testNetwork)
 	t.Run("4/10000/4/sim", testNetwork)
 	t.Run("8/10000/4/sim", testNetwork)
