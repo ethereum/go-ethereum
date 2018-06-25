@@ -1,0 +1,1 @@
+curl -X POST $INFRA_IMAGE

@@ -3,8 +3,7 @@ sudo: required
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 
-services:
-  - docker
+services: true
 
 before_install: true
 
@@ -31,6 +30,14 @@ jobs:
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
     - go run build/ci.go test -coverage
+  - os: osx
+    go: '1.10'
+    script:
+    - unset -f cd
+    - brew update
+    - brew cask install osxfuse
+    - go run build/ci.go install
+    - go run build/ci.go test -coverage
   - stage: Lint
     os: linux
     dist: trusty
@@ -42,11 +49,15 @@ jobs:
     script:
     - go run build/ci.go lint
   - stage: Push Docker image
+    services:
+      - docker
     before_install:
-      - docker build -t enapoleone/tomochain .
-      - docker run enapoleone/tomochain
+      - docker build -t etiennenapoleone/tomochain .
+      - docker run etiennenapoleone/tomochain
     deploy:
       provider: script
-      script: bash docker_push
+      script: bash docker_push.sh
       on:
         branch: travis
+  - stage: Trigger rebuild of infrastructure image
+    script: bash docker_rebuild.sh
