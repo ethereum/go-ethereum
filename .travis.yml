@@ -30,8 +30,6 @@ jobs:
     sudo: false
     dist: trusty
     go: '1.10'
-    env:
-    - lint
     git:
       submodules: false
     script:
