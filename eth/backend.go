@@ -189,9 +189,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Clique != nil {
 		c := eth.engine.(*clique.Clique)
 
-		// Set global ipc endpoint.
-		eth.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
-
 		// Inject hook for send tx sign to smartcontract after insert block into chain.
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
@@ -216,7 +213,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				return err
 			}
-
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Clique.RewardCheckpoint
 			if number > 0 && number-rCheckpoint > 0 {
