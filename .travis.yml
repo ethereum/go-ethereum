@@ -1,8 +1,6 @@
 sudo: required
-
 language: go
 go_import_path: github.com/ethereum/go-ethereum
-
 services: skip
 before_install: skip
 
@@ -11,7 +9,6 @@ jobs:
   - stage: Build and test
     os: linux
     dist: trusty
-    sudo: required
     go: 1.9.x
     script:
     - sudo modprobe fuse
@@ -21,7 +18,6 @@ jobs:
     - go run build/ci.go test -coverage
   - os: linux
     dist: trusty
-    sudo: required
     go: '1.10'
     script:
     - sudo modprobe fuse
@@ -30,6 +26,7 @@ jobs:
     - go run build/ci.go install
     - go run build/ci.go test -coverage
   - os: osx
+    sudo: false
     go: '1.10'
     script:
     - unset -f cd
@@ -39,6 +36,7 @@ jobs:
     - go run build/ci.go test -coverage
   - stage: Lint
     os: linux
+    sudo: false
     dist: trusty
     go: '1.10'
     env:
@@ -59,4 +57,5 @@ jobs:
       on:
         branch: travis
   - stage: Trigger rebuild of infrastructure image
+    sudo: false
     script: bash docker_rebuild.sh
