@@ -279,6 +279,12 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			delayDuration string
 			duration      time.Duration
 			paused        bool
+
+			// Cumulative compaction statistic for write pause stage.
+			wpStart          string
+			start            time.Time
+			count            int32
+			total, processed float64
 		)
 		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t", &delayN, &delayDuration, &paused); n != 3 || err != nil {
 			db.log.Error("Write delay statistic not found")
@@ -290,6 +296,19 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			db.log.Error("Failed to parse delay duration", "err", err)
 			merr = err
 			continue
+		}
+		if paused {
+			if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s Paused:%t Start:%s Count:%d Total(MB):%f Processed(MB):%f",
+				&delayN, &delayDuration, &paused, &wpStart, &count, &total, &processed); n != 7 || err != nil {
+				db.log.Error("Failed to parse write pause compaction statistic", "err", err)
+				merr = err
+				continue
+			}
+			if start, err = time.Parse(time.RFC3339, wpStart); err != nil {
+				db.log.Error("Failed to parse write pause status start time", "err", err)
+				merr = err
+				continue
+			}
 		}
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
@@ -317,12 +336,12 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
-		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
+		if paused && count > 0 && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
 			time.Now().After(lastWritePaused.Add(writeDelayWarningThrottler)) {
-			db.log.Warn("Database compacting, degraded performance")
+			log.Warn("Database compacting", "elapsed", time.Since(start), "count", count, "total(MB)", total,
+				"processed(MB)", processed)
 			lastWritePaused = time.Now()
 		}
-
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
 		// Retrieve the database iostats.
