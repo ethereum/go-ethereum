@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -52,7 +53,7 @@ const (
 
 type Masternode struct {
 	Address common.Address
-	Stake   int64
+	Stake   string
 }
 
 // Clique proof-of-authority protocol constants.
@@ -394,7 +395,7 @@ func position(list []common.Address, x common.Address) int {
 	return -1
 }
 
-func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
 	if header.Number.Uint64() == 0 {
 		// Not check signer for genesis block.
 		return true, nil
@@ -404,10 +405,21 @@ func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, e
 	if err != nil {
 		return false, err
 	}
-	preIndex := position(snap.signers(), pre)
-	curIndex := position(snap.signers(), cur)
-	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
-	return (preIndex+1)%len(snap.signers()) == curIndex, nil
+	preIndex := position(masternodes, pre)
+	curIndex := position(masternodes, cur)
+	log.Info("Debugging info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	for i, s := range masternodes {
+		fmt.Printf("%d - %s\n", i, s.String())
+	}
+	return (preIndex+1)%len(masternodes) == curIndex, nil
+}
+
+func GetExtraVanity() int {
+	return extraVanity
+}
+
+func GetExtraSeal() int {
+	return extraSeal
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -606,6 +618,29 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(c.config.Period))
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
+	}
+	return nil
+}
+
+func (c *Clique) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []Masternode) error {
+	number := header.Number.Uint64()
+	log.Trace("take snapshot", "number", number, "hash", header.Hash())
+	snap, err := c.snapshot(chain, number, header.Hash(), nil)
+	if err != nil {
+		return err
+	}
+	currentSigners := snap.signers()
+	proposedSigners := make(map[common.Address]struct{})
+	// count all addresses in ms to be masternode
+	for _, m := range ms {
+		proposedSigners[m.Address] = struct{}{}
+		c.proposals[m.Address] = true
+	}
+	// deactivate current masternodes which aren't in ms
+	for _, s := range currentSigners {
+		if _, ok := proposedSigners[s]; !ok {
+			c.proposals[s] = false
+		}
 	}
 	return nil
 }

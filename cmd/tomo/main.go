@@ -377,13 +377,16 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						if err != nil {
 							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
 						}
-						ms = append(ms, clique.Masternode{Address: candidate, Stake: v.Int64()})
+						ms = append(ms, clique.Masternode{Address: candidate, Stake: v.String()})
 					}
-					// order by cap
-					sort.Slice(ms, func(i, j int) bool {
-						return ms[i].Stake > ms[j].Stake
-					})
-					log.Info("Ordered list of masternode candidates", "candidates", ms)
+					//// order by cap
+					//sort.Slice(ms, func(i, j int) bool {
+					//	return ms[i].Stake > ms[j].Stake
+					//})
+					log.Info("Ordered list of masternode candidates")
+					for _, m := range ms {
+						fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
+					}
 					if len(ms) == 0 {
 						log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
 					} else {

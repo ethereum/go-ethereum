@@ -428,23 +428,10 @@ func (s *Ethereum) UpdateMasternodes(ms []clique.Masternode) error {
 		return errors.New("not clique")
 	}
 	c := s.engine.(*clique.Clique)
-	snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
+	err := c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
 	if err != nil {
 		return err
 	}
-
-	snap.Signers = make(map[common.Address]struct{})
-	for i, m := range ms {
-		if i == NumOfMasternodes {
-			break
-		}
-		snap.Signers[m.Address] = struct{}{}
-	}
-	err = c.StoreSnapshot(snap)
-	if err != nil {
-		return err
-	}
-	log.Trace("Stored masternodes snapshot to db", "number", snap.Number, "hash", snap.Hash)
 	return nil
 }
 
