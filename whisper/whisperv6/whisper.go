@@ -650,7 +650,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
 		if err != nil {
-			log.Warn("message loop", "peer", p.peer.ID(), "err", err)
+			log.Info("message loop", "peer", p.peer.ID(), "err", err)
 			return err
 		}
 		if packet.Size > whisper.MaxMessageSize() {
