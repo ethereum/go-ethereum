@@ -9,6 +9,8 @@ FROM alpine:latest
 
 LABEL maintainer="etienne@tomochain.com"
 
+WORKDIR /tomochain
+
 COPY --from=builder /tomochain/build/bin/tomo /usr/local/bin/tomo
 
 RUN chmod +x /usr/local/bin/tomo
