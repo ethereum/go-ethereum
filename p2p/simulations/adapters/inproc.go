@@ -28,12 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
-// connects them using in-memory net.Pipe connections
+// connects them using net.Pipe
 type SimAdapter struct {
+	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
 	nodes    map[discover.NodeID]*SimNode
 	services map[string]ServiceFunc
@@ -42,8 +44,18 @@ type SimAdapter struct {
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
 // simulation nodes running any of the given services (the services to run on a
 // particular node are passed to the NewNode function in the NodeConfig)
+// the adapter uses a net.Pipe for in-memory simulated network connections
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
+		pipe:     pipes.NetPipe,
+		nodes:    make(map[discover.NodeID]*SimNode),
+		services: services,
+	}
+}
+
+func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
+	return &SimAdapter{
+		pipe:     pipes.TCPPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -81,7 +93,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			MaxPeers:        math.MaxInt32,
 			NoDiscovery:     true,
 			Dialer:          s,
-			EnableMsgEvents: true,
+			EnableMsgEvents: config.EnableMsgEvents,
 		},
 		NoUSB:  true,
 		Logger: log.New("node.id", id.String()),
@@ -102,7 +114,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 }
 
 // Dial implements the p2p.NodeDialer interface by connecting to the node using
-// an in-memory net.Pipe connection
+// an in-memory net.Pipe
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	node, ok := s.GetNode(dest.ID)
 	if !ok {
@@ -112,7 +124,14 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	if srv == nil {
 		return nil, fmt.Errorf("node not running: %s", dest.ID)
 	}
-	pipe1, pipe2 := net.Pipe()
+	// SimAdapter.pipe is net.Pipe (NewSimAdapter)
+	pipe1, pipe2, err := s.pipe()
+	if err != nil {
+		return nil, err
+	}
+	// this is simulated 'listening'
+	// asynchronously call the dialed destintion node's p2p server
+	// to set up connection on the 'listening' side
 	go srv.SetupConn(pipe1, 0, nil)
 	return pipe2, nil
 }
@@ -140,8 +159,8 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 }
 
 // SimNode is an in-memory simulation node which connects to other nodes using
-// an in-memory net.Pipe connection (see SimAdapter.Dial), running devp2p
-// protocols directly over that pipe
+// net.Pipe (see SimAdapter.Dial), running devp2p protocols directly over that
+// pipe
 type SimNode struct {
 	lock         sync.RWMutex
 	ID           discover.NodeID
@@ -241,7 +260,7 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 		for _, name := range sn.config.Services {
 			if err := sn.node.Register(newService(name)); err != nil {
 				regErr = err
-				return
+				break
 			}
 		}
 	})
@@ -313,4 +332,19 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 		}
 	}
 	return server.NodeInfo()
+}
+
+func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int) error {
+	switch v := conn.(type) {
+	case *net.UnixConn:
+		err := v.SetReadBuffer(socketReadBuffer)
+		if err != nil {
+			return err
+		}
+		err = v.SetWriteBuffer(socketWriteBuffer)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

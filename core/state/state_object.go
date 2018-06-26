@@ -219,7 +219,7 @@ func (so *stateObject) updateRoot(db Database) {
 	so.data.Root = so.trie.Hash()
 }
 
-// CommitTrie the storage trie of the object to dwb.
+// CommitTrie the storage trie of the object to db.
 // This updates the trie root.
 func (so *stateObject) CommitTrie(db Database) error {
 	so.updateTrie(db)

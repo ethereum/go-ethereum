@@ -24,7 +24,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 func externalUnmount(mountPoint string) error {
@@ -38,11 +38,11 @@ func externalUnmount(mountPoint string) error {
 	// Try FUSE-specific commands if umount didn't work.
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.CommandContext(ctx, "diskutil", "umount", "force", mountPoint).Run()
+		return exec.CommandContext(ctx, "diskutil", "umount", mountPoint).Run()
 	case "linux":
 		return exec.CommandContext(ctx, "fusermount", "-u", mountPoint).Run()
 	default:
-		return fmt.Errorf("unmount: unimplemented")
+		return fmt.Errorf("swarmfs unmount: unimplemented")
 	}
 }
 
@@ -54,14 +54,14 @@ func addFileToSwarm(sf *SwarmFile, content []byte, size int) error {
 
 	sf.lock.Lock()
 	defer sf.lock.Unlock()
-	sf.key = fkey
+	sf.addr = fkey
 	sf.fileSize = int64(size)
 
 	sf.mountInfo.lock.Lock()
 	defer sf.mountInfo.lock.Unlock()
 	sf.mountInfo.LatestManifest = mhash
 
-	log.Info("Added new file:", "fname", sf.name, "New Manifest hash", mhash)
+	log.Info("swarmfs added new file:", "fname", sf.name, "new Manifest hash", mhash)
 	return nil
 }
 
@@ -75,7 +75,7 @@ func removeFileFromSwarm(sf *SwarmFile) error {
 	defer sf.mountInfo.lock.Unlock()
 	sf.mountInfo.LatestManifest = mkey
 
-	log.Info("Removed file:", "fname", sf.name, "New Manifest hash", mkey)
+	log.Info("swarmfs removed file:", "fname", sf.name, "new Manifest hash", mkey)
 	return nil
 }
 
@@ -102,20 +102,20 @@ func removeDirectoryFromSwarm(sd *SwarmDir) error {
 }
 
 func appendToExistingFileInSwarm(sf *SwarmFile, content []byte, offset int64, length int64) error {
-	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.key, offset, length, true)
+	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.addr, offset, length, true)
 	if err != nil {
 		return err
 	}
 
 	sf.lock.Lock()
 	defer sf.lock.Unlock()
-	sf.key = fkey
+	sf.addr = fkey
 	sf.fileSize = sf.fileSize + int64(len(content))
 
 	sf.mountInfo.lock.Lock()
 	defer sf.mountInfo.lock.Unlock()
 	sf.mountInfo.LatestManifest = mhash
 
-	log.Info("Appended file:", "fname", sf.name, "New Manifest hash", mhash)
+	log.Info("swarmfs appended file:", "fname", sf.name, "new Manifest hash", mhash)
 	return nil
 }
