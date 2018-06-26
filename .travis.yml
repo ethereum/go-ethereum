@@ -1,11 +1,14 @@
+sudo: required
 language: go
 go_import_path: github.com/ethereum/go-ethereum
-sudo: false
-matrix:
+services: skip
+before_install: skip
+
+jobs:
   include:
-  - os: linux
+  - stage: Build and test
+    os: linux
     dist: trusty
-    sudo: required
     go: 1.9.x
     script:
     - sudo modprobe fuse
@@ -15,7 +18,6 @@ matrix:
     - go run build/ci.go test -coverage
   - os: linux
     dist: trusty
-    sudo: required
     go: '1.10'
     script:
     - sudo modprobe fuse
@@ -23,23 +25,37 @@ matrix:
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
     - go run build/ci.go test -coverage
-  - os: osx
-    go: '1.10'
-    script:
-    - unset -f cd
-    - brew update
-    - brew cask install osxfuse
-    - go run build/ci.go install
-    - go run build/ci.go test -coverage
-  - os: linux
+  - stage: Lint
+    os: linux
+    sudo: false
     dist: trusty
     go: '1.10'
-    env:
-    - lint
     git:
       submodules: false
     script:
     - go run build/ci.go lint
+  - stage: Build and push Docker image
+    services:
+      - docker
+    before_install:
+      - docker build -t tomochain/tomochain .
+      - docker run tomochain/tomochain
+    deploy:
+      provider: script
+      script: bash docker_push.sh
+      on:
+        branch: master
+  - stage: Trigger rebuild of infrastructure image
+    sudo: false
+    script: bash docker_rebuild.sh
+
+stages:
+  - name: Build and test
+  - name: Lint
+  - name: Build and push Docker image
+    if: type != pull_request AND branch = master
+  - name: Trigger rebuild of infrastructure image
+    if: type != pull_request AND branch = master
 
 notifications:
   slack:
