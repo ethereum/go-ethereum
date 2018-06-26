@@ -28,7 +28,7 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 }
 
 func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, candidates []common.Address, caps []*big.Int) (common.Address, *Validator, error) {
-	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, candidates, caps)
+	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, candidates, caps, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
