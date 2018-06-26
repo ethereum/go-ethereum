@@ -22,14 +22,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/contracts"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -739,11 +735,7 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 	}
 }
 
-// Create tx for sign to smartcontract after import block into chain.
-func (f *Fetcher) HookCreateTxSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager) {
-	f.importedHook = func(block *types.Block) {
-		if err := contracts.CreateTransactionSign(chainConfig, pool, manager, block); err != nil {
-			log.Error("Fail to create tx sign for imported block", "error", err)
-		}
-	}
+// Bind import hook when block imported into chain.
+func (f *Fetcher) SetImportedHook(importedHook func(*types.Block)) {
+	f.importedHook = importedHook
 }

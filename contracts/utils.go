@@ -19,6 +19,11 @@ const (
 	HexSignMethod = "2fb1b25f"
 )
 
+type rewardLog struct {
+	Sign   uint64   `json:"sign"`
+	Reward *big.Int `json:"reward"`
+}
+
 // Get ethClient over IPC of current node.
 func GetEthClient(ctx *node.ServiceContext) (*ethclient.Client, error) {
 	conf := ctx.GetConfig()
@@ -33,27 +38,29 @@ func GetEthClient(ctx *node.ServiceContext) (*ethclient.Client, error) {
 
 // Send tx sign for block number to smart contract blockSigner.
 func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block) error {
-	// Find active account.
-	account := accounts.Account{}
-	var wallet accounts.Wallet
-	if wallets := manager.Wallets(); len(wallets) > 0 {
-		wallet = wallets[0]
-		if accts := wallets[0].Accounts(); len(accts) > 0 {
-			account = accts[0]
+	if chainConfig.Clique != nil {
+		// Find active account.
+		account := accounts.Account{}
+		var wallet accounts.Wallet
+		if wallets := manager.Wallets(); len(wallets) > 0 {
+			wallet = wallets[0]
+			if accts := wallets[0].Accounts(); len(accts) > 0 {
+				account = accts[0]
+			}
 		}
-	}
 
-	// Create and send tx to smart contract for sign validate block.
-	nonce := pool.State().GetNonce(account.Address)
-	tx := CreateTxSign(block.Number(), nonce, common.HexToAddress(common.BlockSigners))
-	txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
-	if err != nil {
-		log.Error("Fail to create tx sign", "error", err)
-		return err
-	}
+		// Create and send tx to smart contract for sign validate block.
+		nonce := pool.State().GetNonce(account.Address)
+		tx := CreateTxSign(block.Number(), nonce, common.HexToAddress(common.BlockSigners))
+		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
+		if err != nil {
+			log.Error("Fail to create tx sign", "error", err)
+			return err
+		}
 
-	// Add tx signed to local tx pool.
-	pool.AddLocal(txSigned)
+		// Add tx signed to local tx pool.
+		pool.AddLocal(txSigned)
+	}
 
 	return nil
 }
@@ -86,17 +93,11 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(chainReward *big.Int, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend) (map[common.Address]*big.Int, error) {
-	type rewardLog struct {
-		Sign   uint64   `json:"sign"`
-		Reward *big.Int `json:"reward"`
-	}
-
+func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	startBlockNumber := number - (rCheckpoint * 2) + 1
 	endBlockNumber := startBlockNumber + rCheckpoint - 1
 	signers := make(map[common.Address]*rewardLog)
-	totalSigner := uint64(0)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		addrs, err := GetSignersFromContract(blockSignerAddr, client, i)
@@ -119,30 +120,35 @@ func GetRewardForCheckpoint(chainReward *big.Int, blockSignerAddr common.Address
 				} else {
 					signers[addr] = &rewardLog{1, new(big.Int)}
 				}
-				totalSigner++
+				*totalSigner++
 			}
 		}
 	}
 
+	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
+
+	return signers, nil
+}
+
+// Calculate reward for signers.
+func CalculateReward(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
 	resultSigners := make(map[common.Address]*big.Int)
-	// Add reward for signer.
-	calcReward := new(big.Int)
 	// Add reward for signers.
 	for signer, rLog := range signers {
-		calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
-		calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+		// Add reward for signer.
+		calcReward := new(big.Int)
+		calcReward.Div(chainReward, new(big.Int).SetUint64(totalSigner))
+		calcReward.Mul(calcReward, new(big.Int).SetUint64(rLog.Sign))
 		rLog.Reward = calcReward
 
 		resultSigners[signer] = calcReward
 	}
-
 	jsonSigners, err := json.Marshal(signers)
 	if err != nil {
 		log.Error("Fail to parse json signers", "error", err)
 		return nil, err
 	}
-
-	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
+	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 
 	return resultSigners, nil
 }
