@@ -1,16 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 
 function version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
-function go_version {
-    version=$(go version)
-    echo $version
-        regex="([0-9].[0-9]+.[0-9])"
-        if [[ $version =~ $regex ]]; then 
-            echo ${BASH_REMATCH[1]}
-    fi
-}
 
-golang_version=$(go_version)
+golang_version=$(go version |cut -d' ' -f3 |sed 's/go//')
 
 # Clean go build cache when go version is greater than or equal to 1.10
 if !(version_gt 1.10 $golang_version); then
