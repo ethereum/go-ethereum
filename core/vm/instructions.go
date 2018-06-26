@@ -861,7 +861,7 @@ func makeDup(size int64) executionFunc {
 // make swap instruction function
 func makeSwap(size int64) executionFunc {
 	// switch n + 1 otherwise n would be swapped with n
-	size += 1
+	size++
 	return func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		stack.swap(int(size))
 		return nil, nil
