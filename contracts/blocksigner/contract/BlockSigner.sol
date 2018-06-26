@@ -5,7 +5,7 @@ import "./libs/SafeMath.sol";
 contract BlockSigner {
     using SafeMath for uint256;
 
-    event Sign(address _signer, uint256 blockNumber);
+    event Sign(address _signer, uint256 _blockNumber);
 
     mapping(uint256 => address[]) blockSigners;
 

@@ -16,10 +16,10 @@ import (
 )
 
 // BlockSignerABI is the input ABI used to generate the binding from.
-const BlockSignerABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"sign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"getSigners\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"blockNumber\",\"type\":\"uint256\"}],\"name\":\"Sign\",\"type\":\"event\"}]"
+const BlockSignerABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"sign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"getSigners\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"Sign\",\"type\":\"event\"}]"
 
 // BlockSignerBin is the compiled bytecode used for deploying new contracts.
-const BlockSignerBin = `0x6060604052341561000f57600080fd5b6102d88061001e6000396000f30060606040526004361061004b5763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632fb1b25f8114610050578063dfceceae14610068575b600080fd5b341561005b57600080fd5b6100666004356100d1565b005b341561007357600080fd5b61007e6004356101b3565b60405160208082528190810183818151815260200191508051906020019060200280838360005b838110156100bd5780820151838201526020016100a5565b505050509050019250505060405180910390f35b43819010156100df57600080fd5b6100f1816107bc63ffffffff61023a16565b4311156100fd57600080fd5b600081815260208190526040902080546001810161011b8382610250565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff19163373ffffffffffffffffffffffffffffffffffffffff8116919091179091557f9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059908260405173ffffffffffffffffffffffffffffffffffffffff909216825260208201526040908101905180910390a150565b6101bb610279565b60008083815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561022e57602002820191906000526020600020905b815473ffffffffffffffffffffffffffffffffffffffff168152600190910190602001808311610203575b50505050509050919050565b60008282018381101561024957fe5b9392505050565b8154818355818115116102745760008381526020902061027491810190830161028b565b505050565b60206040519081016040526000815290565b6102a991905b808211156102a55760008155600101610291565b5090565b905600a165627a7a723058202122aa6936b95136c1c3d903171e9967879db0166a672dd0a376ba5e2b340a6a0029`
+const BlockSignerBin = `0x6060604052341561000f57600080fd5b6102d88061001e6000396000f30060606040526004361061004b5763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632fb1b25f8114610050578063dfceceae14610068575b600080fd5b341561005b57600080fd5b6100666004356100d1565b005b341561007357600080fd5b61007e6004356101b3565b60405160208082528190810183818151815260200191508051906020019060200280838360005b838110156100bd5780820151838201526020016100a5565b505050509050019250505060405180910390f35b43819010156100df57600080fd5b6100f1816107bc63ffffffff61023a16565b4311156100fd57600080fd5b600081815260208190526040902080546001810161011b8382610250565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff19163373ffffffffffffffffffffffffffffffffffffffff8116919091179091557f9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059908260405173ffffffffffffffffffffffffffffffffffffffff909216825260208201526040908101905180910390a150565b6101bb610279565b60008083815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561022e57602002820191906000526020600020905b815473ffffffffffffffffffffffffffffffffffffffff168152600190910190602001808311610203575b50505050509050919050565b60008282018381101561024957fe5b9392505050565b8154818355818115116102745760008381526020902061027491810190830161028b565b505050565b60206040519081016040526000815290565b6102a991905b808211156102a55760008155600101610291565b5090565b905600a165627a7a7230582072c605c43392422edd0a185ff1131c536a80cb5329c717d23fc954f2afb51b5e0029`
 
 // DeployBlockSigner deploys a new Ethereum contract, binding an instance of BlockSigner to it.
 func DeployBlockSigner(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *BlockSigner, error) {
@@ -299,7 +299,7 @@ type BlockSignerSign struct {
 
 // FilterSign is a free log retrieval operation binding the contract event 0x9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059.
 //
-// Solidity: event Sign(_signer address, blockNumber uint256)
+// Solidity: event Sign(_signer address, _blockNumber uint256)
 func (_BlockSigner *BlockSignerFilterer) FilterSign(opts *bind.FilterOpts) (*BlockSignerSignIterator, error) {
 
 	logs, sub, err := _BlockSigner.contract.FilterLogs(opts, "Sign")
@@ -311,7 +311,7 @@ func (_BlockSigner *BlockSignerFilterer) FilterSign(opts *bind.FilterOpts) (*Blo
 
 // WatchSign is a free log subscription operation binding the contract event 0x9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059.
 //
-// Solidity: event Sign(_signer address, blockNumber uint256)
+// Solidity: event Sign(_signer address, _blockNumber uint256)
 func (_BlockSigner *BlockSignerFilterer) WatchSign(opts *bind.WatchOpts, sink chan<- *BlockSignerSign) (event.Subscription, error) {
 
 	logs, sub, err := _BlockSigner.contract.WatchLogs(opts, "Sign")
