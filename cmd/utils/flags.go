@@ -1182,6 +1182,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 func SetupNetwork(ctx *cli.Context) {
 	// TODO(fjl): move target gas limit into config
 	params.TargetGasLimit = ctx.GlobalUint64(TargetGasLimitFlag.Name)
+	log.Info("Current effective", "targetGasLimit", params.TargetGasLimit)
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
