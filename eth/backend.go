@@ -205,14 +205,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				endBlockNumber := startBlockNumber + rCheckpoint - 1
 				signers := make(map[common.Address]*rewardLog)
 				totalSigner := uint64(0)
+				// Get signers in blockSigner smartcontract.
+				client, err := contracts.GetEthClient(ctx)
+				if err != nil {
+					log.Error("Fail to connect IPC from blockSigner", "error", err)
+					return err
+				}
 
 				for i := startBlockNumber; i <= endBlockNumber; i++ {
-					// Get signers in blockSigner smartcontract.
-					client, err := contracts.GetEthClient(ctx)
-					if err != nil {
-						log.Error("Fail to connect IPC from blockSigner", "error", err)
-						return err
-					}
 					addrs, err := contracts.GetSignersFromContract(client, i)
 					if err != nil {
 						log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
