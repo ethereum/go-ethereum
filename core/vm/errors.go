@@ -18,6 +18,7 @@ package vm
 
 import "errors"
 
+// List execution errors
 var (
 	ErrOutOfGas                 = errors.New("out of gas")
 	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
