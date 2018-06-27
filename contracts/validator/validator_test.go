@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -20,7 +19,7 @@ func TestValidator(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
-	_, validator, err := DeployValidator(transactOpts, contractBackend, []common.Address{addr}, []*big.Int{big.NewInt(0)})
+	_, validator, err := DeployValidator(transactOpts, contractBackend)
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
