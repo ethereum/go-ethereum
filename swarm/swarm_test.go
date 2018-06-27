@@ -17,6 +17,7 @@
 package swarm
 
 import (
+	"context"
 	"encoding/hex"
 	"io/ioutil"
 	"math/rand"
@@ -347,7 +348,7 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 	}
 	dataPut := string(slice)
 
-	k, wait, err := swarm.api.Store(strings.NewReader(dataPut), int64(len(dataPut)), false)
+	k, wait, err := swarm.api.Store(context.TODO(), strings.NewReader(dataPut), int64(len(dataPut)), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +356,7 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 		wait()
 	}
 
-	r, _ := swarm.api.Retrieve(k)
+	r, _ := swarm.api.Retrieve(context.TODO(), k)
 
 	d, err := ioutil.ReadAll(r)
 	if err != nil {

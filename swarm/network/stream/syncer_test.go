@@ -202,7 +202,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		// here we distribute chunks of a random file into stores 1...nodes
 		rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 		size := chunkCount * chunkSize
-		_, wait, err := rrFileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		_, wait, err := rrFileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 		// need to wait cos we then immediately collect the relevant bin content
 		wait()
 		if err != nil {

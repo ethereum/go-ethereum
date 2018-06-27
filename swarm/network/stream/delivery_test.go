@@ -345,7 +345,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
 	rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
-	fileHash, wait, err := rrFileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	fileHash, wait, err := rrFileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
 	wait()
 	if err != nil {
@@ -627,7 +627,7 @@ Loop:
 		hashes := make([]storage.Address, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
-			hash, wait, err := remoteFileStore.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+			hash, wait, err := remoteFileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
 			// wait until all chunks stored
 			wait()
 			if err != nil {

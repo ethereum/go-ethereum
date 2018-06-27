@@ -508,7 +508,7 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	// File data is very short, but it is ensured that its
 	// uniqueness is very certain.
 	data := fmt.Sprintf("test content %s %x", time.Now().Round(0), b)
-	k, wait, err := swarm.api.Put(data, "text/plain", false)
+	k, wait, err := swarm.api.Put(context.TODO(), data, "text/plain", false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -570,7 +570,7 @@ func retrieve(
 
 				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
-				r, _, _, _, err := swarm.api.Get(f.addr, "/")
+				r, _, _, _, err := swarm.api.Get(context.TODO(), f.addr, "/")
 				if err != nil {
 					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 					return
