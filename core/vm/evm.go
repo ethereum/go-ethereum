@@ -51,7 +51,20 @@ func run(evm *EVM, contract *Contract, input []byte) ([]byte, error) {
 			return RunPrecompiledContract(p, input, contract)
 		}
 	}
-	return evm.interpreter.Run(contract, input)
+	for _, interpreter := range evm.interpreters {
+		if interpreter.CanRun(contract.Code) {
+			if evm.interpreter != interpreter {
+				// Ensure that the interpreter pointer is set back
+				// to its current value upon return.
+				defer func(i Interpreter) {
+					evm.interpreter = i
+				}(evm.interpreter)
+				evm.interpreter = interpreter
+			}
+			return interpreter.Run(contract, input)
+		}
+	}
+	return nil, ErrNoCompatibleInterpreter
 }
 
 // Context provides the EVM with auxiliary information. Once provided
@@ -103,7 +116,8 @@ type EVM struct {
 	vmConfig Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
-	interpreter *Interpreter
+	interpreters []Interpreter
+	interpreter  Interpreter
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
@@ -117,14 +131,17 @@ type EVM struct {
 // only ever be used *once*.
 func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
 	evm := &EVM{
-		Context:     ctx,
-		StateDB:     statedb,
-		vmConfig:    vmConfig,
-		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(ctx.BlockNumber),
+		Context:      ctx,
+		StateDB:      statedb,
+		vmConfig:     vmConfig,
+		chainConfig:  chainConfig,
+		chainRules:   chainConfig.Rules(ctx.BlockNumber),
+		interpreters: make([]Interpreter, 1),
 	}
 
-	evm.interpreter = NewInterpreter(evm, vmConfig)
+	evm.interpreters[0] = NewEVMInterpreter(evm, vmConfig)
+	evm.interpreter = evm.interpreters[0]
+
 	return evm
 }
 
@@ -132,6 +149,11 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 // it's safe to be called multiple times.
 func (evm *EVM) Cancel() {
 	atomic.StoreInt32(&evm.abort, 1)
+}
+
+// Interpreter returns the current interpreter
+func (evm *EVM) Interpreter() Interpreter {
+	return evm.interpreter
 }
 
 // Call executes the contract associated with the addr with the given input as
@@ -291,9 +313,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// Make sure the readonly is only set if we aren't in readonly yet
 	// this makes also sure that the readonly flag isn't removed for
 	// child calls.
-	if !evm.interpreter.readOnly {
-		evm.interpreter.readOnly = true
-		defer func() { evm.interpreter.readOnly = false }()
+	if !evm.interpreter.IsReadOnly() {
+		evm.interpreter.SetReadOnly(true)
+		defer func() { evm.interpreter.SetReadOnly(false) }()
 	}
 
 	var (
@@ -414,6 +436,3 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
-
-// Interpreter returns the EVM interpreter
-func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
