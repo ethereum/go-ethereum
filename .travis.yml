@@ -24,7 +24,9 @@ jobs:
     - sudo chmod 666 /dev/fuse
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
-    - travis_wait go run build/ci.go test -coverage
+    - while sleep 540; do echo "[ still running ]"; done &
+    - go run build/ci.go test -coverage
+    - kill %1
   - os: linux
     dist: trusty
     go: '1.10'
@@ -33,7 +35,9 @@ jobs:
     - sudo chmod 666 /dev/fuse
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
-    - travis_wait go run build/ci.go test -coverage
+    - while sleep 540; do echo "[ still running ]"; done &
+    - go run build/ci.go test -coverage
+    - kill %1
   - stage: Build and push Docker image
     services:
       - docker
