@@ -6,6 +6,15 @@ before_install: skip
 
 jobs:
   include:
+  - stage: Lint
+    os: linux
+    sudo: false
+    dist: trusty
+    go: '1.10'
+    git:
+      submodules: false
+      script:
+        - go run build/ci.go lint
   - stage: Build and test
     os: linux
     dist: trusty
@@ -15,7 +24,7 @@ jobs:
     - sudo chmod 666 /dev/fuse
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
-    - go run build/ci.go test -coverage
+    - travis_wait go run build/ci.go test -coverage
   - os: linux
     dist: trusty
     go: '1.10'
@@ -24,16 +33,7 @@ jobs:
     - sudo chmod 666 /dev/fuse
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
-    - go run build/ci.go test -coverage
-  - stage: Lint
-    os: linux
-    sudo: false
-    dist: trusty
-    go: '1.10'
-    git:
-      submodules: false
-    script:
-    - go run build/ci.go lint
+    - travis_wait go run build/ci.go test -coverage
   - stage: Build and push Docker image
     services:
       - docker
@@ -50,8 +50,8 @@ jobs:
     script: bash docker_rebuild.sh
 
 stages:
-  - name: Build and test
   - name: Lint
+  - name: Build and test
   - name: Build and push Docker image
     if: type != pull_request AND branch = master
   - name: Trigger rebuild of infrastructure image
