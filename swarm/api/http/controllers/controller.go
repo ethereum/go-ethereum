@@ -49,7 +49,7 @@ func (controller *Controller) Respond(w http.ResponseWriter, req *messages.Reque
 		Msg:       msg,
 		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
-		template:  views.GetTemplate(code),
+		Template:  views.GetTemplate(code),
 	})
 }
 

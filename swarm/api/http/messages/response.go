@@ -22,6 +22,6 @@ type ResponseParams struct {
 	Msg       string
 	Code      int
 	Timestamp string
-	template  *template.Template
+	Template  *template.Template
 	Details   template.HTML
 }

@@ -65,7 +65,7 @@ func (controller *BzzListController) Get(w http.ResponseWriter, r *messages.Requ
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
 		w.Header().Set("Content-Type", "text/html")
 		err := views.HtmlListTemplate.Execute(w, &views.HtmlListData{
-			URI: &api.Uri{
+			URI: &api.URI{
 				Scheme: "bzz",
 				Addr:   r.Uri.Addr,
 				Path:   r.Uri.Path,
