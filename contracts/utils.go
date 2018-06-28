@@ -8,9 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -22,18 +20,6 @@ const (
 type rewardLog struct {
 	Sign   uint64   `json:"sign"`
 	Reward *big.Int `json:"reward"`
-}
-
-// Get ethClient over IPC of current node.
-func GetEthClient(ctx *node.ServiceContext) (*ethclient.Client, error) {
-	conf := ctx.GetConfig()
-	client, err := ethclient.Dial(conf.IPCEndpoint())
-	if err != nil {
-		log.Error("Fail to connect RPC", "error", err)
-		return nil, err
-	}
-
-	return client, nil
 }
 
 // Send tx sign for block number to smart contract blockSigner.
