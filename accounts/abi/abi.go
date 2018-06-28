@@ -138,21 +138,27 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		// empty defaults to function according to the abi spec
 		case "function", "":
+			_, ok := abi.Methods[field.Name]
+			if ok {
+				abi.Methods[field.Name+strconv.Itoa(functionCnt)] = abi.Methods[field.Name]
+			}
 			abi.Methods[field.Name] = Method{
 				Name:    field.Name,
 				Const:   field.Constant,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
-			abi.Methods[field.Name+strconv.Itoa(functionCnt)] = abi.Methods[field.Name]
 			functionCnt++
 		case "event":
+			_, ok := abi.Events[field.Name]
+			if ok {
+				abi.Events[field.Name+strconv.Itoa(eventCnt)] = abi.Events[field.Name]
+			}
 			abi.Events[field.Name] = Event{
 				Name:      field.Name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
-			abi.Events[field.Name+strconv.Itoa(eventCnt)] = abi.Events[field.Name]
 			eventCnt++
 		}
 	}
