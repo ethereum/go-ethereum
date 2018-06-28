@@ -316,17 +316,20 @@ func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
 }
 
 func (tab *Table) findnode(n *Node, targetID NodeID, reply chan<- []*Node) {
+	fails := tab.db.findFails(n.ID)
 	r, err := tab.net.findnode(n.ID, n.addr(), targetID)
-	if err != nil {
-		// Bump the failure counter to detect and evacuate non-bonded entries
-		fails := tab.db.findFails(n.ID) + 1
+	if err != nil || len(r) == 0 {
+		fails++
 		tab.db.updateFindFails(n.ID, fails)
-		log.Trace("Bumping findnode failure counter", "id", n.ID, "failcount", fails)
+		log.Trace("Findnode failed", "id", n.ID, "failcount", fails, "err", err)
 		if fails >= maxFindnodeFailures {
 			log.Trace("Too many findnode failures, dropping", "id", n.ID, "failcount", fails)
 			tab.delete(n)
 		}
+	} else if fails > 0 {
+		tab.db.updateFindFails(n.ID, fails-1)
 	}
+
 	// Grab as many nodes as possible if we're in the init phase.
 	if !tab.isInitDone() {
 		for _, n := range r {
