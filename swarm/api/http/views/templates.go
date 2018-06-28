@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http
+package views
 
 import (
 	"html/template"
@@ -23,12 +23,12 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
-type htmlListData struct {
+type HtmlListData struct {
 	URI  *api.URI
 	List *api.ManifestList
 }
 
-var htmlListTemplate = template.Must(template.New("html-list").Funcs(template.FuncMap{"basename": path.Base}).Parse(`
+var HtmlListTemplate = template.Must(template.New("html-list").Funcs(template.FuncMap{"basename": path.Base}).Parse(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -71,7 +71,7 @@ var htmlListTemplate = template.Must(template.New("html-list").Funcs(template.Fu
 </body>
 `[1:]))
 
-var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
+var LandingPageTemplate = template.Must(template.New("landingPage").Parse(`
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
