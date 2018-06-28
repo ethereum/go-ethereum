@@ -124,7 +124,7 @@ func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string
 		}
 	}
 	tab.seedRand()
-	tab.loadSeedNodes(false)
+	tab.loadSeedNodes()
 	// Start the background expiration goroutine after loading seeds so that the search for
 	// seed nodes also considers older nodes that would otherwise be removed by the
 	// expiration.
@@ -419,7 +419,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// Load nodes from the database and insert
 	// them. This should yield a few previously seen nodes that are
 	// (hopefully) still alive.
-	tab.loadSeedNodes(true)
+	tab.loadSeedNodes()
 
 	// Run self lookup to discover new neighbor nodes.
 	tab.lookup(tab.self.ID, false)
@@ -437,7 +437,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	}
 }
 
-func (tab *Table) loadSeedNodes(bond bool) {
+func (tab *Table) loadSeedNodes() {
 	seeds := tab.db.querySeeds(seedCount, seedMaxAge)
 	seeds = append(seeds, tab.nursery...)
 	for i := range seeds {
