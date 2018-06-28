@@ -18,7 +18,7 @@
 Show nicely (but simple) formatted HTML error pages (or respond with JSON
 if the appropriate `Accept` header is set)) for the http package.
 */
-package http
+package views
 
 import (
 	"encoding/json"
@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/http/messages"
 	l "github.com/ethereum/go-ethereum/swarm/log"
 )
 
@@ -56,8 +57,8 @@ type ResponseParams struct {
 //a custom error case struct that would be used to store validators and
 //additional error info to display with client responses.
 type CaseError struct {
-	Validator func(*Request) bool
-	Msg       func(*Request) string
+	Validator func(*messages.Request) bool
+	Msg       func(*messages.Request) string
 }
 
 //we init the error handling right on boot time, so lookup and http response is fast
@@ -86,9 +87,11 @@ func initErrHandling() {
 
 	caseErrors = []CaseError{
 		{
-			Validator: func(r *Request) bool { return r.uri != nil && r.uri.Addr != "" && strings.HasPrefix(r.uri.Addr, "0x") },
-			Msg: func(r *Request) string {
-				uriCopy := r.uri
+			Validator: func(r *messages.Request) bool {
+				return r.Uri != nil && r.Uri.Addr != "" && strings.HasPrefix(r.Uri.Addr, "0x")
+			},
+			Msg: func(r *messages.Request) string {
+				uriCopy := r.Uri
 				uriCopy.Addr = strings.TrimPrefix(uriCopy.Addr, "0x")
 				return fmt.Sprintf(`The requested hash seems to be prefixed with '0x'. You will be redirected to the correct URL within 5 seconds.<br/>
 			Please click <a href='%[1]s'>here</a> if your browser does not redirect you.<script>setTimeout("location.href='%[1]s';",5000);</script>`, "/"+uriCopy.String())
@@ -98,7 +101,7 @@ func initErrHandling() {
 
 //ValidateCaseErrors is a method that process the request object through certain validators
 //that assert if certain conditions are met for further information to log as an error
-func ValidateCaseErrors(r *Request) string {
+func ValidateCaseErrors(r *messages.Request) string {
 	for _, err := range caseErrors {
 		if err.Validator(r) {
 			return err.Msg(r)
@@ -114,7 +117,7 @@ func ValidateCaseErrors(r *Request) string {
 //For example, if the user requests bzz:/<hash>/read and that manifest contains entries
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
-func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestList) {
+func ShowMultipleChoices(w http.ResponseWriter, req *messages.Request, list api.ManifestList) {
 	msg := ""
 	if list.Entries == nil {
 		Respond(w, req, "Could not resolve", http.StatusInternalServerError)
@@ -142,13 +145,13 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
+func Respond(w http.ResponseWriter, req *messages.Request, msg string, code int) {
 	additionalMessage := ValidateCaseErrors(req)
 	switch code {
 	case http.StatusInternalServerError:
-		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.ruid, "code", code)
+		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.Ruid, "code", code)
 	default:
-		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
+		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.Ruid, "code", code)
 	}
 
 	if code >= 400 {
@@ -161,7 +164,7 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 		Msg:       msg,
 		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
-		template:  getTemplate(code),
+		template:  GetTemplate(code),
 	})
 }
 
@@ -192,7 +195,7 @@ func respondJSON(w http.ResponseWriter, params *ResponseParams) {
 }
 
 //get the HTML template for a given code
-func getTemplate(code int) *template.Template {
+func GetTemplate(code int) *template.Template {
 	if val, tmpl := templateMap[code]; tmpl {
 		return val
 	}

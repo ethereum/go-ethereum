@@ -25,6 +25,6 @@ import (
 type Request struct {
 	http.Request
 
-	uri  *api.URI
-	ruid string // request unique id
+	Uri  *api.URI
+	Ruid string // request unique id
 }

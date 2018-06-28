@@ -24,7 +24,7 @@ they won't be found.
 For this reason we resort to save the HTML error pages as strings, which then can be
 parsed by Go's html/template package
 */
-package http
+package views
 
 //This returns the HTML for generic errors
 func GetGenericErrorPage() string {
