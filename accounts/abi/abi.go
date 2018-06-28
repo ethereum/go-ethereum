@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 // The ABI holds information about a contract's context and available
@@ -108,6 +109,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 
 	abi.Methods = make(map[string]Method)
 	abi.Events = make(map[string]Event)
+	functionCnt, eventCnt := 0, 0
 	for _, field := range fields {
 		switch field.Type {
 		case "constructor":
@@ -122,12 +124,16 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
+			abi.Methods[field.Name+strconv.Itoa(functionCnt)] = abi.Methods[field.Name]
+			functionCnt++
 		case "event":
 			abi.Events[field.Name] = Event{
 				Name:      field.Name,
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
+			abi.Events[field.Name+strconv.Itoa(eventCnt)] = abi.Events[field.Name]
+			eventCnt++
 		}
 	}
 
