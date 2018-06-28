@@ -6,15 +6,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/api/http/messages"
 	"github.com/ethereum/go-ethereum/swarm/api/http/views"
 	l "github.com/ethereum/go-ethereum/swarm/log"
 )
 
 type Controller struct {
-	api *api.API
-
 	ControllerHandler
 }
 
@@ -57,8 +54,8 @@ func (controller *Controller) Respond(w http.ResponseWriter, req *messages.Reque
 func respond(w http.ResponseWriter, r *http.Request, params *messages.ResponseParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
-		//	respondJSON(w, params)
+		views.RespondJSON(w, params)
 	} else {
-		//	respondHTML(w, params)
+		views.RespondHTML(w, params)
 	}
 }

@@ -159,36 +159,36 @@ func Respond(w http.ResponseWriter, req *messages.Request, msg string, code int)
 		w.Header().Del("ETag")
 	}
 
-	respond(w, &req.Request, &ResponseParams{
+	respond(w, &req.Request, &messages.ResponseParams{
 		Code:      code,
 		Msg:       msg,
 		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
-		template:  GetTemplate(code),
+		Template:  GetTemplate(code),
 	})
 }
 
 //evaluate if client accepts html or json response
-func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
+func respond(w http.ResponseWriter, r *http.Request, params *messages.ResponseParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
-		respondJSON(w, params)
+		RespondJSON(w, params)
 	} else {
-		respondHTML(w, params)
+		RespondHTML(w, params)
 	}
 }
 
 //return a HTML page
-func respondHTML(w http.ResponseWriter, params *ResponseParams) {
+func RespondHTML(w http.ResponseWriter, params *messages.ResponseParams) {
 	htmlCounter.Inc(1)
-	err := params.template.Execute(w, params)
+	err := params.Template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
 	}
 }
 
 //return JSON
-func respondJSON(w http.ResponseWriter, params *ResponseParams) {
+func RespondJSON(w http.ResponseWriter, params *messages.ResponseParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)

@@ -29,6 +29,8 @@ import (
 )
 
 type BzzListController struct {
+	Api *api.API
+
 	*Controller
 }
 
@@ -44,7 +46,7 @@ func (controller *BzzListController) Get(w http.ResponseWriter, r *messages.Requ
 		return
 	}
 
-	addr, err := controller.api.Resolve(r.Uri)
+	addr, err := controller.Api.Resolve(r.Uri)
 	if err != nil {
 		//getListFail.Inc(1)
 		controller.Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.Uri.Addr, err), http.StatusNotFound)
@@ -52,7 +54,7 @@ func (controller *BzzListController) Get(w http.ResponseWriter, r *messages.Requ
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.Ruid, "key", addr)
 
-	list, err := controller.getManifestList(addr, r.Uri.Path)
+	list, err := controller.GetManifestList(addr, r.Uri.Path)
 
 	if err != nil {
 		// getListFail.Inc(1)
@@ -83,8 +85,8 @@ func (controller *BzzListController) Get(w http.ResponseWriter, r *messages.Requ
 	json.NewEncoder(w).Encode(&list)
 }
 
-func (controller *BzzListController) getManifestList(addr storage.Address, prefix string) (list api.ManifestList, err error) {
-	walker, err := controller.api.NewManifestWalker(addr, nil)
+func (controller *BzzListController) GetManifestList(addr storage.Address, prefix string) (list api.ManifestList, err error) {
+	walker, err := controller.Api.NewManifestWalker(addr, nil)
 	if err != nil {
 		return
 	}
