@@ -103,14 +103,6 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // considered a revert-and-consume-all-gas operation except for
 // errExecutionReverted which means revert-and-keep-gas-left.
 func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
-	// Increment the call depth which is restricted to 1024
-	in.evm.depth++
-	defer func() { in.evm.depth-- }()
-
-	// Reset the previous call's return data. It's unimportant to preserve the old buffer
-	// as every returning call will return new data anyway.
-	in.returnData = nil
-
 	if in.intPool == nil {
 		in.intPool = poolOfIntPools.get()
 		defer func() {
@@ -118,6 +110,14 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 			in.intPool = nil
 		}()
 	}
+
+	// Increment the call depth which is restricted to 1024
+	in.evm.depth++
+	defer func() { in.evm.depth-- }()
+
+	// Reset the previous call's return data. It's unimportant to preserve the old buffer
+	// as every returning call will return new data anyway.
+	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
