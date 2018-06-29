@@ -50,11 +50,11 @@ type fakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Put(*Chunk) {
+func (f *fakeChunkStore) Put(context.Context, *Chunk) {
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(Address) (*Chunk, error) {
+func (f *fakeChunkStore) Get(context.Context, Address) (*Chunk, error) {
 	return nil, errors.New("FakeChunkStore doesn't support Get")
 }
 
@@ -281,7 +281,7 @@ func TestRandomBrokenData(t *testing.T) {
 }
 
 func benchReadAll(reader LazySectionReader) {
-	size, _ := reader.Size(nil)
+	size, _ := reader.Size(context.TODO(), nil)
 	output := make([]byte, 1000)
 	for pos := int64(0); pos < size; pos += 1000 {
 		reader.ReadAt(output, pos)

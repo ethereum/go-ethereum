@@ -437,7 +437,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			} else {
 				//use the actual localstore
 				lstore := stores[id]
-				_, err = lstore.Get(chunk)
+				_, err = lstore.Get(context.TODO(), chunk)
 			}
 			if err != nil {
 				log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))

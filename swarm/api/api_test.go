@@ -90,7 +90,7 @@ func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	quitC := make(chan bool)
-	size, err := reader.Size(quitC)
+	size, err := reader.Size(context.TODO(), quitC)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

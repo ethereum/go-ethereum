@@ -250,7 +250,8 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
-	Size(chan bool) (int64, error)
+	Context() context.Context
+	Size(context.Context, chan bool) (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
@@ -260,8 +261,12 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (r *LazyTestSectionReader) Size(chan bool) (int64, error) {
+func (r *LazyTestSectionReader) Size(context.Context, chan bool) (int64, error) {
 	return r.SectionReader.Size(), nil
+}
+
+func (r *LazyTestSectionReader) Context() context.Context {
+	return context.TODO()
 }
 
 type StoreParams struct {
@@ -298,7 +303,7 @@ type Reference []byte
 
 // Putter is responsible to store data and create a reference for it
 type Putter interface {
-	Put(ChunkData) (Reference, error)
+	Put(context.Context, ChunkData) (Reference, error)
 	// RefSize returns the length of the Reference created by this Putter
 	RefSize() int64
 	// Close is to indicate that no more chunk data will be Put on this Putter
@@ -309,7 +314,7 @@ type Putter interface {
 
 // Getter is an interface to retrieve a chunk's data by its reference
 type Getter interface {
-	Get(Reference) (ChunkData, error)
+	Get(context.Context, Reference) (ChunkData, error)
 }
 
 // NOTE: this returns invalid data if chunk is encrypted

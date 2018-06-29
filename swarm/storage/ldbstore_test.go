@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -157,7 +158,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	_, err = db.Get(ZeroAddr)
+	_, err = db.Get(context.TODO(), ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -188,7 +189,7 @@ func testIterator(t *testing.T, mock bool) {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
-		db.Put(chunks[i])
+		db.Put(context.TODO(), chunks[i])
 		chunkkeys[i] = chunks[i].Addr
 		j := i
 		go func() {
@@ -299,7 +300,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		go ldb.Put(chunks[i])
+		go ldb.Put(context.TODO(), chunks[i])
 	}
 
 	// wait for all chunks to be stored
@@ -310,7 +311,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+		ret, err := ldb.Get(context.TODO(), chunks[i].Addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -349,7 +350,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
+		ldb.Put(context.TODO(), chunks[i])
 	}
 
 	// wait for all chunks to be stored
@@ -364,7 +365,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	var missing int
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+		ret, err := ldb.Get(context.TODO(), chunks[i].Addr)
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
@@ -403,7 +404,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		go ldb.Put(chunks[i])
+		go ldb.Put(context.TODO(), chunks[i])
 	}
 
 	// wait for all chunks to be stored before continuing
@@ -428,7 +429,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+		ret, err := ldb.Get(context.TODO(), chunks[i].Addr)
 
 		if i%2 == 0 {
 			// expect even chunks to be missing
@@ -465,7 +466,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
+		ldb.Put(context.TODO(), chunks[i])
 	}
 
 	// wait for all chunks to be stored before continuing
@@ -494,7 +495,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	n = 10
 
 	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
+		ldb.Put(context.TODO(), chunks[i])
 	}
 
 	// wait for all chunks to be stored before continuing
@@ -504,14 +505,14 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// expect for first chunk to be missing, because it has the smallest access value
 	idx := 0
-	ret, err := ldb.Get(chunks[idx].Addr)
+	ret, err := ldb.Get(context.TODO(), chunks[idx].Addr)
 	if err == nil || ret != nil {
 		t.Fatal("expected first chunk to be missing, but got no error")
 	}
 
 	// expect for last chunk to be present, as it has the largest access value
 	idx = 9
-	ret, err = ldb.Get(chunks[idx].Addr)
+	ret, err = ldb.Get(context.TODO(), chunks[idx].Addr)
 	if err != nil {
 		t.Fatalf("expected no error, but got %s", err)
 	}

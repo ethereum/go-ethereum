@@ -126,7 +126,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	return testRegistry, nil
 }
 
-func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
+func defaultRetrieveFunc(id discover.NodeID) func(ctx context.Context, chunk *storage.Chunk) error {
 	return nil
 }
 
@@ -217,14 +217,14 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(addr storage.Address) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (*storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
+func (rrs *roundRobinStore) Put(ctx context.Context, chunk *storage.Chunk) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(chunk)
+	rrs.stores[idx].Put(ctx, chunk)
 }
 
 func (rrs *roundRobinStore) Close() {
@@ -369,8 +369,8 @@ func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
 	}
 }
 
-func (c *testExternalClient) NeedData(hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(hash)
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
+	chunk, _ := c.db.GetOrCreateRequest(ctx, hash)
 	if chunk.ReqC == nil {
 		return nil
 	}
@@ -429,7 +429,7 @@ func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint6
 	return b, from, to, nil, nil
 }
 
-func (s *testExternalServer) GetData([]byte) ([]byte, error) {
+func (s *testExternalServer) GetData(context.Context, []byte) ([]byte, error) {
 	return make([]byte, 4096), nil
 }
 

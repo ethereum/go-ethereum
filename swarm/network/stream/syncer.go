@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"context"
 	"math"
 	"strconv"
 	"time"
@@ -78,8 +79,8 @@ func (s *SwarmSyncerServer) Close() {
 }
 
 // GetSection retrieves the actual chunk from localstore
-func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Address(key))
+func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
+	chunk, err := s.db.Get(ctx, storage.Address(key))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {
@@ -210,8 +211,8 @@ func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 }
 
 // NeedData
-func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
-	chunk, _ := s.db.GetOrCreateRequest(key)
+func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func()) {
+	chunk, _ := s.db.GetOrCreateRequest(ctx, key)
 	// TODO: we may want to request from this peer anyway even if the request exists
 
 	// ignoreExistingRequest is temporary commented out until its functionality is verified.

@@ -125,6 +125,10 @@ type resource struct {
 	updated    time.Time
 }
 
+func (r *resource) Context() context.Context {
+	return context.TODO()
+}
+
 // TODO Expire content after a defined period (to force resync)
 func (r *resource) isSynced() bool {
 	return !r.updated.IsZero()
@@ -134,7 +138,7 @@ func (r *resource) NameHash() common.Hash {
 	return r.nameHash
 }
 
-func (r *resource) Size(chan bool) (int64, error) {
+func (r *resource) Size(context.Context, chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}
@@ -413,7 +417,7 @@ func (h *Handler) New(ctx context.Context, name string, frequency uint64) (stora
 
 	chunk := h.newMetaChunk(name, currentblock, frequency)
 
-	h.chunkStore.Put(chunk)
+	h.chunkStore.Put(ctx, chunk)
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	// create the internal index for the resource and populate it with the data of the first version
@@ -593,7 +597,7 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, refresh 
 			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := h.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := h.chunkStore.GetWithTimeout(key, defaultRetrieveTimeout)
+		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), key, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
 				return h.updateIndex(rsrc, chunk)
@@ -603,7 +607,7 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, refresh 
 			for {
 				newversion := version + 1
 				key := h.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := h.chunkStore.GetWithTimeout(key, defaultRetrieveTimeout)
+				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), key, defaultRetrieveTimeout)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
 				}
@@ -621,8 +625,8 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, refresh 
 
 // Retrieves a resource metadata chunk and creates/updates the index entry for it
 // with the resulting metadata
-func (h *Handler) Load(addr storage.Address) (*resource, error) {
-	chunk, err := h.chunkStore.GetWithTimeout(addr, defaultRetrieveTimeout)
+func (h *Handler) Load(ctx context.Context, addr storage.Address) (*resource, error) {
+	chunk, err := h.chunkStore.GetWithTimeout(ctx, addr, defaultRetrieveTimeout)
 	if err != nil {
 		return nil, NewError(ErrNotFound, err.Error())
 	}
@@ -890,7 +894,7 @@ func (h *Handler) update(ctx context.Context, name string, data []byte, multihas
 	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	h.chunkStore.Put(chunk)
+	h.chunkStore.Put(ctx, chunk)
 	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData, "multihash", multihash)
 
 	// update our resources map entry and return the new key
