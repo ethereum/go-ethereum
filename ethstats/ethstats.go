@@ -499,7 +499,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 	return []byte("[]"), nil
 }
 
-// reportBlock retrieves the current chain head and repors it to the stats server.
+// reportBlock retrieves the current chain head and reports it to the stats server.
 func (s *Service) reportBlock(conn *websocket.Conn, block *types.Block) error {
 	// Gather the block details from the header or block chain
 	details := s.assembleBlockStats(block)
