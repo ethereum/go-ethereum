@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
+	contract2 "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -111,9 +112,25 @@ func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rChec
 		}
 	}
 
+	// Get Owner for signers.
+	owners := make(map[common.Address]*rewardLog)
+	if len(signers) > 0 {
+		for addr, log := range signers {
+			owner, err := GetCandidatesOwnerByAddress(client, addr)
+			if err != nil {
+				owner = addr
+			}
+			if _, ok := owners[owner]; ok {
+				owners[owner].Sign = owners[owner].Sign + log.Sign
+			} else {
+				owners[owner] = log
+			}
+		}
+	}
+
 	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
 
-	return signers, nil
+	return owners, nil
 }
 
 // Calculate reward for signers.
@@ -137,4 +154,22 @@ func CalculateReward(chainReward *big.Int, signers map[common.Address]*rewardLog
 	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 
 	return resultSigners, nil
+}
+
+// Get candidate owner by address.
+func GetCandidatesOwnerByAddress(client bind.ContractBackend, addr common.Address) (common.Address, error) {
+	owner := common.Address{}
+	validator, err := contract2.NewTomoValidator(common.HexToAddress(common.TomoValidator), client)
+	if err != nil {
+		log.Error("Fail get instance of IValidator", "error", err)
+		return owner, err
+	}
+	opts := new(bind.CallOpts)
+	owner, err = validator.GetCandidateOwner(opts, addr)
+	if err != nil {
+		log.Error("Fail get candidate owner", "error", err)
+		return owner, err
+	}
+
+	return owner, nil
 }
