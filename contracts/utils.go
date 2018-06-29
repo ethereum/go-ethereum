@@ -161,7 +161,7 @@ func GetCandidatesOwnerByAddress(client bind.ContractBackend, addr common.Addres
 	owner := common.Address{}
 	validator, err := contract2.NewTomoValidator(common.HexToAddress(common.TomoValidator), client)
 	if err != nil {
-		log.Error("Fail get instance of IValidator", "error", err)
+		log.Error("Fail get instance of Tomo Validator", "error", err)
 		return owner, err
 	}
 	opts := new(bind.CallOpts)
