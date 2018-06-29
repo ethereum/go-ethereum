@@ -377,7 +377,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						if err != nil {
 							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
 						}
-						ms = append(ms, clique.Masternode{Address: candidate, Stake: v.String()})
+						//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
+						if candidate.String() != "0x0000000000000000000000000000000000000000" {
+							ms = append(ms, clique.Masternode{Address: candidate, Stake: v.String()})
+						}
 					}
 					//// order by cap
 					//sort.Slice(ms, func(i, j int) bool {
