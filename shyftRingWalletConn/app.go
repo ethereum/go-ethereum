@@ -6,7 +6,8 @@ import (
   "net"
   "fmt"
   "os"
-	"encoding/json"
+  "encoding/json"
+  "github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -56,8 +57,18 @@ func handleRequest(conn net.Conn) {
 		//Ecrecover takes 2 args, bytes[] and bytes[]
 		// we need to pass in the hash of the message as bytes
 		// and the bytes array of the signature
-		//crypto.Ecrecover()
-		fmt.Println("Message is ", msg)
+		var msg = []byte(dat["msg"].(string))
+		var sig = []byte(dat["sig"].(string))
+		var address, err = crypto.Ecrecover(msg, sig)
+		if err != nil {
+			fmt.Println("The error is ")
+			fmt.Println(err)
+		}
+		s := string(address[:])
+		fmt.Println("the address is ")
+		fmt.Println(s)
+		//fmt.Println(address)
+		//fmt.Println("Message is ", msg)
 	}
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
