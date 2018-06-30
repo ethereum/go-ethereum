@@ -46,9 +46,8 @@ func handleRequest(conn net.Conn) {
 	if err == nil {
 		fmt.Println("Message is ", string(buf[:msg]))
 		var dat map[string]interface{}
-		byt := []byte(string(buf[:msg]))
-		
-		if err := json.Unmarshal(byt, &dat); err != nil {
+
+		if err := json.Unmarshal(buf[:msg], &dat); err != nil {
 			panic(err)
 		}
 		fmt.Println(dat["address"])
