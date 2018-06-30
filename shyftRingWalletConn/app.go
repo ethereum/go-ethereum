@@ -59,7 +59,8 @@ func handleRequest(conn net.Conn) {
 		// and the bytes array of the signature
 		var msg = []byte(dat["msg"].(string))
 		var sig = []byte(dat["sig"].(string))
-		var address, err = crypto.Ecrecover(msg, sig)
+		new_msg := crypto.Keccak256(msg)
+		var address, err = crypto.Ecrecover(new_msg, sig)
 		if err != nil {
 			fmt.Println("The error is ")
 			fmt.Println(err)
