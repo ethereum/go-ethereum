@@ -3,9 +3,10 @@ package main
 //@NOTE SHYFT main func for api, sets up router and spins up a server
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
-"net"
-"fmt"
-"os"
+  "net"
+  "fmt"
+  "os"
+	"encoding/json"
 )
 
 const (
@@ -44,6 +45,19 @@ func handleRequest(conn net.Conn) {
 
 	if err == nil {
 		fmt.Println("Message is ", string(buf[:msg]))
+		var dat map[string]interface{}
+		byt := []byte(string(buf[:msg]))
+		
+		if err := json.Unmarshal(byt, &dat); err != nil {
+			panic(err)
+		}
+		fmt.Println(dat["address"])
+		fmt.Println(dat["msg"])
+		fmt.Println(dat["sig"])
+		//Ecrecover takes 2 args, bytes[] and bytes[]
+		// we need to pass in the hash of the message as bytes
+		// and the bytes array of the signature
+		//crypto.Ecrecover()
 		fmt.Println("Message is ", msg)
 	}
 	if err != nil {
