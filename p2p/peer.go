@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	ErrShuttingDown = errors.New("shutting down")
 )
 
 const (
@@ -47,8 +52,6 @@ const (
 	discMsg      = 0x01
 	pingMsg      = 0x02
 	pongMsg      = 0x03
-	getPeersMsg  = 0x04
-	peersMsg     = 0x05
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -222,6 +225,7 @@ loop:
 			reason = discReasonForError(err)
 			break loop
 		case err = <-p.disc:
+			reason = discReasonForError(err)
 			break loop
 		}
 	}
@@ -394,7 +398,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 		// as well but we don't want to rely on that.
 		rw.werr <- err
 	case <-rw.closed:
-		err = fmt.Errorf("shutting down")
+		err = ErrShuttingDown
 	}
 	return err
 }

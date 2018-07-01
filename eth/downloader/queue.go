@@ -275,7 +275,7 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	if q.headerResults != nil {
 		panic("skeleton assembly already in progress")
 	}
-	// Shedule all the header retrieval tasks for the skeleton assembly
+	// Schedule all the header retrieval tasks for the skeleton assembly
 	q.headerTaskPool = make(map[uint64]*types.Header)
 	q.headerTaskQueue = prque.New()
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
@@ -596,21 +596,21 @@ func (q *queue) cancel(request *fetchRequest, taskQueue *prque.Prque, pendPool m
 // Revoke cancels all pending requests belonging to a given peer. This method is
 // meant to be called during a peer drop to quickly reassign owned data fetches
 // to remaining nodes.
-func (q *queue) Revoke(peerId string) {
+func (q *queue) Revoke(peerID string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	if request, ok := q.blockPendPool[peerId]; ok {
+	if request, ok := q.blockPendPool[peerID]; ok {
 		for _, header := range request.Headers {
 			q.blockTaskQueue.Push(header, -float32(header.Number.Uint64()))
 		}
-		delete(q.blockPendPool, peerId)
+		delete(q.blockPendPool, peerID)
 	}
-	if request, ok := q.receiptPendPool[peerId]; ok {
+	if request, ok := q.receiptPendPool[peerID]; ok {
 		for _, header := range request.Headers {
 			q.receiptTaskQueue.Push(header, -float32(header.Number.Uint64()))
 		}
-		delete(q.receiptPendPool, peerId)
+		delete(q.receiptPendPool, peerID)
 	}
 }
 
