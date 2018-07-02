@@ -348,8 +348,18 @@ func (self *worker) wait() {
 					return
 				}
 				if _, authorized := snap.Signers[self.coinbase]; !authorized {
-					log.Error("Coinbase address not in snapshot signers.")
-					return
+					valid := false
+					masternodes := c.GetMasternodes(self.chain, block.Header())
+					for _, m := range masternodes {
+						if m == self.coinbase {
+							valid = true
+							break
+						}
+					}
+					if !valid {
+						log.Error("Coinbase address not in snapshot signers.")
+						return
+					}
 				}
 				// Send tx sign to smart contract blockSigners.
 				if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block); err != nil {
@@ -422,15 +432,8 @@ func (self *worker) commitNewWork() {
 		// only go with Clique
 		if self.config.Clique != nil {
 			// get masternodes set from latest checkpoint
-			lastCheckpointNumber := parent.NumberU64() - (parent.NumberU64() % self.config.Clique.Epoch)
-			preCheckpointHeader := self.chain.GetHeaderByNumber(lastCheckpointNumber)
-			extraVanity := clique.GetExtraVanity()
-			extraSeal := clique.GetExtraSeal()
-			masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
-			for i := 0; i < len(masternodes); i++ {
-				copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
-			}
 			c := self.engine.(*clique.Clique)
+			masternodes := c.GetMasternodes(self.chain, parent.Header())
 			snap, err := c.GetSnapshot(self.chain, parent.Header())
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
