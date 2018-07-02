@@ -15,7 +15,11 @@ import (
 )
 
 const (
-	HexSignMethod = "2fb1b25f"
+	HexSignMethod           = "2fb1b25f"
+	RewardMasterPercent     = 30
+	RewardVoterPercent      = 60
+	RewardFoundationPercent = 10
+	FoudationWalletAddr     = "0x0000000000000000000000000000000000000068"
 )
 
 type rewardLog struct {
@@ -112,11 +116,18 @@ func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rChec
 		}
 	}
 
+	// Get validator.
+	validator, err := contract2.NewTomoValidator(common.HexToAddress(common.TomoValidator), client)
+	if err != nil {
+		log.Error("Fail get instance of Tomo Validator", "error", err)
+		return nil, err
+	}
+
 	// Get Owner for signers.
 	owners := make(map[common.Address]*rewardLog)
 	if len(signers) > 0 {
 		for addr, log := range signers {
-			owner, err := GetCandidatesOwnerByAddress(client, addr)
+			owner, err := GetCandidatesOwnerByAddress(validator, addr)
 			if err != nil {
 				owner = addr
 			}
@@ -157,19 +168,53 @@ func CalculateReward(chainReward *big.Int, signers map[common.Address]*rewardLog
 }
 
 // Get candidate owner by address.
-func GetCandidatesOwnerByAddress(client bind.ContractBackend, addr common.Address) (common.Address, error) {
+func GetCandidatesOwnerByAddress(validator *contract2.TomoValidator, addr common.Address) (common.Address, error) {
 	owner := common.Address{}
-	validator, err := contract2.NewTomoValidator(common.HexToAddress(common.TomoValidator), client)
-	if err != nil {
-		log.Error("Fail get instance of Tomo Validator", "error", err)
-		return owner, err
-	}
 	opts := new(bind.CallOpts)
-	owner, err = validator.GetCandidateOwner(opts, addr)
+	owner, err := validator.GetCandidateOwner(opts, addr)
 	if err != nil {
 		log.Error("Fail get candidate owner", "error", err)
 		return owner, err
 	}
 
 	return owner, nil
+}
+
+// Get reward balance rates.
+func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, validator *contract2.TomoValidator) (map[common.Address]*big.Int, error) {
+	balances := make(map[common.Address]*big.Int)
+	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent/100))
+	balances[masterAddr] = rewardMaster
+	// Get voters for masternode.
+	opts := new(bind.CallOpts)
+	voters, err := validator.GetVoters(opts, masterAddr)
+	if err != nil {
+		log.Error("Fail to get voters", "error", err)
+		return nil, err
+	}
+
+	if len(voters) > 0 {
+		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardVoterPercent/100))
+		totalCap := new(big.Int)
+		// Get voters capacities.
+		voterCaps := make(map[common.Address]*big.Int)
+		for _, voteAddr := range voters {
+			cap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
+			if err != nil {
+				log.Error("Fail to get vote capacity", "error", err)
+				return nil, err
+			}
+			totalCap.Add(totalCap, cap)
+			voterCaps[voteAddr] = cap
+		}
+		for addr, voteCap := range voterCaps {
+			balances[addr] = new(big.Int).Mul(totalVoterReward, voteCap)
+			balances[addr] = new(big.Int).Div(balances[addr], totalCap)
+		}
+	}
+
+	balances[common.HexToAddress(FoudationWalletAddr)] =
+		new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent/100))
+
+	return balances, nil
 }
