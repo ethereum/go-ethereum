@@ -110,11 +110,20 @@ func (b *memBatch) Put(key, value []byte) error {
 	return nil
 }
 
+func (b *memBatch) Delete(key []byte) error {
+	b.writes = append(b.writes, kv{common.CopyBytes(key), nil})
+	return nil
+}
+
 func (b *memBatch) Write() error {
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
 	for _, kv := range b.writes {
+		if kv.v == nil {
+			delete(b.db.db, string(kv.k))
+			continue
+		}
 		b.db.db[string(kv.k)] = kv.v
 	}
 	return nil

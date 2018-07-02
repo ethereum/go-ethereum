@@ -388,6 +388,12 @@ func (b *ldbBatch) Put(key, value []byte) error {
 	return nil
 }
 
+func (b *ldbBatch) Delete(key []byte) error {
+	b.b.Delete(key)
+	b.size += 1
+	return nil
+}
+
 func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
 }
@@ -451,6 +457,10 @@ func (dt *table) NewBatch() Batch {
 
 func (tb *tableBatch) Put(key, value []byte) error {
 	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
+}
+
+func (tb *tableBatch) Delete(key []byte) error {
+	return tb.batch.Delete(append([]byte(tb.prefix), key...))
 }
 
 func (tb *tableBatch) Write() error {
