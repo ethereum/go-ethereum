@@ -88,8 +88,6 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
-
-	badBlockReportingEnabled bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -159,7 +157,7 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(downloader.FullSync, chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlockAndState, blockchain.GetHeaderByHash,
 		blockchain.GetBlockByHash, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead,
-		blockchain.GetTdByHash, blockchain.InsertHeaderChain, manager.insertChain, blockchain.InsertReceiptChain, blockchain.Rollback,
+		blockchain.GetTdByHash, blockchain.InsertHeaderChain, manager.blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback,
 		manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
@@ -170,24 +168,11 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
 		atomic.StoreUint32(&manager.synced, 1) // Mark initial sync done on any fetcher import
-		return manager.insertChain(blocks)
+		return manager.blockchain.InsertChain(blocks)
 	}
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
 
-	if blockchain.Genesis().Hash().Hex() == defaultGenesisHash && networkId == 1 {
-		glog.V(logger.Debug).Infoln("Bad Block Reporting is enabled")
-		manager.badBlockReportingEnabled = true
-	}
-
 	return manager, nil
-}
-
-func (pm *ProtocolManager) insertChain(blocks types.Blocks) (i int, err error) {
-	i, err = pm.blockchain.InsertChain(blocks)
-	if pm.badBlockReportingEnabled && core.IsValidationErr(err) && i < len(blocks) {
-		go sendBadBlockReport(blocks[i], err)
-	}
-	return i, err
 }
 
 func (pm *ProtocolManager) removePeer(id string) {
