@@ -17,89 +17,65 @@
 package vm
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
-// Global Debug flag indicating Debug VM (full logging)
-var Debug bool
-
-type Type byte
-
-const (
-	StdVmTy Type = iota
-	JitVmTy
-	MaxVmTy
-
-	LogTyPretty byte = 0x1
-	LogTyDiff   byte = 0x2
-)
-
-var (
-	Pow256 = common.BigPow(2, 256)
-
-	U256 = common.U256
-	S256 = common.S256
-
-	Zero = common.Big0
-	One  = common.Big1
-
-	max = big.NewInt(math.MaxInt64)
-)
-
-func NewVm(env Environment) VirtualMachine {
-	switch env.VmType() {
-	case JitVmTy:
-		return NewJitVm(env)
-	default:
-		glog.V(0).Infoln("unsupported vm type %d", env.VmType())
-		fallthrough
-	case StdVmTy:
-		return New(env)
-	}
-}
-
+// calculates the memory size required for a step
 func calcMemSize(off, l *big.Int) *big.Int {
-	if l.Cmp(common.Big0) == 0 {
+	if l.Sign() == 0 {
 		return common.Big0
 	}
 
 	return new(big.Int).Add(off, l)
 }
 
-// Simple helper
-func u256(n int64) *big.Int {
-	return big.NewInt(n)
-}
-
-// Mainly used for print variables and passing to Print*
-func toValue(val *big.Int) interface{} {
-	// Let's assume a string on right padded zero's
-	b := val.Bytes()
-	if b[0] != 0 && b[len(b)-1] == 0x0 && b[len(b)-2] == 0x0 {
-		return string(b)
+// getData returns a slice from the data based on the start and size and pads
+// up to size with zero's. This function is overflow safe.
+func getData(data []byte, start uint64, size uint64) []byte {
+	length := uint64(len(data))
+	if start > length {
+		start = length
 	}
-
-	return val
+	end := start + size
+	if end > length {
+		end = length
+	}
+	return common.RightPadBytes(data[start:end], int(size))
 }
 
-func getData(data []byte, start, size *big.Int) []byte {
+// getDataBig returns a slice from the data based on the start and size and pads
+// up to size with zero's. This function is overflow safe.
+func getDataBig(data []byte, start *big.Int, size *big.Int) []byte {
 	dlen := big.NewInt(int64(len(data)))
 
-	s := common.BigMin(start, dlen)
-	e := common.BigMin(new(big.Int).Add(s, size), dlen)
+	s := math.BigMin(start, dlen)
+	e := math.BigMin(new(big.Int).Add(s, size), dlen)
 	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }
 
-func UseGas(gas, amount *big.Int) bool {
-	if gas.Cmp(amount) < 0 {
-		return false
+// bigUint64 returns the integer casted to a uint64 and returns whether it
+// overflowed in the process.
+func bigUint64(v *big.Int) (uint64, bool) {
+	return v.Uint64(), v.BitLen() > 64
+}
+
+// toWordSize returns the ceiled word size required for memory expansion.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
 	}
 
-	// Sub the amount of gas from the remaining
-	gas.Sub(gas, amount)
+	return (size + 31) / 32
+}
+
+func allZero(b []byte) bool {
+	for _, byte := range b {
+		if byte != 0 {
+			return false
+		}
+	}
 	return true
 }

@@ -14,46 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package compiler wraps the Solidity compiler executable (solc).
 package compiler
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-const (
-	// flair           = "Christian <c@ethdev.com> and Lefteris <lefteris@ethdev.com> (c) 2014-2015"
-	flair           = ""
-	languageVersion = "0"
-)
-
-var (
-	versionRegExp = regexp.MustCompile("[0-9]+.[0-9]+.[0-9]+")
-	params        = []string{
-		"--binary",       // Request to output the contract in binary (hexadecimal).
-		"file",           //
-		"--json-abi",     // Request to output the contract's JSON ABI interface.
-		"file",           //
-		"--natspec-user", // Request to output the contract's Natspec user documentation.
-		"file",           //
-		"--natspec-dev",  // Request to output the contract's Natspec developer documentation.
-		"file",
-		"--add-std",
-		"1",
-	}
-)
+var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 type Contract struct {
 	Code string       `json:"code"`
@@ -65,148 +41,154 @@ type ContractInfo struct {
 	Language        string      `json:"language"`
 	LanguageVersion string      `json:"languageVersion"`
 	CompilerVersion string      `json:"compilerVersion"`
+	CompilerOptions string      `json:"compilerOptions"`
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
+	Metadata        string      `json:"metadata"`
 }
 
+// Solidity contains information about the solidity compiler.
 type Solidity struct {
-	solcPath string
-	version  string
+	Path, Version, FullVersion string
+	Major, Minor, Patch        int
 }
 
-func New(solcPath string) (sol *Solidity, err error) {
-	// set default solc
-	if len(solcPath) == 0 {
-		solcPath = "solc"
+// --combined-output format
+type solcOutput struct {
+	Contracts map[string]struct {
+		Bin, Abi, Devdoc, Userdoc, Metadata string
 	}
-	solcPath, err = exec.LookPath(solcPath)
-	if err != nil {
-		return
-	}
+	Version string
+}
 
-	cmd := exec.Command(solcPath, "--version")
+func (s *Solidity) makeArgs() []string {
+	p := []string{
+		"--combined-json", "bin,abi,userdoc,devdoc",
+		"--optimize", // code optimizer switched on
+	}
+	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
+		p[1] += ",metadata"
+	}
+	return p
+}
+
+// SolidityVersion runs solc and parses its version output.
+func SolidityVersion(solc string) (*Solidity, error) {
+	if solc == "" {
+		solc = "solc"
+	}
 	var out bytes.Buffer
+	cmd := exec.Command(solc, "--version")
 	cmd.Stdout = &out
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
-		return
+		return nil, err
 	}
-
-	version := versionRegExp.FindString(out.String())
-	sol = &Solidity{
-		solcPath: solcPath,
-		version:  version,
+	matches := versionRegexp.FindStringSubmatch(out.String())
+	if len(matches) != 4 {
+		return nil, fmt.Errorf("can't parse solc version %q", out.String())
 	}
-	glog.V(logger.Info).Infoln(sol.Info())
-	return
+	s := &Solidity{Path: cmd.Path, FullVersion: out.String(), Version: matches[0]}
+	if s.Major, err = strconv.Atoi(matches[1]); err != nil {
+		return nil, err
+	}
+	if s.Minor, err = strconv.Atoi(matches[2]); err != nil {
+		return nil, err
+	}
+	if s.Patch, err = strconv.Atoi(matches[3]); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (sol *Solidity) Info() string {
-	return fmt.Sprintf("solc v%s\nSolidity Compiler: %s\n%s", sol.version, sol.solcPath, flair)
-}
-
-func (sol *Solidity) Version() string {
-	return sol.version
-}
-
-func (sol *Solidity) Compile(source string) (contracts map[string]*Contract, err error) {
-
+// CompileSolidityString builds and returns all the contracts contained within a source string.
+func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if len(source) == 0 {
-		err = fmt.Errorf("empty source")
-		return
+		return nil, errors.New("solc: empty source string")
 	}
-
-	wd, err := ioutil.TempDir("", "solc")
+	s, err := SolidityVersion(solc)
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer os.RemoveAll(wd)
+	args := append(s.makeArgs(), "--")
+	cmd := exec.Command(s.Path, append(args, "-")...)
+	cmd.Stdin = strings.NewReader(source)
+	return s.run(cmd, source)
+}
 
-	in := strings.NewReader(source)
-	var out bytes.Buffer
-	// cwd set to temp dir
-	cmd := exec.Command(sol.solcPath, params...)
-	cmd.Dir = wd
-	cmd.Stdin = in
-	cmd.Stdout = &out
-	err = cmd.Run()
+// CompileSolidity compiles all given Solidity source files.
+func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, error) {
+	if len(sourcefiles) == 0 {
+		return nil, errors.New("solc: no source files")
+	}
+	source, err := slurpFiles(sourcefiles)
 	if err != nil {
-		err = fmt.Errorf("solc error: %v", err)
-		return
+		return nil, err
+	}
+	s, err := SolidityVersion(solc)
+	if err != nil {
+		return nil, err
+	}
+	args := append(s.makeArgs(), "--")
+	cmd := exec.Command(s.Path, append(args, sourcefiles...)...)
+	return s.run(cmd, source)
+}
+
+func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+	var stderr, stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("solc: %v\n%s", err, stderr.Bytes())
+	}
+	var output solcOutput
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		return nil, err
 	}
 
-	matches, _ := filepath.Glob(wd + "/*.binary")
-	if len(matches) < 1 {
-		err = fmt.Errorf("solc error: missing code output")
-		return
-	}
-
-	contracts = make(map[string]*Contract)
-	for _, path := range matches {
-		_, file := filepath.Split(path)
-		base := strings.Split(file, ".")[0]
-
-		codeFile := filepath.Join(wd, base+".binary")
-		abiDefinitionFile := filepath.Join(wd, base+".abi")
-		userDocFile := filepath.Join(wd, base+".docuser")
-		developerDocFile := filepath.Join(wd, base+".docdev")
-
-		var code, abiDefinitionJson, userDocJson, developerDocJson []byte
-		code, err = ioutil.ReadFile(codeFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for code: %v", err)
-			return
+	// Compilation succeeded, assemble and return the contracts.
+	contracts := make(map[string]*Contract)
+	for name, info := range output.Contracts {
+		// Parse the individual compilation results.
+		var abi interface{}
+		if err := json.Unmarshal([]byte(info.Abi), &abi); err != nil {
+			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}
-		abiDefinitionJson, err = ioutil.ReadFile(abiDefinitionFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for abiDefinition: %v", err)
-			return
+		var userdoc interface{}
+		if err := json.Unmarshal([]byte(info.Userdoc), &userdoc); err != nil {
+			return nil, fmt.Errorf("solc: error reading user doc: %v", err)
 		}
-		var abiDefinition interface{}
-		err = json.Unmarshal(abiDefinitionJson, &abiDefinition)
-
-		userDocJson, err = ioutil.ReadFile(userDocFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for userDoc: %v", err)
-			return
+		var devdoc interface{}
+		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
+			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
-		var userDoc interface{}
-		err = json.Unmarshal(userDocJson, &userDoc)
-
-		developerDocJson, err = ioutil.ReadFile(developerDocFile)
-		if err != nil {
-			err = fmt.Errorf("error reading compiler output for developerDoc: %v", err)
-			return
-		}
-		var developerDoc interface{}
-		err = json.Unmarshal(developerDocJson, &developerDoc)
-
-		contract := &Contract{
-			Code: "0x" + string(code),
+		contracts[name] = &Contract{
+			Code: "0x" + info.Bin,
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
-				LanguageVersion: languageVersion,
-				CompilerVersion: sol.version,
-				AbiDefinition:   abiDefinition,
-				UserDoc:         userDoc,
-				DeveloperDoc:    developerDoc,
+				LanguageVersion: s.Version,
+				CompilerVersion: s.Version,
+				CompilerOptions: strings.Join(s.makeArgs(), " "),
+				AbiDefinition:   abi,
+				UserDoc:         userdoc,
+				DeveloperDoc:    devdoc,
+				Metadata:        info.Metadata,
 			},
 		}
-
-		contracts[base] = contract
 	}
-
-	return
+	return contracts, nil
 }
 
-func SaveInfo(info *ContractInfo, filename string) (contenthash common.Hash, err error) {
-	infojson, err := json.Marshal(info)
-	if err != nil {
-		return
+func slurpFiles(files []string) (string, error) {
+	var concat bytes.Buffer
+	for _, file := range files {
+		content, err := ioutil.ReadFile(file)
+		if err != nil {
+			return "", err
+		}
+		concat.Write(content)
 	}
-	contenthash = common.BytesToHash(crypto.Sha3(infojson))
-	err = ioutil.WriteFile(filename, infojson, 0600)
-	return
+	return concat.String(), nil
 }

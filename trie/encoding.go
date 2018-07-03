@@ -16,77 +16,99 @@
 
 package trie
 
-import (
-	"bytes"
-	"encoding/hex"
-	"strings"
-)
+// Trie keys are dealt with in three distinct encodings:
+//
+// KEYBYTES encoding contains the actual key and nothing else. This encoding is the
+// input to most API functions.
+//
+// HEX encoding contains one byte for each nibble of the key and an optional trailing
+// 'terminator' byte of value 0x10 which indicates whether or not the node at the key
+// contains a value. Hex key encoding is used for nodes loaded in memory because it's
+// convenient to access.
+//
+// COMPACT encoding is defined by the Ethereum Yellow Paper (it's called "hex prefix
+// encoding" there) and contains the bytes of the key and a flag. The high nibble of the
+// first byte contains the flag; the lowest bit encoding the oddness of the length and
+// the second-lowest encoding whether the node at the key is a value node. The low nibble
+// of the first byte is zero in the case of an even number of nibbles and the first nibble
+// in the case of an odd number. All remaining nibbles (now an even number) fit properly
+// into the remaining bytes. Compact encoding is used for nodes stored on disk.
 
-func CompactEncode(hexSlice []byte) string {
-	terminator := 0
-	if hexSlice[len(hexSlice)-1] == 16 {
+func hexToCompact(hex []byte) []byte {
+	terminator := byte(0)
+	if hasTerm(hex) {
 		terminator = 1
+		hex = hex[:len(hex)-1]
 	}
-
-	if terminator == 1 {
-		hexSlice = hexSlice[:len(hexSlice)-1]
+	buf := make([]byte, len(hex)/2+1)
+	buf[0] = terminator << 5 // the flag byte
+	if len(hex)&1 == 1 {
+		buf[0] |= 1 << 4 // odd flag
+		buf[0] |= hex[0] // first nibble is contained in the first byte
+		hex = hex[1:]
 	}
-
-	oddlen := len(hexSlice) % 2
-	flags := byte(2*terminator + oddlen)
-	if oddlen != 0 {
-		hexSlice = append([]byte{flags}, hexSlice...)
-	} else {
-		hexSlice = append([]byte{flags, 0}, hexSlice...)
-	}
-
-	var buff bytes.Buffer
-	for i := 0; i < len(hexSlice); i += 2 {
-		buff.WriteByte(byte(16*hexSlice[i] + hexSlice[i+1]))
-	}
-
-	return buff.String()
+	decodeNibbles(hex, buf[1:])
+	return buf
 }
 
-func CompactDecode(str string) []byte {
-	base := CompactHexDecode(str)
+func compactToHex(compact []byte) []byte {
+	base := keybytesToHex(compact)
 	base = base[:len(base)-1]
+	// apply terminator flag
 	if base[0] >= 2 {
 		base = append(base, 16)
 	}
-	if base[0]%2 == 1 {
-		base = base[1:]
-	} else {
-		base = base[2:]
-	}
-
-	return base
+	// apply odd flag
+	chop := 2 - base[0]&1
+	return base[chop:]
 }
 
-func CompactHexDecode(str string) []byte {
-	base := "0123456789abcdef"
-	var hexSlice []byte
-
-	enc := hex.EncodeToString([]byte(str))
-	for _, v := range enc {
-		hexSlice = append(hexSlice, byte(strings.IndexByte(base, byte(v))))
+func keybytesToHex(str []byte) []byte {
+	l := len(str)*2 + 1
+	var nibbles = make([]byte, l)
+	for i, b := range str {
+		nibbles[i*2] = b / 16
+		nibbles[i*2+1] = b % 16
 	}
-	hexSlice = append(hexSlice, 16)
-
-	return hexSlice
+	nibbles[l-1] = 16
+	return nibbles
 }
 
-func DecodeCompact(key []byte) string {
-	const base = "0123456789abcdef"
-	var str string
+// hexToKeybytes turns hex nibbles into key bytes.
+// This can only be used for keys of even length.
+func hexToKeybytes(hex []byte) []byte {
+	if hasTerm(hex) {
+		hex = hex[:len(hex)-1]
+	}
+	if len(hex)&1 != 0 {
+		panic("can't convert hex key of odd length")
+	}
+	key := make([]byte, (len(hex)+1)/2)
+	decodeNibbles(hex, key)
+	return key
+}
 
-	for _, v := range key {
-		if v < 16 {
-			str += string(base[v])
+func decodeNibbles(nibbles []byte, bytes []byte) {
+	for bi, ni := 0, 0; ni < len(nibbles); bi, ni = bi+1, ni+2 {
+		bytes[bi] = nibbles[ni]<<4 | nibbles[ni+1]
+	}
+}
+
+// prefixLen returns the length of the common prefix of a and b.
+func prefixLen(a, b []byte) int {
+	var i, length = 0, len(a)
+	if len(b) < length {
+		length = len(b)
+	}
+	for ; i < length; i++ {
+		if a[i] != b[i] {
+			break
 		}
 	}
+	return i
+}
 
-	res, _ := hex.DecodeString(str)
-
-	return string(res)
+// hasTerm returns whether a hex key has the terminator flag.
+func hasTerm(s []byte) bool {
+	return len(s) > 0 && s[len(s)-1] == 16
 }

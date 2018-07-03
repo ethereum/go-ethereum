@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	// "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -32,30 +30,30 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         common.Database
+	db         ethdb.Database
 	txPool     *TxPool
-	blockChain *ChainManager
+	blockChain *BlockChain
 	Blocks     []*types.Block
 }
 
-func (s *TestManager) IsListening() bool {
+func (tm *TestManager) IsListening() bool {
 	return false
 }
 
-func (s *TestManager) IsMining() bool {
+func (tm *TestManager) IsMining() bool {
 	return false
 }
 
-func (s *TestManager) PeerCount() int {
+func (tm *TestManager) PeerCount() int {
 	return 0
 }
 
-func (s *TestManager) Peers() *list.List {
+func (tm *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) ChainManager() *ChainManager {
-	return s.blockChain
+func (tm *TestManager) BlockChain() *BlockChain {
+	return tm.blockChain
 }
 
 func (tm *TestManager) TxPool() *TxPool {
@@ -74,7 +72,7 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() common.Database {
+func (tm *TestManager) Db() ethdb.Database {
 	return tm.db
 }
 
@@ -89,7 +87,7 @@ func NewTestManager() *TestManager {
 	testManager.eventMux = new(event.TypeMux)
 	testManager.db = db
 	// testManager.txPool = NewTxPool(testManager)
-	// testManager.blockChain = NewChainManager(testManager)
+	// testManager.blockChain = NewBlockChain(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
 
 	return testManager

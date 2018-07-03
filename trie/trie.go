@@ -19,372 +19,460 @@ package trie
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
-func ParanoiaCheck(t1 *Trie, backend Backend) (bool, *Trie) {
-	t2 := New(nil, backend)
+var (
+	// emptyRoot is the known root hash of an empty trie.
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
-	it := t1.Iterator()
-	for it.Next() {
-		t2.Update(it.Key, it.Value)
-	}
+	// emptyState is the known hash of an empty state trie entry.
+	emptyState = crypto.Keccak256Hash(nil)
+)
 
-	return bytes.Equal(t2.Hash(), t1.Hash()), t2
+var (
+	cacheMissCounter   = metrics.NewRegisteredCounter("trie/cachemiss", nil)
+	cacheUnloadCounter = metrics.NewRegisteredCounter("trie/cacheunload", nil)
+)
+
+// CacheMisses retrieves a global counter measuring the number of cache misses
+// the trie had since process startup. This isn't useful for anything apart from
+// trie debugging purposes.
+func CacheMisses() int64 {
+	return cacheMissCounter.Count()
 }
 
+// CacheUnloads retrieves a global counter measuring the number of cache unloads
+// the trie did since process startup. This isn't useful for anything apart from
+// trie debugging purposes.
+func CacheUnloads() int64 {
+	return cacheUnloadCounter.Count()
+}
+
+// LeafCallback is a callback type invoked when a trie operation reaches a leaf
+// node. It's used by state sync and commit to allow handling external references
+// between account and storage tries.
+type LeafCallback func(leaf []byte, parent common.Hash) error
+
+// Trie is a Merkle Patricia Trie.
+// The zero value is an empty trie with no database.
+// Use New to create a trie that sits on top of a database.
+//
+// Trie is not safe for concurrent use.
 type Trie struct {
-	mu       sync.Mutex
-	root     Node
-	roothash []byte
-	cache    *Cache
+	db           *Database
+	root         node
+	originalRoot common.Hash
 
-	revisions *list.List
+	// Cache generation values.
+	// cachegen increases by one with each commit operation.
+	// new nodes are tagged with the current generation and unloaded
+	// when their generation is older than than cachegen-cachelimit.
+	cachegen, cachelimit uint16
 }
 
-func New(root []byte, backend Backend) *Trie {
-	trie := &Trie{}
-	trie.revisions = list.New()
-	trie.roothash = root
-	if backend != nil {
-		trie.cache = NewCache(backend)
+// SetCacheLimit sets the number of 'cache generations' to keep.
+// A cache generation is created by a call to Commit.
+func (t *Trie) SetCacheLimit(l uint16) {
+	t.cachelimit = l
+}
+
+// newFlag returns the cache flag value for a newly created node.
+func (t *Trie) newFlag() nodeFlag {
+	return nodeFlag{dirty: true, gen: t.cachegen}
+}
+
+// New creates a trie with an existing root node from db.
+//
+// If root is the zero hash or the sha3 hash of an empty string, the
+// trie is initially empty and does not require a database. Otherwise,
+// New will panic if db is nil and returns a MissingNodeError if root does
+// not exist in the database. Accessing the trie loads nodes from db on demand.
+func New(root common.Hash, db *Database) (*Trie, error) {
+	if db == nil {
+		panic("trie.New called without a database")
 	}
-
-	if root != nil {
-		value := common.NewValueFromBytes(trie.cache.Get(root))
-		trie.root = trie.mknode(value)
+	trie := &Trie{
+		db:           db,
+		originalRoot: root,
 	}
-
-	return trie
-}
-
-func (self *Trie) Iterator() *Iterator {
-	return NewIterator(self)
-}
-
-func (self *Trie) Copy() *Trie {
-	cpy := make([]byte, 32)
-	copy(cpy, self.roothash)
-	trie := New(nil, nil)
-	trie.cache = self.cache.Copy()
-	if self.root != nil {
-		trie.root = self.root.Copy(trie)
-	}
-
-	return trie
-}
-
-// Legacy support
-func (self *Trie) Root() []byte { return self.Hash() }
-func (self *Trie) Hash() []byte {
-	var hash []byte
-	if self.root != nil {
-		t := self.root.Hash()
-		if byts, ok := t.([]byte); ok && len(byts) > 0 {
-			hash = byts
-		} else {
-			hash = crypto.Sha3(common.Encode(self.root.RlpData()))
+	if (root != common.Hash{}) && root != emptyRoot {
+		rootnode, err := trie.resolveHash(root[:], nil)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		hash = crypto.Sha3(common.Encode(""))
+		trie.root = rootnode
 	}
-
-	if !bytes.Equal(hash, self.roothash) {
-		self.revisions.PushBack(self.roothash)
-		self.roothash = hash
-	}
-
-	return hash
-}
-func (self *Trie) Commit() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	// Hash first
-	self.Hash()
-
-	self.cache.Flush()
+	return trie, nil
 }
 
-// Reset should only be called if the trie has been hashed
-func (self *Trie) Reset() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	self.cache.Reset()
-
-	if self.revisions.Len() > 0 {
-		revision := self.revisions.Remove(self.revisions.Back()).([]byte)
-		self.roothash = revision
-	}
-	value := common.NewValueFromBytes(self.cache.Get(self.roothash))
-	self.root = self.mknode(value)
+// NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
+// the key after the given start key.
+func (t *Trie) NodeIterator(start []byte) NodeIterator {
+	return newNodeIterator(t, start)
 }
 
-func (self *Trie) UpdateString(key, value string) Node { return self.Update([]byte(key), []byte(value)) }
-func (self *Trie) Update(key, value []byte) Node {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+// Get returns the value for key stored in the trie.
+// The value bytes must not be modified by the caller.
+func (t *Trie) Get(key []byte) []byte {
+	res, err := t.TryGet(key)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+	}
+	return res
+}
 
-	k := CompactHexDecode(string(key))
+// TryGet returns the value for key stored in the trie.
+// The value bytes must not be modified by the caller.
+// If a node was not found in the database, a MissingNodeError is returned.
+func (t *Trie) TryGet(key []byte) ([]byte, error) {
+	key = keybytesToHex(key)
+	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
+	if err == nil && didResolve {
+		t.root = newroot
+	}
+	return value, err
+}
 
+func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+	switch n := (origNode).(type) {
+	case nil:
+		return nil, nil, false, nil
+	case valueNode:
+		return n, n, false, nil
+	case *shortNode:
+		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+			// key not found in trie
+			return nil, n, false, nil
+		}
+		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Val = newnode
+			n.flags.gen = t.cachegen
+		}
+		return value, n, didResolve, err
+	case *fullNode:
+		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
+		if err == nil && didResolve {
+			n = n.copy()
+			n.flags.gen = t.cachegen
+			n.Children[key[pos]] = newnode
+		}
+		return value, n, didResolve, err
+	case hashNode:
+		child, err := t.resolveHash(n, key[:pos])
+		if err != nil {
+			return nil, n, true, err
+		}
+		value, newnode, _, err := t.tryGet(child, key, pos)
+		return value, newnode, true, err
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
+// Update associates key with value in the trie. Subsequent calls to
+// Get will return value. If value has length zero, any existing value
+// is deleted from the trie and calls to Get will return nil.
+//
+// The value bytes must not be modified by the caller while they are
+// stored in the trie.
+func (t *Trie) Update(key, value []byte) {
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+	}
+}
+
+// TryUpdate associates key with value in the trie. Subsequent calls to
+// Get will return value. If value has length zero, any existing value
+// is deleted from the trie and calls to Get will return nil.
+//
+// The value bytes must not be modified by the caller while they are
+// stored in the trie.
+//
+// If a node was not found in the database, a MissingNodeError is returned.
+func (t *Trie) TryUpdate(key, value []byte) error {
+	k := keybytesToHex(key)
 	if len(value) != 0 {
-		node := NewValueNode(self, value)
-		node.dirty = true
-		self.root = self.insert(self.root, k, node)
+		_, n, err := t.insert(t.root, nil, k, valueNode(value))
+		if err != nil {
+			return err
+		}
+		t.root = n
 	} else {
-		self.root = self.delete(self.root, k)
+		_, n, err := t.delete(t.root, nil, k)
+		if err != nil {
+			return err
+		}
+		t.root = n
 	}
-
-	return self.root
-}
-
-func (self *Trie) GetString(key string) []byte { return self.Get([]byte(key)) }
-func (self *Trie) Get(key []byte) []byte {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	k := CompactHexDecode(string(key))
-
-	n := self.get(self.root, k)
-	if n != nil {
-		return n.(*ValueNode).Val()
-	}
-
 	return nil
 }
 
-func (self *Trie) DeleteString(key string) Node { return self.Delete([]byte(key)) }
-func (self *Trie) Delete(key []byte) Node {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	k := CompactHexDecode(string(key))
-	self.root = self.delete(self.root, k)
-
-	return self.root
-}
-
-func (self *Trie) insert(node Node, key []byte, value Node) Node {
+func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
-		return value
-	}
-
-	if node == nil {
-		node := NewShortNode(self, key, value)
-		node.dirty = true
-		return node
-	}
-
-	switch node := node.(type) {
-	case *ShortNode:
-		k := node.Key()
-		cnode := node.Value()
-		if bytes.Equal(k, key) {
-			node := NewShortNode(self, key, value)
-			node.dirty = true
-			return node
-
+		if v, ok := n.(valueNode); ok {
+			return !bytes.Equal(v, value.(valueNode)), value, nil
 		}
-
-		var n Node
-		matchlength := MatchingNibbleLength(key, k)
-		if matchlength == len(k) {
-			n = self.insert(cnode, key[matchlength:], value)
-		} else {
-			pnode := self.insert(nil, k[matchlength+1:], cnode)
-			nnode := self.insert(nil, key[matchlength+1:], value)
-			fulln := NewFullNode(self)
-			fulln.dirty = true
-			fulln.set(k[matchlength], pnode)
-			fulln.set(key[matchlength], nnode)
-			n = fulln
-		}
-		if matchlength == 0 {
-			return n
-		}
-
-		snode := NewShortNode(self, key[:matchlength], n)
-		snode.dirty = true
-		return snode
-
-	case *FullNode:
-		cpy := node.Copy(self).(*FullNode)
-		cpy.set(key[0], self.insert(node.branch(key[0]), key[1:], value))
-		cpy.dirty = true
-
-		return cpy
-
-	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", node, node))
+		return true, value, nil
 	}
-}
-
-func (self *Trie) get(node Node, key []byte) Node {
-	if len(key) == 0 {
-		return node
-	}
-
-	if node == nil {
-		return nil
-	}
-
-	switch node := node.(type) {
-	case *ShortNode:
-		k := node.Key()
-		cnode := node.Value()
-
-		if len(key) >= len(k) && bytes.Equal(k, key[:len(k)]) {
-			return self.get(cnode, key[len(k):])
-		}
-
-		return nil
-	case *FullNode:
-		return self.get(node.branch(key[0]), key[1:])
-	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", node, node))
-	}
-}
-
-func (self *Trie) delete(node Node, key []byte) Node {
-	if len(key) == 0 && node == nil {
-		return nil
-	}
-
-	switch node := node.(type) {
-	case *ShortNode:
-		k := node.Key()
-		cnode := node.Value()
-		if bytes.Equal(key, k) {
-			return nil
-		} else if bytes.Equal(key[:len(k)], k) {
-			child := self.delete(cnode, key[len(k):])
-
-			var n Node
-			switch child := child.(type) {
-			case *ShortNode:
-				nkey := append(k, child.Key()...)
-				n = NewShortNode(self, nkey, child.Value())
-				n.(*ShortNode).dirty = true
-			case *FullNode:
-				sn := NewShortNode(self, node.Key(), child)
-				sn.dirty = true
-				sn.key = node.key
-				n = sn
+	switch n := n.(type) {
+	case *shortNode:
+		matchlen := prefixLen(key, n.Key)
+		// If the whole key matches, keep this short node as is
+		// and only update the value.
+		if matchlen == len(n.Key) {
+			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
+			if !dirty || err != nil {
+				return false, n, err
 			}
+			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
+		}
+		// Otherwise branch out at the index where they differ.
+		branch := &fullNode{flags: t.newFlag()}
+		var err error
+		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		if err != nil {
+			return false, nil, err
+		}
+		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		if err != nil {
+			return false, nil, err
+		}
+		// Replace this shortNode with the branch if it occurs at index 0.
+		if matchlen == 0 {
+			return true, branch, nil
+		}
+		// Otherwise, replace it with a short node leading up to the branch.
+		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
-			return n
-		} else {
-			return node
+	case *fullNode:
+		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
+		if !dirty || err != nil {
+			return false, n, err
+		}
+		n = n.copy()
+		n.flags = t.newFlag()
+		n.Children[key[0]] = nn
+		return true, n, nil
+
+	case nil:
+		return true, &shortNode{key, value, t.newFlag()}, nil
+
+	case hashNode:
+		// We've hit a part of the trie that isn't loaded yet. Load
+		// the node and insert into it. This leaves all child nodes on
+		// the path to the value in the trie.
+		rn, err := t.resolveHash(n, prefix)
+		if err != nil {
+			return false, nil, err
+		}
+		dirty, nn, err := t.insert(rn, prefix, key, value)
+		if !dirty || err != nil {
+			return false, rn, err
+		}
+		return true, nn, nil
+
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
+	}
+}
+
+// Delete removes any existing value for key from the trie.
+func (t *Trie) Delete(key []byte) {
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+	}
+}
+
+// TryDelete removes any existing value for key from the trie.
+// If a node was not found in the database, a MissingNodeError is returned.
+func (t *Trie) TryDelete(key []byte) error {
+	k := keybytesToHex(key)
+	_, n, err := t.delete(t.root, nil, k)
+	if err != nil {
+		return err
+	}
+	t.root = n
+	return nil
+}
+
+// delete returns the new root of the trie with key deleted.
+// It reduces the trie to minimal form by simplifying
+// nodes on the way up after deleting recursively.
+func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
+	switch n := n.(type) {
+	case *shortNode:
+		matchlen := prefixLen(key, n.Key)
+		if matchlen < len(n.Key) {
+			return false, n, nil // don't replace n on mismatch
+		}
+		if matchlen == len(key) {
+			return true, nil, nil // remove n entirely for whole matches
+		}
+		// The key is longer than n.Key. Remove the remaining suffix
+		// from the subtrie. Child can never be nil here since the
+		// subtrie must contain at least two other values with keys
+		// longer than n.Key.
+		dirty, child, err := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
+		if !dirty || err != nil {
+			return false, n, err
+		}
+		switch child := child.(type) {
+		case *shortNode:
+			// Deleting from the subtrie reduced it to another
+			// short node. Merge the nodes to avoid creating a
+			// shortNode{..., shortNode{...}}. Use concat (which
+			// always creates a new slice) instead of append to
+			// avoid modifying n.Key since it might be shared with
+			// other nodes.
+			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
+		default:
+			return true, &shortNode{n.Key, child, t.newFlag()}, nil
 		}
 
-	case *FullNode:
-		n := node.Copy(self).(*FullNode)
-		n.set(key[0], self.delete(n.branch(key[0]), key[1:]))
-		n.dirty = true
+	case *fullNode:
+		dirty, nn, err := t.delete(n.Children[key[0]], append(prefix, key[0]), key[1:])
+		if !dirty || err != nil {
+			return false, n, err
+		}
+		n = n.copy()
+		n.flags = t.newFlag()
+		n.Children[key[0]] = nn
 
+		// Check how many non-nil entries are left after deleting and
+		// reduce the full node to a short node if only one entry is
+		// left. Since n must've contained at least two children
+		// before deletion (otherwise it would not be a full node) n
+		// can never be reduced to nil.
+		//
+		// When the loop is done, pos contains the index of the single
+		// value that is left in n or -2 if n contains at least two
+		// values.
 		pos := -1
-		for i := 0; i < 17; i++ {
-			if n.branch(byte(i)) != nil {
+		for i, cld := range n.Children {
+			if cld != nil {
 				if pos == -1 {
 					pos = i
 				} else {
 					pos = -2
+					break
 				}
 			}
 		}
-
-		var nnode Node
-		if pos == 16 {
-			nnode = NewShortNode(self, []byte{16}, n.branch(byte(pos)))
-			nnode.(*ShortNode).dirty = true
-		} else if pos >= 0 {
-			cnode := n.branch(byte(pos))
-			switch cnode := cnode.(type) {
-			case *ShortNode:
-				// Stitch keys
-				k := append([]byte{byte(pos)}, cnode.Key()...)
-				nnode = NewShortNode(self, k, cnode.Value())
-				nnode.(*ShortNode).dirty = true
-			case *FullNode:
-				nnode = NewShortNode(self, []byte{byte(pos)}, n.branch(byte(pos)))
-				nnode.(*ShortNode).dirty = true
+		if pos >= 0 {
+			if pos != 16 {
+				// If the remaining entry is a short node, it replaces
+				// n and its key gets the missing nibble tacked to the
+				// front. This avoids creating an invalid
+				// shortNode{..., shortNode{...}}.  Since the entry
+				// might not be loaded yet, resolve it just for this
+				// check.
+				cnode, err := t.resolve(n.Children[pos], prefix)
+				if err != nil {
+					return false, nil, err
+				}
+				if cnode, ok := cnode.(*shortNode); ok {
+					k := append([]byte{byte(pos)}, cnode.Key...)
+					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
+				}
 			}
-		} else {
-			nnode = n
+			// Otherwise, n is replaced by a one-nibble short node
+			// containing the child.
+			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag()}, nil
 		}
+		// n still contains at least two values and cannot be reduced.
+		return true, n, nil
 
-		return nnode
+	case valueNode:
+		return true, nil, nil
+
 	case nil:
-		return nil
+		return false, nil, nil
+
+	case hashNode:
+		// We've hit a part of the trie that isn't loaded yet. Load
+		// the node and delete from it. This leaves all child nodes on
+		// the path to the value in the trie.
+		rn, err := t.resolveHash(n, prefix)
+		if err != nil {
+			return false, nil, err
+		}
+		dirty, nn, err := t.delete(rn, prefix, key)
+		if !dirty || err != nil {
+			return false, rn, err
+		}
+		return true, nn, nil
+
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v (%v)", node, node, key))
+		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
 	}
 }
 
-// casting functions and cache storing
-func (self *Trie) mknode(value *common.Value) Node {
-	l := value.Len()
-	switch l {
-	case 0:
-		return nil
-	case 2:
-		// A value node may consists of 2 bytes.
-		if value.Get(0).Len() != 0 {
-			key := CompactDecode(string(value.Get(0).Bytes()))
-			if key[len(key)-1] == 16 {
-				return NewShortNode(self, key, NewValueNode(self, value.Get(1).Bytes()))
-			} else {
-				return NewShortNode(self, key, self.mknode(value.Get(1)))
-			}
-		}
-	case 17:
-		if len(value.Bytes()) != 17 {
-			fnode := NewFullNode(self)
-			for i := 0; i < 16; i++ {
-				fnode.set(byte(i), self.mknode(value.Get(i)))
-			}
-			return fnode
-		}
-	case 32:
-		return NewHash(value.Bytes(), self)
-	}
-
-	return NewValueNode(self, value.Bytes())
+func concat(s1 []byte, s2 ...byte) []byte {
+	r := make([]byte, len(s1)+len(s2))
+	copy(r, s1)
+	copy(r[len(s1):], s2)
+	return r
 }
 
-func (self *Trie) trans(node Node) Node {
-	switch node := node.(type) {
-	case *HashNode:
-		value := common.NewValueFromBytes(self.cache.Get(node.key))
-		return self.mknode(value)
-	default:
-		return node
+func (t *Trie) resolve(n node, prefix []byte) (node, error) {
+	if n, ok := n.(hashNode); ok {
+		return t.resolveHash(n, prefix)
 	}
+	return n, nil
 }
 
-func (self *Trie) store(node Node) interface{} {
-	data := common.Encode(node)
-	if len(data) >= 32 {
-		key := crypto.Sha3(data)
-		if node.Dirty() {
-			//fmt.Println("save", node)
-			//fmt.Println()
-			self.cache.Put(key, data)
-		}
+func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
+	cacheMissCounter.Inc(1)
 
-		return key
+	hash := common.BytesToHash(n)
+
+	enc, err := t.db.Node(hash)
+	if err != nil || enc == nil {
+		return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 	}
-
-	return node.RlpData()
+	return mustDecodeNode(n, enc, t.cachegen), nil
 }
 
-func (self *Trie) PrintRoot() {
-	fmt.Println(self.root)
-	fmt.Printf("root=%x\n", self.Root())
+// Root returns the root hash of the trie.
+// Deprecated: use Hash instead.
+func (t *Trie) Root() []byte { return t.Hash().Bytes() }
+
+// Hash returns the root hash of the trie. It does not write to the
+// database and can be used even if the trie doesn't have one.
+func (t *Trie) Hash() common.Hash {
+	hash, cached, _ := t.hashRoot(nil, nil)
+	t.root = cached
+	return common.BytesToHash(hash.(hashNode))
+}
+
+// Commit writes all nodes to the trie's memory database, tracking the internal
+// and external (for account tries) references.
+func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+	if t.db == nil {
+		panic("commit called on trie with nil database")
+	}
+	hash, cached, err := t.hashRoot(t.db, onleaf)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	t.root = cached
+	t.cachegen++
+	return common.BytesToHash(hash.(hashNode)), nil
+}
+
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+	if t.root == nil {
+		return hashNode(emptyRoot.Bytes()), nil, nil
+	}
+	h := newHasher(t.cachegen, t.cachelimit, onleaf)
+	defer returnHasherToPool(h)
+	return h.hash(t.root, db, true)
 }

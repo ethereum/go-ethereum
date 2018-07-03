@@ -25,6 +25,14 @@ import (
 
 type testEvent int
 
+func TestSubCloseUnsub(t *testing.T) {
+	// the point of this test is **not** to panic
+	var mux TypeMux
+	mux.Stop()
+	sub := mux.Subscribe(int(0))
+	sub.Unsubscribe()
+}
+
 func TestSub(t *testing.T) {
 	mux := new(TypeMux)
 	defer mux.Stop()
@@ -37,7 +45,7 @@ func TestSub(t *testing.T) {
 	}()
 	ev := <-sub.Chan()
 
-	if ev.(testEvent) != testEvent(5) {
+	if ev.Data.(testEvent) != testEvent(5) {
 		t.Errorf("Got %v (%T), expected event %v (%T)",
 			ev, ev, testEvent(5), testEvent(5))
 	}
@@ -136,21 +144,39 @@ func TestMuxConcurrent(t *testing.T) {
 func emptySubscriber(mux *TypeMux, types ...interface{}) {
 	s := mux.Subscribe(testEvent(0))
 	go func() {
-		for _ = range s.Chan() {
+		for range s.Chan() {
 		}
 	}()
 }
 
-func BenchmarkPost3(b *testing.B) {
-	var mux = new(TypeMux)
-	defer mux.Stop()
-	emptySubscriber(mux, testEvent(0))
-	emptySubscriber(mux, testEvent(0))
-	emptySubscriber(mux, testEvent(0))
+func BenchmarkPost1000(b *testing.B) {
+	var (
+		mux              = new(TypeMux)
+		subscribed, done sync.WaitGroup
+		nsubs            = 1000
+	)
+	subscribed.Add(nsubs)
+	done.Add(nsubs)
+	for i := 0; i < nsubs; i++ {
+		go func() {
+			s := mux.Subscribe(testEvent(0))
+			subscribed.Done()
+			for range s.Chan() {
+			}
+			done.Done()
+		}()
+	}
+	subscribed.Wait()
 
+	// The actual benchmark.
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		mux.Post(testEvent(0))
 	}
+
+	b.StopTimer()
+	mux.Stop()
+	done.Wait()
 }
 
 func BenchmarkPostConcurrent(b *testing.B) {
@@ -179,7 +205,7 @@ func BenchmarkChanSend(b *testing.B) {
 	c := make(chan interface{})
 	closed := make(chan struct{})
 	go func() {
-		for _ = range c {
+		for range c {
 		}
 	}()
 

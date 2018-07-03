@@ -21,14 +21,14 @@ package discover
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -46,11 +46,8 @@ var (
 
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
-	lvl    *leveldb.DB       // Interface to the database itself
-	seeder iterator.Iterator // Iterator for fetching possible seed nodes
-
-	self NodeID // Own node id to prevent adding it into the database
-
+	lvl    *leveldb.DB   // Interface to the database itself
+	self   NodeID        // Own node id to prevent adding it into the database
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
@@ -182,15 +179,14 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 func (db *nodeDB) node(id NodeID) *Node {
 	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
 	if err != nil {
-		glog.V(logger.Detail).Infof("failed to retrieve node %v: %v", id, err)
 		return nil
 	}
 	node := new(Node)
 	if err := rlp.DecodeBytes(blob, node); err != nil {
-		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
+		log.Error("Failed to decode node RLP", "err", err)
 		return nil
 	}
-	node.sha = crypto.Sha3Hash(node.ID[:])
+	node.sha = crypto.Keccak256Hash(node.ID[:])
 	return node
 }
 
@@ -230,14 +226,14 @@ func (db *nodeDB) ensureExpirer() {
 // expirer should be started in a go routine, and is responsible for looping ad
 // infinitum and dropping stale data from the database.
 func (db *nodeDB) expirer() {
-	tick := time.Tick(nodeDBCleanupCycle)
+	tick := time.NewTicker(nodeDBCleanupCycle)
+	defer tick.Stop()
 	for {
 		select {
-		case <-tick:
+		case <-tick.C:
 			if err := db.expireNodes(); err != nil {
-				glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
+				log.Error("Failed to expire nodedb items", "err", err)
 			}
-
 		case <-db.quit:
 			return
 		}
@@ -245,7 +241,7 @@ func (db *nodeDB) expirer() {
 }
 
 // expireNodes iterates over the database and deletes all nodes that have not
-// been seen (i.e. received a pong from) for some alloted time.
+// been seen (i.e. received a pong from) for some allotted time.
 func (db *nodeDB) expireNodes() error {
 	threshold := time.Now().Add(-nodeDBNodeExpiration)
 
@@ -260,8 +256,8 @@ func (db *nodeDB) expireNodes() error {
 			continue
 		}
 		// Skip the node if not expired yet (and not self)
-		if bytes.Compare(id[:], db.self[:]) != 0 {
-			if seen := db.lastPong(id); seen.After(threshold) {
+		if !bytes.Equal(id[:], db.self[:]) {
+			if seen := db.bondTime(id); seen.After(threshold) {
 				continue
 			}
 		}
@@ -282,13 +278,18 @@ func (db *nodeDB) updateLastPing(id NodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPing), instance.Unix())
 }
 
-// lastPong retrieves the time of the last successful contact from remote node.
-func (db *nodeDB) lastPong(id NodeID) time.Time {
+// bondTime retrieves the time of the last successful pong from remote node.
+func (db *nodeDB) bondTime(id NodeID) time.Time {
 	return time.Unix(db.fetchInt64(makeKey(id, nodeDBDiscoverPong)), 0)
 }
 
-// updateLastPong updates the last time a remote node successfully contacted.
-func (db *nodeDB) updateLastPong(id NodeID, instance time.Time) error {
+// hasBond reports whether the given node is considered bonded.
+func (db *nodeDB) hasBond(id NodeID) bool {
+	return time.Since(db.bondTime(id)) < nodeDBNodeExpiration
+}
+
+// updateBondTime updates the last pong time of a node.
+func (db *nodeDB) updateBondTime(id NodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPong), instance.Unix())
 }
 
@@ -302,52 +303,68 @@ func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
 }
 
-// querySeeds retrieves a batch of nodes to be used as potential seed servers
-// during bootstrapping the node into the network.
-//
-// Ideal seeds are the most recently seen nodes (highest probability to be still
-// alive), but yet untried. However, since leveldb only supports dumb iteration
-// we will instead start pulling in potential seeds that haven't been yet pinged
-// since the start of the boot procedure.
-//
-// If the database runs out of potential seeds, we restart the startup counter
-// and start iterating over the peers again.
-func (db *nodeDB) querySeeds(n int) []*Node {
-	// Create a new seed iterator if none exists
-	if db.seeder == nil {
-		db.seeder = db.lvl.NewIterator(nil, nil)
-	}
-	// Iterate over the nodes and find suitable seeds
-	nodes := make([]*Node, 0, n)
-	for len(nodes) < n && db.seeder.Next() {
-		// Iterate until a discovery node is found
-		id, field := splitKey(db.seeder.Key())
-		if field != nodeDBDiscoverRoot {
-			continue
+// querySeeds retrieves random nodes to be used as potential seed nodes
+// for bootstrapping.
+func (db *nodeDB) querySeeds(n int, maxAge time.Duration) []*Node {
+	var (
+		now   = time.Now()
+		nodes = make([]*Node, 0, n)
+		it    = db.lvl.NewIterator(nil, nil)
+		id    NodeID
+	)
+	defer it.Release()
+
+seek:
+	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
+		// Seek to a random entry. The first byte is incremented by a
+		// random amount each time in order to increase the likelihood
+		// of hitting all existing nodes in very small databases.
+		ctr := id[0]
+		rand.Read(id[:])
+		id[0] = ctr + id[0]%16
+		it.Seek(makeKey(id, nodeDBDiscoverRoot))
+
+		n := nextNode(it)
+		if n == nil {
+			id[0] = 0
+			continue seek // iterator exhausted
 		}
-		// Dump it if its a self reference
-		if bytes.Compare(id[:], db.self[:]) == 0 {
-			db.deleteNode(id)
-			continue
+		if n.ID == db.self {
+			continue seek
 		}
-		// Load it as a potential seed
-		if node := db.node(id); node != nil {
-			nodes = append(nodes, node)
+		if now.Sub(db.bondTime(n.ID)) > maxAge {
+			continue seek
 		}
-	}
-	// Release the iterator if we reached the end
-	if len(nodes) == 0 {
-		db.seeder.Release()
-		db.seeder = nil
+		for i := range nodes {
+			if nodes[i].ID == n.ID {
+				continue seek // duplicate
+			}
+		}
+		nodes = append(nodes, n)
 	}
 	return nodes
 }
 
+// reads the next node record from the iterator, skipping over other
+// database entries.
+func nextNode(it iterator.Iterator) *Node {
+	for end := false; !end; end = !it.Next() {
+		id, field := splitKey(it.Key())
+		if field != nodeDBDiscoverRoot {
+			continue
+		}
+		var n Node
+		if err := rlp.DecodeBytes(it.Value(), &n); err != nil {
+			log.Warn("Failed to decode node RLP", "id", id, "err", err)
+			continue
+		}
+		return &n
+	}
+	return nil
+}
+
 // close flushes and closes the database files.
 func (db *nodeDB) close() {
-	if db.seeder != nil {
-		db.seeder.Release()
-	}
 	close(db.quit)
 	db.lvl.Close()
 }
