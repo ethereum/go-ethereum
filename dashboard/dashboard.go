@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
+	"io"
 )
 
 const (
@@ -243,15 +244,16 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		db.lock.Unlock()
 	}()
 	for {
-		var r Request
-		err := websocket.JSON.Receive(conn, &r)
-		if err != nil {
-			client.logger.Warn("Failed to receive request", "err", err)
+		r := new(Request)
+		if err := websocket.JSON.Receive(conn, r); err != nil {
+			if err != io.EOF {
+				client.logger.Warn("Failed to receive request", "err", err)
+			}
 			close(done)
 			return
 		}
 		if r.Logs != nil {
-			db.handleLogRequest(r.Logs, client) // TODO (kurkomisi): concurrent function call?
+			db.handleLogRequest(r.Logs, client)
 		}
 	}
 }
@@ -292,8 +294,6 @@ func (db *Dashboard) collectData() {
 
 		frequency = float64(db.config.Refresh / time.Second)
 		numCPU    = float64(runtime.NumCPU())
-
-		sys = db.history.System
 	)
 
 	for {
@@ -360,6 +360,8 @@ func (db *Dashboard) collectData() {
 				Time:  now,
 				Value: float64(deltaDiskWrite) / frequency,
 			}
+			sys := db.history.System
+			db.lock.Lock()
 			sys.ActiveMemory = append(sys.ActiveMemory[1:], activeMemory)
 			sys.VirtualMemory = append(sys.VirtualMemory[1:], virtualMemory)
 			sys.NetworkIngress = append(sys.NetworkIngress[1:], networkIngress)
@@ -368,6 +370,7 @@ func (db *Dashboard) collectData() {
 			sys.SystemCPU = append(sys.SystemCPU[1:], systemCPU)
 			sys.DiskRead = append(sys.DiskRead[1:], diskRead)
 			sys.DiskWrite = append(sys.DiskRead[1:], diskWrite)
+			db.lock.Unlock()
 
 			db.sendToAll(&Message{
 				System: &SystemMessage{

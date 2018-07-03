@@ -86,12 +86,11 @@ export type Logs = {
 };
 
 export type LogsMessage = {
-	old:   ?LogFile,
-	chunk: Array<Record>,
+	source: ?LogFile,
+	chunk:  Array<Record>,
 };
 
 export type LogFile = {
 	name: string,
-	past: string,
 	last: string,
 };

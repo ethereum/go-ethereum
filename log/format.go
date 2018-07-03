@@ -202,16 +202,16 @@ func JSONFormat() Format {
 	return JSONFormatEx(false, true)
 }
 
-// JsonFormatOrderedCtx is similar to JsonFormatEx, except instead of a map this creates an array out of the ctx
-// in order to keep the original order.
-func JsonFormatOrderedCtx(pretty, lineSeparated bool) Format {
+// JSONFormatOrderedEx formats log records as JSON arrays. If pretty is true,
+// records will be pretty-printed. If lineSeparated is true, records
+// will be logged with a new line between each record.
+func JSONFormatOrderedEx(pretty, lineSeparated bool) Format {
 	jsonMarshal := json.Marshal
 	if pretty {
 		jsonMarshal = func(v interface{}) ([]byte, error) {
 			return json.MarshalIndent(v, "", "    ")
 		}
 	}
-
 	return FormatFunc(func(r *Record) []byte {
 		props := make(map[string]interface{})
 
@@ -226,7 +226,6 @@ func JsonFormatOrderedCtx(pretty, lineSeparated bool) Format {
 				props[errorKey] = fmt.Sprintf("%+v is not a string key,", r.Ctx[i])
 			}
 			ctx[i] = k
-			// TODO (kurkomisi): display hash fields entirely - possibly logger independently
 			ctx[i+1] = formatLogfmtValue(r.Ctx[i+1], true)
 		}
 		props[r.KeyNames.Ctx] = ctx
@@ -238,11 +237,9 @@ func JsonFormatOrderedCtx(pretty, lineSeparated bool) Format {
 			})
 			return b
 		}
-
 		if lineSeparated {
 			b = append(b, '\n')
 		}
-
 		return b
 	})
 }

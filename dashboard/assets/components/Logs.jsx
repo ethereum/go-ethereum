@@ -67,25 +67,34 @@ const createChunk = (records: Array<Record>) => {
 		default:
 			lvl = '';
 		}
-		if (lvl === '' || typeof t !== 'string' || t.length < 19 || typeof msg !== 'string' || !Array.isArray(ctx)) {
-			content += `<span style="color:${color}">Invalid log record</span><br />`;
+		const time = new Date(t);
+		if (lvl === '' || !(time instanceof Date) || isNaN(time) || typeof msg !== 'string' || !Array.isArray(ctx)) {
+			content += '<span style="color:#ce3c23">Invalid log record</span><br />';
 			return;
 		}
 		if (ctx.length > 0) {
 			msg += '&nbsp;'.repeat(Math.max(40 - msg.length, 0));
 		}
-		// Time format: 2006-01-02T15:04:05-0700 -> 01-02|15:04:05
-		content += `<span style="color:${color}">${lvl}</span>[${t.substr(5, 5)}|${t.substr(11, 8)}] ${msg}`;
+		const month = `0${time.getMonth() + 1}`.slice(-2);
+		const date = `0${time.getDate()}`.slice(-2);
+		const hours = `0${time.getHours()}`.slice(-2);
+		const minutes = `0${time.getMinutes()}`.slice(-2);
+		const seconds = `0${time.getSeconds()}`.slice(-2);
+		content += `<span style="color:${color}">${lvl}</span>[${month}-${date}|${hours}:${minutes}:${seconds}] ${msg}`;
 
 		for (let i = 0; i < ctx.length; i += 2) {
 			const key = ctx[i];
-			const value = ctx[i + 1];
+			const val = ctx[i + 1];
 			let padding = fieldPadding.get(key);
-			if (typeof padding === 'undefined' || padding < value.length) {
-				padding = value.length;
+			if (typeof padding !== 'number' || padding < val.length) {
+				padding = val.length;
 				fieldPadding.set(key, padding);
 			}
-			content += ` <span style="color:${color}">${key}</span>=${value}${'&nbsp;'.repeat(padding - value.length)}`;
+			let p = '';
+			if (i < ctx.length - 2) {
+				p = '&nbsp;'.repeat(padding - val.length);
+			}
+			content += ` <span style="color:${color}">${key}</span>=${val}${p}`;
 		}
 		content += '<br />';
 	});
@@ -104,7 +113,7 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 		prev.chunks = [];
 	}
 	const content = createChunk(update.chunk);
-	if (!update.old) {
+	if (!update.source) {
 		// In case of stream chunk.
 		if (!prev.endBottom) {
 			return prev;
@@ -119,10 +128,10 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 	}
 	const chunk = {
 		content,
-		name: update.old.name,
+		name: update.source.name,
 	};
-	if (update.old.past) {
-		if (update.old.last) {
+	if (prev.chunks.length > 0 && update.source.name < prev.chunks[0].name) {
+		if (update.source.last) {
 			prev.endTop = true;
 		}
 		if (prev.chunks.length >= limit) {
@@ -134,7 +143,7 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 		prev.topChanged = 1;
 		return prev;
 	}
-	if (update.old.last) {
+	if (update.source.last) {
 		prev.endBottom = true;
 	}
 	if (prev.chunks.length >= limit) {

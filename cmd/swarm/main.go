@@ -432,11 +432,7 @@ pv(1) tool to get a progress bar:
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		disklogs := ""
-		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-			disklogs = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
-		}
-		if err := debug.Setup(ctx, disklogs); err != nil {
+		if err := debug.Setup(ctx, ""); err != nil {
 			return err
 		}
 		swarmmetrics.Setup(ctx)

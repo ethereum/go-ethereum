@@ -112,18 +112,19 @@ func init() {
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context, disklogs string) error {
+func Setup(ctx *cli.Context, logdir string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if disklogs != "" {
-		glogger.SetHandler(log.MultiHandler(
-			ostream,
-			log.RotatingFileHandler(
-				disklogs,
-				262144,
-				log.JsonFormatOrderedCtx(false, true),
-			),
-		))
+	if logdir != "" {
+		rfh, err := log.RotatingFileHandler(
+			logdir,
+			262144,
+			log.JSONFormatOrderedEx(false, true),
+		)
+		if err != nil {
+			return err
+		}
+		glogger.SetHandler(log.MultiHandler(ostream, rfh))
 	}
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))

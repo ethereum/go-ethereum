@@ -10389,12 +10389,16 @@ var _bundleJs = []byte((((((((((`!function(modules) {
               default:
                 lvl = "";
             }
-            if ("" === lvl || "string" != typeof t || t.length < 19 || "string" != typeof msg || !Array.isArray(ctx)) return void (content += '<span style="color:' + color + '">Invalid log record</span><br />');
-            ctx.length > 0 && (msg += "&nbsp;".repeat(Math.max(40 - msg.length, 0))), content += '<span style="color:' + color + '">' + lvl + "</span>[" + t.substr(5, 5) + "|" + t.substr(11, 8) + "] " + msg;
+            var time = new Date(t);
+            if ("" === lvl || !(time instanceof Date) || isNaN(time) || "string" != typeof msg || !Array.isArray(ctx)) return void (content += '<span style="color:#ce3c23">Invalid log record</span><br />');
+            ctx.length > 0 && (msg += "&nbsp;".repeat(Math.max(40 - msg.length, 0)));
+            var month = ("0" + (time.getMonth() + 1)).slice(-2), date = ("0" + time.getDate()).slice(-2), hours = ("0" + time.getHours()).slice(-2), minutes = ("0" + time.getMinutes()).slice(-2), seconds = ("0" + time.getSeconds()).slice(-2);
+            content += '<span style="color:' + color + '">' + lvl + "</span>[" + month + "-" + date + "|" + hours + ":" + minutes + ":" + seconds + "] " + msg;
             for (var i = 0; i < ctx.length; i += 2) {
-                var key = ctx[i], value = ctx[i + 1], padding = fieldPadding.get(key);
-                (void 0 === padding || padding < value.length) && (padding = value.length, fieldPadding.set(key, padding)), 
-                content += ' <span style="color:' + color + '">' + key + "</span>=" + value + "&nbsp;".repeat(padding - value.length);
+                var key = ctx[i], val = ctx[i + 1], padding = fieldPadding.get(key);
+                ("number" != typeof padding || padding < val.length) && (padding = val.length, fieldPadding.set(key, padding));
+                var p = "";
+                i < ctx.length - 2 && (p = "&nbsp;".repeat(padding - val.length)), content += ' <span style="color:' + color + '">' + key + "</span>=" + val + p;
             }
             content += "<br />";
         }), content;
@@ -10403,19 +10407,19 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             if (prev.topChanged = 0, prev.bottomChanged = 0, !Array.isArray(update.chunk) || update.chunk.length < 1) return prev;
             Array.isArray(prev.chunks) || (prev.chunks = []);
             var content = createChunk(update.chunk);
-            if (!update.old) return prev.endBottom ? prev.chunks.length < 1 ? [ {
+            if (!update.source) return prev.endBottom ? prev.chunks.length < 1 ? [ {
                 content: content,
                 name: "00000000000000.log"
             } ] : (prev.chunks[prev.chunks.length - 1].content += content, prev.bottomChanged = 1, 
             prev) : prev;
             var chunk = {
                 content: content,
-                name: update.old.name
+                name: update.source.name
             };
-            return update.old.past ? (update.old.last && (prev.endTop = !0), prev.chunks.length >= limit && (prev.endBottom = !1, 
-            prev.chunks.splice(limit - 1, prev.chunks.length - limit + 1), prev.bottomChanged = -1), 
-            prev.chunks = [ chunk ].concat(_toConsumableArray(prev.chunks)), prev.topChanged = 1, 
-            prev) : (update.old.last && (prev.endBottom = !0), prev.chunks.length >= limit && (prev.endTop = !1, 
+            return prev.chunks.length > 0 && update.source.name < prev.chunks[0].name ? (update.source.last && (prev.endTop = !0), 
+            prev.chunks.length >= limit && (prev.endBottom = !1, prev.chunks.splice(limit - 1, prev.chunks.length - limit + 1), 
+            prev.bottomChanged = -1), prev.chunks = [ chunk ].concat(_toConsumableArray(prev.chunks)), 
+            prev.topChanged = 1, prev) : (update.source.last && (prev.endBottom = !0), prev.chunks.length >= limit && (prev.endTop = !1, 
             prev.chunks.splice(0, prev.chunks.length - limit + 1), prev.topChanged = -1), prev.chunks = [].concat(_toConsumableArray(prev.chunks), [ chunk ]), 
             prev.bottomChanged = 1, prev);
         };
@@ -40575,7 +40579,7 @@ func bundleJs() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "bundle.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x69, 0xa2, 0xe, 0x5a, 0x74, 0x8, 0xb1, 0x63, 0x1c, 0x5d, 0xae, 0x27, 0x7, 0x18, 0x9f, 0xbe, 0xee, 0x93, 0x92, 0x88, 0x93, 0xd6, 0xfd, 0xfd, 0x5b, 0xf, 0xe8, 0x45, 0xcb, 0x8f, 0xbe, 0x60}}
+	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xc1, 0xd0, 0xe9, 0xd3, 0xae, 0x7d, 0x57, 0x66, 0x4, 0xc8, 0xf9, 0x40, 0x68, 0xff, 0x8b, 0xa0, 0x4d, 0x0, 0xca, 0x4b, 0x3d, 0x7f, 0xb9, 0x40, 0xd, 0xae, 0xe0, 0x75, 0xd0, 0xd1, 0xfc, 0x7b}}
 	return a, nil
 }
 

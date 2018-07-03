@@ -200,11 +200,11 @@ func init() {
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
-		disklogs := ""
+		logdir := ""
 		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-			disklogs = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
 		}
-		if err := debug.Setup(ctx, disklogs); err != nil {
+		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
 		}
 		// Cap the cache allowance and tune the garbage collector

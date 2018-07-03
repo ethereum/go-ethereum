@@ -74,92 +74,100 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 	return closingHandler{f, StreamHandler(f, fmtr)}, nil
 }
 
-type writeCounter struct {
-	w     io.Writer
-	count uint
+// countingWriter wraps a WriteCloser object in order to count the written bytes.
+type countingWriter struct {
+	w     io.WriteCloser // the wrapped object
+	count uint           // number of bytes written
 }
 
-func (w *writeCounter) Write(p []byte) (n int, err error) {
+// Write increments the byte counter by the number of bytes written.
+// Implements the WriteCloser interface.
+func (w *countingWriter) Write(p []byte) (n int, err error) {
 	n, err = w.w.Write(p)
 	w.count += uint(n)
 	return n, err
 }
 
+// Close implements the WriteCloser interface.
+func (w *countingWriter) Close() error {
+	return w.w.Close()
+}
+
+// prepFile opens the log file at the given path, and cuts off the invalid part
+// from the end, because the previous execution could have been finished by interruption.
+// Assumes that every line ended by '\n' contains a valid log record.
+func prepFile(path string) (*countingWriter, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0600)
+	if err != nil {
+		return nil, err
+	}
+	_, err = f.Seek(-1, io.SeekEnd)
+	if err != nil {
+		return nil, err
+	}
+	buf := make([]byte, 1)
+	var cut int64
+	for {
+		if _, err := f.Read(buf); err != nil {
+			return nil, err
+		}
+		if buf[0] == '\n' {
+			break
+		}
+		if _, err = f.Seek(-2, io.SeekCurrent); err != nil {
+			return nil, err
+		}
+		cut++
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	ns := fi.Size() - cut
+	if err = f.Truncate(ns); err != nil {
+		return nil, err
+	}
+	return &countingWriter{w: f, count: uint(ns)}, nil
+}
+
 // RotatingFileHandler returns a handler which writes log records to file chunks
 // at the given path. When a file's size reaches the limit, the handler creates
 // a new file named after the timestamp of the first log record it will contain.
-func RotatingFileHandler(path string, limit uint, formatter Format) Handler {
-	if err := os.MkdirAll(path, 0755); err != nil {
-		panic(err)
+func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, error) {
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return nil, err
 	}
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	counter := new(writeCounter)
+	re := regexp.MustCompile("\\.log$")
+	last := len(files) - 1
+	for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
+		last--
+	}
+	var counter *countingWriter
+	if last >= 0 && files[last].Size() < int64(limit){
+		// Open the last file, and continue to write into it until it's size reaches the limit.
+		if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
+			return nil, err
+		}
+	}
+	if counter == nil {
+		counter = new(countingWriter)
+	}
 	h := StreamHandler(counter, formatter)
 
-	re := regexp.MustCompile(".log$")
-	var i int
-	for i = len(files) - 1; i >= 0 && (!files[i].Mode().IsRegular() || !re.Match([]byte(files[i].Name()))); i-- {
-	}
-	if i >= 0 {
-		// Open the last file, and continue to write into it until it's size reaches the limit.
-		last := files[i]
-		if last.Size() >= int64(limit) {
-			goto createNew
-		}
-		f, err := os.OpenFile(filepath.Join(path, last.Name()), os.O_RDWR|os.O_APPEND, 0644)
-		if err != nil {
-			goto createNew
-		}
-		// The previous execution could have been finished by interruption, in this case cut the invalid
-		// record from the end. Assume that every line ended by '\n' contains a valid log record.
-		bufSize := int64(100)
-		buf := make([]byte, bufSize)
-		cut := bufSize
-		if _, err = f.Seek(-bufSize, 2); err != nil {
-			goto createNew
-		}
-		n, err := f.Read(buf)
-		for err == nil {
-			for ; n > 0 && buf[n-1] != '\n'; n-- {
-			}
-			if n > 0 {
-				break
-			}
-			if _, err = f.Seek(-2*bufSize, 1); err != nil {
-				break
-			}
-			cut += bufSize
-			n, err = f.Read(buf)
-		}
-		if err != nil {
-			goto createNew
-		}
-		cut -= int64(n)
-
-		ns := last.Size() - cut
-		if err = f.Truncate(ns); err != nil {
-			goto createNew
-		}
-		counter.w = f
-		counter.count = uint(ns)
-	}
-createNew:
-
 	return FuncHandler(func(r *Record) error {
-		if counter.count > limit || counter.w == nil {
-			// TODO (kurkomisi): close the last file too.
-			if f, ok := counter.w.(*os.File); ok {
-				if err := f.Close(); err != nil {
-					return err
-				}
-			}
+		if counter.count > limit {
+			counter.Close()
+			counter.w = nil
+		}
+		if counter.w == nil {
 			f, err := os.OpenFile(
 				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))),
 				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-				0644,
+				0600,
 			)
 			if err != nil {
 				return err
@@ -168,7 +176,7 @@ createNew:
 			counter.count = 0
 		}
 		return h.Log(r)
-	})
+	}), nil
 }
 
 // NetHandler opens a socket to the given address and writes records

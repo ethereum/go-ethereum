@@ -27,125 +27,121 @@ import (
 	"regexp"
 	"sort"
 	"time"
+	"bytes"
 )
 
-// embrace inserts buf into brackets.
-func embrace(buf []byte) []byte {
-	b := make([]byte, len(buf)+2)
+var emptyChunk = json.RawMessage("[]")
+
+// prepLogs creates a JSON array from the given log record buffer.
+// Returns the prepared array and the position of the last '\n'
+// character in the original buffer, or -1 if it doesn't contain any.
+func prepLogs(buf []byte) (json.RawMessage, int) {
+	b := make(json.RawMessage, 1, len(buf) + 1)
 	b[0] = '['
-	copy(b[1:], buf)
-	b[len(buf)+1] = ']'
-
-	return b
-}
-
-// replaceNewLinesWithCommas replaces the '\n' characters with ',' characters and returns the last replaced position.
-func replaceNewLinesWithCommas(buf []byte) int {
+	b = append(b, buf...)
 	last := -1
-	for i := 0; i < len(buf); i++ {
-		if buf[i] == '\n' {
-			buf[i] = ','
+	for i := 1; i < len(b); i++ {
+		if b[i] == '\n' {
+			b[i] = ','
 			last = i
 		}
 	}
-	return last
+	if last < 0 {
+		return emptyChunk, -1
+	}
+	b[last] = ']'
+	return b[:last+1], last - 1
 }
 
-// handleLogRequest searches for the log file specified by the timestamp of the request, creates a JSON array out of it
-// and sends it to the requesting client.
+// handleLogRequest searches for the log file specified by the timestamp of the
+// request, creates a JSON array out of it and sends it to the requesting client.
 func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 	files, err := ioutil.ReadDir(db.logdir)
 	if err != nil {
 		log.Warn("Failed to open logdir", "path", db.logdir, "err", err)
 		return
 	}
-	re := regexp.MustCompile(".log$")
-	fileNames := make([]string, len(files))
-	n := 0
+	re := regexp.MustCompile("\\.log$")
+	fileNames := make([]string, 0, len(files))
 	for _, f := range files {
-		if f.Mode().IsRegular() && re.Match([]byte(f.Name())) {
-			fileNames[n] = f.Name()
-			n++
+		if f.Mode().IsRegular() && re.MatchString(f.Name()) {
+			fileNames = append(fileNames, f.Name())
 		}
 	}
-	if n < 1 {
-		log.Warn("There isn't any log file in the logdir", "path", db.logdir)
+	if len(fileNames) < 1 {
+		log.Warn("No log files in logdir", "path", db.logdir)
 		return
 	}
-	i := sort.Search(n, func(i int) bool {
-		return fileNames[i] >= r.Name // Returns the smallest index such as fileNames[i] >= r.Name.
+	idx := sort.Search(len(fileNames), func(idx int) bool {
+		// Returns the smallest index such as fileNames[idx] >= r.Name,
+		// if there is no such index, returns n.
+		return fileNames[idx] >= r.Name
 	})
 
-	if i >= n || fileNames[i] != r.Name {
-		log.Warn("The requested file isn't in the logdir", "path", filepath.Join(db.logdir, r.Name))
+	switch {
+	case idx < 0:
 		return
-	}
-
-	last := false
-	if r.Past {
-		if i <= 0 {
-			return
-		}
-		i--
-		if i == 0 {
-			last = true
-		}
-	} else {
-		if i >= n-1 {
-			return
-		}
-		if i == n-2 {
-			// The last file is continuously updated, and its chunks are streamed,
-			// so in order to avoid log record duplication on the client side, it is
-			// handled differently. Its actual content is always saved in the history.
-			db.lock.Lock()
-			if db.history.Logs != nil {
-				c.msg <- &Message{
-					Logs: db.history.Logs,
-				}
+	case idx == 0 && r.Past:
+		return
+	case idx >= len(fileNames):
+		return
+	case r.Past:
+		idx--
+	case idx == len(fileNames)-1 && fileNames[idx] == r.Name:
+		return
+	case idx == len(fileNames)-1 || (idx == len(fileNames)-2 && fileNames[idx] == r.Name):
+		// The last file is continuously updated, and its chunks are streamed,
+		// so in order to avoid log record duplication on the client side, it is
+		// handled differently. Its actual content is always saved in the history.
+		db.lock.Lock()
+		if db.history.Logs != nil {
+			c.msg <- &Message{
+				Logs: db.history.Logs,
 			}
-			db.lock.Unlock()
-			return
 		}
-		i++
+		db.lock.Unlock()
+		return
+	case fileNames[idx] == r.Name:
+		idx++
 	}
 
-	path := filepath.Join(db.logdir, fileNames[i])
-	f, err := os.OpenFile(path, os.O_RDONLY, 0644)
-	if err != nil {
-		log.Warn("Failed to open file", "path", path, "err", err)
-		return
-	}
-	defer f.Close()
+	path := filepath.Join(db.logdir, fileNames[idx])
 	var buf []byte
-	if buf, err = ioutil.ReadAll(f); err != nil {
+	if buf, err = ioutil.ReadFile(path); err != nil {
 		log.Warn("Failed to read file", "path", path, "err", err)
 		return
 	}
-	lastComma := replaceNewLinesWithCommas(buf)
-	if lastComma < 0 {
+	chunk, end := prepLogs(buf)
+	if end < 0 {
 		log.Warn("The file doesn't contain valid logs", "path", path)
 		return
 	}
-	db.lock.Lock()
 	c.msg <- &Message{
 		Logs: &LogsMessage{
-			Old: &LogFile{
-				Name: fileNames[i],
-				Past: r.Past,
-				Last: last,
+			Source: &LogFile{
+				Name: fileNames[idx],
+				Last: r.Past && idx == 0,
 			},
-			Chunk: embrace(buf[:lastComma]),
+			Chunk: chunk,
 		},
 	}
-	db.lock.Unlock()
 }
 
-// streamLogs watches the file system, and when the logger writes the new log records into the files, picks them up,
-// then makes JSON array out of them and sends them to the clients.
-// This could be embedded into collectData, but they shouldn't depend on each other, and also cleaner this way.
+// streamLogs watches the file system, and when the logger writes
+// the new log records into the files, picks them up, then makes
+// JSON array out of them and sends them to the clients.
 func (db *Dashboard) streamLogs() {
 	defer db.wg.Done()
+	var (
+		err error
+		errc chan error
+	)
+	defer func() {
+		if errc == nil {
+			errc = <-db.quit
+		}
+		errc <- err
+	}()
 
 	files, err := ioutil.ReadDir(db.logdir)
 	if err != nil {
@@ -158,15 +154,16 @@ func (db *Dashboard) streamLogs() {
 	)
 
 	// The log records are always written into the last file in alphabetical order, because of the timestamp.
-	re := regexp.MustCompile(".log$")
-	var i int
-	for i = len(files) - 1; i >= 0 && (!files[i].Mode().IsRegular() || !re.Match([]byte(files[i].Name()))); i-- {
+	re := regexp.MustCompile("\\.log$")
+	i := len(files) - 1
+	for i >= 0 && (!files[i].Mode().IsRegular() || !re.MatchString(files[i].Name())) {
+		i--
 	}
 	if i < 0 {
-		log.Warn("There isn't any log file in the logdir", "path", db.logdir)
+		log.Warn("No log files in logdir", "path", db.logdir)
 		return
 	}
-	if opened, err = os.OpenFile(filepath.Join(db.logdir, files[i].Name()), os.O_RDONLY, 0644); err != nil {
+	if opened, err = os.OpenFile(filepath.Join(db.logdir, files[i].Name()), os.O_RDONLY, 0600); err != nil {
 		log.Warn("Failed to open file", "name", files[i].Name(), "err", err)
 		return
 	}
@@ -178,12 +175,11 @@ func (db *Dashboard) streamLogs() {
 	}
 	db.lock.Lock()
 	db.history.Logs = &LogsMessage{
-		Old: &LogFile{
+		Source: &LogFile{
 			Name: fi.Name(),
-			Past: false,
 			Last: true,
 		},
-		Chunk: json.RawMessage("[]"),
+		Chunk: emptyChunk,
 	}
 	db.lock.Unlock()
 
@@ -202,7 +198,8 @@ func (db *Dashboard) streamLogs() {
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
-	for {
+loop:
+	for err == nil || errc == nil {
 		select {
 		case event := <-watcher.Events:
 			// Make sure that new log file was created.
@@ -211,9 +208,10 @@ func (db *Dashboard) streamLogs() {
 			}
 			if opened == nil {
 				log.Warn("The last log file is not opened")
-				return
+				break loop
 			}
-			// The new log file's name is always greater, because it is created using the actual log record's time.
+			// The new log file's name is always greater,
+			// because it is created using the actual log record's time.
 			if opened.Name() >= event.Name {
 				break
 			}
@@ -221,25 +219,22 @@ func (db *Dashboard) streamLogs() {
 			chunk, err := ioutil.ReadAll(opened)
 			if err != nil {
 				log.Warn("Failed to read file", "name", opened.Name(), "err", err)
-				return
+				break loop
 			}
-			b := make([]byte, len(buf)+len(chunk))
-			copy(b, buf)
-			copy(b[len(buf):], chunk)
-			buf = b
+			buf = append(buf, chunk...)
 			opened.Close()
 
-			if last := replaceNewLinesWithCommas(buf); last >= 0 {
+			if chunk, last := prepLogs(buf); last >= 0 {
 				// Send the rest of the previously opened file.
 				db.sendToAll(&Message{
 					Logs: &LogsMessage{
-						Chunk: embrace(buf[:last]),
+						Chunk: chunk,
 					},
 				})
 			}
 			if opened, err = os.OpenFile(event.Name, os.O_RDONLY, 0644); err != nil {
 				log.Warn("Failed to open file", "name", event.Name, "err", err)
-				return
+				break loop
 			}
 			buf = buf[:0]
 
@@ -247,62 +242,55 @@ func (db *Dashboard) streamLogs() {
 			fi, err := opened.Stat()
 			if err != nil {
 				log.Warn("Problem with file", "name", opened.Name(), "err", err)
-				return
+				break loop
 			}
 			db.lock.Lock()
-			db.history.Logs.Old.Name = fi.Name()
-			db.history.Logs.Chunk = json.RawMessage("[]")
+			db.history.Logs.Source.Name = fi.Name()
+			db.history.Logs.Chunk = emptyChunk
 			db.lock.Unlock()
 		case err := <-watcher.Errors:
 			if err != nil {
 				log.Warn("Fs watcher error", "err", err)
 			}
-			return
-		case errc := <-db.quit:
-			errc <- nil
-			return
-			// Send log updates to the client.
-		case <-ticker.C:
+		case <-ticker.C: // Send log updates to the client.
 			if opened == nil {
 				log.Warn("The last log file is not opened")
-				return
+				break loop
 			}
-
 			// Read the new logs created since the last read.
 			chunk, err := ioutil.ReadAll(opened)
 			if err != nil {
 				log.Warn("Failed to read file", "name", opened.Name(), "err", err)
-				return
+				break loop
 			}
-			b := make([]byte, len(buf)+len(chunk))
-			copy(b, buf)
-			copy(b[len(buf):], chunk)
+			b := append(buf, chunk...)
 
-			last := replaceNewLinesWithCommas(b)
+			chunk, last := prepLogs(b)
 			if last < 0 {
 				break
 			}
 			// Only keep the invalid part of the buffer, which can be valid after the next read.
 			buf = b[last+1:]
 
-			msg := embrace(b[:last])
 			var l *LogsMessage
 			// Update the history.
 			db.lock.Lock()
-			if len(db.history.Logs.Chunk) == 2 {
-				db.history.Logs.Chunk = msg
+			if bytes.Equal(db.history.Logs.Chunk, emptyChunk) {
+				db.history.Logs.Chunk = chunk
 				l = deepcopy.Copy(db.history.Logs).(*LogsMessage)
 			} else {
-				b = make([]byte, len(db.history.Logs.Chunk)+len(msg)-1)
+				b = make([]byte, len(db.history.Logs.Chunk)+len(chunk)-1)
 				copy(b, db.history.Logs.Chunk)
 				b[len(db.history.Logs.Chunk)-1] = ','
-				copy(b[len(db.history.Logs.Chunk):], msg[1:])
+				copy(b[len(db.history.Logs.Chunk):], chunk[1:])
 				db.history.Logs.Chunk = b
-				l = &LogsMessage{Chunk: msg}
+				l = &LogsMessage{Chunk: chunk}
 			}
 			db.lock.Unlock()
 
 			db.sendToAll(&Message{Logs: l})
+		case errc = <-db.quit:
+			break loop
 		}
 	}
 }

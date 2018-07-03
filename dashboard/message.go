@@ -70,17 +70,19 @@ type SystemMessage struct {
 	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
+// LogsMessage wraps up a log chunk. If Source isn't present, the chunk is a stream chunk.
 type LogsMessage struct {
-	Old   *LogFile        `json:"old,omitempty"` // Attributes of the log file.
-	Chunk json.RawMessage `json:"chunk"`         // Contains log records.
+	Source *LogFile        `json:"source,omitempty"` // Attributes of the log file.
+	Chunk  json.RawMessage `json:"chunk"`            // Contains log records.
 }
 
+// LogFile contains the attributes of a log file.
 type LogFile struct {
 	Name string `json:"name"` // The name of the file.
-	Past bool   `json:"past"` // Denotes if the file is the previous or the next one.
-	Last bool   `json:"last"` // Denotes if there isn't more file.
+	Last bool   `json:"last"` // Denotes if the actual log file is the last one in the directory.
 }
 
+// Request represents the client request.
 type Request struct {
 	Logs *LogsRequest `json:"logs,omitempty"`
 }
