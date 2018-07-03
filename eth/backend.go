@@ -53,6 +53,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const NumOfMasternodes = 99
+
 type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
@@ -236,7 +238,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 			}
-
 			return nil
 		}
 	}
@@ -418,6 +419,20 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 		return false, fmt.Errorf("Only verify miners in Clique protocol")
 	}
 	return true, nil
+}
+
+// Store new set of masternodes into local db
+func (s *Ethereum) UpdateMasternodes(ms []clique.Masternode) error {
+	// get snapshot from local db
+	if s.chainConfig.Clique == nil {
+		return errors.New("not clique")
+	}
+	c := s.engine.(*clique.Clique)
+	err := c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Ethereum) StartStaking(local bool) error {

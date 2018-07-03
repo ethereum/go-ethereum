@@ -26,9 +26,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/console"
+	validatorContract "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -313,39 +317,90 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				started = true
 				log.Info("Enabled mining node!!!")
 			}
-			defer close(core.Checkpoint)
+			defer close(core.CheckpointCh)
+			defer close(core.M1Ch)
+			for {
+				select {
+				case <-core.CheckpointCh:
+					log.Info("Checkpoint!!! It's time to reconcile node's state...")
+					ok, err := ethereum.ValidateStaker()
+					if err != nil {
+						utils.Fatalf("Can't verify masternode permission: %v", err)
+					}
+					if !ok {
+						log.Info("Only masternode can propose and verify blocks. Cancelling mining on this node...")
+						if started {
+							ethereum.StopMining()
+							started = false
+						}
+						log.Info("Cancelled mining mode!!!")
+					} else if !started {
+						log.Info("Masternode found. Enabling mining mode...")
+						// Use a reduced number of threads if requested
+						if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+							type threaded interface {
+								SetThreads(threads int)
+							}
+							if th, ok := ethereum.Engine().(threaded); ok {
+								th.SetThreads(threads)
+							}
+						}
+						// Set the gas price to the limits from the CLI and start mining
+						ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+						if err := ethereum.StartStaking(true); err != nil {
+							utils.Fatalf("Failed to start mining: %v", err)
+						}
+						started = true
+						log.Info("Enabled mining node!!!")
+					}
+				case <-core.M1Ch:
+					log.Info("It's time to update new set of masternodes for the next epoch...")
+					// get masternodes information from smart contract
+					client, err := ethclient.Dial(stack.IPCEndpoint())
+					if err != nil {
+						utils.Fatalf("Fail to connect RPC: %v", err)
+					}
+					addr := common.HexToAddress(common.Validator)
+					validator, err := validatorContract.NewTomoValidator(addr, client)
+					if err != nil {
+						utils.Fatalf("Fail to get validator smc: %v", err)
+					}
+					opts := new(bind.CallOpts)
+					candidates, err := validator.GetCandidates(opts)
+					if err != nil {
+						utils.Fatalf("Can't get list of masternode candidates: %v", err)
+					}
 
-			for range core.Checkpoint {
-				log.Info("Checkpoint!!! It's time to reconcile node's state...")
-				ok, err := ethereum.ValidateStaker()
-				if err != nil {
-					utils.Fatalf("Can't verify validator permission: %v", err)
-				}
-				if !ok {
-					log.Info("Only validator can mine blocks. Cancelling mining on this node...")
-					if started {
-						ethereum.StopMining()
-						started = false
-					}
-					log.Info("Cancelled mining mode!!!")
-				} else if !started {
-					log.Info("Validator found. Enabling mining mode...")
-					// Use a reduced number of threads if requested
-					if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
-						type threaded interface {
-							SetThreads(threads int)
+					var ms []clique.Masternode
+					for _, candidate := range candidates {
+						v, err := validator.GetCandidateCap(opts, candidate)
+						if err != nil {
+							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
 						}
-						if th, ok := ethereum.Engine().(threaded); ok {
-							th.SetThreads(threads)
+						//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
+						if candidate.String() != "0x0000000000000000000000000000000000000000" {
+							ms = append(ms, clique.Masternode{Address: candidate, Stake: v.String()})
 						}
 					}
-					// Set the gas price to the limits from the CLI and start mining
-					ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-					if err := ethereum.StartStaking(true); err != nil {
-						utils.Fatalf("Failed to start mining: %v", err)
+					//// order by cap
+					//sort.Slice(ms, func(i, j int) bool {
+					//	return ms[i].Stake > ms[j].Stake
+					//})
+					log.Info("Ordered list of masternode candidates")
+					for _, m := range ms {
+						fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
 					}
-					started = true
-					log.Info("Enabled mining node!!!")
+					if len(ms) == 0 {
+						log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+					} else {
+						// update masternodes
+						log.Info("Updating new set of masternodes")
+						err = ethereum.UpdateMasternodes(ms)
+						if err != nil {
+							utils.Fatalf("Can't update masternodes: %v", err)
+						}
+						log.Info("Masternodes are ready for the next epoch")
+					}
 				}
 			}
 		}()

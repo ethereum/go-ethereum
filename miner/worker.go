@@ -348,8 +348,18 @@ func (self *worker) wait() {
 					return
 				}
 				if _, authorized := snap.Signers[self.coinbase]; !authorized {
-					log.Error("Coinbase address not in snapshot signers.")
-					return
+					valid := false
+					masternodes := c.GetMasternodes(self.chain, block.Header())
+					for _, m := range masternodes {
+						if m == self.coinbase {
+							valid = true
+							break
+						}
+					}
+					if !valid {
+						log.Error("Coinbase address not in snapshot signers.")
+						return
+					}
 				}
 				// Send tx sign to smart contract blockSigners.
 				if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block); err != nil {
@@ -421,13 +431,15 @@ func (self *worker) commitNewWork() {
 		// check if we are right after parent's coinbase in the list
 		// only go with Clique
 		if self.config.Clique != nil {
+			// get masternodes set from latest checkpoint
 			c := self.engine.(*clique.Clique)
+			masternodes := c.GetMasternodes(self.chain, parent.Header())
 			snap, err := c.GetSnapshot(self.chain, parent.Header())
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
-			ok, err := clique.YourTurn(snap, parent.Header(), self.coinbase)
+			ok, err := clique.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
@@ -530,8 +542,15 @@ func (self *worker) commitNewWork() {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	if (work.config.Clique != nil) && (work.Block.NumberU64()%work.config.Clique.Epoch) == 0 {
-		core.Checkpoint <- 1
+	if work.config.Clique != nil {
+		// epoch block
+		if (work.Block.NumberU64() % work.config.Clique.Epoch) == 0 {
+			core.CheckpointCh <- 1
+		}
+		// prepare set of masternodes for the next epoch
+		if (work.Block.NumberU64() % work.config.Clique.Epoch) == (work.config.Clique.Epoch - core.M1Gap) {
+			core.M1Ch <- 1
+		}
 	}
 	self.push(work)
 }
