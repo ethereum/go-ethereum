@@ -141,7 +141,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	contract.Input = input
 
 	// Reclaim the stack as an int pool when the execution stops
-	defer in.intPool.put(stack.data...)
+	defer func() { in.intPool.put(stack.data...) }()
 
 	if in.cfg.Debug {
 		defer func() {
