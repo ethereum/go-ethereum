@@ -35,8 +35,6 @@ import (
 
 const (
 	defaultDialTimeout      = 15 * time.Second
-	refreshPeersInterval    = 30 * time.Second
-	staticPeerCheckInterval = 15 * time.Second
 
 	// Maximum number of concurrently handshaking inbound connections.
 	maxAcceptConns = 50
