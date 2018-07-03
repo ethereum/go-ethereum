@@ -469,7 +469,7 @@ func TestKeys(t *testing.T) {
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.generateSymmetricKey(topicobj, &addr, true)
+	inkeyid, err := ps.GenerateSymmetricKey(topicobj, &addr, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -1282,7 +1282,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
+	symkeyid, err := ps.GenerateSymmetricKey(topic, &to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -1375,7 +1375,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &to, true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1457,7 +1457,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
