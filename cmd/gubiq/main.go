@@ -66,7 +66,6 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
-		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
 		// See monitorcmd.go:
