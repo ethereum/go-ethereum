@@ -330,11 +330,10 @@ func (tab *Table) findnode(n *Node, targetID NodeID, reply chan<- []*Node) {
 		tab.db.updateFindFails(n.ID, fails-1)
 	}
 
-	// Grab as many nodes as possible if we're in the init phase.
-	if !tab.isInitDone() {
-		for _, n := range r {
-			tab.add(n)
-		}
+	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
+	// just remove those again during revalidation.
+	for _, n := range r {
+		tab.add(n)
 	}
 	reply <- r
 }
