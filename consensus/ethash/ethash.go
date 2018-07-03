@@ -389,7 +389,7 @@ type Config struct {
 	PowMode        Mode
 }
 
-// Ethash is a consensus engine based on proot-of-work implementing the ethash
+// Ethash is a consensus engine based on proof-of-work implementing the ethash
 // algorithm.
 type Ethash struct {
 	config Config
