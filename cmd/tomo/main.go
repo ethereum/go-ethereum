@@ -328,12 +328,12 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						utils.Fatalf("Can't verify masternode permission: %v", err)
 					}
 					if !ok {
-						log.Info("Only masternode can propose and verify blocks. Cancelling mining on this node...")
 						if started {
+							log.Info("Only masternode can propose and verify blocks. Cancelling mining on this node...")
 							ethereum.StopMining()
 							started = false
+							log.Info("Cancelled mining mode!!!")
 						}
-						log.Info("Cancelled mining mode!!!")
 					} else if !started {
 						log.Info("Masternode found. Enabling mining mode...")
 						// Use a reduced number of threads if requested
