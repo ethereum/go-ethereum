@@ -779,16 +779,10 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				glog.Fatal(errs[index])
 				return
 			}
-			if err := WriteTransactions(self.chainDb, block); err != nil {
-				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
+			if err := WriteTxLookupEntries(self.chainDb, block); err != nil {
+				errs[index] = fmt.Errorf("failed to write lookup metadata: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			if err := WriteReceipts(self.chainDb, receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write individual receipts: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				glog.Fatal("Failed to write lookup metadata", "err", err)
 				return
 			}
 			atomic.AddInt32(&stats.processed, 1)
@@ -1027,12 +1021,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
-			// This puts transactions in a extra db for rpc
-			if err := WriteTransactions(self.chainDb, block); err != nil {
-				return i, err
-			}
-			// store the receipts
-			if err := WriteReceipts(self.chainDb, receipts); err != nil {
+			// Write the positional metadata for transaction and receipt lookups
+			if err := WriteTxLookupEntries(self.chainDb, block); err != nil {
 				return i, err
 			}
 			// Write map map bloom filters
@@ -1201,16 +1191,12 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	for _, block := range newChain {
 		// insert the block in the canonical way, re-writing history
 		self.insert(block)
-		// write canonical receipts and transactions
-		if err := WriteTransactions(self.chainDb, block); err != nil {
-			return err
-		}
-		receipts := GetBlockReceipts(self.chainDb, block.Hash(), block.NumberU64())
-		// write receipts
-		if err := WriteReceipts(self.chainDb, receipts); err != nil {
+		// write lookup entries for hash based transaction/receipt searches
+		if err := WriteTxLookupEntries(self.chainDb, block); err != nil {
 			return err
 		}
 		// Write map map bloom filters
+		receipts := GetBlockReceipts(self.chainDb, block.Hash(), block.NumberU64())
 		if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
 			return err
 		}
@@ -1222,8 +1208,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// When transactions get deleted from the database that means the
 	// receipts that were created in the fork must also be deleted
 	for _, tx := range diff {
-		DeleteReceipt(self.chainDb, tx.Hash())
-		DeleteTransaction(self.chainDb, tx.Hash())
+		DeleteTxLookupEntry(self.chainDb, tx.Hash())
 	}
 	// Must be posted in a goroutine because of the transaction pool trying
 	// to acquire the chain manager lock

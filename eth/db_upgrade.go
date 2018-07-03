@@ -19,297 +19,121 @@ package eth
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
-	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/rlp"
 )
 
-var useSequentialKeys = []byte("dbUpgrade_20160530sequentialKeys")
+var deduplicateData = []byte("dbUpgrade_20170714deduplicateData")
 
-// upgradeSequentialKeys checks the chain database version and
+// upgradeDeduplicateData checks the chain database version and
 // starts a background process to make upgrades if necessary.
 // Returns a stop function that blocks until the process has
 // been safely stopped.
-func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
-	data, _ := db.Get(useSequentialKeys)
+func upgradeDeduplicateData(db ethdb.Database) func() error {
+	// If the database is already converted or empty, bail out
+	data, _ := db.Get(deduplicateData)
 	if len(data) > 0 && data[0] == 42 {
-		return nil // already converted
+		return nil
 	}
-
 	if data, _ := db.Get([]byte("LastHeader")); len(data) == 0 {
-		db.Put(useSequentialKeys, []byte{42})
-		return nil // empty database, nothing to do
+		db.Put(deduplicateData, []byte{42})
+		return nil
 	}
-
-	glog.V(logger.Info).Infof("Upgrading chain database to use sequential keys")
-
-	stopChn := make(chan struct{})
-	stoppedChn := make(chan struct{})
+	// Start the deduplication upgrade on a new goroutine
+	glog.V(logger.Info).Infof("Upgrading database to use lookup entries")
+	stop := make(chan chan error)
 
 	go func() {
-		stopFn := func() bool {
-			select {
-			case <-time.After(time.Microsecond * 100): // make sure other processes don't get starved
-			case <-stopChn:
-				return true
-			}
-			return false
-		}
-
-		err, stopped := upgradeSequentialCanonicalNumbers(db, stopFn)
-		if err == nil && !stopped {
-			err, stopped = upgradeSequentialBlocks(db, stopFn)
-		}
-		if err == nil && !stopped {
-			err, stopped = upgradeSequentialOrphanedReceipts(db, stopFn)
-		}
-		if err == nil && !stopped {
-			glog.V(logger.Info).Infof("Database conversion successful")
-			db.Put(useSequentialKeys, []byte{42})
-		}
-		if err != nil {
-			glog.V(logger.Error).Infof("Database conversion failed: %v", err)
-		}
-		close(stoppedChn)
-	}()
-
-	return func() {
-		close(stopChn)
-		<-stoppedChn
-	}
-}
-
-// upgradeSequentialCanonicalNumbers reads all old format canonical numbers from
-// the database, writes them in new format and deletes the old ones if successful.
-func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (error, bool) {
-	prefix := []byte("block-num-")
-	it := db.(*ethdb.LDBDatabase).NewIterator()
-	defer func() {
-		it.Release()
-	}()
-	it.Seek(prefix)
-	cnt := 0
-	for bytes.HasPrefix(it.Key(), prefix) {
-		keyPtr := it.Key()
-		if len(keyPtr) < 20 {
-			cnt++
-			if cnt%100000 == 0 {
+		// Create an iterator to read the entire database and covert old lookup entires
+		it := db.(*ethdb.LDBDatabase).NewIterator()
+		defer func() {
+			if it != nil {
 				it.Release()
-				it = db.(*ethdb.LDBDatabase).NewIterator()
-				it.Seek(keyPtr)
-				glog.V(logger.Info).Infof("converting %d canonical numbers...", cnt)
 			}
-			number := big.NewInt(0).SetBytes(keyPtr[10:]).Uint64()
-			newKey := []byte("h12345678n")
-			binary.BigEndian.PutUint64(newKey[1:9], number)
-			if err := db.Put(newKey, it.Value()); err != nil {
-				return err, false
-			}
-			if err := db.Delete(keyPtr); err != nil {
-				return err, false
-			}
-		}
+		}()
 
-		if stopFn() {
-			return nil, true
-		}
-		it.Next()
-	}
-	if cnt > 0 {
-		glog.V(logger.Info).Infof("converted %d canonical numbers...", cnt)
-	}
-	return nil, false
-}
+		var (
+			converted uint64
+			failed    error
+		)
+		for failed == nil && it.Next() {
+			// Skip any entries that don't look like old transaction meta entires (<hash>0x01)
+			key := it.Key()
+			if len(key) != common.HashLength+1 || key[common.HashLength] != 0x01 {
+				continue
+			}
+			// Skip any entries that don't contain metadata (name clash between <hash>0x01 and <some-prefix><hash>)
+			var meta struct {
+				BlockHash  common.Hash
+				BlockIndex uint64
+				Index      uint64
+			}
+			if err := rlp.DecodeBytes(it.Value(), &meta); err != nil {
+				continue
+			}
+			// Skip any already upgraded entries (clash due to <hash> ending with 0x01 (old suffix))
+			hash := key[:common.HashLength]
 
-// upgradeSequentialBlocks reads all old format block headers, bodies, TDs and block
-// receipts from the database, writes them in new format and deletes the old ones
-// if successful.
-func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool) {
-	prefix := []byte("block-")
-	it := db.(*ethdb.LDBDatabase).NewIterator()
-	defer func() {
-		it.Release()
-	}()
-	it.Seek(prefix)
-	cnt := 0
-	for bytes.HasPrefix(it.Key(), prefix) {
-		keyPtr := it.Key()
-		if len(keyPtr) >= 38 {
-			cnt++
-			if cnt%10000 == 0 {
-				it.Release()
-				it = db.(*ethdb.LDBDatabase).NewIterator()
-				it.Seek(keyPtr)
-				glog.V(logger.Info).Infof("converting %d blocks...", cnt)
-			}
-			// convert header, body, td and block receipts
-			var keyPrefix [38]byte
-			copy(keyPrefix[:], keyPtr[0:38])
-			hash := keyPrefix[6:38]
-			if err := upgradeSequentialBlockData(db, hash); err != nil {
-				return err, false
-			}
-			// delete old db entries belonging to this hash
-			for bytes.HasPrefix(it.Key(), keyPrefix[:]) {
-				if err := db.Delete(it.Key()); err != nil {
-					return err, false
+			if hash[0] == byte('l') {
+				// Potential clash, the "old" `hash` must point to a live transaction.
+				if tx, _, _, _ := core.GetTransaction(db, common.BytesToHash(hash)); tx == nil || !bytes.Equal(tx.Hash().Bytes(), hash) {
+					continue
 				}
-				it.Next()
 			}
-			if err := db.Delete(append([]byte("receipts-block-"), hash...)); err != nil {
-				return err, false
+			// Convert the old metadata to a new lookup entry, delete duplicate data
+			if failed = db.Put(append([]byte("l"), hash...), it.Value()); failed == nil { // Write the new looku entry
+				if failed = db.Delete(hash); failed == nil { // Delete the duplicate transaction data
+					if failed = db.Delete(append([]byte("receipts-"), hash...)); failed == nil { // Delete the duplicate receipt data
+						if failed = db.Delete(key); failed != nil { // Delete the old transaction metadata
+							break
+						}
+					}
+				}
 			}
+			// Bump the conversion counter, and recreate the iterator occasionally to
+			// avoid too high memory consumption.
+			converted++
+			if converted%100000 == 0 {
+				it.Release()
+				it = db.(*ethdb.LDBDatabase).NewIterator()
+				it.Seek(key)
+
+				glog.V(logger.Info).Infof("Deduplicating database entries. deduped: %d", converted)
+			}
+			// Check for termination, or continue after a bit of a timeout
+			select {
+			case errc := <-stop:
+				errc <- nil
+				return
+			case <-time.After(time.Microsecond * 100):
+			}
+		}
+		// Upgrade finished, mark a such and terminate
+		if failed == nil {
+			glog.V(logger.Info).Infof("Database deduplication successful. deduped: %d", converted)
+			db.Put(deduplicateData, []byte{42})
 		} else {
-			it.Next()
+			glog.V(logger.Error).Infof("Database deduplication failed. deduped: %d", converted, "err", failed)
 		}
+		it.Release()
+		it = nil
 
-		if stopFn() {
-			return nil, true
-		}
+		errc := <-stop
+		errc <- failed
+	}()
+	// Assembly the cancellation callback
+	return func() error {
+		errc := make(chan error)
+		stop <- errc
+		return <-errc
 	}
-	if cnt > 0 {
-		glog.V(logger.Info).Infof("converted %d blocks...", cnt)
-	}
-	return nil, false
-}
-
-// upgradeSequentialOrphanedReceipts removes any old format block receipts from the
-// database that did not have a corresponding block
-func upgradeSequentialOrphanedReceipts(db ethdb.Database, stopFn func() bool) (error, bool) {
-	prefix := []byte("receipts-block-")
-	it := db.(*ethdb.LDBDatabase).NewIterator()
-	defer it.Release()
-	it.Seek(prefix)
-	cnt := 0
-	for bytes.HasPrefix(it.Key(), prefix) {
-		// phase 2 already converted receipts belonging to existing
-		// blocks, just remove if there's anything left
-		cnt++
-		if err := db.Delete(it.Key()); err != nil {
-			return err, false
-		}
-
-		if stopFn() {
-			return nil, true
-		}
-		it.Next()
-	}
-	if cnt > 0 {
-		glog.V(logger.Info).Infof("removed %d orphaned block receipts...", cnt)
-	}
-	return nil, false
-}
-
-// upgradeSequentialBlockData upgrades the header, body, td and block receipts
-// database entries belonging to a single hash (doesn't delete old data).
-func upgradeSequentialBlockData(db ethdb.Database, hash []byte) error {
-	// get old chain data and block number
-	headerRLP, _ := db.Get(append(append([]byte("block-"), hash...), []byte("-header")...))
-	if len(headerRLP) == 0 {
-		return nil
-	}
-	header := new(types.Header)
-	if err := rlp.Decode(bytes.NewReader(headerRLP), header); err != nil {
-		return err
-	}
-	number := header.Number.Uint64()
-	bodyRLP, _ := db.Get(append(append([]byte("block-"), hash...), []byte("-body")...))
-	tdRLP, _ := db.Get(append(append([]byte("block-"), hash...), []byte("-td")...))
-	receiptsRLP, _ := db.Get(append([]byte("receipts-block-"), hash...))
-	// store new hash -> number association
-	encNum := make([]byte, 8)
-	binary.BigEndian.PutUint64(encNum, number)
-	if err := db.Put(append([]byte("H"), hash...), encNum); err != nil {
-		return err
-	}
-	// store new chain data
-	if err := db.Put(append(append([]byte("h"), encNum...), hash...), headerRLP); err != nil {
-		return err
-	}
-	if len(tdRLP) != 0 {
-		if err := db.Put(append(append(append([]byte("h"), encNum...), hash...), []byte("t")...), tdRLP); err != nil {
-			return err
-		}
-	}
-	if len(bodyRLP) != 0 {
-		if err := db.Put(append(append([]byte("b"), encNum...), hash...), bodyRLP); err != nil {
-			return err
-		}
-	}
-	if len(receiptsRLP) != 0 {
-		if err := db.Put(append(append([]byte("r"), encNum...), hash...), receiptsRLP); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// upgradeChainDatabase ensures that the chain database stores block split into
-// separate header and body entries.
-func upgradeChainDatabase(db ethdb.Database) error {
-	// Short circuit if the head block is stored already as separate header and body
-	data, err := db.Get([]byte("LastBlock"))
-	if err != nil {
-		return nil
-	}
-	head := common.BytesToHash(data)
-
-	if block := core.GetBlockByHashOld(db, head); block == nil {
-		return nil
-	}
-	// At least some of the database is still the old format, upgrade (skip the head block!)
-	glog.V(logger.Info).Info("Old database detected, upgrading...")
-
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		blockPrefix := []byte("block-hash-")
-		for it := db.NewIterator(); it.Next(); {
-			// Skip anything other than a combined block
-			if !bytes.HasPrefix(it.Key(), blockPrefix) {
-				continue
-			}
-			// Skip the head block (merge last to signal upgrade completion)
-			if bytes.HasSuffix(it.Key(), head.Bytes()) {
-				continue
-			}
-			// Load the block, split and serialize (order!)
-			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
-
-			if err := core.WriteTd(db, block.Hash(), block.NumberU64(), block.DeprecatedTd()); err != nil {
-				return err
-			}
-			if err := core.WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-				return err
-			}
-			if err := core.WriteHeader(db, block.Header()); err != nil {
-				return err
-			}
-			if err := db.Delete(it.Key()); err != nil {
-				return err
-			}
-		}
-		// Lastly, upgrade the head block, disabling the upgrade mechanism
-		current := core.GetBlockByHashOld(db, head)
-
-		if err := core.WriteTd(db, current.Hash(), current.NumberU64(), current.DeprecatedTd()); err != nil {
-			return err
-		}
-		if err := core.WriteBody(db, current.Hash(), current.NumberU64(), current.Body()); err != nil {
-			return err
-		}
-		if err := core.WriteHeader(db, current.Header()); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func addMipmapBloomBins(db ethdb.Database) (err error) {

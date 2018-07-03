@@ -113,8 +113,8 @@ type LesServer interface {
 type Ethereum struct {
 	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
-	shutdownChan  chan bool // Channel for shutting down the ethereum
-	stopDbUpgrade func()    // stop chain db sequential key upgrade
+	shutdownChan  chan bool    // Channel for shutting down the ethereum
+	stopDbUpgrade func() error // stop chain db sequential key upgrade
 	// Handlers
 	txPool          *core.TxPool
 	txMu            sync.Mutex
@@ -154,7 +154,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	stopDbUpgrade := upgradeSequentialKeys(chainDb)
+	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	if err := SetupGenesisBlock(&chainDb, config); err != nil {
 		return nil, err
 	}
@@ -177,9 +177,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		solcPath:       config.SolcPath,
 	}
 
-	if err := upgradeChainDatabase(chainDb); err != nil {
-		return nil, err
-	}
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
