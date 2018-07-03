@@ -306,7 +306,8 @@ func (t *udp) waitping(from NodeID) error {
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
 func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
-	// Ensure bond exists before attempting findnode.
+	// If we haven't seen a ping from the destination node for a while, it won't remember
+	// our endpoint proof and reject findnode. Solicit a ping first.
 	if time.Since(t.db.lastPingReceived(toid)) > nodeDBNodeExpiration {
 		t.ping(toid, toaddr)
 		t.waitping(toid)
@@ -604,14 +605,12 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	})
 	t.handleReply(fromID, pingPacket, req)
 
+	// Add the node to the table. Before doing so, ensure that we have a recent enough pong
+	// recorded in the database so their findnode requests will be accepted later.
 	n := NewNode(fromID, from.IP, uint16(from.Port), req.From.TCP)
-	if time.Since(t.db.lastPingReceived(fromID)) > nodeDBNodeExpiration {
-		// We haven't answered the senders ping since a long time.
-		// Verify their endpoint by pinging back. If they manage to reply
-		// their endpoint is legit and can be added to the table.
+	if time.Since(t.db.lastPongReceived(fromID)) > nodeDBNodeExpiration {
 		t.sendPing(fromID, from, func() { t.addThroughPing(n) })
 	} else {
-		// Add immediately because bond exists.
 		t.addThroughPing(n)
 	}
 	t.db.updateLastPingReceived(fromID, time.Now())
@@ -638,13 +637,12 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		return errExpired
 	}
 	if !t.db.hasBond(fromID) {
-		// No bond exists, we don't process the packet. This prevents
-		// an attack vector where the discovery protocol could be used
-		// to amplify traffic in a DDOS attack. A malicious actor
-		// would send a findnode request with the IP address and UDP
-		// port of the target as the source address. The recipient of
-		// the findnode packet would then send a neighbors packet
-		// (which is a much bigger packet than findnode) to the victim.
+		// No endpoint proof pong exists, we don't process the packet. This prevents an
+		// attack vector where the discovery protocol could be used to amplify traffic in a
+		// DDOS attack. A malicious actor would send a findnode request with the IP address
+		// and UDP port of the target as the source address. The recipient of the findnode
+		// packet would then send a neighbors packet (which is a much bigger packet than
+		// findnode) to the victim.
 		return errUnknownNode
 	}
 	target := crypto.Keccak256Hash(req.Target[:])
