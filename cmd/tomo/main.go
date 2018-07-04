@@ -360,7 +360,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					if err != nil {
 						utils.Fatalf("Fail to connect RPC: %v", err)
 					}
-					addr := common.HexToAddress(common.Validator)
+					addr := common.HexToAddress(common.MasternodeVotingSMC)
 					validator, err := validatorContract.NewTomoValidator(addr, client)
 					if err != nil {
 						utils.Fatalf("Fail to get validator smc: %v", err)

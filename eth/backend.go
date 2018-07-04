@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts"
+	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -195,7 +196,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
-				log.Error("Fail to get snapshot for sign tx validator.")
+				log.Error("Fail to get snapshot for sign tx validator.", "error", err)
 				return
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
@@ -227,14 +228,24 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				if err != nil {
 					log.Error("Fail to get signers for reward checkpoint", "error", err)
 				}
-				rewardSigners, err := contracts.CalculateReward(chainReward, signers, *totalSigner)
+				rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
 				if err != nil {
 					log.Error("Fail to calculate reward for signers", "error", err)
 				}
-				// Add reward for signers.
+				//// Get validator.
+				validator, err := contract.NewTomoValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
+				if err != nil {
+					log.Error("Fail get instance of Tomo Validator", "error", err)
+
+					return err
+				}
+				// Add reward for coin holders.
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						state.AddBalance(signer, calcReward)
+						err := contracts.CalculateRewardForHolders(validator, state, signer, calcReward)
+						if err != nil {
+							log.Error("Fail to calculate reward for holders.", "error", err)
+						}
 					}
 				}
 			}
