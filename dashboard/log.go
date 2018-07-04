@@ -19,15 +19,16 @@ package dashboard
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/mohae/deepcopy"
-	"github.com/rjeczalik/notify"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/mohae/deepcopy"
+	"github.com/rjeczalik/notify"
 )
 
 var emptyChunk = json.RawMessage("[]")

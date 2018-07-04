@@ -32,6 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"io"
+
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -40,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
-	"io"
 )
 
 const (

@@ -8,11 +8,12 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/go-stack/stack"
 	"io/ioutil"
-	"regexp"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/go-stack/stack"
 )
 
 // Handler defines where and how log records are written.
@@ -147,7 +148,7 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 		last--
 	}
 	var counter *countingWriter
-	if last >= 0 && files[last].Size() < int64(limit){
+	if last >= 0 && files[last].Size() < int64(limit) {
 		// Open the last file, and continue to write into it until it's size reaches the limit.
 		if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
 			return nil, err
