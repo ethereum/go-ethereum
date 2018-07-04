@@ -126,15 +126,15 @@ func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rChec
 	// Get Owner for signers.
 	owners := make(map[common.Address]*rewardLog)
 	if len(signers) > 0 {
-		for addr, log := range signers {
+		for addr, rwLog := range signers {
 			owner, err := GetCandidatesOwnerByAddress(validator, addr)
 			if err != nil {
 				owner = addr
 			}
 			if _, ok := owners[owner]; ok {
-				owners[owner].Sign = owners[owner].Sign + log.Sign
+				owners[owner].Sign = owners[owner].Sign + rwLog.Sign
 			} else {
-				owners[owner] = log
+				owners[owner] = rwLog
 			}
 		}
 	}
@@ -183,7 +183,8 @@ func GetCandidatesOwnerByAddress(validator *contract2.TomoValidator, addr common
 // Get reward balance rates.
 func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, validator *contract2.TomoValidator) (map[common.Address]*big.Int, error) {
 	balances := make(map[common.Address]*big.Int)
-	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent/100))
+	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent))
+	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[masterAddr] = rewardMaster
 	// Get voters for masternode.
 	opts := new(bind.CallOpts)
@@ -194,18 +195,19 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 	}
 
 	if len(voters) > 0 {
-		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardVoterPercent/100))
+		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(RewardVoterPercent))
+		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
 		totalCap := new(big.Int)
 		// Get voters capacities.
 		voterCaps := make(map[common.Address]*big.Int)
 		for _, voteAddr := range voters {
-			cap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
+			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
 			if err != nil {
 				log.Error("Fail to get vote capacity", "error", err)
 				return nil, err
 			}
-			totalCap.Add(totalCap, cap)
-			voterCaps[voteAddr] = cap
+			totalCap.Add(totalCap, voterCap)
+			voterCaps[voteAddr] = voterCap
 		}
 		for addr, voteCap := range voterCaps {
 			balances[addr] = new(big.Int).Mul(totalVoterReward, voteCap)
@@ -213,8 +215,9 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 		}
 	}
 
-	balances[common.HexToAddress(FoudationWalletAddr)] =
-		new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent/100))
+	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent))
+	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
+	balances[common.HexToAddress(FoudationWalletAddr)] = foudationReward
 
 	return balances, nil
 }
