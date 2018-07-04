@@ -109,11 +109,15 @@ func TestApiPut(t *testing.T) {
 	testAPI(t, func(api *API, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
-		addr, wait, err := api.Put(context.TODO(), content, exp.MimeType, toEncrypt)
+		ctx := context.TODO()
+		addr, wait, err := api.Put(ctx, content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		wait()
+		err = wait(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 	})

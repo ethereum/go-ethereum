@@ -765,9 +765,13 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string,
 			return nil, nil, err
 		}
 		//store it (upload it) on the FileStore
-		rk, wait, err := fileStore.Store(context.TODO(), strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
+		ctx := context.TODO()
+		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
-		wait()
+		if err != nil {
+			return nil, nil, err
+		}
+		err = wait(ctx)
 		if err != nil {
 			return nil, nil, err
 		}

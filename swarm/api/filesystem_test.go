@@ -106,8 +106,13 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		hash, wait, err := api.Store(context.TODO(), bytes.NewReader(index), int64(len(index)), toEncrypt)
-		wait()
+		ctx := context.TODO()
+		hash, wait, err := api.Store(ctx, bytes.NewReader(index), int64(len(index)), toEncrypt)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		err = wait(ctx)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return

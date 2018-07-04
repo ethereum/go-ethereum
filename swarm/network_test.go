@@ -508,14 +508,15 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	// File data is very short, but it is ensured that its
 	// uniqueness is very certain.
 	data := fmt.Sprintf("test content %s %x", time.Now().Round(0), b)
-	k, wait, err := swarm.api.Put(context.TODO(), data, "text/plain", false)
+	ctx := context.TODO()
+	k, wait, err := swarm.api.Put(ctx, data, "text/plain", false)
 	if err != nil {
 		return nil, "", err
 	}
 	if wait != nil {
-		wait()
+		err = wait(ctx)
 	}
-	return k, data, nil
+	return k, data, err
 }
 
 // retrieve is the function that is used for checking the availability of

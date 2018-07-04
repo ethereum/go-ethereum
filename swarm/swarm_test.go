@@ -348,12 +348,16 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 	}
 	dataPut := string(slice)
 
-	k, wait, err := swarm.api.Store(context.TODO(), strings.NewReader(dataPut), int64(len(dataPut)), false)
+	ctx := context.TODO()
+	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if wait != nil {
-		wait()
+		err = wait(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	r, _ := swarm.api.Retrieve(context.TODO(), k)

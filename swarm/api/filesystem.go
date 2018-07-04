@@ -114,12 +114,13 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 			if err == nil {
 				stat, _ := f.Stat()
 				var hash storage.Address
-				var wait func()
-				hash, wait, err = fs.api.fileStore.Store(context.TODO(), f, stat.Size(), toEncrypt)
+				var wait func(context.Context) error
+				ctx := context.TODO()
+				hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}
-				wait()
+				err = wait(ctx)
 				awg.Done()
 				if err == nil {
 					first512 := make([]byte, 512)

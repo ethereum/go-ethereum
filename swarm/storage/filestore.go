@@ -82,15 +82,15 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
-	reader = TreeJoin(addr, getter, 0)
+	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(), err error) {
+func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
-	return PyramidSplit(data, putter, putter)
+	return PyramidSplit(ctx, data, putter, putter)
 }
 
 func (f *FileStore) HashSize() int {

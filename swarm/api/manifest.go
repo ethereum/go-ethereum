@@ -69,7 +69,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 		return nil, err
 	}
 	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait()
+	wait(ctx)
 	return key, err
 }
 
@@ -382,8 +382,12 @@ func (mt *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := mt.fileStore.Store(context.TODO(), sr, int64(len(manifest)), mt.encrypted)
-	wait()
+	ctx := context.TODO()
+	key, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
+	if err2 != nil {
+		return err2
+	}
+	err2 = wait(ctx)
 	mt.ref = key
 	return err2
 }

@@ -239,7 +239,7 @@ func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storag
 }
 
 // Store wraps the Store API call of the embedded FileStore
-func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
+func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(ctx context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
 	return a.fileStore.Store(ctx, data, size, toEncrypt)
 }
@@ -286,7 +286,7 @@ func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of FileStore store
-func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
+func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
 	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
@@ -301,9 +301,12 @@ func (a *API) Put(ctx context.Context, content string, contentType string, toEnc
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
-	return key, func() {
-		waitContent()
-		waitManifest()
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
 	}, nil
 }
 
