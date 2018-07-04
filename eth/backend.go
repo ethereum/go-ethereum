@@ -88,7 +88,6 @@ type Config struct {
 	Etherbase    common.Address
 	GasPrice     *big.Int
 	MinerThreads int
-	SolcPath     string
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -136,7 +135,6 @@ type Ethereum struct {
 	AutoDAG      bool
 	autodagquit  chan bool
 	etherbase    common.Address
-	solcPath     string
 
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
@@ -174,7 +172,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
 		AutoDAG:        config.AutoDAG,
-		solcPath:       config.SolcPath,
 	}
 
 	if err := addMipmapBloomBins(chainDb); err != nil {
@@ -305,7 +302,7 @@ func CreatePoW(config *Config) (pow.PoW, error) {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
+	return append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",

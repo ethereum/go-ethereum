@@ -24,7 +24,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/common/compiler"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -63,8 +62,6 @@ type LightEthereum struct {
 	eventMux       *event.TypeMux
 	pow            pow.PoW
 	accountManager *accounts.Manager
-	solcPath       string
-	solc           *compiler.Solidity
 
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
@@ -94,7 +91,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		pow:            pow,
 		shutdownChan:   make(chan bool),
 		netVersionId:   config.NetworkId,
-		solcPath:       config.SolcPath,
 	}
 
 	if config.ChainConfig == nil {
@@ -144,7 +140,7 @@ func (s *LightDummyAPI) Mining() bool {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *LightEthereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
+	return append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",

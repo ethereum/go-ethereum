@@ -376,11 +376,6 @@ var (
 		Usage: "JavaScript root path for `loadScript`",
 		Value: ".",
 	}
-	SolcPathFlag = cli.StringFlag{
-		Name:  "solc",
-		Usage: "Solidity compiler command to be used",
-		Value: "solc",
-	}
 
 	// Gas price oracle settings
 	GpoMinGasPriceFlag = cli.StringFlag{
@@ -749,7 +744,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
 		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
-		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}

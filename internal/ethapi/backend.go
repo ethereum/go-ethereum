@@ -72,9 +72,8 @@ type State interface {
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
-func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
-	compiler := makeCompilerAPIs(solcPath)
-	all := []rpc.API{
+func GetAPIs(apiBackend Backend) []rpc.API {
+	return []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -116,5 +115,4 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Public:    false,
 		},
 	}
-	return append(compiler, all...)
 }
