@@ -18,7 +18,6 @@
 package mclock
 
 import (
-	"runtime"
 	"sync"
 	"time"
 )
@@ -39,18 +38,23 @@ type SimulatedClock struct {
 	now       AbsTime
 	scheduled []event
 	stop      bool
+	pingCh    chan struct{}
 	lock      sync.RWMutex
 }
 
 // NewSimulatedClock creates a new simulated clock
-func NewSimulatedClock(maxStep time.Duration, goSchedCount int) *SimulatedClock {
-	s := &SimulatedClock{scheduled: make([]event, 0, 100)}
+func NewSimulatedClock(maxStep time.Duration, pingCount int) *SimulatedClock {
+	s := &SimulatedClock{scheduled: make([]event, 0, 100), pingCh: make(chan struct{})}
 
 	go func() {
 		lastScheduled := 0
 		for {
-			for i := 0; i < goSchedCount; i++ {
-				runtime.Gosched()
+			timeout := time.After(maxStep / 100)
+			for i := 0; i < pingCount; i++ {
+				select {
+				case s.pingCh <- struct{}{}:
+				case <-timeout:
+				}
 			}
 			s.lock.Lock()
 			if s.stop {
@@ -76,6 +80,11 @@ func NewSimulatedClock(maxStep time.Duration, goSchedCount int) *SimulatedClock 
 	return s
 }
 
+// PingChannel returns a channel that event loops should listen to
+func (s *SimulatedClock) PingChannel() chan struct{} {
+	return s.pingCh
+}
+
 // Stop stops the clock (Sleeps and Afters will never return after this)
 func (s *SimulatedClock) Stop() {
 	s.lock.Lock()
@@ -97,7 +106,13 @@ func (s *SimulatedClock) Sleep(d time.Duration) {
 	s.insert(d, func() {
 		close(done)
 	})
-	<-done
+	for {
+		select {
+		case <-done:
+			return
+		case <-s.pingCh:
+		}
+	}
 }
 
 // After implements Clock

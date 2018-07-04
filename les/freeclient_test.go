@@ -86,6 +86,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 loop:
 	for {
 		select {
+		case <-clock.PingChannel():
 		case <-tickCh:
 			i := rand.Intn(clientCount)
 			if connected[i] {

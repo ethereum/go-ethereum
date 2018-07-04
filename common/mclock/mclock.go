@@ -33,14 +33,23 @@ func Now() AbsTime {
 
 // Clock interface makes it possible to replace the monotonic system clock with
 // a simulated clock
+//
+// Note: event loops capable of running with a simulated clock should listen to PingChannel.
+// MonotonicClock also implements this function to ensure interface compatibility.
 type Clock interface {
 	Now() AbsTime
 	Sleep(time.Duration)
 	After(time.Duration) <-chan time.Time
+	PingChannel() chan struct{}
 }
 
 // MonotonicClock implements Clock using the system clock
 type MonotonicClock struct{}
+
+// PingChannel implements Clock by returning a dummy nil channel
+func (MonotonicClock) PingChannel() chan struct{} {
+	return nil
+}
 
 // Now implements Clock
 func (MonotonicClock) Now() AbsTime {
