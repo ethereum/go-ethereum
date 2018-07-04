@@ -142,7 +142,7 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	if err != nil {
 		return nil, err
 	}
-	re := regexp.MustCompile("\\.log$")
+	re := regexp.MustCompile(`\.log$`)
 	last := len(files) - 1
 	for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
 		last--

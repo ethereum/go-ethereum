@@ -62,7 +62,7 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 		log.Warn("Failed to open logdir", "path", db.logdir, "err", err)
 		return
 	}
-	re := regexp.MustCompile("\\.log$")
+	re := regexp.MustCompile(`\.log$`)
 	fileNames := make([]string, 0, len(files))
 	for _, f := range files {
 		if f.Mode().IsRegular() && re.MatchString(f.Name()) {
@@ -155,7 +155,7 @@ func (db *Dashboard) streamLogs() {
 	)
 
 	// The log records are always written into the last file in alphabetical order, because of the timestamp.
-	re := regexp.MustCompile("\\.log$")
+	re := regexp.MustCompile(`\.log$`)
 	i := len(files) - 1
 	for i >= 0 && (!files[i].Mode().IsRegular() || !re.MatchString(files[i].Name())) {
 		i--
