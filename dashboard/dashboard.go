@@ -105,7 +105,7 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 			},
 		},
-		logdir:  logdir,
+		logdir: logdir,
 	}
 }
 

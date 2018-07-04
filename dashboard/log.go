@@ -17,17 +17,17 @@
 package dashboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/fsnotify/fsnotify"
 	"github.com/mohae/deepcopy"
+	"github.com/rjeczalik/notify"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"time"
-	"bytes"
 )
 
 var emptyChunk = json.RawMessage("[]")
@@ -36,7 +36,7 @@ var emptyChunk = json.RawMessage("[]")
 // Returns the prepared array and the position of the last '\n'
 // character in the original buffer, or -1 if it doesn't contain any.
 func prepLogs(buf []byte) (json.RawMessage, int) {
-	b := make(json.RawMessage, 1, len(buf) + 1)
+	b := make(json.RawMessage, 1, len(buf)+1)
 	b[0] = '['
 	b = append(b, buf...)
 	last := -1
@@ -133,7 +133,7 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 func (db *Dashboard) streamLogs() {
 	defer db.wg.Done()
 	var (
-		err error
+		err  error
 		errc chan error
 	)
 	defer func() {
@@ -183,17 +183,12 @@ func (db *Dashboard) streamLogs() {
 	}
 	db.lock.Unlock()
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Warn("Failed to create fs watcher", "err", err)
+	watcher := make(chan notify.EventInfo, 10)
+	if err := notify.Watch(db.logdir, watcher, notify.Create); err != nil {
+		log.Warn("Failed to create file system watcher", "err", err)
 		return
 	}
-	defer watcher.Close()
-	err = watcher.Add(db.logdir)
-	if err != nil {
-		log.Warn("Failed to add logdir to fs watcher", "logdir", db.logdir, "err", err)
-		return
-	}
+	defer notify.Stop(watcher)
 
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
@@ -201,9 +196,9 @@ func (db *Dashboard) streamLogs() {
 loop:
 	for err == nil || errc == nil {
 		select {
-		case event := <-watcher.Events:
+		case event := <-watcher:
 			// Make sure that new log file was created.
-			if event.Op&fsnotify.Create == 0 || !re.Match([]byte(event.Name)) {
+			if !re.Match([]byte(event.Path())) {
 				break
 			}
 			if opened == nil {
@@ -212,7 +207,7 @@ loop:
 			}
 			// The new log file's name is always greater,
 			// because it is created using the actual log record's time.
-			if opened.Name() >= event.Name {
+			if opened.Name() >= event.Path() {
 				break
 			}
 			// Read the rest of the previously opened file.
@@ -232,8 +227,8 @@ loop:
 					},
 				})
 			}
-			if opened, err = os.OpenFile(event.Name, os.O_RDONLY, 0644); err != nil {
-				log.Warn("Failed to open file", "name", event.Name, "err", err)
+			if opened, err = os.OpenFile(event.Path(), os.O_RDONLY, 0644); err != nil {
+				log.Warn("Failed to open file", "name", event.Path(), "err", err)
 				break loop
 			}
 			buf = buf[:0]
@@ -248,10 +243,6 @@ loop:
 			db.history.Logs.Source.Name = fi.Name()
 			db.history.Logs.Chunk = emptyChunk
 			db.lock.Unlock()
-		case err := <-watcher.Errors:
-			if err != nil {
-				log.Warn("Fs watcher error", "err", err)
-			}
 		case <-ticker.C: // Send log updates to the client.
 			if opened == nil {
 				log.Warn("The last log file is not opened")
