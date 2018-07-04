@@ -26,9 +26,6 @@ import (
 // TxPreEvent is posted when a transaction enters the transaction pool.
 type TxPreEvent struct{ Tx *types.Transaction }
 
-// TxPostEvent is posted when a transaction has been processed.
-type TxPostEvent struct{ Tx *types.Transaction }
-
 // PendingLogsEvent is posted pre mining and notifies of pending logs.
 type PendingLogsEvent struct {
 	Logs []*types.Log
@@ -62,19 +59,6 @@ type ChainSideEvent struct {
 	Block *types.Block
 }
 
-type PendingBlockEvent struct {
-	Block *types.Block
-	Logs  []*types.Log
-}
-
-type ChainUncleEvent struct {
-	Block *types.Block
-}
-
 type ChainHeadEvent struct{ Block *types.Block }
 
 type GasPriceChanged struct{ Price *big.Int }
-
-// Mining operation events
-type StartMining struct{}
-type TopMining struct{}
