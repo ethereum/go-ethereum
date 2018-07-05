@@ -31,37 +31,33 @@ func Now() AbsTime {
 	return AbsTime(monotime.Now())
 }
 
+// Add returns t + d.
+func (t AbsTime) Add(d time.Duration) AbsTime {
+	return t + AbsTime(d)
+}
+
 // Clock interface makes it possible to replace the monotonic system clock with
-// a simulated clock
-//
-// Note: event loops capable of running with a simulated clock should listen to PingChannel.
-// MonotonicClock also implements this function to ensure interface compatibility.
+// a simulated clock.
 type Clock interface {
 	Now() AbsTime
 	Sleep(time.Duration)
 	After(time.Duration) <-chan time.Time
-	PingChannel() chan struct{}
 }
 
-// MonotonicClock implements Clock using the system clock
-type MonotonicClock struct{}
+// System implements Clock using the system clock.
+type System struct{}
 
-// PingChannel implements Clock by returning a dummy nil channel
-func (MonotonicClock) PingChannel() chan struct{} {
-	return nil
-}
-
-// Now implements Clock
-func (MonotonicClock) Now() AbsTime {
+// Now implements Clock.
+func (System) Now() AbsTime {
 	return AbsTime(monotime.Now())
 }
 
-// Sleep implements Clock
-func (MonotonicClock) Sleep(d time.Duration) {
+// Sleep implements Clock.
+func (System) Sleep(d time.Duration) {
 	time.Sleep(d)
 }
 
-// After implements Clock
-func (MonotonicClock) After(d time.Duration) <-chan time.Time {
+// After implements Clock.
+func (System) After(d time.Duration) <-chan time.Time {
 	return time.After(d)
 }

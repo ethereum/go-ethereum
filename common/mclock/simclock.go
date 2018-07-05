@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// package mclock is a wrapper for a monotonic clock source
 package mclock
 
 import (
@@ -22,111 +21,89 @@ import (
 	"time"
 )
 
+// Simulated implements a virtual Clock for reproducible time-sensitive tests. It
+// simulates a scheduler on a virtual timescale where actual processing takes zero time.
+//
+// The virtual clock doesn't advance on its own, call Run to advance it and execute timers.
+// Since there is no way to influence the Go scheduler, testing timeout behaviour involving
+// goroutines needs special care. A good way to test such timeouts is as follows: First
+// perform the action that is supposed to time out. Ensure that the timer you want to test
+// is created. Then run the clock until after the timeout. Finally observe the effect of
+// the timeout using a channel or semaphore.
+type Simulated struct {
+	now       AbsTime
+	scheduled []event
+	mu        sync.RWMutex
+	cond      *sync.Cond
+}
+
 type event struct {
 	do func()
 	at AbsTime
 }
 
-// SimulatedClock implements a virtual Clock for reproducible time-sensitive tests.
-// It simulates a scheduler on a virtual timescale where actual processing takes zero time.
-//
-// Note: since there is no way in Go to know when all goroutines have reached a waiting
-// state (which should theoretically happen in each virtual moment), the algorithm runs
-// GoSched a fixed number of times after each step and limits time steps in order to
-// minimize precision loss (see maxStep and goSchedCount).
-type SimulatedClock struct {
-	now       AbsTime
-	scheduled []event
-	stop      bool
-	pingCh    chan struct{}
-	lock      sync.RWMutex
-}
+// Run moves the clock by the given duration, executing all timers before that duration.
+func (s *Simulated) Run(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.init()
 
-// NewSimulatedClock creates a new simulated clock
-func NewSimulatedClock(maxStep time.Duration, pingCount int) *SimulatedClock {
-	s := &SimulatedClock{scheduled: make([]event, 0, 100), pingCh: make(chan struct{})}
-
-	go func() {
-		lastScheduled := 0
-		for {
-			timeout := time.After(maxStep / 100)
-			for i := 0; i < pingCount; i++ {
-				select {
-				case s.pingCh <- struct{}{}:
-				case <-timeout:
-				}
-			}
-			s.lock.Lock()
-			if s.stop {
-				s.lock.Unlock()
-				return
-			}
-			scheduled := len(s.scheduled)
-			if scheduled > 0 && scheduled == lastScheduled {
-				ev := s.scheduled[0]
-				if ev.at <= s.now+AbsTime(maxStep) {
-					s.scheduled = s.scheduled[1:]
-					s.now = ev.at
-					ev.do()
-				} else {
-					s.now += AbsTime(maxStep)
-				}
-			}
-			lastScheduled = scheduled
-			s.lock.Unlock()
+	end := s.now + AbsTime(d)
+	for len(s.scheduled) > 0 {
+		ev := s.scheduled[0]
+		if ev.at > end {
+			break
 		}
-	}()
-
-	return s
+		s.now = ev.at
+		ev.do()
+		s.scheduled = s.scheduled[1:]
+	}
+	s.now = end
 }
 
-// PingChannel returns a channel that event loops should listen to
-func (s *SimulatedClock) PingChannel() chan struct{} {
-	return s.pingCh
+func (s *Simulated) ActiveTimers() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.scheduled)
 }
 
-// Stop stops the clock (Sleeps and Afters will never return after this)
-func (s *SimulatedClock) Stop() {
-	s.lock.Lock()
-	s.stop = true
-	s.lock.Unlock()
+func (s *Simulated) WaitForTimers(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.init()
+
+	for len(s.scheduled) < n {
+		s.cond.Wait()
+	}
 }
 
-// Now implements Clock
-func (s *SimulatedClock) Now() AbsTime {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+// Now implements Clock.
+func (s *Simulated) Now() AbsTime {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return s.now
 }
 
-// Sleep implements Clock
-func (s *SimulatedClock) Sleep(d time.Duration) {
-	done := make(chan struct{})
-	s.insert(d, func() {
-		close(done)
-	})
-	for {
-		select {
-		case <-done:
-			return
-		case <-s.pingCh:
-		}
-	}
+// Sleep implements Clock.
+func (s *Simulated) Sleep(d time.Duration) {
+	<-s.After(d)
 }
 
-// After implements Clock
-func (s *SimulatedClock) After(d time.Duration) <-chan time.Time {
+// After implements Clock.
+func (s *Simulated) After(d time.Duration) <-chan time.Time {
 	after := make(chan time.Time, 1)
 	s.insert(d, func() {
-		after <- time.Unix(0, int64(s.now))
+		after <- (time.Time{}).Add(time.Duration(s.now))
 	})
 	return after
 }
 
-func (s *SimulatedClock) insert(d time.Duration, do func()) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (s *Simulated) insert(d time.Duration, do func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.init()
 
 	at := s.now + AbsTime(d)
 	l, h := 0, len(s.scheduled)
@@ -142,4 +119,11 @@ func (s *SimulatedClock) insert(d time.Duration, do func()) {
 	s.scheduled = append(s.scheduled, event{})
 	copy(s.scheduled[l+1:], s.scheduled[l:ll])
 	s.scheduled[l] = event{do: do, at: at}
+	s.cond.Broadcast()
+}
+
+func (s *Simulated) init() {
+	if s.cond == nil {
+		s.cond = sync.NewCond(&s.mu)
+	}
 }
