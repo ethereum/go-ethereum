@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+
 )
 
 const (
@@ -528,6 +529,26 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 	log.Info("Historical state regenerated", "block", block.NumberU64(), "elapsed", time.Since(start), "size", database.TrieDB().Size())
 	return statedb, nil
 }
+
+
+//func GetTracerToRun(hash common.Hash) (interface{}, error) {
+//	config2 := params.ShyftNetworkChainConfig
+//	var cfg *Config
+//	fmt.Println(reflect.TypeOf(cfg))
+//	var ctx context.Context
+//	var config *TraceConfig
+//	var fullNode *Ethereum
+//	var stack *node.Node
+//	fmt.Println(reflect.TypeOf(stack))
+//	err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+//	 fullNode, err := New(ctx, cfg)
+//	 return fullNode, err
+//	})
+//	fmt.Println(err)
+//	privateAPI := NewPrivateDebugAPI(config2, fullNode)
+//	return privateAPI.TraceTransaction(ctx, hash, config)
+//}
+
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.

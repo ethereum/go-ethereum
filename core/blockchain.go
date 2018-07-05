@@ -1002,7 +1002,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// NOTE:SHYFT - Write block data for block explorer
-	fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
+	//fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
 	if err := SWriteBlock(block, receipts); err != nil {
 		return NonStatTy, err
 	}
@@ -1026,7 +1026,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // only reason this method exists as a separate one is to make locking cleaner
 // with deferred statements.
 func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
-	       fmt.Println("++++++++++ insertChain +++++++++")
 	       _, file, no, ok := runtime.Caller(1)
 	       if ok {
 		               fmt.Printf("called from %s#%d\n", file, no)

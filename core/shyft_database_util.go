@@ -4,16 +4,19 @@ import (
 "encoding/json"
 "fmt"
 "math/big"
-"github.com/ethereum/go-ethereum/common"
-"github.com/ethereum/go-ethereum/core/types"
 "time"
 "strconv"
 "database/sql"
 "log"
-
 _ "github.com/lib/pq"
-Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/shyfttracerinterface"
+	"github.com/ethereum/go-ethereum/node"
+	"reflect"
+
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -171,8 +174,20 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
+
+	hash := txData.TxHash
+	fmt.Println(reflect.TypeOf(hash))
 	txHash := txData.TxHash.Hex()
-	IShyftTracer.MyTraceTransaction(txHash) //.chaindb_global
+	//IShyftTracer.MyTraceTransaction(txHash)
+
+	//
+	var stack *node.Node
+	fmt.Println(reflect.TypeOf(stack))
+
+	prayer, err := IShyftTracer.GetTracerToRun(hash, stack)
+	fmt.Println("THIS IS A PRAYER", prayer)
+	fmt.Println(err)
+
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()

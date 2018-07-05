@@ -109,7 +109,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	shyft_tracer := new(ShyftTracer)
 	core.SetIShyftTracer(shyft_tracer)
 
-	fmt.Println("++++++++++")
 	_, file, no, ok := runtime.Caller(1)
 	if ok {
 		fmt.Printf("called from %s#%d\n", file, no)
