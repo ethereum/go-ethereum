@@ -228,7 +228,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
-		pm.clientPool = newFreeClientPool(pm.chainDb, maxPeers, 10000, pm.quitSync, pm.wg, mclock.MonotonicClock{})
+		pm.clientPool = newFreeClientPool(pm.chainDb, maxPeers, 10000, pm.quitSync, pm.wg, mclock.System{})
 		go func() {
 			for range pm.newPeerCh {
 			}

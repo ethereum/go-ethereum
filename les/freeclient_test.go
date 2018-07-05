@@ -44,24 +44,19 @@ func TestFreeClientPoolL100C300(t *testing.T) {
 const testFreeClientPoolTicks = 500000
 
 func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
-	quit := make(chan struct{})
-	clock := mclock.NewSimulatedClock(time.Second, 10)
-	defer clock.Stop()
-	var wg sync.WaitGroup
-	db := ethdb.NewMemDatabase()
-
-	pool := newFreeClientPool(db, connLimit, 10000, quit, &wg, clock)
-
-	connected := make([]bool, clientCount)
-	connTicks := make([]int, clientCount)
-	disconnCh := make(chan int)
-	tickCh := clock.After(time.Second)
-	tickCounter := 0
-
+	var (
+		quit      = make(chan struct{})
+		clock     mclock.Simulated
+		wg        sync.WaitGroup
+		db        = ethdb.NewMemDatabase()
+		pool      = newFreeClientPool(db, connLimit, 10000, quit, &wg, &clock)
+		connected = make([]bool, clientCount)
+		connTicks = make([]int, clientCount)
+		disconnCh = make(chan int)
+	)
 	peerId := func(i int) string {
 		return fmt.Sprintf("test peer #%d", i)
 	}
-
 	disconnFn := func(i int) func() {
 		return func() {
 			disconnCh <- i
@@ -73,42 +68,42 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 		if pool.connect(peerId(i), disconnFn(i)) {
 			connected[i] = true
 		} else {
-			t.Errorf("Test peer #%d rejected", i)
+			t.Fatalf("Test peer #%d rejected", i)
 		}
 	}
 	// since all accepted peers are new and should not be kicked out, the next one should be rejected
 	if pool.connect(peerId(connLimit), disconnFn(connLimit)) {
 		connected[connLimit] = true
-		t.Errorf("Peer accepted over connected limit")
+		t.Fatalf("Peer accepted over connected limit")
 	}
 
 	// randomly connect and disconnect peers, expect to have a similar total connection time at the end
-loop:
-	for {
-		select {
-		case <-clock.PingChannel():
-		case <-tickCh:
-			i := rand.Intn(clientCount)
-			if connected[i] {
-				pool.disconnect(peerId(i))
-				connected[i] = false
-				connTicks[i] += tickCounter
-			} else {
-				if pool.connect(peerId(i), disconnFn(i)) {
-					connected[i] = true
-					connTicks[i] -= tickCounter
-				}
-			}
-			tickCounter++
-			if tickCounter >= testFreeClientPoolTicks {
-				break loop
-			}
-			tickCh = clock.After(time.Second)
-		case i := <-disconnCh:
+	tickCounter := 0
+	for ; tickCounter < testFreeClientPoolTicks; tickCounter++ {
+		clock.Run(1 * time.Second)
+
+		i := rand.Intn(clientCount)
+		if connected[i] {
 			pool.disconnect(peerId(i))
-			if connected[i] {
-				connTicks[i] += tickCounter
-				connected[i] = false
+			connected[i] = false
+			connTicks[i] += tickCounter
+		} else {
+			if pool.connect(peerId(i), disconnFn(i)) {
+				connected[i] = true
+				connTicks[i] -= tickCounter
+			}
+		}
+	pollDisconnects:
+		for {
+			select {
+			case i := <-disconnCh:
+				pool.disconnect(peerId(i))
+				if connected[i] {
+					connTicks[i] += tickCounter
+					connected[i] = false
+				}
+			default:
+				break pollDisconnects
 			}
 		}
 	}
@@ -137,7 +132,7 @@ loop:
 	wg.Wait()
 	quit2 := make(chan struct{})
 	var wg2 sync.WaitGroup
-	pool = newFreeClientPool(db, connLimit, 10000, quit2, &wg2, clock)
+	pool = newFreeClientPool(db, connLimit, 10000, quit2, &wg2, &clock)
 
 	// try connecting all known peers (connLimit should be filled up)
 	for i := 0; i < clientCount; i++ {
