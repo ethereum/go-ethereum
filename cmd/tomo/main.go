@@ -301,7 +301,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			if ok {
 				log.Info("Validator found. Enabling staking mode...")
 				// Use a reduced number of threads if requested
-				if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+				if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 					type threaded interface {
 						SetThreads(threads int)
 					}
@@ -337,7 +337,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					} else if !started {
 						log.Info("Masternode found. Enabling staking mode...")
 						// Use a reduced number of threads if requested
-						if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 							type threaded interface {
 								SetThreads(threads int)
 							}
