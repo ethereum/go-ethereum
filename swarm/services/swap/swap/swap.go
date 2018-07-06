@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // SwAP Swarm Accounting Protocol with
 //      Swift Automatic  Payments
 // a peer to peer micropayment system
 
-// public swap profile
+// Profile - public swap profile
 // public parameters for SWAP, serializable config struct passed in handshake
 type Profile struct {
 	BuyAt  *big.Int // accepted max price for chunk
@@ -55,34 +55,33 @@ type Params struct {
 	*Strategy
 }
 
-// Promise
-// 3rd party Provable Promise of Payment
+// Promise - 3rd party Provable Promise of Payment
 // issued by outPayment
-// serialisable to send with Protocol
+// serializable to send with Protocol
 type Promise interface{}
 
-// interface for the peer protocol for testing or external alternative payment
+// Protocol interface for the peer protocol for testing or external alternative payment
 type Protocol interface {
 	Pay(int, Promise) // units, payment proof
 	Drop()
 	String() string
 }
 
-// interface for the (delayed) ougoing payment system with autodeposit
+// OutPayment interface for the (delayed) outgoing payment system with auto-deposit
 type OutPayment interface {
 	Issue(amount *big.Int) (promise Promise, err error)
 	AutoDeposit(interval time.Duration, threshold, buffer *big.Int)
 	Stop()
 }
 
-// interface for the (delayed) incoming payment system with autocash
+// InPayment interface for the (delayed) incoming payment system with autocash
 type InPayment interface {
 	Receive(promise Promise) (*big.Int, error)
 	AutoCash(cashInterval time.Duration, maxUncashed *big.Int)
 	Stop()
 }
 
-// swap is the swarm accounting protocol instance
+// Swap is the swarm accounting protocol instance
 // * pairwise accounting and payments
 type Swap struct {
 	lock    sync.Mutex // mutex for balance access
@@ -93,160 +92,161 @@ type Swap struct {
 	Payment
 }
 
+// Payment handlers
 type Payment struct {
 	Out         OutPayment // outgoing payment handler
 	In          InPayment  // incoming  payment handler
 	Buys, Sells bool
 }
 
-// swap constructor
-func New(local *Params, pm Payment, proto Protocol) (self *Swap, err error) {
+// New - swap constructor
+func New(local *Params, pm Payment, proto Protocol) (swap *Swap, err error) {
 
-	self = &Swap{
+	swap = &Swap{
 		local:   local,
 		Payment: pm,
 		proto:   proto,
 	}
 
-	self.SetParams(local)
+	swap.SetParams(local)
 
 	return
 }
 
-// entry point for setting remote swap profile (e.g from handshake or other message)
-func (self *Swap) SetRemote(remote *Profile) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
+// SetRemote - entry point for setting remote swap profile (e.g from handshake or other message)
+func (swap *Swap) SetRemote(remote *Profile) {
+	defer swap.lock.Unlock()
+	swap.lock.Lock()
 
-	self.remote = remote
-	if self.Sells && (remote.BuyAt.Sign() <= 0 || self.local.SellAt.Sign() <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
-		self.Out.Stop()
-		self.Sells = false
+	swap.remote = remote
+	if swap.Sells && (remote.BuyAt.Sign() <= 0 || swap.local.SellAt.Sign() <= 0 || remote.BuyAt.Cmp(swap.local.SellAt) < 0) {
+		swap.Out.Stop()
+		swap.Sells = false
 	}
-	if self.Buys && (remote.SellAt.Sign() <= 0 || self.local.BuyAt.Sign() <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
-		self.In.Stop()
-		self.Buys = false
+	if swap.Buys && (remote.SellAt.Sign() <= 0 || swap.local.BuyAt.Sign() <= 0 || swap.local.BuyAt.Cmp(swap.remote.SellAt) < 0) {
+		swap.In.Stop()
+		swap.Buys = false
 	}
 
-	log.Debug(fmt.Sprintf("<%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt))
+	log.Debug(fmt.Sprintf("<%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", swap.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt))
 
 }
 
-// to set strategy dynamically
-func (self *Swap) SetParams(local *Params) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	self.local = local
-	self.setParams(local)
+// SetParams - to set strategy dynamically
+func (swap *Swap) SetParams(local *Params) {
+	defer swap.lock.Unlock()
+	swap.lock.Lock()
+	swap.local = local
+	swap.setParams(local)
 }
 
-// caller holds the lock
+// setParams - caller holds the lock
+func (swap *Swap) setParams(local *Params) {
 
-func (self *Swap) setParams(local *Params) {
-
-	if self.Sells {
-		self.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
-		log.Info(fmt.Sprintf("<%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold))
+	if swap.Sells {
+		swap.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
+		log.Info(fmt.Sprintf("<%v> set autocash to every %v, max uncashed limit: %v", swap.proto, local.AutoCashInterval, local.AutoCashThreshold))
 	} else {
-		log.Info(fmt.Sprintf("<%v> autocash off (not selling)", self.proto))
+		log.Info(fmt.Sprintf("<%v> autocash off (not selling)", swap.proto))
 	}
-	if self.Buys {
-		self.Out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
-		log.Info(fmt.Sprintf("<%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer))
+	if swap.Buys {
+		swap.Out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+		log.Info(fmt.Sprintf("<%v> set autodeposit to every %v, pay at: %v, buffer: %v", swap.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer))
 	} else {
-		log.Info(fmt.Sprintf("<%v> autodeposit off (not buying)", self.proto))
+		log.Info(fmt.Sprintf("<%v> autodeposit off (not buying)", swap.proto))
 	}
 }
 
-// Add(n)
+// Add (n)
 // n > 0 called when promised/provided n units of service
 // n < 0 called when used/requested n units of service
-func (self *Swap) Add(n int) error {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	self.balance += n
-	if !self.Sells && self.balance > 0 {
-		log.Trace(fmt.Sprintf("<%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance))
-		self.proto.Drop()
-		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance)
+func (swap *Swap) Add(n int) error {
+	defer swap.lock.Unlock()
+	swap.lock.Lock()
+	swap.balance += n
+	if !swap.Sells && swap.balance > 0 {
+		log.Trace(fmt.Sprintf("<%v> remote peer cannot have debt (balance: %v)", swap.proto, swap.balance))
+		swap.proto.Drop()
+		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (balance: %v)", swap.proto, swap.balance)
 	}
-	if !self.Buys && self.balance < 0 {
-		log.Trace(fmt.Sprintf("<%v> we cannot have debt (balance: %v)", self.proto, self.balance))
-		return fmt.Errorf("[SWAP] <%v> we cannot have debt (balance: %v)", self.proto, self.balance)
+	if !swap.Buys && swap.balance < 0 {
+		log.Trace(fmt.Sprintf("<%v> we cannot have debt (balance: %v)", swap.proto, swap.balance))
+		return fmt.Errorf("[SWAP] <%v> we cannot have debt (balance: %v)", swap.proto, swap.balance)
 	}
-	if self.balance >= int(self.local.DropAt) {
-		log.Trace(fmt.Sprintf("<%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt))
-		self.proto.Drop()
-		return fmt.Errorf("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
-	} else if self.balance <= -int(self.remote.PayAt) {
-		self.send()
+	if swap.balance >= int(swap.local.DropAt) {
+		log.Trace(fmt.Sprintf("<%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", swap.proto, swap.balance, swap.local.DropAt))
+		swap.proto.Drop()
+		return fmt.Errorf("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", swap.proto, swap.balance, swap.local.DropAt)
+	} else if swap.balance <= -int(swap.remote.PayAt) {
+		swap.send()
 	}
 	return nil
 }
 
-func (self *Swap) Balance() int {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	return self.balance
+// Balance accessor
+func (swap *Swap) Balance() int {
+	defer swap.lock.Unlock()
+	swap.lock.Lock()
+	return swap.balance
 }
 
-// send(units) is called when payment is due
+// send (units) is called when payment is due
 // In case of insolvency no promise is issued and sent, safe against fraud
 // No return value: no error = payment is opportunistic = hang in till dropped
-func (self *Swap) send() {
-	if self.local.BuyAt != nil && self.balance < 0 {
-		amount := big.NewInt(int64(-self.balance))
-		amount.Mul(amount, self.remote.SellAt)
-		promise, err := self.Out.Issue(amount)
+func (swap *Swap) send() {
+	if swap.local.BuyAt != nil && swap.balance < 0 {
+		amount := big.NewInt(int64(-swap.balance))
+		amount.Mul(amount, swap.remote.SellAt)
+		promise, err := swap.Out.Issue(amount)
 		if err != nil {
-			log.Warn(fmt.Sprintf("<%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.Out, err))
+			log.Warn(fmt.Sprintf("<%v> cannot issue cheque (amount: %v, channel: %v): %v", swap.proto, amount, swap.Out, err))
 		} else {
-			log.Warn(fmt.Sprintf("<%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.Out))
-			self.proto.Pay(-self.balance, promise)
-			self.balance = 0
+			log.Warn(fmt.Sprintf("<%v> cheque issued (amount: %v, channel: %v)", swap.proto, amount, swap.Out))
+			swap.proto.Pay(-swap.balance, promise)
+			swap.balance = 0
 		}
 	}
 }
 
-// receive(units, promise) is called by the protocol when a payment msg is received
+// Receive (units, promise) is called by the protocol when a payment msg is received
 // returns error if promise is invalid.
-func (self *Swap) Receive(units int, promise Promise) error {
+func (swap *Swap) Receive(units int, promise Promise) error {
 	if units <= 0 {
 		return fmt.Errorf("invalid units: %v <= 0", units)
 	}
 
 	price := new(big.Int).SetInt64(int64(units))
-	price.Mul(price, self.local.SellAt)
+	price.Mul(price, swap.local.SellAt)
 
-	amount, err := self.In.Receive(promise)
+	amount, err := swap.In.Receive(promise)
 
 	if err != nil {
 		err = fmt.Errorf("invalid promise: %v", err)
 	} else if price.Cmp(amount) != 0 {
 		// verify amount = units * unit sale price
-		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, self.local.SellAt, amount)
+		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, swap.local.SellAt, amount)
 	}
 	if err != nil {
-		log.Trace(fmt.Sprintf("<%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, err))
+		log.Trace(fmt.Sprintf("<%v> invalid promise (amount: %v, channel: %v): %v", swap.proto, amount, swap.In, err))
 		return err
 	}
 
 	// credit remote peer with units
-	self.Add(-units)
-	log.Trace(fmt.Sprintf("<%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, promise))
+	swap.Add(-units)
+	log.Trace(fmt.Sprintf("<%v> received promise (amount: %v, channel: %v): %v", swap.proto, amount, swap.In, promise))
 
 	return nil
 }
 
-// stop() causes autocash loop to terminate.
+// Stop causes autocash loop to terminate.
 // Called after protocol handle loop terminates.
-func (self *Swap) Stop() {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	if self.Buys {
-		self.Out.Stop()
+func (swap *Swap) Stop() {
+	defer swap.lock.Unlock()
+	swap.lock.Lock()
+	if swap.Buys {
+		swap.Out.Stop()
 	}
-	if self.Sells {
-		self.In.Stop()
+	if swap.Sells {
+		swap.In.Stop()
 	}
 }

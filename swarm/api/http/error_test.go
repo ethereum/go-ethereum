@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http_test
+package http
 
 import (
 	"encoding/json"
@@ -30,7 +30,7 @@ import (
 
 func TestError(t *testing.T) {
 
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -56,7 +56,7 @@ func TestError(t *testing.T) {
 }
 
 func Test404Page(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -82,7 +82,7 @@ func Test404Page(t *testing.T) {
 }
 
 func Test500Page(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -107,7 +107,7 @@ func Test500Page(t *testing.T) {
 	}
 }
 func Test500PageWith0xHashPrefix(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -137,7 +137,7 @@ func Test500PageWith0xHashPrefix(t *testing.T) {
 }
 
 func TestJsonResponse(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	var resp *http.Response

@@ -52,27 +52,22 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
-	// Wait for init so bond is accepted.
 	<-tab.initDone
 
-	// fill up the sender's bucket.
+	// Fill up the sender's bucket.
 	pingSender := NewNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
 	last := fillBucket(tab, pingSender)
 
-	// this call to bond should replace the last node
-	// in its bucket if the node is not responding.
+	// Add the sender as if it just pinged us. Revalidate should replace the last node in
+	// its bucket if it is unresponsive. Revalidate again to ensure that
 	transport.dead[last.ID] = !lastInBucketIsResponding
 	transport.dead[pingSender.ID] = !newNodeIsResponding
-	tab.bond(true, pingSender.ID, &net.UDPAddr{}, 0)
+	tab.add(pingSender)
+	tab.doRevalidate(make(chan struct{}, 1))
 	tab.doRevalidate(make(chan struct{}, 1))
 
-	// first ping goes to sender (bonding pingback)
-	if !transport.pinged[pingSender.ID] {
-		t.Error("table did not ping back sender")
-	}
 	if !transport.pinged[last.ID] {
-		// second ping goes to oldest node in bucket
-		// to see whether it is still alive.
+		// Oldest node in bucket is pinged to see whether it is still alive.
 		t.Error("table did not ping last node in bucket")
 	}
 
@@ -83,7 +78,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 		wantSize--
 	}
 	if l := len(tab.bucket(pingSender.sha).entries); l != wantSize {
-		t.Errorf("wrong bucket size after bond: got %d, want %d", l, wantSize)
+		t.Errorf("wrong bucket size after add: got %d, want %d", l, wantSize)
 	}
 	if found := contains(tab.bucket(pingSender.sha).entries, last.ID); found != lastInBucketIsResponding {
 		t.Errorf("last entry found: %t, want: %t", found, lastInBucketIsResponding)
@@ -206,10 +201,7 @@ func newPingRecorder() *pingRecorder {
 func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
 	return nil, nil
 }
-func (t *pingRecorder) close() {}
-func (t *pingRecorder) waitping(from NodeID) error {
-	return nil // remote always pings
-}
+
 func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -221,6 +213,8 @@ func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
 		return nil
 	}
 }
+
+func (t *pingRecorder) close() {}
 
 func TestTable_closest(t *testing.T) {
 	t.Parallel()

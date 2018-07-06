@@ -815,11 +815,9 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 
 	for i, tx := range txs {
 		var replace bool
-		if replace, errs[i] = pool.add(tx, local); errs[i] == nil {
-			if !replace {
-				from, _ := types.Sender(pool.signer, tx) // already validated
-				dirty[from] = struct{}{}
-			}
+		if replace, errs[i] = pool.add(tx, local); errs[i] == nil && !replace {
+			from, _ := types.Sender(pool.signer, tx) // already validated
+			dirty[from] = struct{}{}
 		}
 	}
 	// Only reprocess the internal state if something was actually added
@@ -1107,7 +1105,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			log.Trace("Demoting pending transaction", "hash", hash)
 			pool.enqueueTx(hash, tx)
 		}
-		// If there's a gap in front, warn (should never happen) and postpone all transactions
+		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
 			for _, tx := range list.Cap(0) {
 				hash := tx.Hash()

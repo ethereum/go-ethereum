@@ -156,13 +156,16 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Delete any canonical number assignments above the new head
+		batch := hc.chainDb.NewBatch()
 		for i := number + 1; ; i++ {
 			hash := rawdb.ReadCanonicalHash(hc.chainDb, i)
 			if hash == (common.Hash{}) {
 				break
 			}
-			rawdb.DeleteCanonicalHash(hc.chainDb, i)
+			rawdb.DeleteCanonicalHash(batch, i)
 		}
+		batch.Write()
+
 		// Overwrite any stale canonical number assignments
 		var (
 			headHash   = header.ParentHash
@@ -438,7 +441,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 
 // DeleteCallback is a callback function that is called by SetHead before
 // each header is deleted.
-type DeleteCallback func(common.Hash, uint64)
+type DeleteCallback func(rawdb.DatabaseDeleter, common.Hash, uint64)
 
 // SetHead rewinds the local chain to a new head. Everything above the new head
 // will be deleted and the new one set.
@@ -448,22 +451,24 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	if hdr := hc.CurrentHeader(); hdr != nil {
 		height = hdr.Number.Uint64()
 	}
-
+	batch := hc.chainDb.NewBatch()
 	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
 		hash := hdr.Hash()
 		num := hdr.Number.Uint64()
 		if delFn != nil {
-			delFn(hash, num)
+			delFn(batch, hash, num)
 		}
-		rawdb.DeleteHeader(hc.chainDb, hash, num)
-		rawdb.DeleteTd(hc.chainDb, hash, num)
+		rawdb.DeleteHeader(batch, hash, num)
+		rawdb.DeleteTd(batch, hash, num)
 
 		hc.currentHeader.Store(hc.GetHeader(hdr.ParentHash, hdr.Number.Uint64()-1))
 	}
 	// Roll back the canonical chain numbering
 	for i := height; i > head; i-- {
-		rawdb.DeleteCanonicalHash(hc.chainDb, i)
+		rawdb.DeleteCanonicalHash(batch, i)
 	}
+	batch.Write()
+
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()
