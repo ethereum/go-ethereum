@@ -202,7 +202,7 @@ func init() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
-		// Cap the cache allowance and tune the garbage colelctor
+		// Cap the cache allowance and tune the garbage collector
 		var mem gosigar.Mem
 		if err := mem.Get(); err == nil {
 			allowance := int(mem.Total / 1024 / 1024 / 3)
