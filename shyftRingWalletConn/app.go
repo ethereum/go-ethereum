@@ -61,21 +61,16 @@ func handleRequest(conn net.Conn) {
 		fmt.Println(dat["address"])
 		fmt.Println(dat["msg"])
 		fmt.Println(dat["sig"])
-		//Ecrecover takes 2 args, bytes[] and bytes[]
-		// we need to pass in the hash of the message as bytes
-		// and the bytes array of the signature
+
 		var msg = dat["msg"].(string)
 		var sig = dat["sig"].(string)
 		fmt.Println("the first sig is ")
 		fmt.Println(msg)
 		fmt.Println(sig)
-		//var new_byte_array, err2 = hexutil.Decode(msg)
 		var new_byte_array = []byte(msg)
 		var bazz = hexutil.Encode(new_byte_array)
 		fizz, err2 := hexutil.Decode(bazz)
-		fmt.Println("THE fizz is ")
-		fmt.Println(fizz)
-		//fizz = hexutil.Decode(fizz.String())
+
 		var new_sig_byte_array, err3 = hexutil.Decode(sig)
 		if err2 != nil {
 			fmt.Println("the err2 is ")
@@ -90,22 +85,6 @@ func handleRequest(conn net.Conn) {
 		buzz[64] -= 27
 		fmt.Println("that bytes is")
 		fmt.Println(fizz)
-
-
-		//var bytes_msg = []byte(msg)
-		//var foo, err = hex.DecodeString(msg)
-		//fmt.Println("msg is ")
-		//fmt.Println(msg)
-		//fmt.Println("bytes_msg is ")
-		//fmt.Println(bytes_msg)
-
-		//var sig = dat["sig"].(string)
-		//fmt.Println("The sig is ")
-		//fmt.Println(sig)
-		//decoded, er := hex.DecodeString(sig)
-		//if er != nil {
-		//	log.Fatal(err)
-		//}
 
 		new_msg := signHash(fizz)
 		fmt.Println("the new_msg is ")
@@ -125,15 +104,6 @@ func handleRequest(conn net.Conn) {
 		fmt.Println(recoveredAddr)
 		fmt.Println(recoveredAddr.Hex())
 
-
-		//res, _ := new_add.MarshalText()
-		//fmt.Println(hexutil.Encode(address))
-		//s := string(address[:])
-		//
-		//fmt.Println(s)
-
-		//fmt.Println(address)
-		//fmt.Println("Message is ", msg)
 	}
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
