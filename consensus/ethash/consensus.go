@@ -312,8 +312,8 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 // chain is a private network or not based on the configurations
 // ChainID.
 func isPrivateNetwork(config *params.ChainConfig) bool {
-	return config.ChainID != params.MainnetChainConfig.ChainID ||
-		config.ChainID != params.TestChainConfig.ChainID ||
+	return config.ChainID != params.MainnetChainConfig.ChainID &&
+		config.ChainID != params.TestChainConfig.ChainID &&
 		config.ChainID != params.RinkebyChainConfig.ChainID
 }
 
