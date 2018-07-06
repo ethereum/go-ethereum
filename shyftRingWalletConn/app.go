@@ -67,8 +67,15 @@ func handleRequest(conn net.Conn) {
 		var msg = dat["msg"].(string)
 		var sig = dat["sig"].(string)
 		fmt.Println("the first sig is ")
+		fmt.Println(msg)
 		fmt.Println(sig)
-		var new_byte_array, err2 = hexutil.Decode(msg)
+		//var new_byte_array, err2 = hexutil.Decode(msg)
+		var new_byte_array = []byte(msg)
+		var bazz = hexutil.Encode(new_byte_array)
+		fizz, err2 := hexutil.Decode(bazz)
+		fmt.Println("THE fizz is ")
+		fmt.Println(fizz)
+		//fizz = hexutil.Decode(fizz.String())
 		var new_sig_byte_array, err3 = hexutil.Decode(sig)
 		if err2 != nil {
 			fmt.Println("the err2 is ")
@@ -78,11 +85,13 @@ func handleRequest(conn net.Conn) {
 			fmt.Println("the err3 is ")
 			fmt.Println(err3)
 		}
-		var fizz = hexutil.Bytes(new_byte_array)
+
 		var buzz = hexutil.Bytes(new_sig_byte_array)
 		buzz[64] -= 27
 		fmt.Println("that bytes is")
 		fmt.Println(fizz)
+
+
 		//var bytes_msg = []byte(msg)
 		//var foo, err = hex.DecodeString(msg)
 		//fmt.Println("msg is ")
@@ -97,6 +106,7 @@ func handleRequest(conn net.Conn) {
 		//if er != nil {
 		//	log.Fatal(err)
 		//}
+
 		new_msg := signHash(fizz)
 		fmt.Println("the new_msg is ")
 		fmt.Println(new_msg)
@@ -114,6 +124,8 @@ func handleRequest(conn net.Conn) {
 		fmt.Println("the address is ")
 		fmt.Println(recoveredAddr)
 		fmt.Println(recoveredAddr.Hex())
+
+
 		//res, _ := new_add.MarshalText()
 		//fmt.Println(hexutil.Encode(address))
 		//s := string(address[:])
