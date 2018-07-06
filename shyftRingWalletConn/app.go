@@ -65,8 +65,6 @@ func handleRequest(conn net.Conn) {
 		var msg = dat["msg"].(string)
 		var sig = dat["sig"].(string)
 		fmt.Println("the first sig is ")
-		fmt.Println(msg)
-		fmt.Println(sig)
 		var new_byte_array = []byte(msg)
 		var bazz = hexutil.Encode(new_byte_array)
 		fizz, err2 := hexutil.Decode(bazz)
@@ -87,10 +85,6 @@ func handleRequest(conn net.Conn) {
 		fmt.Println(fizz)
 
 		new_msg := signHash(fizz)
-		fmt.Println("the new_msg is ")
-		fmt.Println(new_msg)
-		fmt.Println("the buzz is ")
-		fmt.Println(buzz)
 
 		var rpk, err = crypto.Ecrecover(new_msg, buzz)
 		if err != nil {
