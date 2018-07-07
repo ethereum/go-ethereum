@@ -36,6 +36,7 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 		stack = newstack()
 		pc    = uint64(0)
 	)
+	env.interpreter.intPool = poolOfIntPools.get()
 	for i, test := range tests {
 		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
 		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
@@ -64,6 +65,7 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 			}
 		}
 	}
+	poolOfIntPools.put(env.interpreter.intPool)
 }
 
 func TestByteOp(t *testing.T) {
@@ -71,6 +73,7 @@ func TestByteOp(t *testing.T) {
 		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 	)
+	env.interpreter.intPool = poolOfIntPools.get()
 	tests := []struct {
 		v        string
 		th       uint64
@@ -97,6 +100,7 @@ func TestByteOp(t *testing.T) {
 			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.v, test.th, test.expected, actual)
 		}
 	}
+	poolOfIntPools.put(env.interpreter.intPool)
 }
 
 func TestSHL(t *testing.T) {
@@ -432,6 +436,7 @@ func TestOpMstore(t *testing.T) {
 		stack = newstack()
 		mem   = NewMemory()
 	)
+	env.interpreter.intPool = poolOfIntPools.get()
 	mem.Resize(64)
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
@@ -445,6 +450,7 @@ func TestOpMstore(t *testing.T) {
 	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
+	poolOfIntPools.put(env.interpreter.intPool)
 }
 
 func BenchmarkOpMstore(bench *testing.B) {
