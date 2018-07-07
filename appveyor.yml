@@ -29,10 +29,6 @@ build_script:
   - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256
   - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256 | Out-File multi-geth-win64.zip.sha256
 
-test_script:
-  - set CGO_ENABLED=1
-  - go run build\ci.go test
-
 artifacts:
   - path: '*.zip'
     name: geth
