@@ -102,7 +102,7 @@ func TestSendTxSign(t *testing.T) {
 	signers[common.HexToAddress("0x12f588d7d03bb269b382b842fc15d874e8c055a7")] = &rewardLog{5, new(big.Int).SetUint64(0)}
 	signers[common.HexToAddress("0x1f9e122c0921a4504fc116d967baf7a7bf2604ef")] = &rewardLog{6, new(big.Int).SetUint64(0)}
 	signers[common.HexToAddress("0xea489e4e673c25ff0614617ebe88efd853efe00c")] = &rewardLog{6, new(big.Int).SetUint64(0)}
-	rewardSigners, err := CalculateReward(chainReward, signers, totalSigner)
+	rewardSigners, err := CalculateRewardForSigner(chainReward, signers, totalSigner)
 	if err != nil {
 		t.Errorf("Fail to calculate reward for signers: %v", err)
 	}

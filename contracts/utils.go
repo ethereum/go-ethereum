@@ -6,7 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -14,7 +16,11 @@ import (
 )
 
 const (
-	HexSignMethod = "2fb1b25f"
+	HexSignMethod           = "2fb1b25f"
+	RewardMasterPercent     = 30
+	RewardVoterPercent      = 60
+	RewardFoundationPercent = 10
+	FoudationWalletAddr     = "0x0000000000000000000000000000000000000068"
 )
 
 type rewardLog struct {
@@ -117,7 +123,7 @@ func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rChec
 }
 
 // Calculate reward for signers.
-func CalculateReward(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
+func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
 	resultSigners := make(map[common.Address]*big.Int)
 	// Add reward for signers.
 	for signer, rLog := range signers {
@@ -137,4 +143,81 @@ func CalculateReward(chainReward *big.Int, signers map[common.Address]*rewardLog
 	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 
 	return resultSigners, nil
+}
+
+// Get candidate owner by address.
+func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, signerAddr common.Address) common.Address {
+	owner := signerAddr
+	opts := new(bind.CallOpts)
+	owner, err := validator.GetCandidateOwner(opts, signerAddr)
+	if err != nil {
+		log.Error("Fail get candidate owner", "error", err)
+		return owner
+	}
+
+	return owner
+}
+
+// Calculate reward for holders.
+func CalculateRewardForHolders(validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) error {
+	rewards, err := GetRewardBalancesRate(signer, calcReward, validator)
+	if err != nil {
+		return err
+	}
+	if len(rewards) > 0 {
+		for holder, reward := range rewards {
+			state.AddBalance(holder, reward)
+		}
+	}
+	return nil
+}
+
+// Get reward balance rates for master node, founder and holders.
+func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
+	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
+	balances := make(map[common.Address]*big.Int)
+	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent))
+	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
+	balances[owner] = rewardMaster
+	// Get voters for masternode.
+	opts := new(bind.CallOpts)
+	voters, err := validator.GetVoters(opts, masterAddr)
+	if err != nil {
+		log.Error("Fail to get voters", "error", err)
+		return nil, err
+	}
+
+	if len(voters) > 0 {
+		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(RewardVoterPercent))
+		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
+		totalCap := new(big.Int)
+		// Get voters capacities.
+		voterCaps := make(map[common.Address]*big.Int)
+		for _, voteAddr := range voters {
+			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
+			if err != nil {
+				log.Error("Fail to get vote capacity", "error", err)
+				return nil, err
+			}
+			totalCap.Add(totalCap, voterCap)
+			voterCaps[voteAddr] = voterCap
+		}
+		for addr, voteCap := range voterCaps {
+			balances[addr] = new(big.Int).Mul(totalVoterReward, voteCap)
+			balances[addr] = new(big.Int).Div(balances[addr], totalCap)
+		}
+	}
+
+	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent))
+	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
+	balances[common.HexToAddress(FoudationWalletAddr)] = foudationReward
+
+	jsonHolders, err := json.Marshal(balances)
+	if err != nil {
+		log.Error("Fail to parse json holders", "error", err)
+		return nil, err
+	}
+	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
+
+	return balances, nil
 }
