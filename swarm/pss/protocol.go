@@ -172,6 +172,8 @@ func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid str
 		rw, err := p.AddPeer(peer, *p.topic, asymmetric, keyid)
 		if err != nil {
 			return err
+		} else if rw == nil {
+			return fmt.Errorf("handle called on nil MsgReadWriter for new key " + keyid)
 		}
 		vrw = rw.(*PssReadWriter)
 	}
@@ -181,8 +183,14 @@ func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid str
 		return fmt.Errorf("could not decode pssmsg")
 	}
 	if asymmetric {
+		if p.pubKeyRWPool[keyid] == nil {
+			return fmt.Errorf("handle called on nil MsgReadWriter for key " + keyid)
+		}
 		vrw = p.pubKeyRWPool[keyid].(*PssReadWriter)
 	} else {
+		if p.symKeyRWPool[keyid] == nil {
+			return fmt.Errorf("handle called on nil MsgReadWriter for key " + keyid)
+		}
 		vrw = p.symKeyRWPool[keyid].(*PssReadWriter)
 	}
 	vrw.injectMsg(pmsg)

@@ -18,6 +18,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func TestApiDirUpload0(t *testing.T) {
 		checkResponse(t, resp, exp)
 
 		addr := storage.Address(common.Hex2Bytes(bzzhash))
-		_, _, _, _, err = api.Get(addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), addr, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -95,7 +96,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		}
 
 		addr := storage.Address(common.Hex2Bytes(bzzhash))
-		addr, err = api.Modify(addr, "index.html", "", "")
+		addr, err = api.Modify(context.TODO(), addr, "index.html", "", "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -105,18 +106,23 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		hash, wait, err := api.Store(bytes.NewReader(index), int64(len(index)), toEncrypt)
-		wait()
+		ctx := context.TODO()
+		hash, wait, err := api.Store(ctx, bytes.NewReader(index), int64(len(index)), toEncrypt)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		addr, err = api.Modify(addr, "index2.html", hash.Hex(), "text/html; charset=utf-8")
+		err = wait(ctx)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		addr, err = api.Modify(addr, "img/logo.png", hash.Hex(), "text/html; charset=utf-8")
+		addr, err = api.Modify(context.TODO(), addr, "index2.html", hash.Hex(), "text/html; charset=utf-8")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		addr, err = api.Modify(context.TODO(), addr, "img/logo.png", hash.Hex(), "text/html; charset=utf-8")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -137,7 +143,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, _, err = api.Get(addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), addr, "")
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}

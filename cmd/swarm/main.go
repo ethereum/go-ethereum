@@ -143,7 +143,7 @@ var (
 	}
 	SwarmWantManifestFlag = cli.BoolTFlag{
 		Name:  "manifest",
-		Usage: "Automatic manifest upload",
+		Usage: "Automatic manifest upload (default true)",
 	}
 	SwarmUploadDefaultPath = cli.StringFlag{
 		Name:  "defaultpath",
@@ -155,7 +155,7 @@ var (
 	}
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
-		Usage: "force mime type",
+		Usage: "Manually specify MIME type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
 		Name:  "encrypt",

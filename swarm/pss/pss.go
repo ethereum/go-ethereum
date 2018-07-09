@@ -41,7 +41,7 @@ import (
 
 const (
 	defaultPaddingByteSize     = 16
-	defaultMsgTTL              = time.Second * 120
+	DefaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
@@ -94,7 +94,7 @@ type PssParams struct {
 // Sane defaults for Pss
 func NewPssParams() *PssParams {
 	return &PssParams{
-		MsgTTL:              defaultMsgTTL,
+		MsgTTL:              DefaultMsgTTL,
 		CacheTTL:            defaultDigestCacheTTL,
 		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
 	}
@@ -354,11 +354,11 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 	}
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
-		log.Warn("pss filtered expired message", "from", fmt.Sprintf("%x", p.Overlay.BaseAddr()), "to", fmt.Sprintf("%x", common.ToHex(pssmsg.To)))
+		log.Warn("pss filtered expired message", "from", common.ToHex(p.Overlay.BaseAddr()), "to", common.ToHex(pssmsg.To))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", p.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Trace("pss relay block-cache match (process)", "from", common.ToHex(p.Overlay.BaseAddr()), "to", (common.ToHex(pssmsg.To)))
 		return nil
 	}
 	p.addFwdCache(pssmsg)
@@ -480,7 +480,7 @@ func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address *Ps
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (p *Pss) generateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
+func (p *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
 	keyid, err := p.w.GenerateSymKey()
 	if err != nil {
 		return "", err

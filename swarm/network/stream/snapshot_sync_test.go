@@ -581,8 +581,12 @@ func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.
 	fileStore := storage.NewFileStore(lstore, storage.NewFileStoreParams())
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {
-		rk, wait, err := fileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
-		wait()
+		ctx := context.TODO()
+		rk, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		if err != nil {
+			return nil, err
+		}
+		err = wait(ctx)
 		if err != nil {
 			return nil, err
 		}
