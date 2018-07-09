@@ -44,9 +44,9 @@ func (e Event) String() string {
 	return fmt.Sprintf("e %v(%v)", e.Name, strings.Join(inputs, ", "))
 }
 
-// Id returns the canonical representation of the event's signature used by the
+// ID returns the canonical representation of the event's signature used by the
 // abi definition to identify event names and types.
-func (e Event) Id() common.Hash {
+func (e Event) ID() common.Hash {
 	types := make([]string, len(e.Inputs))
 	i := 0
 	for _, input := range e.Inputs {

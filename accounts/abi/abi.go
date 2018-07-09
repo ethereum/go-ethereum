@@ -70,7 +70,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 		return nil, err
 	}
 	// Pack up the method ID too if not a constructor and return
-	return append(method.Id(), arguments...), nil
+	return append(method.ID(), arguments...), nil
 }
 
 // Unpack output in v according to the abi specification
@@ -138,7 +138,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 // returns nil if none found
 func (abi *ABI) MethodByID(sigdata []byte) (*Method, error) {
 	for _, method := range abi.Methods {
-		if bytes.Equal(method.Id(), sigdata[:4]) {
+		if bytes.Equal(method.ID(), sigdata[:4]) {
 			return &method, nil
 		}
 	}

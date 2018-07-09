@@ -185,8 +185,8 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	idexp := crypto.Keccak256([]byte(exp))[:4]
-	if !bytes.Equal(m.Id(), idexp) {
-		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
+	if !bytes.Equal(m.ID(), idexp) {
+		t.Errorf("expected ids to match %x != %x", m.ID(), idexp)
 	}
 
 	uintt, _ := NewType("uint256")
@@ -702,13 +702,13 @@ func TestABI_MethodByID(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodByID(m.Id())
+		m2, err := abi.MethodByID(m.ID())
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.Id()))
+			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.ID()))
 		}
 	}
 
