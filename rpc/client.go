@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,13 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	case "":
 		return DialIPC(ctx, rawurl)
 	default:
+		if runtime.GOOS == "windows" && len(u.Scheme) == 1 {
+			for s := 'a'; s <= 'z'; s++ {
+				if rune(u.Scheme[0]) == s {
+					return DialIPC(ctx, rawurl)
+				}
+			}
+		}
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
 }
