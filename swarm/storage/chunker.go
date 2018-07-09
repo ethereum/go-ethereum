@@ -16,6 +16,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -126,7 +127,7 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
+func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
 	jp := &JoinerParams{
 		ChunkerParams: ChunkerParams{
 			chunkSize: DefaultChunkSize,
@@ -137,14 +138,14 @@ func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
 		depth:  depth,
 	}
 
-	return NewTreeJoiner(jp).Join()
+	return NewTreeJoiner(jp).Join(ctx)
 }
 
 /*
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
+func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
@@ -156,7 +157,7 @@ func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(
 		},
 		size: size,
 	}
-	return NewTreeSplitter(tsp).Split()
+	return NewTreeSplitter(tsp).Split(ctx)
 }
 
 func NewTreeJoiner(params *JoinerParams) *TreeChunker {
@@ -224,7 +225,7 @@ func (tc *TreeChunker) decrementWorkerCount() {
 	tc.workerCount -= 1
 }
 
-func (tc *TreeChunker) Split() (k Address, wait func(), err error) {
+func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	if tc.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
@@ -380,7 +381,7 @@ type LazyChunkReader struct {
 	getter    Getter
 }
 
-func (tc *TreeChunker) Join() *LazyChunkReader {
+func (tc *TreeChunker) Join(ctx context.Context) *LazyChunkReader {
 	return &LazyChunkReader{
 		key:       tc.addr,
 		chunkSize: tc.chunkSize,

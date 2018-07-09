@@ -19,6 +19,7 @@
 package fuse
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -104,7 +105,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	}
 
 	log.Trace("swarmfs mount: getting manifest tree")
-	_, manifestEntryMap, err := swarmfs.swarmApi.BuildDirectoryTree(mhash, true)
+	_, manifestEntryMap, err := swarmfs.swarmApi.BuildDirectoryTree(context.TODO(), mhash, true)
 	if err != nil {
 		return nil, err
 	}

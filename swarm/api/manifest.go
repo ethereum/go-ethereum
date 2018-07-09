@@ -18,6 +18,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -61,20 +62,20 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *API) NewManifest(toEncrypt bool) (storage.Address, error) {
+func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
 	}
-	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait()
+	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
+	wait(ctx)
 	return key, err
 }
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(resourceAddr string) (storage.Address, error) {
+func (a *API) NewResourceManifest(ctx context.Context, resourceAddr string) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
 		Hash:        resourceAddr,
@@ -85,7 +86,7 @@ func (a *API) NewResourceManifest(resourceAddr string) (storage.Address, error) 
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)), false)
+	key, _, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
 	return key, err
 }
 
@@ -96,8 +97,8 @@ type ManifestWriter struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWriter(addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(a.fileStore, addr, quitC)
+func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -105,9 +106,8 @@ func (a *API) NewManifestWriter(addr storage.Address, quitC chan bool) (*Manifes
 }
 
 // AddEntry stores the given data and adds the resulting key to the manifest
-func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Address, error) {
-
-	key, _, err := m.api.Store(data, e.Size, m.trie.encrypted)
+func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (storage.Address, error) {
+	key, _, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(a.fileStore, addr, quitC)
+func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -204,10 +204,10 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via FileStore
-	manifestReader, isEncrypted := fileStore.Retrieve(hash)
+	manifestReader, isEncrypted := fileStore.Retrieve(ctx, hash)
 	log.Trace("reader retrieved", "key", hash)
 	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
 }
@@ -382,8 +382,12 @@ func (mt *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := mt.fileStore.Store(sr, int64(len(manifest)), mt.encrypted)
-	wait()
+	ctx := context.TODO()
+	key, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
+	if err2 != nil {
+		return err2
+	}
+	err2 = wait(ctx)
 	mt.ref = key
 	return err2
 }
@@ -391,7 +395,7 @@ func (mt *manifestTrie) recalcAndStore() error {
 func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(mt.fileStore, hash, quitC)
+		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return

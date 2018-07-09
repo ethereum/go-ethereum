@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -126,9 +127,10 @@ func (h *hasherStore) Close() {
 // Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
-func (h *hasherStore) Wait() {
+func (h *hasherStore) Wait(ctx context.Context) error {
 	<-h.closed
 	h.wg.Wait()
+	return nil
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Address {

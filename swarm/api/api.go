@@ -227,28 +227,28 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Han
 }
 
 // Upload to be used only in TEST
-func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
+func (a *API) Upload(ctx context.Context, uploadDir, index string, toEncrypt bool) (hash string, err error) {
 	fs := NewFileSystem(a)
 	hash, err = fs.Upload(uploadDir, index, toEncrypt)
 	return hash, err
 }
 
 // Retrieve FileStore reader API
-func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
-	return a.fileStore.Retrieve(addr)
+func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
+	return a.fileStore.Retrieve(ctx, addr)
 }
 
 // Store wraps the Store API call of the embedded FileStore
-func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
+func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(ctx context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
-	return a.fileStore.Store(data, size, toEncrypt)
+	return a.fileStore.Store(ctx, data, size, toEncrypt)
 }
 
 // ErrResolve is returned when an URI cannot be resolved from ENS.
 type ErrResolve error
 
 // Resolve resolves a URI to an Address using the MultiResolver.
-func (a *API) Resolve(uri *URI) (storage.Address, error) {
+func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
@@ -286,34 +286,37 @@ func (a *API) Resolve(uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of FileStore store
-func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
+func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := a.fileStore.Store(r, int64(len(content)), toEncrypt)
+	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.fileStore.Store(r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.fileStore.Store(ctx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
-	return key, func() {
-		waitContent()
-		waitManifest()
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
 	}, nil
 }
 
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
+func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
 	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(a.fileStore, manifestAddr, nil)
+	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -375,7 +378,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 				log.Trace("resource is multihash", "key", manifestAddr)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(a.fileStore, manifestAddr, nil)
+				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -410,7 +413,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		reader, _ = a.fileStore.Retrieve(contentAddr)
+		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
 		status = http.StatusNotFound
@@ -422,10 +425,10 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 }
 
 // Modify loads manifest and checks the content hash before recalculating and storing the manifest.
-func (a *API) Modify(addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
+func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(a.fileStore, addr, quitC)
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -449,7 +452,7 @@ func (a *API) Modify(addr storage.Address, path, contentHash, contentType string
 }
 
 // AddFile creates a new manifest entry, adds it to swarm, then adds a file to swarm.
-func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
+func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -457,7 +460,7 @@ func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bo
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.Resolve(uri)
+	mkey, err := a.Resolve(ctx, uri)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -476,13 +479,13 @@ func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bo
 		ModTime:     time.Now(),
 	}
 
-	mw, err := a.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(ctx, mkey, nil)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
-	fkey, err := mw.AddEntry(bytes.NewReader(content), entry)
+	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -496,11 +499,10 @@ func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bo
 	}
 
 	return fkey, newMkey.String(), nil
-
 }
 
 // RemoveFile removes a file entry in a manifest.
-func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
+func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -508,7 +510,7 @@ func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, 
 		apiRmFileFail.Inc(1)
 		return "", err
 	}
-	mkey, err := a.Resolve(uri)
+	mkey, err := a.Resolve(ctx, uri)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -519,7 +521,7 @@ func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, 
 		path = path[1:]
 	}
 
-	mw, err := a.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(ctx, mkey, nil)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -542,7 +544,7 @@ func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, 
 }
 
 // AppendFile removes old manifest, appends file entry to new manifest and adds it to Swarm.
-func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
+func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -552,7 +554,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 
 	buf := make([]byte, buffSize)
 
-	oldReader, _ := a.Retrieve(oldAddr)
+	oldReader, _ := a.Retrieve(ctx, oldAddr)
 	io.ReadAtLeast(oldReader, buf, int(offset))
 
 	newReader := bytes.NewReader(content)
@@ -575,7 +577,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.Resolve(uri)
+	mkey, err := a.Resolve(ctx, uri)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -586,7 +588,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 		path = path[1:]
 	}
 
-	mw, err := a.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(ctx, mkey, nil)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -606,7 +608,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 		ModTime:     time.Now(),
 	}
 
-	fkey, err := mw.AddEntry(io.Reader(combinedReader), entry)
+	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -620,23 +622,22 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 	}
 
 	return fkey, newMkey.String(), nil
-
 }
 
 // BuildDirectoryTree used by swarmfs_unix
-func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = a.Resolve(uri)
+	addr, err = a.Resolve(ctx, uri)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(a.fileStore, addr, quitC)
+	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
 	}
@@ -725,8 +726,8 @@ func (a *API) ResourceIsValidated() bool {
 }
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
-func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(a.fileStore, addr, nil)
+func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (storage.Address, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}

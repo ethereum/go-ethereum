@@ -47,7 +47,7 @@ func externalUnmount(mountPoint string) error {
 }
 
 func addFileToSwarm(sf *SwarmFile, content []byte, size int) error {
-	fkey, mhash, err := sf.mountInfo.swarmApi.AddFile(sf.mountInfo.LatestManifest, sf.path, sf.name, content, true)
+	fkey, mhash, err := sf.mountInfo.swarmApi.AddFile(context.TODO(), sf.mountInfo.LatestManifest, sf.path, sf.name, content, true)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func addFileToSwarm(sf *SwarmFile, content []byte, size int) error {
 }
 
 func removeFileFromSwarm(sf *SwarmFile) error {
-	mkey, err := sf.mountInfo.swarmApi.RemoveFile(sf.mountInfo.LatestManifest, sf.path, sf.name, true)
+	mkey, err := sf.mountInfo.swarmApi.RemoveFile(context.TODO(), sf.mountInfo.LatestManifest, sf.path, sf.name, true)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func removeDirectoryFromSwarm(sd *SwarmDir) error {
 }
 
 func appendToExistingFileInSwarm(sf *SwarmFile, content []byte, offset int64, length int64) error {
-	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.addr, offset, length, true)
+	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(context.TODO(), sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.addr, offset, length, true)
 	if err != nil {
 		return err
 	}

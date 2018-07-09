@@ -385,7 +385,7 @@ func (ctl *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount 
 	// generate new keys to send
 	for i := 0; i < len(recvkeyids); i++ {
 		var err error
-		recvkeyids[i], err = ctl.pss.generateSymmetricKey(*topic, to, true)
+		recvkeyids[i], err = ctl.pss.GenerateSymmetricKey(*topic, to, true)
 		if err != nil {
 			return []string{}, fmt.Errorf("set receive symkey fail (pubkey %x topic %x): %v", pubkeyid, topic, err)
 		}

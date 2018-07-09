@@ -37,8 +37,14 @@ import (
 )
 
 func generateEndpoints(scheme string, cluster string, from int, to int) {
+	if cluster == "prod" {
+		cluster = ""
+	} else {
+		cluster = cluster + "."
+	}
+
 	for port := from; port <= to; port++ {
-		endpoints = append(endpoints, fmt.Sprintf("%s://%v.%s.swarm-gateways.net", scheme, port, cluster))
+		endpoints = append(endpoints, fmt.Sprintf("%s://%v.%sswarm-gateways.net", scheme, port, cluster))
 	}
 
 	if includeLocalhost {

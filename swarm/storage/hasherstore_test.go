@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -60,7 +61,10 @@ func TestHasherStore(t *testing.T) {
 		hasherStore.Close()
 
 		// Wait until chunks are really stored
-		hasherStore.Wait()
+		err = hasherStore.Wait(context.TODO())
+		if err != nil {
+			t.Fatalf("Expected no error got \"%v\"", err)
+		}
 
 		// Get the first chunk
 		retrievedChunkData1, err := hasherStore.Get(key1)
