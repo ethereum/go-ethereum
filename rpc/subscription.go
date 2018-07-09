@@ -25,14 +25,14 @@ import (
 var (
 	// ErrNotificationsUnsupported is returned when the connection doesn't support notifications
 	ErrNotificationsUnsupported = errors.New("notifications not supported")
-	// ErrNotificationNotFound is returned when the notification for the given id is not found
+	// ErrSubscriptionNotFound is returned when the notification for the given id is not found
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
 
 // ID defines a pseudo random number that is used to identify RPC subscriptions.
 type ID string
 
-// a Subscription is created by a notifier and tight to that notifier. The client can use
+// Subscription is created by a notifier and tight to that notifier. The client can use
 // this subscription to wait for an unsubscribe request for the client, see Err().
 type Subscription struct {
 	ID        ID

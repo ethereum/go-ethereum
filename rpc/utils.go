@@ -215,12 +215,12 @@ func NewID() ID {
 		}
 	}
 
-	rpcId := hex.EncodeToString(id)
+	rpcID := hex.EncodeToString(id)
 	// rpc ID's are RPC quantities, no leading zero's and 0 is 0x0
-	rpcId = strings.TrimLeft(rpcId, "0")
-	if rpcId == "" {
-		rpcId = "0"
+	rpcID = strings.TrimLeft(rpcID, "0")
+	if rpcID == "" {
+		rpcID = "0"
 	}
 
-	return ID("0x" + rpcId)
+	return ID("0x" + rpcID)
 }

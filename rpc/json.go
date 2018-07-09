@@ -40,13 +40,13 @@ const (
 type jsonRequest struct {
 	Method  string          `json:"method"`
 	Version string          `json:"jsonrpc"`
-	Id      json.RawMessage `json:"id,omitempty"`
+	ID      json.RawMessage `json:"id,omitempty"`
 	Payload json.RawMessage `json:"params,omitempty"`
 }
 
 type jsonSuccessResponse struct {
 	Version string      `json:"jsonrpc"`
-	Id      interface{} `json:"id,omitempty"`
+	ID      interface{} `json:"id,omitempty"`
 	Result  interface{} `json:"result"`
 }
 
@@ -58,7 +58,7 @@ type jsonError struct {
 
 type jsonErrResponse struct {
 	Version string      `json:"jsonrpc"`
-	Id      interface{} `json:"id,omitempty"`
+	ID      interface{} `json:"id,omitempty"`
 	Error   jsonError   `json:"error"`
 }
 
@@ -150,17 +150,17 @@ func (c *jsonCodec) ReadRequestHeaders() ([]rpcRequest, bool, Error) {
 	return parseRequest(incomingMsg)
 }
 
-// checkReqId returns an error when the given reqId isn't valid for RPC method calls.
+// checkReqID returns an error when the given reqID isn't valid for RPC method calls.
 // valid id's are strings, numbers or null
-func checkReqId(reqId json.RawMessage) error {
-	if len(reqId) == 0 {
+func checkReqID(reqID json.RawMessage) error {
+	if len(reqID) == 0 {
 		return fmt.Errorf("missing request id")
 	}
-	if _, err := strconv.ParseFloat(string(reqId), 64); err == nil {
+	if _, err := strconv.ParseFloat(string(reqID), 64); err == nil {
 		return nil
 	}
 	var str string
-	if err := json.Unmarshal(reqId, &str); err == nil {
+	if err := json.Unmarshal(reqID, &str); err == nil {
 		return nil
 	}
 	return fmt.Errorf("invalid request id")
@@ -175,13 +175,13 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 		return nil, false, &invalidMessageError{err.Error()}
 	}
 
-	if err := checkReqId(in.Id); err != nil {
+	if err := checkReqID(in.ID); err != nil {
 		return nil, false, &invalidMessageError{err.Error()}
 	}
 
 	// subscribe are special, they will always use `subscribeMethod` as first param in the payload
 	if strings.HasSuffix(in.Method, subscribeMethodSuffix) {
-		reqs := []rpcRequest{{id: &in.Id, isPubSub: true}}
+		reqs := []rpcRequest{{id: &in.ID, isPubSub: true}}
 		if len(in.Payload) > 0 {
 			// first param must be subscription name
 			var subscribeMethod [1]string
@@ -198,7 +198,7 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 	}
 
 	if strings.HasSuffix(in.Method, unsubscribeMethodSuffix) {
-		return []rpcRequest{{id: &in.Id, isPubSub: true,
+		return []rpcRequest{{id: &in.ID, isPubSub: true,
 			method: in.Method, params: in.Payload}}, false, nil
 	}
 
@@ -209,10 +209,10 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 
 	// regular RPC call
 	if len(in.Payload) == 0 {
-		return []rpcRequest{{service: elems[0], method: elems[1], id: &in.Id}}, false, nil
+		return []rpcRequest{{service: elems[0], method: elems[1], id: &in.ID}}, false, nil
 	}
 
-	return []rpcRequest{{service: elems[0], method: elems[1], id: &in.Id, params: in.Payload}}, false, nil
+	return []rpcRequest{{service: elems[0], method: elems[1], id: &in.ID, params: in.Payload}}, false, nil
 }
 
 // parseBatchRequest will parse a batch request into a collection of requests from the given RawMessage, an indication
@@ -225,11 +225,11 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 
 	requests := make([]rpcRequest, len(in))
 	for i, r := range in {
-		if err := checkReqId(r.Id); err != nil {
+		if err := checkReqID(r.ID); err != nil {
 			return nil, false, &invalidMessageError{err.Error()}
 		}
 
-		id := &in[i].Id
+		id := &in[i].ID
 
 		// subscribe are special, they will always use `subscriptionMethod` as first param in the payload
 		if strings.HasSuffix(r.Method, subscribeMethodSuffix) {
@@ -325,13 +325,13 @@ func (c *jsonCodec) CreateResponse(id interface{}, reply interface{}) interface{
 
 // CreateErrorResponse will create a JSON-RPC error response with the given id and error.
 func (c *jsonCodec) CreateErrorResponse(id interface{}, err Error) interface{} {
-	return &jsonErrResponse{Version: jsonrpcVersion, Id: id, Error: jsonError{Code: err.ErrorCode(), Message: err.Error()}}
+	return &jsonErrResponse{Version: jsonrpcVersion, ID: id, Error: jsonError{Code: err.ErrorCode(), Message: err.Error()}}
 }
 
 // CreateErrorResponseWithInfo will create a JSON-RPC error response with the given id and error.
 // info is optional and contains additional information about the error. When an empty string is passed it is ignored.
 func (c *jsonCodec) CreateErrorResponseWithInfo(id interface{}, err Error, info interface{}) interface{} {
-	return &jsonErrResponse{Version: jsonrpcVersion, Id: id,
+	return &jsonErrResponse{Version: jsonrpcVersion, ID: id,
 		Error: jsonError{Code: err.ErrorCode(), Message: err.Error(), Data: info}}
 }
 

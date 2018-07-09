@@ -69,8 +69,8 @@ func TestJSONRequestParsing(t *testing.T) {
 		t.Fatalf("Expected method 'Add' but got '%s'", requests[0].method)
 	}
 
-	if rawId, ok := requests[0].id.(*json.RawMessage); ok {
-		id, e := strconv.ParseInt(string(*rawId), 0, 64)
+	if rawID, ok := requests[0].id.(*json.RawMessage); ok {
+		id, e := strconv.ParseInt(string(*rawID), 0, 64)
 		if e != nil {
 			t.Fatalf("%v", e)
 		}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 )
 
+// Version components of the current release.
 const (
 	VersionMajor = 1          // Major version component of the current release
 	VersionMinor = 8          // Minor version component of the current release
