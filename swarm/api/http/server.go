@@ -899,7 +899,7 @@ func (s *Server) getManifestList(ctx context.Context, addr storage.Address, pref
 		return api.ErrSkipManifest
 	})
 
-	return list, nil
+	return list, err
 }
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
