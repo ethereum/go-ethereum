@@ -297,6 +297,8 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
+	case isPrivateNetwork(config):
+		return parent.Difficulty
 	case config.IsByzantium(next):
 		return calcDifficultyByzantium(time, parent)
 	case config.IsHomestead(next):
@@ -304,6 +306,15 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	default:
 		return calcDifficultyFrontier(time, parent)
 	}
+}
+
+// isPrivateNetwork is a helper function to determine if the current
+// chain is a private network or not based on the configurations
+// ChainID.
+func isPrivateNetwork(config *params.ChainConfig) bool {
+	return config.ChainID != params.MainnetChainConfig.ChainID &&
+		config.ChainID != params.TestChainConfig.ChainID &&
+		config.ChainID != params.RinkebyChainConfig.ChainID
 }
 
 // Some weird constants to avoid constant memory allocs for them.

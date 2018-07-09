@@ -84,3 +84,21 @@ func TestCalcDifficulty(t *testing.T) {
 		}
 	}
 }
+
+func TestIsPrivateNetwork(t *testing.T) {
+	tests := make(map[*big.Int]bool)
+
+	tests[big.NewInt(314)] = true
+	tests[params.MainnetChainConfig.ChainID] = false
+	tests[params.TestChainConfig.ChainID] = false
+	tests[params.RinkebyChainConfig.ChainID] = false
+
+	for chainID, expected := range tests {
+		config := &params.ChainConfig{ChainID: chainID}
+
+		isPrivate := isPrivateNetwork(config)
+		if isPrivate != expected {
+			t.Error("Private chain test failed. Expected", expected, "but determined", isPrivate)
+		}
+	}
+}
