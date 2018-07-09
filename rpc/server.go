@@ -29,7 +29,7 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-const MetadataApi = "rpc"
+const MetadataAPI = "rpc"
 
 // CodecOption specifies which type of messages this codec supports
 type CodecOption int
@@ -53,7 +53,7 @@ func NewServer() *Server {
 	// register a default service which will provide meta information about the RPC service such as the services and
 	// methods it offers.
 	rpcService := &RPCService{server}
-	server.RegisterName(MetadataApi, rpcService)
+	server.RegisterName(MetadataAPI, rpcService)
 
 	return server
 }
