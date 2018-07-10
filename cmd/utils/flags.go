@@ -145,6 +145,10 @@ var (
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
 	}
+	DeveloperPasswordFlag = cli.BoolFlag{
+		Name:  "dev.password",
+		Usage: "Password to unlock first account in custom keystore and use it as developer coinbase account",
+	}
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",
 		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
@@ -1128,16 +1132,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		var (
 			developer accounts.Account
 			err       error
+			password  string
 		)
+		password = ctx.GlobalString(DeveloperPasswordFlag.Name)
 		if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
-			developer, err = ks.NewAccount("")
+			developer, err = ks.NewAccount(password)
 			if err != nil {
 				Fatalf("Failed to create developer account: %v", err)
 			}
 		}
-		if err := ks.Unlock(developer, ""); err != nil {
+		if err := ks.Unlock(developer, password); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
 		log.Info("Using developer account", "address", developer.Address)
