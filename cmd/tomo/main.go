@@ -99,8 +99,8 @@ var (
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
-		utils.MinerThreadsFlag,
-		utils.MiningEnabledFlag,
+		utils.StakerThreadsFlag,
+		utils.StakingEnabledFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
@@ -283,10 +283,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}()
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
+	if ctx.GlobalBool(utils.StakingEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
 		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support mining")
+			utils.Fatalf("Light clients do not support staking")
 		}
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
@@ -299,9 +299,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				utils.Fatalf("Can't verify validator permission: %v", err)
 			}
 			if ok {
-				log.Info("Validator found. Enabling mining mode...")
+				log.Info("Validator found. Enabling staking mode...")
 				// Use a reduced number of threads if requested
-				if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+				if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 					type threaded interface {
 						SetThreads(threads int)
 					}
@@ -315,7 +315,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					utils.Fatalf("Failed to start staking: %v", err)
 				}
 				started = true
-				log.Info("Enabled mining node!!!")
+				log.Info("Enabled staking node!!!")
 			}
 			defer close(core.CheckpointCh)
 			defer close(core.M1Ch)
@@ -329,15 +329,15 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					}
 					if !ok {
 						if started {
-							log.Info("Only masternode can propose and verify blocks. Cancelling mining on this node...")
-							ethereum.StopMining()
+							log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
+							ethereum.StopStaking()
 							started = false
 							log.Info("Cancelled mining mode!!!")
 						}
 					} else if !started {
-						log.Info("Masternode found. Enabling mining mode...")
+						log.Info("Masternode found. Enabling staking mode...")
 						// Use a reduced number of threads if requested
-						if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 							type threaded interface {
 								SetThreads(threads int)
 							}
@@ -348,10 +348,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						// Set the gas price to the limits from the CLI and start mining
 						ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
 						if err := ethereum.StartStaking(true); err != nil {
-							utils.Fatalf("Failed to start mining: %v", err)
+							utils.Fatalf("Failed to start staking: %v", err)
 						}
 						started = true
-						log.Info("Enabled mining node!!!")
+						log.Info("Enabled staking node!!!")
 					}
 				case <-core.M1Ch:
 					log.Info("It's time to update new set of masternodes for the next epoch...")
