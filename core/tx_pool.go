@@ -402,7 +402,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	}
 	statedb, err := pool.chain.StateAt(newHead.Root)
 	if err != nil {
-		log.Error("Failed to reset txpool state", "err", err)
+		//log.Error("Failed to reset txpool state", "err", err)
 		return
 	}
 	pool.currentState = statedb
