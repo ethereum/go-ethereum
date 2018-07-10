@@ -124,7 +124,7 @@ func TestUDP_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.table.Close()
 
-	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version})
+	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4})
 	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: []byte{}, Expiration: futureExp})
 	test.packetIn(errUnknownNode, findnodePacket, &findnode{Expiration: futureExp})
 	test.packetIn(errUnsolicitedReply, neighborsPacket, &neighbors{Expiration: futureExp})
@@ -247,7 +247,7 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateBondTime(PubkeyID(&test.remotekey.PublicKey), time.Now())
+	test.table.db.updateLastPongReceived(PubkeyID(&test.remotekey.PublicKey), time.Now())
 
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
@@ -273,10 +273,12 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.table.Close()
 
+	rid := PubkeyID(&test.remotekey.PublicKey)
+	test.table.db.updateLastPingReceived(rid, time.Now())
+
 	// queue a pending findnode request
 	resultc, errc := make(chan []*Node), make(chan error)
 	go func() {
-		rid := PubkeyID(&test.remotekey.PublicKey)
 		ns, err := test.udp.findnode(rid, test.remoteaddr, testTarget)
 		if err != nil && len(ns) == 0 {
 			errc <- err
@@ -328,7 +330,7 @@ func TestUDP_successfulPing(t *testing.T) {
 	defer test.table.Close()
 
 	// The remote side sends a ping packet to initiate the exchange.
-	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
+	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 
 	// the ping is replied to.
 	test.waitPacketOut(func(p *pong) {

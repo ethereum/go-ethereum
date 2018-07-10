@@ -125,12 +125,12 @@ func (t *Topics) Append(topics *Hashes) {
 	t.topics = append(t.topics, topics.hashes)
 }
 
-// FilterQuery contains options for contact log filtering.
+// FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
 	query ethereum.FilterQuery
 }
 
-// NewFilterQuery creates an empty filter query for contact log filtering.
+// NewFilterQuery creates an empty filter query for contract log filtering.
 func NewFilterQuery() *FilterQuery {
 	return new(FilterQuery)
 }

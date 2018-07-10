@@ -81,10 +81,10 @@
 			"revisionTime": "2017-02-01T22:58:49Z"
 		},
 		{
-			"checksumSHA1": "lutCa+IVM60R1OYBm9RtDAW50Ys=",
+			"checksumSHA1": "Ad8LPSCP9HctFrmskh+S5HpHXcs=",
 			"path": "github.com/docker/docker/pkg/reexec",
-			"revision": "83ee902ecc3790c33c1e2d87334074436056bb49",
-			"revisionTime": "2017-04-22T21:51:12Z"
+			"revision": "8e610b2b55bfd1bfa9436ab110d311f5e8a74dcb",
+			"revisionTime": "2018-06-25T18:44:42Z"
 		},
 		{
 			"checksumSHA1": "zYnPsNAVm1/ViwCkN++dX2JQhBo=",
