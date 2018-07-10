@@ -409,7 +409,7 @@ func (self *worker) commitNewWork() {
 				return
 			}
 			if !clique.YourTurn(snap, parent.Coinbase(), self.coinbase) {
-				log.Info("Not our turn to commit block", "wait" , nil)
+				log.Info("Not our turn to commit block. Wait for next time")
 				return
 			}
 		}

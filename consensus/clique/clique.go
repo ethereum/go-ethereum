@@ -47,7 +47,8 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime      = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	genesisCoinBase = "0x0000000000000000000000000000000000000000"
 )
 
 // Clique proof-of-authority protocol constants.
@@ -384,7 +385,10 @@ func position(list []common.Address, x common.Address) int {
 }
 
 func YourTurn(snap *Snapshot, pre, cur common.Address) bool {
-	return (position(snap.signers(), pre)+1) % len(snap.signers()) == position(snap.signers(), cur)
+	preIndex := position(snap.signers(), pre)
+	curIndex := position(snap.signers(), cur)
+	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	return (preIndex+1)%len(snap.signers()) == curIndex || pre.String() == genesisCoinBase
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -526,7 +530,8 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 // header for running the transactions on top.
 func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
-	header.Coinbase = common.Address{}
+	//FIXME: keep header.Coinbase == miner's address
+	//header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
