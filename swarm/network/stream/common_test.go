@@ -18,135 +18,73 @@ package stream
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
-	"sync/atomic"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock/db"
+	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
 	colorable "github.com/mattn/go-colorable"
 )
 
 var (
-	deliveries   map[discover.NodeID]*Delivery
-	stores       map[discover.NodeID]storage.ChunkStore
-	toAddr       func(discover.NodeID) *network.BzzAddr
-	peerCount    func(discover.NodeID) int
-	adapter      = flag.String("adapter", "sim", "type of simulation: sim|exec|docker")
 	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
 	chunks       = flag.Int("chunks", 0, "number of chunks")
 	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
-)
+	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
+	waitKademlia = flag.Bool("waitkademlia", true, "wait for healthy kademlia before checking files availability")
 
-var (
-	defaultSkipCheck  bool
-	waitPeerErrC      chan error
-	chunkSize         = 4096
-	registries        map[discover.NodeID]*TestRegistry
-	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
-	getRetrieveFunc   = defaultRetrieveFunc
-	subscriptionCount = 0
-	globalStore       mock.GlobalStorer
-	globalStoreDir    string
-)
+	bucketKeyDB        = simulation.BucketKey("db")
+	bucketKeyStore     = simulation.BucketKey("store")
+	bucketKeyFileStore = simulation.BucketKey("filestore")
+	bucketKeyNetStore  = simulation.BucketKey("netstore")
+	bucketKeyDelivery  = simulation.BucketKey("delivery")
+	bucketKeyRegistry  = simulation.BucketKey("registry")
 
-var services = adapters.Services{
-	"streamer":          NewStreamerService,
-	"intervalsStreamer": newIntervalsStreamerService,
-}
+	chunkSize = 4096
+	pof       = pot.DefaultPof(256)
+)
 
 func init() {
 	flag.Parse()
-	// register the Delivery service which will run as a devp2p
-	// protocol when using the exec adapter
-	adapters.RegisterServices(services)
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-func createGlobalStore() {
-	var err error
-	globalStoreDir, err = ioutil.TempDir("", "global.store")
+func createGlobalStore() (string, *mockdb.GlobalStore, error) {
+	var globalStore *mockdb.GlobalStore
+	globalStoreDir, err := ioutil.TempDir("", "global.store")
 	if err != nil {
 		log.Error("Error initiating global store temp directory!", "err", err)
-		return
+		return "", nil, err
 	}
-	globalStore, err = db.NewGlobalStore(globalStoreDir)
+	globalStore, err = mockdb.NewGlobalStore(globalStoreDir)
 	if err != nil {
 		log.Error("Error initiating global store!", "err", err)
+		return "", nil, err
 	}
-}
-
-// NewStreamerService
-func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
-	var err error
-	id := ctx.Config.ID
-	addr := toAddr(id)
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	stores[id], err = createStoreFunc(id, addr)
-	if err != nil {
-		return nil, err
-	}
-	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
-	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-		SkipCheck:  defaultSkipCheck,
-		DoRetrieve: false,
-	})
-	RegisterSwarmSyncerServer(r, db)
-	RegisterSwarmSyncerClient(r, db)
-	go func() {
-		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
-	}()
-	fileStore := storage.NewFileStore(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewFileStoreParams())
-	testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
-	registries[id] = testRegistry
-	return testRegistry, nil
-}
-
-func defaultRetrieveFunc(id discover.NodeID) func(ctx context.Context, chunk *storage.Chunk) error {
-	return nil
-}
-
-func datadirsCleanup() {
-	for _, id := range ids {
-		os.RemoveAll(datadirs[id])
-	}
-	if globalStoreDir != "" {
-		os.RemoveAll(globalStoreDir)
-	}
-}
-
-//local stores need to be cleaned up after the sim is done
-func localStoreCleanup() {
-	log.Info("Cleaning up...")
-	for _, id := range ids {
-		registries[id].Close()
-		stores[id].Close()
-	}
-	log.Info("Local store cleanup done")
+	return globalStoreDir, globalStore, nil
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
@@ -175,7 +113,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-		SkipCheck: defaultSkipCheck,
+		SkipCheck: false,
 	})
 	teardown := func() {
 		streamer.Close()
@@ -203,33 +141,6 @@ func waitForPeers(streamer *Registry, timeout time.Duration, expectedPeers int) 
 		case <-timeoutTimer.C:
 			return errors.New("timeout")
 		}
-	}
-}
-
-type roundRobinStore struct {
-	index  uint32
-	stores []storage.ChunkStore
-}
-
-func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
-	return &roundRobinStore{
-		stores: stores,
-	}
-}
-
-func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (*storage.Chunk, error) {
-	return nil, errors.New("get not well defined on round robin store")
-}
-
-func (rrs *roundRobinStore) Put(ctx context.Context, chunk *storage.Chunk) {
-	i := atomic.AddUint32(&rrs.index, 1)
-	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(ctx, chunk)
-}
-
-func (rrs *roundRobinStore) Close() {
-	for _, store := range rrs.stores {
-		store.Close()
 	}
 }
 
@@ -435,15 +346,74 @@ func (s *testExternalServer) GetData(context.Context, []byte) ([]byte, error) {
 
 func (s *testExternalServer) Close() {}
 
-// Sets the global value defaultSkipCheck.
-// It should be used in test function defer to reset the global value
-// to the original value.
-//
-// defer setDefaultSkipCheck(defaultSkipCheck)
-// defaultSkipCheck = skipCheck
-//
-// This works as defer function arguments evaluations are evaluated as ususal,
-// but only the function body invocation is deferred.
-func setDefaultSkipCheck(skipCheck bool) {
-	defaultSkipCheck = skipCheck
+func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string, error) {
+	nodes := sim.UpNodeIDs()
+	nodeCnt := len(nodes)
+	log.Debug(fmt.Sprintf("Uploading %d files to nodes", nodeCnt))
+	//array holding generated files
+	rfiles := make([]string, nodeCnt)
+	//array holding the root hashes of the files
+	rootAddrs := make([]storage.Address, nodeCnt)
+
+	var err error
+	//for every node, generate a file and upload
+	for i, id := range nodes {
+		item, ok := sim.NodeItem(id, bucketKeyFileStore)
+		if !ok {
+			return nil, nil, fmt.Errorf("Error accessing localstore")
+		}
+		fileStore := item.(*storage.FileStore)
+		//generate a file
+		rfiles[i], err = generateRandomFile()
+		if err != nil {
+			return nil, nil, err
+		}
+		//store it (upload it) on the FileStore
+		ctx := context.TODO()
+		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
+		log.Debug("Uploaded random string file to node")
+		if err != nil {
+			return nil, nil, err
+		}
+		err = wait(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		rootAddrs[i] = rk
+	}
+	return rootAddrs, rfiles, nil
+}
+
+//generate a random file (string)
+func generateRandomFile() (string, error) {
+	//generate a random file size between minFileSize and maxFileSize
+	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
+	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
+	b := make([]byte, fileSize*1024)
+	_, err := crand.Read(b)
+	if err != nil {
+		log.Error("Error generating random file.", "err", err)
+		return "", err
+	}
+	return string(b), nil
+}
+
+//create a local store for the given node
+func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
+	var datadir string
+	var err error
+	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
+	if err != nil {
+		return nil, "", err
+	}
+	var store storage.ChunkStore
+	params := storage.NewDefaultLocalStoreParams()
+	params.ChunkDbPath = datadir
+	params.BaseKey = addr.Over()
+	store, err = storage.NewTestLocalStoreForAddr(params)
+	if err != nil {
+		os.RemoveAll(datadir)
+		return nil, "", err
+	}
+	return store, datadir, nil
 }

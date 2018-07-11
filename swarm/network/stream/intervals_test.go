@@ -22,17 +22,17 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -42,31 +42,6 @@ var (
 	externalStreamSessionAt uint64 = 50
 	externalStreamMaxKeys   uint64 = 100
 )
-
-func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
-	id := ctx.Config.ID
-	addr := toAddr(id)
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
-	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-		SkipCheck: defaultSkipCheck,
-	})
-
-	r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return newTestExternalClient(db), nil
-	})
-	r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
-		return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
-	})
-
-	go func() {
-		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
-	}()
-	return &TestExternalRegistry{r}, nil
-}
 
 func TestIntervals(t *testing.T) {
 	testIntervals(t, true, nil, false)
@@ -82,236 +57,229 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	nodes := 2
 	chunkCount := dataChunkCount
 
-	defer setDefaultSkipCheck(defaultSkipCheck)
-	defaultSkipCheck = skipCheck
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 
-	toAddr = network.NewAddrFromNodeID
-	conf := &streamTesting.RunConfig{
-		Adapter:        *adapter,
-		NodeCount:      nodes,
-		ConnLevel:      1,
-		ToAddr:         toAddr,
-		Services:       services,
-		DefaultService: "intervalsStreamer",
-	}
-
-	sim, teardown, err := streamTesting.NewSimulation(conf)
-	var rpcSubscriptionsWg sync.WaitGroup
-	defer func() {
-		rpcSubscriptionsWg.Wait()
-		teardown()
-	}()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
-	for i, id := range sim.IDs {
-		stores[id] = sim.Stores[i]
-	}
-
-	peerCount = func(id discover.NodeID) int {
-		return 1
-	}
-
-	fileStore := storage.NewFileStore(sim.Stores[0], storage.NewFileStoreParams())
-	size := chunkCount * chunkSize
-	ctx := context.TODO()
-	_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = wait(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	errc := make(chan error, 1)
-	waitPeerErrC = make(chan error)
-	quitC := make(chan struct{})
-	defer close(quitC)
-
-	action := func(ctx context.Context) error {
-		i := 0
-		for err := range waitPeerErrC {
+			id := ctx.Config.ID
+			addr := network.NewAddrFromNodeID(id)
+			store, datadir, err := createTestLocalStorageForId(id, addr)
 			if err != nil {
-				return fmt.Errorf("error waiting for peers: %s", err)
+				return nil, nil, err
 			}
-			i++
-			if i == nodes {
-				break
+			bucket.Store(bucketKeyStore, store)
+			cleanup = func() {
+				store.Close()
+				os.RemoveAll(datadir)
 			}
-		}
+			localStore := store.(*storage.LocalStore)
+			db := storage.NewDBAPI(localStore)
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			delivery := NewDelivery(kad, db)
 
-		id := sim.IDs[1]
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+				SkipCheck: skipCheck,
+			})
 
-		err := sim.CallClient(id, func(client *rpc.Client) error {
+			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
+				return newTestExternalClient(db), nil
+			})
+			r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
+				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
+			})
 
-			sid := sim.IDs[0]
+			fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
+			bucket.Store(bucketKeyFileStore, fileStore)
 
-			doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
-			if err != nil {
-				return err
-			}
-			rpcSubscriptionsWg.Add(1)
-			go func() {
-				<-doneC
-				rpcSubscriptionsWg.Done()
-			}()
-			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
-			defer cancel()
+			testRegistry := &TestExternalRegistry{r}
 
-			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, "", live), history, Top)
-			if err != nil {
-				return err
-			}
+			return testRegistry, cleanup, nil
 
-			liveErrC := make(chan error)
-			historyErrC := make(chan error)
-
-			go func() {
-				if !live {
-					close(liveErrC)
-					return
-				}
-
-				var err error
-				defer func() {
-					liveErrC <- err
-				}()
-
-				// live stream
-				liveHashesChan := make(chan []byte)
-				liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, "", true))
-				if err != nil {
-					return
-				}
-				defer liveSubscription.Unsubscribe()
-
-				i := externalStreamSessionAt
-
-				// we have subscribed, enable notifications
-				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, "", true))
-				if err != nil {
-					return
-				}
-
-				for {
-					select {
-					case hash := <-liveHashesChan:
-						h := binary.BigEndian.Uint64(hash)
-						if h != i {
-							err = fmt.Errorf("expected live hash %d, got %d", i, h)
-							return
-						}
-						i++
-						if i > externalStreamMaxKeys {
-							return
-						}
-					case err = <-liveSubscription.Err():
-						return
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
-
-			go func() {
-				if live && history == nil {
-					close(historyErrC)
-					return
-				}
-
-				var err error
-				defer func() {
-					historyErrC <- err
-				}()
-
-				// history stream
-				historyHashesChan := make(chan []byte)
-				historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, "", false))
-				if err != nil {
-					return
-				}
-				defer historySubscription.Unsubscribe()
-
-				var i uint64
-				historyTo := externalStreamMaxKeys
-				if history != nil {
-					i = history.From
-					if history.To != 0 {
-						historyTo = history.To
-					}
-				}
-
-				// we have subscribed, enable notifications
-				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, "", false))
-				if err != nil {
-					return
-				}
-
-				for {
-					select {
-					case hash := <-historyHashesChan:
-						h := binary.BigEndian.Uint64(hash)
-						if h != i {
-							err = fmt.Errorf("expected history hash %d, got %d", i, h)
-							return
-						}
-						i++
-						if i > historyTo {
-							return
-						}
-					case err = <-historySubscription.Err():
-						return
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
-
-			if err := <-liveErrC; err != nil {
-				return err
-			}
-			if err := <-historyErrC; err != nil {
-				return err
-			}
-
-			return nil
-		})
-		return err
-	}
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		select {
-		case err := <-errc:
-			return false, err
-		case <-ctx.Done():
-			return false, ctx.Err()
-		default:
-		}
-		return true, nil
-	}
-
-	conf.Step = &simulations.Step{
-		Action:  action,
-		Trigger: streamTesting.Trigger(10*time.Millisecond, quitC, sim.IDs[0]),
-		Expect: &simulations.Expectation{
-			Nodes: sim.IDs[1:1],
-			Check: check,
 		},
-	}
-	startedAt := time.Now()
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	result, err := sim.Run(ctx, conf)
-	finishedAt := time.Now()
+	})
+	defer sim.Close()
+
+	log.Info("Adding nodes to simulation")
+	_, err := sim.AddNodesAndConnectFull(nodes)
 	if err != nil {
-		t.Fatalf("Setting up simulation failed: %v", err)
+		t.Fatal(err)
 	}
+
+	ctx := context.Background()
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		nodeIDs := sim.UpNodeIDs()
+		storer := nodeIDs[0]
+		checker := nodeIDs[1]
+
+		item, ok := sim.NodeItem(storer, bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+
+		size := chunkCount * chunkSize
+		_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		if err != nil {
+			log.Error("Store error: %v", "err", err)
+			t.Fatal(err)
+		}
+		err = wait(ctx)
+		if err != nil {
+			log.Error("Wait error: %v", "err", err)
+			t.Fatal(err)
+		}
+
+		client, err := sim.Net.GetNode(checker).Client()
+		if err != nil {
+			log.Error("Get Client error: %v", "err", err)
+			return err
+		}
+		ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
+		defer cancel()
+		err = client.CallContext(ctx, nil, "stream_subscribeStream", storer, NewStream(externalStreamName, "", live), history, Top)
+		if err != nil {
+			log.Error("Stream subscribe error: %v", "err", err)
+			return err
+		}
+
+		liveErrC := make(chan error)
+		historyErrC := make(chan error)
+
+		if *waitKademlia {
+			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+				log.Error("WaitKademlia error: %v", "err", err)
+				return err
+			}
+		}
+
+		log.Debug("Watching for disconnections")
+		disconnections := sim.PeerEvents(
+			context.Background(),
+			sim.NodeIDs(),
+			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+		)
+
+		go func() {
+			for d := range disconnections {
+				if d.Error != nil {
+					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+					t.Fatal(d.Error)
+				}
+			}
+		}()
+
+		go func() {
+			if !live {
+				close(liveErrC)
+				return
+			}
+
+			var err error
+			defer func() {
+				liveErrC <- err
+			}()
+
+			// live stream
+			liveHashesChan := make(chan []byte)
+			liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", storer, NewStream(externalStreamName, "", true))
+			if err != nil {
+				log.Error("Subscription error: %v", "err", err)
+				return
+			}
+			defer liveSubscription.Unsubscribe()
+			i := externalStreamSessionAt
+
+			// we have subscribed, enable notifications
+			err = client.CallContext(ctx, nil, "stream_enableNotifications", storer, NewStream(externalStreamName, "", true))
+			if err != nil {
+				return
+			}
+
+			for {
+				select {
+				case hash := <-liveHashesChan:
+					h := binary.BigEndian.Uint64(hash)
+					if h != i {
+						err = fmt.Errorf("expected live hash %d, got %d", i, h)
+						return
+					}
+					i++
+					if i > externalStreamMaxKeys {
+						return
+					}
+				case err = <-liveSubscription.Err():
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
+		go func() {
+			if live && history == nil {
+				close(historyErrC)
+				return
+			}
+
+			var err error
+			defer func() {
+				historyErrC <- err
+			}()
+
+			// history stream
+			historyHashesChan := make(chan []byte)
+			historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", storer, NewStream(externalStreamName, "", false))
+			if err != nil {
+				return
+			}
+			defer historySubscription.Unsubscribe()
+
+			var i uint64
+			historyTo := externalStreamMaxKeys
+			if history != nil {
+				i = history.From
+				if history.To != 0 {
+					historyTo = history.To
+				}
+			}
+
+			// we have subscribed, enable notifications
+			err = client.CallContext(ctx, nil, "stream_enableNotifications", storer, NewStream(externalStreamName, "", false))
+			if err != nil {
+				return
+			}
+
+			for {
+				select {
+				case hash := <-historyHashesChan:
+					h := binary.BigEndian.Uint64(hash)
+					if h != i {
+						err = fmt.Errorf("expected history hash %d, got %d", i, h)
+						return
+					}
+					i++
+					if i > historyTo {
+						return
+					}
+				case err = <-historySubscription.Err():
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
+		if err := <-liveErrC; err != nil {
+			return err
+		}
+		if err := <-historyErrC; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	if result.Error != nil {
-		t.Fatalf("Simulation failed: %s", result.Error)
+		t.Fatal(result.Error)
 	}
-	streamTesting.CheckResult(t, result, startedAt, finishedAt)
 }
