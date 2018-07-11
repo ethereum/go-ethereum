@@ -151,18 +151,22 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 
 // SetClient sets the rpc client and starts watching checkpoint contract if it is not yet watched.
 func (s *LesServer) SetClient(client *ethclient.Client) {
-	if addr, ok := registrar.RegistrarAddr[s.genesis]; ok {
-		if !atomic.CompareAndSwapInt32(&s.watching, 0, 1) {
-			return
-		}
-		registrar, err := registrar.NewRegistrar(addr, client)
-		if err != nil {
-			atomic.StoreInt32(&s.watching, 0)
-			return
-		}
-		s.registrar = registrar
-		go s.checkpointLoop(s.recoverCheckpoint())
+	addr, ok := registrar.RegistrarAddr[s.genesis]
+	if !ok {
+		log.Info("The registrar contract is not deployed")
+		return
 	}
+	registrar, err := registrar.NewRegistrar(addr, client)
+	if err != nil {
+		log.Info("Bind registrar contract failed", "err", err)
+		return
+	}
+	if !atomic.CompareAndSwapInt32(&s.watching, 0, 1) {
+		log.Info("Already bound and listening to registrar contract")
+		return
+	}
+	s.registrar = registrar
+	go s.checkpointLoop(s.recoverCheckpoint())
 }
 
 // Stop stops the LES service

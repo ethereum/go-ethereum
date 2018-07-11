@@ -1181,6 +1181,8 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		if err == nil {
 			err = stack.RegisterCallback(reflect.TypeOf(&eth.Ethereum{}), func(service node.Service) error {
 				if e, ok := service.(*eth.Ethereum); ok {
+					// The node lock will be held during the whole node setup procedure, so no extra
+					// lock operation is needed.
 					rpcClient, err := stack.AttachLocked()
 					if err != nil {
 						return err
