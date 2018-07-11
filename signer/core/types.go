@@ -22,10 +22,10 @@ import (
 
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/zhigui-projects/go-ethereum/accounts"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/common/hexutil"
+	"github.com/zhigui-projects/go-ethereum/core/types"
 )
 
 type Accounts []Account

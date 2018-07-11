@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
+	"github.com/zhigui-projects/go-ethereum/crypto/sha3"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage/encryption"
 )
 
 type chunkEncryption struct {

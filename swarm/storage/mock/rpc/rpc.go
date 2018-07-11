@@ -26,10 +26,10 @@ package rpc
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/rpc"
+	"github.com/zhigui-projects/go-ethereum/swarm/log"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage/mock"
 )
 
 // GlobalStore is rpc.Client that connects to a centralized mock store.

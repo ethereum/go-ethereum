@@ -21,11 +21,11 @@ import (
 	"errors"
 	"math"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/common/hexutil"
+	"github.com/zhigui-projects/go-ethereum/consensus/ethash"
+	"github.com/zhigui-projects/go-ethereum/core"
+	"github.com/zhigui-projects/go-ethereum/params"
 )
 
 // cppEthereumGenesisSpec represents the genesis specification format used by the

@@ -22,16 +22,16 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/common/bitutil"
+	"github.com/zhigui-projects/go-ethereum/core"
+	"github.com/zhigui-projects/go-ethereum/core/rawdb"
+	"github.com/zhigui-projects/go-ethereum/core/types"
+	"github.com/zhigui-projects/go-ethereum/ethdb"
+	"github.com/zhigui-projects/go-ethereum/log"
+	"github.com/zhigui-projects/go-ethereum/params"
+	"github.com/zhigui-projects/go-ethereum/rlp"
+	"github.com/zhigui-projects/go-ethereum/trie"
 )
 
 const (

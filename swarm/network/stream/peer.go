@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
-	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/zhigui-projects/go-ethereum/metrics"
+	"github.com/zhigui-projects/go-ethereum/p2p/protocols"
+	"github.com/zhigui-projects/go-ethereum/swarm/log"
+	pq "github.com/zhigui-projects/go-ethereum/swarm/network/priorityqueue"
+	"github.com/zhigui-projects/go-ethereum/swarm/network/stream/intervals"
+	"github.com/zhigui-projects/go-ethereum/swarm/state"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage"
 )
 
 var sendTimeout = 30 * time.Second

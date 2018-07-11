@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/state"
+	"github.com/zhigui-projects/go-ethereum/crypto"
+	"github.com/zhigui-projects/go-ethereum/p2p"
+	"github.com/zhigui-projects/go-ethereum/p2p/discover"
+	"github.com/zhigui-projects/go-ethereum/p2p/protocols"
+	"github.com/zhigui-projects/go-ethereum/rpc"
+	"github.com/zhigui-projects/go-ethereum/swarm/log"
+	"github.com/zhigui-projects/go-ethereum/swarm/state"
 )
 
 const (

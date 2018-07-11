@@ -27,16 +27,16 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/core"
+	"github.com/zhigui-projects/go-ethereum/core/rawdb"
+	"github.com/zhigui-projects/go-ethereum/core/types"
+	"github.com/zhigui-projects/go-ethereum/crypto"
+	"github.com/zhigui-projects/go-ethereum/ethdb"
+	"github.com/zhigui-projects/go-ethereum/internal/debug"
+	"github.com/zhigui-projects/go-ethereum/log"
+	"github.com/zhigui-projects/go-ethereum/node"
+	"github.com/zhigui-projects/go-ethereum/rlp"
 )
 
 const (

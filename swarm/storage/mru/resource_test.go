@@ -30,17 +30,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/contracts/ens/contract"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/zhigui-projects/go-ethereum/accounts/abi/bind"
+	"github.com/zhigui-projects/go-ethereum/accounts/abi/bind/backends"
+	"github.com/zhigui-projects/go-ethereum/common"
+	"github.com/zhigui-projects/go-ethereum/contracts/ens"
+	"github.com/zhigui-projects/go-ethereum/contracts/ens/contract"
+	"github.com/zhigui-projects/go-ethereum/core"
+	"github.com/zhigui-projects/go-ethereum/core/types"
+	"github.com/zhigui-projects/go-ethereum/crypto"
+	"github.com/zhigui-projects/go-ethereum/log"
+	"github.com/zhigui-projects/go-ethereum/swarm/multihash"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage"
 )
 
 var (

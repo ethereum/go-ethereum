@@ -33,10 +33,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/zhigui-projects/go-ethereum/metrics"
+	"github.com/zhigui-projects/go-ethereum/rlp"
+	"github.com/zhigui-projects/go-ethereum/swarm/log"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )

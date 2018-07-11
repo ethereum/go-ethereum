@@ -25,10 +25,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/zhigui-projects/go-ethereum/core/types"
+	"github.com/zhigui-projects/go-ethereum/swarm/api"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage"
+	"github.com/zhigui-projects/go-ethereum/swarm/storage/mru"
 )
 
 type TestServer interface {

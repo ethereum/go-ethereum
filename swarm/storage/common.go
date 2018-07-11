@@ -18,7 +18,7 @@ package storage
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/zhigui-projects/go-ethereum/swarm/log"
 )
 
 // PutChunks adds chunks  to localstore
