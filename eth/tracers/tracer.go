@@ -579,8 +579,28 @@ type Internals struct {
 	From string
 	To string
 	Value string
+	Gas string
+	GasUsed string
 	Calls []*Internals
 }
+
+
+func (i *Internals) InternalRecursive() {
+	fmt.Println("[Internal To]", i.To)
+	fmt.Println("[Internal From]", i.From)
+	lengthOfCalls := len(i.Calls)
+	fmt.Println("[LENGTH OF CALLS]", lengthOfCalls)
+	if lengthOfCalls == 0 {
+		return
+	}
+
+	for _, val := range i.Calls {
+		val.InternalRecursive()
+	}
+}
+
+
+
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (jst *Tracer) GetResult() (json.RawMessage, error) {
@@ -622,33 +642,13 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
 
-	//var dat map[string]interface{}
 	var dat Internals
 
 	if err := json.Unmarshal(result, &dat); err != nil {
 		panic(err)
 	}
 
-	//fmt.Println("[FULL DATA]", string(result))
-	//fmt.Println("\n +++++++++++++++++++")
-	//fmt.Println(dat["calls"])
-	//fmt.Println(dat["calls"]["gasUsed"])
-	//j, _ := json.Marshal(result)
-	//internals := string(j)
-	//fmt.Println("[RESULT]", dat)
-	//fmt.Println("[RESULT]", dat.To)
-	//fmt.Println("[Internal Call]", len(dat.Calls))
-
-	for key, val := range dat.Calls {
-		fmt.Println(key)
-		fmt.Println("[INTERNAL TO]", val.To)
-		fmt.Println("[INTERNAL From]", val.From)
-		fmt.Println("[INTERNAL Calls length]", len(val.Calls))
-		for newKey, newVal := range val.Calls {
-			fmt.Println(newKey)
-			fmt.Println("[INSIDE INTERNAL TO]", newVal.To)
-		}
-	}
+	dat.InternalRecursive()
 
 	return result, jst.err
 }

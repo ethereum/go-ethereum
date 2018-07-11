@@ -177,9 +177,6 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 
 	IShyftTracer.GetTracerToRun(hash)
 
-	//var stack *node.Node
-	//var cfg *eth.Config
-
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()
