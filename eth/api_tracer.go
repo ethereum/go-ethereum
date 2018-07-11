@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-
 )
 
 const (
@@ -533,6 +532,197 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
+	fmt.Println("TRACE TRANSACTION ++++++!+!+!+!+!+!+!+!+!+!+!+!++!")
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(2)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(3)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(4)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(5)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(6)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(7)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(8)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(9)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(10)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(11)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(12)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(13)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(14)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(15)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(16)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(17)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(18)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(19)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(20)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(21)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(22)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(23)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(24)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(25)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(26)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(27)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(28)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(29)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(30)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(31)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(32)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(33)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(34)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(35)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(36)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(37)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(38)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(39)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(40)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	fmt.Println("////////////// ++++++++++++++++ /////////////////// Phantom *(!*!*!*!*!*!**!*!*")
+	_, file, no, ok = runtime.Caller(41)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(42)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(43)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	_, file, no, ok = runtime.Caller(44)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	fmt.Println("////////////// ++++++++++++++++ /////////////////// TraceTransaction *(!*!*!*!*!*!**!*!*")
+	_, file, no, ok = runtime.Caller(45)
+	if ok {
+		fmt.Printf("called from %s#%d\n", file, no)
+	}
+	// NOTE:SHYFT
+	//fmt.Printf("\n\t[API_TRACER.GO api.config]    %+v", api.config)
+	//fmt.Printf("\n\t[API_TRACER.GO api.eth]       %+v\n", api.eth)
+	// Retrieve the transaction and assemble its EVM context
+	//fmt.Println("IN TRACE TRANSACTION the chaindb is ")
+	//fmt.Println(chaindb)
+	//fmt.Println("IN TRACE TRANSACTION the common hash is ")
+	//fmt.Println(hash)
 
 	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {

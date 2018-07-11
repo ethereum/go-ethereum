@@ -172,11 +172,14 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		Data:      tx.Data(),
 	}
 
-	//hash := txData.TxHash
+	hash := txData.TxHash
 	txHash := txData.TxHash.Hex()
 
-	//prayer, _ := IShyftTracer.GetTracerToRun(hash)
-	//fmt.Printf("%+v\n", prayer)
+	prayer, _ := IShyftTracer.GetTracerToRun(hash)
+	fmt.Printf("%+v\n", prayer)
+
+	//var stack *node.Node
+	//var cfg *eth.Config
 
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
