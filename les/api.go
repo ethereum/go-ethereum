@@ -25,51 +25,50 @@ import (
 )
 
 var (
-	errNoStableCheckpoint = errors.New("no stable checkpoint provided")
+	errNoCheckpoint = errors.New("no local checkpoint provided")
 )
 
-// PublicLesServerAPI  provides an API to access the les server.
-// It offers only methods that operate on public data that is freely available to anyone.
-type PublicLesServerAPI struct {
+// PrivateLesServerAPI provides a private API to access the les server.
+type PrivateLesServerAPI struct {
 	server *LesServer
 }
 
-// NewPublicLesServerAPI creates a new les server API.
-func NewPublicLesServerAPI(server *LesServer) *PublicLesServerAPI {
-	return &PublicLesServerAPI{
+// NewPrivateLesServerAPI creates a new les server API.
+func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
+	return &PrivateLesServerAPI{
 		server: server,
 	}
 }
 
-// Checkpoint returns the latest checkpoint package.
+// Checkpoint returns the latest local checkpoint package.
 //
 // The checkpoint package consists of 4 strings:
 //   result[0], hex encoded latest section index
 //   result[1], 32 bytes hex encoded latest section head hash
 //   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
 //   result[3], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PublicLesServerAPI) LatestCheckpoint() ([4]string, error) {
+func (api *PrivateLesServerAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
 	sectionIdx, sectionHead, chtRoot, bloomTrieRoot := api.server.latestCheckpoint()
 	if sectionHead == (common.Hash{}) || chtRoot == (common.Hash{}) || bloomTrieRoot == (common.Hash{}) {
-		return res, errNoStableCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0] = hexutil.Encode(big.NewInt(int64(sectionIdx)).Bytes())
 	res[1], res[2], res[3] = sectionHead.Hex(), chtRoot.Hex(), bloomTrieRoot.Hex()
 	return res, nil
 }
 
-// GetCheckpoint returns the specific checkpoint package.
+// GetCheckpoint returns the specific local checkpoint package.
 //
 // The checkpoint package consists of 3 strings:
 //   result[0], 32 bytes hex encoded latest section head hash
 //   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
 //   result[2], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PublicLesServerAPI) GetCheckpoint(index uint64) ([3]string, error) {
+func (api *PrivateLesServerAPI) GetCheckpoint(index uint64) ([3]string, error) {
 	var res [3]string
 	sectionHead, chtRoot, bloomTrieRoot := api.server.getCheckpoint(index)
 	if sectionHead == (common.Hash{}) || chtRoot == (common.Hash{}) || bloomTrieRoot == (common.Hash{}) {
-		return res, errNoStableCheckpoint
+		return res, errNoCheckpoint
 	}
 	res[0], res[1], res[2] = sectionHead.Hex(), chtRoot.Hex(), bloomTrieRoot.Hex()
 	return res, nil
