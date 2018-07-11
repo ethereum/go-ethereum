@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	duktape "gopkg.in/olebedev/go-duktape.v3"
+	"gopkg.in/olebedev/go-duktape.v3"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -307,13 +307,10 @@ type Tracer struct {
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
 func New(code string) (*Tracer, error) {
-	fmt.Println("\n [TRACER.GO New func]", code)
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
-		fmt.Println("\n [ok]", ok)
 	}
-	fmt.Println("\n [tracer]", tracer)
 
 	tracer := &Tracer{
 		vm:              duktape.New(),
@@ -328,6 +325,7 @@ func New(code string) (*Tracer, error) {
 		costValue:       new(uint),
 		depthValue:      new(uint),
 	}
+
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
@@ -460,7 +458,6 @@ func New(code string) (*Tracer, error) {
 
 	tracer.dbWrapper.pushObject(tracer.vm)
 	tracer.vm.PutPropString(tracer.stateObject, "db")
-
 	return tracer, nil
 }
 
@@ -500,11 +497,6 @@ func wrapError(context string, err error) error {
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *Tracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
-	//fmt.Println("\n\n\t\t type: ", reflect.TypeOf(input))
-	fmt.Println("\t\t [TRACER TO]:", to.String())
-	fmt.Println("\t\t [TRACER FROM]:", from.String())
-	fmt.Println("\t\t [TRACER VALUE]:", value.String())
-	fmt.Println("\t\t [TRACER INPUT STRING]:", string(input[:len(input)]), "\n\n")
 	jst.ctx["type"] = "CALL"
 	if create {
 		jst.ctx["type"] = "CREATE"
@@ -573,9 +565,6 @@ func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
-	//fmt.Println("\n\n\t\t", reflect.TypeOf(output))
-	//fmt.Println("\t\t [TRACER OUTPUT]:", output[:len(output)])
-	//fmt.Println("\t\t [TRACER OUTPUT STRING]:", string(output[:len(output)]), "\n\n")
 	jst.ctx["output"] = output
 	jst.ctx["gasUsed"] = gasUsed
 	jst.ctx["time"] = t.String()
@@ -584,6 +573,13 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 		jst.ctx["error"] = err.Error()
 	}
 	return nil
+}
+
+type Internals struct {
+	From string
+	To string
+	Value string
+	Calls []*Internals
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
@@ -625,6 +621,34 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	// Clean up the JavaScript environment
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
+
+	//var dat map[string]interface{}
+	var dat Internals
+
+	if err := json.Unmarshal(result, &dat); err != nil {
+		panic(err)
+	}
+
+	//fmt.Println("[FULL DATA]", string(result))
+	//fmt.Println("\n +++++++++++++++++++")
+	//fmt.Println(dat["calls"])
+	//fmt.Println(dat["calls"]["gasUsed"])
+	//j, _ := json.Marshal(result)
+	//internals := string(j)
+	//fmt.Println("[RESULT]", dat)
+	//fmt.Println("[RESULT]", dat.To)
+	//fmt.Println("[Internal Call]", len(dat.Calls))
+
+	for key, val := range dat.Calls {
+		fmt.Println(key)
+		fmt.Println("[INTERNAL TO]", val.To)
+		fmt.Println("[INTERNAL From]", val.From)
+		fmt.Println("[INTERNAL Calls length]", len(val.Calls))
+		for newKey, newVal := range val.Calls {
+			fmt.Println(newKey)
+			fmt.Println("[INSIDE INTERNAL TO]", newVal.To)
+		}
+	}
 
 	return result, jst.err
 }

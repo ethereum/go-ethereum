@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"context"
-	"fmt"
 )
 
 var EthereumObject interface{}
@@ -26,7 +25,6 @@ func (st ShyftTracer) GetTracerToRun (hash common.Hash) (interface{}, error) {
 		Timeout: nil,
 		Reexec: nil,
 	}
-	fmt.Printf("%+v", config, "THIS IS CONFIG IN SHYFT_TRACER")
 	//var fullNode *Ethereum
 	fullNode, _ := SNew(Global_config)
 	privateAPI := NewPrivateDebugAPI(config2, fullNode)

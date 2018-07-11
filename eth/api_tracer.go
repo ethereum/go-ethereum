@@ -532,189 +532,6 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	fmt.Println("TRACE TRANSACTION ++++++!+!+!+!+!+!+!+!+!+!+!+!++!")
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(2)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(3)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(4)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(5)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(6)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(7)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(8)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(9)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(10)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(11)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(12)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(13)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(14)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(15)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(16)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(17)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(18)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(19)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(20)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(21)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(22)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(23)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(24)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(25)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(26)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(27)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(28)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(29)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(30)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(31)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(32)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(33)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(34)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(35)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(36)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(37)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(38)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(39)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(40)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	fmt.Println("////////////// ++++++++++++++++ /////////////////// Phantom *(!*!*!*!*!*!**!*!*")
-	_, file, no, ok = runtime.Caller(41)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(42)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(43)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	_, file, no, ok = runtime.Caller(44)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
-	fmt.Println("////////////// ++++++++++++++++ /////////////////// TraceTransaction *(!*!*!*!*!*!**!*!*")
-	_, file, no, ok = runtime.Caller(45)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
 	// NOTE:SHYFT
 	//fmt.Printf("\n\t[API_TRACER.GO api.config]    %+v", api.config)
 	//fmt.Printf("\n\t[API_TRACER.GO api.eth]       %+v\n", api.eth)
@@ -729,7 +546,6 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 		return nil, fmt.Errorf("transaction %x not found", hash)
 	}
 
-	fmt.Println("TX IN TRACETRANSACTION", tx)
 	reexec := defaultTraceReexec
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
@@ -746,8 +562,6 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 // be tracer dependent.
 func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
-	fmt.Println("\n [API_TRACER.GO traceTX func]")
-	//	fmt.Printf("%+v", config, "THIS IS CONFIG")
 	var (
 		tracer vm.Tracer
 		err    error
@@ -756,23 +570,23 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	case config != nil && config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
 		timeout := defaultTraceTimeout
+		fmt.Println(timeout)
 		if config.Timeout != nil {
 			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
 				return nil, err
 			}
 		}
 		// Constuct the JavaScript tracer to execute with
-		fmt.Printf("%+v \n", *config.Tracer)
 		if tracer, err = tracers.New(*config.Tracer); err != nil {
 			return nil, err
 		}
 		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
-		}()
-		defer cancel()
+		//deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		//go func() {
+		//	<-deadlineCtx.Done()
+		//	tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
+		//}()
+		//defer cancel()
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)
@@ -798,7 +612,6 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		}, nil
 
 	case *tracers.Tracer:
-		fmt.Println("THIS RAN MF")
 		return tracer.GetResult()
 
 	default:
