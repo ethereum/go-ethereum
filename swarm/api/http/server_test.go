@@ -17,6 +17,7 @@
 package http
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -24,11 +25,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -88,7 +91,7 @@ func TestResourcePostMode(t *testing.T) {
 }
 
 func serverFunc(api *api.API) testutil.TestServer {
-	return NewServer(api)
+	return NewServer(api, "")
 }
 
 // test the transparent resolving of multihash resource types with bzz:// scheme
@@ -356,6 +359,11 @@ func TestBzzGetPath(t *testing.T) {
 	testBzzGetPath(true, t)
 }
 
+func TestBzzTar(t *testing.T) {
+	testBzzTar(false, t)
+	testBzzTar(true, t)
+}
+
 func testBzzGetPath(encrypted bool, t *testing.T) {
 	var err error
 
@@ -588,6 +596,122 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		}
 		if !strings.Contains(string(respbody), nonhashresponses[i]) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
+		}
+	}
+}
+
+func testBzzTar(encrypted bool, t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+	fileNames := []string{"tmp1.txt", "tmp2.lock", "tmp3.rtf"}
+	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
+
+	buf := &bytes.Buffer{}
+	tw := tar.NewWriter(buf)
+	defer tw.Close()
+
+	for i, v := range fileNames {
+		size := int64(len(fileContents[i]))
+		hdr := &tar.Header{
+			Name:    v,
+			Mode:    0644,
+			Size:    size,
+			ModTime: time.Now(),
+			Xattrs: map[string]string{
+				"user.swarm.content-type": "text/plain",
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		// copy the file into the tar stream
+		n, err := io.Copy(tw, bytes.NewBufferString(fileContents[i]))
+		if err != nil {
+			t.Fatal(err)
+		} else if n != size {
+			t.Fatal("size mismatch")
+		}
+	}
+
+	//post tar stream
+	url := srv.URL + "/bzz:/"
+	if encrypted {
+		url = url + "encrypt"
+	}
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-tar")
+	client := &http.Client{}
+	resp2, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp2.Status)
+	}
+	swarmHash, err := ioutil.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	t.Logf("uploaded tarball successfully and got manifest address at %s", string(swarmHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// now do a GET to get a tarball back
+	req, err = http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s", string(swarmHash)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Accept", "application/x-tar")
+	resp2, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	file, err := ioutil.TempFile("", "swarm-downloaded-tarball")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(file.Name())
+	_, err = io.Copy(file, resp2.Body)
+	if err != nil {
+		t.Fatalf("error getting tarball: %v", err)
+	}
+	file.Sync()
+	file.Close()
+
+	tarFileHandle, err := os.Open(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(tarFileHandle)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("error reading tar stream: %s", err)
+		}
+		bb := make([]byte, hdr.Size)
+		_, err = tr.Read(bb)
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		passed := false
+		for i, v := range fileNames {
+			if v == hdr.Name {
+				if string(bb) == fileContents[i] {
+					passed = true
+					break
+				}
+			}
+		}
+		if !passed {
+			t.Fatalf("file %s did not pass content assertion", hdr.Name)
 		}
 	}
 }

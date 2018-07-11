@@ -17,6 +17,7 @@
 package api
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"io"
@@ -41,22 +42,32 @@ import (
 )
 
 var (
-	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
-	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
-	apiPutCount        = metrics.NewRegisteredCounter("api.put.count", nil)
-	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
-	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
-	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
-	apiGetHTTP300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
-	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
-	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
-	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
-	apiAddFileFail     = metrics.NewRegisteredCounter("api.addfile.fail", nil)
-	apiRmFileCount     = metrics.NewRegisteredCounter("api.removefile.count", nil)
-	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
-	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
-	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
-	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
+	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
+	apiResolveFail         = metrics.NewRegisteredCounter("api.resolve.fail", nil)
+	apiPutCount            = metrics.NewRegisteredCounter("api.put.count", nil)
+	apiPutFail             = metrics.NewRegisteredCounter("api.put.fail", nil)
+	apiGetCount            = metrics.NewRegisteredCounter("api.get.count", nil)
+	apiGetNotFound         = metrics.NewRegisteredCounter("api.get.notfound", nil)
+	apiGetHTTP300          = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiManifestUpdateCount = metrics.NewRegisteredCounter("api.manifestupdate.count", nil)
+	apiManifestUpdateFail  = metrics.NewRegisteredCounter("api.manifestupdate.fail", nil)
+	apiManifestListCount   = metrics.NewRegisteredCounter("api.manifestlist.count", nil)
+	apiManifestListFail    = metrics.NewRegisteredCounter("api.manifestlist.fail", nil)
+	apiDeleteCount         = metrics.NewRegisteredCounter("api.delete.count", nil)
+	apiDeleteFail          = metrics.NewRegisteredCounter("api.delete.fail", nil)
+	apiGetTarCount         = metrics.NewRegisteredCounter("api.gettar.count", nil)
+	apiGetTarFail          = metrics.NewRegisteredCounter("api.gettar.fail", nil)
+	apiUploadTarCount      = metrics.NewRegisteredCounter("api.uploadtar.count", nil)
+	apiUploadTarFail       = metrics.NewRegisteredCounter("api.uploadtar.fail", nil)
+	apiModifyCount         = metrics.NewRegisteredCounter("api.modify.count", nil)
+	apiModifyFail          = metrics.NewRegisteredCounter("api.modify.fail", nil)
+	apiAddFileCount        = metrics.NewRegisteredCounter("api.addfile.count", nil)
+	apiAddFileFail         = metrics.NewRegisteredCounter("api.addfile.fail", nil)
+	apiRmFileCount         = metrics.NewRegisteredCounter("api.removefile.count", nil)
+	apiRmFileFail          = metrics.NewRegisteredCounter("api.removefile.fail", nil)
+	apiAppendFileCount     = metrics.NewRegisteredCounter("api.appendfile.count", nil)
+	apiAppendFileFail      = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
+	apiGetInvalid          = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
 // Resolver interface resolve a domain name to a hash using ENS
@@ -424,6 +435,185 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 	return
 }
 
+func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
+	apiDeleteCount.Inc(1)
+	uri, err := Parse("bzz:/" + addr)
+	if err != nil {
+		apiDeleteFail.Inc(1)
+		return nil, err
+	}
+	key, err := a.Resolve(ctx, uri)
+
+	if err != nil {
+		return nil, err
+	}
+	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
+		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
+		return mw.RemoveEntry(path)
+	})
+	if err != nil {
+		apiDeleteFail.Inc(1)
+		return nil, err
+	}
+
+	return newKey, nil
+}
+
+// GetDirectoryTar fetches a requested directory as a tarstream
+// it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
+func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, error) {
+	apiGetTarCount.Inc(1)
+	addr, err := a.Resolve(ctx, uri)
+	if err != nil {
+		return nil, err
+	}
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		apiGetTarFail.Inc(1)
+		return nil, err
+	}
+
+	piper, pipew := io.Pipe()
+
+	tw := tar.NewWriter(pipew)
+
+	go func() {
+		err := walker.Walk(func(entry *ManifestEntry) error {
+			// ignore manifests (walk will recurse into them)
+			if entry.ContentType == ManifestType {
+				return nil
+			}
+
+			// retrieve the entry's key and size
+			reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
+			size, err := reader.Size(nil)
+			if err != nil {
+				return err
+			}
+
+			// write a tar header for the entry
+			hdr := &tar.Header{
+				Name:    entry.Path,
+				Mode:    entry.Mode,
+				Size:    size,
+				ModTime: entry.ModTime,
+				Xattrs: map[string]string{
+					"user.swarm.content-type": entry.ContentType,
+				},
+			}
+
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+
+			// copy the file into the tar stream
+			n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
+			if err != nil {
+				return err
+			} else if n != size {
+				return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
+			}
+
+			return nil
+		})
+		if err != nil {
+			apiGetTarFail.Inc(1)
+			pipew.CloseWithError(err)
+		} else {
+			pipew.Close()
+		}
+	}()
+
+	return piper, nil
+}
+
+// GetManifestList lists the manifest entries for the specified address and prefix
+// and returns it as a ManifestList
+func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
+	apiManifestListCount.Inc(1)
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		apiManifestListFail.Inc(1)
+		return ManifestList{}, err
+	}
+
+	err = walker.Walk(func(entry *ManifestEntry) error {
+		// handle non-manifest files
+		if entry.ContentType != ManifestType {
+			// ignore the file if it doesn't have the specified prefix
+			if !strings.HasPrefix(entry.Path, prefix) {
+				return nil
+			}
+
+			// if the path after the prefix contains a slash, add a
+			// common prefix to the list, otherwise add the entry
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return nil
+			}
+			if entry.Path == "" {
+				entry.Path = "/"
+			}
+			list.Entries = append(list.Entries, entry)
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the specified prefix
+		// then just recurse into the manifest by returning nil and
+		// continuing the walk
+		if strings.HasPrefix(prefix, entry.Path) {
+			return nil
+		}
+
+		// if the manifest's path has the specified prefix, then if the
+		// path after the prefix contains a slash, add a common prefix
+		// to the list and skip the manifest, otherwise recurse into
+		// the manifest by returning nil and continuing the walk
+		if strings.HasPrefix(entry.Path, prefix) {
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return ErrSkipManifest
+			}
+			return nil
+		}
+
+		// the manifest neither has the prefix or needs recursing in to
+		// so just skip it
+		return ErrSkipManifest
+	})
+
+	if err != nil {
+		apiManifestListFail.Inc(1)
+		return ManifestList{}, err
+	}
+
+	return list, nil
+}
+
+func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
+	apiManifestUpdateCount.Inc(1)
+	mw, err := a.NewManifestWriter(ctx, addr, nil)
+	if err != nil {
+		apiManifestUpdateFail.Inc(1)
+		return nil, err
+	}
+
+	if err := update(mw); err != nil {
+		apiManifestUpdateFail.Inc(1)
+		return nil, err
+	}
+
+	addr, err = mw.Store()
+	if err != nil {
+		apiManifestUpdateFail.Inc(1)
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("generated manifest %s", addr))
+	return addr, nil
+}
+
 // Modify loads manifest and checks the content hash before recalculating and storing the manifest.
 func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
@@ -499,6 +689,43 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	}
 
 	return fkey, newMkey.String(), nil
+}
+
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) (storage.Address, error) {
+	apiUploadTarCount.Inc(1)
+	var contentKey storage.Address
+	tr := tar.NewReader(bodyReader)
+	defer bodyReader.Close()
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			apiUploadTarFail.Inc(1)
+			return nil, fmt.Errorf("error reading tar stream: %s", err)
+		}
+
+		// only store regular files
+		if !hdr.FileInfo().Mode().IsRegular() {
+			continue
+		}
+
+		// add the entry under the path from the request
+		manifestPath := path.Join(manifestPath, hdr.Name)
+		entry := &ManifestEntry{
+			Path:        manifestPath,
+			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			Mode:        hdr.Mode,
+			Size:        hdr.Size,
+			ModTime:     hdr.ModTime,
+		}
+		contentKey, err = mw.AddEntry(ctx, tr, entry)
+		if err != nil {
+			apiUploadTarFail.Inc(1)
+			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+		}
+	}
+	return contentKey, nil
 }
 
 // RemoveFile removes a file entry in a manifest.
