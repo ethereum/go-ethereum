@@ -231,6 +231,14 @@ func startNode(ctx *cli.Context, stack *node.Node,cfg tomoConfig) {
 
 	//passwords := utils.MakePasswordList(ctx)
 	//unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	if(ctx.GlobalIsSet(utils.UnlockedAccountFlag.Name)) {
+		cfg.Account.Unlocks=strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	}
+
+	if(ctx.GlobalIsSet(utils.PasswordFileFlag.Name)) {
+		cfg.Account.Passwords=utils.MakePasswordList(ctx)
+	}
+
 	for i, account := range cfg.Account.Unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
 			unlockAccount(ctx, ks, trimmed, i, cfg.Account.Passwords)
