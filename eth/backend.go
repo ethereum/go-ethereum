@@ -102,12 +102,47 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
+func SNew(config *Config) (*Ethereum, error) {
+	stopDbUpgrade := upgradeDeduplicateData(Chaindb_global)
+	chainConfig, _, _ := core.SetupGenesisBlock(Chaindb_global, config.Genesis)
+
+	eth := &Ethereum{
+		config:         config,
+		chainDb:        Chaindb_global,
+		chainConfig:    chainConfig,
+		//eventMux:       ctx.EventMux,
+		//accountManager: ctx.AccountManager,
+		//engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, Chaindb_global),
+		shutdownChan:   make(chan bool),
+		stopDbUpgrade:  stopDbUpgrade,
+		networkId:      config.NetworkId,
+		gasPrice:       config.GasPrice,
+		etherbase:      config.Etherbase,
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bloomIndexer:   NewBloomIndexer(Chaindb_global, params.BloomBitsBlocks),
+	}
+
+	//var (
+	//	vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
+	//	cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
+	//)
+	//
+	//eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+	//
+	//BlockchainObject = eth.blockchain
+
+	eth.blockchain = BlockchainObject
+
+	return eth, nil
+}
+
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	shyft_tracer := new(ShyftTracer)
 	core.SetIShyftTracer(shyft_tracer)
+	setGlobalConfig(config)
 
 	_, file, no, ok := runtime.Caller(1)
 	if ok {
@@ -124,8 +159,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// @TODO: Create Genesis Block
 
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
@@ -167,7 +200,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
 
 	BlockchainObject = eth.blockchain
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +255,6 @@ func makeExtraData(extra []byte) []byte {
 
 // CreateDB creates the chain database.
 func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
-	fmt.Println("in create db")
 	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err

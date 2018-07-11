@@ -307,10 +307,14 @@ type Tracer struct {
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
 func New(code string) (*Tracer, error) {
+	fmt.Println("\n [TRACER.GO New func]", code)
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
+		fmt.Println("\n [ok]", ok)
 	}
+	fmt.Println("\n [tracer]", tracer)
+
 	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
@@ -497,7 +501,9 @@ func wrapError(context string, err error) error {
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *Tracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
 	//fmt.Println("\n\n\t\t type: ", reflect.TypeOf(input))
-	fmt.Println("\t\t [TRACER INPUT]:", input)
+	fmt.Println("\t\t [TRACER TO]:", to.String())
+	fmt.Println("\t\t [TRACER FROM]:", from.String())
+	fmt.Println("\t\t [TRACER VALUE]:", value.String())
 	fmt.Println("\t\t [TRACER INPUT STRING]:", string(input[:len(input)]), "\n\n")
 	jst.ctx["type"] = "CALL"
 	if create {
@@ -568,8 +574,8 @@ func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	//fmt.Println("\n\n\t\t", reflect.TypeOf(output))
-	fmt.Println("\t\t [TRACER OUTPUT]:", output[:len(output)])
-	fmt.Println("\t\t [TRACER OUTPUT STRING]:", string(output[:len(output)]), "\n\n")
+	//fmt.Println("\t\t [TRACER OUTPUT]:", output[:len(output)])
+	//fmt.Println("\t\t [TRACER OUTPUT STRING]:", string(output[:len(output)]), "\n\n")
 	jst.ctx["output"] = output
 	jst.ctx["gasUsed"] = gasUsed
 	jst.ctx["time"] = t.String()

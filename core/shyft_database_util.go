@@ -14,9 +14,6 @@ _ "github.com/lib/pq"
 	"github.com/ethereum/go-ethereum/core/types"
 	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/shyfttracerinterface"
-	"github.com/ethereum/go-ethereum/node"
-	"reflect"
-
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -175,18 +172,11 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		Data:      tx.Data(),
 	}
 
-	hash := txData.TxHash
-	fmt.Println(reflect.TypeOf(hash))
+	//hash := txData.TxHash
 	txHash := txData.TxHash.Hex()
-	//IShyftTracer.MyTraceTransaction(txHash)
 
-	//
-	var stack *node.Node
-	fmt.Println(reflect.TypeOf(stack))
-
-	prayer, err := IShyftTracer.GetTracerToRun(hash, stack)
-	fmt.Println("THIS IS A PRAYER", prayer)
-	fmt.Println(err)
+	//prayer, _ := IShyftTracer.GetTracerToRun(hash)
+	//fmt.Printf("%+v\n", prayer)
 
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
