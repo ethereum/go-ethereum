@@ -56,6 +56,7 @@ type Node struct {
 	addedAt time.Time
 }
 
+
 // NewNode creates a new node. It is mostly meant to be used for
 // testing purposes.
 func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {

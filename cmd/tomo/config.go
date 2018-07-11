@@ -25,7 +25,7 @@ import (
 	"reflect"
 	"unicode"
 
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/dashboard"
@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
+	"strings"
 )
 
 var (
@@ -71,15 +72,21 @@ var tomlSettings = toml.Config{
 }
 
 type ethstatsConfig struct {
-	URL string `toml:",omitempty"`
+	URL string `toml:"url"`
 }
 
+type account struct {
+	Unlocks   []string `toml:"unlocks"`
+	Passwords []string `toml:"passwords"`
+}
 type tomoConfig struct {
-	Eth       eth.Config
-	Shh       whisper.Config
-	Node      node.Config
-	Ethstats  ethstatsConfig
-	Dashboard dashboard.Config
+	Eth        eth.Config       `toml:"eth"`
+	Shh        whisper.Config   `toml:"ssh"`
+	Node       node.Config      `toml:"node"`
+	Ethstats   ethstatsConfig   `toml:"ethstats"`
+	Dashboard  dashboard.Config `toml:"dashboard"`
+	Account    account          `toml:"account"`
+	MineEnable bool             `toml:"mine"`
 }
 
 func loadConfig(file string, cfg *tomoConfig) error {
@@ -88,7 +95,6 @@ func loadConfig(file string, cfg *tomoConfig) error {
 		return err
 	}
 	defer f.Close()
-
 	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
 	// Add file name to errors that have a line number.
 	if _, ok := err.(*toml.LineError); ok {
@@ -115,13 +121,27 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		Node:      defaultNodeConfig(),
 		Dashboard: dashboard.DefaultConfig,
 	}
-
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
+
+	// read passwords from enviroment
+	passwords := []string{}
+	for _, env := range cfg.Account.Passwords {
+		if trimmed := strings.TrimSpace(env); trimmed != "" {
+			value := os.Getenv(trimmed)
+			for _, info := range strings.Split(value, ",") {
+				trimmed2 := strings.TrimSpace(info)
+				if (trimmed2 != "") {
+					passwords = append(passwords, trimmed2)
+				}
+			}
+		}
+	}
+	cfg.Account.Passwords = passwords
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
@@ -150,7 +170,7 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) *node.Node {
+func makeFullNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
 	utils.RegisterEthService(stack, &cfg.Eth)
@@ -175,7 +195,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
-	return stack
+	return stack, cfg
 }
 
 // dumpConfig is the dumpconfig command.

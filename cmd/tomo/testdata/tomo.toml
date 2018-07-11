@@ -1,0 +1,29 @@
+mine		= true	# flag --mine ( true : enable miner , false : disable )
+[eth]
+NetworkId	= 1515  # flag --networkid
+SyncMode	= "full" # flag --syncmode
+GasPrice	= 1	# flag --gasprice
+
+[ssh]
+
+[node]
+datadir	  = "node1/"	# flag --datadir
+http_host = "localhost"	# flag --rpcaddr 
+http_port = 8501 	# flag --rpcport 
+http_modules  = ["personal","db","eth","net","web3","txpool","miner"] # flag --rpcapi 
+[node.p2p]
+listenaddr = ":30311"  # flag --port 
+bootnodes = ["enode://a890c5762c406fe046fb93fd307577a8454d571b6bf789f7dbfbf3c559be751f5fa400bc10639691245a9b22be1cfce0bbf82b322a24d06c6dcf29bf7eeb930c@127.0.0.1:30310"] 
+# flag --bootnodes
+
+[ethstats]
+[dashboard]
+[account]
+unlocks  = ["0x12f90a417f41bedd4bbcc99d52971803fb4c3f8b"]   # list account slipt in flag --unlock
+passwords = ["PWD_DEVNET"]    				   # list password in environment variable (split by ',') : ex : export PWD_DEVNET=123456,123456789
+
+
+
+
+
+
