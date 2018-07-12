@@ -576,20 +576,35 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 }
 
 type Internals struct {
+	Type string
 	From string
 	To string
 	Value string
 	Gas string
 	GasUsed string
+	Input string
+	Output string
+	Time string
 	Calls []*Internals
 }
 
+//func (i *Internals) SWriteInteralTxs() {
+//	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+//	sqldb, err := sql.Open("postgres", connStr)
+//	if err != nil {
+//		return
+//	}
+//
+//	sqlStatement := `INSERT INTO internalTxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10))`
+//	qerr := sqldb.QueryRow(sqlStatement, i.Type, txHash, i.From, i.To, i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output)
+//
+//	if qerr != nil {
+//		panic(qerr)
+//	}
+//}
 
 func (i *Internals) InternalRecursive() {
-	fmt.Println("[Internal To]", i.To)
-	fmt.Println("[Internal From]", i.From)
 	lengthOfCalls := len(i.Calls)
-	fmt.Println("[LENGTH OF CALLS]", lengthOfCalls)
 	if lengthOfCalls == 0 {
 		return
 	}
