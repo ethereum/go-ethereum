@@ -1,8 +1,10 @@
 package blocksigner
 
 import (
+	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -24,6 +26,16 @@ func TestBlockSigner(t *testing.T) {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
 	contractBackend.Commit()
+
+	d := time.Now().Add(1000 * time.Millisecond)
+	ctx, _ := context.WithDeadline(context.Background(), d)
+	code, _ := contractBackend.CodeAt(ctx, blockSignerAddress, nil)
+	t.Log("contract code", common.ToHex(code))
+	f := func(key, val common.Hash) bool {
+		t.Log(key.Hex(), val.Hex())
+		return true
+	}
+	contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 
 	signers, err := blockSigner.GetSigners(big.NewInt(0))
 	if err != nil {
