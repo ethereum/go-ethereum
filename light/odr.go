@@ -133,20 +133,26 @@ func (req *ReceiptsRequest) StoreResult(db ethdb.Database, config *IndexerConfig
 // ChtRequest is the ODR request type for state/storage trie entries
 type ChtRequest struct {
 	OdrRequest
-	ChtNum, BlockNum uint64
-	ChtRoot          common.Hash
-	Header           *types.Header
-	Td               *big.Int
-	Proof            *NodeSet
+	ChtNum   uint64
+	ChtRoot  common.Hash
+	BlockNum []uint64
+	Header   []*types.Header
+	Td       []*big.Int
+	Proof    *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *ChtRequest) StoreResult(db ethdb.Database, config *IndexerConfig) {
-	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
+	// The block number, header, td, proof length consistency has been verified
+	// in the validation phase.
+	for index := range req.BlockNum {
+		header := req.Header[index]
+		hash, num := header.Hash(), header.Number.Uint64()
 
-	rawdb.WriteHeader(db, req.Header)
-	rawdb.WriteTd(db, hash, num, req.Td)
-	rawdb.WriteCanonicalHash(db, hash, num)
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteTd(db, hash, num, req.Td[index])
+		rawdb.WriteCanonicalHash(db, hash, num)
+	}
 }
 
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
