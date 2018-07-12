@@ -34,9 +34,7 @@ import (
 )
 
 const (
-	writeDelayNThreshold       = 200
-	writeDelayThreshold        = 350 * time.Millisecond
-	writeDelayWarningThrottler = 1 * time.Minute
+	writePauseWarningThrottler = 1 * time.Minute
 )
 
 var OpenFileLimit = 64
@@ -206,8 +204,6 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	// Create storage and warning log tracer for write delay.
 	var (
 		delaystats      [2]int64
-		lastWriteDelay  time.Time
-		lastWriteDelayN time.Time
 		lastWritePaused time.Time
 	)
 
@@ -293,36 +289,17 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-			// If the write delay number been collected in the last minute exceeds the predefined threshold,
-			// print a warning log here.
-			// If a warning that db performance is laggy has been displayed,
-			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
-			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold &&
-				time.Now().After(lastWriteDelayN.Add(writeDelayWarningThrottler)) {
-				db.log.Warn("Write delay number exceeds the threshold (200 per second) in the last minute")
-				lastWriteDelayN = time.Now()
-			}
 		}
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-			// If the write delay duration been collected in the last minute exceeds the predefined threshold,
-			// print a warning log here.
-			// If a warning that db performance is laggy has been displayed,
-			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
-			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() &&
-				time.Now().After(lastWriteDelay.Add(writeDelayWarningThrottler)) {
-				db.log.Warn("Write delay duration exceeds the threshold (35% of the time) in the last minute")
-				lastWriteDelay = time.Now()
-			}
 		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(writeDelayWarningThrottler)) {
+			time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
 			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
-
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
 		// Retrieve the database iostats.
