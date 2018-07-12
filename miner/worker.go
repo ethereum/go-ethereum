@@ -316,7 +316,9 @@ func (self *worker) wait() {
 			for _, log := range work.state.Logs() {
 				log.BlockHash = block.Hash()
 			}
-			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
+			self.currentMu.Lock()
+			stat, err := self.chain.WriteBlockWithState(block)
+			self.currentMu.Unlock()
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
@@ -438,7 +440,7 @@ func (self *worker) commitNewWork() {
 	// Could potentially happen if starting to mine in an odd state.
 	err := self.makeCurrent(parent, header)
 	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
+		//log.Error("Failed to create mining context", "err", err)
 		return
 	}
 	// Create the current work task and check any fork transitions needed
