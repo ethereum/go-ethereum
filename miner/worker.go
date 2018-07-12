@@ -51,6 +51,8 @@ const (
 	chainHeadChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
+	// Timeout waiting for M1
+	m1Timeout = 1000
 )
 
 // Agent can register themself with the worker
@@ -415,6 +417,24 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	return nil
 }
 
+func abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func hop(len, pre, cur int) int {
+	switch {
+	case pre < cur:
+		return cur - (pre + 1)
+	case pre > cur:
+		return (len - pre) + (cur - 1)
+	default:
+		return len - 1
+	}
+}
+
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -439,14 +459,33 @@ func (self *worker) commitNewWork() {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
-			ok, err := clique.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
+			preIndex, curIndex, ok, err := clique.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
 			if !ok {
-				log.Info("Not our turn to commit block. Wait for next time")
-				return
+				log.Info("Not my turn to commit block. Waiting...")
+				// in case some nodes are down
+				if preIndex == -1 {
+					// first block
+					return
+				}
+				h := hop(len(masternodes), preIndex, curIndex)
+				gap := int64(c.GetPeriod()) * int64(h)
+				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
+			L:
+				for {
+					select {
+					case <-core.NewBlockCh:
+						log.Info("New block has came already. Skip this turn")
+						return
+					case <-time.After(time.Duration(gap+m1Timeout) * time.Second):
+						// wait enough. It's my turn
+						log.Info("Wait enough. It's my turn", "waited seconds", gap+m1Timeout)
+						break L
+					}
+				}
 			}
 		}
 	}
