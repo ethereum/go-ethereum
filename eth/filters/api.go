@@ -28,7 +28,6 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -325,36 +324,26 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
-	var (
-		fromBlock int64
-		toBlock   int64
-	)
-
+	var filter *Filter
 	if crit.BlockHash != nil {
-		// look up block number from block hash
-		if block := rawdb.ReadHeaderNumber(api.chainDb, *crit.BlockHash); block != nil {
-			// verify block is part of canonical chain
-			if canonical := rawdb.ReadCanonicalHash(api.chainDb, *block); canonical != *crit.BlockHash {
-				return nil, fmt.Errorf("Block with hash %s was removed from canonical chain", crit.BlockHash.Hex())
-			}
-			fromBlock = int64(*block)
-			toBlock = fromBlock
-		} else {
-			return nil, fmt.Errorf("Block with hash %s was not found", crit.BlockHash.Hex())
-		}
+		// Block filter requested, construct a single-shot filter
+		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
 		// Convert the RPC block numbers into internal representations
+		var (
+			begin int64
+			end   int64
+		)
 		if crit.FromBlock == nil {
-			fromBlock = int64(rpc.LatestBlockNumber)
+			begin = int64(rpc.LatestBlockNumber)
 		}
 		if crit.ToBlock == nil {
-			toBlock = int64(rpc.LatestBlockNumber)
+			end = int64(rpc.LatestBlockNumber)
 		}
+		// Construct the range filter
+		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
 	}
-
-	// Create and run the filter to get all the logs
-	filter := New(api.backend, fromBlock, toBlock, crit.Addresses, crit.Topics)
-
+	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
@@ -392,17 +381,24 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	begin := rpc.LatestBlockNumber.Int64()
-	if f.crit.FromBlock != nil {
-		begin = f.crit.FromBlock.Int64()
+	var filter *Filter
+	if f.crit.BlockHash != nil {
+		// Block filter requested, construct a single-shot filter
+		filter = NewBlockFilter(api.backend, *f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
+	} else {
+		// Convert the RPC block numbers into internal representations
+		begin := rpc.LatestBlockNumber.Int64()
+		if f.crit.FromBlock != nil {
+			begin = f.crit.FromBlock.Int64()
+		}
+		end := rpc.LatestBlockNumber.Int64()
+		if f.crit.ToBlock != nil {
+			end = f.crit.ToBlock.Int64()
+		}
+		// Construct the range filter
+		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 	}
-	end := rpc.LatestBlockNumber.Int64()
-	if f.crit.ToBlock != nil {
-		end = f.crit.ToBlock.Int64()
-	}
-	// Create and run the filter to get all the logs
-	filter := New(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
-
+	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
