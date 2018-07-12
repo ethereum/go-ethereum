@@ -17,6 +17,9 @@ const (
 	CONN_TYPE = "tcp"
 )
 
+var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
+var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
+
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
@@ -58,6 +61,8 @@ func handleRequest(conn net.Conn) {
 		if err := json.Unmarshal(buf[:msg], &dat); err != nil {
 			panic(err)
 		}
+
+
 		fmt.Println(dat["address"])
 		fmt.Println(dat["msg"])
 		fmt.Println(dat["sig"])
@@ -81,8 +86,6 @@ func handleRequest(conn net.Conn) {
 
 		var buzz = hexutil.Bytes(new_sig_byte_array)
 		buzz[64] -= 27
-		fmt.Println("that bytes is")
-		fmt.Println(fizz)
 
 		new_msg := signHash(fizz)
 
@@ -95,7 +98,7 @@ func handleRequest(conn net.Conn) {
 		pubKey := crypto.ToECDSAPub(rpk)
 		recoveredAddr := crypto.PubkeyToAddress(*pubKey)
 		fmt.Println("the address is ")
-		fmt.Println(recoveredAddr)
+		//fmt.Println(recoveredAddr)
 		fmt.Println(recoveredAddr.Hex())
 
 	}
@@ -105,5 +108,5 @@ func handleRequest(conn net.Conn) {
 	// Send a response back to person contacting us.
 	conn.Write([]byte("Message received."))
 	// Close the connection when you're done with it.
-	conn.Close()
+	//conn.Close()
 }
