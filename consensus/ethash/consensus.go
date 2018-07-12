@@ -356,8 +356,8 @@ func calcDifficultyByzantium(time uint64, parent *types.Header) *big.Int {
 		x.Set(params.MinimumDifficulty)
 	}
 	// calculate a fake block number for the ice-age delay:
-	//   https://github.com/ethereum/EIPs/pull/669
-	//   fake_block_number = min(0, block.number - 3_000_000
+	// https://github.com/ethereum/EIPs/pull/669
+	// fake_block_number = max(0, block.number - 3_000_000)
 	fakeBlockNumber := new(big.Int)
 	if parent.Number.Cmp(big2999999) >= 0 {
 		fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, big2999999) // Note, parent is 1 less than the actual block number
