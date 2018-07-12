@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -408,7 +409,12 @@ func (self *worker) commitNewWork() {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
-			if !clique.YourTurn(snap, parent.Coinbase(), self.coinbase) {
+			ok, err := clique.YourTurn(snap, parent.Header(), self.coinbase)
+			if err != nil {
+				log.Error("Failed when trying to commit new work", "err", err)
+				return
+			}
+			if !ok {
 				log.Info("Not our turn to commit block. Wait for next time")
 				return
 			}
