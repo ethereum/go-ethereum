@@ -408,9 +408,10 @@ func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Heade
 func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
+	var err error
 	preIndex := -1
 	if header.Number.Uint64() != 0 {
-		pre, err := ecrecover(header, snap.sigcache)
+		pre, err = ecrecover(header, snap.sigcache)
 		if err != nil {
 			return false, err
 		}
