@@ -7,8 +7,9 @@ import (
   "fmt"
   "os"
   "encoding/json"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -101,12 +102,24 @@ func handleRequest(conn net.Conn) {
 		//fmt.Println(recoveredAddr)
 		fmt.Println(recoveredAddr.Hex())
 
+		conn.Write([]byte("Message received."))
+
+		key, _ := crypto.HexToECDSA(testPrivHex)
+		addr := common.HexToAddress(testAddrHex)
+
+		new_msg2 := crypto.Keccak256([]byte("Message Received"))
+		new_sig , err := crypto.Sign(new_msg2, key)
+
+		conn.Write([]byte("Message Received"))
+		conn.Write(new_msg2)
+		conn.Write(addr[:])
+		conn.Write(new_sig)
 	}
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
 	}
 	// Send a response back to person contacting us.
-	conn.Write([]byte("Message received."))
+
 	// Close the connection when you're done with it.
 	//conn.Close()
 }
