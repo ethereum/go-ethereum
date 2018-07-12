@@ -259,8 +259,9 @@ class Logs extends Component<Props, State> {
 	// and the height of the first log chunk, which can be deleted during the insertion.
 	beforeUpdate = () => {
 		let firstHeight = 0;
-		if (this.content && this.content.children[0] && this.content.children[0].children[0]) {
-			firstHeight = this.content.children[0].children[0].clientHeight;
+		let chunkList = this.content.children[1];
+		if (chunkList && chunkList.children[0]) {
+			firstHeight = chunkList.children[0].clientHeight;
 		}
 		return {
 			scrollTop: this.props.container.scrollTop,
@@ -288,10 +289,10 @@ class Logs extends Component<Props, State> {
 			}
 			return;
 		}
-		const chunks = this.content.children[1].children;
 		let {scrollTop} = snapshot;
 		if (logs.topChanged === ADDED) {
-			scrollTop += chunks[0].clientHeight;
+			// It would be safer to use a ref to the list, but ref doesn't work well with HOCs.
+			scrollTop += this.content.children[1].children[0].clientHeight;
 		} else if (logs.bottomChanged === ADDED) {
 			if (logs.topChanged === REMOVED) {
 				scrollTop -= snapshot.firstHeight;

@@ -10466,8 +10466,8 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                 var container = _this.props.container;
                 return container.scrollHeight - container.scrollTop <= container.clientHeight + container.scrollHeight * requestBand;
             }, _this.beforeUpdate = function() {
-                var firstHeight = 0;
-                return _this.content && _this.content.children[0] && _this.content.children[0].children[0] && (firstHeight = _this.content.children[0].children[0].clientHeight), 
+                var firstHeight = 0, chunkList = _this.content.children[1];
+                return chunkList && chunkList.children[0] && (firstHeight = chunkList.children[0].clientHeight), 
                 {
                     scrollTop: _this.props.container.scrollTop,
                     firstHeight: firstHeight
@@ -10477,8 +10477,8 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                     var logs = _this.props.content.logs, container = _this.props.container;
                     if (!(void 0 === container || logs.chunks.length < 1)) {
                         if (_this.content.clientHeight < container.clientHeight) return void (logs.endTop || _this.sendRequest(logs.chunks[0].name, !0));
-                        var chunks = _this.content.children[1].children, scrollTop = snapshot.scrollTop;
-                        logs.topChanged === ADDED ? scrollTop += chunks[0].clientHeight : logs.bottomChanged === ADDED && (logs.topChanged === REMOVED ? scrollTop -= snapshot.firstHeight : _this.atBottom() && logs.endBottom && (scrollTop = container.scrollHeight - container.clientHeight)), 
+                        var scrollTop = snapshot.scrollTop;
+                        logs.topChanged === ADDED ? scrollTop += _this.content.children[1].children[0].clientHeight : logs.bottomChanged === ADDED && (logs.topChanged === REMOVED ? scrollTop -= snapshot.firstHeight : _this.atBottom() && logs.endBottom && (scrollTop = container.scrollHeight - container.clientHeight)), 
                         container.scrollTop = scrollTop, _this.setState({
                             requestAllowed: !0
                         });
@@ -40593,7 +40593,7 @@ func bundleJs() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "bundle.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x3d, 0x8a, 0x53, 0x2e, 0x63, 0x83, 0xc6, 0x18, 0xd0, 0x6, 0x0, 0xcf, 0x2f, 0x21, 0x73, 0x66, 0x4d, 0xfe, 0xec, 0x2b, 0x8e, 0x5, 0xa8, 0xf7, 0xeb, 0x38, 0x87, 0x5c, 0x37, 0x6f, 0x56, 0xcc}}
+	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xb8, 0x2a, 0xfa, 0x2b, 0x5f, 0x53, 0x70, 0xf3, 0x27, 0xb0, 0x5c, 0x53, 0x65, 0xe8, 0x2c, 0xd5, 0xf7, 0x55, 0x71, 0x3, 0x2b, 0x21, 0xfb, 0x9f, 0x48, 0xfd, 0x68, 0xc0, 0x7e, 0x55, 0xcc, 0x20}}
 	return a, nil
 }
 
