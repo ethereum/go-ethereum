@@ -118,6 +118,7 @@ func handleRequest(conn net.Conn) {
 		f_msg := "Message Received"
 		first_message := []byte(f_msg)
 		new_msg2 := crypto.Keccak256(first_message)
+		fmt.Println("the hash is ", hexutil.Encode(new_msg2))
 
 		//send_message := append(new_msg2, []byte{byte(10)}...)
 		new_sig , err := crypto.Sign(new_msg2, key)
