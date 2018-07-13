@@ -38,6 +38,7 @@ import (
 
 var (
 	dockerPrefix     string // unique prefix used for the created docker resources
+	dockerNetwork    string // name of the docker network to start containers in
 	dashboardsFolder string // folder containing all dashboards to be imported in Grafana
 	grafanaPort      int    // expose port for the Grafana HTTP interface
 	influxdbPort     int    // expose port for the InfluxDB HTTP interface
@@ -86,7 +87,12 @@ func main() {
 		cli.StringFlag{
 			Name:  "docker-prefix",
 			Value: "stateth",
-			Usage: "prefix to be used for docker network and containers. must be unique.",
+			Usage: "prefix to be used for docker network (if not specified explicitly) and containers. must be unique.",
+		},
+		cli.StringFlag{
+			Name:  "docker-network",
+			Value: "",
+			Usage: "docker network to start containers in.",
 		},
 		cli.BoolFlag{
 			Name:  "rm",
@@ -97,6 +103,10 @@ func main() {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
 		dockerPrefix = c.String("docker-prefix")
+		dockerNetwork = c.String("docker-network")
+		if dockerNetwork == "" {
+			dockerNetwork = dockerPrefix
+		}
 		grafanaPort = c.Int("grafana-http-port")
 		influxdbPort = c.Int("influxdb-http-port")
 		dashboardsFolder = c.String("grafana-dashboards-folder")
@@ -107,9 +117,8 @@ func main() {
 			cleanupContainers(c)
 		}
 
-		if err := runNetwork(c); err != nil {
-			return err
-		}
+		runNetwork(c)
+
 		if err := runInfluxDB(c); err != nil {
 			return err
 		}
@@ -151,15 +160,13 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runNetwork(c *cli.Context) error {
-	log.Info("creating docker network", "network", dockerPrefix)
-	command := strings.Split(fmt.Sprintf("docker network create %s", dockerPrefix), " ")
+func runNetwork(c *cli.Context) {
+	log.Info("creating docker network", "network", dockerNetwork)
+	command := strings.Split(fmt.Sprintf("docker network create %s", dockerNetwork), " ")
 	r, err := exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
-		log.Error(string(r))
-		return err
+		log.Warn(string(r))
 	}
-	return nil
 }
 
 func runInfluxDB(c *cli.Context) error {
@@ -172,7 +179,7 @@ func runInfluxDB(c *cli.Context) error {
 	}
 
 	log.Info("running influxdb docker container", "container", fmt.Sprintf("%s_influxdb", dockerPrefix))
-	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=%s -e INFLUXDB_ADMIN_USER=%s -e INFLUXDB_ADMIN_PASSWORD=%s -p %d:8086 -d influxdb:1.5.2", dockerPrefix, dockerPrefix, influxdbDatabase, influxdbAdminUser, influxdbAdminPass, influxdbPort), " ")
+	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=%s -e INFLUXDB_ADMIN_USER=%s -e INFLUXDB_ADMIN_PASSWORD=%s -p %d:8086 -d influxdb:1.5.2", dockerNetwork, dockerPrefix, influxdbDatabase, influxdbAdminUser, influxdbAdminPass, influxdbPort), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Error(string(r))
@@ -191,7 +198,7 @@ func runGrafana(c *cli.Context) error {
 	}
 
 	log.Info("running grafana docker container", "container", fmt.Sprintf("%s_grafana", dockerPrefix))
-	command = strings.Split(fmt.Sprintf("docker run --network %s --name=%s_grafana -p %d:3000 -e GF_AUTH_ANONYMOUS_ENABLED=true -d grafana/grafana:5.1.3", dockerPrefix, dockerPrefix, grafanaPort), " ")
+	command = strings.Split(fmt.Sprintf("docker run --network %s --name=%s_grafana -p %d:3000 -e GF_AUTH_ANONYMOUS_ENABLED=true -d grafana/grafana:5.1.3", dockerNetwork, dockerPrefix, grafanaPort), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Error(string(r))
@@ -216,7 +223,7 @@ func cleanupContainers(c *cli.Context) {
 	}
 
 	log.Info("removing network")
-	command = strings.Split(fmt.Sprintf("docker network rm %s", dockerPrefix), " ")
+	command = strings.Split(fmt.Sprintf("docker network rm %s", dockerNetwork), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Warn(string(r))
