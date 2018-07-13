@@ -44,6 +44,8 @@ var (
 	influxdbPort     int    // expose port for the InfluxDB HTTP interface
 	influxdbDatabase string // name of database to provision on InfluxDB
 	rm               bool   // remove stateth containers and stateth network upon startup
+
+	grafanaIP string
 )
 
 const (
@@ -136,7 +138,7 @@ func main() {
 
 		sigs := make(chan os.Signal, 1)
 		done := make(chan bool, 1)
-		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 		go func() {
 			sig := <-sigs
@@ -149,7 +151,7 @@ func main() {
 		fmt.Println(fmt.Sprintf("username: %s", grafanaUser))
 		fmt.Println(fmt.Sprintf("password: %s", grafanaPass))
 		fmt.Println()
-		fmt.Println("waiting for SIGINT or SIGTERM (CTRL^C) to stop service and remove containers...")
+		fmt.Println("waiting for SIGINT, SIGTERM or SIGHUP to stop service and remove containers...")
 		<-done
 
 		cleanupContainers(c)
@@ -170,12 +172,16 @@ func runNetwork(c *cli.Context) {
 }
 
 func runInfluxDB(c *cli.Context) error {
-	log.Info("pulling influxdb:1.5.2 docker image")
-	command := strings.Split("docker pull influxdb:1.5.2", " ")
+	command := strings.Split("docker image inspect influxdb:1.5.2", " ")
 	r, err := exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
-		log.Error(err.Error())
-		return err
+		log.Info("pulling influxdb:1.5.2 docker image")
+		command := strings.Split("docker pull influxdb:1.5.2", " ")
+		_, err := exec.Command(command[0], command[1:]...).CombinedOutput()
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
 	}
 
 	log.Info("running influxdb docker container", "container", fmt.Sprintf("%s_influxdb", dockerPrefix))
@@ -189,12 +195,16 @@ func runInfluxDB(c *cli.Context) error {
 }
 
 func runGrafana(c *cli.Context) error {
-	log.Info("pulling grafana/grafana:5.1.3 docker image")
-	command := strings.Split("docker pull grafana/grafana:5.1.3", " ")
+	command := strings.Split("docker image inspect grafana/grafana:5.1.3", " ")
 	r, err := exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
-		log.Error(string(r))
-		return err
+		log.Info("pulling grafana/grafana:5.1.3 docker image")
+		command := strings.Split("docker pull grafana/grafana:5.1.3", " ")
+		_, err := exec.Command(command[0], command[1:]...).CombinedOutput()
+		if err != nil {
+			log.Error(string(r))
+			return err
+		}
 	}
 
 	log.Info("running grafana docker container", "container", fmt.Sprintf("%s_grafana", dockerPrefix))
@@ -204,6 +214,16 @@ func runGrafana(c *cli.Context) error {
 		log.Error(string(r))
 		return err
 	}
+
+	r, err = exec.Command("docker", "inspect", "-f", "'{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'", "stateth_grafana").CombinedOutput()
+	if err != nil {
+		log.Error(string(r))
+		return err
+	}
+
+	grafanaIP = strings.Trim(string(r), "' \n")
+
+	log.Info("grafana docker container ip", "ip", grafanaIP)
 	return nil
 }
 
@@ -232,7 +252,7 @@ func cleanupContainers(c *cli.Context) {
 
 func importGrafanaDatasource(c *cli.Context) error {
 	log.Info("importing grafana datasource")
-	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://localhost:%d", grafanaPort))
+	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://%s:%d", grafanaIP, grafanaPort))
 	if err != nil {
 		log.Warn(err.Error())
 		return nil
@@ -261,7 +281,7 @@ func importGrafanaDatasource(c *cli.Context) error {
 
 func importGrafanaDashboards(c *cli.Context) error {
 	log.Info("importing grafana dashboards")
-	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://localhost:%d", grafanaPort))
+	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://%s:%d", grafanaIP, grafanaPort))
 	if err != nil {
 		log.Warn(err.Error())
 		return nil
