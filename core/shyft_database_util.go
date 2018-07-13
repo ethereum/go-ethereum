@@ -175,8 +175,6 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 	hash := txData.TxHash
 	txHash := txData.TxHash.Hex()
 
-	IShyftTracer.GetTracerToRun(hash)
-
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()
@@ -230,6 +228,8 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 			panic(qerr)
 		}
 	}
+
+	IShyftTracer.GetTracerToRun(hash)
 
 	return nil
 }

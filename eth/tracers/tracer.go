@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/olebedev/go-duktape.v3"
+	"database/sql"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -588,34 +589,36 @@ type Internals struct {
 	Calls []*Internals
 }
 
-//func (i *Internals) SWriteInteralTxs() {
-//	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-//	sqldb, err := sql.Open("postgres", connStr)
-//	if err != nil {
-//		return
-//	}
-//
-//	sqlStatement := `INSERT INTO internalTxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10))`
-//	qerr := sqldb.QueryRow(sqlStatement, i.Type, txHash, i.From, i.To, i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output)
-//
-//	if qerr != nil {
-//		panic(qerr)
-//	}
-//}
+func (i *Internals) SWriteInteralTxs(hash common.Hash) {
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	sqldb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+	gas, _ := hexutil.DecodeUint64(i.Gas)
+	gasUsed, _ := hexutil.DecodeUint64(i.GasUsed)
 
-func (i *Internals) InternalRecursive() {
+	var returnValue string
+	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
+	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, i.Value, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
+
+	if qerr != nil {
+		fmt.Println(qerr)
+		panic(qerr)
+	}
+}
+
+func (i *Internals) InternalRecursive(hash common.Hash) {
+	i.SWriteInteralTxs(hash)
 	lengthOfCalls := len(i.Calls)
 	if lengthOfCalls == 0 {
 		return
 	}
 
 	for _, val := range i.Calls {
-		val.InternalRecursive()
+		val.InternalRecursive(hash)
 	}
 }
-
-
-
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (jst *Tracer) GetResult() (json.RawMessage, error) {
@@ -662,8 +665,56 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	if err := json.Unmarshal(result, &dat); err != nil {
 		panic(err)
 	}
+	return result, jst.err
+}
 
-	dat.InternalRecursive()
+// GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
+func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
+	// Transform the context into a JavaScript object and inject into the state
+	obj := jst.vm.PushObject()
+
+	for key, val := range jst.ctx {
+		switch val := val.(type) {
+		case uint64:
+			jst.vm.PushUint(uint(val))
+
+		case string:
+			jst.vm.PushString(val)
+
+		case []byte:
+			ptr := jst.vm.PushFixedBuffer(len(val))
+			copy(makeSlice(ptr, uint(len(val))), val[:])
+
+		case common.Address:
+			ptr := jst.vm.PushFixedBuffer(20)
+			copy(makeSlice(ptr, 20), val[:])
+
+		case *big.Int:
+			pushBigInt(val, jst.vm)
+
+		default:
+			panic(fmt.Sprintf("unsupported type: %T", val))
+		}
+		jst.vm.PutPropString(obj, key)
+	}
+	jst.vm.PutPropString(jst.stateObject, "ctx")
+
+	// Finalize the trace and return the results
+	result, err := jst.call("result", "ctx", "db")
+	if err != nil {
+		jst.err = wrapError("result", err)
+	}
+	// Clean up the JavaScript environment
+	jst.vm.DestroyHeap()
+	jst.vm.Destroy()
+
+	var dat Internals
+
+	if err := json.Unmarshal(result, &dat); err != nil {
+		panic(err)
+	}
+	fmt.Println("[THIS IS HASH]", hash.Hex())
+	dat.InternalRecursive(hash)
 
 	return result, jst.err
 }

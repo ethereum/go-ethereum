@@ -548,6 +548,91 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	return api.traceTx(ctx, msg, vmctx, statedb, config)
 }
 
+// TraceTransaction returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (api *PrivateDebugAPI) STraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
+	// NOTE:SHYFT
+	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
+	if tx == nil {
+		return nil, fmt.Errorf("transaction %x not found", hash)
+	}
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+	msg, vmctx, statedb, err := api.computeTxEnv(blockHash, int(index), reexec)
+	if err != nil {
+		return nil, err
+	}
+	return api.StraceTx(ctx, msg, vmctx, statedb, config, hash)
+}
+
+// traceTx configures a new tracer according to the provided configuration, and
+// executes the given message in the provided environment. The return value will
+// be tracer dependent.
+func (api *PrivateDebugAPI) StraceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig, hash common.Hash) (interface{}, error) {
+	// Assemble the structured logger or the JavaScript tracer
+	var (
+		tracer vm.Tracer
+		err    error
+	)
+	switch {
+	case config != nil && config.Tracer != nil:
+		// Define a meaningful timeout of a single transaction trace
+
+		_ = defaultTraceTimeout
+
+		if config.Timeout != nil {
+			if _, err = time.ParseDuration(*config.Timeout); err != nil {
+				return nil, err
+			}
+		}
+		// Constuct the JavaScript tracer to execute with
+		if tracer, err = tracers.New(*config.Tracer); err != nil {
+			return nil, err
+		}
+		// NOTE:SHYFT REMOVED CTX DEADLINE
+		// Handle timeouts and RPC cancellations
+		//deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		//go func() {
+		//	<-deadlineCtx.Done()
+		//	tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
+		//}()
+		//defer cancel()
+
+	case config == nil:
+		tracer = vm.NewStructLogger(nil)
+
+	default:
+		tracer = vm.NewStructLogger(config.LogConfig)
+	}
+	// Run the transaction with tracing enabled.
+	vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
+
+	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()))
+	if err != nil {
+		return nil, fmt.Errorf("tracing failed: %v", err)
+	}
+	// Depending on the tracer type, format and return the output
+	switch tracer := tracer.(type) {
+	case *vm.StructLogger:
+		return &ethapi.ExecutionResult{
+			Gas:         gas,
+			Failed:      failed,
+			ReturnValue: fmt.Sprintf("%x", ret),
+			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+		}, nil
+
+	case *tracers.Tracer:
+		return tracer.SGetResult(hash)
+
+	default:
+		panic(fmt.Sprintf("bad tracer type %T", tracer))
+	}
+}
+
+
+
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
