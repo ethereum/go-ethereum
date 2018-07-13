@@ -277,7 +277,7 @@ func retrieveToFile(quitC chan bool, fileStore *storage.FileStore, addr storage.
 	}
 	reader, _ := fileStore.Retrieve(context.TODO(), addr)
 	writer := bufio.NewWriter(f)
-	size, err := reader.Size(quitC)
+	size, err := reader.Size(context.TODO(), quitC)
 	if err != nil {
 		return err
 	}

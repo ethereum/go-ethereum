@@ -82,9 +82,9 @@ type Peer interface {
 type Conn interface {
 	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
-	Send(interface{}) error                                                               // can send messages
+	Send(context.Context, interface{}) error                                              // can send messages
 	Drop(error)                                                                           // disconnect this peer
-	Run(func(interface{}) error) error                                                    // the run function to run a protocol
+	Run(func(context.Context, interface{}) error) error                                   // the run function to run a protocol
 	Off() OverlayAddr
 }
 

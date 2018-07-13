@@ -25,6 +25,7 @@ package storage
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -370,7 +371,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		key := Address(keybytes)
 		chunk := NewChunk(key, nil)
 		chunk.SData = data[32:]
-		s.Put(chunk)
+		s.Put(context.TODO(), chunk)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -499,7 +500,7 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
-func (s *LDBStore) Put(chunk *Chunk) {
+func (s *LDBStore) Put(ctx context.Context, chunk *Chunk) {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Addr)
 
@@ -639,7 +640,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(addr Address) (chunk *Chunk, err error) {
+func (s *LDBStore) Get(ctx context.Context, addr Address) (chunk *Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
 

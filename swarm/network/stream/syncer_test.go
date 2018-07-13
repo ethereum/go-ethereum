@@ -231,7 +231,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		for j := i; j < nodes; j++ {
 			total += len(hashes[j])
 			for _, key := range hashes[j] {
-				chunk, err := dbs[i].Get(key)
+				chunk, err := dbs[i].Get(ctx, key)
 				if err == storage.ErrFetching {
 					<-chunk.ReqC
 				} else if err != nil {

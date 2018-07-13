@@ -77,8 +77,9 @@ func cliUploadAndSync(c *cli.Context) error {
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 
 	if filesize < 10 {
-		time.Sleep(15 * time.Second)
+		time.Sleep(35 * time.Second)
 	} else {
+		time.Sleep(15 * time.Second)
 		time.Sleep(2 * time.Duration(filesize) * time.Second)
 	}
 
@@ -108,7 +109,7 @@ func cliUploadAndSync(c *cli.Context) error {
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
 func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	log.Trace("sleeping", "ruid", ruid)
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
 	res, err := http.Get(endpoint + "/bzz:/" + hash + "/")

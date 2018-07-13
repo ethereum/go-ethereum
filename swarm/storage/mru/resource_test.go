@@ -182,7 +182,7 @@ func TestHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk, err := rh.chunkStore.Get(storage.Address(rootChunkKey))
+	chunk, err := rh.chunkStore.Get(context.TODO(), storage.Address(rootChunkKey))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -256,7 +256,7 @@ func TestHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrc2, err := rh2.Load(rootChunkKey)
+	rsrc2, err := rh2.Load(context.TODO(), rootChunkKey)
 	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -754,7 +754,7 @@ func newTestSigner() (*GenericSigner, error) {
 }
 
 func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
-	chunk, err := rh.chunkStore.Get(addr)
+	chunk, err := rh.chunkStore.Get(context.TODO(), addr)
 	if err != nil {
 		return nil, err
 	}

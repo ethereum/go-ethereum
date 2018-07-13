@@ -287,7 +287,7 @@ func (pc *PyramidChunker) processor(id int64) {
 func (pc *PyramidChunker) processChunk(id int64, job *chunkJob) {
 	log.Debug("pyramid.chunker: processChunk()", "id", id)
 
-	ref, err := pc.putter.Put(job.chunk)
+	ref, err := pc.putter.Put(context.TODO(), job.chunk)
 	if err != nil {
 		pc.errC <- err
 	}
@@ -302,7 +302,7 @@ func (pc *PyramidChunker) processChunk(id int64, job *chunkJob) {
 func (pc *PyramidChunker) loadTree() error {
 	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
-	chunkData, err := pc.getter.Get(Reference(pc.key))
+	chunkData, err := pc.getter.Get(context.TODO(), Reference(pc.key))
 	if err != nil {
 		return errLoadingTreeRootChunk
 	}
@@ -355,7 +355,7 @@ func (pc *PyramidChunker) loadTree() error {
 			branchCount = int64(len(ent.chunk)-8) / pc.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*pc.hashSize) : 8+((i+1)*pc.hashSize)]
-				newChunkData, err := pc.getter.Get(Reference(key))
+				newChunkData, err := pc.getter.Get(context.TODO(), Reference(key))
 				if err != nil {
 					return errLoadingTreeChunk
 				}
@@ -417,7 +417,7 @@ func (pc *PyramidChunker) prepareChunks(isAppend bool) {
 			lastKey := parent.chunk[8+lastBranch*pc.hashSize : 8+(lastBranch+1)*pc.hashSize]
 
 			var err error
-			unfinishedChunkData, err = pc.getter.Get(lastKey)
+			unfinishedChunkData, err = pc.getter.Get(context.TODO(), lastKey)
 			if err != nil {
 				pc.errC <- err
 			}

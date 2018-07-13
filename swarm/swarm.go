@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"path/filepath"
@@ -50,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
 var (
@@ -76,6 +78,8 @@ type Swarm struct {
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
+
+	tracerClose io.Closer
 }
 
 type SwarmAPI struct {
@@ -356,6 +360,8 @@ Start is called when the stack is started
 func (self *Swarm) Start(srv *p2p.Server) error {
 	startTime = time.Now()
 
+	self.tracerClose = tracing.Closer
+
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
@@ -424,6 +430,13 @@ func (self *Swarm) updateGauges() {
 // implements the node.Service interface
 // stops all component services.
 func (self *Swarm) Stop() error {
+	if self.tracerClose != nil {
+		err := self.tracerClose.Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	if self.ps != nil {
 		self.ps.Stop()
 	}

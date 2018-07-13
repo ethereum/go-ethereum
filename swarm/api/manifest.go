@@ -212,10 +212,10 @@ func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storag
 	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
 }
 
-func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
-	size, err := manifestReader.Size(quitC)
+	size, err := mr.Size(mr.Context(), quitC)
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
 		log.Trace("manifest not found", "key", hash)
@@ -228,7 +228,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Address
 		return
 	}
 	manifestData := make([]byte, size)
-	read, err := manifestReader.Read(manifestData)
+	read, err := mr.Read(manifestData)
 	if int64(read) < size {
 		log.Trace("manifest not found", "key", hash)
 		if err == nil {
