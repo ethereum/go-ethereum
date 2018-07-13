@@ -193,7 +193,7 @@ var (
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
-		Name:  "dashboard",
+		Name:  metrics.DashboardEnabledFlag,
 		Usage: "Enable the dashboard",
 	}
 	DashboardAddrFlag = cli.StringFlag{
@@ -998,7 +998,7 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
-// checkExclusive verifies that only a single isntance of the provided flags was
+// checkExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
 func checkExclusive(ctx *cli.Context, args ...interface{}) {
@@ -1185,7 +1185,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 // RegisterDashboardService adds a dashboard to the stack.
 func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg, commit)
+		return dashboard.New(cfg, commit, ctx.ResolvePath("logs")), nil
 	})
 }
 

@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -99,12 +100,12 @@ func NewPyramidSplitterParams(addr Address, reader io.Reader, putter Putter, get
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Address, func(), error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split()
+func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split(ctx)
 }
 
-func PyramidAppend(addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(), error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, DefaultChunkSize)).Append()
+func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, DefaultChunkSize)).Append(ctx)
 }
 
 // Entry to create a tree node
@@ -203,7 +204,7 @@ func (pc *PyramidChunker) decrementWorkerCount() {
 	pc.workerCount -= 1
 }
 
-func (pc *PyramidChunker) Split() (k Address, wait func(), err error) {
+func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Split()")
 
 	pc.wg.Add(1)
@@ -235,7 +236,7 @@ func (pc *PyramidChunker) Split() (k Address, wait func(), err error) {
 
 }
 
-func (pc *PyramidChunker) Append() (k Address, wait func(), err error) {
+func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Append()")
 	// Load the right most unfinished tree chunks in every level
 	pc.loadTree()

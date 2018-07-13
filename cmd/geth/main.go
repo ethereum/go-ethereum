@@ -199,10 +199,15 @@ func init() {
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx); err != nil {
+
+		logdir := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
 		}
-		// Cap the cache allowance and tune the garbage colelctor
+		// Cap the cache allowance and tune the garbage collector
 		var mem gosigar.Mem
 		if err := mem.Get(); err == nil {
 			allowance := int(mem.Total / 1024 / 1024 / 3)

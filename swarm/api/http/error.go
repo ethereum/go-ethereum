@@ -147,6 +147,14 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 	switch code {
 	case http.StatusInternalServerError:
 		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.ruid, "code", code)
+	case http.StatusMultipleChoices:
+		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
+		listURI := api.URI{
+			Scheme: "bzz-list",
+			Addr:   req.uri.Addr,
+			Path:   req.uri.Path,
+		}
+		additionalMessage = fmt.Sprintf(`<a href="/%s">multiple choices</a>`, listURI.String())
 	default:
 		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
 	}

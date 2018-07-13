@@ -17,10 +17,13 @@
 package swarm
 
 import (
+	"context"
+	"encoding/hex"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +44,13 @@ func TestNewSwarm(t *testing.T) {
 
 	// a simple rpc endpoint for testing dialing
 	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+
+	// windows namedpipes are not on filesystem but on NPFS
+	if runtime.GOOS == "windows" {
+		b := make([]byte, 8)
+		rand.Read(b)
+		ipcEndpoint = `\\.\pipe\TestSwarm-` + hex.EncodeToString(b)
+	}
 
 	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
 	if err != nil {
@@ -338,15 +348,19 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 	}
 	dataPut := string(slice)
 
-	k, wait, err := swarm.api.Store(strings.NewReader(dataPut), int64(len(dataPut)), false)
+	ctx := context.TODO()
+	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if wait != nil {
-		wait()
+		err = wait(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	r, _ := swarm.api.Retrieve(k)
+	r, _ := swarm.api.Retrieve(context.TODO(), k)
 
 	d, err := ioutil.ReadAll(r)
 	if err != nil {
