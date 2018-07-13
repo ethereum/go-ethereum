@@ -8,9 +8,17 @@ import (
   "os"
   "encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common"
+	//"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"bytes"
 )
+
+type Msg struct {
+	Message string `json:"message"`
+	HashedMessage string `json:"hashed_message"`
+	Signature string `json:"signature"`
+	Address string `json:"address"`
+}
 
 const (
 	CONN_HOST = "localhost"
@@ -102,18 +110,36 @@ func handleRequest(conn net.Conn) {
 		//fmt.Println(recoveredAddr)
 		fmt.Println(recoveredAddr.Hex())
 
-		conn.Write([]byte("Message received."))
+		//conn.Write([]byte("Message received."))
 
 		key, _ := crypto.HexToECDSA(testPrivHex)
-		addr := common.HexToAddress(testAddrHex)
+		//addr := common.HexToAddress(testAddrHex)
 
-		new_msg2 := crypto.Keccak256([]byte("Message Received"))
+		f_msg := "Message Received"
+		first_message := []byte(f_msg)
+		new_msg2 := crypto.Keccak256(first_message)
+
+		//send_message := append(new_msg2, []byte{byte(10)}...)
 		new_sig , err := crypto.Sign(new_msg2, key)
+		hex_sig := hexutil.Encode(new_sig)
+		fmt.Println("THE hex sig is ", hex_sig)
 
+
+		myNewMsg := Msg{f_msg, string(new_msg2[:]), string(new_sig[:]), testAddrHex}
+		reqBodyBytes := new(bytes.Buffer)
+		json.NewEncoder(reqBodyBytes).Encode(myNewMsg)
+
+		fmt.Println([]byte("Message Received\n"))
 		conn.Write([]byte("Message Received"))
-		conn.Write(new_msg2)
-		conn.Write(addr[:])
+		conn.Write([]byte("\n"))
 		conn.Write(new_sig)
+		conn.Write([]byte("\n"))
+		fmt.Println("PAUSE")
+		//time.Sleep(5 * time.Second)
+		//fmt.Println(send_message)
+		//conn.Write(send_message)
+		//conn.Write(addr[:])
+		//conn.Write(append(reqBodyBytes.Bytes() ,[]byte{byte(10)}...))
 	}
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
