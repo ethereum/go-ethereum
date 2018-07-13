@@ -186,7 +186,7 @@ func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptes
 
 func correctBzzHandshake(addr *BzzAddr) *HandshakeMsg {
 	return &HandshakeMsg{
-		Version:   4,
+		Version:   5,
 		NetworkID: DefaultNetworkID,
 		Addr:      addr,
 	}
@@ -199,7 +199,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 4, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 5, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
 	)
 
@@ -216,7 +216,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
 		&HandshakeMsg{Version: 0, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
-		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= 4)")},
+		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= 5)")},
 	)
 
 	if err != nil {
@@ -231,7 +231,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 4, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 5, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
 	)
 
 	if err != nil {
