@@ -38,7 +38,7 @@ import (
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 )
 
-const SWARM_VERSION = "0.3"
+const SWARM_VERSION = "0.3.1-unstable"
 
 var (
 	//flag definition for the dumpconfig command
