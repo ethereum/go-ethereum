@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/olebedev/go-duktape.v3"
 	"database/sql"
+	"reflect"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -595,6 +596,12 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	if err != nil {
 		return
 	}
+	fmt.Println("[VALUE]", reflect.TypeOf(i.Value))
+	test := "0x3782dace9d900000"
+	if test == i.Value {
+		fmt.Println("[EQUAL]: ", test, i.Value)
+	}
+
 	gas, _ := hexutil.DecodeUint64(i.Gas)
 	gasUsed, _ := hexutil.DecodeUint64(i.GasUsed)
 
@@ -609,6 +616,11 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 }
 
 func (i *Internals) InternalRecursive(hash common.Hash) {
+	amount, _ := hexutil.DecodeUint64(i.Value)
+	if i.Type != "CREATE" {
+		fmt.Println("[INSIDE RECURSIVE VALUE]", amount)
+		fmt.Printf("%+v", i)
+	}
 	i.SWriteInteralTxs(hash)
 	lengthOfCalls := len(i.Calls)
 	if lengthOfCalls == 0 {
@@ -713,7 +725,8 @@ func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
 	if err := json.Unmarshal(result, &dat); err != nil {
 		panic(err)
 	}
-	fmt.Println("[THIS IS HASH]", hash.Hex())
+	//fmt.Println("[THIS IS HASH]", hash.Hex())
+	//fmt.Println("DAT DATA STRUCTURE" , dat)
 	dat.InternalRecursive(hash)
 
 	return result, jst.err

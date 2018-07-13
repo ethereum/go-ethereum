@@ -4,13 +4,19 @@ var Transfers2 = artifacts.require("Transfers2");
 contract('Transfers', function(accounts) {
     var addressA = web3.eth.accounts[0];
     var addressB = web3.eth.accounts[1];
+    console.log("Addr A:", addressA)
+    console.log("Addr B:", addressB)
+
     var transfers;
     web3.eth.defaultAccount = web3.eth.accounts[0];
 
     it("should initialize", async() => {
     	transfers = await Transfers.new();
     	transfers2 = await Transfers2.new();
-    	assert(transfers !== undefined, "");
+    	console.log("Transfer addr1", transfers.address)
+        console.log("Transfer addr2", transfers2.address)
+
+        assert(transfers !== undefined, "");
     	assert(transfers2 !== undefined, "");
     })
 
