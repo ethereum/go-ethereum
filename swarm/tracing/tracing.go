@@ -1,7 +1,6 @@
 package tracing
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -97,7 +96,7 @@ func initTracer(endpoint, svc string) (closer io.Closer) {
 		//jaegercfg.Observer(rpcmetrics.NewObserver(jMetricsFactory, rpcmetrics.DefaultNameNormalizer)),
 	)
 	if err != nil {
-		panic(fmt.Sprintf("Could not initialize jaeger tracer: %s", err.Error()))
+		log.Error("Could not initialize Jaeger tracer", "err", err)
 	}
 
 	return closer
