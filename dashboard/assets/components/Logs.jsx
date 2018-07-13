@@ -19,8 +19,8 @@
 import React, {Component} from 'react';
 
 import List, {ListItem} from 'material-ui/List';
+import escapeHtml from 'escape-html';
 import type {Record, Content, LogsMessage, Logs as LogsType} from '../types/content';
-import {htmlEscape} from '../common';
 
 // requestBand says how wide is the top/bottom zone, eg. 0.1 means 10% of the container height.
 const requestBand = 0.05;
@@ -84,8 +84,8 @@ const createChunk = (records: Array<Record>) => {
 		content += `<span style="color:${color}">${lvl}</span>[${month}-${date}|${hours}:${minutes}:${seconds}] ${msg}`;
 
 		for (let i = 0; i < ctx.length; i += 2) {
-			const key = htmlEscape(ctx[i]);
-			const val = htmlEscape(ctx[i + 1]);
+			const key = escapeHtml(ctx[i]);
+			const val = escapeHtml(ctx[i + 1]);
 			let padding = fieldPadding.get(key);
 			if (typeof padding !== 'number' || padding < val.length) {
 				padding = val.length;

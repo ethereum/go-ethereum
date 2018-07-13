@@ -69,11 +69,3 @@ export const styles = {
 		color: 'rgba(255, 255, 255, 0.54)',
 	},
 };
-
-// htmlEscape replaces the HTML specific special characters in a string.
-export const htmlEscape = (str: string) => str
-	.replace(/&/g, '&amp;')
-	.replace(/"/g, '&quot;')
-	.replace(/'/g, '&#39;')
-	.replace(/</g, '&lt;')
-	.replace(/>/g, '&gt;');
