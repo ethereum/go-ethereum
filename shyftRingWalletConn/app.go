@@ -26,8 +26,8 @@ const (
 	CONN_TYPE = "tcp"
 )
 
-var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
-var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
+var testAddrHex = "14791697260E4c9A71f18484C9f997B308e59325"
+var testPrivHex = "0123456789012345678901234567890123456789012345678901234567890123"
 
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
@@ -115,7 +115,7 @@ func handleRequest(conn net.Conn) {
 		key, _ := crypto.HexToECDSA(testPrivHex)
 		//addr := common.HexToAddress(testAddrHex)
 
-		f_msg := "Message Received"
+		f_msg := "Hello World"
 		first_message := []byte(f_msg)
 		new_msg2 := crypto.Keccak256(first_message)
 		fmt.Println("the hash is ", hexutil.Encode(new_msg2))
@@ -130,8 +130,7 @@ func handleRequest(conn net.Conn) {
 		reqBodyBytes := new(bytes.Buffer)
 		json.NewEncoder(reqBodyBytes).Encode(myNewMsg)
 
-		fmt.Println([]byte("Message Received\n"))
-		conn.Write([]byte("Message Received"))
+		conn.Write([]byte(f_msg))
 		conn.Write([]byte("\n"))
 		conn.Write(new_sig)
 		conn.Write([]byte("\n"))
