@@ -75,7 +75,7 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many Ethers should be rewarded to signer? (default = 0)")
 		genesis.Config.Clique.Reward = uint64(w.readDefaultInt(0))
-		
+
 		// We also need the initial list of signers
 		fmt.Println()
 		fmt.Println("Which accounts are allowed to seal? (mandatory at least one)")
@@ -102,6 +102,10 @@ func (w *wizard) makeGenesis() {
 		for i, signer := range signers {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
+
+		fmt.Println()
+		fmt.Println("How many blocks per checkpoint? (default = 990)")
+		genesis.Config.Clique.RewardCheckpoint = uint64(w.readDefaultInt(990))
 
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
