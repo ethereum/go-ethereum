@@ -550,6 +550,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
+//@NOTE:SHYFT
 func (api *PrivateDebugAPI) STraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	// NOTE:SHYFT
 	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
@@ -570,6 +571,7 @@ func (api *PrivateDebugAPI) STraceTransaction(ctx context.Context, hash common.H
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
+//@NOTE:SHYFT
 func (api *PrivateDebugAPI) StraceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig, hash common.Hash) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
@@ -591,7 +593,7 @@ func (api *PrivateDebugAPI) StraceTx(ctx context.Context, message core.Message, 
 		if tracer, err = tracers.New(*config.Tracer); err != nil {
 			return nil, err
 		}
-		// NOTE:SHYFT REMOVED CTX DEADLINE
+		// @NOTE:SHYFT REMOVED CTX DEADLINE
 		// Handle timeouts and RPC cancellations
 		//deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		//go func() {
@@ -646,10 +648,10 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	case config != nil && config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
 
-		 _ = defaultTraceTimeout
+		 timeout := defaultTraceTimeout
 
 		if config.Timeout != nil {
-			if _, err = time.ParseDuration(*config.Timeout); err != nil {
+			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
 				return nil, err
 			}
 		}
@@ -657,14 +659,13 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 		if tracer, err = tracers.New(*config.Tracer); err != nil {
 			return nil, err
 		}
-		// NOTE:SHYFT REMOVED CTX DEADLINE
-		// Handle timeouts and RPC cancellations
-		//deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		//go func() {
-		//	<-deadlineCtx.Done()
-		//	tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
-		//}()
-		//defer cancel()
+		//Handle timeouts and RPC cancellations
+		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		go func() {
+			<-deadlineCtx.Done()
+			tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
+		}()
+		defer cancel()
 
 	case config == nil:
 		tracer = vm.NewStructLogger(nil)

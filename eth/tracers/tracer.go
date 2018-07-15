@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/olebedev/go-duktape.v3"
 	"database/sql"
-	"reflect"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -577,6 +576,7 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 	return nil
 }
 
+//@NOTE:SHYFT
 type Internals struct {
 	Type string
 	From string
@@ -590,16 +590,12 @@ type Internals struct {
 	Calls []*Internals
 }
 
+//@NOTE:SHYFT
 func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	sqldb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return
-	}
-	fmt.Println("[VALUE]", reflect.TypeOf(i.Value))
-	test := "0x3782dace9d900000"
-	if test == i.Value {
-		fmt.Println("[EQUAL]: ", test, i.Value)
 	}
 
 	gas, _ := hexutil.DecodeUint64(i.Gas)
@@ -614,13 +610,8 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 		panic(qerr)
 	}
 }
-
+//@NOTE:SHYFT
 func (i *Internals) InternalRecursive(hash common.Hash) {
-	amount, _ := hexutil.DecodeUint64(i.Value)
-	if i.Type != "CREATE" {
-		fmt.Println("[INSIDE RECURSIVE VALUE]", amount)
-		fmt.Printf("%+v", i)
-	}
 	i.SWriteInteralTxs(hash)
 	lengthOfCalls := len(i.Calls)
 	if lengthOfCalls == 0 {
@@ -672,15 +663,12 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
 
-	var dat Internals
-
-	if err := json.Unmarshal(result, &dat); err != nil {
-		panic(err)
-	}
 	return result, jst.err
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
+
+//@NOTE:SHYFT
 func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
@@ -725,8 +713,6 @@ func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
 	if err := json.Unmarshal(result, &dat); err != nil {
 		panic(err)
 	}
-	//fmt.Println("[THIS IS HASH]", hash.Hex())
-	//fmt.Println("DAT DATA STRUCTURE" , dat)
 	dat.InternalRecursive(hash)
 
 	return result, jst.err
