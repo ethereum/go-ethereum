@@ -3,6 +3,7 @@ package shyftdb
 import (
 	"testing"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	//"time"
@@ -40,18 +41,18 @@ func TestBlockToReturnBlock(t *testing.T) {
 	block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
 
 	// Write and verify the block in the database
-	if err := WriteBlock(block, receipts); err != nil {
+	if err := core.SWriteBlock(block, receipts); err != nil {
 		t.Fatalf("Failed to write block into database: %v", err)
 	}
 
-	sqldb, err := DBConnection()
-	if (err != nil) {
+	sqldb, err := core.DBConnection()
+	if err != nil {
 		panic(err)
 	}
 
-	entry := GetBlock(sqldb, block.Number().String())
+	entry := core.SGetBlock(sqldb, block.Number().String())
 		byt := []byte(entry)
-		var data SBlock
+		var data core.SBlock
 		json.Unmarshal(byt, &data)
 
 	//TODO Difficulty, rewards, age
@@ -89,11 +90,11 @@ func TestBlockToReturnBlock(t *testing.T) {
 		t.Fatalf("Block nonce [%v]: Block nonce not found", block.Nonce())
 	}
 
-	if getAllBlocks := GetAllBlocks(sqldb); len(getAllBlocks) == 0 {
+	if getAllBlocks := core.SGetAllBlocks(sqldb); len(getAllBlocks) == 0 {
 		t.Fatalf("GetAllBlocks [%v]: GetAllBlocks did not return correctly", getAllBlocks)
 	}
 
-	if getAllBlocksMinedByAddress := GetAllBlocksMinedByAddress(sqldb, block.Coinbase().String()); len(getAllBlocksMinedByAddress) == 0 {
+	if getAllBlocksMinedByAddress := core.SGetAllBlocksMinedByAddress(sqldb, block.Coinbase().String()); len(getAllBlocksMinedByAddress) == 0 {
 		t.Fatalf("GetAllBlocksMinedByAddress [%v]: GetAllBlocksMinedByAddress did not return correctly", getAllBlocksMinedByAddress)
 	}
 
@@ -133,19 +134,19 @@ func TestGetRecentBlock(t *testing.T) {
 
 	for _, bc := range blocks {
 		// Write and verify the block in the database
-		if err := WriteBlock(bc, receipts); err != nil {
+		if err := core.SWriteBlock(bc, receipts); err != nil {
 			t.Fatalf("Failed to write block into database: %v", err)
 		}
 	}
 
-	sqldb, err := DBConnection()
+	sqldb, err := core.DBConnection()
 	if (err != nil) {
 		panic(err)
 	}
 
-	response := GetRecentBlock(sqldb)
+	response := core.SGetRecentBlock(sqldb)
 	byteRes := []byte(response)
-	var recentBlock SBlock
+	var recentBlock core.SBlock
 	json.Unmarshal(byteRes, &recentBlock)
 
 	if block.Hash().String() != recentBlock.Hash {
@@ -182,7 +183,7 @@ func TestGetRecentBlock(t *testing.T) {
 		t.Fatalf("Block nonce [%v]: Block nonce not found", block.Nonce())
 	}
 
-	if allTxsFromBlock:= GetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
+	if allTxsFromBlock:= core.SGetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
 		t.Fatalf("GetAllTransactionsFromBlock [%v]: GetAllTransactionsFromBlock did not return correctly", allTxsFromBlock)
 	}
 	ClearTables()
@@ -212,7 +213,7 @@ func TestContractCreationTx(t *testing.T) {
 	receipts := []*types.Receipt{receipt2}
 	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, receipts)
 
-	if err := WriteBlock(block, receipts); err != nil {
+	if err := core.SWriteBlock(block, receipts); err != nil {
 		t.Fatalf("Failed to write block into database: %v", err)
 	}
 
@@ -221,15 +222,15 @@ func TestContractCreationTx(t *testing.T) {
 		contractAddressFromReciept = (*types.ReceiptForStorage)(receipt).ContractAddress.String()
 	}
 
-	sqldb, err := DBConnection()
+	sqldb, err := core.DBConnection()
 	if (err != nil) {
 		panic(err)
 	}
 
 	for _, tx := range txs {
-		txn := GetTransaction(sqldb, tx.Hash().String())
+		txn := core.SGetTransaction(sqldb, tx.Hash().String())
 		byt := []byte(txn)
-		var data ShyftTxEntryPretty
+		var data core.ShyftTxEntryPretty
 		json.Unmarshal(byt, &data)
 
 		if tx.Hash().String() != data.TxHash {
@@ -316,18 +317,18 @@ func TestTransactionsToReturnTransactions(t *testing.T) {
 	receipts := []*types.Receipt{receipt1}
 	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, receipts)
 
-	if err := WriteBlock(block, receipts); err != nil {
+	if err := core.SWriteBlock(block, receipts); err != nil {
 		t.Fatalf("Failed to write block into database: %v", err)
 	}
-	sqldb, err := DBConnection()
+	sqldb, err := core.DBConnection()
 	if (err != nil) {
 		panic(err)
 	}
 	
 	for _, tx := range txs {
-		txn := GetTransaction(sqldb, tx.Hash().String())
+		txn := core.SGetTransaction(sqldb, tx.Hash().String())
 			byt := []byte(txn)
-			var data ShyftTxEntryPretty
+			var data core.ShyftTxEntryPretty
 			json.Unmarshal(byt, &data)
 
 			//TODO age, data
@@ -385,7 +386,7 @@ func TestTransactionsToReturnTransactions(t *testing.T) {
 		}
 	}
 
-	if getAllTx := GetAllTransactions(sqldb); len(getAllTx) == 0 {
+	if getAllTx := core.SGetAllTransactions(sqldb); len(getAllTx) == 0 {
 		t.Fatalf("GetAllTransactions [%v]: GetAllTransactions did not return correctly", getAllTx)
 	}
 	ClearTables()
@@ -418,20 +419,20 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 
 	receipts := []*types.Receipt{receipt1}
 	block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
-		if err := WriteBlock(block, receipts); err != nil {
+		if err := core.SWriteBlock(block, receipts); err != nil {
 			t.Fatalf("Failed to write block into database: %v", err)
 		}
 
-	sqldb, err := DBConnection()
+	sqldb, err := core.DBConnection()
 	if (err != nil) {
 		panic(err)
 	}
 
 
 	for _, tx := range txs {
-			accountAddrTo := GetAccount(sqldb, tx.To().String())
+			accountAddrTo := core.SGetAccount(sqldb, tx.To().String())
 			byts := []byte(accountAddrTo)
-			var accountDataTo SAccounts
+			var accountDataTo core.SAccounts
 			json.Unmarshal(byts, &accountDataTo)
 
 		if tx.To().String() != accountDataTo.Addr {
@@ -443,12 +444,12 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 		if strconv.FormatUint(tx.Nonce(), 10) != accountDataTo.TxCountAccount {
 			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataTo.TxCountAccount)
 		}
-		if getAllAccountTxs := GetAccountTxs(sqldb, tx.To().String()); len(getAllAccountTxs) == 0 {
+		if getAllAccountTxs := core.SGetAccountTxs(sqldb, tx.To().String()); len(getAllAccountTxs) == 0 {
 			t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
 		}
 	}
 
-	if getAllAccounts := GetAllAccounts(sqldb); len(getAllAccounts) == 0 {
+	if getAllAccounts := core.SGetAllAccounts(sqldb); len(getAllAccounts) == 0 {
 		t.Fatalf("GetAllAccounts [%v]: GetAllAccounts did not return correctly", getAllAccounts)
 	}
 	ClearTables()

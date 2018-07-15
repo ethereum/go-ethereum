@@ -255,7 +255,7 @@ func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 			panic(insertErr)
 		}
 	default:
-		getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+		getAccountBalanceSender:= SGetAccount(sqldb, fromAddr)
 		var senderBalance SendAndReceive
 		if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
 			log.Fatal(err)
