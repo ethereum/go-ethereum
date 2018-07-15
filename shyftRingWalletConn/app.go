@@ -149,3 +149,12 @@ func handleRequest(conn net.Conn) {
 	// Close the connection when you're done with it.
 	//conn.Close()
 }
+
+func intArrToByteArr(foo []int) []byte {
+
+	ret := []byte{}
+	for _, value := range foo {
+		ret = append(ret, byte(value))
+	}
+	return ret
+}
