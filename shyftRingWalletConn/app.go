@@ -130,6 +130,21 @@ func handleRequest(conn net.Conn) {
 		reqBodyBytes := new(bytes.Buffer)
 		json.NewEncoder(reqBodyBytes).Encode(myNewMsg)
 
+		//testArr := []byte{0xFF, 0x0a, 0xFE, 0x11, 0x0a, 0x0a, 0x0a, 0xF0, 0x0a, 0x1F, 0x22}
+		//testArr := []byte{0xFF, 0x0a, 0xFE, 0x11, 0x0a, 0x0a, 0xF0, 0x0a, 0x22}
+		//testArr := []byte{0xFF, 0x0a, 0xFE, 0xa, 0x22, 0xF3}
+		//testArr2 := []byte{0xF2, 0x0a, 0x1E}
+		//testArr3 := []byte{0xF1, 0x0a, 0xa0}
+
+		//conn.Write(testArr)
+		//time.Sleep(1 * time.Second)
+		//conn.Write(testArr2)
+		//time.Sleep(1 * time.Second)
+		//conn.Write(testArr3)
+
+
+		conn.Write([]byte("Broadcasting Message"))
+		conn.Write([]byte("\n"))
 		conn.Write([]byte(f_msg))
 		conn.Write([]byte("\n"))
 		conn.Write(new_sig)
