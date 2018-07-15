@@ -55,7 +55,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	db := ethdb.NewMemDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
-	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, DefaultClientIndexerConfig, ethash.NewFaker())
+	blockchain, _ := NewLightChain(&dummyOdr{db: db, indexerConfig: TestClientIndexerConfig}, gspec.Config, ethash.NewFaker())
 
 	// Create and inject the requested chain
 	if n == 0 {
@@ -75,7 +75,7 @@ func newTestLightChain() *LightChain {
 		Config:     params.TestChainConfig,
 	}
 	gspec.MustCommit(db)
-	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, DefaultClientIndexerConfig, ethash.NewFullFaker())
+	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker())
 	if err != nil {
 		panic(err)
 	}
@@ -265,7 +265,8 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 
 type dummyOdr struct {
 	OdrBackend
-	db ethdb.Database
+	db            ethdb.Database
+	indexerConfig *IndexerConfig
 }
 
 func (odr *dummyOdr) Database() ethdb.Database {
@@ -274,6 +275,10 @@ func (odr *dummyOdr) Database() ethdb.Database {
 
 func (odr *dummyOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	return nil
+}
+
+func (odr *dummyOdr) IndexerConfig() *IndexerConfig {
+	return odr.indexerConfig
 }
 
 // Tests that reorganizing a long difficult chain after a short easy one
@@ -339,7 +344,7 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
 
 	// Create a new LightChain and check that it rolled back the state.
-	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, DefaultClientIndexerConfig, ethash.NewFaker())
+	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, ethash.NewFaker())
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}

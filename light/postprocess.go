@@ -59,27 +59,48 @@ type IndexerConfig struct {
 	BloomTrieConfirm uint64
 }
 
-// DefaultServerIndexerConfig wraps a set of configs as a default indexer config for server side.
-var DefaultServerIndexerConfig = &IndexerConfig{
-	ChtSize:          params.CHTFrequencyServer,
-	PairChtSize:      params.CHTFrequencyClient,
-	ChtConfirm:       params.HelperTrieProcessConfirmations,
-	BloomSize:        params.BloomBitsBlocks,
-	BloomConfirm:     params.BloomConfirms,
-	BloomTrieSize:    params.BloomTrieFrequency,
-	BloomTrieConfirm: params.HelperTrieProcessConfirmations,
-}
-
-// DefaultClientIndexerConfig wraps a set of configs as a default indexer config for client side.
-var DefaultClientIndexerConfig = &IndexerConfig{
-	ChtSize:          params.CHTFrequencyClient,
-	PairChtSize:      params.CHTFrequencyServer,
-	ChtConfirm:       params.HelperTrieConfirmations,
-	BloomSize:        params.BloomBitsBlocksClient,
-	BloomConfirm:     params.HelperTrieConfirmations,
-	BloomTrieSize:    params.BloomTrieFrequency,
-	BloomTrieConfirm: params.HelperTrieConfirmations,
-}
+var (
+	// DefaultServerIndexerConfig wraps a set of configs as a default indexer config for server side.
+	DefaultServerIndexerConfig = &IndexerConfig{
+		ChtSize:          params.CHTFrequencyServer,
+		PairChtSize:      params.CHTFrequencyClient,
+		ChtConfirm:       params.HelperTrieProcessConfirmations,
+		BloomSize:        params.BloomBitsBlocks,
+		BloomConfirm:     params.BloomConfirms,
+		BloomTrieSize:    params.BloomTrieFrequency,
+		BloomTrieConfirm: params.HelperTrieProcessConfirmations,
+	}
+	// DefaultClientIndexerConfig wraps a set of configs as a default indexer config for client side.
+	DefaultClientIndexerConfig = &IndexerConfig{
+		ChtSize:          params.CHTFrequencyClient,
+		PairChtSize:      params.CHTFrequencyServer,
+		ChtConfirm:       params.HelperTrieConfirmations,
+		BloomSize:        params.BloomBitsBlocksClient,
+		BloomConfirm:     params.HelperTrieConfirmations,
+		BloomTrieSize:    params.BloomTrieFrequency,
+		BloomTrieConfirm: params.HelperTrieConfirmations,
+	}
+	// TestServerIndexerConfig wraps a set of configs as a test indexer config for server side.
+	TestServerIndexerConfig = &IndexerConfig{
+		ChtSize:          256,
+		PairChtSize:      2048,
+		ChtConfirm:       16,
+		BloomSize:        256,
+		BloomConfirm:     16,
+		BloomTrieSize:    2048,
+		BloomTrieConfirm: 16,
+	}
+	// TestClientIndexerConfig wraps a set of configs as a test indexer config for client side.
+	TestClientIndexerConfig = &IndexerConfig{
+		ChtSize:          2048,
+		PairChtSize:      256,
+		ChtConfirm:       128,
+		BloomSize:        2048,
+		BloomConfirm:     128,
+		BloomTrieSize:    2048,
+		BloomTrieConfirm: 128,
+	}
+)
 
 // trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash. It is used to start light syncing from this checkpoint

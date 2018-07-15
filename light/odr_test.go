@@ -93,6 +93,10 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	return nil
 }
 
+func (odr *testOdr) IndexerConfig() *IndexerConfig {
+	return odr.indexerConfig
+}
+
 type odrTestFn func(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error)
 
 func TestOdrGetBlockLes1(t *testing.T) { testChainOdr(t, 1, odrGetBlock) }
@@ -259,8 +263,8 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 		t.Fatal(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: DefaultClientIndexerConfig}
-	lightchain, err := NewLightChain(odr, params.TestChainConfig, DefaultClientIndexerConfig, ethash.NewFullFaker())
+	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
+	lightchain, err := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)
 	}

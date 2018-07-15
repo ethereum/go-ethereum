@@ -94,13 +94,13 @@ func TestTxPool(t *testing.T) {
 		panic(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: DefaultClientIndexerConfig}
+	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
 	relay := &testTxRelay{
 		send:    make(chan int, 1),
 		discard: make(chan int, 1),
 		mined:   make(chan int, 1),
 	}
-	lightchain, _ := NewLightChain(odr, params.TestChainConfig, DefaultClientIndexerConfig, ethash.NewFullFaker())
+	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker())
 	txPermanent = 50
 	pool := NewTxPool(params.TestChainConfig, lightchain, relay)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
