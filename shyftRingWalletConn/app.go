@@ -6,11 +6,10 @@ import (
   "net"
   "fmt"
   "os"
-  "encoding/json"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	//"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"bytes"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 type Msg struct {
@@ -59,106 +58,112 @@ func main() {
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 	// Make a buffer to hold incoming data.
-	buf := make([]byte, 1024)
 	// Read the incoming connection into the buffer.
-	msg, err := conn.Read(buf)
 
-	if err == nil {
-		fmt.Println("Message is ", string(buf[:msg]))
-		var dat map[string]interface{}
+	go func() {
+		buf := make([]byte, 1024)
+		msgBuf := make([]byte, 0)
+		var prevMsg []byte
+		var addressOfClient []byte
+		var signatureFromClient []byte
+		var msgFromClient []byte
 
-		if err := json.Unmarshal(buf[:msg], &dat); err != nil {
-			panic(err)
+		for {
+			//var addressOfClient []byte
+			//var msgFromClient []byte
+			//var sigFromClient []byte
+			msg, err := conn.Read(buf)
+
+			if err == nil {
+				fmt.Println("Message is ", buf[:msg])
+				fmt.Println("The old msg buf is ", msgBuf)
+				msgBuf = append(msgBuf, buf[:msg]...)
+				fmt.Println("THE msgBuf is ")
+				fmt.Println(msgBuf)
+				//fmt.Println("Message is ", string(buf[:msg]))
+			}
+			index := bytes.IndexByte(msgBuf, 0x0a)
+			for index != -1 {
+				newMsg := msgBuf[:index]
+				rest := msgBuf[(index + 1):len(msgBuf)]
+				msgBuf = rest
+				index = bytes.IndexByte(msgBuf, 0x0a)
+				fmt.Println("new msg")
+				fmt.Println(newMsg)
+				fmt.Println(string(newMsg[:]))
+				fmt.Println("prev message ", prevMsg)
+				fmt.Println((prevMsg == nil))
+				if prevMsg != nil {
+					fmt.Println("not nil")
+					s := string(prevMsg[:])
+					if s == "-- ADDRESS --" {
+						fmt.Println("the address should be ")
+						fmt.Println(newMsg)
+						addressOfClient = newMsg
+					}
+					if s == "-- SIGNATURE --" {
+						signatureFromClient = newMsg
+					}
+					if s == "-- MESSAGE --" {
+						msgFromClient = newMsg
+					}
+					prevMsg = nil
+				} else {
+					fmt.Println("nil")
+					prevMsg = newMsg
+					fmt.Println("prev message is in else block ", prevMsg)
+					fmt.Println("index ", index)
+					fmt.Println("msgBuf ", msgBuf)
+					fmt.Println(bytes.IndexByte(msgBuf, 0x0a))
+
+				}
+			}
+
+			if(addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil ){
+				fmt.Println("ALL COMPONENTS RECEIVED")
+				msg := string(msgFromClient[:])
+				//new_msg := signHash(msgFromClient)
+				sig := string(signatureFromClient[:])
+				addr := string(addressOfClient[:])
+				fmt.Println(addr)
+				fmt.Println(msg)
+				fmt.Println(sig)
+
+				var new_byte_array = []byte(msg)
+				var bazz = hexutil.Encode(new_byte_array)
+				fizz, err2 := hexutil.Decode(bazz)
+
+				var new_sig_byte_array, err3 = hexutil.Decode(sig)
+				if err2 != nil {
+					fmt.Println("the err2 is ")
+					fmt.Println(err2)
+				}
+				if err3 != nil {
+					fmt.Println("the err3 is ")
+					fmt.Println(err3)
+				}
+
+				var buzz = hexutil.Bytes(new_sig_byte_array)
+				buzz[64] -= 27
+
+				new_msg := signHash(fizz)
+
+				var rpk, err = crypto.Ecrecover(new_msg, buzz)
+				if err != nil {
+					fmt.Println("The error is ")
+					fmt.Println(err)
+				}
+
+				pubKey := crypto.ToECDSAPub(rpk)
+				recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+				fmt.Println("the address is ")
+				//fmt.Println(recoveredAddr)
+				fmt.Println(recoveredAddr.Hex())
+			}
 		}
+	}()
+	conn.Write([]byte{byte(0x0f)})
 
-
-		fmt.Println(dat["address"])
-		fmt.Println(dat["msg"])
-		fmt.Println(dat["sig"])
-
-		var msg = dat["msg"].(string)
-		var sig = dat["sig"].(string)
-		fmt.Println("the first sig is ")
-		var new_byte_array = []byte(msg)
-		var bazz = hexutil.Encode(new_byte_array)
-		fizz, err2 := hexutil.Decode(bazz)
-
-		var new_sig_byte_array, err3 = hexutil.Decode(sig)
-		if err2 != nil {
-			fmt.Println("the err2 is ")
-			fmt.Println(err2)
-		}
-		if err3 != nil {
-			fmt.Println("the err3 is ")
-			fmt.Println(err3)
-		}
-
-		var buzz = hexutil.Bytes(new_sig_byte_array)
-		buzz[64] -= 27
-
-		new_msg := signHash(fizz)
-
-		var rpk, err = crypto.Ecrecover(new_msg, buzz)
-		if err != nil {
-			fmt.Println("The error is ")
-			fmt.Println(err)
-		}
-
-		pubKey := crypto.ToECDSAPub(rpk)
-		recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-		fmt.Println("the address is ")
-		//fmt.Println(recoveredAddr)
-		fmt.Println(recoveredAddr.Hex())
-
-		//conn.Write([]byte("Message received."))
-
-		key, _ := crypto.HexToECDSA(testPrivHex)
-		//addr := common.HexToAddress(testAddrHex)
-
-		f_msg := "Hello World"
-		first_message := []byte(f_msg)
-		new_msg2 := crypto.Keccak256(first_message)
-		fmt.Println("the hash is ", hexutil.Encode(new_msg2))
-
-		//send_message := append(new_msg2, []byte{byte(10)}...)
-		new_sig , err := crypto.Sign(new_msg2, key)
-		hex_sig := hexutil.Encode(new_sig)
-		fmt.Println("THE hex sig is ", hex_sig)
-
-
-		myNewMsg := Msg{f_msg, string(new_msg2[:]), string(new_sig[:]), testAddrHex}
-		reqBodyBytes := new(bytes.Buffer)
-		json.NewEncoder(reqBodyBytes).Encode(myNewMsg)
-
-		//testArr := []byte{0xFF, 0x0a, 0xFE, 0x11, 0x0a, 0x0a, 0x0a, 0xF0, 0x0a, 0x1F, 0x22}
-		//testArr := []byte{0xFF, 0x0a, 0xFE, 0x11, 0x0a, 0x0a, 0xF0, 0x0a, 0x22}
-		//testArr := []byte{0xFF, 0x0a, 0xFE, 0xa, 0x22, 0xF3}
-		//testArr2 := []byte{0xF2, 0x0a, 0x1E}
-		//testArr3 := []byte{0xF1, 0x0a, 0xa0}
-
-		//conn.Write(testArr)
-		//time.Sleep(1 * time.Second)
-		//conn.Write(testArr2)
-		//time.Sleep(1 * time.Second)
-		//conn.Write(testArr3)
-
-
-		conn.Write([]byte("Broadcasting Message"))
-		conn.Write([]byte("\n"))
-		conn.Write([]byte(f_msg))
-		conn.Write([]byte("\n"))
-		conn.Write(new_sig)
-		conn.Write([]byte("\n"))
-		fmt.Println("PAUSE")
-		//time.Sleep(5 * time.Second)
-		//fmt.Println(send_message)
-		//conn.Write(send_message)
-		//conn.Write(addr[:])
-		//conn.Write(append(reqBodyBytes.Bytes() ,[]byte{byte(10)}...))
-	}
-	if err != nil {
-		fmt.Println("Error reading:", err.Error())
-	}
 	// Send a response back to person contacting us.
 
 	// Close the connection when you're done with it.
