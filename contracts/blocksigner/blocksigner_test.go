@@ -39,7 +39,8 @@ func TestBlockSigner(t *testing.T) {
 	}
 	contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 
-	signers, err := blockSigner.GetSigners(big.NewInt(0))
+	byte0 := [32]byte{}
+	signers, err := blockSigner.GetSigners(byte0)
 	if err != nil {
 		t.Fatalf("can't get candidates: %v", err)
 	}
