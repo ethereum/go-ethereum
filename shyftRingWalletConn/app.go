@@ -129,11 +129,11 @@ func handleRequest(conn net.Conn) {
 				fmt.Println(msg)
 				fmt.Println(sig)
 
-				var new_byte_array = []byte(msg)
-				var bazz = hexutil.Encode(new_byte_array)
-				fizz, err2 := hexutil.Decode(bazz)
+				var msgByteArr = []byte(msg)
+				var hexMsg = hexutil.Encode(msgByteArr)
+				fizz, err2 := hexutil.Decode(hexMsg)
 
-				var new_sig_byte_array, err3 = hexutil.Decode(sig)
+				var sigByteArr, err3 = hexutil.Decode(sig)
 				if err2 != nil {
 					fmt.Println("the err2 is ")
 					fmt.Println(err2)
@@ -143,12 +143,12 @@ func handleRequest(conn net.Conn) {
 					fmt.Println(err3)
 				}
 
-				var buzz = hexutil.Bytes(new_sig_byte_array)
-				buzz[64] -= 27
+				var sigHex = hexutil.Bytes(sigByteArr)
+				sigHex[64] -= 27
 
-				new_msg := signHash(fizz)
+				signedMsgHash := signHash(fizz)
 
-				var rpk, err = crypto.Ecrecover(new_msg, buzz)
+				var rpk, err = crypto.Ecrecover(signedMsgHash, sigHex)
 				if err != nil {
 					fmt.Println("The error is ")
 					fmt.Println(err)
