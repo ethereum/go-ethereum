@@ -26,7 +26,7 @@ Available commands are:
    install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
    test       [ -coverage ] [ packages... ]                                                    -- runs the tests
    lint                                                                                        -- runs certain pre-selected linters
-   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
+   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artifacts
    importkeys                                                                                  -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
    nsis                                                                                        -- creates a Windows NSIS installer
