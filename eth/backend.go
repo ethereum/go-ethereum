@@ -103,9 +103,10 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 }
 
 func SNew(config *Config) (*Ethereum, error) {
+	fmt.Println("SNEW FROM SHYFTREACER")
 	stopDbUpgrade := upgradeDeduplicateData(Chaindb_global)
+	fmt.Println("ChainGlobal v+%", Chaindb_global)
 	chainConfig, _, _ := core.SetupGenesisBlock(Chaindb_global, config.Genesis)
-
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        Chaindb_global,
@@ -139,10 +140,9 @@ func SNew(config *Config) (*Ethereum, error) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-
 	shyft_tracer := new(ShyftTracer)
 	core.SetIShyftTracer(shyft_tracer)
-	setGlobalConfig(config)
+	SetGlobalConfig(config)
 
 	_, file, no, ok := runtime.Caller(1)
 	if ok {

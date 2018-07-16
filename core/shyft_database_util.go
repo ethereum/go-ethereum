@@ -114,7 +114,7 @@ type SendAndReceive struct {
 func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
@@ -204,7 +204,6 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		isContract = true
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit,txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
 		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
-
 		if qerr != nil {
 			panic(qerr)
 		}
@@ -228,7 +227,6 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 			panic(qerr)
 		}
 	}
-
 	IShyftTracer.GetTracerToRun(hash)
 
 	return nil

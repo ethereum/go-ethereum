@@ -27,11 +27,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/olebedev/go-duktape.v3"
-	"database/sql"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -592,10 +592,10 @@ type Internals struct {
 
 //@NOTE:SHYFT
 func (i *Internals) SWriteInteralTxs(hash common.Hash) {
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	sqldb, err := sql.Open("postgres", connStr)
+	fmt.Println("WRITE INTERNAL")
+	sqldb, err := core.DBConnection()
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	gas, _ := hexutil.DecodeUint64(i.Gas)
@@ -612,6 +612,7 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 }
 //@NOTE:SHYFT
 func (i *Internals) InternalRecursive(hash common.Hash) {
+	fmt.Println("internal recursive")
 	i.SWriteInteralTxs(hash)
 	lengthOfCalls := len(i.Calls)
 	if lengthOfCalls == 0 {
@@ -670,6 +671,7 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 //@NOTE:SHYFT
 func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
+	fmt.Println("SGETRESULT")
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 

@@ -8,7 +8,3 @@ type IShyftTracer interface {
 	GetTracerToRun(hash common.Hash) (interface{}, error)
 }
 
-//type IShyftTracer interface {
-//	MyTraceTransaction(hash string) (interface{})
-//}
-
