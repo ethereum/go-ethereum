@@ -162,7 +162,31 @@ func handleRequest(conn net.Conn) {
 			}
 		}
 	}()
-	conn.Write([]byte{byte(0x0f)})
+	go func() {
+		key, _ := crypto.HexToECDSA(testPrivHex)
+		//addr := common.HexToAddress(testAddrHex)
+
+		f_msg := "Hello World"
+		first_message := []byte(f_msg)
+		new_msg2 := crypto.Keccak256(first_message)
+		fmt.Println("the hash is ", hexutil.Encode(new_msg2))
+
+		//send_message := append(new_msg2, []byte{byte(10)}...)
+		new_sig , err := crypto.Sign(new_msg2, key)
+		if err != nil {
+			fmt.Println("The crypto.Sign err is ", err)
+		}
+		hex_sig := hexutil.Encode(new_sig)
+		fmt.Println("THE hex sig is ", hex_sig)
+
+		conn.Write([]byte("Broadcasting Message"))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(f_msg))
+		conn.Write([]byte("\n"))
+		conn.Write(new_sig)
+		conn.Write([]byte("\n"))
+	}()
+	//conn.Write([]byte{byte(0x0f)})
 
 	// Send a response back to person contacting us.
 
