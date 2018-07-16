@@ -12,13 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-type Msg struct {
-	Message string `json:"message"`
-	HashedMessage string `json:"hashed_message"`
-	Signature string `json:"signature"`
-	Address string `json:"address"`
-}
-
 const (
 	CONN_HOST = "localhost"
 	CONN_PORT = "3333"
@@ -69,18 +62,10 @@ func handleRequest(conn net.Conn) {
 		var msgFromClient []byte
 
 		for {
-			//var addressOfClient []byte
-			//var msgFromClient []byte
-			//var sigFromClient []byte
 			msg, err := conn.Read(buf)
 
 			if err == nil {
-				fmt.Println("Message is ", buf[:msg])
-				fmt.Println("The old msg buf is ", msgBuf)
 				msgBuf = append(msgBuf, buf[:msg]...)
-				fmt.Println("THE msgBuf is ")
-				fmt.Println(msgBuf)
-				//fmt.Println("Message is ", string(buf[:msg]))
 			}
 			index := bytes.IndexByte(msgBuf, 0x0a)
 			for index != -1 {
@@ -88,17 +73,9 @@ func handleRequest(conn net.Conn) {
 				rest := msgBuf[(index + 1):len(msgBuf)]
 				msgBuf = rest
 				index = bytes.IndexByte(msgBuf, 0x0a)
-				fmt.Println("new msg")
-				fmt.Println(newMsg)
-				fmt.Println(string(newMsg[:]))
-				fmt.Println("prev message ", prevMsg)
-				fmt.Println((prevMsg == nil))
 				if prevMsg != nil {
-					fmt.Println("not nil")
 					s := string(prevMsg[:])
 					if s == "-- ADDRESS --" {
-						fmt.Println("the address should be ")
-						fmt.Println(newMsg)
 						addressOfClient = newMsg
 					}
 					if s == "-- SIGNATURE --" {
@@ -109,67 +86,41 @@ func handleRequest(conn net.Conn) {
 					}
 					prevMsg = nil
 				} else {
-					fmt.Println("nil")
 					prevMsg = newMsg
-					fmt.Println("prev message is in else block ", prevMsg)
-					fmt.Println("index ", index)
-					fmt.Println("msgBuf ", msgBuf)
-					fmt.Println(bytes.IndexByte(msgBuf, 0x0a))
-
 				}
 			}
 
-			if(addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil ){
-				fmt.Println("ALL COMPONENTS RECEIVED")
-				msg := string(msgFromClient[:])
-				//new_msg := signHash(msgFromClient)
+			if addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil {
 				sig := string(signatureFromClient[:])
-				addr := string(addressOfClient[:])
-				fmt.Println(addr)
-				fmt.Println(msg)
-				fmt.Println(sig)
+				var sigByteArr, error = hexutil.Decode(sig)
 
-				var msgByteArr = []byte(msg)
-				var hexMsg = hexutil.Encode(msgByteArr)
-				fizz, err2 := hexutil.Decode(hexMsg)
-
-				var sigByteArr, err3 = hexutil.Decode(sig)
-				if err2 != nil {
-					fmt.Println("the err2 is ")
-					fmt.Println(err2)
-				}
-				if err3 != nil {
-					fmt.Println("the err3 is ")
-					fmt.Println(err3)
+				if error != nil {
+					fmt.Println(error)
 				}
 
 				var sigHex = hexutil.Bytes(sigByteArr)
 				sigHex[64] -= 27
 
-				signedMsgHash := signHash(fizz)
+				signedMsgHash := signHash(msgFromClient)
 
 				var rpk, err = crypto.Ecrecover(signedMsgHash, sigHex)
 				if err != nil {
-					fmt.Println("The error is ")
 					fmt.Println(err)
 				}
 
 				pubKey := crypto.ToECDSAPub(rpk)
 				recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-				fmt.Println("the address is ")
-				//fmt.Println(recoveredAddr)
-				fmt.Println(recoveredAddr.Hex())
+				fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
 			}
 		}
 	}()
 	go func() {
 		key, _ := crypto.HexToECDSA(testPrivHex)
-		//addr := common.HexToAddress(testAddrHex)
 
 		f_msg := "Hello World"
 		first_message := []byte(f_msg)
 		new_msg2 := crypto.Keccak256(first_message)
-		fmt.Println("the hash is ", hexutil.Encode(new_msg2))
+		fmt.Println("HASH IS ::", hexutil.Encode(new_msg2))
 
 		//send_message := append(new_msg2, []byte{byte(10)}...)
 		new_sig , err := crypto.Sign(new_msg2, key)
@@ -177,7 +128,7 @@ func handleRequest(conn net.Conn) {
 			fmt.Println("The crypto.Sign err is ", err)
 		}
 		hex_sig := hexutil.Encode(new_sig)
-		fmt.Println("THE hex sig is ", hex_sig)
+		fmt.Println("HEX SIG ::", hex_sig)
 
 		conn.Write([]byte("Broadcasting Message"))
 		conn.Write([]byte("\n"))
@@ -186,19 +137,4 @@ func handleRequest(conn net.Conn) {
 		conn.Write(new_sig)
 		conn.Write([]byte("\n"))
 	}()
-	//conn.Write([]byte{byte(0x0f)})
-
-	// Send a response back to person contacting us.
-
-	// Close the connection when you're done with it.
-	//conn.Close()
-}
-
-func intArrToByteArr(foo []int) []byte {
-
-	ret := []byte{}
-	for _, value := range foo {
-		ret = append(ret, byte(value))
-	}
-	return ret
 }
