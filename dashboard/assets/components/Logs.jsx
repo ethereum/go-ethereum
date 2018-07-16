@@ -19,6 +19,7 @@
 import React, {Component} from 'react';
 
 import List, {ListItem} from 'material-ui/List';
+import escapeHtml from 'escape-html';
 import type {Record, Content, LogsMessage, Logs as LogsType} from '../types/content';
 
 // requestBand says how wide is the top/bottom zone, eg. 0.1 means 10% of the container height.
@@ -83,8 +84,8 @@ const createChunk = (records: Array<Record>) => {
 		content += `<span style="color:${color}">${lvl}</span>[${month}-${date}|${hours}:${minutes}:${seconds}] ${msg}`;
 
 		for (let i = 0; i < ctx.length; i += 2) {
-			const key = ctx[i];
-			const val = ctx[i + 1];
+			const key = escapeHtml(ctx[i]);
+			const val = escapeHtml(ctx[i + 1]);
 			let padding = fieldPadding.get(key);
 			if (typeof padding !== 'number' || padding < val.length) {
 				padding = val.length;
@@ -101,11 +102,17 @@ const createChunk = (records: Array<Record>) => {
 	return content;
 };
 
+// ADDED, SAME and REMOVED are used to track the change of the log chunk array.
+// The scroll position is set using these values.
+const ADDED = 1;
+const SAME = 0;
+const REMOVED = -1;
+
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
 export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType) => {
-	prev.topChanged = 0;
-	prev.bottomChanged = 0;
+	prev.topChanged = SAME;
+	prev.bottomChanged = SAME;
 	if (!Array.isArray(update.chunk) || update.chunk.length < 1) {
 		return prev;
 	}
@@ -123,7 +130,7 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 			return [{content, name: '00000000000000.log'}];
 		}
 		prev.chunks[prev.chunks.length - 1].content += content;
-		prev.bottomChanged = 1;
+		prev.bottomChanged = ADDED;
 		return prev;
 	}
 	const chunk = {
@@ -137,10 +144,10 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 		if (prev.chunks.length >= limit) {
 			prev.endBottom = false;
 			prev.chunks.splice(limit - 1, prev.chunks.length - limit + 1);
-			prev.bottomChanged = -1;
+			prev.bottomChanged = REMOVED;
 		}
 		prev.chunks = [chunk, ...prev.chunks];
-		prev.topChanged = 1;
+		prev.topChanged = ADDED;
 		return prev;
 	}
 	if (update.source.last) {
@@ -149,10 +156,10 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 	if (prev.chunks.length >= limit) {
 		prev.endTop = false;
 		prev.chunks.splice(0, prev.chunks.length - limit + 1);
-		prev.topChanged = -1;
+		prev.topChanged = REMOVED;
 	}
 	prev.chunks = [...prev.chunks, chunk];
-	prev.bottomChanged = 1;
+	prev.bottomChanged = ADDED;
 	return prev;
 };
 
@@ -160,12 +167,18 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 const styles = {
 	logListItem: {
 		padding: 0,
+		lineHeight: 1.231,
 	},
 	logChunk: {
 		color:      'white',
 		fontFamily: 'monospace',
 		whiteSpace: 'nowrap',
 		width:      0,
+	},
+	waitMsg: {
+		textAlign:  'center',
+		color:      'white',
+		fontFamily: 'monospace',
 	},
 };
 
@@ -192,7 +205,17 @@ class Logs extends Component<Props, State> {
 
 	componentDidMount() {
 		const {container} = this.props;
+		if (typeof container === 'undefined') {
+			return;
+		}
 		container.scrollTop = container.scrollHeight - container.clientHeight;
+		const {logs} = this.props.content;
+		if (typeof this.content === 'undefined' || logs.chunks.length < 1) {
+			return;
+		}
+		if (this.content.clientHeight < container.clientHeight && !logs.endTop) {
+			this.sendRequest(logs.chunks[0].name, true);
+		}
 	}
 
 	// onScroll is triggered by the parent component's scroll event, and sends requests if the scroll position is
@@ -205,27 +228,21 @@ class Logs extends Component<Props, State> {
 		if (logs.chunks.length < 1) {
 			return;
 		}
-		if (this.atTop()) {
-			if (!logs.endTop) {
-				this.setState({requestAllowed: false});
-				this.props.send(JSON.stringify({
-					Logs: {
-						Name: logs.chunks[0].name,
-						Past: true,
-					},
-				}));
-			}
-		} else if (this.atBottom()) {
-			if (!logs.endBottom) {
-				this.setState({requestAllowed: false});
-				this.props.send(JSON.stringify({
-					Logs: {
-						Name: logs.chunks[logs.chunks.length - 1].name,
-						Past: false,
-					},
-				}));
-			}
+		if (this.atTop() && !logs.endTop) {
+			this.sendRequest(logs.chunks[0].name, true);
+		} else if (this.atBottom() && !logs.endBottom) {
+			this.sendRequest(logs.chunks[logs.chunks.length - 1].name, false);
 		}
+	};
+
+	sendRequest = (name: string, past: boolean) => {
+		this.setState({requestAllowed: false});
+		this.props.send(JSON.stringify({
+			Logs: {
+				Name: name,
+				Past: past,
+			},
+		}));
 	};
 
 	// atTop checks if the scroll position it at the top of the container.
@@ -242,8 +259,9 @@ class Logs extends Component<Props, State> {
 	// and the height of the first log chunk, which can be deleted during the insertion.
 	beforeUpdate = () => {
 		let firstHeight = 0;
-		if (this.content && this.content.children[0] && this.content.children[0].children[0]) {
-			firstHeight = this.content.children[0].children[0].clientHeight;
+		let chunkList = this.content.children[1];
+		if (chunkList && chunkList.children[0]) {
+			firstHeight = chunkList.children[0].clientHeight;
 		}
 		return {
 			scrollTop: this.props.container.scrollTop,
@@ -252,8 +270,8 @@ class Logs extends Component<Props, State> {
 	};
 
 	// didUpdate is called by the parent component, which provides the container. Sends the first request if the
-	// visible part of the container isn't full, and resets the scroll position in order to avoid jumping when new
-	// chunk is inserted.
+	// visible part of the container isn't full, and resets the scroll position in order to avoid jumping when a
+	// chunk is inserted or removed.
 	didUpdate = (prevProps, prevState, snapshot) => {
 		if (typeof this.props.shouldUpdate.logs === 'undefined' || typeof this.content === 'undefined' || snapshot === null) {
 			return;
@@ -264,27 +282,21 @@ class Logs extends Component<Props, State> {
 			return;
 		}
 		if (this.content.clientHeight < container.clientHeight) {
-			// Only enters here at the beginning, when there isn't enough log to fill the container
+			// Only enters here at the beginning, when there aren't enough logs to fill the container
 			// and the scroll bar doesn't appear.
 			if (!logs.endTop) {
-				this.setState({requestAllowed: false});
-				this.props.send(JSON.stringify({
-					Logs: {
-						Name: logs.chunks[0].name,
-						Past: true,
-					},
-				}));
+				this.sendRequest(logs.chunks[0].name, true);
 			}
 			return;
 		}
-		const chunks = this.content.children[0].children;
 		let {scrollTop} = snapshot;
-		if (logs.topChanged > 0) {
-			scrollTop += chunks[0].clientHeight;
-		} else if (logs.bottomChanged > 0) {
-			if (logs.topChanged < 0) {
+		if (logs.topChanged === ADDED) {
+			// It would be safer to use a ref to the list, but ref doesn't work well with HOCs.
+			scrollTop += this.content.children[1].children[0].clientHeight;
+		} else if (logs.bottomChanged === ADDED) {
+			if (logs.topChanged === REMOVED) {
 				scrollTop -= snapshot.firstHeight;
-			} else if (logs.endBottom && this.atBottom()) {
+			} else if (this.atBottom() && logs.endBottom) {
 				scrollTop = container.scrollHeight - container.clientHeight;
 			}
 		}
@@ -295,6 +307,9 @@ class Logs extends Component<Props, State> {
 	render() {
 		return (
 			<div ref={(ref) => { this.content = ref; }}>
+				<div style={styles.waitMsg}>
+					{this.props.content.logs.endTop ? 'No more logs.' : 'Waiting for server...'}
+				</div>
 				<List>
 					{this.props.content.logs.chunks.map((c, index) => (
 						<ListItem style={styles.logListItem} key={index}>
@@ -302,6 +317,7 @@ class Logs extends Component<Props, State> {
 						</ListItem>
 					))}
 				</List>
+				{this.props.content.logs.endBottom || <div style={styles.waitMsg}>Waiting for server...</div>}
 			</div>
 		);
 	}
