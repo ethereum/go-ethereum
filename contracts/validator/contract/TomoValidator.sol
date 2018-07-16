@@ -1,9 +1,8 @@
 pragma solidity ^0.4.21;
 
-import "./interfaces/IValidator.sol";
 import "./libs/SafeMath.sol";
 
-contract TomoValidator is IValidator {
+contract TomoValidator {
     using SafeMath for uint256;
 
     event Vote(address _voter, address _candidate, uint256 _cap);
@@ -18,7 +17,6 @@ contract TomoValidator is IValidator {
         string nodeUrl;
         bool isCandidate;
         uint256 cap;
-        uint256 withdrawBlockNumber;
         mapping(address => uint256) voters;
     }
 
@@ -31,13 +29,8 @@ contract TomoValidator is IValidator {
 
     mapping(address => ValidatorState) validatorsState;
     mapping(address => address[]) voters;
-    address[] public candidates = [
-        0xf99805B536609cC03AcBB2604dFaC11E9E54a448,
-        0x31b249fE6F267aa2396Eb2DC36E9c79351d97Ec5,
-        0xfC5571921c6d3672e13B58EA23DEA534f2b35fA0
-    ];
+    address[] public candidates;
 
-    address public firstOwner = 0x487d62d33467c4842c5e54Eb370837E4E88BBA0F;
     uint256 public candidateCount = 3;
     uint256 public minCandidateCap;
     uint256 public maxValidatorNumber;
@@ -84,6 +77,9 @@ contract TomoValidator is IValidator {
     }
 
     function TomoValidator (
+        address[] _candidates,
+        uint256[] _caps,
+        address _firstOwner,
         uint256 _minCandidateCap,
         uint256 _maxValidatorNumber,
         uint256 _candidateWithdrawDelay,
@@ -94,16 +90,16 @@ contract TomoValidator is IValidator {
         candidateWithdrawDelay = _candidateWithdrawDelay;
         voterWithdrawDelay = _voterWithdrawDelay;
 
-        for (uint256 i = 0; i < candidates.length; i++) {
-            validatorsState[candidates[i]] = ValidatorState({
-                owner: firstOwner,
+        for (uint256 i = 0; i < _candidates.length; i++) {
+            candidates.push(_candidates[i]);
+            validatorsState[_candidates[i]] = ValidatorState({
+                owner: _firstOwner,
                 nodeUrl: '',
                 isCandidate: true,
-                withdrawBlockNumber: 0,
-                cap: minCandidateCap
+                cap: _caps[i]
             });
-            voters[candidates[i]].push(firstOwner);
-            validatorsState[candidates[i]].voters[firstOwner] = minCandidateCap;
+            voters[_candidates[i]].push(_firstOwner);
+            validatorsState[candidates[i]].voters[_firstOwner] = minCandidateCap;
         }
     }
 
@@ -113,7 +109,6 @@ contract TomoValidator is IValidator {
             owner: msg.sender,
             nodeUrl: _nodeUrl,
             isCandidate: true,
-            withdrawBlockNumber: 0,
             cap: msg.value
         });
         validatorsState[_candidate].voters[msg.sender] = msg.value;
@@ -145,10 +140,6 @@ contract TomoValidator is IValidator {
 
     function getCandidateOwner(address _candidate) public view returns(address) {
         return validatorsState[_candidate].owner;
-    }
-
-    function getCandidateWithdrawBlockNumber(address _candidate) public view returns(uint256) {
-        return validatorsState[_candidate].withdrawBlockNumber;
     }
 
     function getVoterCap(address _candidate, address _voter) public view returns(uint256) {
