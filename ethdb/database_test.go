@@ -78,7 +78,7 @@ func testPutGet(db ethdb.Database, t *testing.T) {
 
 	_, err := db.Get([]byte("non-exist-key"))
 	if err == nil {
-		t.Fatalf("expect to return a non found error")
+		t.Fatalf("expect to return a not found error")
 	}
 
 	for _, v := range test_values {
