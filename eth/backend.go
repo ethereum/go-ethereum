@@ -232,6 +232,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	DebugApi.eth = eth
 	DebugApi.config = chainConfig
+	// Shyft Tracer
+	InitTracerEnv()
 
 	return eth, nil
 }

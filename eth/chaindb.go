@@ -4,6 +4,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/node"
 	"fmt"
+	"io/ioutil"
+	"os"
 )
 
 var Chaindb_global ethdb.Database
@@ -24,4 +26,22 @@ func chaindb(ctx *node.ServiceContext, config *Config) (ethdb.Database, error) {
 		return Chaindb_global, nil
 	}
 	return nil, err
+}
+
+//(*ethdb.LDBDatabase, func())
+func NewShyftTestLDB() {
+	dirname, err := ioutil.TempDir(os.TempDir(), "shyftdb_test_")
+	if err != nil {
+		panic("failed to create test file: " + err.Error())
+	}
+	db, err := ethdb.NewLDBDatabase(dirname, 0, 0)
+	if err != nil {
+		panic("failed to create test database: " + err.Error())
+	}
+	Chaindb_global = db
+
+	//return db, func() {
+	//	db.Close()
+	//	os.RemoveAll(dirname)
+	//}
 }

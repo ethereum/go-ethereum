@@ -29,6 +29,7 @@ const (
 )
 
 func TestBlock(t *testing.T) {
+	eth.NewShyftTestLDB()
 	core.InitDBTest()
 	shyft_tracer := new(eth.ShyftTracer)
 	core.SetIShyftTracer(shyft_tracer)
@@ -54,6 +55,8 @@ func TestBlock(t *testing.T) {
 	//}
 
 	eth.SetGlobalConfig(ethConf)
+
+	eth.InitTracerEnv()
 
 	t.Run("TestBlockToReturnBlock", func(t *testing.T) {
 		key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
