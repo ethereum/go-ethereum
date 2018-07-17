@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/empyrean/go-ethereum/crypto"
 )
 
 const (

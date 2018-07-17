@@ -1,14 +1,14 @@
 package shyftdb
 
 import (
-  	"fmt"
-  	"database/sql"
+	"database/sql"
+	"fmt"
 	"os"
 )
 
 var blockExplorerDb *sql.DB
 
-func InitDB() (*sql.DB, error){
+func InitDB() (*sql.DB, error) {
 	var connStr string
 	if "test" == os.Getenv("SHYFT_ENV") {
 		connStr = "user=postgres dbname=shyftdbtest sslmode=disable"
@@ -27,9 +27,9 @@ func InitDB() (*sql.DB, error){
 }
 
 func DBConnection() (*sql.DB, error) {
-	if (blockExplorerDb == nil) {
+	if blockExplorerDb == nil {
 		_, err := InitDB()
-		if(err != nil) {
+		if err != nil {
 			return nil, err
 		}
 	}

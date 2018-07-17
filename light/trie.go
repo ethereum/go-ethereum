@@ -21,12 +21,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/empyrean/go-ethereum/common"
+	"github.com/empyrean/go-ethereum/core/state"
+	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/empyrean/go-ethereum/ethdb"
+	"github.com/empyrean/go-ethereum/trie"
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {

@@ -32,9 +32,9 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/empyrean/go-ethereum/log"
+	"github.com/empyrean/go-ethereum/metrics"
+	"github.com/empyrean/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )

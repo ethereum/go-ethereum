@@ -1,27 +1,27 @@
 package shyftdb
 
 import (
-	"testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/empyrean/go-ethereum/common"
+	"github.com/empyrean/go-ethereum/core/types"
 	"math/big"
+	"testing"
 	//"time"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/empyrean/go-ethereum/crypto"
 	"strconv"
 )
 
 func TestBlockToReturnBlock(t *testing.T) {
-	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	signer  := types.NewEIP155Signer(big.NewInt(2147483647))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 	//Nonce, To Address,Value, GasLimit, Gasprice, data
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-	mytx,_ := types.SignTx(tx1, signer, key)
+	mytx, _ := types.SignTx(tx1, signer, key)
 	tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
-	mytx2,_ := types.SignTx(tx2, signer, key)
+	mytx2, _ := types.SignTx(tx2, signer, key)
 	tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
-	mytx3,_ := types.SignTx(tx3, signer, key)
+	mytx3, _ := types.SignTx(tx3, signer, key)
 	txs := []*types.Transaction{mytx, mytx2, mytx3}
 
 	receipt := &types.Receipt{
@@ -45,14 +45,14 @@ func TestBlockToReturnBlock(t *testing.T) {
 	}
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
 	entry := GetBlock(sqldb, block.Number().String())
-		byt := []byte(entry)
-		var data SBlock
-		json.Unmarshal(byt, &data)
+	byt := []byte(entry)
+	var data SBlock
+	json.Unmarshal(byt, &data)
 
 	//TODO Difficulty, rewards, age
 	if block.Hash().String() != data.Hash {
@@ -101,17 +101,17 @@ func TestBlockToReturnBlock(t *testing.T) {
 }
 
 func TestGetRecentBlock(t *testing.T) {
-	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	signer   := types.NewEIP155Signer(big.NewInt(2147483647))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 	//Nonce, To Address,Value, GasLimit, Gasprice, data
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-	mytx,_ := types.SignTx(tx1, signer, key)
+	mytx, _ := types.SignTx(tx1, signer, key)
 	tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
-	mytx2,_ := types.SignTx(tx2, signer, key)
+	mytx2, _ := types.SignTx(tx2, signer, key)
 	tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
-	mytx3,_ := types.SignTx(tx3, signer, key)
-	txs  := []*types.Transaction{mytx, mytx2}
+	mytx3, _ := types.SignTx(tx3, signer, key)
+	txs := []*types.Transaction{mytx, mytx2}
 	txs1 := []*types.Transaction{mytx3}
 
 	receipt1 := &types.Receipt{
@@ -139,7 +139,7 @@ func TestGetRecentBlock(t *testing.T) {
 	}
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
@@ -182,19 +182,19 @@ func TestGetRecentBlock(t *testing.T) {
 		t.Fatalf("Block nonce [%v]: Block nonce not found", block.Nonce())
 	}
 
-	if allTxsFromBlock:= GetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
+	if allTxsFromBlock := GetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
 		t.Fatalf("GetAllTransactionsFromBlock [%v]: GetAllTransactionsFromBlock did not return correctly", allTxsFromBlock)
 	}
 	ClearTables()
 }
 
 func TestContractCreationTx(t *testing.T) {
-	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	signer  := types.NewEIP155Signer(big.NewInt(2147483647))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 	//Nonce,Value, GasLimit, Gasprice, data
 	contractCreation := types.NewContractCreation(1, big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-	mytx,_ := types.SignTx(contractCreation, signer, key)
+	mytx, _ := types.SignTx(contractCreation, signer, key)
 	txs := []*types.Transaction{mytx}
 
 	receipt2 := &types.Receipt{
@@ -222,7 +222,7 @@ func TestContractCreationTx(t *testing.T) {
 	}
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
@@ -289,16 +289,16 @@ func TestContractCreationTx(t *testing.T) {
 }
 
 func TestTransactionsToReturnTransactions(t *testing.T) {
-	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	signer  := types.NewEIP155Signer(big.NewInt(2147483647))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 	//Nonce, To Address,Value, GasLimit, Gasprice, data
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-	mytx,_ := types.SignTx(tx1, signer, key)
+	mytx, _ := types.SignTx(tx1, signer, key)
 	tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
-	mytx2,_ := types.SignTx(tx2, signer, key)
+	mytx2, _ := types.SignTx(tx2, signer, key)
 	tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
-	mytx3,_ := types.SignTx(tx3, signer, key)
+	mytx3, _ := types.SignTx(tx3, signer, key)
 	txs := []*types.Transaction{mytx, mytx2, mytx3}
 
 	receipt1 := &types.Receipt{
@@ -320,17 +320,17 @@ func TestTransactionsToReturnTransactions(t *testing.T) {
 		t.Fatalf("Failed to write block into database: %v", err)
 	}
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
-	
+
 	for _, tx := range txs {
 		txn := GetTransaction(sqldb, tx.Hash().String())
-			byt := []byte(txn)
-			var data ShyftTxEntryPretty
-			json.Unmarshal(byt, &data)
+		byt := []byte(txn)
+		var data ShyftTxEntryPretty
+		json.Unmarshal(byt, &data)
 
-			//TODO age, data
+		//TODO age, data
 		if tx.Hash().String() != data.TxHash {
 			t.Fatalf("txHash [%v]: tx Hash not found", tx.Hash().String())
 		}
@@ -392,16 +392,16 @@ func TestTransactionsToReturnTransactions(t *testing.T) {
 }
 
 func TestAccountsToReturnAccounts(t *testing.T) {
-	key, _   := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	signer  := types.NewEIP155Signer(big.NewInt(2147483647))
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 	//Nonce, To Address,Value, GasLimit, Gasprice, data
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
-	mytx,_ := types.SignTx(tx1, signer, key)
+	mytx, _ := types.SignTx(tx1, signer, key)
 	tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
-	mytx2,_ := types.SignTx(tx2, signer, key)
+	mytx2, _ := types.SignTx(tx2, signer, key)
 	tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
-	mytx3,_ := types.SignTx(tx3, signer, key)
+	mytx3, _ := types.SignTx(tx3, signer, key)
 	txs := []*types.Transaction{mytx, mytx2, mytx3}
 
 	receipt1 := &types.Receipt{
@@ -418,21 +418,20 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 
 	receipts := []*types.Receipt{receipt1}
 	block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
-		if err := WriteBlock(block, receipts); err != nil {
-			t.Fatalf("Failed to write block into database: %v", err)
-		}
+	if err := WriteBlock(block, receipts); err != nil {
+		t.Fatalf("Failed to write block into database: %v", err)
+	}
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
-
 	for _, tx := range txs {
-			accountAddrTo := GetAccount(sqldb, tx.To().String())
-			byts := []byte(accountAddrTo)
-			var accountDataTo SAccounts
-			json.Unmarshal(byts, &accountDataTo)
+		accountAddrTo := GetAccount(sqldb, tx.To().String())
+		byts := []byte(accountAddrTo)
+		var accountDataTo SAccounts
+		json.Unmarshal(byts, &accountDataTo)
 
 		if tx.To().String() != accountDataTo.Addr {
 			t.Fatalf("To address [%v]: To address not found", accountDataTo.Addr)
@@ -453,6 +452,3 @@ func TestAccountsToReturnAccounts(t *testing.T) {
 	}
 	ClearTables()
 }
-
-
-

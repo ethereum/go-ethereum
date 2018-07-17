@@ -25,7 +25,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/empyrean/go-ethereum/log"
 )
 
 const (

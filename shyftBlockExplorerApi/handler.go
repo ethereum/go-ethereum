@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/ethereum/go-ethereum/shyftdb"
+	"github.com/empyrean/go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
 	"bytes"
 	"io/ioutil"

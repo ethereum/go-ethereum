@@ -1,36 +1,36 @@
 package shyftdb
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"time"
-	"strconv"
-	"database/sql"
+	"github.com/empyrean/go-ethereum/common"
+	"github.com/empyrean/go-ethereum/core/types"
 	"log"
+	"math/big"
+	"strconv"
+	"time"
 
+	Rewards "github.com/empyrean/go-ethereum/consensus/ethash"
 	_ "github.com/lib/pq"
-	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 )
 
 //SBlock type
 type SBlock struct {
-	Hash     string
-	Coinbase string
-	Number   string
-	GasUsed	 uint64
-	GasLimit uint64
-	TxCount  int
+	Hash       string
+	Coinbase   string
+	Number     string
+	GasUsed    uint64
+	GasLimit   uint64
+	TxCount    int
 	UncleCount int
 	Age        string
 	ParentHash string
-	UncleHash string
+	UncleHash  string
 	Difficulty string
-	Size string
-	Nonce uint64
-	Rewards string
+	Size       string
+	Nonce      uint64
+	Rewards    string
 }
 
 //blockRes struct
@@ -42,8 +42,8 @@ type blockRes struct {
 }
 
 type SAccounts struct {
-	Addr    string
-	Balance string
+	Addr           string
+	Balance        string
 	TxCountAccount string
 }
 
@@ -62,7 +62,7 @@ type ShyftTxEntry struct {
 	Amount    *big.Int
 	GasPrice  *big.Int
 	Gas       uint64
-	Cost	  *big.Int
+	Cost      *big.Int
 	Nonce     uint64
 	Data      []byte
 }
@@ -72,21 +72,21 @@ type txRes struct {
 }
 
 type ShyftTxEntryPretty struct {
-	TxHash    string
-	To        string
-	From      string
-	BlockHash string
+	TxHash      string
+	To          string
+	From        string
+	BlockHash   string
 	BlockNumber string
-	Amount   string
-	GasPrice  uint64
-	Gas       uint64
-	GasLimit  uint64
-	Cost	  uint64
-	Nonce     uint64
-	Status	  string
-	IsContract bool
-	Age        time.Time
-	Data      []byte
+	Amount      string
+	GasPrice    uint64
+	Gas         uint64
+	GasLimit    uint64
+	Cost        uint64
+	Nonce       uint64
+	Status      string
+	IsContract  bool
+	Age         time.Time
+	Data        []byte
 }
 
 type ShyftAccountEntry struct {
@@ -95,11 +95,11 @@ type ShyftAccountEntry struct {
 }
 
 type SendAndReceive struct {
-	To        string
-	From      string
-	Amount    string
-	Address   string
-	Balance   string
+	To             string
+	From           string
+	Amount         string
+	Address        string
+	Balance        string
 	TxCountAccount string
 }
 
@@ -107,11 +107,11 @@ type SendAndReceive struct {
 func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
 
 	sqldb, err := DBConnection()
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
-	rewards := writeMinerRewards(sqldb,block)
+	rewards := writeMinerRewards(sqldb, block)
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
@@ -151,14 +151,14 @@ func WriteBlock(block *types.Block, receipts []*types.Receipt) error {
 }
 
 //writeTransactions writes to sqldb
-func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
+func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string, receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
 		From:      tx.From(),
 		To:        tx.To(),
 		BlockHash: blockHash.Hex(),
 		Amount:    tx.Value(),
-		Cost:	   tx.Cost(),
+		Cost:      tx.Cost(),
 		GasPrice:  tx.GasPrice(),
 		Gas:       tx.Gas(),
 		Nonce:     tx.Nonce(),
@@ -177,7 +177,7 @@ func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	var isContract bool
 	var statusFromReciept string
 
-	if (to == nil){
+	if to == nil {
 		var contractAddressFromReciept string
 		for _, receipt := range receipts {
 			statusReciept := (*types.ReceiptForStorage)(receipt).Status
@@ -193,7 +193,7 @@ func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		var retNonce string
 		isContract = true
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit,txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -212,7 +212,7 @@ func writeTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		}
 
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -243,7 +243,7 @@ func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 			panic(insertErr)
 		}
 	default:
-		getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+		getAccountBalanceSender := GetAccount(sqldb, fromAddr)
 		var senderBalance SendAndReceive
 		if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
 			log.Fatal(err)
@@ -350,15 +350,15 @@ func writeFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 
 func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
 	sendAndReceiveData := SendAndReceive{
-		To: tx.To().Hex(),
-		From: tx.From().Hex(),
+		To:     tx.To().Hex(),
+		From:   tx.From().Hex(),
 		Amount: tx.Value().String(),
 	}
 
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
 	getAccountBalanceReceiver := GetAccount(sqldb, toAddr)
-	getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+	getAccountBalanceSender := GetAccount(sqldb, fromAddr)
 
 	var receiverBalance SendAndReceive
 	if err := json.Unmarshal([]byte(getAccountBalanceReceiver), &receiverBalance); err != nil {
@@ -397,7 +397,7 @@ func writeMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	// https://ethereum.stackexchange.com/questions/27172/different-uncles-reward
 	// line 551 in consensus.go (shyft_go-ethereum/consensus/ethash/consensus.go)
 	// Some weird constants to avoid constant memory allocs for them.
-	var big8   = big.NewInt(8)
+	var big8 = big.NewInt(8)
 	var uncleRewards []*big.Int
 	var uncleAddrs []string
 
@@ -517,23 +517,23 @@ func GetAllBlocks(sqldb *sql.DB) string {
 			&size,
 			&nonce,
 			&rewards,
-			&num,)
+			&num)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     hash,
-			Coinbase: coinbase,
-			GasUsed: gasUsed,
-			GasLimit: gasLimit,
-			TxCount: txCount,
+			Hash:       hash,
+			Coinbase:   coinbase,
+			GasUsed:    gasUsed,
+			GasLimit:   gasLimit,
+			TxCount:    txCount,
 			UncleCount: uncleCount,
-			Age: age,
-			ParentHash:parentHash,
-			UncleHash:uncleHash,
-			Difficulty:difficulty,
-			Size: size,
-			Nonce:nonce,
-			Rewards: rewards,
-			Number:   num,
+			Age:        age,
+			ParentHash: parentHash,
+			UncleHash:  uncleHash,
+			Difficulty: difficulty,
+			Size:       size,
+			Nonce:      nonce,
+			Rewards:    rewards,
+			Number:     num,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -576,23 +576,23 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 		&size,
 		&nonce,
 		&rewards,
-		&num,)
+		&num)
 
 	block := SBlock{
-		Hash:     hash,
-		Coinbase: coinbase,
-		GasUsed: gasUsed,
-		GasLimit: gasLimit,
-		TxCount: txCount,
+		Hash:       hash,
+		Coinbase:   coinbase,
+		GasUsed:    gasUsed,
+		GasLimit:   gasLimit,
+		TxCount:    txCount,
 		UncleCount: uncleCount,
-		Age: age,
-		ParentHash:parentHash,
-		UncleHash:uncleHash,
-		Difficulty:difficulty,
-		Size: size,
-		Nonce:nonce,
-		Rewards: rewards,
-		Number:   num,
+		Age:        age,
+		ParentHash: parentHash,
+		UncleHash:  uncleHash,
+		Difficulty: difficulty,
+		Size:       size,
+		Nonce:      nonce,
+		Rewards:    rewards,
+		Number:     num,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
@@ -629,23 +629,23 @@ func GetRecentBlock(sqldb *sql.DB) string {
 		&size,
 		&nonce,
 		&rewards,
-		&num,)
+		&num)
 
 	block := SBlock{
-		Hash:     hash,
-		Coinbase: coinbase,
-		GasUsed: gasUsed,
-		GasLimit: gasLimit,
-		TxCount: txCount,
+		Hash:       hash,
+		Coinbase:   coinbase,
+		GasUsed:    gasUsed,
+		GasLimit:   gasLimit,
+		TxCount:    txCount,
 		UncleCount: uncleCount,
-		Age: age,
-		ParentHash:parentHash,
-		UncleHash:uncleHash,
-		Difficulty:difficulty,
-		Size: size,
-		Nonce:nonce,
-		Rewards: rewards,
-		Number:   num,
+		Age:        age,
+		ParentHash: parentHash,
+		UncleHash:  uncleHash,
+		Difficulty: difficulty,
+		Size:       size,
+		Nonce:      nonce,
+		Rewards:    rewards,
+		Number:     num,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
@@ -695,21 +695,21 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 		)
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
+			TxHash:      txhash,
+			To:          to_addr,
+			From:        from_addr,
+			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
+			IsContract:  isContract,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)
@@ -759,23 +759,23 @@ func GetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
 			&size,
 			&nonce,
 			&rewards,
-			&num,)
+			&num)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     hash,
-			Coinbase: coinbase,
-			GasUsed: gasUsed,
-			GasLimit: gasLimit,
-			TxCount: txCount,
+			Hash:       hash,
+			Coinbase:   coinbase,
+			GasUsed:    gasUsed,
+			GasLimit:   gasLimit,
+			TxCount:    txCount,
 			UncleCount: uncleCount,
-			Age: age,
-			ParentHash:parentHash,
-			UncleHash:uncleHash,
-			Difficulty:difficulty,
-			Size: size,
-			Nonce:nonce,
-			Rewards: rewards,
-			Number:   num,
+			Age:        age,
+			ParentHash: parentHash,
+			UncleHash:  uncleHash,
+			Difficulty: difficulty,
+			Size:       size,
+			Nonce:      nonce,
+			Rewards:    rewards,
+			Number:     num,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -830,21 +830,21 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		)
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
+			TxHash:      txhash,
+			To:          to_addr,
+			From:        from_addr,
+			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
+			IsContract:  isContract,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)
@@ -891,21 +891,21 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 		&data)
 
 	tx := ShyftTxEntryPretty{
-		TxHash:    txhash,
-		To:        to_addr,
-		From:      from_addr,
-		BlockHash: blockhash,
+		TxHash:      txhash,
+		To:          to_addr,
+		From:        from_addr,
+		BlockHash:   blockhash,
 		BlockNumber: blocknumber,
-		Amount:    amount,
-		GasPrice:  gasprice,
-		Gas:       gas,
-		GasLimit:	gasLimit,
-		Cost:      txfee,
-		Nonce:     nonce,
-		Status:    status,
-		IsContract: isContract,
-		Age:		age,
-		Data:	   data,
+		Amount:      amount,
+		GasPrice:    gasprice,
+		Gas:         gas,
+		GasLimit:    gasLimit,
+		Cost:        txfee,
+		Nonce:       nonce,
+		Status:      status,
+		IsContract:  isContract,
+		Age:         age,
+		Data:        data,
 	}
 	json, _ := json.Marshal(tx)
 
@@ -925,8 +925,8 @@ func GetAccount(sqldb *sql.DB, address string) string {
 		&txCountAccount)
 
 	account := SAccounts{
-		Addr:    addr,
-		Balance: balance,
+		Addr:           addr,
+		Balance:        balance,
 		TxCountAccount: txCountAccount,
 	}
 	json, _ := json.Marshal(account)
@@ -960,8 +960,8 @@ func GetAllAccounts(sqldb *sql.DB) string {
 		)
 
 		array.AllAccounts = append(array.AllAccounts, SAccounts{
-			Addr:    addr,
-			Balance: balance,
+			Addr:           addr,
+			Balance:        balance,
 			TxCountAccount: txCountAccount,
 		})
 
@@ -1017,21 +1017,21 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 		)
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
+			TxHash:      txhash,
+			To:          to_addr,
+			From:        from_addr,
+			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
+			IsContract:  isContract,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)

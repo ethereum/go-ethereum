@@ -17,8 +17,8 @@
 package les
 
 import (
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/empyrean/go-ethereum/metrics"
+	"github.com/empyrean/go-ethereum/p2p"
 )
 
 var (

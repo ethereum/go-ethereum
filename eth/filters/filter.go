@@ -20,13 +20,13 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/empyrean/go-ethereum/common"
+	"github.com/empyrean/go-ethereum/core"
+	"github.com/empyrean/go-ethereum/core/bloombits"
+	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/empyrean/go-ethereum/ethdb"
+	"github.com/empyrean/go-ethereum/event"
+	"github.com/empyrean/go-ethereum/rpc"
 )
 
 type Backend interface {

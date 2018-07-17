@@ -22,15 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/empyrean/go-ethereum/common"
+	"github.com/empyrean/go-ethereum/core"
+	"github.com/empyrean/go-ethereum/core/state"
+	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/empyrean/go-ethereum/ethdb"
+	"github.com/empyrean/go-ethereum/event"
+	"github.com/empyrean/go-ethereum/log"
+	"github.com/empyrean/go-ethereum/params"
+	"github.com/empyrean/go-ethereum/rlp"
 )
 
 const (
