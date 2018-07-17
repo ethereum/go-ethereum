@@ -592,7 +592,6 @@ type Internals struct {
 
 //@NOTE:SHYFT
 func (i *Internals) SWriteInteralTxs(hash common.Hash) {
-	fmt.Println("WRITE INTERNAL")
 	sqldb, err := core.DBConnection()
 	if err != nil {
 		panic(err)
@@ -612,7 +611,6 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 }
 //@NOTE:SHYFT
 func (i *Internals) InternalRecursive(hash common.Hash) {
-	fmt.Println("internal recursive")
 	i.SWriteInteralTxs(hash)
 	lengthOfCalls := len(i.Calls)
 	if lengthOfCalls == 0 {
@@ -671,7 +669,6 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 //@NOTE:SHYFT
 func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
-	fmt.Println("SGETRESULT")
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 

@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"context"
-	"fmt"
 )
 
 var EthereumObject interface{}
@@ -17,7 +16,6 @@ var Context context.Context
 var TracerConfig *TraceConfig
 
 func InitTracerEnv() {
-	fmt.Println("INIT tracer Env")
 	config2 := params.ShyftNetworkChainConfig
 
 	jsTracer := "callTracer"
@@ -30,13 +28,9 @@ func InitTracerEnv() {
 		Reexec: nil,
 	}
 	TracerConfig = config
-	fmt.Println("+++++++++++++++++++++++++++ before FULLNODE", Global_config)
-	// called here
 	fullNode, _ := SNew(Global_config)
-	fmt.Println("+++++++++++++++++++++++++++ after FULLNODE")
 	privateAPI := NewPrivateDebugAPI(config2, fullNode)
 	PrivateAPI = privateAPI
-	fmt.Println("+++++++++++++++++++++++++++ after privateAPI")
 }
 
 func (st ShyftTracer) GetTracerToRun (hash common.Hash) (interface{}, error) {
@@ -50,6 +44,5 @@ func setEthObject(ethobj interface{}){
 var Global_config *Config
 
 func SetGlobalConfig(c *Config) {
-	fmt.Println("SETGLOBAL")
 	Global_config = c
 }

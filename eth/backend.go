@@ -103,17 +103,12 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 }
 
 func SNew(config *Config) (*Ethereum, error) {
-	fmt.Println("SNEW FROM SHYFTREACER")
 	stopDbUpgrade := upgradeDeduplicateData(Chaindb_global)
-	fmt.Println("ChainGlobal v+%", Chaindb_global)
 	chainConfig, _, _ := core.SetupGenesisBlock(Chaindb_global, config.Genesis)
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        Chaindb_global,
 		chainConfig:    chainConfig,
-		//eventMux:       ctx.EventMux,
-		//accountManager: ctx.AccountManager,
-		//engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, Chaindb_global),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -122,15 +117,6 @@ func SNew(config *Config) (*Ethereum, error) {
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(Chaindb_global, params.BloomBitsBlocks),
 	}
-
-	//var (
-	//	vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
-	//	cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
-	//)
-	//
-	//eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
-	//
-	//BlockchainObject = eth.blockchain
 
 	eth.blockchain = BlockchainObject
 
@@ -143,11 +129,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	shyft_tracer := new(ShyftTracer)
 	core.SetIShyftTracer(shyft_tracer)
 	SetGlobalConfig(config)
-
-	_, file, no, ok := runtime.Caller(1)
-	if ok {
-		fmt.Printf("called from %s#%d\n", file, no)
-	}
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -232,7 +213,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	DebugApi.eth = eth
 	DebugApi.config = chainConfig
-	// Shyft Tracer
+	//@NOTE Shyft Tracer
 	InitTracerEnv()
 
 	return eth, nil

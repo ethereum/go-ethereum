@@ -186,8 +186,6 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 				panic(insertError)
 			}
 		}
-
-
 	default:
 		log.Info("Found Genesis Block")
 }}}

@@ -561,12 +561,10 @@ func (api *PrivateDebugAPI) STraceTransaction(ctx context.Context, hash common.H
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	fmt.Println("+++++++++++++++++++++++++++ Middle")
 	msg, vmctx, statedb, err := api.computeTxEnv(blockHash, int(index), reexec)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("+++++++++++++++++++++++++++ BOTTOM")
 	return api.StraceTx(ctx, msg, vmctx, statedb, config, hash)
 }
 
@@ -583,7 +581,6 @@ func (api *PrivateDebugAPI) StraceTx(ctx context.Context, message core.Message, 
 	switch {
 	case config != nil && config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
-		fmt.Println("STRACETX")
 		_ = defaultTraceTimeout
 
 		if config.Timeout != nil {
@@ -703,7 +700,6 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 // computeTxEnv returns the execution environment of a certain transaction.
 func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, reexec uint64) (core.Message, vm.Context, *state.StateDB, error) {
 	// Create the parent state database
-	fmt.Println("COMPUTETXENV")
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
 		return nil, vm.Context{}, nil, fmt.Errorf("block %x not found", blockHash)
@@ -733,6 +729,5 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		}
 		statedb.DeleteSuicides()
 	}
-	fmt.Println("+++++++++++++++++ BOTTOM COMPUTETXENV")
 	return nil, vm.Context{}, nil, fmt.Errorf("tx index %d out of range for block %x", txIndex, blockHash)
 }
