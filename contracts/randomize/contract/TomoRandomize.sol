@@ -9,9 +9,9 @@ contract TomoRandomize {
     uint256 public blockTimeOpening;
 
     mapping (address=>bytes32[]) randomSecret;
-    mapping (address=>bytes32[]) randomOpening;
+    mapping (address=>bytes32) randomOpening;
 
-    function TomoRandomize (uint256 _epochNumber, uint256 _blockTimeSecret, uint256 _blockTimeOpening) public {
+    function TomoRandomize(uint256 _epochNumber, uint256 _blockTimeSecret, uint256 _blockTimeOpening) public {
         epochNumber = _epochNumber;
         blockTimeOpening = _blockTimeOpening;
         blockTimeSecret = _blockTimeSecret;
@@ -28,9 +28,7 @@ contract TomoRandomize {
         randomSecret[msg.sender] = _secret;
     }
 
-    function setOpening(bytes32[] _opening) public {
-        require(_opening.length == epochNumber);
-
+    function setOpening(bytes32 _opening) public {
         uint256 _blockNum = block.number;
         uint256 _epoch = _blockNum.sub(_blockNum.div(epochNumber).mul(epochNumber));
 
@@ -49,7 +47,7 @@ contract TomoRandomize {
         return randomSecret[_validator];
     }
 
-    function getOpening(address _validator) public view returns(bytes32[]) {
+    function getOpening(address _validator) public view returns(bytes32) {
         uint256 _blockNum = block.number;
         uint256 _epoch = _blockNum.sub(_blockNum.div(epochNumber).mul(epochNumber));
 
