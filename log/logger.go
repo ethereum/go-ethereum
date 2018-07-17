@@ -1,11 +1,15 @@
 package log
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-stack/stack"
+	"github.com/golang/glog"
 )
 
 const timeKey = "t"
@@ -131,19 +135,22 @@ type logger struct {
 }
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
-	l.h.Log(&Record{
-		Time: time.Now(),
-		Lvl:  lvl,
-		Msg:  msg,
-		Ctx:  newContext(l.ctx, ctx),
-		Call: stack.Caller(skip),
-		KeyNames: RecordKeyNames{
-			Time: timeKey,
-			Msg:  msgKey,
-			Lvl:  lvlKey,
-			Ctx:  ctxKey,
-		},
-	})
+	switch lvl {
+	case LvlTrace:
+		glog.V(3).Info(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	case LvlDebug:
+		glog.V(2).Info(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	case LvlInfo:
+		glog.Info(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	case LvlWarn:
+		glog.Warning(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	case LvlError:
+		glog.Error(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	case LvlCrit:
+		glog.Fatal(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	default:
+		glog.Info(getLogMsg(msg, newContext(l.ctx, ctx), skip))
+	}
 }
 
 func (l *logger) New(ctx ...interface{}) Logger {
@@ -191,6 +198,41 @@ func (l *logger) GetHandler() Handler {
 
 func (l *logger) SetHandler(h Handler) {
 	l.h.Swap(h)
+}
+
+// getLogMsg method returns the log message in the following format:
+// <Full path of origin> <padding> <Log message> <padding> <Context key & value>
+func getLogMsg(msg string, ctx []interface{}, skip int) string {
+	// locationEnabled is an atomic flag controlling whether the formatter should
+	// append the log locations too when printing entries.
+	atomic.StoreUint32(&locationEnabled, 0)
+	// Format the location path and line number.
+	location := fmt.Sprintf("%+v", stack.Caller(skip))
+	align := int(atomic.LoadUint32(&locationLength))
+	// Maintain the maximum location length for fancyer alignment.
+	if align < len(location) {
+		align = len(location)
+		atomic.StoreUint32(&locationLength, uint32(align))
+	}
+	// Specifying padding based on the maximum length of the string representing
+	// the location of the origin of the log.
+	padding := strings.Repeat(" ", align-len(location))
+	buf := &bytes.Buffer{}
+	buf.WriteString(location)
+	buf.WriteString(padding)
+	buf.WriteString(msg)
+	// Maintain the maximum log message length for fancier alignment.
+	if align < len(msg) {
+		align = len(msg)
+		atomic.StoreUint32(&locationLength, uint32(align))
+	}
+	// Specifying padding based on the maximum length of the string representing
+	// the logged message.
+	padding = strings.Repeat(" ", align-len(msg))
+	buf.WriteString(padding)
+	// Writing key-value pairs of the context into the buffer.
+	logfmt(buf, ctx, 0, false)
+	return string(buf.Bytes()[:])
 }
 
 func normalize(ctx []interface{}) []interface{} {
