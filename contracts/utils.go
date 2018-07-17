@@ -75,7 +75,10 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 		return nil, err
 	}
 	opts := new(bind.CallOpts)
-	addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(blockNumber))
+	// TODO: let move from blockNumber to blockHash
+	// addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(blockNumber))
+	log.Error("Should replace blockNumber to blockHash", blockNumber)
+	addrs, err := blockSigner.GetSigners(opts, [32]byte{})
 	if err != nil {
 		log.Error("Fail get block signers", "error", err)
 		return nil, err
