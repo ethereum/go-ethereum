@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -89,7 +90,9 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	rm := newRetrieveManager(peers, dist, nil)
 	db := ethdb.NewMemDatabase()
 	ldb := ethdb.NewMemDatabase()
-	odr := NewLesOdr(ldb, light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency), rm)
+	odr := NewLesOdr(ldb, light.NewChtIndexer(db, light.CHTFrequencyClient, light.HelperTrieConfirmations),
+		light.NewBloomTrieIndexer(db, light.BloomTrieFrequency, params.BloomConfirms, light.BloomTrieFrequency, light.HelperTrieConfirmations),
+		eth.NewBloomIndexer(db, light.BloomTrieFrequency, params.BloomConfirms), rm)
 
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)

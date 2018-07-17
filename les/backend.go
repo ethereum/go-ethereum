@@ -95,20 +95,21 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	quitSync := make(chan struct{})
 
 	leth := &LightEthereum{
-		config:           config,
-		chainConfig:      chainConfig,
-		chainDb:          chainDb,
-		eventMux:         ctx.EventMux,
-		peers:            peers,
-		reqDist:          newRequestDistributor(peers, quitSync),
-		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
-		shutdownChan:     make(chan bool),
-		networkId:        config.NetworkId,
-		bloomRequests:    make(chan chan *bloombits.Retrieval),
-		bloomIndexer:     eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
-		chtIndexer:       light.NewChtIndexer(chainDb, true),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, true),
+		config:         config,
+		chainConfig:    chainConfig,
+		chainDb:        chainDb,
+		eventMux:       ctx.EventMux,
+		peers:          peers,
+		reqDist:        newRequestDistributor(peers, quitSync),
+		accountManager: ctx.AccountManager,
+		engine:         eth.CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		shutdownChan:   make(chan bool),
+		networkId:      config.NetworkId,
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bloomIndexer:   eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency, params.BloomConfirms),
+		chtIndexer:     light.NewChtIndexer(chainDb, light.CHTFrequencyClient, light.HelperTrieConfirmations),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, light.BloomTrieFrequency, params.BloomConfirms,
+			light.BloomTrieFrequency, light.HelperTrieConfirmations),
 	}
 
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
@@ -222,7 +223,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
-	s.startBloomHandlers()
+	s.startBloomHandlers(light.BloomTrieFrequency)
 	log.Warn("Light client mode is an experimental feature")
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
 	// clients are searching for the first advertised protocol in the list

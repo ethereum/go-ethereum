@@ -414,7 +414,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		proofsV1[0].Proof = proof
 
 	case 2:
-		root := light.GetChtV2Root(db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
+		root := light.GetChtRoot(db, (light.CHTFrequencyClient/light.CHTFrequencyServer)-1, bc.GetHeaderByNumber(frequency-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
 		trie.Prove(key, 0, &proofsV2.Proofs)
 	}

@@ -94,7 +94,7 @@ type ChtNode struct {
 	Td   *big.Int
 }
 
-// GetChtRoot reads the CHT root assoctiated to the given section from the database
+// GetChtRoot reads the CHT root associated to the given section from the database
 // Note that sectionIdx is specified according to LES/1 CHT section size
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
@@ -103,13 +103,7 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 	return common.BytesToHash(data)
 }
 
-// GetChtV2Root reads the CHT root assoctiated to the given section from the database
-// Note that sectionIdx is specified according to LES/2 CHT section size
-func GetChtV2Root(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
-	return GetChtRoot(db, (sectionIdx+1)*(CHTFrequencyClient/CHTFrequencyServer)-1, sectionHead)
-}
-
-// StoreChtRoot writes the CHT root assoctiated to the given section into the database
+// StoreChtRoot writes the CHT root associated to the given section into the database
 // Note that sectionIdx is specified according to LES/1 CHT section size
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
@@ -126,23 +120,15 @@ type ChtIndexerBackend struct {
 	trie                 *trie.Trie
 }
 
-// NewBloomTrieIndexer creates a BloomTrie chain indexer
-func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
-	var sectionSize, confirmReq uint64
-	if clientMode {
-		sectionSize = CHTFrequencyClient
-		confirmReq = HelperTrieConfirmations
-	} else {
-		sectionSize = CHTFrequencyServer
-		confirmReq = HelperTrieProcessConfirmations
-	}
+// NewChtIndexer creates a Cht chain indexer
+func NewChtIndexer(db ethdb.Database, size, confirms uint64) *core.ChainIndexer {
 	idb := ethdb.NewTable(db, "chtIndex-")
 	backend := &ChtIndexerBackend{
 		diskdb:      db,
 		triedb:      trie.NewDatabase(ethdb.NewTable(db, ChtTablePrefix)),
-		sectionSize: sectionSize,
+		sectionSize: size,
 	}
-	return core.NewChainIndexer(db, idb, backend, sectionSize, confirmReq, time.Millisecond*100, "cht")
+	return core.NewChainIndexer(db, idb, backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -215,32 +201,29 @@ func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root 
 
 // BloomTrieIndexerBackend implements core.ChainIndexerBackend
 type BloomTrieIndexerBackend struct {
-	diskdb                                     ethdb.Database
-	triedb                                     *trie.Database
-	section, parentSectionSize, bloomTrieRatio uint64
-	trie                                       *trie.Trie
-	sectionHeads                               []common.Hash
+	diskdb         ethdb.Database
+	triedb         *trie.Database
+	section        uint64
+	parentSize     uint64
+	size           uint64
+	bloomTrieRatio uint64
+	trie           *trie.Trie
+	sectionHeads   []common.Hash
 }
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
-func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
+func NewBloomTrieIndexer(db ethdb.Database, parentSize, parentConfirms, size, confirms uint64) *core.ChainIndexer {
 	backend := &BloomTrieIndexerBackend{
-		diskdb: db,
-		triedb: trie.NewDatabase(ethdb.NewTable(db, BloomTrieTablePrefix)),
+		diskdb:     db,
+		triedb:     trie.NewDatabase(ethdb.NewTable(db, BloomTrieTablePrefix)),
+		parentSize: parentSize,
+		size:       size,
 	}
 	idb := ethdb.NewTable(db, "bltIndex-")
 
-	var confirmReq uint64
-	if clientMode {
-		backend.parentSectionSize = BloomTrieFrequency
-		confirmReq = HelperTrieConfirmations
-	} else {
-		backend.parentSectionSize = ethBloomBitsSection
-		confirmReq = HelperTrieProcessConfirmations
-	}
-	backend.bloomTrieRatio = BloomTrieFrequency / backend.parentSectionSize
+	backend.bloomTrieRatio = size / backend.parentSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, confirmReq-ethBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, idb, backend, size, confirms-parentConfirms, time.Millisecond*100, "bloomtrie")
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -257,9 +240,9 @@ func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.H
 
 // Process implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Process(header *types.Header) {
-	num := header.Number.Uint64() - b.section*BloomTrieFrequency
-	if (num+1)%b.parentSectionSize == 0 {
-		b.sectionHeads[num/b.parentSectionSize] = header.Hash()
+	num := header.Number.Uint64() - b.section*b.size
+	if (num+1)%b.parentSize == 0 {
+		b.sectionHeads[num/b.parentSize] = header.Hash()
 	}
 }
 
@@ -277,7 +260,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 			if err != nil {
 				return err
 			}
-			decompData, err2 := bitutil.DecompressBytes(data, int(b.parentSectionSize/8))
+			decompData, err2 := bitutil.DecompressBytes(data, int(b.parentSize/8))
 			if err2 != nil {
 				return err2
 			}
