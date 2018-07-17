@@ -28,15 +28,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -261,15 +260,45 @@ type testSwarmNetworkOptions struct {
 //  - May wait for Kademlia on every node to be healthy.
 //  - Checking if a file is retrievable from all nodes.
 func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwarmNetworkStep) {
-	dir, err := ioutil.TempDir("", "swarm-network-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
 	if o == nil {
 		o = new(testSwarmNetworkOptions)
 	}
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			config := api.NewConfig()
+
+			dir, err := ioutil.TempDir("", "swarm-network-test-node")
+			if err != nil {
+				return nil, nil, err
+			}
+			cleanup = func() {
+				err := os.RemoveAll(dir)
+				if err != nil {
+					log.Error("cleaning up swarm temp dir", "err", err)
+				}
+			}
+
+			config.Path = dir
+
+			privkey, err := crypto.GenerateKey()
+			if err != nil {
+				return nil, cleanup, err
+			}
+
+			config.Init(privkey)
+			config.DeliverySkipCheck = o.SkipCheck
+
+			swarm, err := NewSwarm(config, nil)
+			if err != nil {
+				return nil, cleanup, err
+			}
+			bucket.Store(simulation.BucketKeyKademlia, swarm.bzz.Hive.Overlay.(*network.Kademlia))
+			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
+			return swarm, cleanup, nil
+		},
+	})
+	defer sim.Close()
 
 	ctx := context.Background()
 	if o.Timeout > 0 {
@@ -278,61 +307,20 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		defer cancel()
 	}
 
-	swarms := make(map[discover.NodeID]*Swarm)
 	files := make([]file, 0)
-
-	services := map[string]adapters.ServiceFunc{
-		"swarm": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			config := api.NewConfig()
-
-			dir, err := ioutil.TempDir(dir, "node")
-			if err != nil {
-				return nil, err
-			}
-
-			config.Path = dir
-
-			privkey, err := crypto.GenerateKey()
-			if err != nil {
-				return nil, err
-			}
-
-			config.Init(privkey)
-			config.DeliverySkipCheck = o.SkipCheck
-
-			s, err := NewSwarm(config, nil)
-			if err != nil {
-				return nil, err
-			}
-			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", s.bzz.BaseAddr()))
-			swarms[ctx.Config.ID] = s
-			return s, nil
-		},
-	}
-
-	a := adapters.NewSimAdapter(services)
-	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "swarm",
-	})
-	defer net.Shutdown()
-
-	trigger := make(chan discover.NodeID)
-
-	sim := simulations.NewSimulation(net)
 
 	for i, step := range steps {
 		log.Debug("test sync step", "n", i+1, "nodes", step.nodeCount)
 
-		change := step.nodeCount - len(allNodeIDs(net))
+		change := step.nodeCount - len(sim.UpNodeIDs())
 
 		if change > 0 {
-			_, err := addNodes(change, net)
+			_, err := sim.AddNodesAndConnectChain(change)
 			if err != nil {
 				t.Fatal(err)
 			}
 		} else if change < 0 {
-			err := removeNodes(-change, net)
+			_, err := sim.StopRandomNodes(-change)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -341,160 +329,48 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			continue
 		}
 
-		nodeIDs := allNodeIDs(net)
-		shuffle(len(nodeIDs), func(i, j int) {
-			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
-		})
-		for _, id := range nodeIDs {
-			key, data, err := uploadFile(swarms[id])
-			if err != nil {
-				t.Fatal(err)
-			}
-			log.Trace("file uploaded", "node", id, "key", key.String())
-			files = append(files, file{
-				addr:   key,
-				data:   data,
-				nodeID: id,
-			})
-		}
-
-		// Prepare PeerPot map for checking Kademlia health
-		var ppmap map[string]*network.PeerPot
-		nIDs := allNodeIDs(net)
-		addrs := make([][]byte, len(nIDs))
-		if *waitKademlia {
-			for i, id := range nIDs {
-				addrs[i] = swarms[id].bzz.BaseAddr()
-			}
-			ppmap = network.NewPeerPotMap(2, addrs)
-		}
-
 		var checkStatusM sync.Map
 		var nodeStatusM sync.Map
 		var totalFoundCount uint64
 
-		result := sim.Run(ctx, &simulations.Step{
-			Action: func(ctx context.Context) error {
-				if *waitKademlia {
-					// Wait for healthy Kademlia on every node before checking files
-					ticker := time.NewTicker(200 * time.Millisecond)
-					defer ticker.Stop()
-
-					for range ticker.C {
-						healthy := true
-						log.Debug("kademlia health check", "node count", len(nIDs), "addr count", len(addrs))
-						for i, id := range nIDs {
-							swarm := swarms[id]
-							//PeerPot for this node
-							addr := common.Bytes2Hex(swarm.bzz.BaseAddr())
-							pp := ppmap[addr]
-							//call Healthy RPC
-							h := swarm.bzz.Healthy(pp)
-							//print info
-							log.Debug(swarm.bzz.String())
-							log.Debug("kademlia", "empty bins", pp.EmptyBins, "gotNN", h.GotNN, "knowNN", h.KnowNN, "full", h.Full)
-							log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
-							log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
-							if !h.GotNN || !h.Full {
-								healthy = false
-								break
-							}
-						}
-						if healthy {
-							break
-						}
-					}
+		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+			nodeIDs := sim.UpNodeIDs()
+			shuffle(len(nodeIDs), func(i, j int) {
+				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
+			})
+			for _, id := range nodeIDs {
+				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
+				if err != nil {
+					return err
 				}
+				log.Trace("file uploaded", "node", id, "key", key.String())
+				files = append(files, file{
+					addr:   key,
+					data:   data,
+					nodeID: id,
+				})
+			}
 
-				go func() {
-					// File retrieval check is repeated until all uploaded files are retrieved from all nodes
-					// or until the timeout is reached.
-					for {
-						if retrieve(net, files, swarms, trigger, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
-							return
-						}
-					}
-				}()
-				return nil
-			},
-			Trigger: trigger,
-			Expect: &simulations.Expectation{
-				Nodes: allNodeIDs(net),
-				Check: func(ctx context.Context, id discover.NodeID) (bool, error) {
-					// The check is done by a goroutine in the action function.
-					return true, nil
-				},
-			},
+			if *waitKademlia {
+				if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+					return err
+				}
+			}
+
+			// File retrieval check is repeated until all uploaded files are retrieved from all nodes
+			// or until the timeout is reached.
+			for {
+				if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+					return nil
+				}
+			}
 		})
+
 		if result.Error != nil {
 			t.Fatal(result.Error)
 		}
 		log.Debug("done: test sync step", "n", i+1, "nodes", step.nodeCount)
 	}
-}
-
-// allNodeIDs is returning NodeID for every node that is Up.
-func allNodeIDs(net *simulations.Network) (nodes []discover.NodeID) {
-	for _, n := range net.GetNodes() {
-		if n.Up {
-			nodes = append(nodes, n.ID())
-		}
-	}
-	return
-}
-
-// addNodes adds a number of nodes to the network.
-func addNodes(count int, net *simulations.Network) (ids []discover.NodeID, err error) {
-	for i := 0; i < count; i++ {
-		nodeIDs := allNodeIDs(net)
-		l := len(nodeIDs)
-		nodeconf := adapters.RandomNodeConfig()
-		node, err := net.NewNodeWithConfig(nodeconf)
-		if err != nil {
-			return nil, fmt.Errorf("create node: %v", err)
-		}
-		err = net.Start(node.ID())
-		if err != nil {
-			return nil, fmt.Errorf("start node: %v", err)
-		}
-
-		log.Debug("created node", "id", node.ID())
-
-		// connect nodes in a chain
-		if l > 0 {
-			var otherNodeID discover.NodeID
-			for i := l - 1; i >= 0; i-- {
-				n := net.GetNode(nodeIDs[i])
-				if n.Up {
-					otherNodeID = n.ID()
-					break
-				}
-			}
-			log.Debug("connect nodes", "one", node.ID(), "other", otherNodeID)
-			if err := net.Connect(node.ID(), otherNodeID); err != nil {
-				return nil, err
-			}
-		}
-		ids = append(ids, node.ID())
-	}
-	return ids, nil
-}
-
-// removeNodes stops a random nodes in the network.
-func removeNodes(count int, net *simulations.Network) error {
-	for i := 0; i < count; i++ {
-		// allNodeIDs are returning only the Up nodes.
-		nodeIDs := allNodeIDs(net)
-		if len(nodeIDs) == 0 {
-			break
-		}
-		node := net.GetNode(nodeIDs[rand.Intn(len(nodeIDs))])
-		if err := node.Stop(); err != nil {
-			return err
-		}
-		log.Debug("removed node", "id", node.ID())
-	}
-	return nil
 }
 
 // uploadFile, uploads a short file to the swarm instance
@@ -522,10 +398,8 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 // retrieve is the function that is used for checking the availability of
 // uploaded files in testSwarmNetwork test helper function.
 func retrieve(
-	net *simulations.Network,
+	sim *simulation.Simulation,
 	files []file,
-	swarms map[discover.NodeID]*Swarm,
-	trigger chan discover.NodeID,
 	checkStatusM *sync.Map,
 	nodeStatusM *sync.Map,
 	totalFoundCount *uint64,
@@ -537,7 +411,7 @@ func retrieve(
 	var totalWg sync.WaitGroup
 	errc := make(chan error)
 
-	nodeIDs := allNodeIDs(net)
+	nodeIDs := sim.UpNodeIDs()
 
 	totalCheckCount := len(nodeIDs) * len(files)
 
@@ -553,8 +427,8 @@ func retrieve(
 
 		var wg sync.WaitGroup
 
+		swarm := sim.Service("swarm", id).(*Swarm)
 		for _, f := range files {
-			swarm := swarms[id]
 
 			checkKey := check{
 				key:    f.addr.String(),
@@ -601,7 +475,6 @@ func retrieve(
 			if foundCount == checkCount {
 				log.Info("all files are found for node", "id", id.String(), "duration", time.Since(start))
 				nodeStatusM.Store(id, 0)
-				trigger <- id
 				return
 			}
 			log.Debug("files missing for node", "id", id.String(), "check", checkCount, "found", foundCount)
