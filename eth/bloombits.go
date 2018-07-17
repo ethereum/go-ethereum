@@ -79,7 +79,6 @@ func (eth *Ethereum) startBloomHandlers(sectionSize uint64) {
 }
 
 const (
-
 	// bloomThrottling is the time to wait between processing two consecutive index
 	// sections. It's useful during chain upgrades to prevent disk overload.
 	bloomThrottling = 100 * time.Millisecond

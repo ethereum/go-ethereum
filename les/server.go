@@ -68,19 +68,19 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		protocolManager: pm,
 		quitSync:        quitSync,
 		lesTopics:       lesTopics,
-		chtIndexer:      light.NewChtIndexer(eth.ChainDb(), light.CHTFrequencyServer, light.HelperTrieProcessConfirmations),
+		chtIndexer:      light.NewChtIndexer(eth.ChainDb(), params.CHTFrequencyServer, params.HelperTrieProcessConfirmations),
 		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), params.BloomBitsBlocks, params.BloomConfirms,
-			light.BloomTrieFrequency, light.HelperTrieProcessConfirmations),
+			params.BloomTrieFrequency, params.HelperTrieProcessConfirmations),
 	}
 	logger := log.New()
 
 	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
-	chtV2SectionCount := chtV1SectionCount / (light.CHTFrequencyClient / light.CHTFrequencyServer)
+	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)
 	if chtV2SectionCount != 0 {
 		// convert to LES/2 section
 		chtLastSection := chtV2SectionCount - 1
 		// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
-		chtLastSectionV1 := (chtLastSection+1)*(light.CHTFrequencyClient/light.CHTFrequencyServer) - 1
+		chtLastSectionV1 := (chtLastSection+1)*(params.CHTFrequencyClient/params.CHTFrequencyServer) - 1
 		chtSectionHead := srv.chtIndexer.SectionHead(chtLastSectionV1)
 		chtRoot := light.GetChtRoot(pm.chainDb, chtLastSectionV1, chtSectionHead)
 		logger.Info("Loaded CHT", "section", chtLastSection, "head", chtSectionHead, "root", chtRoot)

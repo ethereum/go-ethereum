@@ -376,20 +376,20 @@ func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
 
 func testGetCHTProofs(t *testing.T, protocol int) {
 	// Figure out the client's CHT frequency
-	frequency := uint64(light.CHTFrequencyClient)
+	frequency := uint64(params.CHTFrequencyClient)
 	if protocol == 1 {
-		frequency = uint64(light.CHTFrequencyServer)
+		frequency = uint64(params.CHTFrequencyServer)
 	}
 	// Assemble the test environment
 	db := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, int(frequency)+light.HelperTrieProcessConfirmations, testChainGen, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, int(frequency)+params.HelperTrieProcessConfirmations, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
 
 	// Wait a while for the CHT indexer to process the new headers
-	time.Sleep(100 * time.Millisecond * time.Duration(frequency/light.CHTFrequencyServer)) // Chain indexer throttling
-	time.Sleep(250 * time.Millisecond)                                                     // CI tester slack
+	time.Sleep(100 * time.Millisecond * time.Duration(frequency/params.CHTFrequencyServer)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                      // CI tester slack
 
 	// Assemble the proofs from the different protocols
 	header := bc.GetHeaderByNumber(frequency)
@@ -414,7 +414,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		proofsV1[0].Proof = proof
 
 	case 2:
-		root := light.GetChtRoot(db, (light.CHTFrequencyClient/light.CHTFrequencyServer)-1, bc.GetHeaderByNumber(frequency-1).Hash())
+		root := light.GetChtRoot(db, (params.CHTFrequencyClient/params.CHTFrequencyServer)-1, bc.GetHeaderByNumber(frequency-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
 		trie.Prove(key, 0, &proofsV2.Proofs)
 	}
@@ -450,14 +450,14 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 func TestGetBloombitsProofs(t *testing.T) {
 	// Assemble the test environment
 	db := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, light.BloomTrieFrequency+256, testChainGen, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, params.BloomTrieFrequency+256, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", 2, pm, true)
 	defer peer.close()
 
 	// Wait a while for the bloombits indexer to process the new headers
-	time.Sleep(100 * time.Millisecond * time.Duration(light.BloomTrieFrequency/4096)) // Chain indexer throttling
-	time.Sleep(250 * time.Millisecond)                                                // CI tester slack
+	time.Sleep(100 * time.Millisecond * time.Duration(params.BloomTrieFrequency/4096)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                 // CI tester slack
 
 	// Request and verify each bit of the bloom bits proofs
 	for bit := 0; bit < 2048; bit++ {
@@ -465,7 +465,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 		key := make([]byte, 10)
 
 		binary.BigEndian.PutUint16(key[:2], uint16(bit))
-		binary.BigEndian.PutUint64(key[2:], uint64(light.BloomTrieFrequency))
+		binary.BigEndian.PutUint64(key[2:], uint64(params.BloomTrieFrequency))
 
 		requests := []HelperTrieReq{{
 			Type:    htBloomBits,
@@ -474,7 +474,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 		}}
 		var proofs HelperTrieResps
 
-		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(light.BloomTrieFrequency-1).Hash())
+		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(params.BloomTrieFrequency-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.BloomTrieTablePrefix)))
 		trie.Prove(key, 0, &proofs.Proofs)
 

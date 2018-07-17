@@ -128,7 +128,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*params.CHTFrequencyClient-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -457,7 +457,7 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	if header := self.hc.GetHeaderByNumber(number); header != nil {
 		return header, nil
 	}
-	return GetHeaderByNumber(ctx, self.odr, number)
+	return GetHeaderByNumber(ctx, params.CHTFrequencyClient, params.HelperTrieConfirmations, self.odr, number)
 }
 
 // Config retrieves the header chain's chain configuration.
@@ -469,9 +469,9 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	}
 	headNum := self.CurrentHeader().Number.Uint64()
 	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*CHTFrequencyClient {
-		num := chtCount*CHTFrequencyClient - 1
-		header, err := GetHeaderByNumber(ctx, self.odr, num)
+	if headNum+1 < chtCount*params.CHTFrequencyClient {
+		num := chtCount*params.CHTFrequencyClient - 1
+		header, err := GetHeaderByNumber(ctx, params.CHTFrequencyClient, params.HelperTrieConfirmations, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()
 			if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {

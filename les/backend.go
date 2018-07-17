@@ -106,10 +106,10 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency, params.BloomConfirms),
-		chtIndexer:     light.NewChtIndexer(chainDb, light.CHTFrequencyClient, light.HelperTrieConfirmations),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, light.BloomTrieFrequency, params.BloomConfirms,
-			light.BloomTrieFrequency, light.HelperTrieConfirmations),
+		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomTrieFrequency, params.BloomConfirms),
+		chtIndexer:     light.NewChtIndexer(chainDb, params.CHTFrequencyClient, params.HelperTrieConfirmations),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, params.BloomTrieFrequency, params.BloomConfirms,
+			params.BloomTrieFrequency, params.HelperTrieConfirmations),
 	}
 
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
@@ -223,7 +223,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
-	s.startBloomHandlers(light.BloomTrieFrequency)
+	s.startBloomHandlers(params.BloomTrieFrequency, params.HelperTrieConfirmations)
 	log.Warn("Light client mode is an experimental feature")
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
 	// clients are searching for the first advertised protocol in the list

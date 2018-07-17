@@ -156,11 +156,11 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	} else {
 		blockchain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{})
 
-		chtIndexer := light.NewChtIndexer(db, light.CHTFrequencyServer, light.HelperTrieProcessConfirmations)
+		chtIndexer := light.NewChtIndexer(db, params.CHTFrequencyServer, params.HelperTrieProcessConfirmations)
 		chtIndexer.Start(blockchain)
 
 		bbtIndexer := light.NewBloomTrieIndexer(db, params.BloomBitsBlocks, params.BloomConfirms,
-			light.BloomTrieFrequency, light.HelperTrieProcessConfirmations)
+			params.BloomTrieFrequency, params.HelperTrieProcessConfirmations)
 
 		bloomIndexer := eth.NewBloomIndexer(db, params.BloomBitsBlocks, params.BloomConfirms)
 		bloomIndexer.AddChildIndexer(bbtIndexer)

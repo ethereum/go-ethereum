@@ -34,19 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-const (
-	// CHTFrequencyClient is the block frequency for creating CHTs on the client side.
-	CHTFrequencyClient = 32768
-
-	// CHTFrequencyServer is the block frequency for creating CHTs on the server side.
-	// Eventually this can be merged back with the client version, but that requires a
-	// full database upgrade, so that should be left for a suitable moment.
-	CHTFrequencyServer = 4096
-
-	HelperTrieConfirmations        = 2048 // number of confirmations before a server is expected to have the given HelperTrie available
-	HelperTrieProcessConfirmations = 256  // number of confirmations before a HelperTrie is generated
-)
-
 // trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash. It is used to start light syncing from this checkpoint
 // and avoid downloading the entire header chain while still being able to securely access old headers/logs.
@@ -95,7 +82,7 @@ type ChtNode struct {
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database
-// Note that sectionIdx is specified according to LES/1 CHT section size
+// Note that sectionIdx is specified according to LES/1 CHT section size.
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -104,23 +91,24 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 }
 
 // StoreChtRoot writes the CHT root associated to the given section into the database
-// Note that sectionIdx is specified according to LES/1 CHT section size
+// Note that sectionIdx is specified according to LES/1 CHT section size.
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
 	db.Put(append(append(chtPrefix, encNumber[:]...), sectionHead.Bytes()...), root.Bytes())
 }
 
-// ChtIndexerBackend implements core.ChainIndexerBackend
+// ChtIndexerBackend implements core.ChainIndexerBackend.
 type ChtIndexerBackend struct {
-	diskdb               ethdb.Database
-	triedb               *trie.Database
-	section, sectionSize uint64
-	lastHash             common.Hash
-	trie                 *trie.Trie
+	diskdb      ethdb.Database
+	triedb      *trie.Database
+	section     uint64
+	sectionSize uint64
+	lastHash    common.Hash
+	trie        *trie.Trie
 }
 
-// NewChtIndexer creates a Cht chain indexer
+// NewChtIndexer creates a Cht chain indexer.
 func NewChtIndexer(db ethdb.Database, size, confirms uint64) *core.ChainIndexer {
 	idb := ethdb.NewTable(db, "chtIndex-")
 	backend := &ChtIndexerBackend{
@@ -131,7 +119,7 @@ func NewChtIndexer(db ethdb.Database, size, confirms uint64) *core.ChainIndexer 
 	return core.NewChainIndexer(db, idb, backend, size, confirms, time.Millisecond*100, "cht")
 }
 
-// Reset implements core.ChainIndexerBackend
+// Reset implements core.ChainIndexerBackend.
 func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
 	var root common.Hash
 	if section > 0 {
@@ -166,18 +154,12 @@ func (c *ChtIndexerBackend) Commit() error {
 	}
 	c.triedb.Commit(root, false)
 
-	if ((c.section+1)*c.sectionSize)%CHTFrequencyClient == 0 {
-		log.Info("Storing CHT", "section", c.section*c.sectionSize/CHTFrequencyClient, "head", c.lastHash, "root", root)
+	if ((c.section+1)*c.sectionSize)%params.CHTFrequencyClient == 0 {
+		log.Info("Storing CHT", "section", c.section*c.sectionSize/params.CHTFrequencyClient, "head", c.lastHash, "root", root)
 	}
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
 	return nil
 }
-
-const (
-	BloomTrieFrequency        = 32768
-	ethBloomBitsSection       = 4096
-	ethBloomBitsConfirmations = 256
-)
 
 var (
 	bloomTriePrefix      = []byte("bltRoot-") // bloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
