@@ -266,9 +266,6 @@ func GetBlockReceipts(db DatabaseReader, hash common.Hash, number uint64) types.
 // hash to allow retrieving the transaction or receipt by hash.
 func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64, uint64) {
 	// Load the positional metadata from disk and bail if it fails
-	//fmt.Println("INSIDE GetTxLookupEntry  ")
-	//fmt.Println("the db is ")
-	//fmt.Println(db)
 	data, _ := db.Get(append(lookupPrefix, hash.Bytes()...))
 	if len(data) == 0 {
 		return common.Hash{}, 0, 0

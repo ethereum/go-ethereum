@@ -188,8 +188,6 @@ loop:
 				arguments = make([]interface{}, 1)
 			}
 			arguments[0] = timer.call.ArgumentList[0]
-			fmt.Println("The arguments are")
-			fmt.Println(arguments)
 			_, err := vm.Call(`Function.call.call`, nil, arguments...)
 			if err != nil {
 				fmt.Println("js error:", err, arguments)

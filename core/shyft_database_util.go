@@ -118,7 +118,7 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 		panic(err)
 	}
 
-	rewards := writeMinerRewards(sqldb,block)
+	rewards := swriteMinerRewards(sqldb,block)
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
@@ -147,10 +147,10 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 		for _, tx := range block.Transactions() {
 			SwriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
 			if block.Transactions()[0].To() != nil {
-				writeFromBalance(sqldb, tx)
+				swriteFromBalance(sqldb, tx)
 			}
 			if block.Transactions()[0].To() == nil {
-				writeContractBalance(sqldb, tx)
+				swriteContractBalance(sqldb, tx)
 			}
 		}
 	}
@@ -232,7 +232,7 @@ func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 	return nil
 }
 
-func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
+func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	sendAndReceiveData := SendAndReceive{
 		From:   tx.From().Hex(),
 		Amount: tx.Value().String(),
@@ -284,7 +284,7 @@ func writeContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-func writeContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
+func swriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		From: tx.From().Hex(),
 		Amount: tx.Value().String(),
@@ -304,8 +304,8 @@ func writeContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndRe
 }
 
 //writeFromBalance writes senders balance to accounts db
-func writeFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := writeBalanceHelper(sqldb, tx)
+func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := swriteBalanceHelper(sqldb, tx)
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
 	amount := sendAndReceiveData.Amount
@@ -377,7 +377,7 @@ func writeFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
+func swriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		To: tx.To().Hex(),
 		From: tx.From().Hex(),
@@ -412,7 +412,7 @@ func writeBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
 // @TODO: Calculate reorg
-func writeMinerRewards(sqldb *sql.DB, block *types.Block) string {
+func swriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	minerAddr := block.Coinbase().String()
 	shyftConduitAddress := Rewards.ShyftNetworkConduitAddress.String()
 	// Calculate the total gas used in the block
@@ -442,13 +442,13 @@ func writeMinerRewards(sqldb *sql.DB, block *types.Block) string {
 		uncleAddrs = append(uncleAddrs, uncle.Coinbase.String())
 	}
 
-	storeReward(sqldb, minerAddr, totalMinerReward)
-	storeReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
+	sstoreReward(sqldb, minerAddr, totalMinerReward)
+	sstoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
 	var uncRewards = new(big.Int)
 	for i := 0; i < len(uncleAddrs); i++ {
 		uncRewards := uncleRewards[i]
 		fmt.Println(uncRewards)
-		storeReward(sqldb, uncleAddrs[i], uncleRewards[i])
+		sstoreReward(sqldb, uncleAddrs[i], uncleRewards[i])
 	}
 
 	fullRewardValue := new(big.Int)
@@ -458,7 +458,7 @@ func writeMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	return fullRewardValue.String()
 }
 
-func storeReward(sqldb *sql.DB, address string, reward *big.Int) {
+func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 	// Check if address exists
 	var addressBalance string
 	addressExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`

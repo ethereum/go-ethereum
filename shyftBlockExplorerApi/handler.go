@@ -18,11 +18,6 @@ import (
 func GetTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	txHash := vars["txHash"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 	sqldb, err := core.DBConnection()
 	getTxResponse := core.SGetTransaction(sqldb, txHash)
 
@@ -39,11 +34,6 @@ func GetTransaction(w http.ResponseWriter, r *http.Request) {
 
 // GetAllTransactions gets txs
 func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -53,7 +43,6 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
@@ -65,11 +54,6 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	blockNumber := vars["blockNumber"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -89,11 +73,6 @@ func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
 func GetAllBlocksMinedByAddress(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	coinbase := vars["coinbase"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -114,11 +93,6 @@ func GetAllBlocksMinedByAddress(w http.ResponseWriter, r *http.Request) {
 func GetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -139,11 +113,6 @@ func GetAccount(w http.ResponseWriter, r *http.Request) {
 func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -162,11 +131,6 @@ func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
 
 // GetAllAccounts gets balances
 func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
 
 	sqldb, err := core.DBConnection()
 
@@ -185,11 +149,7 @@ func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
 func GetBlock(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	blockNumber := vars["blockNumber"]
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
+
 	sqldb, err := core.DBConnection()
 	getBlockResponse := core.SGetBlock(sqldb, blockNumber)
 
@@ -206,11 +166,7 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 
 // GetAllBlocks response
 func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
+
 	sqldb, err := core.DBConnection()
 	block3 := core.SGetAllBlocks(sqldb)
 	if err != nil {
@@ -223,11 +179,7 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRecentBlock(w http.ResponseWriter, r *http.Request) {
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//blockExplorerDb, err := sql.Open("postgres", connStr)
-	//if err != nil {
-	//	return
-	//}
+
 	sqldb, err := core.DBConnection()
 
 	mostRecentBlock := core.SGetRecentBlock(sqldb)

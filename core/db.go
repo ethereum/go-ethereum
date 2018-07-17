@@ -7,12 +7,16 @@ import (
 
 var blockExplorerDb *sql.DB
 
+const (
+	connStr = "user=postgres dbname=shyftdb sslmode=disable"
+	connStrTest =  "user=postgres dbname=shyftdbtest sslmode=disable"
+)
+
 func InitDB() (*sql.DB, error){
-	var connStr = "user=postgres dbname=shyftdb sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
-		fmt.Println(err)
+		panic(err)
 		return nil, err
 	} else {
 		blockExplorerDb = db
@@ -21,11 +25,10 @@ func InitDB() (*sql.DB, error){
 }
 
 func InitDBTest() (*sql.DB, error){
-	var connStr = "user=postgres dbname=shyftdbtest sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", connStrTest)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
-		fmt.Println(err)
+		panic(err)
 		return nil, err
 	} else {
 		blockExplorerDb = db
