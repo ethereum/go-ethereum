@@ -55,8 +55,9 @@ var (
 
 type testOdr struct {
 	OdrBackend
-	sdb, ldb ethdb.Database
-	disable  bool
+	indexerConfig *IndexerConfig
+	sdb, ldb      ethdb.Database
+	disable       bool
 }
 
 func (odr *testOdr) Database() ethdb.Database {
@@ -88,7 +89,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	case *CodeRequest:
 		req.Data, _ = odr.sdb.Get(req.Hash[:])
 	}
-	req.StoreResult(odr.ldb)
+	req.StoreResult(odr.ldb, odr.indexerConfig)
 	return nil
 }
 
@@ -258,7 +259,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 		t.Fatal(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb}
+	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: DefaultClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, params.TestChainConfig, DefaultClientIndexerConfig, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)

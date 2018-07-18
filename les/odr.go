@@ -28,14 +28,16 @@ import (
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
 	db                                         ethdb.Database
+	indexerConfig                              *light.IndexerConfig
 	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
 	retriever                                  *retrieveManager
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
 		db:               db,
+		indexerConfig:    config,
 		chtIndexer:       chtIndexer,
 		bloomTrieIndexer: bloomTrieIndexer,
 		bloomIndexer:     bloomIndexer,
@@ -98,7 +100,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
-			return lreq.CanSend(p)
+			return lreq.CanSend(p, odr.indexerConfig)
 		},
 		request: func(dp distPeer) func() {
 			p := dp.(*peer)
@@ -110,7 +112,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 
 	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
 		// retrieved from network, store in db
-		req.StoreResult(odr.db)
+		req.StoreResult(odr.db, odr.indexerConfig)
 	} else {
 		log.Debug("Failed to retrieve data from network", "err", err)
 	}

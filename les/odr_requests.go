@@ -49,7 +49,7 @@ var (
 
 type LesOdrRequest interface {
 	GetCost(*peer) uint64
-	CanSend(*peer) bool
+	CanSend(*peer, *light.IndexerConfig) bool
 	Request(uint64, *peer) error
 	Validate(ethdb.Database, *Msg) error
 }
@@ -83,7 +83,7 @@ func (r *BlockRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *BlockRequest) CanSend(peer *peer) bool {
+func (r *BlockRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	return peer.HasBlock(r.Hash, r.Number)
 }
 
@@ -139,7 +139,7 @@ func (r *ReceiptsRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *ReceiptsRequest) CanSend(peer *peer) bool {
+func (r *ReceiptsRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	return peer.HasBlock(r.Hash, r.Number)
 }
 
@@ -201,7 +201,7 @@ func (r *TrieRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *TrieRequest) CanSend(peer *peer) bool {
+func (r *TrieRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
 }
 
@@ -271,7 +271,7 @@ func (r *CodeRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *CodeRequest) CanSend(peer *peer) bool {
+func (r *CodeRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
 }
 
@@ -361,11 +361,11 @@ func (r *ChtRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *ChtRequest) CanSend(peer *peer) bool {
+func (r *ChtRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	return peer.headInfo.Number >= r.Confirms && r.ChtNum <= (peer.headInfo.Number-r.Confirms)/r.SectionSize
+	return peer.headInfo.Number >= config.ChtConfirm && r.ChtNum <= (peer.headInfo.Number-config.ChtConfirm)/config.ChtSize
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -477,14 +477,14 @@ func (r *BloomRequest) GetCost(peer *peer) uint64 {
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
-func (r *BloomRequest) CanSend(peer *peer) bool {
+func (r *BloomRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
 	if peer.version < lpv2 {
 		return false
 	}
-	return peer.headInfo.Number >= r.Confirms && r.BloomTrieNum <= (peer.headInfo.Number-r.Confirms)/r.SectionSize
+	return peer.headInfo.Number >= config.BloomTrieConfirm && r.BloomTrieNum <= (peer.headInfo.Number-config.BloomTrieConfirm)/config.BloomTrieSize
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)

@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -63,19 +62,19 @@ func GetHeaderByNumber(ctx context.Context, size uint64, confirms uint64, odr Od
 	if number >= chtCount*size {
 		return nil, ErrNoTrustedCht
 	}
-	r := &ChtRequest{SectionSize: size, Confirms: confirms, ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, BlockNum: number}
+	r := &ChtRequest{ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, BlockNum: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
 	return r.Header, nil
 }
 
-func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
+func GetCanonicalHash(ctx context.Context, odr OdrBackend, size uint64, confirm uint64, number uint64) (common.Hash, error) {
 	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
 	if (hash != common.Hash{}) {
 		return hash, nil
 	}
-	header, err := GetHeaderByNumber(ctx, params.CHTFrequencyClient, params.HelperTrieConfirmations, odr, number)
+	header, err := GetHeaderByNumber(ctx, size, confirm, odr, number)
 	if header != nil {
 		return header.Hash(), nil
 	}
@@ -221,7 +220,7 @@ func GetBloomBits(ctx context.Context, size uint64, confirms uint64, odr OdrBack
 		return result, nil
 	}
 
-	r := &BloomRequest{SectionSize: size, Confirms: confirms, BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1,
+	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1,
 		BitIdx: bitIdx, SectionIdxList: reqList}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err

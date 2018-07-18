@@ -130,7 +130,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*params.CHTFrequencyClient-1, "hash", cp.sectionHead)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*self.indexerConfig.ChtSize-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -292,7 +292,7 @@ func (self *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 // GetBlockByNumber retrieves a block from the database or ODR service by
 // number, caching it (associated with its hash) if found.
 func (self *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
-	hash, err := GetCanonicalHash(ctx, self.odr, number)
+	hash, err := GetCanonicalHash(ctx, self.odr, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, number)
 	if hash == (common.Hash{}) || err != nil {
 		return nil, err
 	}
