@@ -19,7 +19,6 @@ package les
 
 import (
 	"crypto/ecdsa"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -32,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -285,21 +283,11 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 }
 
 // RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
-func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq) error {
+func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []interface{}) error {
 	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
 	switch p.version {
 	case lpv1:
-		reqsV1 := make([]ChtReq, len(reqs))
-		for i, req := range reqs {
-			if req.Type != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
-				return fmt.Errorf("Request invalid in LES/1 mode")
-			}
-			blockNum := binary.BigEndian.Uint64(req.Key)
-			// convert HelperTrie request to old CHT request
-			reqsV1[i] = ChtReq{ChtNum: (req.TrieIdx + 1) * (params.CHTFrequencyClient / params.CHTFrequencyServer), BlockNum: blockNum, FromLevel: req.FromLevel}
-
-		}
-		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqsV1)
+		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
 	case lpv2:
 		return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
 	default:

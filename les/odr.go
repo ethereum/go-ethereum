@@ -106,7 +106,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 			p := dp.(*peer)
 			cost := lreq.GetCost(p)
 			p.fcServer.QueueRequest(reqID, cost)
-			return func() { lreq.Request(reqID, p) }
+			return func() { lreq.Request(reqID, p, odr.indexerConfig) }
 		},
 	}
 
