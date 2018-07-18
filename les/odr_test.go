@@ -168,8 +168,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	db := ethdb.NewMemDatabase()
 	ldb := ethdb.NewMemDatabase()
 	odr := NewLesOdr(ldb, light.NewChtIndexer(db, params.CHTFrequencyClient, params.HelperTrieConfirmations),
-		light.NewBloomTrieIndexer(db, params.BloomTrieFrequency, params.BloomConfirms, params.BloomTrieFrequency, params.HelperTrieConfirmations),
-		eth.NewBloomIndexer(db, params.BloomTrieFrequency, params.BloomConfirms), rm)
+		light.NewBloomTrieIndexer(db, params.BloomBitsBlocksClient, params.HelperTrieConfirmations, params.BloomTrieFrequency, params.HelperTrieConfirmations),
+		eth.NewBloomIndexer(db, params.BloomBitsBlocksClient, params.HelperTrieConfirmations), rm)
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)

@@ -24,6 +24,10 @@ const (
 	// contains.
 	BloomBitsBlocks uint64 = 4096
 
+	// BloomBitsBlocksClient is the number of blocks a single bloom bit section vector
+	// contains on the light client side
+	BloomBitsBlocksClient uint64 = 32768
+
 	// BloomConfirms is the number of confirmation blocks before a bloom section is
 	// considered probably final and its rotated bits are calculated.
 	BloomConfirms = 256

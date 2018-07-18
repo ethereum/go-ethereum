@@ -450,14 +450,14 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 func TestGetBloombitsProofs(t *testing.T) {
 	// Assemble the test environment
 	db := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, params.BloomTrieFrequency+256, testChainGen, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, int(params.BloomBitsBlocksClient)+256, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", 2, pm, true)
 	defer peer.close()
 
 	// Wait a while for the bloombits indexer to process the new headers
-	time.Sleep(100 * time.Millisecond * time.Duration(params.BloomTrieFrequency/4096)) // Chain indexer throttling
-	time.Sleep(250 * time.Millisecond)                                                 // CI tester slack
+	time.Sleep(100 * time.Millisecond * time.Duration(params.BloomBitsBlocksClient/4096)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                    // CI tester slack
 
 	// Request and verify each bit of the bloom bits proofs
 	for bit := 0; bit < 2048; bit++ {
@@ -465,7 +465,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 		key := make([]byte, 10)
 
 		binary.BigEndian.PutUint16(key[:2], uint16(bit))
-		binary.BigEndian.PutUint64(key[2:], uint64(params.BloomTrieFrequency))
+		binary.BigEndian.PutUint64(key[2:], params.BloomBitsBlocksClient)
 
 		requests := []HelperTrieReq{{
 			Type:    htBloomBits,
@@ -474,7 +474,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 		}}
 		var proofs HelperTrieResps
 
-		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(params.BloomTrieFrequency-1).Hash())
+		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(params.BloomBitsBlocksClient-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.BloomTrieTablePrefix)))
 		trie.Prove(key, 0, &proofs.Proofs)
 
