@@ -193,7 +193,7 @@ func (w *wizard) makeGenesis() {
 			return true
 		}
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
-		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000088")] = core.GenesisAccount{
+		genesis.Alloc[common.HexToAddress(common.MasternodeVotingSMC)] = core.GenesisAccount{
 			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
 			Code:    code,
 			Storage: storage,
@@ -209,7 +209,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, blockSignerAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
-		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000089")] = core.GenesisAccount{
+		genesis.Alloc[common.HexToAddress(common.BlockSigners)] = core.GenesisAccount{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -225,7 +225,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, randomizeAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, randomizeAddress, nil, f)
-		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000090")] = core.GenesisAccount{
+		genesis.Alloc[common.HexToAddress(common.RandomizeSMC)] = core.GenesisAccount{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -248,7 +248,7 @@ func (w *wizard) makeGenesis() {
 		break
 	}
 	// Add a batch of precompile balances to avoid them getting deleted
-	for i := int64(0); i < 256; i++ {
+	for i := int64(0); i < 2; i++ {
 		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
 	}
 	// Query the user for some custom extras
