@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/shyftdb"
 	"database/sql"
 	"strconv"
 	"time"
@@ -145,7 +144,7 @@ func (e *GenesisMismatchError) Error() string {
 //@NOTE:SHYFT
 func WriteShyftGen(gen *Genesis, block *types.Block) {
 
-	sqldb, _ := shyftdb.DBConnection()
+	sqldb, _ := DBConnection()
 
 	for k := range gen.Alloc {
 		addr := k.String()
@@ -187,15 +186,13 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 				panic(insertError)
 			}
 		}
-
-
 	default:
 		log.Info("Found Genesis Block")
 }}}
 
 func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
 	
-	sqldb, _ := shyftdb.DBConnection()
+	sqldb, _ := DBConnection()
 
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()

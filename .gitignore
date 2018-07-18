@@ -51,3 +51,4 @@ $HOME
 shyftData/*
 shyft-cli/web3/token_test/node_modules
 shyft-cli/web3/transfer-through-master/node_modules
+shyft-cli/web3/transfer-through-master/build

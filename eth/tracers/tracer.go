@@ -27,10 +27,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	duktape "gopkg.in/olebedev/go-duktape.v3"
+	"gopkg.in/olebedev/go-duktape.v3"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -311,6 +312,7 @@ func New(code string) (*Tracer, error) {
 	if tracer, ok := tracer(code); ok {
 		code = tracer
 	}
+
 	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
@@ -324,6 +326,7 @@ func New(code string) (*Tracer, error) {
 		costValue:       new(uint),
 		depthValue:      new(uint),
 	}
+
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
@@ -456,7 +459,6 @@ func New(code string) (*Tracer, error) {
 
 	tracer.dbWrapper.pushObject(tracer.vm)
 	tracer.vm.PutPropString(tracer.stateObject, "db")
-
 	return tracer, nil
 }
 
@@ -496,9 +498,6 @@ func wrapError(context string, err error) error {
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (jst *Tracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
-	//fmt.Println("\n\n\t\t type: ", reflect.TypeOf(input))
-	fmt.Println("\t\t [TRACER INPUT]:", input)
-	fmt.Println("\t\t [TRACER INPUT STRING]:", string(input[:len(input)]), "\n\n")
 	jst.ctx["type"] = "CALL"
 	if create {
 		jst.ctx["type"] = "CREATE"
@@ -567,9 +566,6 @@ func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost 
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
-	//fmt.Println("\n\n\t\t", reflect.TypeOf(output))
-	fmt.Println("\t\t [TRACER OUTPUT]:", output[:len(output)])
-	fmt.Println("\t\t [TRACER OUTPUT STRING]:", string(output[:len(output)]), "\n\n")
 	jst.ctx["output"] = output
 	jst.ctx["gasUsed"] = gasUsed
 	jst.ctx["time"] = t.String()
@@ -578,6 +574,52 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 		jst.ctx["error"] = err.Error()
 	}
 	return nil
+}
+
+//@NOTE:SHYFT
+type Internals struct {
+	Type string
+	From string
+	To string
+	Value string
+	Gas string
+	GasUsed string
+	Input string
+	Output string
+	Time string
+	Calls []*Internals
+}
+
+//@NOTE:SHYFT
+func (i *Internals) SWriteInteralTxs(hash common.Hash) {
+	sqldb, err := core.DBConnection()
+	if err != nil {
+		panic(err)
+	}
+
+	gas, _ := hexutil.DecodeUint64(i.Gas)
+	gasUsed, _ := hexutil.DecodeUint64(i.GasUsed)
+
+	var returnValue string
+	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
+	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, i.Value, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
+
+	if qerr != nil {
+		fmt.Println(qerr)
+		panic(qerr)
+	}
+}
+//@NOTE:SHYFT
+func (i *Internals) InternalRecursive(hash common.Hash) {
+	i.SWriteInteralTxs(hash)
+	lengthOfCalls := len(i.Calls)
+	if lengthOfCalls == 0 {
+		return
+	}
+
+	for _, val := range i.Calls {
+		val.InternalRecursive(hash)
+	}
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
@@ -619,6 +661,58 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	// Clean up the JavaScript environment
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
+
+	return result, jst.err
+}
+
+// GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
+
+//@NOTE:SHYFT
+func (jst *Tracer) SGetResult(hash common.Hash) (json.RawMessage, error) {
+	// Transform the context into a JavaScript object and inject into the state
+	obj := jst.vm.PushObject()
+
+	for key, val := range jst.ctx {
+		switch val := val.(type) {
+		case uint64:
+			jst.vm.PushUint(uint(val))
+
+		case string:
+			jst.vm.PushString(val)
+
+		case []byte:
+			ptr := jst.vm.PushFixedBuffer(len(val))
+			copy(makeSlice(ptr, uint(len(val))), val[:])
+
+		case common.Address:
+			ptr := jst.vm.PushFixedBuffer(20)
+			copy(makeSlice(ptr, 20), val[:])
+
+		case *big.Int:
+			pushBigInt(val, jst.vm)
+
+		default:
+			panic(fmt.Sprintf("unsupported type: %T", val))
+		}
+		jst.vm.PutPropString(obj, key)
+	}
+	jst.vm.PutPropString(jst.stateObject, "ctx")
+
+	// Finalize the trace and return the results
+	result, err := jst.call("result", "ctx", "db")
+	if err != nil {
+		jst.err = wrapError("result", err)
+	}
+	// Clean up the JavaScript environment
+	jst.vm.DestroyHeap()
+	jst.vm.Destroy()
+
+	var dat Internals
+
+	if err := json.Unmarshal(result, &dat); err != nil {
+		panic(err)
+	}
+	dat.InternalRecursive(hash)
 
 	return result, jst.err
 }

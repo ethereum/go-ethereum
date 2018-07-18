@@ -28,12 +28,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	
+
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/shyftdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -901,15 +901,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	// @NOTE:SHYFT - Write block data for block explorer
-	if err := shyftdb.WriteBlock(block, receipts); err != nil {
-		return NonStatTy, err
-	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+
 	if err != nil {
 		return NonStatTy, err
 	}
+
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
@@ -1000,6 +998,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+	}
+
+	// NOTE:SHYFT - Write block data for block explorer
+	//fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
+	if err := SWriteBlock(block, receipts); err != nil {
+		return NonStatTy, err
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil

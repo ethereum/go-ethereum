@@ -49,6 +49,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var BlockchainObject *core.BlockChain
+
+var DebugApi PrivateDebugAPI
+
 type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
@@ -98,21 +102,44 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
+func SNew(config *Config) (*Ethereum, error) {
+	stopDbUpgrade := upgradeDeduplicateData(Chaindb_global)
+	chainConfig, _, _ := core.SetupGenesisBlock(Chaindb_global, config.Genesis)
+	eth := &Ethereum{
+		config:         config,
+		chainDb:        Chaindb_global,
+		chainConfig:    chainConfig,
+		shutdownChan:   make(chan bool),
+		stopDbUpgrade:  stopDbUpgrade,
+		networkId:      config.NetworkId,
+		gasPrice:       config.GasPrice,
+		etherbase:      config.Etherbase,
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bloomIndexer:   NewBloomIndexer(Chaindb_global, params.BloomBitsBlocks),
+	}
+
+	eth.blockchain = BlockchainObject
+
+	return eth, nil
+}
+
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+	shyft_tracer := new(ShyftTracer)
+	core.SetIShyftTracer(shyft_tracer)
+	SetGlobalConfig(config)
+
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	chainDb, err := CreateDB(ctx, config, "chaindata")
+	chainDb, err := chaindb(ctx, config)
 	if err != nil {
 		return nil, err
 	}
-
-	// @TODO: Create Genesis Block
 
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
@@ -150,7 +177,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+
+	BlockchainObject = eth.blockchain
+
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +210,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		gpoParams.Default = config.GasPrice
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
+
+	DebugApi.eth = eth
+	DebugApi.config = chainConfig
+	//@NOTE Shyft Tracer
+	InitTracerEnv()
 
 	return eth, nil
 }

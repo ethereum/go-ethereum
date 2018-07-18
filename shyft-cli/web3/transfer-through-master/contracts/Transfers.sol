@@ -7,7 +7,7 @@ contract Transfers {
 	Transfers2 t;
 	address t_addr;
 
-	constructor() public {
+	function Transfers() public {
 		t = new Transfers2();
 		t_addr = address(t);
 	}
