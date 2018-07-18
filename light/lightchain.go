@@ -48,6 +48,7 @@ var (
 // interface. It only does header validation during chain insertion.
 type LightChain struct {
 	hc            *core.HeaderChain
+	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
 	odr           OdrBackend
 	chainFeed     event.Feed
@@ -75,19 +76,20 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, indexerConfig *IndexerConfig, engine consensus.Engine) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 
 	bc := &LightChain{
-		chainDb:      odr.Database(),
-		odr:          odr,
-		quit:         make(chan struct{}),
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
-		blockCache:   blockCache,
-		engine:       engine,
+		chainDb:       odr.Database(),
+		indexerConfig: indexerConfig,
+		odr:           odr,
+		quit:          make(chan struct{}),
+		bodyCache:     bodyCache,
+		bodyRLPCache:  bodyRLPCache,
+		blockCache:    blockCache,
+		engine:        engine,
 	}
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
@@ -457,7 +459,7 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	if header := self.hc.GetHeaderByNumber(number); header != nil {
 		return header, nil
 	}
-	return GetHeaderByNumber(ctx, params.CHTFrequencyClient, params.HelperTrieConfirmations, self.odr, number)
+	return GetHeaderByNumber(ctx, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, self.odr, number)
 }
 
 // Config retrieves the header chain's chain configuration.
@@ -469,9 +471,9 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	}
 	headNum := self.CurrentHeader().Number.Uint64()
 	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*params.CHTFrequencyClient {
-		num := chtCount*params.CHTFrequencyClient - 1
-		header, err := GetHeaderByNumber(ctx, params.CHTFrequencyClient, params.HelperTrieConfirmations, self.odr, num)
+	if headNum+1 < chtCount*self.indexerConfig.ChtSize {
+		num := chtCount*self.indexerConfig.ChtSize - 1
+		header, err := GetHeaderByNumber(ctx, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()
 			if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {

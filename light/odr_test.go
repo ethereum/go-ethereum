@@ -259,7 +259,7 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	}
 
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	lightchain, err := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker())
+	lightchain, err := NewLightChain(odr, params.TestChainConfig, DefaultClientIndexerConfig, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)
 	}

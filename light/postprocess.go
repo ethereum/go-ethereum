@@ -34,6 +34,36 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// IndexerConfig specifies a set of configs for chain indexers.
+type IndexerConfig struct {
+	ChtSize          uint64
+	ChtClientSize    uint64
+	ChtConfirm       uint64
+	BloomSize        uint64
+	BloomConfirm     uint64
+	BloomTrieSize    uint64
+	BloomTrieConfirm uint64
+}
+
+var DefaultServerIndexerConfig = &IndexerConfig{
+	ChtSize:          params.CHTFrequencyServer,
+	ChtClientSize:    params.CHTFrequencyClient,
+	ChtConfirm:       params.HelperTrieProcessConfirmations,
+	BloomSize:        params.BloomBitsBlocks,
+	BloomConfirm:     params.BloomConfirms,
+	BloomTrieSize:    params.BloomTrieFrequency,
+	BloomTrieConfirm: params.HelperTrieProcessConfirmations,
+}
+
+var DefaultClientIndexerConfig = &IndexerConfig{
+	ChtSize:          params.CHTFrequencyClient,
+	ChtConfirm:       params.HelperTrieConfirmations,
+	BloomSize:        params.BloomBitsBlocksClient,
+	BloomConfirm:     params.HelperTrieConfirmations,
+	BloomTrieSize:    params.BloomTrieFrequency,
+	BloomTrieConfirm: params.HelperTrieConfirmations,
+}
+
 // trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash. It is used to start light syncing from this checkpoint
 // and avoid downloading the entire header chain while still being able to securely access old headers/logs.

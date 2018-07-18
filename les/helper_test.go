@@ -152,7 +152,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	}
 
 	if lightSync {
-		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
+		chain, _ = light.NewLightChain(odr, gspec.Config, light.DefaultClientIndexerConfig, engine)
 	} else {
 		blockchain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{})
 
@@ -173,13 +173,19 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain = blockchain
 	}
 
-	var protocolVersions []uint
+	var (
+		protocolVersions []uint
+		indexConfig      *light.IndexerConfig
+	)
+
 	if lightSync {
 		protocolVersions = ClientProtocolVersions
+		indexConfig = light.DefaultClientIndexerConfig
 	} else {
 		protocolVersions = ServerProtocolVersions
+		indexConfig = light.DefaultServerIndexerConfig
 	}
-	pm, err := NewProtocolManager(gspec.Config, lightSync, protocolVersions, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup))
+	pm, err := NewProtocolManager(gspec.Config, indexConfig, lightSync, protocolVersions, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, nil, make(chan struct{}), new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}

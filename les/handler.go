@@ -94,19 +94,20 @@ type txPool interface {
 }
 
 type ProtocolManager struct {
-	lightSync   bool
-	txpool      txPool
-	txrelay     *LesTxRelay
-	networkId   uint64
-	chainConfig *params.ChainConfig
-	blockchain  BlockChain
-	chainDb     ethdb.Database
-	odr         *LesOdr
-	server      *LesServer
-	serverPool  *serverPool
-	lesTopic    discv5.Topic
-	reqDist     *requestDistributor
-	retriever   *retrieveManager
+	lightSync     bool
+	txpool        txPool
+	txrelay       *LesTxRelay
+	networkId     uint64
+	chainConfig   *params.ChainConfig
+	indexerConfig *light.IndexerConfig
+	blockchain    BlockChain
+	chainDb       ethdb.Database
+	odr           *LesOdr
+	server        *LesServer
+	serverPool    *serverPool
+	lesTopic      discv5.Topic
+	reqDist       *requestDistributor
+	retriever     *retrieveManager
 
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
@@ -129,24 +130,25 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protocolVersions []uint, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, indexerConfig *light.IndexerConfig, lightSync bool, protocolVersions []uint, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		lightSync:   lightSync,
-		eventMux:    mux,
-		blockchain:  blockchain,
-		chainConfig: chainConfig,
-		chainDb:     chainDb,
-		odr:         odr,
-		networkId:   networkId,
-		txpool:      txpool,
-		txrelay:     txrelay,
-		serverPool:  serverPool,
-		peers:       peers,
-		newPeerCh:   make(chan *peer),
-		quitSync:    quitSync,
-		wg:          wg,
-		noMorePeers: make(chan struct{}),
+		lightSync:     lightSync,
+		eventMux:      mux,
+		blockchain:    blockchain,
+		chainConfig:   chainConfig,
+		indexerConfig: indexerConfig,
+		chainDb:       chainDb,
+		odr:           odr,
+		networkId:     networkId,
+		txpool:        txpool,
+		txrelay:       txrelay,
+		serverPool:    serverPool,
+		peers:         peers,
+		newPeerCh:     make(chan *peer),
+		quitSync:      quitSync,
+		wg:            wg,
+		noMorePeers:   make(chan struct{}),
 	}
 	if odr != nil {
 		manager.retriever = odr.retriever
@@ -892,7 +894,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
 		for _, req := range req.Reqs {
 			if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
-				sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, req.ChtNum*params.CHTFrequencyServer-1)
+				sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, req.ChtNum*pm.indexerConfig.ChtSize-1)
 				if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
 					trie, err := trie.New(root, trieDb)
 					if err != nil {
@@ -1147,11 +1149,11 @@ func (pm *ProtocolManager) getAccount(statedb *state.StateDB, root, hash common.
 func (pm *ProtocolManager) getHelperTrie(id uint, idx uint64) (common.Hash, string) {
 	switch id {
 	case htCanonical:
-		idxV2 := (idx+1)*(params.CHTFrequencyClient/params.CHTFrequencyServer) - 1
-		sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, (idx+1)*params.CHTFrequencyClient-1)
+		idxV2 := (idx+1)*(pm.indexerConfig.ChtClientSize/pm.indexerConfig.ChtSize) - 1
+		sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, (idx+1)*pm.indexerConfig.ChtClientSize-1)
 		return light.GetChtRoot(pm.chainDb, idxV2, sectionHead), light.ChtTablePrefix
 	case htBloomBits:
-		sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, (idx+1)*params.BloomTrieFrequency-1)
+		sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, (idx+1)*pm.indexerConfig.BloomTrieSize-1)
 		return light.GetBloomTrieRoot(pm.chainDb, idx, sectionHead), light.BloomTrieTablePrefix
 	}
 	return common.Hash{}, ""
