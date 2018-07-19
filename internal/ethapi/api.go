@@ -1395,6 +1395,28 @@ func (api *PublicDebugAPI) GetBlockRlp(ctx context.Context, number uint64) (stri
 	return fmt.Sprintf("%x", encoded), nil
 }
 
+// GetLevelDbKey retrieves the value of a key from levelDB backend
+func (api *PublicDebugAPI) GetLevelDbKey(ctx context.Context, input string) (string, error) {
+	ldb, ok := api.b.ChainDb().(interface {
+		LDB() *leveldb.DB
+	})
+	if !ok {
+		return "", fmt.Errorf("db not found!")
+	}
+
+	bb, err := hexutil.Decode(input)
+	if err != nil {
+		return "", fmt.Errorf("incorrect input, expected string representation of hex")
+	}
+
+	value, err := ldb.LDB().Get(bb, nil)
+	if err != nil {
+		return "", fmt.Errorf("error getting value from levelDB %v", err)
+	}
+
+	return fmt.Sprintf("%x", value), nil
+}
+
 // PrintBlock retrieves a block and returns its pretty printed form.
 func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (string, error) {
 	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
