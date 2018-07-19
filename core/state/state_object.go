@@ -77,6 +77,7 @@ type stateObject struct {
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
+	originStorage Storage // Storage cache of original entries to dedup rewrites
 	cachedStorage Storage // Storage entry cache to avoid duplicate reads
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
 
@@ -115,6 +116,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		address:       address,
 		addrHash:      crypto.Keccak256Hash(address[:]),
 		data:          data,
+		originStorage: make(Storage),
 		cachedStorage: make(Storage),
 		dirtyStorage:  make(Storage),
 	}
@@ -178,6 +180,7 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 		}
 		value.SetBytes(content)
 	}
+	self.originStorage[key] = value
 	self.cachedStorage[key] = value
 	return value
 }
@@ -202,6 +205,13 @@ func (self *stateObject) updateTrie(db Database) Trie {
 	tr := self.getTrie(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
+
+		// Skip noop changes, persist actual changes
+		if value == self.originStorage[key] {
+			continue
+		}
+		self.originStorage[key] = value
+
 		if (value == common.Hash{}) {
 			self.setError(tr.TryDelete(key[:]))
 			continue
@@ -280,6 +290,7 @@ func (self *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
+	stateObject.originStorage = self.originStorage.Copy()
 	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
