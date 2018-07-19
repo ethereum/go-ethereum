@@ -49,7 +49,6 @@ var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 	CheckpointCh     = make(chan int)
 	M1Ch             = make(chan int)
-	NewBlockCh       = make(chan int)
 	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
@@ -1244,7 +1243,6 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
 		log.Info("Imported new chain segment", context...)
-		NewBlockCh <- 1
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
 }
