@@ -108,8 +108,10 @@ type (
 		prev    uint64
 	}
 	storageChange struct {
-		account       *common.Address
-		key, prevalue common.Hash
+		account   *common.Address
+		key       common.Hash
+		prevValue common.Hash
+		prevDirty bool
 	}
 	codeChange struct {
 		account            *common.Address
@@ -196,7 +198,7 @@ func (ch codeChange) dirtied() *common.Address {
 }
 
 func (ch storageChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+	s.getStateObject(*ch.account).setState(ch.key, ch.prevValue, ch.prevDirty)
 }
 
 func (ch storageChange) dirtied() *common.Address {

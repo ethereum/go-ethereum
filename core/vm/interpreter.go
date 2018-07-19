@@ -133,7 +133,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err
 			in.intPool = nil
 		}()
 	}
-
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()

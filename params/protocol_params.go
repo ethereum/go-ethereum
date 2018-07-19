@@ -36,15 +36,25 @@ const (
 	TxGasContractCreation uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas         uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	QuadCoeffDiv          uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
-	SstoreSetGas          uint64 = 20000 // Once per SLOAD operation.
 	LogDataGas            uint64 = 8     // Per byte in a LOG* operation's data.
 	CallStipend           uint64 = 2300  // Free gas given at beginning of call.
 
-	Sha3Gas          uint64 = 30    // Once per SHA3 operation.
-	Sha3WordGas      uint64 = 6     // Once per word of the SHA3 operation's data.
-	SstoreResetGas   uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
-	SstoreClearGas   uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
-	SstoreRefundGas  uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
+	Sha3Gas     uint64 = 30 // Once per SHA3 operation.
+	Sha3WordGas uint64 = 6  // Once per word of the SHA3 operation's data.
+
+	SstoreSetGas    uint64 = 20000 // Once per SSTORE operation.
+	SstoreResetGas  uint64 = 5000  // Once per SSTORE operation if the zeroness changes from zero.
+	SstoreClearGas  uint64 = 5000  // Once per SSTORE operation if the zeroness doesn't change.
+	SstoreRefundGas uint64 = 15000 // Once per SSTORE operation if the zeroness changes to zero.
+
+	NetSstoreNoopGas           uint64 = 200   // Once per SSTORE operation if the value doesn't change.
+	NetSstoreDirtyGas          uint64 = 200   // Once per SSTORE operation from dirty.
+	NetSstoreCleanInitgas      uint64 = 20000 // Once per SSTORE operation from clean zero.
+	NetSstoreCleanUpdateGas    uint64 = 5000  // Once per SSTORE operation from clean non-zero.
+	NetSstoreRefundNoopZero    uint64 = 19800 // Once per dirty slot if it was changed from zero to non-zero and back to zero.
+	NetSstoreRefundNoopNonZero uint64 = 4800  // Once per dirty slot if it was changed from non-zero to anything and back to the orignal.
+	NetSstoreRefund            uint64 = 10000 // Once per dirty slot if it was changed from non-zero to zero.
+
 	JumpdestGas      uint64 = 1     // Refunded gas, once per SSTORE operation if the zeroness changes to zero.
 	EpochDuration    uint64 = 30000 // Duration between proof-of-work epochs.
 	CallGas          uint64 = 40    // Once per CALL operation & message call transaction.

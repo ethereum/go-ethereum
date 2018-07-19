@@ -381,11 +381,19 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
-			state.ForEachStorage(addr, func(key, val common.Hash) bool {
-				return checkeq("GetState("+key.Hex()+")", val, checkstate.GetState(addr, key))
+			state.ForEachStorage(addr, func(key, value common.Hash, dirty bool) bool {
+				v, d := checkstate.GetState(addr, key)
+				if ok := checkeq("GetState("+key.Hex()+").value", value, v); ok {
+					return ok
+				}
+				return checkeq("GetState("+key.Hex()+").dirty", dirty, d)
 			})
-			checkstate.ForEachStorage(addr, func(key, checkval common.Hash) bool {
-				return checkeq("GetState("+key.Hex()+")", state.GetState(addr, key), checkval)
+			checkstate.ForEachStorage(addr, func(key, value common.Hash, dirty bool) bool {
+				v, d := state.GetState(addr, key)
+				if ok := checkeq("GetState("+key.Hex()+").value", v, value); ok {
+					return ok
+				}
+				return checkeq("GetState("+key.Hex()+").dirty", d, dirty)
 			})
 		}
 		if err != nil {
@@ -393,9 +401,11 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		}
 	}
 
-	if state.GetRefund() != checkstate.GetRefund() {
-		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
-			state.GetRefund(), checkstate.GetRefund())
+	for _, netGasMetering := range []bool{false, true} {
+		if state.GetRefund(netGasMetering) != checkstate.GetRefund(netGasMetering) {
+			return fmt.Errorf("got GetRefund(%v) == %d, want GetRefund(%v) == %d",
+				netGasMetering, state.GetRefund(netGasMetering), netGasMetering, checkstate.GetRefund(netGasMetering))
+		}
 	}
 	if !reflect.DeepEqual(state.GetLogs(common.Hash{}), checkstate.GetLogs(common.Hash{})) {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
