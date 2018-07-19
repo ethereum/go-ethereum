@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"strconv"
+	"fmt"
 )
 
 type ShyftTracer struct {}
@@ -66,11 +67,12 @@ func TestBlock(t *testing.T) {
 		receipts := []*types.Receipt{receipt}
 		block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
 
+		fmt.Println("++++++HERE")
 		// Write and verify the block in the database
 		if err := core.SWriteBlock(block, receipts); err != nil {
 			t.Fatalf("Failed to write block into database: %v", err)
 		}
-
+		fmt.Println("++++++AND HERE")
 		sqldb, err := core.DBConnection()
 		if err != nil {
 			panic(err)
@@ -467,8 +469,8 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 		if tx.Value().String() != accountDataTo.Balance {
 			t.Fatalf("To address balance [%v]: To address balance not found", accountDataTo.Balance)
 		}
-		if strconv.FormatUint(tx.Nonce(), 10) != accountDataTo.TxCountAccount {
-			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataTo.TxCountAccount)
+		if strconv.FormatUint(tx.Nonce(), 10) != accountDataTo.AccountNonce {
+			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataTo.AccountNonce)
 		}
 		if getAllAccountTxs := core.SGetAccountTxs(sqldb, tx.To().String()); len(getAllAccountTxs) == 0 {
 			t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
