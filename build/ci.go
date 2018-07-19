@@ -62,9 +62,6 @@ import (
 )
 
 var (
-	gethVersionFile  = "VERSION"
-	swarmVersionFile = "swarm/VERSION"
-
 	// Files that end up in the geth*.zip archive.
 	gethArchiveFiles = []string{
 		"COPYING",
@@ -88,8 +85,6 @@ var (
 		"COPYING",
 		executablePath("swarm"),
 	}
-
-	swarmPackageName = "ethereum-swarm"
 
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
@@ -127,21 +122,21 @@ var (
 	debSwarmExecutables = []debExecutable{
 		{
 			BinaryName:  "swarm",
-			PackageName: swarmPackageName,
+			PackageName: "ethereum-swarm",
 			Description: "Ethereum Swarm daemon and tools",
 		},
-	}
-
-	debSwarm = debPackage{
-		Name:            swarmPackageName,
-		VersionFilePath: "swarm/VERSION",
-		Executables:     debSwarmExecutables,
 	}
 
 	debEthereum = debPackage{
 		Name:            "ethereum",
 		VersionFilePath: "VERSION",
 		Executables:     debExecutables,
+	}
+
+	debSwarm = debPackage{
+		Name:            "ethereum-swarm",
+		VersionFilePath: "swarm/VERSION",
+		Executables:     debSwarmExecutables,
 	}
 
 	// Debian meta packages to build and push to Ubuntu PPA
@@ -405,11 +400,11 @@ func doArchive(cmdline []string) {
 	var (
 		env = build.Env()
 
-		basegeth = archiveBasename(*arch, env, gethVersionFile)
+		basegeth = archiveBasename(*arch, env, debEthereum.VersionFilePath)
 		geth     = "geth-" + basegeth + ext
 		alltools = "geth-alltools-" + basegeth + ext
 
-		baseswarm = archiveBasename(*arch, env, swarmVersionFile)
+		baseswarm = archiveBasename(*arch, env, debSwarm.VersionFilePath)
 		swarm     = "swarm-" + baseswarm + ext
 	)
 	maybeSkipArchive(env)
@@ -661,9 +656,9 @@ func (meta debMetadata) ExeName(exe debExecutable) string {
 // depends on and installs "ethereum-swarm"
 func (meta debMetadata) EthereumSwarmPackageName() string {
 	if isUnstableBuild(meta.Env) {
-		return swarmPackageName + "-unstable"
+		return debSwarm.Name + "-unstable"
 	}
-	return swarmPackageName
+	return debSwarm.Name
 }
 
 // ExeConflicts returns the content of the Conflicts field
@@ -761,11 +756,11 @@ func doWindowsInstaller(cmdline []string) {
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
 	// minimum).
-	version := strings.Split(build.VERSION(gethVersionFile), ".")
+	version := strings.Split(build.VERSION(debEthereum.VersionFilePath), ".")
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
-	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, env, gethVersionFile) + ".exe")
+	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, env, debEthereum.VersionFilePath) + ".exe")
 	build.MustRunCommand("makensis.exe",
 		"/DOUTPUTFILE="+installer,
 		"/DMAJORVERSION="+version[0],
@@ -817,7 +812,7 @@ func doAndroidArchive(cmdline []string) {
 	maybeSkipArchive(env)
 
 	// Sign and upload the archive to Azure
-	archive := "geth-" + archiveBasename("android", env, gethVersionFile) + ".aar"
+	archive := "geth-" + archiveBasename("android", env, debEthereum.VersionFilePath) + ".aar"
 	os.Rename("geth.aar", archive)
 
 	if err := archiveUpload(archive, *upload, *signer); err != nil {
@@ -902,7 +897,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 		}
 	}
 	// Render the version and package strings
-	version := build.VERSION(gethVersionFile)
+	version := build.VERSION(debEthereum.VersionFilePath)
 	if isUnstableBuild(env) {
 		version += "-SNAPSHOT"
 	}
@@ -937,7 +932,7 @@ func doXCodeFramework(cmdline []string) {
 		build.MustRun(bind)
 		return
 	}
-	archive := "geth-" + archiveBasename("ios", env, gethVersionFile)
+	archive := "geth-" + archiveBasename("ios", env, debEthereum.VersionFilePath)
 	if err := os.Mkdir(archive, os.ModePerm); err != nil {
 		log.Fatal(err)
 	}
@@ -993,7 +988,7 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 			}
 		}
 	}
-	version := build.VERSION(gethVersionFile)
+	version := build.VERSION(debEthereum.VersionFilePath)
 	if isUnstableBuild(env) {
 		version += "-unstable." + env.Buildnum
 	}
