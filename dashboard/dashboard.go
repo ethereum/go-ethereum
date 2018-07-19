@@ -385,6 +385,10 @@ func (db *Dashboard) collectData() {
 					DiskWrite:      ChartEntries{diskWrite},
 				},
 			})
+
+			for k, v := range p2p.IngressTrafficMeters {
+				fmt.Println(k[:6], v.Count())
+			}
 		}
 	}
 }

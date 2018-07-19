@@ -21,20 +21,26 @@ package p2p
 import (
 	"net"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
-	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/InboundConnects", nil)
-	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/InboundTraffic", nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/OutboundConnects", nil)
-	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil)
+	ingressConnectMeter  = metrics.NewRegisteredMeter("p2p/InboundConnects", nil)
+	ingressTrafficMeter  = metrics.NewRegisteredMeter("p2p/InboundTraffic", nil)
+	egressConnectMeter   = metrics.NewRegisteredMeter("p2p/OutboundConnects", nil)
+	egressTrafficMeter   = metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil)
+	IngressTrafficMeters = make(map[string]metrics.Meter)
+	EgressTrafficMeters  = make(map[string]metrics.Meter)
 )
 
 // meteredConn is a wrapper around a net.Conn that meters both the
 // inbound and outbound network traffic.
 type meteredConn struct {
-	net.Conn // Network connection to wrap with metering
+	net.Conn        // Network connection to wrap with metering
+	id              string
+	unmarkedIngress uint
+	unmarkedEgress  uint
 }
 
 // newMeteredConn creates a new metered connection, also bumping the ingress or
@@ -59,7 +65,12 @@ func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
 func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
-	return
+	if rm, ok := IngressTrafficMeters[c.id]; ok {
+		rm.Mark(int64(n))
+		return n, err
+	}
+	c.unmarkedIngress += uint(n)
+	return n, err
 }
 
 // Write delegates a network write to the underlying connection, bumping the
@@ -67,5 +78,28 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
-	return
+	if rm, ok := EgressTrafficMeters[c.id]; ok {
+		rm.Mark(int64(n))
+		return n, err
+	}
+	c.unmarkedEgress += uint(n)
+	return n, err
+}
+
+func (c *meteredConn) meterIndividually(id string) {
+	c.id = id
+	IngressTrafficMeters[id] = metrics.NewRegisteredMeter(fmt.Sprintf("p2p/InboundTraffic/%s", id), nil)
+	EgressTrafficMeters[id] = metrics.NewRegisteredMeter(fmt.Sprintf("p2p/OutboundTraffic/%s", id), nil)
+	IngressTrafficMeters[id].Mark(int64(c.unmarkedIngress))
+	EgressTrafficMeters[id].Mark(int64(c.unmarkedEgress))
+	c.unmarkedIngress, c.unmarkedEgress = 0, 0
+}
+
+func (c *meteredConn) Close() error {
+	delete(IngressTrafficMeters, c.id)
+	delete(EgressTrafficMeters, c.id)
+	metrics.Unregister(fmt.Sprintf("p2p/InboundTraffic/%s", c.id))
+	metrics.Unregister(fmt.Sprintf("p2p/OutboundTraffic/%s", c.id))
+	fmt.Println("Close", c.id)
+	return c.Conn.Close()
 }
