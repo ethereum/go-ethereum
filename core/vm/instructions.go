@@ -496,6 +496,16 @@ func opExtCodeCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
+func opExtCodeHash(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	slot := stack.peek()
+	if hash := evm.StateDB.GetCodeHash(common.BigToAddress(slot)); hash == (common.Hash{}) {
+		slot.SetUint64(0)
+	} else {
+		slot.SetBytes(hash.Bytes())
+	}
+	return nil, nil
+}
+
 func opGasprice(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(evm.interpreter.intPool.get().Set(evm.GasPrice))
 	return nil, nil
