@@ -60,9 +60,9 @@ func GOPATH() string {
 	return os.Getenv("GOPATH")
 }
 
-// VERSION returns the content of the VERSION file.
-func VERSION() string {
-	version, err := ioutil.ReadFile("VERSION")
+// VERSION returns the content of a VERSION file.
+func VERSION(path string) string {
+	version, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
