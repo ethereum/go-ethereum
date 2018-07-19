@@ -89,6 +89,8 @@ var (
 		executablePath("swarm"),
 	}
 
+	swarmPackageName = "ethereum-swarm"
+
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
 		{
@@ -125,13 +127,13 @@ var (
 	debSwarmExecutables = []debExecutable{
 		{
 			BinaryName:  "swarm",
-			PackageName: "ethereum-swarm",
+			PackageName: swarmPackageName,
 			Description: "Ethereum Swarm daemon and tools",
 		},
 	}
 
 	debSwarm = debPackage{
-		Name:            "ethereum-swarm",
+		Name:            swarmPackageName,
 		VersionFilePath: "swarm/VERSION",
 		Executables:     debSwarmExecutables,
 	}
@@ -651,6 +653,17 @@ func (meta debMetadata) ExeName(exe debExecutable) string {
 		return exe.Package() + "-unstable"
 	}
 	return exe.Package()
+}
+
+// EthereumSwarmPackageName returns the name of the swarm package based on
+// environment, e.g. "ethereum-swarm-unstable", or "ethereum-swarm".
+// This is needed so that we make sure that "ethereum" package,
+// depends on and installs "ethereum-swarm"
+func (meta debMetadata) EthereumSwarmPackageName() string {
+	if isUnstableBuild(meta.Env) {
+		return swarmPackageName + "-unstable"
+	}
+	return swarmPackageName
 }
 
 // ExeConflicts returns the content of the Conflicts field
