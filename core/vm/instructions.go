@@ -673,19 +673,13 @@ func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 		input        = memory.Get(offset.Int64(), size.Int64())
 		gas          = contract.Gas
 	)
-	if evm.ChainConfig().IsEIP150(evm.BlockNumber) {
-		gas -= gas / 64
-	}
 
+	// Apply EIP150
+	gas -= gas / 64
 	contract.UseGas(gas)
 	res, addr, returnGas, suberr := evm.Create2(contract, input, gas, endowment, salt)
-	// Push item on the stack based on the returned error. If the ruleset is
-	// homestead we must check for CodeStoreOutOfGasError (homestead only
-	// rule) and treat as an error, if the ruleset is frontier we must
-	// ignore this error and pretend the operation was successful.
-	if evm.ChainConfig().IsHomestead(evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
-		stack.push(evm.interpreter.intPool.getZero())
-	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+	// Push item on the stack based on the returned error.
+	if suberr != nil {
 		stack.push(evm.interpreter.intPool.getZero())
 	} else {
 		stack.push(addr.Big())
