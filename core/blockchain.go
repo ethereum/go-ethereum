@@ -1243,7 +1243,6 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
 		log.Info("Imported new chain segment", context...)
-
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
 }
