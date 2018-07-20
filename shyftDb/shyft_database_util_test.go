@@ -471,9 +471,18 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 	if toAddr1.String() != tx1.To().String() {
 		t.Fatalf("To address [%v]: To address not found", toAddr1.String())
 	}
-	accountAddrTo := core.SGetAccount(sqldb, toAddr1.String())
+	accountAddrTo, _ := core.InnerSGetAccount(sqldb, toAddr1.String())
+	//ewAccountNonceReceiver.Add(accountR, nonceIncrement)
+	addedAmount := new(big.Int)
+	b := new(big.Int).SetUint64(toAmountPrev1)
+	addedAmount.Add(toAmount1, b)
+	toBalance := new(big.Int)
+	toBalance, l := toBalance.SetString(accountAddrTo.Balance, 10)
+	fmt.Println(l)
 	
-
+	if toBalance.Cmp(addedAmount) != 0 {
+		t.Fatalf("To address balance [%v]: To address balance not correct FFO", toBalance)
+	}
 
 	//for _, tx := range txs {
 	//	accountAddrTo := core.SGetAccount(sqldb, tx.To().String())
