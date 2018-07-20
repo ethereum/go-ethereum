@@ -200,10 +200,9 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 		}
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
@@ -408,10 +407,8 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		var gDir string
