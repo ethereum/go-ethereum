@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/accounts/abi/bind"
-	"github.com/empyrean/go-ethereum/accounts/abi/bind/backends"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind/backends"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

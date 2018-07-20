@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 // In this test, nodes try to randomly resolve each other.

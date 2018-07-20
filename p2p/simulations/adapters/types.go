@@ -25,11 +25,11 @@ import (
 	"os"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 // Node represents a node in a simulation network which is created by a

@@ -25,8 +25,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/swarm/api"
-	"github.com/empyrean/go-ethereum/swarm/testutil"
+	"github.com/ShyftNetwork/go-empyrean/swarm/api"
+	"github.com/ShyftNetwork/go-empyrean/swarm/testutil"
 )
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm

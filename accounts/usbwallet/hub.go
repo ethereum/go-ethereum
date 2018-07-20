@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/event"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/event"
+	"github.com/ShyftNetwork/go-empyrean/log"
 	"github.com/karalabe/hid"
 )
 

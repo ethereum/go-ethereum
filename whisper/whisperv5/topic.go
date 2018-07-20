@@ -19,8 +19,8 @@
 package whisperv5
 
 import (
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 // Topic represents a cryptographically secure, probabilistic partial

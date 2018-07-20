@@ -26,11 +26,11 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/crypto/secp256k1"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/crypto/secp256k1"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 // Constants to match up protocol versions and messages

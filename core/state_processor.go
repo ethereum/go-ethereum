@@ -17,14 +17,14 @@
 package core
 
 import (
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/consensus"
-	"github.com/empyrean/go-ethereum/consensus/misc"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/core/vm"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/consensus"
+	"github.com/ShyftNetwork/go-empyrean/consensus/misc"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning

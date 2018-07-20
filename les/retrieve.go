@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common/mclock"
+	"github.com/ShyftNetwork/go-empyrean/common/mclock"
 )
 
 var (

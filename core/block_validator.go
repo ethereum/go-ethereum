@@ -19,10 +19,10 @@ package core
 import (
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/consensus"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/consensus"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

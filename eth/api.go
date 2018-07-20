@@ -25,17 +25,17 @@ import (
 	"os"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/hexutil"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/miner"
-	"github.com/empyrean/go-ethereum/params"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/rpc"
-	"github.com/empyrean/go-ethereum/trie"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/miner"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
+	"github.com/ShyftNetwork/go-empyrean/trie"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related

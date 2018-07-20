@@ -27,10 +27,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/common"
 )
 
 var (

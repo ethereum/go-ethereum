@@ -23,12 +23,12 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/trie"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/trie"
 )
 
 type revision struct {

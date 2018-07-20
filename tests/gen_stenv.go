@@ -7,8 +7,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/math"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
 )
 
 var _ = (*stEnvMarshaling)(nil)

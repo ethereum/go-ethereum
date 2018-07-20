@@ -24,13 +24,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/math"
-	"github.com/empyrean/go-ethereum/consensus"
-	"github.com/empyrean/go-ethereum/consensus/misc"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/consensus"
+	"github.com/ShyftNetwork/go-empyrean/consensus/misc"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/params"
 	set "gopkg.in/fatih/set.v0"
 )
 

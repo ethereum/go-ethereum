@@ -25,7 +25,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
 )
 
 func newTestLDB() (*ethdb.LDBDatabase, func()) {

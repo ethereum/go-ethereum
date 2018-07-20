@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // faucetDockerfile is the Dockerfile required to build an faucet container to

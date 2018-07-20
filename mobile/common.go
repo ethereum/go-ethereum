@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

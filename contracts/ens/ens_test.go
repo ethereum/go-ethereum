@@ -20,11 +20,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/accounts/abi/bind"
-	"github.com/empyrean/go-ethereum/accounts/abi/bind/backends"
-	"github.com/empyrean/go-ethereum/contracts/ens/contract"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind/backends"
+	"github.com/ShyftNetwork/go-empyrean/contracts/ens/contract"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 var (

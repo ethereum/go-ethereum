@@ -19,8 +19,8 @@ package trie
 import (
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all

@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/empyrean/go-ethereum/cmd/utils"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 	"github.com/gizak/termui"
 	"gopkg.in/urfave/cli.v1"
 )

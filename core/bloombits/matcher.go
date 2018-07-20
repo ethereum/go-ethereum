@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common/bitutil"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/common/bitutil"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong

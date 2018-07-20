@@ -27,13 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common/mclock"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/p2p/discv5"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common/mclock"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discv5"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 const (

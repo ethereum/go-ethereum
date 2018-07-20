@@ -20,9 +20,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 func TestEIP155Signing(t *testing.T) {

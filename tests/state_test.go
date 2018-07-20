@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
 )
 
 func TestState(t *testing.T) {

@@ -31,9 +31,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/crypto/secp256k1"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/crypto/secp256k1"
 )
 
 const NodeIDBits = 512

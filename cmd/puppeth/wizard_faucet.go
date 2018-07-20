@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/accounts/keystore"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/accounts/keystore"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // deployFaucet queries the user for various input on deploying a faucet, after

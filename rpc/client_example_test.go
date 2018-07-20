@@ -22,7 +22,11 @@ import (
 	"math/big"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/empyrean/go-ethereum/rpc"
+=======
+	"github.com/ShyftNetwork/go-empyrean/rpc"
+>>>>>>> shftBlock_rename
 )
 
 // In this example, our client whishes to track the latest 'block number'

@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/swarm/storage"
+	"github.com/ShyftNetwork/go-empyrean/swarm/storage"
 )
 
 func manifest(paths ...string) (manifestReader storage.LazySectionReader) {

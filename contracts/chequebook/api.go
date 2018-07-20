@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 const Version = "1.0"

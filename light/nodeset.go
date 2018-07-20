@@ -20,10 +20,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 // NodeSet stores a set of trie nodes. It implements trie.Database and can also

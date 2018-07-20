@@ -26,10 +26,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/cmd/internal/browser"
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/cmd/internal/browser"
+	"github.com/ShyftNetwork/go-empyrean/params"
 
-	"github.com/empyrean/go-ethereum/cmd/utils"
+	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +41,7 @@ var bugCommand = cli.Command{
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
-const issueUrl = "https://github.com/empyrean/go-ethereum/issues/new"
+const issueUrl = "https://github.com/ShyftNetwork/go-empyrean/issues/new"
 
 // reportBug reports a bug by opening a new URL to the go-ethereum GH issue
 // tracker and setting default values as the issue body.

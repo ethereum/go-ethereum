@@ -19,7 +19,7 @@
 package downloader
 
 import (
-	"github.com/empyrean/go-ethereum/metrics"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
 )
 
 var (

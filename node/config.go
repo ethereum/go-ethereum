@@ -25,14 +25,14 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/accounts/keystore"
-	"github.com/empyrean/go-ethereum/accounts/usbwallet"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/accounts/keystore"
+	"github.com/ShyftNetwork/go-empyrean/accounts/usbwallet"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
 )
 
 const (

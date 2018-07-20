@@ -20,17 +20,17 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 /*
 http roundtripper to register for bzz url scheme
-see https://github.com/empyrean/go-ethereum/issues/2040
+see https://github.com/ShyftNetwork/go-empyrean/issues/2040
 Usage:
 
 import (
- "github.com/empyrean/go-ethereum/common/httpclient"
- "github.com/empyrean/go-ethereum/swarm/api/http"
+ "github.com/ShyftNetwork/go-empyrean/common/httpclient"
+ "github.com/ShyftNetwork/go-empyrean/swarm/api/http"
 )
 client := httpclient.New()
 // for (private) swarm proxy running locally

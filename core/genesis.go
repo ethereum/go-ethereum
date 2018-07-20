@@ -26,16 +26,15 @@ import (
 	"strings"
 
 	_ "github.com/lib/pq"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/hexutil"
-	"github.com/empyrean/go-ethereum/common/math"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/params"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/shyftdb"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 	"database/sql"
 	"strconv"
 	"time"
@@ -145,7 +144,7 @@ func (e *GenesisMismatchError) Error() string {
 //@NOTE:SHYFT
 func WriteShyftGen(gen *Genesis, block *types.Block) {
 
-	sqldb, _ := shyftdb.DBConnection()
+	sqldb, _ := DBConnection()
 
 	for k := range gen.Alloc {
 		addr := k.String()
@@ -187,15 +186,13 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 				panic(insertError)
 			}
 		}
-
-
 	default:
 		log.Info("Found Genesis Block")
 }}}
 
 func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
 	
-	sqldb, _ := shyftdb.DBConnection()
+	sqldb, _ := DBConnection()
 
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()

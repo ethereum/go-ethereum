@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 type (

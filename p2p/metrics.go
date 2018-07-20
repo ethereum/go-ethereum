@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/empyrean/go-ethereum/metrics"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
 )
 
 var (

@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/event"
+	"github.com/ShyftNetwork/go-empyrean/event"
 )
 
 // Manager is an overarching account manager that can communicate with various

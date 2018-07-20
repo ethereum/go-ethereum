@@ -22,7 +22,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/empyrean/go-ethereum/p2p/discv5"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discv5"
 )
 
 // Enode represents a host on the network.

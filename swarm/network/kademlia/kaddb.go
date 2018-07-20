@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 type NodeData interface {

@@ -23,17 +23,17 @@ import (
 	"math"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/eth"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/les/flowcontrol"
-	"github.com/empyrean/go-ethereum/light"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discv5"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/eth"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/les/flowcontrol"
+	"github.com/ShyftNetwork/go-empyrean/light"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discv5"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 type LesServer struct {

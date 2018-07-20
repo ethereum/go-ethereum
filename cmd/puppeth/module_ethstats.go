@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // ethstatsDockerfile is the Dockerfile required to build an ethstats backend

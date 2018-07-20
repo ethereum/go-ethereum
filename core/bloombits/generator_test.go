@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

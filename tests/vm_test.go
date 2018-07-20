@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/empyrean/go-ethereum/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
 )
 
 func TestVM(t *testing.T) {

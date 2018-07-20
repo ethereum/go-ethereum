@@ -23,9 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/empyrean/go-ethereum/accounts/keystore"
-	"github.com/empyrean/go-ethereum/cmd/utils"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/accounts/keystore"
+	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/pborman/uuid"
 	"gopkg.in/urfave/cli.v1"
 )

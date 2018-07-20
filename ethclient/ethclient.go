@@ -24,12 +24,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/hexutil"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.

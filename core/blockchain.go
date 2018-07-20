@@ -28,22 +28,22 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/mclock"
-	"github.com/empyrean/go-ethereum/consensus"
-	"github.com/empyrean/go-ethereum/core/state"
-	"github.com/empyrean/go-ethereum/shyftdb"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/core/vm"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/event"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/metrics"
-	"github.com/empyrean/go-ethereum/params"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/trie"
+
+
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/mclock"
+	"github.com/ShyftNetwork/go-empyrean/consensus"
+	"github.com/ShyftNetwork/go-empyrean/core/state"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/event"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/trie"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
@@ -901,15 +901,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	// @NOTE:SHYFT - Write block data for block explorer
-	if err := shyftdb.WriteBlock(block, receipts); err != nil {
-		return NonStatTy, err
-	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
+
 	if err != nil {
 		return NonStatTy, err
 	}
+
 	triedb := bc.stateCache.TrieDB()
 
 	// If we're running an archive node, always flush
@@ -1000,6 +998,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+	}
+
+	// NOTE:SHYFT - Write block data for block explorer
+	//fmt.Printf("\n\t[BLOCKCHAIN.GO bc.chainConfig]    %+v", bc.chainConfig)
+	if err := SWriteBlock(block, receipts); err != nil {
+		return NonStatTy, err
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil

@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/eth"
-	"github.com/empyrean/go-ethereum/eth/downloader"
-	"github.com/empyrean/go-ethereum/ethclient"
-	"github.com/empyrean/go-ethereum/ethstats"
-	"github.com/empyrean/go-ethereum/les"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/nat"
-	"github.com/empyrean/go-ethereum/params"
-	whisper "github.com/empyrean/go-ethereum/whisper/whisperv5"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/eth"
+	"github.com/ShyftNetwork/go-empyrean/eth/downloader"
+	"github.com/ShyftNetwork/go-empyrean/ethclient"
+	"github.com/ShyftNetwork/go-empyrean/ethstats"
+	"github.com/ShyftNetwork/go-empyrean/les"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/nat"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	whisper "github.com/ShyftNetwork/go-empyrean/whisper/whisperv5"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth

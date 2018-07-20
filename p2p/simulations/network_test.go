@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/p2p/simulations/adapters"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/simulations/adapters"
 )
 
 // TestNetworkSimulation creates a multi-node simulation network with each node

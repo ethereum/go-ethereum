@@ -23,10 +23,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/accounts/keystore"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/accounts/keystore"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 const (

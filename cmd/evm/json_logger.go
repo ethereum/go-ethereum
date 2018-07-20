@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/math"
-	"github.com/empyrean/go-ethereum/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
 )
 
 type JSONLogger struct {

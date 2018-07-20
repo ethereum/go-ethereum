@@ -24,8 +24,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/accounts/abi/bind"
-	"github.com/empyrean/go-ethereum/common/compiler"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind"
+	"github.com/ShyftNetwork/go-empyrean/common/compiler"
 )
 
 var (

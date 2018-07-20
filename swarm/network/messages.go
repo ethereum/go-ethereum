@@ -21,11 +21,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/empyrean/go-ethereum/contracts/chequebook"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/swarm/network/kademlia"
-	"github.com/empyrean/go-ethereum/swarm/services/swap"
-	"github.com/empyrean/go-ethereum/swarm/storage"
+	"github.com/ShyftNetwork/go-empyrean/contracts/chequebook"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/swarm/network/kademlia"
+	"github.com/ShyftNetwork/go-empyrean/swarm/services/swap"
+	"github.com/ShyftNetwork/go-empyrean/swarm/storage"
 )
 
 /*

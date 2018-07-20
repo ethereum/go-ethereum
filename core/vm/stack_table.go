@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 func makeStackFunc(pop, push int) stackValidationFunc {

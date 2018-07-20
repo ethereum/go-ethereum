@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/p2p/simulations/adapters"
-	p2ptest "github.com/empyrean/go-ethereum/p2p/testing"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/simulations/adapters"
+	p2ptest "github.com/ShyftNetwork/go-empyrean/p2p/testing"
 )
 
 // handshake message type

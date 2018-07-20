@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // deployExplorer creates a new block explorer based on some user input.

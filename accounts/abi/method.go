@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 // Method represents a callable given a `Name` and whether the method is a constant.

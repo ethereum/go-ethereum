@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 func (Address) Generate(rand *rand.Rand, size int) reflect.Value {

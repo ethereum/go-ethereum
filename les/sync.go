@@ -20,9 +20,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/eth/downloader"
-	"github.com/empyrean/go-ethereum/light"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/eth/downloader"
+	"github.com/ShyftNetwork/go-empyrean/light"
 )
 
 const (

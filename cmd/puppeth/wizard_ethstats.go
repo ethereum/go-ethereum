@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // deployEthstats queries the user for various input on deploying an ethstats

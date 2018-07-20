@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/empyrean/go-ethereum/common"
 	"github.com/empyrean/go-ethereum/common/math"
 	"github.com/empyrean/go-ethereum/consensus/ethash"
@@ -31,6 +32,16 @@ import (
 	"github.com/empyrean/go-ethereum/crypto"
 	"github.com/empyrean/go-ethereum/ethdb"
 	"github.com/empyrean/go-ethereum/params"
+=======
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/params"
+>>>>>>> shftBlock_rename
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {

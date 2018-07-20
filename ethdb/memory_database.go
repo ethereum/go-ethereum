@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 /*

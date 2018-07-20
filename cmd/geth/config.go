@@ -27,12 +27,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/empyrean/go-ethereum/cmd/utils"
-	"github.com/empyrean/go-ethereum/dashboard"
-	"github.com/empyrean/go-ethereum/eth"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/params"
-	whisper "github.com/empyrean/go-ethereum/whisper/whisperv5"
+	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
+	"github.com/ShyftNetwork/go-empyrean/dashboard"
+	"github.com/ShyftNetwork/go-empyrean/eth"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	whisper "github.com/ShyftNetwork/go-empyrean/whisper/whisperv5"
 	"github.com/naoina/toml"
 )
 

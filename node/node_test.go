@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 var (

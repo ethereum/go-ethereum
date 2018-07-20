@@ -23,11 +23,11 @@ package ens
 import (
 	"strings"
 
-	"github.com/empyrean/go-ethereum/accounts/abi/bind"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/contracts/ens/contract"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/crypto"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi/bind"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/contracts/ens/contract"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 var (

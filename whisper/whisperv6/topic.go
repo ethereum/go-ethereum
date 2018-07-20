@@ -19,8 +19,8 @@
 package whisperv6
 
 import (
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 // TopicType represents a cryptographically secure, probabilistic partial

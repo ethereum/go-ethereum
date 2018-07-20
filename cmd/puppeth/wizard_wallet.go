@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // deployWallet creates a new web wallet based on some user input.

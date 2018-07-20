@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/event"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/p2p/simulations/adapters"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/event"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/simulations/adapters"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 // testService implements the node.Service interface and provides protocols

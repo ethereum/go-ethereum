@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/crypto/sha3"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/crypto/sha3"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
 )
 
 func init() {

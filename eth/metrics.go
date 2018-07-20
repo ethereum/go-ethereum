@@ -17,8 +17,8 @@
 package eth
 
 import (
-	"github.com/empyrean/go-ethereum/metrics"
-	"github.com/empyrean/go-ethereum/p2p"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
 )
 
 var (

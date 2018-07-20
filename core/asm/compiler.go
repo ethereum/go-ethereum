@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/common/math"
-	"github.com/empyrean/go-ethereum/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
 )
 
 // Compiler contains information about the parsed source

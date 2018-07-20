@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on

@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // deployDashboard queries the user for various input on deploying a web-service

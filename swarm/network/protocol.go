@@ -37,13 +37,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/empyrean/go-ethereum/contracts/chequebook"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/metrics"
-	"github.com/empyrean/go-ethereum/p2p"
-	bzzswap "github.com/empyrean/go-ethereum/swarm/services/swap"
-	"github.com/empyrean/go-ethereum/swarm/services/swap/swap"
-	"github.com/empyrean/go-ethereum/swarm/storage"
+	"github.com/ShyftNetwork/go-empyrean/contracts/chequebook"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	bzzswap "github.com/ShyftNetwork/go-empyrean/swarm/services/swap"
+	"github.com/ShyftNetwork/go-empyrean/swarm/services/swap/swap"
+	"github.com/ShyftNetwork/go-empyrean/swarm/storage"
 )
 
 //metrics variables

@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS blocks (
 );
 
 CREATE TABLE IF NOT EXISTS txs (
-  txHash text,
+  txHash text primary key unique,
   to_addr text,
   from_addr text,
   blockhash text references blocks(hash),
@@ -39,3 +39,20 @@ CREATE TABLE IF NOT EXISTS accounts (
   txCountAccount numeric
 );
 
+CREATE TABLE IF NOT EXISTS contracts (
+  txHash text
+);
+
+CREATE TABLE IF NOT EXISTS internalTxs (
+  id SERIAL PRIMARY KEY,
+  txHash text references txs(txHash),
+  type text,
+  to_addr text,
+  from_addr text,
+  amount text,
+  gas numeric,
+  gasUsed numeric,
+  time text,
+  input text,
+  output text
+)

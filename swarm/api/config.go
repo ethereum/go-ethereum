@@ -22,14 +22,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/contracts/ens"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/swarm/network"
-	"github.com/empyrean/go-ethereum/swarm/services/swap"
-	"github.com/empyrean/go-ethereum/swarm/storage"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/contracts/ens"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/swarm/network"
+	"github.com/ShyftNetwork/go-empyrean/swarm/services/swap"
+	"github.com/ShyftNetwork/go-empyrean/swarm/storage"
 )
 
 const (

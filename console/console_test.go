@@ -26,18 +26,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/consensus/ethash"
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/eth"
-	"github.com/empyrean/go-ethereum/internal/jsre"
-	"github.com/empyrean/go-ethereum/node"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/eth"
+	"github.com/ShyftNetwork/go-empyrean/internal/jsre"
+	"github.com/ShyftNetwork/go-empyrean/node"
 )
 
 const (
 	testInstance = "console-tester"
 	testAddress  = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-)
+	)
 
 // hookedPrompter implements UserPrompter to simulate use input via channels.
 type hookedPrompter struct {

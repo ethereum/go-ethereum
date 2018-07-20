@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that

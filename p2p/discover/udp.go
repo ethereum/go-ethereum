@@ -25,11 +25,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p/nat"
-	"github.com/empyrean/go-ethereum/p2p/netutil"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p/nat"
+	"github.com/ShyftNetwork/go-empyrean/p2p/netutil"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 const Version = 4

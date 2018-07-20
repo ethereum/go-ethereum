@@ -19,10 +19,10 @@ package les
 import (
 	"context"
 
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/light"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/light"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // LesOdr implements light.OdrBackend

@@ -34,7 +34,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
 )
 
 // error codes used by this  protocol scheme

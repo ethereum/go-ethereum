@@ -19,8 +19,8 @@ package miner
 import (
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 )
 
 // noopHeaderRetriever is an implementation of headerRetriever that always

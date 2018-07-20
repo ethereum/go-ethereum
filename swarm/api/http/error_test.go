@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/empyrean/go-ethereum/swarm/testutil"
+	"github.com/ShyftNetwork/go-empyrean/swarm/testutil"
 )
 
 func TestError(t *testing.T) {

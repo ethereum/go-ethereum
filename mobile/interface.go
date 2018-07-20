@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 // Interface represents a wrapped version of Go's interface{}, with the capacity

@@ -17,7 +17,7 @@
 package fuse
 
 import (
-	"github.com/empyrean/go-ethereum/swarm/api"
+	"github.com/ShyftNetwork/go-empyrean/swarm/api"
 	"sync"
 	"time"
 )

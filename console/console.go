@@ -28,9 +28,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/empyrean/go-ethereum/internal/jsre"
-	"github.com/empyrean/go-ethereum/internal/web3ext"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/internal/jsre"
+	"github.com/ShyftNetwork/go-empyrean/internal/web3ext"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"

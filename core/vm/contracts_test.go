@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.

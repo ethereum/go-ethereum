@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/accounts/keystore"
-	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/ShyftNetwork/go-empyrean/accounts/keystore"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 )
 
 // Tests that the account management snippets work correctly.

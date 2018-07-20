@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.

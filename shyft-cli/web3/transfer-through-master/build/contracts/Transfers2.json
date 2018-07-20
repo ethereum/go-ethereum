@@ -16,14 +16,14 @@
       "type": "function"
     }
   ],
-  "bytecode": "0x608060405234801561001057600080fd5b5060ed8061001f6000396000f300608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680631a695230146044575b600080fd5b6076600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506078565b005b8073ffffffffffffffffffffffffffffffffffffffff166108fc349081150290604051600060405180830381858888f1935050505015801560bd573d6000803e3d6000fd5b50505600a165627a7a72305820e95f74106a3328ffadd8b0adb916d92497daab65998ee73cf40afff57dc4b29b0029",
-  "deployedBytecode": "0x608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680631a695230146044575b600080fd5b6076600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506078565b005b8073ffffffffffffffffffffffffffffffffffffffff166108fc349081150290604051600060405180830381858888f1935050505015801560bd573d6000803e3d6000fd5b50505600a165627a7a72305820e95f74106a3328ffadd8b0adb916d92497daab65998ee73cf40afff57dc4b29b0029",
+  "bytecode": "0x608060405234801561001057600080fd5b5060ed8061001f6000396000f300608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680631a695230146044575b600080fd5b6076600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506078565b005b8073ffffffffffffffffffffffffffffffffffffffff166108fc349081150290604051600060405180830381858888f1935050505015801560bd573d6000803e3d6000fd5b50505600a165627a7a723058206b9724f2a2dbdc5e27a309b647c1d11903393ac90b5e54ab4925de752e5f6e760029",
+  "deployedBytecode": "0x608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680631a695230146044575b600080fd5b6076600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506078565b005b8073ffffffffffffffffffffffffffffffffffffffff166108fc349081150290604051600060405180830381858888f1935050505015801560bd573d6000803e3d6000fd5b50505600a165627a7a723058206b9724f2a2dbdc5e27a309b647c1d11903393ac90b5e54ab4925de752e5f6e760029",
   "sourceMap": "26:106:2:-;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;26:106:2;;;;;;;",
   "deployedSourceMap": "26:106:2:-;;;;;;;;;;;;;;;;;;;;;;;;49:81;;;;;;;;;;;;;;;;;;;;;;;;;;;;;101:5;:14;;:25;116:9;101:25;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;101:25:2;49:81;:::o",
   "source": "pragma solidity ^0.4.19;\n\ncontract Transfers2 {\n\tfunction transfer(address _addr) public payable {\n\t\t_addr.transfer(msg.value);\n\t}\n}",
-  "sourcePath": "/Users/gregmarkou/Jobs/Jobs/ChainSafe/shyftNetwork/shyft_go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
+  "sourcePath": "/Users/dustinbrickwood/go/src/github.com/ethereum/go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
   "ast": {
-    "absolutePath": "/Users/gregmarkou/Jobs/Jobs/ChainSafe/shyftNetwork/shyft_go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
+    "absolutePath": "/Users/dustinbrickwood/go/src/github.com/ethereum/go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
     "exportedSymbols": {
       "Transfers2": [
         249
@@ -212,7 +212,7 @@
     "src": "0:132:2"
   },
   "legacyAST": {
-    "absolutePath": "/Users/gregmarkou/Jobs/Jobs/ChainSafe/shyftNetwork/shyft_go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
+    "absolutePath": "/Users/dustinbrickwood/go/src/github.com/ethereum/go-ethereum/shyft-cli/web3/transfer-through-master/contracts/Transfers2.sol",
     "exportedSymbols": {
       "Transfers2": [
         249
@@ -409,7 +409,7 @@
       "events": {},
       "links": {},
       "address": "0xa863f8203ad95e9078f6300e7857a4cca4fb4c60",
-      "transactionHash": "0xb836110657221cb8ac728c0345ae03da1cb4313cfa0bb61285f31b780907af50"
+      "transactionHash": "0x7d4888a4f369e8b635a8418deb115db390b4ef963da86ade26feff951cf25d7c"
     },
     "1528420224459": {
       "events": {},
@@ -418,6 +418,6 @@
       "transactionHash": "0x43f3fed1df72adfe12dd0c2432f0625b4b50b0c151f9583a166722ed74786ce3"
     }
   },
-  "schemaVersion": "2.0.0",
-  "updatedAt": "2018-06-08T15:58:27.899Z"
+  "schemaVersion": "2.0.1",
+  "updatedAt": "2018-07-06T18:05:39.254Z"
 }

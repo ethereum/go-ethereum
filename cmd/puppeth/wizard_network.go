@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an

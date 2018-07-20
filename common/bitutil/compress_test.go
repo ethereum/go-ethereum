@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 // Tests that data bitset encoding and decoding works and is bijective.

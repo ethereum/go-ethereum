@@ -42,7 +42,7 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/empyrean/go-ethereum/crypto"
+	ethcrypto "github.com/ShyftNetwork/go-empyrean/crypto"
 )
 
 var (

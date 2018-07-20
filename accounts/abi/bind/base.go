@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/empyrean/go-ethereum"
-	"github.com/empyrean/go-ethereum/accounts/abi"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/empyrean/go-ethereum/event"
+	"github.com/ShyftNetwork/go-empyrean"
+	"github.com/ShyftNetwork/go-empyrean/accounts/abi"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to

@@ -34,8 +34,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/empyrean/go-ethereum/core"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

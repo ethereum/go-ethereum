@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
 )
 
 //a map of mocker names to its function

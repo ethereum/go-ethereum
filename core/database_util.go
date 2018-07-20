@@ -24,13 +24,13 @@ import (
 	"math/big"
 	"fmt"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/ethdb"
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/metrics"
-	"github.com/empyrean/go-ethereum/params"
-	"github.com/empyrean/go-ethereum/rlp"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 // DatabaseReader wraps the Get method of a backing data store.
@@ -283,7 +283,13 @@ func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64,
 // its added positional metadata.
 func GetTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	// Retrieve the lookup metadata and resolve the transaction from the body
+	//fmt.Println("INSIDE GET TRANSACTION ++++++++")
+	//fmt.Println("The hash and db reader are")
+	//fmt.Println(hash)
+	//fmt.Println(db)
 	blockHash, blockNumber, txIndex := GetTxLookupEntry(db, hash)
+	//fmt.Println(blockHash)
+	//fmt.Println(blockNumber)
 
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)

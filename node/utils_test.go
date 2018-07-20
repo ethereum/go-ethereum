@@ -22,8 +22,8 @@ package node
 import (
 	"reflect"
 
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 // NoopService is a trivial implementation of the Service interface.

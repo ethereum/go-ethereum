@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 const (

@@ -19,7 +19,7 @@ package state
 import (
 	"sync"
 
-	"github.com/empyrean/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 type account struct {

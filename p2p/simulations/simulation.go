@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/empyrean/go-ethereum/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
 )
 
 // Simulation provides a framework for running actions in a simulated network

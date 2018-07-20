@@ -19,10 +19,10 @@ package metrics
 import (
 	"time"
 
-	"github.com/empyrean/go-ethereum/cmd/utils"
-	"github.com/empyrean/go-ethereum/log"
-	gethmetrics "github.com/empyrean/go-ethereum/metrics"
-	"github.com/empyrean/go-ethereum/metrics/influxdb"
+	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	gethmetrics "github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/metrics/influxdb"
 	"gopkg.in/urfave/cli.v1"
 )
 

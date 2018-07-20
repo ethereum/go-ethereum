@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/event"
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/event"
 )
 
 var testSigData = make([]byte, 32)

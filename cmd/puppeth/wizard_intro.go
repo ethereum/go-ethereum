@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // makeWizard creates and returns a new puppeth wizard.

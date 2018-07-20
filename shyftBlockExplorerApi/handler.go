@@ -2,13 +2,12 @@ package main
 
 ///@NOTE Shyft handler functions when endpoints are hit
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 
 	_ "github.com/lib/pq"
 
-	"github.com/empyrean/go-ethereum/shyftdb"
+	"github.com/ShyftNetwork/go-empyrean/core"
 	"github.com/gorilla/mux"
 	"bytes"
 	"io/ioutil"
@@ -19,13 +18,8 @@ import (
 func GetTransaction(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	txHash := vars["txHash"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
-
-	getTxResponse := shyftdb.GetTransaction(blockExplorerDb, txHash)
+	sqldb, err := core.DBConnection()
+	getTxResponse := core.SGetTransaction(sqldb, txHash)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -40,19 +34,15 @@ func GetTransaction(w http.ResponseWriter, r *http.Request) {
 
 // GetAllTransactions gets txs
 func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	txs := shyftdb.GetAllTransactions(blockExplorerDb)
+	sqldb, err := core.DBConnection()
+
+	txs := core.SGetAllTransactions(sqldb)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
@@ -64,13 +54,10 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	blockNumber := vars["blockNumber"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	txsFromBlock := shyftdb.GetAllTransactionsFromBlock(blockExplorerDb, blockNumber)
+	sqldb, err := core.DBConnection()
+
+	txsFromBlock := core.SGetAllTransactionsFromBlock(sqldb, blockNumber)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -86,13 +73,10 @@ func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
 func GetAllBlocksMinedByAddress(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	coinbase := vars["coinbase"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	blocksMined := shyftdb.GetAllBlocksMinedByAddress(blockExplorerDb, coinbase)
+	sqldb, err := core.DBConnection()
+
+	blocksMined := core.SGetAllBlocksMinedByAddress(sqldb, coinbase)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -109,13 +93,10 @@ func GetAllBlocksMinedByAddress(w http.ResponseWriter, r *http.Request) {
 func GetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	getAccountBalance := shyftdb.GetAccount(blockExplorerDb, address)
+	sqldb, err := core.DBConnection()
+
+	getAccountBalance := core.SGetAccount(sqldb, address)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -132,13 +113,10 @@ func GetAccount(w http.ResponseWriter, r *http.Request) {
 func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	getAccountTxs := shyftdb.GetAccountTxs(blockExplorerDb, address)
+	sqldb, err := core.DBConnection()
+
+	getAccountTxs := core.SGetAccountTxs(sqldb, address)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -153,12 +131,10 @@ func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
 
 // GetAllAccounts gets balances
 func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
-	allAccounts := shyftdb.GetAllAccounts(blockExplorerDb)
+
+	sqldb, err := core.DBConnection()
+
+	allAccounts := core.SGetAllAccounts(sqldb)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -173,13 +149,9 @@ func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
 func GetBlock(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	blockNumber := vars["blockNumber"]
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
 
-	getBlockResponse := shyftdb.GetBlock(blockExplorerDb, blockNumber)
+	sqldb, err := core.DBConnection()
+	getBlockResponse := core.SGetBlock(sqldb, blockNumber)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -194,12 +166,9 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 
 // GetAllBlocks response
 func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
-	block3 := shyftdb.GetAllBlocks(blockExplorerDb)
+
+	sqldb, err := core.DBConnection()
+	block3 := core.SGetAllBlocks(sqldb)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -210,12 +179,10 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRecentBlock(w http.ResponseWriter, r *http.Request) {
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return
-	}
-	mostRecentBlock := shyftdb.GetRecentBlock(blockExplorerDb)
+
+	sqldb, err := core.DBConnection()
+
+	mostRecentBlock := core.SGetRecentBlock(sqldb)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

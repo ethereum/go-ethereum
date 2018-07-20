@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/empyrean/go-ethereum/metrics"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
 )
 
 /*

@@ -23,8 +23,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/empyrean/go-ethereum/common/mclock"
-	"github.com/empyrean/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/common/mclock"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 const (

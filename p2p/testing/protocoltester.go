@@ -32,14 +32,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/log"
-	"github.com/empyrean/go-ethereum/node"
-	"github.com/empyrean/go-ethereum/p2p"
-	"github.com/empyrean/go-ethereum/p2p/discover"
-	"github.com/empyrean/go-ethereum/p2p/simulations"
-	"github.com/empyrean/go-ethereum/p2p/simulations/adapters"
-	"github.com/empyrean/go-ethereum/rlp"
-	"github.com/empyrean/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/node"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/simulations"
+	"github.com/ShyftNetwork/go-empyrean/p2p/simulations/adapters"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 // ProtocolTester is the tester environment used for unit testing protocol

@@ -25,13 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/crypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-var jsonEventTransfer = []byte(`{
   "anonymous": false,
   "inputs": [
     {
@@ -244,7 +239,7 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 
 /*
 Taken from
-https://github.com/empyrean/go-ethereum/pull/15568
+https://github.com/ShyftNetwork/go-empyrean/pull/15568
 */
 
 type testResult struct {
