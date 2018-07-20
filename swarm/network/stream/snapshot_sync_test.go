@@ -20,7 +20,6 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -54,10 +53,6 @@ type synctestConfig struct {
 	idToChunksMap    map[discover.NodeID][]int
 	chunksToNodesMap map[string][]int
 	addrToIdMap      map[string]discover.NodeID
-}
-
-func init() {
-	rand.Seed(time.Now().Unix())
 }
 
 //This test is a syncing test for nodes.
@@ -191,17 +186,15 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 			conf.addrToIdMap[string(a)] = n
 		}
 
-		//select one index at random...
-		idx := rand.Intn(len(nodeIDs))
-		//...and get the the node at that index
+		//get the the node at that index
 		//this is the node selected for upload
-		node := nodeIDs[idx]
-		item, ok := sim.NodeItem(node, bucketKeyStore)
+		node := sim.RandomUpNode()
+		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
 		if err != nil {
 			return err
 		}
@@ -403,17 +396,15 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 				}
 			}
 		}()
-		//select one index at random...
-		idx := rand.Intn(len(nodeIDs))
-		//...and get the the node at that index
+		//get the the node at that index
 		//this is the node selected for upload
-		node := nodeIDs[idx]
-		item, ok := sim.NodeItem(node, bucketKeyStore)
+		node := sim.RandomUpNode()
+		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
 		if err != nil {
 			return err
 		}

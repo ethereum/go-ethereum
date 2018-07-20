@@ -384,6 +384,10 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	return rootAddrs, rfiles, nil
 }
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 //generate a random file (string)
 func generateRandomFile() (string, error) {
 	//generate a random file size between minFileSize and maxFileSize

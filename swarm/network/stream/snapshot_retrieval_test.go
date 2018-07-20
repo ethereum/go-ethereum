@@ -18,7 +18,6 @@ package stream
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -343,17 +342,15 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		//uploadFinished := make(chan struct{})
 		//channel to trigger new node checks
 
-		//select one index at random...
-		idx := rand.Intn(len(nodeIDs))
-		//...and get the the node at that index
+		//get the the node at that index
 		//this is the node selected for upload
-		node := nodeIDs[idx]
-		item, ok := sim.NodeItem(node, bucketKeyStore)
+		node := sim.RandomUpNode()
+		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		conf.hashes, err = uploadFileToSingleNodeStore(node, chunkCount, lstore)
+		conf.hashes, err = uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
 		if err != nil {
 			return err
 		}
