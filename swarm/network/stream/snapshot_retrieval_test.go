@@ -137,13 +137,9 @@ func runFileRetrievalTest(nodeCount int) error {
 			delivery := NewDelivery(kad, db)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:       false,
-				DoRetrieve:      false,
 				DoSync:          true,
 				SyncUpdateDelay: 0,
 			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			bucketKeyFileStore = simulation.BucketKey("filestore")
@@ -288,13 +284,9 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			delivery := NewDelivery(kad, db)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:       false,
-				DoRetrieve:      false,
 				DoSync:          true,
 				SyncUpdateDelay: 0,
 			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			bucketKeyFileStore = simulation.BucketKey("filestore")

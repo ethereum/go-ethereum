@@ -330,11 +330,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			delivery := NewDelivery(kad, db)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:  skipCheck,
-				DoRetrieve: false,
+				SkipCheck: skipCheck,
 			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
 
 			retrieveFunc := func(ctx context.Context, chunk *storage.Chunk) error {
 				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
@@ -505,12 +502,9 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
-				DoRetrieve:      false,
 				DoSync:          true,
 				SyncUpdateDelay: 0,
 			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
 
 			retrieveFunc := func(ctx context.Context, chunk *storage.Chunk) error {
 				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)

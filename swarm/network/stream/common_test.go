@@ -112,9 +112,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-		SkipCheck: false,
-	})
+	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()

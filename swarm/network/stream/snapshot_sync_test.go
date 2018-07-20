@@ -139,13 +139,9 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 			delivery := NewDelivery(kad, db)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:       false,
-				DoRetrieve:      false,
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
 			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
@@ -311,13 +307,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, db)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:  false,
-				DoRetrieve: false,
-				DoSync:     false,
-			})
-			RegisterSwarmSyncerServer(r, db)
-			RegisterSwarmSyncerClient(r, db)
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil)
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}

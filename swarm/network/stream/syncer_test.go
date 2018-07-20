@@ -109,8 +109,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			bucket.Store(bucketKeyDelivery, delivery)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-				SkipCheck:  skipCheck,
-				DoRetrieve: false,
+				SkipCheck: skipCheck,
 			})
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
@@ -235,7 +234,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			}
 			log.Debug("sync check", "node", node, "index", i, "bin", po, "found", found, "total", total)
 		}
-		log.Error("total", "total", total)
 		if total == found && total > 0 {
 			return nil
 		}
