@@ -195,7 +195,7 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
-//Upload a snapshot
+//UploadSnapshot uploads a snapshot to the simulation
 //This method tries to open the json file provided, applies the config to all nodes
 //and then loads the snapshot into the Simulation network
 func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
@@ -203,7 +203,12 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			log.Error("Error closing snapshot file", "err", err)
+		}
+	}()
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		return err

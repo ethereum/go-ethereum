@@ -72,7 +72,7 @@ func (f *PeerEventsFilter) MsgCode(c uint64) *PeerEventsFilter {
 func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
 	eventC := make(chan PeerEvent)
 
-	// wait group to make sure all subscriptons to admin peerEvents are established
+	// wait group to make sure all subscriptions to admin peerEvents are established
 	// before this function returns.
 	var subsWG sync.WaitGroup
 	for _, id := range ids {
