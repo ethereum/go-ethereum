@@ -78,10 +78,8 @@ func CreateAddress(b common.Address, nonce uint64) common.Address {
 
 // CreateAddress2 creates an ethereum address given the address bytes, initial
 // contract code and a salt.
-// TODO(rjl493456442) considering address collision, should we add the 0xff as the input prefix?
-func CreateAddress2(b common.Address, salt []byte, code []byte) common.Address {
-	data, _ := rlp.EncodeToBytes([]interface{}{b, salt, code})
-	return common.BytesToAddress(Keccak256(data)[12:])
+func CreateAddress2(b common.Address, salt common.Hash, code []byte) common.Address {
+	return common.BytesToAddress(Keccak256([]byte{0xff}, b.Bytes(), salt.Bytes(), code)[12:])
 }
 
 // ToECDSA creates a private key with the given D value.
