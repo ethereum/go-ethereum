@@ -189,6 +189,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Clique != nil {
 		c := eth.engine.(*clique.Clique)
 
+		// Set global ipc endpoint.
+		eth.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
+
 		// Inject hook for send tx sign to smartcontract after insert block into chain.
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
@@ -210,8 +213,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			client, err := eth.GetClient()
 			if err != nil {
 				log.Error("Fail to connect IPC client for blockSigner", "error", err)
-
-				return err
 			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Clique.RewardCheckpoint
@@ -220,7 +221,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				addr := common.HexToAddress(common.BlockSigners)
 				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
 				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(addr, number, rCheckpoint, client, totalSigner)
+				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
 					log.Error("Fail to get signers for reward checkpoint", "error", err)
 				}
@@ -228,7 +229,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				if err != nil {
 					log.Error("Fail to calculate reward for signers", "error", err)
 				}
-				//// Get validator.
+				// Get validator.
 				validator, err := contract.NewTomoValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
 				if err != nil {
 					log.Error("Fail get instance of Tomo Validator", "error", err)
@@ -435,11 +436,7 @@ func (s *Ethereum) UpdateMasternodes(ms []clique.Masternode) error {
 		return errors.New("not clique")
 	}
 	c := s.engine.(*clique.Clique)
-	err := c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
 }
 
 func (s *Ethereum) StartStaking(local bool) error {
