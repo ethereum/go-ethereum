@@ -384,18 +384,15 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			subscriptionCount += cnt
 		}
 
-		go func() {
-			for e := range eventC {
-				if e.Error != nil {
-					//return e.Error
-					return
-				}
-				subscriptionCount--
-				if subscriptionCount == 0 {
-					break
-				}
+		for e := range eventC {
+			if e.Error != nil {
+				return e.Error
 			}
-		}()
+			subscriptionCount--
+			if subscriptionCount == 0 {
+				break
+			}
+		}
 		//get the the node at that index
 		//this is the node selected for upload
 		node := sim.RandomUpNode()
