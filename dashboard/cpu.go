@@ -21,7 +21,7 @@ package dashboard
 import (
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ShyftNetwork/go-empyrean/log"
 )
 
 // getProcessCPUTime retrieves the process' CPU time since program startup.
