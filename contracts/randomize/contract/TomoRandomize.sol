@@ -14,8 +14,6 @@ contract TomoRandomize {
     }
 
     function setSecret(bytes32[] _secret) public {
-        require(_secret.length == randomNumber);
-
         randomSecret[msg.sender] = _secret;
     }
 
