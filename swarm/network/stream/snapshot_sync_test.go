@@ -103,7 +103,7 @@ func TestSyncingViaRPC(t *testing.T) {
 		//run more test combinations
 		if *longrunning {
 			chnkCnt = []int{1, 8, 32, 256, 1024}
-			nodeCnt = []int{16, 32, 64, 128, 256}
+			nodeCnt = []int{32, 16}
 		} else {
 			//default test
 			chnkCnt = []int{4, 32}
@@ -158,8 +158,6 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 
 	log.Info("Initializing test config")
 
-	ctx := context.Background()
-
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
@@ -172,6 +170,9 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelSimRun()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -327,12 +328,8 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	})
 	defer sim.Close()
 
-	log.Info("Initializing test config")
-	_, err := sim.AddNodesAndConnectFull(3)
-	if err != nil {
-		return err
-	}
-	ctx := context.Background()
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelSimRun()
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -342,7 +339,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
-	err = sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		return err
 	}

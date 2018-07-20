@@ -142,27 +142,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			nodeIndex[id] = i
 		}
 
-		// collect hashes in po 1 bin for each node
-		hashes := make([][]storage.Address, nodes)
-		totalHashes := 0
-		hashCounts := make([]int, nodes)
-		for i := nodes - 1; i >= 0; i-- {
-			if i < nodes-1 {
-				hashCounts[i] = hashCounts[i+1]
-			}
-			item, ok := sim.NodeItem(nodeIDs[i], bucketKeyDB)
-			if !ok {
-				return fmt.Errorf("No DB")
-			}
-			db := item.(*storage.DBAPI)
-			db.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
-				hashes[i] = append(hashes[i], addr)
-				totalHashes++
-				hashCounts[i]++
-				return true
-			})
-		}
-
 		disconnections := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
@@ -190,7 +169,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			if err != nil {
 				return err
 			}
-			if j > 0 {
+			if j > 0 || nodes == 2 {
 				item, ok := sim.NodeItem(nodeIDs[j], bucketKeyFileStore)
 				if !ok {
 					return fmt.Errorf("No filestore")
@@ -211,6 +190,26 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			}
 		}
 
+		// collect hashes in po 1 bin for each node
+		hashes := make([][]storage.Address, nodes)
+		totalHashes := 0
+		hashCounts := make([]int, nodes)
+		for i := nodes - 1; i >= 0; i-- {
+			if i < nodes-1 {
+				hashCounts[i] = hashCounts[i+1]
+			}
+			item, ok := sim.NodeItem(nodeIDs[i], bucketKeyDB)
+			if !ok {
+				return fmt.Errorf("No DB")
+			}
+			db := item.(*storage.DBAPI)
+			db.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
+				hashes[i] = append(hashes[i], addr)
+				totalHashes++
+				hashCounts[i]++
+				return true
+			})
+		}
 		var total, found int
 		for _, node := range nodeIDs {
 			i := nodeIndex[node]
@@ -236,8 +235,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			}
 			log.Debug("sync check", "node", node, "index", i, "bin", po, "found", found, "total", total)
 		}
-		//TODO: This test should not get total = 0? It currently does!
-		if total == found {
+		log.Error("total", "total", total)
+		if total == found && total > 0 {
 			return nil
 		}
 		return fmt.Errorf("Total not equallying found: total is %d", total)
