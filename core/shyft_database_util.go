@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/shyfttracerinterface"
+	"fmt"
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -300,9 +301,11 @@ func swriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, 
 		Amount: tx.Value().String(),
 	}
 
+	fmt.Println("TO", sendAndReceiveData.To)
+	fmt.Println("FROM", sendAndReceiveData.From)
 	getAccountBalanceReceiver := SGetAccount(sqldb, sendAndReceiveData.To)
 	getAccountBalanceSender:= SGetAccount(sqldb, sendAndReceiveData.From)
-
+	fmt.Println("HERE", getAccountBalanceReceiver)
 	var receiverData SendAndReceive
 	if err := json.Unmarshal([]byte(getAccountBalanceReceiver), &receiverData); err != nil {
 		log.Fatal(err)
@@ -407,6 +410,17 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 		}
 		return
 	}
+}
+
+
+func CreateAccount (sqldb *sql.DB, addr string, amount uint64, accountNonce uint64) {
+
+	sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
+	insertErr := sqldb.QueryRow(sqlStatement, addr, amount, accountNonce).Scan(&addr)
+	if insertErr != nil {
+		panic(insertErr)
+	}
+
 }
 
 
