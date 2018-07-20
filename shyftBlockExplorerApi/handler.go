@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ShyftNetwork/go-empyrean/core"
 	"github.com/gorilla/mux"
 	"bytes"
 	"io/ioutil"

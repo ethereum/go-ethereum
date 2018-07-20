@@ -21,8 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ShyftNetwork/go-empyrean/internal/cmdtest"
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
 )
 
 type testEthkey struct {

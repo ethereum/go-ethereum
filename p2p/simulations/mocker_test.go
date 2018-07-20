@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ShyftNetwork/go-empyrean/p2p/discover"
 )
 
 func TestMocker(t *testing.T) {
