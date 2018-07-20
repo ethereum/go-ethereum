@@ -332,6 +332,12 @@
               signatures[name] = true;
               continue;
             }
+
+            // Skip any blobs that do not start with "geth"
+            if (!name.startsWith("geth")) {
+              continue;
+            }
+
             // Otherwise add an entry to one of the release tables
             var parts = name.split("-");
             var date  = parts[parts.length-1].split(".")[0];
