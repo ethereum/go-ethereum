@@ -40,6 +40,7 @@ type OdrBackend interface {
 	BloomTrieIndexer() *core.ChainIndexer
 	BloomIndexer() *core.ChainIndexer
 	Retrieve(ctx context.Context, req OdrRequest) error
+	IndexerConfig() *IndexerConfig
 }
 
 // OdrRequest is an interface for retrieval requests

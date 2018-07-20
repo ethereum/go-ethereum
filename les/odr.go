@@ -71,6 +71,11 @@ func (odr *LesOdr) BloomIndexer() *core.ChainIndexer {
 	return odr.bloomIndexer
 }
 
+// IndexerConfig returns the indexer config.
+func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
+	return odr.indexerConfig
+}
+
 const (
 	MsgBlockBodies = iota
 	MsgCode

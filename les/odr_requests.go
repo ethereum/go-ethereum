@@ -387,7 +387,7 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer, config *light.IndexerConf
 		}
 		blockNum := binary.BigEndian.Uint64(req.Key)
 		// convert HelperTrie request to old CHT request
-		reqsV1 = ChtReq{ChtNum: (req.TrieIdx+1)*(config.ChtSize/config.ChtClientSize) - 1, BlockNum: blockNum, FromLevel: req.FromLevel}
+		reqsV1 = ChtReq{ChtNum: (req.TrieIdx+1)*(config.ChtSize/config.PairChtSize) - 1, BlockNum: blockNum, FromLevel: req.FromLevel}
 		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []interface{}{reqsV1})
 	case lpv2:
 		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []interface{}{req})

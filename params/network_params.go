@@ -21,7 +21,7 @@ package params
 
 const (
 	// BloomBitsBlocks is the number of blocks a single bloom bit section vector
-	// contains.
+	// contains on the server side.
 	BloomBitsBlocks uint64 = 4096
 
 	// BloomBitsBlocksClient is the number of blocks a single bloom bit section vector
@@ -44,7 +44,7 @@ const (
 	// server/client sides.
 	BloomTrieFrequency = 32768
 
-	// HelperTrieConfirmations is the number of confirmations before a server is expected
+	// HelperTrieConfirmations is the number of confirmations before a client is expected
 	// to have the given HelperTrie available.
 	HelperTrieConfirmations = 2048
 

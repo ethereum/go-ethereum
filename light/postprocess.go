@@ -34,20 +34,35 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// IndexerConfig specifies a set of configs for chain indexers.
+// IndexerConfig includes a set of configs for chain indexers.
 type IndexerConfig struct {
-	ChtSize          uint64
-	ChtClientSize    uint64
-	ChtConfirm       uint64
-	BloomSize        uint64
-	BloomConfirm     uint64
-	BloomTrieSize    uint64
+	// The block frequency for creating CHTs.
+	ChtSize uint64
+
+	// A special auxiliary field represents client's chtsize for server config, otherwise represents server's chtsize.
+	PairChtSize uint64
+
+	// The number of confirmations needed to generate/accept a canonical hash help trie.
+	ChtConfirm uint64
+
+	// The block frequency for creating new bloom bits.
+	BloomSize uint64
+
+	// The number of confirmation needed before a bloom section is considered probably final and its rotated bits
+	// are calculated.
+	BloomConfirm uint64
+
+	// The block frequency for creating BloomTrie.
+	BloomTrieSize uint64
+
+	// The number of confirmations needed to generate/accept a bloom trie.
 	BloomTrieConfirm uint64
 }
 
+// DefaultServerIndexerConfig wraps a set of configs as a default indexer config for server side.
 var DefaultServerIndexerConfig = &IndexerConfig{
 	ChtSize:          params.CHTFrequencyServer,
-	ChtClientSize:    params.CHTFrequencyClient,
+	PairChtSize:      params.CHTFrequencyClient,
 	ChtConfirm:       params.HelperTrieProcessConfirmations,
 	BloomSize:        params.BloomBitsBlocks,
 	BloomConfirm:     params.BloomConfirms,
@@ -55,8 +70,10 @@ var DefaultServerIndexerConfig = &IndexerConfig{
 	BloomTrieConfirm: params.HelperTrieProcessConfirmations,
 }
 
+// DefaultClientIndexerConfig wraps a set of configs as a default indexer config for client side.
 var DefaultClientIndexerConfig = &IndexerConfig{
 	ChtSize:          params.CHTFrequencyClient,
+	PairChtSize:      params.CHTFrequencyServer,
 	ChtConfirm:       params.HelperTrieConfirmations,
 	BloomSize:        params.BloomBitsBlocksClient,
 	BloomConfirm:     params.HelperTrieConfirmations,

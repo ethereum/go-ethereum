@@ -292,7 +292,7 @@ func (self *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*
 // GetBlockByNumber retrieves a block from the database or ODR service by
 // number, caching it (associated with its hash) if found.
 func (self *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*types.Block, error) {
-	hash, err := GetCanonicalHash(ctx, self.odr, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, number)
+	hash, err := GetCanonicalHash(ctx, self.odr, number)
 	if hash == (common.Hash{}) || err != nil {
 		return nil, err
 	}
@@ -459,7 +459,7 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	if header := self.hc.GetHeaderByNumber(number); header != nil {
 		return header, nil
 	}
-	return GetHeaderByNumber(ctx, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, self.odr, number)
+	return GetHeaderByNumber(ctx, self.odr, number)
 }
 
 // Config retrieves the header chain's chain configuration.
@@ -473,7 +473,7 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	chtCount, _, _ := self.odr.ChtIndexer().Sections()
 	if headNum+1 < chtCount*self.indexerConfig.ChtSize {
 		num := chtCount*self.indexerConfig.ChtSize - 1
-		header, err := GetHeaderByNumber(ctx, self.indexerConfig.ChtSize, self.indexerConfig.ChtConfirm, self.odr, num)
+		header, err := GetHeaderByNumber(ctx, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()
 			if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
