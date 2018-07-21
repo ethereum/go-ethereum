@@ -182,6 +182,18 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
+	SwarmResourceMultihashFlag = cli.BoolFlag{
+		Name:  "multihash",
+		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as raw, literal data that will be included in the resource",
+	}
+	SwarmResourceNameFlag = cli.StringFlag{
+		Name:  "name",
+		Usage: "User-defined name for the new resource",
+	}
+	SwarmResourceDataOnCreateFlag = cli.StringFlag{
+		Name:  "data",
+		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
+	}
 )
 
 //declare a few constant error messages, useful for later error check comparisons in test
@@ -234,6 +246,41 @@ func init() {
 			ArgsUsage:          "<file>",
 			Flags:              []cli.Flag{SwarmEncryptedFlag},
 			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
+		},
+		{
+			CustomHelpTemplate: helpTemplate,
+			Name:               "resource",
+			Usage:              "(Advanced) Create and update Mutable Resources",
+			ArgsUsage:          "<create|update|info>",
+			Description:        "Works with Mutable Resource Updates",
+			Subcommands: []cli.Command{
+				{
+					Action:             resourceCreate,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "create",
+					Usage:              "creates a new Mutable Resource",
+					ArgsUsage:          "<frequency>",
+					Description:        "creates a new Mutable Resource",
+					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceMultihashFlag},
+				},
+				{
+					Action:             resourceUpdate,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "update",
+					Usage:              "updates the content of an existing Mutable Resource",
+					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
+					Description:        "updates the content of an existing Mutable Resource",
+					Flags:              []cli.Flag{SwarmResourceMultihashFlag},
+				},
+				{
+					Action:             resourceInfo,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "info",
+					Usage:              "obtains information about an existing Mutable Resource",
+					ArgsUsage:          "<Manifest Address or ENS domain>",
+					Description:        "obtains information about an existing Mutable Resource",
+				},
+			},
 		},
 		{
 			Action:             list,
@@ -561,6 +608,26 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+}
+
+// getPrivKey returns the private key of the specified bzzaccount
+// Used only by client commands, such as `resource`
+func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
+	// booting up the swarm node just as we do in bzzd action
+	bzzconfig, err := buildConfig(ctx)
+	if err != nil {
+		utils.Fatalf("unable to configure swarm: %v", err)
+	}
+	cfg := defaultNodeConfig
+	if _, err := os.Stat(bzzconfig.Path); err == nil {
+		cfg.DataDir = bzzconfig.Path
+	}
+	utils.SetNodeConfig(ctx, &cfg)
+	stack, err := node.New(&cfg)
+	if err != nil {
+		utils.Fatalf("can't create node: %v", err)
+	}
+	return getAccount(bzzconfig.BzzAccount, ctx, stack)
 }
 
 func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []string) *ecdsa.PrivateKey {
