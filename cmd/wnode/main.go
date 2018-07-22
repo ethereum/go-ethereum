@@ -140,8 +140,8 @@ func processArgs() {
 	}
 
 	if *asymmetricMode && len(*argPub) > 0 {
-		pub = crypto.ToECDSAPub(common.FromHex(*argPub))
-		if !isKeyValid(pub) {
+		var err error
+		if pub, err = crypto.UnmarshalPubkey(common.FromHex(*argPub)); err != nil {
 			utils.Fatalf("invalid public key")
 		}
 	}
@@ -321,10 +321,6 @@ func startServer() error {
 	return nil
 }
 
-func isKeyValid(k *ecdsa.PublicKey) bool {
-	return k.X != nil && k.Y != nil
-}
-
 func configureNode() {
 	var err error
 	var p2pAccept bool
@@ -340,9 +336,8 @@ func configureNode() {
 			if b == nil {
 				utils.Fatalf("Error: can not convert hexadecimal string")
 			}
-			pub = crypto.ToECDSAPub(b)
-			if !isKeyValid(pub) {
-				utils.Fatalf("Error: invalid public key")
+			if pub, err = crypto.UnmarshalPubkey(b); err != nil {
+				utils.Fatalf("Error: invalid peer public key")
 			}
 		}
 	}
