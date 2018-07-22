@@ -27,6 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/accounts"
+	"math/big"
+	"github.com/ethereum/go-ethereum/core"
 )
 
 const (
@@ -732,5 +736,34 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 			delete(f.queues, insert.origin)
 		}
 		delete(f.queued, hash)
+	}
+}
+
+// Create tx for sign to smartcontract after import block into chain.
+func (f *Fetcher) CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager) {
+	f.importedHook = func(block *types.Block) {
+		// Find active account.
+		account := accounts.Account{}
+		var wallet accounts.Wallet
+		if account == (accounts.Account{}) {
+			if wallets := manager.Wallets(); len(wallets) > 0 {
+				wallet = wallets[0]
+				if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+					account = accounts[0]
+				}
+			}
+		}
+
+		// Create and send tx to smartcontract for sign validate block.
+		data := common.Hex2Bytes("2fb1b25f")
+		nonce := pool.State().GetNonce(account.Address)
+		tx := types.NewTransaction(nonce, common.HexToAddress(common.BlockSigners), big.NewInt(0), 100000, big.NewInt(0), data)
+		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
+		if err != nil {
+			log.Error("TOMO - Fail to create tx sign", "error", err)
+		}
+
+		// Add tx signed to local tx pool.
+		pool.AddLocal(txSigned)
 	}
 }
