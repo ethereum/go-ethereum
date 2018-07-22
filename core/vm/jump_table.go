@@ -33,7 +33,7 @@ type (
 var errGasUintOverflow = errors.New("gas uint64 overflow")
 
 type operation struct {
-	// op is the operation function
+	// execute is the operation function
 	execute executionFunc
 	// gasCost is the gas function and returns the gas required for execution
 	gasCost gasFunc

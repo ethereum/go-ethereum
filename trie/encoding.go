@@ -83,7 +83,7 @@ func hexToKeybytes(hex []byte) []byte {
 	if len(hex)&1 != 0 {
 		panic("can't convert hex key of odd length")
 	}
-	key := make([]byte, (len(hex)+1)/2)
+	key := make([]byte, len(hex)/2)
 	decodeNibbles(hex, key)
 	return key
 }

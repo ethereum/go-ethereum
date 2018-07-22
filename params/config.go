@@ -102,7 +102,10 @@ var (
 		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
 		CallistoStakeReward:     CLOStakeReward,
 
-		Ethash: new(EthashConfig),
+		Clique: &CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		},
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.

@@ -124,12 +124,12 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 	// 1. From a zero-value address to a non-zero value         (NEW VALUE)
 	// 2. From a non-zero value address to a zero-value address (DELETE)
 	// 3. From a non-zero to a non-zero                         (CHANGE)
-	if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
+	if val == (common.Hash{}) && y.Sign() != 0 {
 		// 0 => non 0
 		return params.SstoreSetGas, nil
-	} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
+	} else if val != (common.Hash{}) && y.Sign() == 0 {
+		// non 0 => 0
 		evm.StateDB.AddRefund(params.SstoreRefundGas)
-
 		return params.SstoreClearGas, nil
 	} else {
 		// non 0 => non 0 (or 0 => 0)
