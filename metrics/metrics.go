@@ -68,17 +68,20 @@ func CollectProcessMetrics(refresh time.Duration) {
 	}
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {
-		runtime.ReadMemStats(memstats[i%2])
-		memAllocs.Mark(int64(memstats[i%2].Mallocs - memstats[(i-1)%2].Mallocs))
-		memFrees.Mark(int64(memstats[i%2].Frees - memstats[(i-1)%2].Frees))
-		memInuse.Mark(int64(memstats[i%2].Alloc - memstats[(i-1)%2].Alloc))
-		memPauses.Mark(int64(memstats[i%2].PauseTotalNs - memstats[(i-1)%2].PauseTotalNs))
+		location1 := i%2
+		location2 := (i-1)%2
 
-		if ReadDiskStats(diskstats[i%2]) == nil {
-			diskReads.Mark(diskstats[i%2].ReadCount - diskstats[(i-1)%2].ReadCount)
-			diskReadBytes.Mark(diskstats[i%2].ReadBytes - diskstats[(i-1)%2].ReadBytes)
-			diskWrites.Mark(diskstats[i%2].WriteCount - diskstats[(i-1)%2].WriteCount)
-			diskWriteBytes.Mark(diskstats[i%2].WriteBytes - diskstats[(i-1)%2].WriteBytes)
+		runtime.ReadMemStats(memstats[location1])
+		memAllocs.Mark(int64(memstats[location1].Mallocs - memstats[location2].Mallocs))
+		memFrees.Mark(int64(memstats[location1].Frees - memstats[location2].Frees))
+		memInuse.Mark(int64(memstats[location1].Alloc - memstats[location2].Alloc))
+		memPauses.Mark(int64(memstats[location1].PauseTotalNs - memstats[location2].PauseTotalNs))
+
+		if ReadDiskStats(diskstats[location1]) == nil {
+			diskReads.Mark(diskstats[location1].ReadCount - diskstats[location2].ReadCount)
+			diskReadBytes.Mark(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
+			diskWrites.Mark(diskstats[location1].WriteCount - diskstats[location2].WriteCount)
+			diskWriteBytes.Mark(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
 		}
 		time.Sleep(refresh)
 	}
