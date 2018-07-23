@@ -587,7 +587,7 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 	// for encryption is ephemeral.
 	iv := make([]byte, encc.BlockSize())
 	if c, ok := conn.(*meteredConn); ok {
-		c.meterIndividually(s.RemoteID.String())
+		c.setPeerID(s.RemoteID.String())
 	}
 	return &rlpxFrameRW{
 		conn:       conn,

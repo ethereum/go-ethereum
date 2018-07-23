@@ -385,10 +385,10 @@ func (db *Dashboard) collectData() {
 					DiskWrite:      ChartEntries{diskWrite},
 				},
 			})
-
-			for k, v := range p2p.IngressTrafficMeters {
-				fmt.Println(k[:6], v.Count())
+			for _, id := range p2p.TrafficMeter.GetIDs() {
+				fmt.Println(id)
 			}
+			fmt.Println()
 		}
 	}
 }
