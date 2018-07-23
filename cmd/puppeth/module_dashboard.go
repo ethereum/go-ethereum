@@ -609,7 +609,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	}
 	template.Must(template.New("").Parse(dashboardContent)).Execute(indexfile, map[string]interface{}{
 		"Network":          network,
-		"NetworkID":        conf.Genesis.Config.ChainId,
+		"NetworkID":        conf.Genesis.Config.ChainID,
 		"NetworkTitle":     strings.Title(network),
 		"EthstatsPage":     config.ethstats,
 		"ExplorerPage":     config.explorer,

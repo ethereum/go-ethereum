@@ -340,6 +340,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		hashMode := query.Origin.Hash != (common.Hash{})
+		first := true
+		maxNonCanonical := uint64(100)
 
 		// Gather headers until the fetch or network limits is reached
 		var (
@@ -351,31 +353,36 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// Retrieve the next header satisfying the query
 			var origin *types.Header
 			if hashMode {
-				origin = pm.blockchain.GetHeaderByHash(query.Origin.Hash)
+				if first {
+					first = false
+					origin = pm.blockchain.GetHeaderByHash(query.Origin.Hash)
+					if origin != nil {
+						query.Origin.Number = origin.Number.Uint64()
+					}
+				} else {
+					origin = pm.blockchain.GetHeader(query.Origin.Hash, query.Origin.Number)
+				}
 			} else {
 				origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
 			}
 			if origin == nil {
 				break
 			}
-			number := origin.Number.Uint64()
 			headers = append(headers, origin)
 			bytes += estHeaderRlpSize
 
 			// Advance to the next header of the query
 			switch {
-			case query.Origin.Hash != (common.Hash{}) && query.Reverse:
+			case hashMode && query.Reverse:
 				// Hash based traversal towards the genesis block
-				for i := 0; i < int(query.Skip)+1; i++ {
-					if header := pm.blockchain.GetHeader(query.Origin.Hash, number); header != nil {
-						query.Origin.Hash = header.ParentHash
-						number--
-					} else {
-						unknown = true
-						break
-					}
+				ancestor := query.Skip + 1
+				if ancestor == 0 {
+					unknown = true
+				} else {
+					query.Origin.Hash, query.Origin.Number = pm.blockchain.GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
+					unknown = (query.Origin.Hash == common.Hash{})
 				}
-			case query.Origin.Hash != (common.Hash{}) && !query.Reverse:
+			case hashMode && !query.Reverse:
 				// Hash based traversal towards the leaf block
 				var (
 					current = origin.Number.Uint64()
@@ -387,8 +394,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					unknown = true
 				} else {
 					if header := pm.blockchain.GetHeaderByNumber(next); header != nil {
-						if pm.blockchain.GetBlockHashesFromHash(header.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
-							query.Origin.Hash = header.Hash()
+						nextHash := header.Hash()
+						expOldHash, _ := pm.blockchain.GetAncestor(nextHash, next, query.Skip+1, &maxNonCanonical)
+						if expOldHash == query.Origin.Hash {
+							query.Origin.Hash, query.Origin.Number = nextHash, next
 						} else {
 							unknown = true
 						}

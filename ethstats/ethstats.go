@@ -362,7 +362,7 @@ type nodeInfo struct {
 
 // authMsg is the authentication infos needed to login to a monitoring server.
 type authMsg struct {
-	Id     string   `json:"id"`
+	ID     string   `json:"id"`
 	Info   nodeInfo `json:"info"`
 	Secret string   `json:"secret"`
 }
@@ -381,7 +381,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
 	}
 	auth := &authMsg{
-		Id: s.node,
+		ID: s.node,
 		Info: nodeInfo{
 			Name:     s.node,
 			Node:     infos.Name,

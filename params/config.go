@@ -23,6 +23,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 )
 
+// Genesis hashes to enforce below configs on.
 var (
 	CallistoMainnetGenesisHash = common.HexToHash("0x82270b80fc90beb005505a9ef95039639968a0e81b2904ad30128c93d713d2c4") // Callisto Mainnet genesis hash to enforce below configs on
 	MainnetGenesisHash         = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
@@ -32,7 +33,7 @@ var (
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(1),
+		ChainID:             big.NewInt(1),
 		HomesteadBlock:      big.NewInt(1150000),
 		DAOForkBlock:        big.NewInt(1920000),
 		DAOForkSupport:      true,
@@ -47,7 +48,7 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(3),
+		ChainID:             big.NewInt(3),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -66,7 +67,7 @@ var (
 
 	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
 	CallistoMainnetChainConfig = &ChainConfig{
-		ChainId:                 big.NewInt(820),
+		ChainID:                 big.NewInt(820),
 		HomesteadBlock:          big.NewInt(0),
 		DAOForkBlock:            nil,
 		DAOForkSupport:          false,
@@ -86,7 +87,7 @@ var (
 	}
 
 	CallistoTestnetChainConfig = &ChainConfig{
-		ChainId:                 big.NewInt(7919),
+		ChainID:                 big.NewInt(7919),
 		HomesteadBlock:          big.NewInt(0),
 		DAOForkBlock:            nil,
 		DAOForkSupport:          false,
@@ -110,7 +111,7 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(4),
+		ChainID:             big.NewInt(4),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -150,7 +151,7 @@ var (
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
-	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
+	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -209,7 +210,7 @@ func (c *ChainConfig) String() string {
 		engine = "unknown"
 	}
 	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Callisto: %v Callisto Treasury Address: %v Engine: %v}",
-		c.ChainId,
+		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
 		c.DAOForkSupport,
@@ -229,27 +230,32 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	return isForked(c.HomesteadBlock, num)
 }
 
-// IsDAO returns whether num is either equal to the DAO fork block or greater.
+// IsDAOFork returns whether num is either equal to the DAO fork block or greater.
 func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
 	return isForked(c.DAOForkBlock, num)
 }
 
+// IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
 func (c *ChainConfig) IsEIP150(num *big.Int) bool {
 	return isForked(c.EIP150Block, num)
 }
 
+// IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
 func (c *ChainConfig) IsEIP155(num *big.Int) bool {
 	return isForked(c.EIP155Block, num)
 }
 
+// IsEIP158 returns whether num is either equal to the EIP158 fork block or greater.
 func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 	return isForked(c.EIP158Block, num)
 }
 
+// IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 	return isForked(c.ByzantiumBlock, num)
 }
 
+// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
@@ -313,7 +319,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.EIP158Block, newcfg.EIP158Block, head) {
 		return newCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
 	}
-	if c.IsEIP158(head) && !configNumEqual(c.ChainId, newcfg.ChainId) {
+	if c.IsEIP158(head) && !configNumEqual(c.ChainID, newcfg.ChainID) {
 		return newCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
 	if isForkIncompatible(c.CallistoBlock, newcfg.CallistoBlock, head) {
@@ -389,15 +395,16 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainId                                   *big.Int
+	ChainID                                   *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
 	IsByzantium                               bool
 }
 
+// Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(num *big.Int) Rules {
-	chainId := c.ChainId
-	if chainId == nil {
-		chainId = new(big.Int)
+	chainID := c.ChainID
+	if chainID == nil {
+		chainID = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	return Rules{ChainID: new(big.Int).Set(chainID), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
 }
