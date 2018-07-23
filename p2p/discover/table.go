@@ -480,16 +480,16 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	b := tab.buckets[bi]
 	if err == nil {
 		// The node responded, move it to the front.
-		log.Debug("Revalidated node", "b", bi, "id", last.ID)
+		log.Trace("Revalidated node", "b", bi, "id", last.ID)
 		b.bump(last)
 		return
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
 	// any replacements.
 	if r := tab.replace(b, last); r != nil {
-		log.Debug("Replaced dead node", "b", bi, "id", last.ID, "ip", last.IP, "r", r.ID, "rip", r.IP)
+		log.Trace("Replaced dead node", "b", bi, "id", last.ID, "ip", last.IP, "r", r.ID, "rip", r.IP)
 	} else {
-		log.Debug("Removed dead node", "b", bi, "id", last.ID, "ip", last.IP)
+		log.Trace("Removed dead node", "b", bi, "id", last.ID, "ip", last.IP)
 	}
 }
 

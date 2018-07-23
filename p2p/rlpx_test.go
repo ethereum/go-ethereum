@@ -30,12 +30,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/crypto/ecies"
 	"github.com/EthereumCommonwealth/go-callisto/crypto/sha3"
 	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/simulations/pipes"
 	"github.com/EthereumCommonwealth/go-callisto/rlp"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestSharedSecret(t *testing.T) {
@@ -159,7 +160,7 @@ func TestProtocolHandshake(t *testing.T) {
 		wg sync.WaitGroup
 	)
 
-	fd0, fd1, err := tcpPipe()
+	fd0, fd1, err := pipes.TCPPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,32 +601,4 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	if !bytes.Equal(fooIngressHash, wantFooIngressHash) {
 		t.Errorf("ingress-mac('foo') mismatch:\ngot %x\nwant %x", fooIngressHash, wantFooIngressHash)
 	}
-}
-
-// tcpPipe creates an in process full duplex pipe based on a localhost TCP socket
-func tcpPipe() (net.Conn, net.Conn, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, nil, err
-	}
-	defer l.Close()
-
-	var aconn net.Conn
-	aerr := make(chan error, 1)
-	go func() {
-		var err error
-		aconn, err = l.Accept()
-		aerr <- err
-	}()
-
-	dconn, err := net.Dial("tcp", l.Addr().String())
-	if err != nil {
-		<-aerr
-		return nil, nil, err
-	}
-	if err := <-aerr; err != nil {
-		dconn.Close()
-		return nil, nil, err
-	}
-	return aconn, dconn, nil
 }

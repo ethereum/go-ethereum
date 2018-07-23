@@ -373,15 +373,14 @@ WAIT:
 	}
 
 }
-
-func TestMultiplePeersDropSelf(t *testing.T) {
+func XTestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),
 		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 	)
 }
 
-func TestMultiplePeersDropOther(t *testing.T) {
+func XTestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
 		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("subprotocol error"),

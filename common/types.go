@@ -29,6 +29,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/crypto/sha3"
 )
 
+// Lengths of hashes and addresses in bytes.
 const (
 	HashLength    = 32
 	AddressLength = 20

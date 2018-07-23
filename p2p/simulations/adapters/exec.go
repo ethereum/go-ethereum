@@ -17,6 +17,7 @@
 package adapters
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -103,9 +104,9 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
 
-	// listen on a random localhost port (we'll get the actual port after
-	// starting the node through the RPC admin.nodeInfo method)
-	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
+	// listen on a localhost port, which we set when we
+	// initialise NodeConfig (usually a random port)
+	conf.Stack.P2P.ListenAddr = fmt.Sprintf(":%d", config.Port)
 
 	node := &ExecNode{
 		ID:      config.ID,
@@ -190,9 +191,23 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	n.Cmd = cmd
 
 	// read the WebSocket address from the stderr logs
-	wsAddr, err := findWSAddr(stderrR, 10*time.Second)
-	if err != nil {
-		return fmt.Errorf("error getting WebSocket address: %s", err)
+	var wsAddr string
+	wsAddrC := make(chan string)
+	go func() {
+		s := bufio.NewScanner(stderrR)
+		for s.Scan() {
+			if strings.Contains(s.Text(), "WebSocket endpoint opened") {
+				wsAddrC <- wsAddrPattern.FindString(s.Text())
+			}
+		}
+	}()
+	select {
+	case wsAddr = <-wsAddrC:
+		if wsAddr == "" {
+			return errors.New("failed to read WebSocket address from stderr")
+		}
+	case <-time.After(10 * time.Second):
+		return errors.New("timed out waiting for WebSocket address on stderr")
 	}
 
 	// create the RPC client and load the node info
@@ -318,6 +333,21 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
+// ExternalIP gets an external IP address so that Enode URL is usable
+func ExternalIP() net.IP {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Crit("error getting IP address", "err", err)
+	}
+	for _, addr := range addrs {
+		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() && !ip.IP.IsLinkLocalUnicast() {
+			return ip.IP
+		}
+	}
+	log.Warn("unable to determine explicit IP address, falling back to loopback")
+	return net.IP{127, 0, 0, 1}
+}
+
 // execP2PNode starts a devp2p node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
 // and the node config from the _P2P_NODE_CONFIG environment variable
@@ -341,25 +371,11 @@ func execP2PNode() {
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
 
-	// use explicit IP address in ListenAddr so that Enode URL is usable
-	externalIP := func() string {
-		addrs, err := net.InterfaceAddrs()
-		if err != nil {
-			log.Crit("error getting IP address", "err", err)
-		}
-		for _, addr := range addrs {
-			if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-				return ip.IP.String()
-			}
-		}
-		log.Crit("unable to determine explicit IP address")
-		return ""
-	}
 	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
-		conf.Stack.P2P.ListenAddr = externalIP() + conf.Stack.P2P.ListenAddr
+		conf.Stack.P2P.ListenAddr = ExternalIP().String() + conf.Stack.P2P.ListenAddr
 	}
 	if conf.Stack.WSHost == "0.0.0.0" {
-		conf.Stack.WSHost = externalIP()
+		conf.Stack.WSHost = ExternalIP().String()
 	}
 
 	// initialize the devp2p stack
