@@ -1,18 +1,18 @@
 package core
 
 import (
-  	"fmt"
-  	"database/sql"
+	"database/sql"
+	"fmt"
 )
 
 var blockExplorerDb *sql.DB
 
 const (
-	connStr = "user=postgres dbname=shyftdb sslmode=disable"
-	connStrTest =  "user=postgres dbname=shyftdbtest sslmode=disable"
+	connStr     = "user=postgres dbname=shyftdb sslmode=disable"
+	connStrTest = "user=postgres dbname=shyftdbtest sslmode=disable"
 )
 
-func InitDB() (*sql.DB, error){
+func InitDB() (*sql.DB, error) {
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
@@ -24,7 +24,7 @@ func InitDB() (*sql.DB, error){
 	}
 }
 
-func InitDBTest() (*sql.DB, error){
+func InitDBTest() (*sql.DB, error) {
 	db, err := sql.Open("postgres", connStrTest)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
@@ -37,9 +37,9 @@ func InitDBTest() (*sql.DB, error){
 }
 
 func DBConnection() (*sql.DB, error) {
-	if (blockExplorerDb == nil) {
+	if blockExplorerDb == nil {
 		_, err := InitDB()
-		if(err != nil) {
+		if err != nil {
 			return nil, err
 		}
 	}
