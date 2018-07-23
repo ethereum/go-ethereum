@@ -25,19 +25,11 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	ethereum "github.com/empyrean/go-ethereum"
-	"github.com/empyrean/go-ethereum/accounts"
-	"github.com/empyrean/go-ethereum/common"
-	"github.com/empyrean/go-ethereum/core/types"
-	"github.com/empyrean/go-ethereum/log"
-=======
 	ethereum "github.com/ShyftNetwork/go-empyrean"
 	"github.com/ShyftNetwork/go-empyrean/accounts"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/log"
->>>>>>> shftBlock_rename
 	"github.com/karalabe/hid"
 )
 

@@ -30,13 +30,8 @@ import (
 	"path/filepath"
 	"strings"
 
-<<<<<<< HEAD
-	"github.com/empyrean/go-ethereum/cmd/utils"
-	swarm "github.com/empyrean/go-ethereum/swarm/api/client"
-=======
 	"github.com/ShyftNetwork/go-empyrean/cmd/utils"
 	swarm "github.com/ShyftNetwork/go-empyrean/swarm/api/client"
->>>>>>> shftBlock_rename
 	"gopkg.in/urfave/cli.v1"
 )
 
