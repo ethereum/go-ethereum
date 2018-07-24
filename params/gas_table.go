@@ -64,7 +64,7 @@ var (
 		CreateBySuicide: 25000,
 	}
 	// GasTableEIP158 contain the gas re-prices for
-	// the EIP158 phase.
+	// the EIP155/EIP158 phase.
 	GasTableEIP158 = GasTable{
 		ExtcodeSize: 700,
 		ExtcodeCopy: 700,

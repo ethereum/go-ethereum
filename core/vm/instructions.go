@@ -498,11 +498,7 @@ func opExtCodeCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, sta
 
 func opExtCodeHash(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	slot := stack.peek()
-	if hash := evm.StateDB.GetCodeHash(common.BigToAddress(slot)); hash == (common.Hash{}) {
-		slot.SetUint64(0)
-	} else {
-		slot.SetBytes(hash.Bytes())
-	}
+	slot.SetBytes(evm.StateDB.GetCodeHash(common.BigToAddress(slot)).Bytes())
 	return nil, nil
 }
 
