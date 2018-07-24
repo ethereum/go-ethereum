@@ -280,20 +280,25 @@ func SGetTransaction(sqldb *sql.DB, txHash string) string {
 	return string(json)
 }
 
+func InnerSGetAccount(sqldb *sql.DB, address string) (SAccounts, bool) {
+	sqlStatement := `SELECT * FROM accounts WHERE addr=$1;`
+	var addr, balance, accountNonce string
+	err := sqldb.QueryRow(sqlStatement, address).Scan(&addr, &balance, &accountNonce)
+	if err == sql.ErrNoRows {
+		return SAccounts{}, false
+	} else {
+		account := SAccounts{
+			Addr:    		addr,
+			Balance: 		balance,
+			AccountNonce: 	accountNonce,
+		}
+		return account, true
+	}
+}
+
 //GetAccount returns account balances
 func SGetAccount(sqldb *sql.DB, address string) string {
-	sqlStatement := `SELECT * FROM accounts WHERE addr=$1;`
-	row := sqldb.QueryRow(sqlStatement, address)
-	var addr, balance, accountNonce string
-
-	row.Scan(
-		&addr, &balance, &accountNonce)
-
-	account := SAccounts{
-		Addr:    		addr,
-		Balance: 		balance,
-		AccountNonce: 	accountNonce,
-	}
+	var account, _ = InnerSGetAccount(sqldb, address)
 	json, _ := json.Marshal(account)
 	return string(json)
 }

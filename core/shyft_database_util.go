@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"log"
 	_ "github.com/lib/pq"
-	"fmt"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
@@ -300,11 +299,9 @@ func swriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, 
 		Amount: tx.Value().String(),
 	}
 
-	fmt.Println("TO", sendAndReceiveData.To)
-	fmt.Println("FROM", sendAndReceiveData.From)
 	getAccountBalanceReceiver := SGetAccount(sqldb, sendAndReceiveData.To)
 	getAccountBalanceSender:= SGetAccount(sqldb, sendAndReceiveData.From)
-	fmt.Println("HERE", getAccountBalanceReceiver)
+
 	var receiverData SendAndReceive
 	if err := json.Unmarshal([]byte(getAccountBalanceReceiver), &receiverData); err != nil {
 		log.Fatal(err)

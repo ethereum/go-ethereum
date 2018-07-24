@@ -479,7 +479,7 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 	toBalance := new(big.Int)
 	toBalance, l := toBalance.SetString(accountAddrTo.Balance, 10)
 	fmt.Println(l)
-	
+
 	if toBalance.Cmp(addedAmount) != 0 {
 		t.Fatalf("To address balance [%v]: To address balance not correct FFO", toBalance)
 	}
