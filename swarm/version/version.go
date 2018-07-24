@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package params
+package version
 
 import (
 	"fmt"
 )
 
 const (
-	VersionMajor = 1          // Major version component of the current release
-	VersionMinor = 8          // Minor version component of the current release
-	VersionPatch = 13         // Patch version component of the current release
+	VersionMajor = 0          // Major version component of the current release
+	VersionMinor = 3          // Minor version component of the current release
+	VersionPatch = 1          // Patch version component of the current release
 	VersionMeta  = "unstable" // Version metadata to append to the version string
 )
 
@@ -41,9 +41,9 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
-// ArchiveVersion holds the textual version string used for Geth archives.
-// e.g. "1.8.11-dea1ce05" for stable releases, or
-//      "1.8.13-unstable-21c059b6" for unstable releases
+// ArchiveVersion holds the textual version string used for Swarm archives.
+// e.g. "0.3.0-dea1ce05" for stable releases, or
+//      "0.3.1-unstable-21c059b6" for unstable releases
 func ArchiveVersion(gitCommit string) string {
 	vsn := Version
 	if VersionMeta != "stable" {
@@ -56,7 +56,7 @@ func ArchiveVersion(gitCommit string) string {
 }
 
 func VersionWithCommit(gitCommit string) string {
-	vsn := VersionWithMeta
+	vsn := Version
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
 	}
