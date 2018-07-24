@@ -57,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -384,6 +385,21 @@ var (
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
+	}
+	RPCReadTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcreadtimeout",
+		Usage: "HTTP-RPC server read timeout",
+		Value: rpc.DefaultHTTPReadTimeout,
+	}
+	RPCWriteTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcwritetimeout",
+		Usage: "HTTP-RPC server write timeout",
+		Value: rpc.DefaultHTTPWriteTimeout,
+	}
+	RPCIdleTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcidletimeout",
+		Usage: "HTTP-RPC server idle timeout",
+		Value: rpc.DefaultHTTPIdleTimeout,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -728,6 +744,17 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(RPCVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCVirtualHostsFlag.Name))
+	}
+
+	cfg.HTTPTimeouts = rpc.NewDefaultHTTPTimeouts()
+	if ctx.GlobalIsSet(RPCReadTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.ReadTimeout = ctx.GlobalDuration(RPCReadTimeoutFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCWriteTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.WriteTimeout = ctx.GlobalDuration(RPCWriteTimeoutFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCIdleTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.IdleTimeout = ctx.GlobalDuration(RPCIdleTimeoutFlag.Name)
 	}
 }
 
