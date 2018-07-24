@@ -268,7 +268,7 @@ func (n NodeID) String() string {
 	return fmt.Sprintf("%x", n[:])
 }
 
-// The Go syntax representation of a NodeID is a call to HexID.
+// GoString is the Go syntax representation of a NodeID is a call to HexID.
 func (n NodeID) GoString() string {
 	return fmt.Sprintf("discover.HexID(\"%x\")", n[:])
 }
@@ -326,8 +326,8 @@ func (n NodeID) Pubkey() (*ecdsa.PublicKey, error) {
 	return p, nil
 }
 
-func (id NodeID) mustPubkey() ecdsa.PublicKey {
-	pk, err := id.Pubkey()
+func (n NodeID) mustPubkey() ecdsa.PublicKey {
+	pk, err := n.Pubkey()
 	if err != nil {
 		panic(err)
 	}

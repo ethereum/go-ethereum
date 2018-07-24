@@ -209,9 +209,8 @@ func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
 	t.pinged[toid] = true
 	if t.dead[toid] {
 		return errTimeout
-	} else {
-		return nil
 	}
+	return nil
 }
 
 func (t *pingRecorder) close() {}

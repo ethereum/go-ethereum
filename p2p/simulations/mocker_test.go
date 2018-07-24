@@ -101,7 +101,7 @@ func TestMocker(t *testing.T) {
 						//time.Sleep( 3 *time.Second)
 					}
 				} else if event.Conn != nil && nodesComplete {
-					connCount += 1
+					connCount++
 					if connCount == (nodeCount-1)*2 {
 						wg.Done()
 						return
@@ -135,13 +135,13 @@ func TestMocker(t *testing.T) {
 	wg.Wait()
 
 	//check there are nodeCount number of nodes in the network
-	nodes_info, err := client.GetNodes()
+	nodesInfo, err := client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodes_info) != nodeCount {
-		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodes_info))
+	if len(nodesInfo) != nodeCount {
+		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodesInfo))
 	}
 
 	//stop the mocker
@@ -160,12 +160,12 @@ func TestMocker(t *testing.T) {
 	}
 
 	//now the number of nodes in the network should be zero
-	nodes_info, err = client.GetNodes()
+	nodesInfo, err = client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodes_info) != 0 {
-		t.Fatalf("Expected empty list of nodes, got: %d", len(nodes_info))
+	if len(nodesInfo) != 0 {
+		t.Fatalf("Expected empty list of nodes, got: %d", len(nodesInfo))
 	}
 }
