@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 var (
@@ -561,4 +562,90 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 		return "", err
 	}
 	return string(data), nil
+}
+
+// CreateResource creates a Mutable Resource with the given name and frequency, initializing it with the provided
+// data. Data is interpreted as multihash or not depending on the multihash parameter.
+// startTime=0 means "now"
+// Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
+// or reference future updates (Client.UpdateResource)
+func (c *Client) CreateResource(request *mru.Request) (string, error) {
+	responseStream, err := c.updateResource(request)
+	if err != nil {
+		return "", err
+	}
+	defer responseStream.Close()
+
+	body, err := ioutil.ReadAll(responseStream)
+	if err != nil {
+		return "", err
+	}
+
+	var manifestAddress string
+	if err = json.Unmarshal(body, &manifestAddress); err != nil {
+		return "", err
+	}
+	return manifestAddress, nil
+}
+
+// UpdateResource allows you to set a new version of your content
+func (c *Client) UpdateResource(request *mru.Request) error {
+	_, err := c.updateResource(request)
+	return err
+}
+
+func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
+	body, err := request.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-resource:/", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Body, nil
+
+}
+
+// GetResource returns a byte stream with the raw content of the resource
+// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// points to that address
+func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
+
+	res, err := http.Get(c.Gateway + "/bzz-resource:/" + manifestAddressOrDomain)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+
+}
+
+// GetResourceMetadata returns a structure that describes the Mutable Resource
+// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// points to that address
+func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Request, error) {
+
+	responseStream, err := c.GetResource(manifestAddressOrDomain + "/meta")
+	if err != nil {
+		return nil, err
+	}
+	defer responseStream.Close()
+
+	body, err := ioutil.ReadAll(responseStream)
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata mru.Request
+	if err := metadata.UnmarshalJSON(body); err != nil {
+		return nil, err
+	}
+	return &metadata, nil
 }

@@ -214,15 +214,6 @@ func swap(buffer []byte) {
 	}
 }
 
-// prepare converts an ethash cache or dataset from a byte stream into the internal
-// int representation. All ethash methods work with ints to avoid constant byte to
-// int conversions as well as to handle both little and big endian systems.
-func prepare(dest []uint32, src []byte) {
-	for i := 0; i < len(dest); i++ {
-		dest[i] = binary.LittleEndian.Uint32(src[i*4:])
-	}
-}
-
 // fnv is an algorithm inspired by the FNV hash, which in some cases is used as
 // a non-associative substitute for XOR. Note that we multiply the prime with
 // the full 32-bit input, in contrast with the FNV-1 spec which multiplies the

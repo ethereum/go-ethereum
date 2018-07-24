@@ -192,25 +192,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.fileStore = storage.NewFileStore(netStore, self.config.FileStoreParams)
 
 	var resourceHandler *mru.Handler
-	rhparams := &mru.HandlerParams{
-		// TODO: config parameter to set limits
-		QueryMaxPeriods: &mru.LookupParams{
-			Limit: false,
-		},
-		Signer: &mru.GenericSigner{
-			PrivKey: self.privateKey,
-		},
-	}
-	if resolver != nil {
-		resolver.SetNameHash(ens.EnsNode)
-		// Set HeaderGetter and OwnerValidator interfaces to resolver only if it is not nil.
-		rhparams.HeaderGetter = resolver
-		rhparams.OwnerValidator = resolver
-	} else {
-		log.Warn("No ETH API specified, resource updates will use block height approximation")
-		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.HeaderGetter = mru.NewBlockEstimator()
-	}
+	rhparams := &mru.HandlerParams{}
+
 	resourceHandler, err = mru.NewHandler(rhparams)
 	if err != nil {
 		return nil, err

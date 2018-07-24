@@ -360,7 +360,7 @@ func TestVoting(t *testing.T) {
 		for j, vote := range tt.votes {
 			headers[j] = &types.Header{
 				Number:   big.NewInt(int64(j) + 1),
-				Time:     big.NewInt(int64(j) * int64(blockPeriod)),
+				Time:     big.NewInt(int64(j) * 15),
 				Coinbase: accounts.address(vote.voted),
 				Extra:    make([]byte, extraVanity+extraSeal),
 			}
