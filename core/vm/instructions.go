@@ -665,6 +665,34 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	return nil, nil
 }
 
+func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		endowment    = stack.pop()
+		offset, size = stack.pop(), stack.pop()
+		salt         = stack.pop()
+		input        = memory.Get(offset.Int64(), size.Int64())
+		gas          = contract.Gas
+	)
+
+	// Apply EIP150
+	gas -= gas / 64
+	contract.UseGas(gas)
+	res, addr, returnGas, suberr := evm.Create2(contract, input, gas, endowment, salt)
+	// Push item on the stack based on the returned error.
+	if suberr != nil {
+		stack.push(evm.interpreter.intPool.getZero())
+	} else {
+		stack.push(addr.Big())
+	}
+	contract.Gas += returnGas
+	evm.interpreter.intPool.put(endowment, offset, size, salt)
+
+	if suberr == errExecutionReverted {
+		return res, nil
+	}
+	return nil, nil
+}
+
 func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// Pop gas. The actual gas in in evm.callGasTemp.
 	evm.interpreter.intPool.put(stack.pop())
