@@ -60,15 +60,6 @@ func GOPATH() string {
 	return os.Getenv("GOPATH")
 }
 
-// VERSION returns the content of a VERSION file.
-func VERSION(path string) string {
-	version, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(bytes.TrimSpace(version))
-}
-
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.
