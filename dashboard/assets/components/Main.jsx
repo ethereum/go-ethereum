@@ -89,9 +89,17 @@ class Main extends Component<Props> {
 		let children = null;
 		switch (active) {
 		case MENU.get('home').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('chain').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('txpool').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('network').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('system').id:
 			children = <div>Work in progress.</div>;
 			break;

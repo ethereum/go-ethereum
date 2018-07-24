@@ -56,7 +56,14 @@ type TxPoolMessage struct {
 }
 
 type NetworkMessage struct {
-	/* TODO (kurkomisi) */
+	Peers   []*Peer `json:"peers,omitempty"`
+	Changed []string `json:"changed,omitempty"`
+}
+
+type Peer struct {
+	ID      string `json:"id,omitempty"`
+	Ingress int64  `json:"ingress,omitempty"`
+	Egress  int64  `json:"egress,omitempty"`
 }
 
 type SystemMessage struct {

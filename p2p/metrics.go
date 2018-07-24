@@ -29,122 +29,140 @@ import (
 	"sync/atomic"
 )
 
-var (
-	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/InboundConnects", nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/OutboundConnects", nil)
-	TrafficMeter        = newTrafficMeter()
-	nextDefaultID       uint32
-)
-
 const (
 	IngressPrefix = "p2p/InboundTraffic"
 	EgressPrefix  = "p2p/OutboundTraffic"
 )
 
+var (
+	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/InboundConnects", nil)
+	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/OutboundConnects", nil)
+
+	PeerIngressRegistry   = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, IngressPrefix+"/")
+	PeerEgressRegistry    = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, EgressPrefix+"/")
+	TrafficMeterCollector = newTrafficMeterCollector()
+
+	nextDefaultID uint32
+)
+
 type trafficMeter struct {
-	peerIngress   map[string]metrics.Meter
-	peerEgress    map[string]metrics.Meter
-	commonIngress metrics.Meter
-	commonEgress  metrics.Meter
-	changed       map[string]string
-	lock          sync.RWMutex
-	cLock         sync.RWMutex
+	ingress metrics.Meter
+	egress  metrics.Meter
 }
 
-// Create a new registry.
-func newTrafficMeter() *trafficMeter {
-	return &trafficMeter{
-		peerIngress:   make(map[string]metrics.Meter),
-		peerEgress:    make(map[string]metrics.Meter),
-		commonIngress: metrics.NewRegisteredMeter("p2p/InboundTraffic", nil),
-		commonEgress:  metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil),
-		changed:       make(map[string]string),
+type trafficMeterCollector struct {
+	common  *trafficMeter
+	peers   map[string]*trafficMeter
+	changed []string
+
+	lock  sync.RWMutex
+	cLock sync.Mutex
+}
+
+func newTrafficMeterCollector() *trafficMeterCollector {
+	return &trafficMeterCollector{
+		common: &trafficMeter{
+			ingress: metrics.NewRegisteredMeter(IngressPrefix, nil),
+			egress:  metrics.NewRegisteredMeter(EgressPrefix, nil),
+		},
+		peers:   make(map[string]*trafficMeter),
+		changed: make([]string, 0, 128),
 	}
 }
 
-func (tm *trafficMeter) register(id string, ingressMeter, egressMeter metrics.Meter) error {
-	if ingressMeter == nil && egressMeter == nil {
-		tm.lock.Lock()
-		tm.peerIngress[id] = metrics.NewRegisteredMeter(fmt.Sprintf("%s/%s", IngressPrefix, id), nil)
-		tm.peerEgress[id] = metrics.NewRegisteredMeter(fmt.Sprintf("%s/%s", EgressPrefix, id), nil)
-		tm.lock.Unlock()
+func (tmc *trafficMeterCollector) register(id string, tm *trafficMeter) error {
+	if tm == nil {
+		peer := &trafficMeter{
+			ingress: metrics.NewRegisteredMeter(id, PeerIngressRegistry),
+			egress:  metrics.NewRegisteredMeter(id, PeerEgressRegistry),
+		}
+		tmc.lock.Lock()
+		tmc.peers[id] = peer
+		tmc.lock.Unlock()
 		return nil
 	}
-	if ingressMeter == nil || egressMeter == nil {
-		return errors.New("Meter is not set")
+	if tm.ingress == nil || tm.egress == nil {
+		return errors.New("Meter is not set correctly")
 	}
-	if err := metrics.Register(fmt.Sprintf("%s/%s", IngressPrefix, id), ingressMeter); err != nil {
+	if err := PeerIngressRegistry.Register(id, tm.ingress); err != nil {
 		return err
 	}
-	if err := metrics.Register(fmt.Sprintf("%s/%s", EgressPrefix, id), egressMeter); err != nil {
-		metrics.Unregister(fmt.Sprintf("%s/%s", IngressPrefix, id))
+	if err := PeerEgressRegistry.Register(id, tm.egress); err != nil {
+		PeerIngressRegistry.Unregister(id)
 		return err
 	}
-	tm.lock.Lock()
-	tm.peerIngress[id] = ingressMeter
-	tm.peerEgress[id] = egressMeter
-	tm.lock.Unlock()
+	tmc.lock.Lock()
+	tmc.peers[id] = tm
+	tmc.lock.Unlock()
 	return nil
 }
 
-func (tm *trafficMeter) delete(id string) {
-	tm.lock.Lock()
-	delete(tm.peerIngress, id)
-	delete(tm.peerEgress, id)
-	tm.lock.Unlock()
-}
-func (tm *trafficMeter) unregister(old, new string) {
-	metrics.Unregister(fmt.Sprintf("%s/%s", IngressPrefix, old))
-	metrics.Unregister(fmt.Sprintf("%s/%s", EgressPrefix, old))
-	tm.delete(old)
-	tm.cLock.Lock()
-	tm.changed[old] = new
-	tm.cLock.Unlock()
+func (tmc *trafficMeterCollector) unregister(old, new string) {
+	PeerIngressRegistry.Unregister(old)
+	PeerEgressRegistry.Unregister(old)
+
+	tmc.lock.Lock()
+	delete(tmc.peers, old)
+	tmc.lock.Unlock()
+
+	tmc.cLock.Lock()
+	tmc.changed = append(tmc.changed, old, new)
+	tmc.cLock.Unlock()
 }
 
-func (tm *trafficMeter) changeID(old, new string) error {
-	tm.lock.RLock()
-	irm, oki := tm.peerIngress[old]
-	erm, oke := tm.peerEgress[old]
-	tm.lock.RUnlock()
-	if !oki || !oke {
+func (tmc *trafficMeterCollector) changeID(old, new string) error {
+	tmc.lock.RLock()
+	peer, ok := tmc.peers[old]
+	tmc.lock.RUnlock()
+	if !ok {
 		return errors.New(fmt.Sprintf("No meter with id %s", old))
 	}
-	if err := tm.register(new, irm, erm); err != nil {
+	if err := tmc.register(new, peer); err != nil {
 		return err
 	}
-	tm.unregister(old, new)
+	tmc.unregister(old, new)
 	return nil
 }
 
-func (tm *trafficMeter) markIngress(id string, n int64) {
-	tm.commonIngress.Mark(n)
-	tm.lock.RLock()
-	rm, ok := tm.peerIngress[id]
-	tm.lock.RUnlock()
+func (tmc *trafficMeterCollector) markIngress(id string, n int64) {
+	tmc.common.ingress.Mark(n)
+	tmc.lock.RLock()
+	peer, ok := tmc.peers[id]
+	tmc.lock.RUnlock()
 	if ok {
-		rm.Mark(n)
+		peer.ingress.Mark(n)
 	}
 }
 
-func (tm *trafficMeter) markEgress(id string, n int64) {
-	tm.commonEgress.Mark(n)
-	tm.lock.RLock()
-	rm, ok := tm.peerEgress[id]
-	tm.lock.RUnlock()
+func (tmc *trafficMeterCollector) markEgress(id string, n int64) {
+	tmc.common.egress.Mark(n)
+	tmc.lock.RLock()
+	peer, ok := tmc.peers[id]
+	tmc.lock.RUnlock()
 	if ok {
-		rm.Mark(n)
+		peer.egress.Mark(n)
 	}
 }
 
-func (tm *trafficMeter) GetIDs() []string {
-	ids := make([]string, 0, len(tm.peerIngress))
-	tm.lock.RLock()
-	for id := range tm.peerIngress {
+func (tmc *trafficMeterCollector) GetIDs() []string {
+	tmc.lock.RLock()
+	ids := make([]string, 0, len(tmc.peers))
+	for id := range tmc.peers {
 		ids = append(ids, id)
 	}
-	tm.lock.RUnlock()
+	tmc.lock.RUnlock()
 	return ids
+}
+
+func (tmc *trafficMeterCollector) GetAndClearChanged() []string {
+	tmc.cLock.Lock()
+	defer tmc.cLock.Unlock()
+
+	changed := make([]string, len(tmc.changed))
+	copy(changed, tmc.changed)
+	tmc.changed = tmc.changed[:0]
+
+	return changed
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
@@ -169,7 +187,7 @@ func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
 		egressConnectMeter.Mark(1)
 	}
 	id := fmt.Sprintf("unidentified_%d", atomic.AddUint32(&nextDefaultID, 1))
-	TrafficMeter.register(id, nil, nil)
+	TrafficMeterCollector.register(id, nil)
 	return &meteredConn{Conn: conn, id: id}
 }
 
@@ -177,7 +195,7 @@ func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
 // traffic meter along the way.
 func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
-	TrafficMeter.markIngress(c.id, int64(n))
+	TrafficMeterCollector.markIngress(c.id, int64(n))
 	return n, err
 }
 
@@ -185,20 +203,19 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 // egress traffic meter along the way.
 func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
-	TrafficMeter.markEgress(c.id, int64(n))
+	TrafficMeterCollector.markEgress(c.id, int64(n))
 	return n, err
 }
 
+func (c *meteredConn) Close() error {
+	TrafficMeterCollector.unregister(c.id, "")
+	return c.Conn.Close()
+}
+
 func (c *meteredConn) setPeerID(id string) {
-	if err := TrafficMeter.changeID(c.id, id); err != nil {
+	if err := TrafficMeterCollector.changeID(c.id, id); err != nil {
 		log.Warn("Failed to set peer id", "id", fmt.Sprintf("%s...%s", id[:6], id[len(id)-6:]), "err", err)
 		return
 	}
 	c.id = id
-}
-
-func (c *meteredConn) Close() error {
-	TrafficMeter.unregister(c.id, "")
-	fmt.Println("Close", c.id)
-	return c.Conn.Close()
 }

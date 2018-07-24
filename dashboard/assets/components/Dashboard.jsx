@@ -88,7 +88,10 @@ const defaultContent: () => Content = () => ({
 	home:    {},
 	chain:   {},
 	txpool:  {},
-	network: {},
+	network: {
+		peers:   [],
+		changed: [],
+	},
 	system:  {
 		activeMemory:   [],
 		virtualMemory:  [],
@@ -119,7 +122,10 @@ const updaters = {
 	home:    null,
 	chain:   null,
 	txpool:  null,
-	network: null,
+	network: {
+		peers:   appender(200),
+		changed: appender(200),
+	},
 	system:  {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),
@@ -198,6 +204,9 @@ class Dashboard extends Component<Props, State> {
 				return;
 			}
 			this.update(msg);
+			if (msg.network) {
+				console.log(msg.network);
+			}
 		};
 		server.onclose = () => {
 			this.setState({server: null});

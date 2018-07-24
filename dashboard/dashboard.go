@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
+	"encoding/json"
 )
 
 const (
@@ -261,8 +262,8 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 
 // meterCollector returns a function, which retrieves a specific meter.
 func meterCollector(name string) func() int64 {
-	if metric := metrics.DefaultRegistry.Get(name); metric != nil {
-		m := metric.(metrics.Meter)
+	if meter := metrics.DefaultRegistry.Get(name); meter != nil {
+		m := meter.(metrics.Meter)
 		return func() int64 {
 			return m.Count()
 		}
@@ -373,6 +374,22 @@ func (db *Dashboard) collectData() {
 			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
 			db.lock.Unlock()
 
+			peerIDs := p2p.TrafficMeterCollector.GetIDs()
+			nm := &NetworkMessage{
+				Changed: p2p.TrafficMeterCollector.GetAndClearChanged(),
+			}
+			for _, id := range peerIDs {
+				nm.Peers = append(nm.Peers, &Peer{
+					ID:      id[len(id)-6:],
+					Ingress: p2p.PeerIngressRegistry.Get(id).(metrics.Meter).Count(),
+					Egress:  p2p.PeerEgressRegistry.Get(id).(metrics.Meter).Count(),
+				})
+				fmt.Println(metrics.DefaultRegistry.Get(fmt.Sprintf("%s/%s", p2p.IngressPrefix, id)).(metrics.Meter).Count())
+				fmt.Println(metrics.DefaultRegistry.Get(fmt.Sprintf("%s/%s", p2p.EgressPrefix, id)).(metrics.Meter).Count())
+			}
+			s, _ := json.Marshal(nm)
+			fmt.Println(string(s))
+
 			db.sendToAll(&Message{
 				System: &SystemMessage{
 					ActiveMemory:   ChartEntries{activeMemory},
@@ -384,11 +401,8 @@ func (db *Dashboard) collectData() {
 					DiskRead:       ChartEntries{diskRead},
 					DiskWrite:      ChartEntries{diskWrite},
 				},
+				Network: nm,
 			})
-			for _, id := range p2p.TrafficMeter.GetIDs() {
-				fmt.Println(id)
-			}
-			fmt.Println()
 		}
 	}
 }
