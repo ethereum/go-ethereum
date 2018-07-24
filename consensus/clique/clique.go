@@ -770,8 +770,12 @@ func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.Sta
 		if err != nil {
 			return err
 		}
-		log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
+		log.Info("XDC - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 	}
 
 	return nil
+}
+
+func (c *Clique) RecoverSigner(header *types.Header) (common.Address, error) {
+	return ecrecover(header, c.signatures)
 }

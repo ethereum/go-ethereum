@@ -179,8 +179,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
 	// Inject hook for send tx sign to smartcontract after insert block into chain.
-	eth.protocolManager.fetcher.CreateTransactionSign(eth.chainConfig, eth.txPool, eth.accountManager)
-	
+	eth.protocolManager.fetcher.CreateTransactionSign(eth.chainConfig, eth.txPool, eth.accountManager, eth.engine.(*clique.Clique))	
 	return eth, nil
 }
 
