@@ -25,15 +25,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/common/math"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/core/vm"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
+	"github.com/ShyftNetwork/go-empyrean/tests"
 )
 
 // To generate a new callTracer test, copy paste the makeTest method below into

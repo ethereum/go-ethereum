@@ -26,13 +26,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/accounts"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/event"
+	"github.com/ShyftNetwork/go-empyrean/internal/debug"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/p2p"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 	"github.com/prometheus/prometheus/util/flock"
 )
 

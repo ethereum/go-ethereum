@@ -1,6 +1,6 @@
 package ethObjectInterface
 
-import "github.com/ethereum/go-ethereum/eth"
+import "github.com/ShyftNetwork/go-empyrean/eth"
 
 //var ethObject *eth.Ethereum
 

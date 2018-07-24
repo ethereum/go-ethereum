@@ -22,11 +22,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/internal/ethapi"
+	"github.com/ShyftNetwork/go-empyrean/params"
+	"github.com/ShyftNetwork/go-empyrean/rpc"
 )
 
 var maxPrice = big.NewInt(500 * params.Shannon)

@@ -25,15 +25,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
+	ethereum "github.com/ShyftNetwork/go-empyrean"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/ethdb"
+	"github.com/ShyftNetwork/go-empyrean/event"
+	"github.com/ShyftNetwork/go-empyrean/log"
+	"github.com/ShyftNetwork/go-empyrean/metrics"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 var (

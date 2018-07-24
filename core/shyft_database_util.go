@@ -8,12 +8,11 @@ import (
 	"database/sql"
 	"log"
 	_ "github.com/lib/pq"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/shyfttracerinterface"
 	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer

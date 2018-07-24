@@ -2,16 +2,16 @@ package shyftdb
 
 import (
 	"testing"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/eth"
 	"math/big"
 	//"time"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/consensus/ethash"
 )
 
 type ShyftTracer struct {}

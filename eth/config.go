@@ -24,13 +24,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"github.com/ShyftNetwork/go-empyrean/core"
+	"github.com/ShyftNetwork/go-empyrean/eth/downloader"
+	"github.com/ShyftNetwork/go-empyrean/eth/gasprice"
+	"github.com/ShyftNetwork/go-empyrean/params"
 )
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
