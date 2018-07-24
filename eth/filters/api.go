@@ -564,7 +564,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 func decodeAddress(s string) (common.Address, error) {
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.AddressLength {
-		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for address", len(b), common.AddressLength)
 	}
 	return common.BytesToAddress(b), err
 }
@@ -572,7 +572,7 @@ func decodeAddress(s string) (common.Address, error) {
 func decodeTopic(s string) (common.Hash, error) {
 	b, err := hexutil.Decode(s)
 	if err == nil && len(b) != common.HashLength {
-		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
 }
