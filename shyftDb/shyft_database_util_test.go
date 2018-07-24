@@ -9,9 +9,9 @@ import (
 	"math/big"
 	//"time"
 	"encoding/json"
-	"fmt"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"strconv"
 )
 
 type ShyftTracer struct {}
@@ -66,12 +66,11 @@ func TestBlock(t *testing.T) {
 		receipts := []*types.Receipt{receipt}
 		block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
 
-		fmt.Println("++++++HERE")
 		// Write and verify the block in the database
 		if err := core.SWriteBlock(block, receipts); err != nil {
 			t.Fatalf("Failed to write block into database: %v", err)
 		}
-		fmt.Println("++++++AND HERE")
+
 		sqldb, err := core.DBConnection()
 		if err != nil {
 			panic(err)
@@ -264,7 +263,7 @@ t.Run("TestContractCreationTx", func (t *testing.T) {
 		if tx.Hash().String() != data.TxHash {
 			t.Fatalf("txHash [%v]: tx Hash not found", tx.Hash().String())
 		}
-		if contractAddressFromReciept != data.To {
+		if contractAddressFromReciept != data.ToGet {
 			t.Fatalf("Contract Addr [%v]: Contract addr not found", contractAddressFromReciept)
 		}
 		if tx.From().String() != data.From {
@@ -366,7 +365,7 @@ t.Run("TestTransactionsToReturnTransactions", func(t *testing.T) {
 		if tx.From().String() != data.From {
 			t.Fatalf("From Addr [%v]: From addr not found", tx.From().String())
 		}
-		if tx.To().String() != data.To {
+		if tx.To().String() != data.ToGet {
 			t.Fatalf("To Addr [%v]: To addr not found", tx.To().String())
 		}
 		if tx.Nonce() != data.Nonce {
@@ -429,17 +428,17 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 	toAddr3 := common.BytesToAddress([]byte{0x33})
 
 	toAmount1 := big.NewInt(111)
-	var toAmountPrev1 uint64 = 3968686868
+	var toAmountPrev1 string = "3968686868"
 
 	sqldb, err := core.DBConnection()
 	if (err != nil) {
 		panic(err)
 	}
 
-	core.CreateAccount(sqldb, toAddr1.Hex(), toAmountPrev1, 1)
-	core.CreateAccount(sqldb, toAddr2.Hex(), 423798729847, 1)
-	core.CreateAccount(sqldb, toAddr3.Hex(), 0, 1)
-	core.CreateAccount(sqldb, "0x71562b71999873DB5b286dF957af199Ec94617F7", 3968686868, 1)
+	core.CreateAccount(sqldb, toAddr1.Hex(), toAmountPrev1, "1")
+	core.CreateAccount(sqldb, toAddr2.Hex(), "423798729847", "1")
+	core.CreateAccount(sqldb, toAddr3.Hex(), "0", "1")
+	core.CreateAccount(sqldb, "0x71562b71999873DB5b286dF957af199Ec94617F7", "3968686868", "1")
 
 	//Nonce, To Address,Value, GasLimit, Gasprice, data
 	tx1 := types.NewTransaction(1, toAddr1, toAmount1, 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
@@ -474,11 +473,11 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 	accountAddrTo, _ := core.InnerSGetAccount(sqldb, toAddr1.String())
 	//ewAccountNonceReceiver.Add(accountR, nonceIncrement)
 	addedAmount := new(big.Int)
-	b := new(big.Int).SetUint64(toAmountPrev1)
+	toAmountPrevious1, _ := strconv.ParseUint(toAmountPrev1, 10, 64)
+	b := new(big.Int).SetUint64(toAmountPrevious1)
 	addedAmount.Add(toAmount1, b)
 	toBalance := new(big.Int)
-	toBalance, l := toBalance.SetString(accountAddrTo.Balance, 10)
-	fmt.Println(l)
+	toBalance, _ = toBalance.SetString(accountAddrTo.Balance, 10)
 
 	if toBalance.Cmp(addedAmount) != 0 {
 		t.Fatalf("To address balance [%v]: To address balance not correct FFO", toBalance)
@@ -499,17 +498,18 @@ t.Run("TestAccountsToReturnAccounts",func(t *testing.T) {
 	//	if strconv.FormatUint(tx.Nonce(), 10) != accountDataTo.AccountNonce {
 	//		t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataTo.AccountNonce)
 	//	}
-	//	if getAllAccountTxs := core.SGetAccountTxs(sqldb, tx.To().String()); len(getAllAccountTxs) == 0 {
-	//		t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
-	//	}
 	//}
+
+	if getAllAccountTxs := core.SGetAccountTxs(sqldb, toAddr1.String()); len(getAllAccountTxs) == 0 {
+		t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
+	}
 
 	if getAllAccounts := core.SGetAllAccounts(sqldb); len(getAllAccounts) == 0 {
 		t.Fatalf("GetAllAccounts [%v]: GetAllAccounts did not return correctly", getAllAccounts)
 	}
-	//ClearTables()
+	ClearTables()
 })
 
-	//ClearTables()
+	ClearTables()
 }
 

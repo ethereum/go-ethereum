@@ -34,7 +34,7 @@ func SGetAllBlocks(sqldb *sql.DB) string {
 			GasLimit: 		gasLimit,
 			TxCount: 		txCount,
 			UncleCount: 	uncleCount,
-			Age: 			age,
+			AgeGet: 		age,
 			ParentHash:		parentHash,
 			UncleHash:		uncleHash,
 			Difficulty:		difficulty,
@@ -70,7 +70,7 @@ func SGetBlock(sqldb *sql.DB, blockNumber string) string {
 		GasLimit: 	gasLimit,
 		TxCount: 	txCount,
 		UncleCount: uncleCount,
-		Age: 		age,
+		AgeGet: 	age,
 		ParentHash:	parentHash,
 		UncleHash:	uncleHash,
 		Difficulty:	difficulty,
@@ -100,7 +100,7 @@ func SGetRecentBlock(sqldb *sql.DB) string {
 		GasLimit: 	gasLimit,
 		TxCount: 	txCount,
 		UncleCount: uncleCount,
-		Age: 		age,
+		AgeGet: 	age,
 		ParentHash:	parentHash,
 		UncleHash:	uncleHash,
 		Difficulty:	difficulty,
@@ -135,7 +135,7 @@ func SGetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    	 txhash,
-			To:        	 to_addr,
+			ToGet:       to_addr,
 			From:      	 from_addr,
 			BlockHash: 	 blockhash,
 			BlockNumber: blocknumber,
@@ -177,20 +177,20 @@ func SGetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
 			&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num,)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     hash,
-			Coinbase: coinbase,
-			GasUsed: gasUsed,
-			GasLimit: gasLimit,
-			TxCount: txCount,
+			Hash:     	hash,
+			Coinbase: 	coinbase,
+			GasUsed: 	gasUsed,
+			GasLimit: 	gasLimit,
+			TxCount: 	txCount,
 			UncleCount: uncleCount,
-			Age: age,
-			ParentHash:parentHash,
-			UncleHash:uncleHash,
-			Difficulty:difficulty,
-			Size: size,
-			Nonce:nonce,
-			Rewards: rewards,
-			Number:   num,
+			AgeGet: 	age,
+			ParentHash:	parentHash,
+			UncleHash:	uncleHash,
+			Difficulty:	difficulty,
+			Size: 		size,
+			Nonce:		nonce,
+			Rewards: 	rewards,
+			Number:   	num,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -222,7 +222,7 @@ func SGetAllTransactions(sqldb *sql.DB) string {
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    	 txhash,
-			To:        	 to_addr,
+			ToGet:       to_addr,
 			From:      	 from_addr,
 			BlockHash: 	 blockhash,
 			BlockNumber: blocknumber,
@@ -260,7 +260,7 @@ func SGetTransaction(sqldb *sql.DB, txHash string) string {
 
 	tx := ShyftTxEntryPretty{
 		TxHash:      txhash,
-		To:        	 to_addr,
+		ToGet:       to_addr,
 		From:      	 from_addr,
 		BlockHash: 	 blockhash,
 		BlockNumber: blocknumber,
@@ -362,7 +362,7 @@ func SGetAccountTxs(sqldb *sql.DB, address string) string {
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    	 txhash,
-			To:        	 to_addr,
+			ToGet:       to_addr,
 			From:      	 from_addr,
 			BlockHash:   blockhash,
 			BlockNumber: blocknumber,

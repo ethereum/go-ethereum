@@ -32,6 +32,7 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/ShyftNetwork/go-empyrean/log"
 	"gopkg.in/olebedev/go-duktape.v3"
+	"strconv"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -578,16 +579,16 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 
 //@NOTE:SHYFT
 type Internals struct {
-	Type string
-	From string
-	To string
-	Value string
-	Gas string
+	Type 	string
+	From 	string
+	To 		string
+	Value 	string
+	Gas 	string
 	GasUsed string
-	Input string
-	Output string
-	Time string
-	Calls []*Internals
+	Input 	string
+	Output 	string
+	Time 	string
+	Calls 	[]*Internals
 }
 
 //@NOTE:SHYFT
@@ -599,10 +600,12 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 
 	gas, _ := hexutil.DecodeUint64(i.Gas)
 	gasUsed, _ := hexutil.DecodeUint64(i.GasUsed)
+	value, _ := hexutil.DecodeUint64(i.Value)
+	amount := strconv.FormatUint(value, 10)
 
 	var returnValue string
 	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
-	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, i.Value, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
+	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, amount, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
 
 	if qerr != nil {
 		fmt.Println(qerr)
