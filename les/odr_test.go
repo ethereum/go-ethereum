@@ -36,6 +36,26 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type chtTestFn func(ctx context.Context, bc *core.BlockChain, lc *light.LightChain, number uint64) []byte
+
+func TestChtGetHeadersLes1(t *testing.T) { testCht(t, 1, chtGetHeader) }
+
+func TestChtGetHeadersLes2(t *testing.T) { testCht(t, 2, chtGetHeader) }
+
+func chtGetHeader(ctx context.Context, bc *core.BlockChain, lc *light.LightChain, number uint64) []byte {
+	var header *types.Header
+	if bc != nil {
+		header = bc.GetHeaderByNumber(number)
+	} else {
+		header, _ = lc.GetHeaderByNumberOdr(ctx, number)
+	}
+	if header == nil {
+		return nil
+	}
+	rlp, _ := rlp.EncodeToBytes(header)
+	return rlp
+}
+
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
 
 func TestOdrGetBlockLes1(t *testing.T) { testOdr(t, 1, 1, odrGetBlock) }
@@ -157,6 +177,61 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		}
 	}
 	return res
+}
+
+// testCht tests cht requests whose validation guaranteed by calculated cht root.
+func testCht(t *testing.T, protocol int, fn chtTestFn) {
+	// Assemble the test environment
+	config := light.TestServerIndexerConfig
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bs, _, _ := bIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 8 && bs >= 8 && bts >= 1 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	server, client, tearDown := newClientServerEnv(t, int(config.ChtSize*8+config.ChtConfirm), protocol, waitIndexers, false)
+	defer func() {
+		if tearDown != nil {
+			tearDown()
+		}
+	}()
+
+	// Add trusted checkpoint for client side indexers.
+	cs, _, head := server.chtIndexer.Sections()
+	light.StoreChtRoot(client.db, cs/8-1, head, light.GetChtRoot(server.db, cs-1, head))
+	client.chtIndexer.AddKnownSectionHead(cs/8-1, head)
+	bts, _, head := server.bloomTrieIndexer.Sections()
+	light.StoreBloomTrieRoot(client.db, bts-1, head, light.GetBloomTrieRoot(server.db, bts-1, head))
+	client.bloomTrieIndexer.AddKnownSectionHead(bts-1, head)
+
+	// Create connected peer pair.
+	peer, err1, lPeer, err2 := newTestPeerPair("peer", protocol, server.pm, client.pm)
+	select {
+	case <-time.After(time.Millisecond * 100):
+	case err := <-err1:
+		t.Fatalf("peer 1 handshake error: %v", err)
+	case err := <-err2:
+		t.Fatalf("peer 2 handshake error: %v", err)
+	}
+	server.rPeer, client.rPeer = peer, lPeer
+
+	test := func() {
+		for i := uint64(0); i <= config.ChtSize*8-1; i++ {
+			h1 := fn(light.NoOdr, server.pm.blockchain.(*core.BlockChain), nil, i)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			h2 := fn(ctx, nil, client.pm.blockchain.(*light.LightChain), i)
+			if !bytes.Equal(h1, h2) {
+				t.Error("cht mismatch")
+			}
+			cancel()
+		}
+	}
+	test()
 }
 
 // testOdr tests odr requests whose validation guaranteed by block headers.

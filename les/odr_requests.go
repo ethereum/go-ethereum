@@ -365,7 +365,6 @@ func (r *ChtRequest) GetCost(peer *peer) uint64 {
 func (r *ChtRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
-
 	return peer.headInfo.Number >= config.ChtConfirm && r.ChtNum <= (peer.headInfo.Number-config.ChtConfirm)/config.ChtSize
 }
 
@@ -394,7 +393,7 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer, config *light.IndexerConf
 			}
 			blockNum := binary.BigEndian.Uint64(r.Key)
 			// convert HelperTrie request to old CHT request
-			reqsV1 = append(reqsV1, ChtReq{ChtNum: (r.TrieIdx+1)*(config.ChtSize/config.PairChtSize), BlockNum: blockNum, FromLevel: r.FromLevel})
+			reqsV1 = append(reqsV1, ChtReq{ChtNum: (r.TrieIdx + 1) * (config.ChtSize / config.PairChtSize), BlockNum: blockNum, FromLevel: r.FromLevel})
 		}
 		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), reqsV1)
 	case lpv2:
@@ -409,7 +408,6 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer, config *light.IndexerConf
 // to the request (implementation of LesOdrRequest)
 func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	log.Debug("Validating CHT", "cht", r.ChtNum, "block", r.Numbers)
-
 	switch msg.MsgType {
 	case MsgHeaderProofs: // LES/1 backwards compatibility
 		resps := msg.Obj.([]ChtResp)
@@ -428,6 +426,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 			binary.BigEndian.PutUint64(encNumber[:], num)
 			value, _, err := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(resp.Proof).NodeSet())
 			if err != nil {
+				fmt.Println(err)
 				return err
 			}
 			var node light.ChtNode
