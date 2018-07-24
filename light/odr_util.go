@@ -70,6 +70,63 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	return r.Headers[0], nil
 }
 
+func GetHeadersByNumber(ctx context.Context, odr OdrBackend, numbers []uint64) ([]*types.Header, error) {
+	var (
+		db      = odr.Database()
+		headers = make([]*types.Header, len(numbers))
+		missing []int
+	)
+
+	for i, number := range numbers {
+		hash := rawdb.ReadCanonicalHash(db, number)
+		if (hash != common.Hash{}) {
+			// if there is a canonical hash, there is a header too
+			header := rawdb.ReadHeader(db, hash, number)
+			if header == nil {
+				panic("Canonical hash present but header not found")
+			}
+			headers[i] = header
+		} else {
+			missing = append(missing, i)
+		}
+	}
+
+	var (
+		chtCount, sectionHeadNum uint64
+		sectionHead              common.Hash
+	)
+	if odr.ChtIndexer() != nil {
+		chtCount, sectionHeadNum, sectionHead = odr.ChtIndexer().Sections()
+		canonicalHash := rawdb.ReadCanonicalHash(db, sectionHeadNum)
+		// if the CHT was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
+		for chtCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
+			chtCount--
+			if chtCount > 0 {
+				sectionHeadNum = chtCount*odr.IndexerConfig().ChtSize - 1
+				sectionHead = odr.ChtIndexer().SectionHead(chtCount - 1)
+				canonicalHash = rawdb.ReadCanonicalHash(db, sectionHeadNum)
+			}
+		}
+	}
+
+	reqs := make([]uint64, 0, len(missing))
+	for _, index := range missing {
+		if numbers[index] >= chtCount*odr.IndexerConfig().ChtSize {
+			return nil, ErrNoTrustedCht
+		}
+		reqs = append(reqs, numbers[index])
+	}
+	r := &ChtRequest{ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, Numbers: reqs}
+	if err := odr.Retrieve(ctx, r); err != nil {
+		return nil, err
+	}
+	// Assemble the final result
+	for i, index := range missing {
+		headers[index] = r.Headers[i]
+	}
+	return headers, nil
+}
+
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
 	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
 	if (hash != common.Hash{}) {

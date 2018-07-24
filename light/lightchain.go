@@ -462,6 +462,13 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	return GetHeaderByNumber(ctx, self.odr, number)
 }
 
+// GetHeadersByNumberOdr retrieves a batch of block headers from the database or network
+// by number, caching it (associated with its hash) if found.
+func (self *LightChain) GetHeadersByNumberOdr(ctx context.Context, numbers []uint64) ([]*types.Header, error) {
+	// TODO(rjl4935456442) Caching the read block headers.
+	return GetHeadersByNumber(ctx, self.odr, numbers)
+}
+
 // Config retrieves the header chain's chain configuration.
 func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
 

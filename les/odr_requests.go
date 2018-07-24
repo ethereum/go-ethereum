@@ -370,19 +370,20 @@ func (r *ChtRequest) CanSend(peer *peer, config *light.IndexerConfig) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *ChtRequest) Request(reqID uint64, peer *peer, config *light.IndexerConfig) error {
-	peer.Log().Debug("Requesting CHT", "cht", r.ChtNum, "block", r.Numbers)
+	peer.Log().Debug("Requesting CHT", "cht", r.ChtNum, "blocks", r.Numbers)
+
 	var (
 		encNum [8]byte
-		reqs   = make([]HelperTrieReq, 0, len(r.Numbers))
+		reqs   = make([]HelperTrieReq, len(r.Numbers))
 	)
-	for _, num := range r.Numbers {
+	for i, num := range r.Numbers {
 		binary.BigEndian.PutUint64(encNum[:], num)
-		reqs = append(reqs, HelperTrieReq{
+		reqs[i] = HelperTrieReq{
 			Type:    htCanonical,
 			TrieIdx: r.ChtNum,
 			Key:     common.CopyBytes(encNum[:]),
 			AuxReq:  auxHeader,
-		})
+		}
 	}
 	switch peer.version {
 	case lpv1:
@@ -426,7 +427,6 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 			binary.BigEndian.PutUint64(encNumber[:], num)
 			value, _, err := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(resp.Proof).NodeSet())
 			if err != nil {
-				fmt.Println(err)
 				return err
 			}
 			var node light.ChtNode
