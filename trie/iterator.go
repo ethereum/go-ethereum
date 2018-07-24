@@ -21,7 +21,7 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ShyftNetwork/go-empyrean/common"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.
