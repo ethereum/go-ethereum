@@ -552,9 +552,9 @@ func isUnstableBuild(env build.Environment) bool {
 }
 
 type debPackage struct {
-	Name            string          // the name of the Debian package to produce, e.g. "ethereum", or "ethereum-swarm"
-	VersionFilePath string          // the relative path to the version file to be used for the package, e.g. "VERSION", or "swarm/VERSION"
-	Executables     []debExecutable // executables to be included in the package
+	Name        string          // the name of the Debian package to produce, e.g. "ethereum", or "ethereum-swarm"
+	Version     string          // the clean version of the debPackage, e.g. 1.8.12 or 0.3.0, without any metadata
+	Executables []debExecutable // executables to be included in the package
 }
 
 type debMetadata struct {
