@@ -387,10 +387,10 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer, config *light.IndexerConf
 		}
 		blockNum := binary.BigEndian.Uint64(req.Key)
 		// convert HelperTrie request to old CHT request
-		reqsV1 = ChtReq{ChtNum: (req.TrieIdx+1)*(config.ChtSize/config.PairChtSize) - 1, BlockNum: blockNum, FromLevel: req.FromLevel}
-		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []interface{}{reqsV1})
+		reqsV1 = ChtReq{ChtNum: (req.TrieIdx + 1) * (config.ChtSize / config.PairChtSize), BlockNum: blockNum, FromLevel: req.FromLevel}
+		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []ChtReq{reqsV1})
 	case lpv2:
-		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []interface{}{req})
+		return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []HelperTrieReq{req})
 	default:
 		panic(nil)
 	}
@@ -517,7 +517,7 @@ func (r *BloomRequest) Request(reqID uint64, peer *peer, config *light.IndexerCo
 			Key:     common.CopyBytes(encNumber[:]),
 		}
 	}
-	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []interface{}{reqs})
+	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), reqs)
 }
 
 // Valid processes an ODR request reply message from the LES network

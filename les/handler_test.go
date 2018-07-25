@@ -51,12 +51,8 @@ func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
 func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, downloader.MaxHashFetch+15, protocol, 0)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, tearDown := newServerEnv(t, downloader.MaxHashFetch+15, protocol, nil)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Create a "random" unknown hash for testing
@@ -183,12 +179,8 @@ func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
 func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	server, tearDown := newServerEnv(t, downloader.MaxBlockFetch+15, protocol, 0)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, tearDown := newServerEnv(t, downloader.MaxBlockFetch+15, protocol, nil)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Create a batch of tests for various scenarios
@@ -263,12 +255,8 @@ func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, 0)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, tearDown := newServerEnv(t, 4, protocol, nil)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	var codereqs []*CodeReq
@@ -299,12 +287,8 @@ func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, 0)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, tearDown := newServerEnv(t, 4, protocol, nil)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Collect the hashes to request, and the response to expect
@@ -329,12 +313,8 @@ func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
-	server, tearDown := newServerEnv(t, 4, protocol, 0)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, tearDown := newServerEnv(t, 4, protocol, nil)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	var (
@@ -391,23 +371,30 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 	config := light.TestServerIndexerConfig
 	frequency := config.ChtSize
 	if protocol == 2 {
-		frequency = config.ChtSize * 8
+		frequency = config.PairChtSize
 	}
 
-	server, tearDown := newServerEnv(t, int(frequency+config.ChtConfirm), protocol, 1)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		expectSections := frequency / config.ChtSize
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bs, _, _ := bIndexer.Sections()
+			if cs >= expectSections && bs >= expectSections {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-	}()
+	}
+	server, tearDown := newServerEnv(t, int(frequency+config.ChtConfirm), protocol, waitIndexers)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Assemble the proofs from the different protocols
-	header := bc.GetHeaderByNumber(config.ChtSize - 1)
+	header := bc.GetHeaderByNumber(frequency - 1)
 	rlp, _ := rlp.EncodeToBytes(header)
 
 	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, config.ChtSize-1)
+	binary.BigEndian.PutUint64(key, frequency-1)
 
 	proofsV1 := []ChtResp{{
 		Header: header,
@@ -417,7 +404,7 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 	}
 	switch protocol {
 	case 1:
-		root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
+		root := light.GetChtRoot(server.db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(server.db, light.ChtTablePrefix)))
 
 		var proof light.NodeList
@@ -425,18 +412,18 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		proofsV1[0].Proof = proof
 
 	case 2:
-		root := light.GetChtRoot(server.db, (config.ChtSize/config.PairChtSize)-1, bc.GetHeaderByNumber(config.ChtSize-1).Hash())
+		root := light.GetChtRoot(server.db, (frequency/config.ChtSize)-1, bc.GetHeaderByNumber(frequency-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(server.db, light.ChtTablePrefix)))
 		trie.Prove(key, 0, &proofsV2.Proofs)
 	}
 	// Assemble the requests for the different protocols
 	requestsV1 := []ChtReq{{
-		ChtNum:   1,
-		BlockNum: config.ChtSize - 1,
+		ChtNum:   frequency / config.ChtSize,
+		BlockNum: frequency - 1,
 	}}
 	requestsV2 := []HelperTrieReq{{
 		Type:    htCanonical,
-		TrieIdx: 0,
+		TrieIdx: frequency/config.PairChtSize - 1,
 		Key:     key,
 		AuxReq:  auxHeader,
 	}}
@@ -460,12 +447,20 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 // Tests that bloombits proofs can be correctly retrieved.
 func TestGetBloombitsProofs(t *testing.T) {
 	config := light.TestServerIndexerConfig
-	server, tearDown := newServerEnv(t, int(config.BloomSize+config.BloomConfirm), 2, 1)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
+
+	waitIndexers := func(cIndexer, bIndexer, btIndexer *core.ChainIndexer) {
+		for {
+			cs, _, _ := cIndexer.Sections()
+			bs, _, _ := bIndexer.Sections()
+			bts, _, _ := btIndexer.Sections()
+			if cs >= 8 && bs >= 8 && bts >= 1 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-	}()
+	}
+	server, tearDown := newServerEnv(t, int(config.BloomTrieSize+config.BloomTrieConfirm), 2, waitIndexers)
+	defer tearDown()
 	bc := server.pm.blockchain.(*core.BlockChain)
 
 	// Request and verify each bit of the bloom bits proofs
@@ -474,7 +469,8 @@ func TestGetBloombitsProofs(t *testing.T) {
 		key := make([]byte, 10)
 
 		binary.BigEndian.PutUint16(key[:2], uint16(bit))
-		binary.BigEndian.PutUint64(key[2:], config.BloomSize-1)
+		// Only the first bloom section has data.
+		binary.BigEndian.PutUint64(key[2:], 0)
 
 		requests := []HelperTrieReq{{
 			Type:    htBloomBits,
@@ -483,7 +479,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 		}}
 		var proofs HelperTrieResps
 
-		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomSize-1).Hash())
+		root := light.GetBloomTrieRoot(server.db, 0, bc.GetHeaderByNumber(config.BloomTrieSize-1).Hash())
 		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(server.db, light.BloomTrieTablePrefix)))
 		trie.Prove(key, 0, &proofs.Proofs)
 

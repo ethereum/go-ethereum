@@ -348,7 +348,7 @@ type TestEntity struct {
 }
 
 // newServerEnv creates a server testing environment with a connected test peer for testing purpose.
-func newServerEnv(t *testing.T, blocks int, protocol int, processSections uint64) (*TestEntity, func()) {
+func newServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*core.ChainIndexer, *core.ChainIndexer, *core.ChainIndexer)) (*TestEntity, func()) {
 	db := ethdb.NewMemDatabase()
 	cIndexer, bIndexer, btIndexer := testIndexers(db, light.TestServerIndexerConfig)
 
@@ -359,16 +359,10 @@ func newServerEnv(t *testing.T, blocks int, protocol int, processSections uint64
 	bIndexer.Start(pm.blockchain.(*core.BlockChain))
 
 	// Wait until indexers generate enough index data.
-	if processSections > 0 {
-		for {
-			cs, _, _ := cIndexer.Sections()
-			bs, _, _ := bIndexer.Sections()
-			if cs >= processSections && bs >= processSections {
-				break
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+	if waitIndexers != nil {
+		waitIndexers(cIndexer, bIndexer, btIndexer)
 	}
+
 	return &TestEntity{
 			db:               db,
 			tPeer:            peer,
@@ -386,7 +380,7 @@ func newServerEnv(t *testing.T, blocks int, protocol int, processSections uint64
 
 // newClientServerEnv creates a client/server arch environment with a connected les server and light client pair
 // for testing purpose.
-func newClientServerEnv(t *testing.T, blocks int, protocol int) (*TestEntity, *TestEntity, func()) {
+func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers func(*core.ChainIndexer, *core.ChainIndexer, *core.ChainIndexer), newPeer bool) (*TestEntity, *TestEntity, func()) {
 	db, ldb := ethdb.NewMemDatabase(), ethdb.NewMemDatabase()
 	peers, lPeers := newPeerSet(), newPeerSet()
 
@@ -411,13 +405,24 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int) (*TestEntity, *T
 	startIndexers(false, pm)
 	startIndexers(true, lpm)
 
-	peer, err1, lPeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
-	select {
-	case <-time.After(time.Millisecond * 100):
-	case err := <-err1:
-		t.Fatalf("peer 1 handshake error: %v", err)
-	case err := <-err2:
-		t.Fatalf("peer 2 handshake error: %v", err)
+	// Execute wait until function if it is specified.
+	if waitIndexers != nil {
+		waitIndexers(cIndexer, bIndexer, btIndexer)
+	}
+
+	var (
+		peer, lPeer *peer
+		err1, err2  <-chan error
+	)
+	if newPeer {
+		peer, err1, lPeer, err2 = newTestPeerPair("peer", protocol, pm, lpm)
+		select {
+		case <-time.After(time.Millisecond * 100):
+		case err := <-err1:
+			t.Fatalf("peer 1 handshake error: %v", err)
+		case err := <-err2:
+			t.Fatalf("peer 2 handshake error: %v", err)
+		}
 	}
 
 	return &TestEntity{

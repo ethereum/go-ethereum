@@ -162,12 +162,8 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 // testOdr tests odr requests whose validation guaranteed by block headers.
 func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	// Assemble the test environment
-	server, client, tearDown := newClientServerEnv(t, 4, protocol)
-	defer func() {
-		if tearDown != nil {
-			tearDown()
-		}
-	}()
+	server, client, tearDown := newClientServerEnv(t, 4, protocol, nil, true)
+	defer tearDown()
 	client.pm.synchronise(client.rPeer)
 
 	test := func(expFail uint64) {

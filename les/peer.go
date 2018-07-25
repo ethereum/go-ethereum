@@ -35,9 +35,10 @@ import (
 )
 
 var (
-	errClosed            = errors.New("peer set is closed")
-	errAlreadyRegistered = errors.New("peer is already registered")
-	errNotRegistered     = errors.New("peer is not registered")
+	errClosed             = errors.New("peer set is closed")
+	errAlreadyRegistered  = errors.New("peer is already registered")
+	errNotRegistered      = errors.New("peer is not registered")
+	errInvalidHelpTrieReq = errors.New("invalid help trie request")
 )
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
@@ -283,12 +284,20 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 }
 
 // RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
-func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []interface{}) error {
-	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
+func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, data interface{}) error {
 	switch p.version {
 	case lpv1:
+		reqs, ok := data.([]ChtReq)
+		if !ok {
+			return errInvalidHelpTrieReq
+		}
+		p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
 		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
 	case lpv2:
+		reqs, ok := data.([]HelperTrieReq)
+		if !ok {
+			return errInvalidHelpTrieReq
+		}
 		return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
 	default:
 		panic(nil)
