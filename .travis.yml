@@ -41,6 +41,18 @@ jobs:
     - go run build/ci.go test -coverage
     - kill %1
 
+  - stage: Github release
+    deploy:
+      provider: releases
+      api_key: "GITHUB OAUTH TOKEN"
+      file:
+        - "build/bin/*"
+      # name:
+      # body: (formating not preserved)
+      # prerelease: true
+      # draft: true
+      skip_cleanup: true
+
   - stage: Build and push Docker image
     services:
       - docker
@@ -49,12 +61,16 @@ jobs:
       - docker run tomochain/tomochain
     deploy:
       provider: script
-      script: bash docker_push.sh $TRAVIS_BUILD_ID
+      script:
+        - bash docker_push.sh latest
+        - bash docker_push.sh $TRAVIS_BUILD_ID
       on:
         branch: master AND tag = false
     deploy:
       provider: script
-      script: bash docker_push.sh $TRAVIS_TAG
+      script:
+        - bash docker_push.sh latest
+        - bash docker_push.sh $TRAVIS_TAG
       on:
         branch: master AND tag = true
 
