@@ -603,6 +603,10 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	value, _ := hexutil.DecodeUint64(i.Value)
 	amount := strconv.FormatUint(value, 10)
 
+	//@TODO WRITE OVER TRANSACTION STRUCT
+
+	core.SWriteInternalTxBalances(sqldb, i.To, i.From, amount)
+
 	var returnValue string
 	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
 	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, amount, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)

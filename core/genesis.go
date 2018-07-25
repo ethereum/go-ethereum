@@ -25,7 +25,7 @@ import (
 	"math/big"
 	"strings"
 
-	_ "github.com/lib/pq"
+	"database/sql"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/common/math"
@@ -35,7 +35,7 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/log"
 	"github.com/ShyftNetwork/go-empyrean/params"
 	"github.com/ShyftNetwork/go-empyrean/rlp"
-	"database/sql"
+	_ "github.com/lib/pq"
 	"strconv"
 	"time"
 )
@@ -143,55 +143,62 @@ func (e *GenesisMismatchError) Error() string {
 //WriteShyftGen writes the genesis block to Shyft db
 //@NOTE:SHYFT
 func WriteShyftGen(gen *Genesis, block *types.Block) {
-
+	fmt.Println("IN WRITE GEN")
 	sqldb, _ := DBConnection()
 
-	for k := range gen.Alloc {
+	for k, v := range gen.Alloc {
 		addr := k.String()
-		var response string
-		sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-		err := sqldb.QueryRow(sqlExistsStatement, addr).Scan(&response)
-	switch {
-	case err == sql.ErrNoRows:
-		for k, v := range gen.Alloc {
-			number := block.Header().Number.String()
-			gasUsed := block.Header().GasUsed
-			gasLimit := block.Header().GasLimit
-			gasPrice := 0
-			txFee := 0
-			txStatus := ""
-			isContract := false
-			data:= ""
-			addr := k.String()
-			accountNonce := v.Nonce +1
-			i, err := strconv.ParseInt(block.Time().String(), 10, 64)
-			if err != nil {
-				panic(err)
-			}
-			age := time.Unix(i, 0)
-			Genesis := []string{"GENESIS_", addr}
-			GENESIS := "GENESIS"
-			txHash := strings.Join(Genesis, addr)
 
-			sqlStatement := `INSERT INTO accounts(addr, balance, accountnonce) VALUES(($1), ($2), ($3)) RETURNING addr`
-			insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String(), accountNonce).Scan(&addr)
-			if insertErr != nil {
-				panic(insertErr)
-			}
+		//var response string
+		//sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+		//err := sqldb.QueryRow(sqlExistsStatement, addr).Scan(&response)
+		fmt.Println("[GENESIS]", strings.ToLower(addr))
+		_, _, err := AccountExists(sqldb, addr)
+		fmt.Println("[]ACCOUNT EXISTS ERR", err)
+		switch {
+		case err == sql.ErrNoRows:
+				//number := block.Header().Number.String()
+				//gasUsed := block.Header().GasUsed
+				//gasLimit := block.Header().GasLimit
+				//gasPrice := 0
+				//txFee := 0
+				//txStatus := ""
+				//isContract := false
+				//data := ""
+				addr := k.String()
+				accountNonce := v.Nonce + 1
+				//i, err := strconv.ParseInt(block.Time().String(), 10, 64)
+				//if err != nil {
+				//	panic(err)
+				//}
+				//age := time.Unix(i, 0)
+				//Genesis := []string{"GENESIS_", addr}
+				//GENESIS := "GENESIS"
+				//txHash := strings.Join(Genesis, addr)
 
-			var retNonce string
-			sqlGenTxStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount,gasPrice, gas, gasLimit,txFee,nonce,txstatus, iscontract,age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-			insertError := sqldb.QueryRow(sqlGenTxStatement, txHash, GENESIS, addr, block.Header().Hash().Hex(), number, v.Balance.String(), gasPrice, gasUsed, gasLimit, txFee,accountNonce,txStatus, isContract, age, data).Scan(&retNonce)
-			if insertError != nil {
-				panic(insertError)
-			}
+				//sqlStatement := `INSERT INTO accounts(addr, balance, accountnonce) VALUES(($1), ($2), ($3)) RETURNING addr`
+				//insertErr := sqldb.QueryRow(sqlStatement, strings.ToLower(addr), v.Balance.String(), accountNonce).Scan(&addr)
+				//if insertErr != nil {
+				//	panic(insertErr)
+				//}
+
+				accountNoncee := strconv.FormatUint(accountNonce, 10)
+				CreateAccount(sqldb, addr, v.Balance.String(), accountNoncee)
+
+				//var retNonce string
+				//sqlGenTxStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount,gasPrice, gas, gasLimit,txFee,nonce,txstatus, iscontract,age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
+				//insertError := sqldb.QueryRow(sqlGenTxStatement, txHash, GENESIS, addr, block.Header().Hash().Hex(), number, v.Balance.String(), gasPrice, gasUsed, gasLimit, txFee, accountNonce, txStatus, isContract, age, data).Scan(&retNonce)
+				//if insertError != nil {
+				//	panic(insertError)
+				//}
+		default:
+			log.Info("Found Genesis Block")
 		}
-	default:
-		log.Info("Found Genesis Block")
-}}}
+	}
+}
 
 func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
-	
+
 	sqldb, _ := DBConnection()
 
 	coinbase := block.Header().Coinbase.String()
@@ -229,6 +236,7 @@ func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
 	}
 	return nil
 }
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -315,6 +323,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.AllEthashProtocolChanges
 	}
 }
+
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
@@ -439,6 +448,7 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {

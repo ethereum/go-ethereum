@@ -11,6 +11,8 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
 	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
+	"fmt"
+	"strings"
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -290,6 +292,64 @@ func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
+func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amount string) error {
+	sendAndReceiveData := SendAndReceive{
+		To: 	toAddr,
+		From: 	fromAddr,
+		Amount: amount,
+	}
+
+	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.To)
+
+	switch {
+	case err == sql.ErrNoRows:
+		accountNonce := "1"
+		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
+	case err != nil:
+		log.Fatal(err)
+	default:
+		fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
+		if err == sql.ErrNoRows {
+			fmt.Println("NOT IN ACCOUNTS TABLE", sendAndReceiveData.From)
+			fmt.Println("THIS RAN NO ERR FROM ADDR")
+			//accountNonce := "1"
+			//CreateAccount(sqldb, sendAndReceiveData.From, sendAndReceiveData.Amount, accountNonce)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender  big.Int
+		var nonceIncrement = big.NewInt(1)
+
+		//STRING TO BIG INT
+		//BALANCES TO AND FROM ADDR
+		toBalance := new(big.Int)
+		toBalance, _ = toBalance.SetString(toAddressBalance, 10)
+		fromBalance := new(big.Int)
+		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
+		amountValue := new(big.Int)
+		amountValue, _ = amountValue.SetString(amount, 10)
+
+		//ACCOUNT NONCES
+		toNonce := new(big.Int)
+		toNonce, _ = toNonce.SetString(toAccountNonce, 10)
+		fromNonce := new(big.Int)
+		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
+
+		newBalanceReceiver.Add(toBalance, amountValue)
+		newBalanceSender.Sub(fromBalance, amountValue)
+
+		newAccountNonceReceiver.Add(toNonce, nonceIncrement)
+		newAccountNonceSender.Add(fromNonce, nonceIncrement)
+
+		//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
+		UpdateAccount(sqldb, sendAndReceiveData.To,   newBalanceReceiver.String(), newAccountNonceReceiver.String())
+		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(),   newAccountNonceSender.String())
+	}
+	return nil
+}
+
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
@@ -344,6 +404,7 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 	addressBalance, accountNonce, err := AccountExists(sqldb, address)
 
 	if err == sql.ErrNoRows {
+		fmt.Println("this ran", address)
 		// Addr does not exist, thus create new entry
 		// We convert totalReward into a string and postgres converts into number
 		CreateAccount(sqldb, address, reward.String(), "1")
@@ -379,11 +440,12 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 //DB Utility functions
 //////////////////////
 func CreateAccount (sqldb *sql.DB, addr string, balance string, accountNonce string) {
-	sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
-	insertErr := sqldb.QueryRow(sqlStatement, addr, balance, accountNonce).Scan(&addr)
-	if insertErr != nil {
-		panic(insertErr)
-	}
+	fmt.Println("[CREATE ACCOUNT]", strings.ToLower(addr))
+	//sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
+	//insertErr := sqldb.QueryRow(sqlStatement, strings.ToLower(addr), balance, accountNonce).Scan(&addr)
+	//if insertErr != nil {
+	//	panic(insertErr)
+	//}
 }
 
 func AccountExists (sqldb *sql.DB, addr string) (string, string, error) {
