@@ -21,28 +21,16 @@
 			"revisionTime": "2016-08-11T21:22:31Z"
 		},
 		{
-			"checksumSHA1": "24EW3PGLGVSy/5joAOZdHzN/S2E=",
-			"path": "github.com/Azure/azure-storage-go",
-			"revision": "12ccaadb081cdd217702067d28da9a7ff4305239",
-			"revisionTime": "2017-03-02T22:15:08Z"
+			"checksumSHA1": "z+M6FYl9EKsoZZMLcT0Ktwfk8pI=",
+			"path": "github.com/Azure/azure-pipeline-go/pipeline",
+			"revision": "7571e8eb0876932ab505918ff7ed5107773e5ee2",
+			"revisionTime": "2018-06-07T21:19:23Z"
 		},
 		{
-			"checksumSHA1": "+sxS3YEvxf1VxlRskIdXFRWq9rY=",
-			"path": "github.com/Azure/go-autorest/autorest",
-			"revision": "ec5f4903f77ed9927ac95b19ab8e44ada64c1356",
-			"revisionTime": "2017-02-15T19:58:14Z"
-		},
-		{
-			"checksumSHA1": "ghrnc4vZv6q8zzeakZnrS8CGFhE=",
-			"path": "github.com/Azure/go-autorest/autorest/azure",
-			"revision": "ec5f4903f77ed9927ac95b19ab8e44ada64c1356",
-			"revisionTime": "2017-02-15T19:58:14Z"
-		},
-		{
-			"checksumSHA1": "q9Qz8PAxK5FTOZwgYKe5Lj38u4c=",
-			"path": "github.com/Azure/go-autorest/autorest/date",
-			"revision": "ec5f4903f77ed9927ac95b19ab8e44ada64c1356",
-			"revisionTime": "2017-02-15T19:58:14Z"
+			"checksumSHA1": "5nsGu77r69lloEWbFhMof2UA9rY=",
+			"path": "github.com/Azure/azure-storage-blob-go/2018-03-28/azblob",
+			"revision": "eaae161d9d5e07363f04ddb19d84d57efc66d1a1",
+			"revisionTime": "2018-07-12T00:56:34Z"
 		},
 		{
 			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
