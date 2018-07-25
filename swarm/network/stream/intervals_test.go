@@ -25,21 +25,17 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-)
-
-var (
-	externalStreamName             = "externalStream"
-	externalStreamSessionAt uint64 = 50
-	externalStreamMaxKeys   uint64 = 100
 )
 
 func TestIntervals(t *testing.T) {
@@ -55,6 +51,9 @@ func TestIntervals(t *testing.T) {
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	nodes := 2
 	chunkCount := dataChunkCount
+	externalStreamName := "externalStream"
+	externalStreamSessionAt := uint64(50)
+	externalStreamMaxKeys := uint64(100)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -201,8 +200,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 					if i > externalStreamMaxKeys {
 						return
 					}
-				//case err = <-liveSubscription.Err():
-				//	return
 				case <-ctx.Done():
 					return
 				}
@@ -254,8 +251,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 					if i > historyTo {
 						return
 					}
-				//case err = <-historySubscription.Err():
-				//	return
 				case <-ctx.Done():
 					return
 				}
@@ -276,3 +271,111 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		t.Fatal(result.Error)
 	}
 }
+
+func getHashes(r *Registry, ctx context.Context, peerId discover.NodeID, s Stream) (chan []byte, error) {
+	peer := r.getPeer(peerId)
+
+	client, err := peer.getClient(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
+	c := client.Client.(*testExternalClient)
+
+	return c.hashes, nil
+}
+
+func enableNotifications(r *Registry, peerId discover.NodeID, s Stream) error {
+	peer := r.getPeer(peerId)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := peer.getClient(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	close(client.Client.(*testExternalClient).enableNotificationsC)
+
+	return nil
+}
+
+type testExternalClient struct {
+	hashes               chan []byte
+	db                   *storage.DBAPI
+	enableNotificationsC chan struct{}
+}
+
+func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+	return &testExternalClient{
+		hashes:               make(chan []byte),
+		db:                   db,
+		enableNotificationsC: make(chan struct{}),
+	}
+}
+
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
+	chunk, _ := c.db.GetOrCreateRequest(ctx, hash)
+	if chunk.ReqC == nil {
+		return nil
+	}
+	c.hashes <- hash
+	return func() {
+		chunk.WaitToStore()
+	}
+}
+
+func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
+	return nil
+}
+
+func (c *testExternalClient) Close() {}
+
+const testExternalServerBatchSize = 10
+
+type testExternalServer struct {
+	t         string
+	keyFunc   func(key []byte, index uint64)
+	sessionAt uint64
+	maxKeys   uint64
+}
+
+func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
+	if keyFunc == nil {
+		keyFunc = binary.BigEndian.PutUint64
+	}
+	return &testExternalServer{
+		t:         t,
+		keyFunc:   keyFunc,
+		sessionAt: sessionAt,
+		maxKeys:   maxKeys,
+	}
+}
+
+func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+	if from == 0 && to == 0 {
+		from = s.sessionAt
+		to = s.sessionAt + testExternalServerBatchSize
+	}
+	if to-from > testExternalServerBatchSize {
+		to = from + testExternalServerBatchSize - 1
+	}
+	if from >= s.maxKeys && to > s.maxKeys {
+		return nil, 0, 0, nil, io.EOF
+	}
+	if to > s.maxKeys {
+		to = s.maxKeys
+	}
+	b := make([]byte, HashSize*(to-from+1))
+	for i := from; i <= to; i++ {
+		s.keyFunc(b[(i-from)*HashSize:(i-from+1)*HashSize], i)
+	}
+	return b, from, to, nil, nil
+}
+
+func (s *testExternalServer) GetData(context.Context, []byte) ([]byte, error) {
+	return make([]byte, 4096), nil
+}
+
+func (s *testExternalServer) Close() {}

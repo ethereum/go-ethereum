@@ -424,8 +424,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			}
 		}()
 
-		log.Debug("Waiting for kademlia")
 		if *waitKademlia {
+			log.Debug("Waiting for kademlia")
 			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 				return err
 			}

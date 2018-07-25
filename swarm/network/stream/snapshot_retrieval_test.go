@@ -135,7 +135,7 @@ func runFileRetrievalTest(nodeCount int) error {
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 				DoSync:          true,
-				SyncUpdateDelay: 0,
+				SyncUpdateDelay: 3 * time.Second,
 			})
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
@@ -320,11 +320,6 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 
 		//an array for the random files
 		var randomFiles []string
-		//channel to signal when the upload has finished
-		//uploadFinished := make(chan struct{})
-		//channel to trigger new node checks
-
-		//get the the node at that index
 		//this is the node selected for upload
 		node := sim.RandomUpNode()
 		item, ok := sim.NodeItem(node.ID, bucketKeyStore)

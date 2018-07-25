@@ -42,11 +42,6 @@ import (
 const testMinProxBinSize = 2
 const MaxTimeout = 600
 
-var (
-	//this global is needed to run the RPC test
-	globConf *synctestConfig
-)
-
 type synctestConfig struct {
 	addrs            [][]byte
 	hashes           []storage.Address
@@ -214,7 +209,6 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		if *useMockStore {
 			gDir, globalStore, err = createGlobalStore()
 			if err != nil {
-				//return false, fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
 				return fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
 			}
 			defer func() {
@@ -227,7 +221,6 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		}
 		for !allSuccess {
 			for _, id := range nodeIDs {
-				//log.Trace("file uploaded", "node", id, "key", key.String())
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
 				localSuccess := true
@@ -281,7 +274,6 @@ chunk addresses actually do have the chunks in their local stores.
 The test loads a snapshot file to construct the swarm network,
 assuming that the snapshot file identifies a healthy
 kademlia network. The snapshot should have 'streamer' in its service list.
-
 */
 func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
@@ -345,7 +337,6 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 		}
 
 		var subscriptionCount int
-		globConf = conf
 
 		filter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(4)
 		eventC := sim.PeerEvents(ctx, nodeIDs, filter)
@@ -360,7 +351,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 			registry := item.(*Registry)
 
 			var cnt int
-			cnt, err = startSyncing(registry)
+			cnt, err = startSyncing(registry, conf)
 			if err != nil {
 				return err
 			}
@@ -410,7 +401,6 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 		allSuccess := false
 		for !allSuccess {
 			for _, id := range nodeIDs {
-				//log.Trace("file uploaded", "node", id, "key", key.String())
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
 				localSuccess := true
@@ -461,7 +451,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 //issues `RequestSubscriptionMsg` to peers, based on po, by iterating over
 //the kademlia's `EachBin` function.
 //returns the number of subscriptions requested
-func startSyncing(r *Registry) (int, error) {
+func startSyncing(r *Registry, conf *synctestConfig) (int, error) {
 	var err error
 
 	kad, ok := r.delivery.overlay.(*network.Kademlia)
@@ -476,7 +466,7 @@ func startSyncing(r *Registry) (int, error) {
 		histRange := &Range{}
 
 		subCnt++
-		err = r.RequestSubscription(globConf.addrToIdMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), histRange, Top)
+		err = r.RequestSubscription(conf.addrToIdMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), histRange, Top)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
 			return false

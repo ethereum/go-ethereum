@@ -127,7 +127,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
 
-	_, err := sim.AddNodesAndConnectFull(nodes)
+	_, err := sim.AddNodesAndConnectChain(nodes)
 	if err != nil {
 		t.Fatal(err)
 	}
