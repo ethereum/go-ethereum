@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -332,6 +331,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
+			bucket.Store(bucketKeyRegistry, r)
 
 			retrieveFunc := func(ctx context.Context, chunk *storage.Chunk) error {
 				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
@@ -339,16 +339,15 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			netStore := storage.NewNetStore(localStore, retrieveFunc)
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
 	defer sim.Close()
 
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectFull(nodes)
+	_, err := sim.AddNodesAndConnectChain(nodes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,19 +356,34 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	ctx := context.Background()
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
-		// create a retriever FileStore for the pivot node
-		log.Debug("Selecting pivot node")
-		//select first node
-		node := nodeIDs[0]
-
-		item, ok := sim.NodeItem(node, bucketKeyFileStore)
-		if !ok {
-			return fmt.Errorf("No filestore")
+		//determine the pivot node to be the first node of the simulation
+		sim.SetPivotNode(nodeIDs[0])
+		//distribute chunks of a random file into Stores of nodes 1 to nodes
+		//we will do this by creating a file store with an underlying round-robin store:
+		//the file store will create a hash for the uploaded file, but every chunk will be
+		//distributed to different nodes via round-robin scheduling
+		log.Debug("Writing file to round-robin file store")
+		//to do this, we create an array for chunkstores (length minus one, the pivot node)
+		stores := make([]storage.ChunkStore, len(nodeIDs)-1)
+		//we then need to get all stores from the sim....
+		lStores := sim.NodesItems(bucketKeyStore)
+		i := 0
+		//...iterate the buckets...
+		for id, bucketVal := range lStores {
+			//...and remove the one which is the pivot node
+			if id == *sim.PivotNodeID() {
+				continue
+			}
+			//the other ones are added to the array...
+			stores[i] = bucketVal.(storage.ChunkStore)
+			i++
 		}
-		fileStore := item.(*storage.FileStore)
+		//...which then gets passed to the round-robin file store
+		roundRobinFileStore := storage.NewFileStore(newRoundRobinStore(stores...), storage.NewFileStoreParams())
+		//now we can actually upload a (random) file to the round-robin store
 		size := chunkCount * chunkSize
 		log.Debug("Storing data to file store")
-		fileHash, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		fileHash, wait, err := roundRobinFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 		// wait until all chunks stored
 		if err != nil {
 			return err
@@ -379,22 +393,31 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			return err
 		}
 
-		for j := 0; j < len(nodeIDs)-1; j++ {
-			client, err := sim.Net.GetNode(nodeIDs[j]).Client()
+		//each of the nodes (except pivot node) subscribes to the stream of the next node
+		for j, node := range nodeIDs[0 : nodes-1] {
+			sid := nodeIDs[j+1]
+			item, ok := sim.NodeItem(node, bucketKeyRegistry)
+			if !ok {
+				return fmt.Errorf("No registry")
+			}
+			registry := item.(*Registry)
+			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
-			sid := nodeIDs[j+1]
-			client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
 		}
 
+		//get the pivot node's filestore
+		item, ok := sim.NodeItem(*sim.PivotNodeID(), bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		pivotFileStore := item.(*storage.FileStore)
 		log.Debug("Starting retrieval routine")
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
-			n, err := readAll(fileStore, fileHash)
+			n, err := readAll(pivotFileStore, fileHash)
 			log.Info(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
 			if err != nil {
 				t.Fatalf("requesting chunks action error: %v", err)
@@ -424,26 +447,20 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			}
 		}()
 
+		//finally check that the pivot node gets all chunks via the root hash
 		log.Debug("Check retrieval")
-		allSuccess := true
-		id := nodeIDs[0]
-		client, err := sim.Net.GetNode(id).Client()
-		if err != nil {
-			return err
-		}
+		success := true
 		var total int64
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		err = client.CallContext(ctx, &total, "stream_readAll", common.BytesToHash(fileHash))
+		total, err = readAll(pivotFileStore, fileHash)
 		if err != nil {
 			return err
 		}
 		log.Info(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
 		if err != nil || total != int64(size) {
-			allSuccess = false
+			success = false
 		}
 
-		if !allSuccess {
+		if !success {
 			return fmt.Errorf("Test failed, chunks not available on all nodes")
 		}
 		log.Debug("Test terminated successfully")
@@ -510,18 +527,17 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
 			}
 			netStore := storage.NewNetStore(localStore, retrieveFunc)
-			bucket.Store(bucketKeyNetStore, netStore)
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
+			bucket.Store(bucketKeyFileStore, fileStore)
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
 	defer sim.Close()
 
 	log.Info("Initializing test config")
-	_, err := sim.AddNodesAndConnectFull(nodes)
+	_, err := sim.AddNodesAndConnectChain(nodes)
 	if err != nil {
 		b.Fatal(err)
 	}

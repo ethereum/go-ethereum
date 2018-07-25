@@ -28,15 +28,14 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
-	"github.com/ethereum/go-ethereum/rpc"
+	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/pot"
@@ -67,6 +66,7 @@ var (
 
 func init() {
 	flag.Parse()
+	rand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
@@ -142,20 +142,31 @@ func waitForPeers(streamer *Registry, timeout time.Duration, expectedPeers int) 
 	}
 }
 
-type TestRegistry struct {
-	*Registry
-	fileStore *storage.FileStore
+type roundRobinStore struct {
+	index  uint32
+	stores []storage.ChunkStore
 }
 
-func (r *TestRegistry) APIs() []rpc.API {
-	a := r.Registry.APIs()
-	a = append(a, rpc.API{
-		Namespace: "stream",
-		Version:   "3.0",
-		Service:   r,
-		Public:    true,
-	})
-	return a
+func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
+	return &roundRobinStore{
+		stores: stores,
+	}
+}
+
+func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (*storage.Chunk, error) {
+	return nil, errors.New("get not well defined on round robin store")
+}
+
+func (rrs *roundRobinStore) Put(ctx context.Context, chunk *storage.Chunk) {
+	i := atomic.AddUint32(&rrs.index, 1)
+	idx := int(i) % len(rrs.stores)
+	rrs.stores[idx].Put(ctx, chunk)
+}
+
+func (rrs *roundRobinStore) Close() {
+	for _, store := range rrs.stores {
+		store.Close()
+	}
 }
 
 func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
@@ -174,34 +185,8 @@ func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
 	return total, nil
 }
 
-func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
-	return readAll(r.fileStore, hash[:])
-}
-
-func (r *TestRegistry) Start(server *p2p.Server) error {
-	return r.Registry.Start(server)
-}
-
-func (r *TestRegistry) Stop() error {
-	return r.Registry.Stop()
-}
-
-type TestExternalRegistry struct {
-	*Registry
-}
-
-func (r *TestExternalRegistry) APIs() []rpc.API {
-	a := r.Registry.APIs()
-	a = append(a, rpc.API{
-		Namespace: "stream",
-		Version:   "3.0",
-		Service:   r,
-		Public:    true,
-	})
-	return a
-}
-
-func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.NodeID, s Stream) (*rpc.Subscription, error) {
+//func getHashes(r *Registry, ctx context.Context, peerId discover.NodeID, s Stream) (*rpc.Subscription, error) {
+func getHashes(r *Registry, ctx context.Context, peerId discover.NodeID, s Stream) (chan []byte, error) {
 	peer := r.getPeer(peerId)
 
 	client, err := peer.getClient(ctx, s)
@@ -211,41 +196,10 @@ func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.No
 
 	c := client.Client.(*testExternalClient)
 
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return nil, fmt.Errorf("Subscribe not supported")
-	}
-
-	sub := notifier.CreateSubscription()
-
-	go func() {
-		// if we begin sending event immediately some events
-		// will probably be dropped since the subscription ID might not be send to
-		// the client.
-		// ref: rpc/subscription_test.go#L65
-		time.Sleep(1 * time.Second)
-		for {
-			select {
-			case h := <-c.hashes:
-				<-c.enableNotificationsC // wait for notification subscription to complete
-				if err := notifier.Notify(sub.ID, h); err != nil {
-					log.Warn(fmt.Sprintf("rpc sub notifier notify stream %s: %v", s, err))
-				}
-			case err := <-sub.Err():
-				if err != nil {
-					log.Warn(fmt.Sprintf("caught subscription error in stream %s: %v", s, err))
-				}
-			case <-notifier.Closed():
-				log.Trace(fmt.Sprintf("rpc sub notifier closed"))
-				return
-			}
-		}
-	}()
-
-	return sub, nil
+	return c.hashes, nil
 }
 
-func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Stream) error {
+func enableNotifications(r *Registry, peerId discover.NodeID, s Stream) error {
 	peer := r.getPeer(peerId)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -302,7 +256,6 @@ type testExternalServer struct {
 	keyFunc   func(key []byte, index uint64)
 	sessionAt uint64
 	maxKeys   uint64
-	streamer  *TestExternalRegistry
 }
 
 func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
@@ -380,10 +333,6 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 		rootAddrs[i] = rk
 	}
 	return rootAddrs, rfiles, nil
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 //generate a random file (string)

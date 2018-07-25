@@ -25,7 +25,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -79,6 +78,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
+			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
 				return newTestExternalClient(db), nil
@@ -90,9 +90,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
 
-			testRegistry := &TestExternalRegistry{r}
-
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
@@ -129,16 +127,13 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			t.Fatal(err)
 		}
 
-		client, err := sim.Net.GetNode(checker).Client()
-		if err != nil {
-			log.Error("Get Client error: %v", "err", err)
-			return err
+		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
+		if !ok {
+			return fmt.Errorf("No registry")
 		}
-		ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
-		defer cancel()
-		err = client.CallContext(ctx, nil, "stream_subscribeStream", storer, NewStream(externalStreamName, "", live), history, Top)
+		registry := item.(*Registry)
+		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
 		if err != nil {
-			log.Error("Stream subscribe error: %v", "err", err)
 			return err
 		}
 
@@ -180,17 +175,16 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}()
 
 			// live stream
-			liveHashesChan := make(chan []byte)
-			liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", storer, NewStream(externalStreamName, "", true))
+			var liveHashesChan chan []byte
+			liveHashesChan, err = getHashes(registry, ctx, storer, NewStream(externalStreamName, "", true))
 			if err != nil {
 				log.Error("Subscription error: %v", "err", err)
 				return
 			}
-			defer liveSubscription.Unsubscribe()
 			i := externalStreamSessionAt
 
 			// we have subscribed, enable notifications
-			err = client.CallContext(ctx, nil, "stream_enableNotifications", storer, NewStream(externalStreamName, "", true))
+			err = enableNotifications(registry, storer, NewStream(externalStreamName, "", true))
 			if err != nil {
 				return
 			}
@@ -207,8 +201,8 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 					if i > externalStreamMaxKeys {
 						return
 					}
-				case err = <-liveSubscription.Err():
-					return
+				//case err = <-liveSubscription.Err():
+				//	return
 				case <-ctx.Done():
 					return
 				}
@@ -227,12 +221,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}()
 
 			// history stream
-			historyHashesChan := make(chan []byte)
-			historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", storer, NewStream(externalStreamName, "", false))
+			var historyHashesChan chan []byte
+			historyHashesChan, err = getHashes(registry, ctx, storer, NewStream(externalStreamName, "", false))
 			if err != nil {
 				return
 			}
-			defer historySubscription.Unsubscribe()
 
 			var i uint64
 			historyTo := externalStreamMaxKeys
@@ -244,7 +237,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}
 
 			// we have subscribed, enable notifications
-			err = client.CallContext(ctx, nil, "stream_enableNotifications", storer, NewStream(externalStreamName, "", false))
+			err = enableNotifications(registry, storer, NewStream(externalStreamName, "", false))
 			if err != nil {
 				return
 			}
@@ -261,8 +254,8 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 					if i > historyTo {
 						return
 					}
-				case err = <-historySubscription.Err():
-					return
+				//case err = <-historySubscription.Err():
+				//	return
 				case <-ctx.Done():
 					return
 				}

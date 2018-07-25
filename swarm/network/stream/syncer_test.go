@@ -114,10 +114,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
-			bucket.Store(bucketKeyRegistry, testRegistry)
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})

@@ -62,12 +62,12 @@ type synctestConfig struct {
 //to the pivot node, and we check that nodes get the chunks
 //they are expected to store based on the syncing protocol.
 //Number of chunks and nodes can be provided via commandline too.
-func TestSyncingViaRegistry(t *testing.T) {
+func TestSyncingViaGlobalSync(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
-		testSyncing(t, *chunks, *nodes)
+		testSyncingViaGlobalSync(t, *chunks, *nodes)
 	} else {
 		var nodeCnt []int
 		var chnkCnt []int
@@ -84,18 +84,21 @@ func TestSyncingViaRegistry(t *testing.T) {
 		for _, chnk := range chnkCnt {
 			for _, n := range nodeCnt {
 				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
-				testSyncing(t, chnk, n)
+				testSyncingViaGlobalSync(t, chnk, n)
 			}
 		}
 	}
 }
 
-func TestSyncingViaRPC(t *testing.T) {
+func TestSyncingViaDirectSubscribe(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
-		testSyncingViaRPC(t, *chunks, *nodes)
+		err := testSyncingViaDirectSubscribe(*chunks, *nodes)
+		if err != nil {
+			t.Fatal(err)
+		}
 	} else {
 		var nodeCnt []int
 		var chnkCnt []int
@@ -112,13 +115,16 @@ func TestSyncingViaRPC(t *testing.T) {
 		for _, chnk := range chnkCnt {
 			for _, n := range nodeCnt {
 				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
-				testSyncingViaRPC(t, chnk, n)
+				err := testSyncingViaDirectSubscribe(chnk, n)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 	}
 }
 
-func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
+func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 
@@ -142,11 +148,9 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
 			})
+			bucket.Store(bucketKeyRegistry, r)
 
-			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
-
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
@@ -267,14 +271,6 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 	}
 }
 
-//Do run the tests
-func testSyncingViaRPC(t *testing.T, chunkCount int, nodeCount int) {
-	err := runSyncTest(chunkCount, nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 /*
 The test generates the given number of chunks
 
@@ -287,7 +283,7 @@ assuming that the snapshot file identifies a healthy
 kademlia network. The snapshot should have 'streamer' in its service list.
 
 */
-func runSyncTest(chunkCount int, nodeCount int) error {
+func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 
@@ -308,11 +304,12 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			delivery := NewDelivery(kad, db)
 
 			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil)
+			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
+			bucket.Store(bucketKeyFileStore, fileStore)
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
@@ -353,15 +350,17 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 		filter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(4)
 		eventC := sim.PeerEvents(ctx, nodeIDs, filter)
 
-		for j, id := range nodeIDs {
+		for j, node := range nodeIDs {
 			log.Trace(fmt.Sprintf("Start syncing subscriptions: %d", j))
-			client, err := sim.Net.GetNode(id).Client()
-			if err != nil {
-				return err
-			}
 			//start syncing!
+			item, ok := sim.NodeItem(node, bucketKeyRegistry)
+			if !ok {
+				return fmt.Errorf("No registry")
+			}
+			registry := item.(*Registry)
+
 			var cnt int
-			err = client.CallContext(ctx, &cnt, "stream_startSyncing")
+			cnt, err = startSyncing(registry)
 			if err != nil {
 				return err
 			}
@@ -379,8 +378,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 				break
 			}
 		}
-		//get the the node at that index
-		//this is the node selected for upload
+		//select a random node for upload
 		node := sim.RandomUpNode()
 		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
 		if !ok {
@@ -463,7 +461,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 //issues `RequestSubscriptionMsg` to peers, based on po, by iterating over
 //the kademlia's `EachBin` function.
 //returns the number of subscriptions requested
-func (r *TestRegistry) StartSyncing(ctx context.Context) (int, error) {
+func startSyncing(r *Registry) (int, error) {
 	var err error
 
 	kad, ok := r.delivery.overlay.(*network.Kademlia)

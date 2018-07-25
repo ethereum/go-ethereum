@@ -21,6 +21,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -45,7 +46,10 @@ const (
 //Number of nodes can be provided via commandline too.
 func TestFileRetrieval(t *testing.T) {
 	if *nodes != 0 {
-		fileRetrievalTest(t, *nodes)
+		err := runFileRetrievalTest(*nodes)
+		if err != nil {
+			t.Fatal(err)
+		}
 	} else {
 		nodeCnt := []int{16}
 		//if the `longrunning` flag has been provided
@@ -54,7 +58,10 @@ func TestFileRetrieval(t *testing.T) {
 			nodeCnt = append(nodeCnt, 32, 64, 128)
 		}
 		for _, n := range nodeCnt {
-			fileRetrievalTest(t, n)
+			err := runFileRetrievalTest(n)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 }
@@ -69,7 +76,10 @@ func TestRetrieval(t *testing.T) {
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
-		retrievalTest(t, *chunks, *nodes)
+		err := runRetrievalTest(*chunks, *nodes)
+		if err != nil {
+			t.Fatal(err)
+		}
 	} else {
 		var nodeCnt []int
 		var chnkCnt []int
@@ -85,25 +95,12 @@ func TestRetrieval(t *testing.T) {
 		}
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {
-				retrievalTest(t, c, n)
+				err := runRetrievalTest(c, n)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
-	}
-}
-
-//Run the file retrieval test
-func fileRetrievalTest(t *testing.T, nodeCount int) {
-	err := runFileRetrievalTest(nodeCount)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-//Run the chunks retrieval test
-func retrievalTest(t *testing.T, chunkCount int, nodeCount int) {
-	err := runRetrievalTest(chunkCount, nodeCount)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -142,22 +139,15 @@ func runFileRetrievalTest(nodeCount int) error {
 			})
 
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
-			bucketKeyFileStore = simulation.BucketKey("filestore")
 			bucket.Store(bucketKeyFileStore, fileStore)
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
 	defer sim.Close()
 
 	log.Info("Initializing test config")
-	_, err := sim.AddNodesAndConnectFull(3)
-	if err != nil {
-		return err
-	}
-	ctx := context.Background()
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -167,10 +157,13 @@ func runFileRetrievalTest(nodeCount int) error {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
-	err = sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		return err
 	}
+
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelSimRun()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -291,9 +284,8 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
 			bucketKeyFileStore = simulation.BucketKey("filestore")
 			bucket.Store(bucketKeyFileStore, fileStore)
-			testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 
-			return testRegistry, cleanup, nil
+			return r, cleanup, nil
 
 		},
 	})
