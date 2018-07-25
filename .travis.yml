@@ -44,8 +44,6 @@ jobs:
     before_install:
       - docker build -t tomochain/tomochain .
       - docker run tomochain/tomochain
-      - docker build -t tomochain/bootnode .
-      - docker run tomochain/bootnode
     deploy:
       provider: script
       script: bash docker_push.sh
