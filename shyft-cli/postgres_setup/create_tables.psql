@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS txs (
 CREATE TABLE IF NOT EXISTS accounts (
   addr text primary key unique,
   balance numeric,
-  txCountAccount numeric
+  accountNonce numeric
 );
 
 CREATE TABLE IF NOT EXISTS contracts (
