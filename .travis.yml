@@ -44,14 +44,17 @@ jobs:
   - stage: Github release
     deploy:
       provider: releases
-      api_key: "GITHUB OAUTH TOKEN"
-      file:
-        - "build/bin/*"
+      api_key: $GITHUB_TOKEN
       # name:
       # body: (formating not preserved)
       # prerelease: true
       # draft: true
+      file:
+        - "build/bin/tomo"
       skip_cleanup: true
+      on:
+        branch: master
+        tags: true
 
   - stage: Build and push Docker image
     services:
@@ -66,7 +69,7 @@ jobs:
         - bash docker_push.sh $TRAVIS_BUILD_ID
       on:
         branch: master
-        condition: tags = false
+        tags: false
     deploy:
       provider: script
       script:
@@ -74,7 +77,7 @@ jobs:
         - bash docker_push.sh $TRAVIS_TAG
       on:
         branch: master
-        condition: tags = true
+        tags: true
 
   - stage: Trigger rebuild of infrastructure image
     sudo: false
