@@ -65,14 +65,14 @@ jobs:
         - bash docker_push.sh latest
         - bash docker_push.sh $TRAVIS_BUILD_ID
       on:
-        branch: master AND tag = false
+        branch: master AND tags = false
     deploy:
       provider: script
       script:
         - bash docker_push.sh latest
         - bash docker_push.sh $TRAVIS_TAG
       on:
-        branch: master AND tag = true
+        branch: master AND tags = true
 
   - stage: Trigger rebuild of infrastructure image
     sudo: false
