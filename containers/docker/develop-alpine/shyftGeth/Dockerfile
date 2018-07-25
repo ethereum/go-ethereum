@@ -12,6 +12,7 @@ RUN \
 COPY ./shyft-cli/initShyftGeth.sh /
 COPY ./shyft-cli/resetShyftGeth.sh /
 COPY ./shyft-cli/startShyftGeth.sh /
+# COPY ./containers/docker/develop-alpine/shyftGeth/wait-for-postgres.sh /
 COPY config.toml /
 COPY unlockPasswords.txt /
 COPY ShyftNetwork.json /
@@ -26,6 +27,5 @@ RUN cd / && ls -a
 # EXPOSE 8545
 # EXPOSE 30303
 WORKDIR /
-RUN ["./initShyftGeth.sh"]
 
-ENTRYPOINT ["./startShyftGeth.sh"]
+CMD ["./initShyftGeth.sh"]

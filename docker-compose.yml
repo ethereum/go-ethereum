@@ -14,9 +14,11 @@
       - "5432:5432"
     volumes:
       - .:/go/src/ShyftNetwork/go-empyrean
-    working_dir: /go/src/ShyftNetwork/go-empyrean
+    # working_dir: /go/src/ShyftNetwork/go-empyrean
     depends_on: 
       - pg
+    # command: ["./wait-for-postgres.sh", "pg:5432","./initShyftGeth.sh" ]
+    entrypoint: ["/go/src/ShyftNetwork/go-empyrean/wait-for-postgres.sh", "pg:5432","/go/src/ShyftNetwork/go-empyrean/shyft-cli/initShyftGeth.sh"]
   pg:
     build: 
       context: $PWD
@@ -29,6 +31,7 @@
       - POSTGRES_USER=postgres
       - POSGRES_PASSWORD=docker
       - PGDATA=/pg-data
+
   
   
 

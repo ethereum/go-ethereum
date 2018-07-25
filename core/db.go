@@ -8,8 +8,9 @@ import (
 var blockExplorerDb *sql.DB
 
 const (
-	connStr     = "user=postgres dbname=shyftdb sslmode=disable"
-	connStrTest = "user=postgres dbname=shyftdbtest sslmode=disable"
+	// connStr     = "user=postgres dbname=shyftdb password=docker sslmode=disable"
+	connStr     = "postgresql://postgres:docker@pg:5432/shyftdb"
+	connStrTest = "user=postgres dbname=shyftdbtest password=docker sslmode=disable"
 )
 
 func InitDB() (*sql.DB, error) {
