@@ -14,8 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
-	"math/rand"
-	"time"
 )
 
 const (
@@ -224,15 +222,4 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
 
 	return balances, nil
-}
-
-// Generate random string.
-func RandomHash() common.Hash {
-	letterBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
-	var b common.Hash
-	for i := range b {
-		rand.Seed(time.Now().UnixNano())
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return b
 }
