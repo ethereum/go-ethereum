@@ -29,7 +29,7 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-// bridge is a collection of JavaScript utility methods to bridge the .js runtime
+// bridge is a collection of JavaScript utility methods to bride the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
 	client   *rpc.Client  // RPC client to execute Ethereum requests through
@@ -37,7 +37,7 @@ type bridge struct {
 	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
-// newBridge creates a new JavaScript wrapper around an RPC client
+// newBridge creates a new JavaScript wrapper around an RPC client.
 func newBridge(client *rpc.Client, prompter UserPrompter, printer io.Writer) *bridge {
 	return &bridge{
 		client:   client,
@@ -93,15 +93,12 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 	}
 	wallet := call.Argument(0)
 
-	// If password is not given or is the null value, set the password to
-	// blank which is digestible by otto/JavaScript.
 	var passwd otto.Value
 	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
 		passwd, _ = otto.ToValue("")
 	} else {
 		passwd = call.Argument(1)
 	}
-
 	// Open the wallet and return if successful in itself
 	val, err := call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
 	if err == nil {
@@ -157,7 +154,7 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		}
 		passwd = call.Argument(1)
 	}
-	// Third argument is the duration how long the account must be unlocked
+	// Third argument is the duration how long the account must be unlocked.
 	duration := otto.NullValue()
 	if call.Argument(2).IsDefined() && !call.Argument(2).IsNull() {
 		if !call.Argument(2).IsNumber() {
@@ -183,7 +180,6 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 		passwd  = call.Argument(2)
 	)
 
-	// Make sure the first and second arguments are strings
 	if !message.IsString() {
 		throwJSException("first argument must be the message to sign")
 	}
@@ -191,7 +187,7 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 		throwJSException("second argument must be the account to sign with")
 	}
 
-	// If the password is not given or null ask the user and ensure password is a string
+	// if the password is not given or null ask the user and ensure password is a string
 	if passwd.IsUndefined() || passwd.IsNull() {
 		fmt.Fprintf(b.printer, "Give password for account %s\n", account)
 		if input, err := b.prompter.PromptPassword("Passphrase: "); err != nil {
@@ -275,12 +271,12 @@ func (b *bridge) SleepBlocks(call otto.FunctionCall) (response otto.Value) {
 }
 
 type jsonrpcCall struct {
-	Id     int64
+	ID     int64
 	Method string
 	Params []interface{}
 }
 
-// Send implements the web3 provider "send" method
+// Send implements the web3 provider "send" method.
 func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	// Remarshal the request into a Go value.
 	JSON, _ := call.Otto.Object("JSON")
@@ -308,7 +304,7 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	resps, _ := call.Otto.Object("new Array()")
 	for _, req := range reqs {
 		resp, _ := call.Otto.Object(`({"jsonrpc":"2.0"})`)
-		resp.Set("id", req.Id)
+		resp.Set("id", req.ID)
 		var result json.RawMessage
 		err = b.client.Call(&result, req.Method, req.Params...)
 		switch err := err.(type) {
