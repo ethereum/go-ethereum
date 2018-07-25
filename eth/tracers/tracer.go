@@ -579,16 +579,16 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 
 //@NOTE:SHYFT
 type Internals struct {
-	Type 	string
-	From 	string
-	To 		string
-	Value 	string
-	Gas 	string
+	Type    string
+	From    string
+	To      string
+	Value   string
+	Gas     string
 	GasUsed string
-	Input 	string
-	Output 	string
-	Time 	string
-	Calls 	[]*Internals
+	Input   string
+	Output  string
+	Time    string
+	Calls   []*Internals
 }
 
 //@NOTE:SHYFT
@@ -612,6 +612,7 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 		panic(qerr)
 	}
 }
+
 //@NOTE:SHYFT
 func (i *Internals) InternalRecursive(hash common.Hash) {
 	i.SWriteInteralTxs(hash)
