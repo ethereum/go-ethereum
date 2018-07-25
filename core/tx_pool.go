@@ -1041,7 +1041,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	}
 	if queued > pool.config.GlobalQueue {
 		// Sort all accounts with queued transactions by heartbeat
-		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
+		addresses := make(addressesByHeartbeat, 0, len(pool.queue))
 		for addr := range pool.queue {
 			if !pool.locals.contains(addr) { // don't drop locals
 				addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
@@ -1127,11 +1127,11 @@ type addressByHeartbeat struct {
 	heartbeat time.Time
 }
 
-type addresssByHeartbeat []addressByHeartbeat
+type addressesByHeartbeat []addressByHeartbeat
 
-func (a addresssByHeartbeat) Len() int           { return len(a) }
-func (a addresssByHeartbeat) Less(i, j int) bool { return a[i].heartbeat.Before(a[j].heartbeat) }
-func (a addresssByHeartbeat) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a addressesByHeartbeat) Len() int           { return len(a) }
+func (a addressesByHeartbeat) Less(i, j int) bool { return a[i].heartbeat.Before(a[j].heartbeat) }
+func (a addressesByHeartbeat) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // accountSet is simply a set of addresses to check for existence, and a signer
 // capable of deriving addresses from transactions.
