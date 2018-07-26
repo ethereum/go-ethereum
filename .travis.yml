@@ -2,7 +2,6 @@ sudo: required
 language: go
 go_import_path: github.com/ethereum/go-ethereum
 services: skip
-before_install: skip
 
 jobs:
   include:
@@ -42,15 +41,14 @@ jobs:
     - kill %1
 
   - stage: Github release
+    script:
+      - make tomo
+      - mv build/bin/tomo build/bin/tomo-linux-amd64
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
-      # name:
-      # body: (formating not preserved)
-      # prerelease: true
-      # draft: true
       file:
-        - "build/bin/tomo"
+        - "build/bin/tomo-linux-amd64"
       skip_cleanup: true
       on:
         branch: master
@@ -62,6 +60,8 @@ jobs:
     before_install:
       - docker build -t tomochain/tomochain .
       - docker run tomochain/tomochain
+    install: skip
+    script: skip
     deploy:
       provider: script
       script:
@@ -81,6 +81,7 @@ jobs:
 
   - stage: Trigger rebuild of infrastructure image
     sudo: false
+    install: skip
     script: bash docker_rebuild.sh
 
 stages:
