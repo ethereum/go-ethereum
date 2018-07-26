@@ -3,13 +3,13 @@ package main
 //@NOTE SHYFT main func for api, sets up router and spins up a server
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
-  "net"
-  "fmt"
-  "os"
-  "github.com/ShyftNetwork/go-empyrean/crypto"
-  "bytes"
-  "github.com/ShyftNetwork/go-empyrean/common/hexutil"
-  "io"
+	"bytes"
+	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"io"
+	"net"
+	"os"
 )
 
 const (
@@ -131,7 +131,7 @@ func handleRequest(conn net.Conn) {
 		fmt.Println("HASH IS ::", hexutil.Encode(new_msg2))
 
 		//send_message := append(new_msg2, []byte{byte(10)}...)
-		new_sig , err := crypto.Sign(new_msg2, key)
+		new_sig, err := crypto.Sign(new_msg2, key)
 		if err != nil {
 			fmt.Println("The crypto.Sign err is ", err)
 		}
