@@ -448,29 +448,20 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	if first > last {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
-	batchSize := last - first + 1
-	log.Info("Exporting batch of blocks", "count", batchSize)
+	log.Info("Exporting batch of blocks", "count", last-first+1)
 
-	exportTimeElapsed := mclock.Now()
+	start, reported := time.Now(), time.Now()
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
-		var (
-			now     = mclock.Now()
-			elapsed = time.Duration(now) - time.Duration(exportTimeElapsed)
-		)
-
-		if elapsed >= statsReportLimit {
-			exportedBlocks := block.NumberU64() - first
-			log.Info("Exporting blocks", "exported", exportedBlocks, "elapsed", common.PrettyDuration(elapsed))
-			exportTimeElapsed = mclock.Now()
-		}
-
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
 		}
-
 		if err := block.EncodeRLP(w); err != nil {
 			return err
+		}
+		if time.Since(reported) >= statsReportLimit {
+			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
 		}
 	}
 
@@ -1216,8 +1207,8 @@ type insertStats struct {
 	startTime                  mclock.AbsTime
 }
 
-// statsReportLimit is the time limit during import and export after which we always print
-// out progress. This avoids the user wondering what's going on.
+// statsReportLimit is the time limit during import and export after which we
+// always print out progress. This avoids the user wondering what's going on.
 const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
