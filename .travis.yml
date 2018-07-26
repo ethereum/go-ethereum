@@ -88,11 +88,11 @@ stages:
   - name: Lint
   - name: Build and test
   - name: Github release
-    if: type != pull_request AND branch = master AND tag = true
+    if: type != pull_request AND branch = master AND tag = true AND repo = tomochain/tomochain
   - name: Build and push tomochain/tomochain image
-    if: type != pull_request AND branch = master
+    if: type != pull_request AND branch = master AND repo = tomochain/tomochain
   - name: Trigger rebuild of tomochain/infra-tomochain image
-    if: type != pull_request AND branch = master
+    if: type != pull_request AND branch = master AND repo = tomochain/tomochain
 
 notifications:
   slack:
