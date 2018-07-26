@@ -1218,6 +1218,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 func SetupNetwork(ctx *cli.Context) {
 	// TODO(fjl): move target gas limit into config
 	params.TargetGasLimit = ctx.GlobalUint64(TargetGasLimitFlag.Name)
+	log.Info("Current effective", "targetGasLimit", params.TargetGasLimit)
 }
 
 func SetupMetrics(ctx *cli.Context) {
