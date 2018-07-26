@@ -6,10 +6,9 @@ import (
   "net"
   "fmt"
   "os"
-	//"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"bytes"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+  "github.com/ShyftNetwork/go-empyrean/crypto"
+  "bytes"
+  "github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 const (
