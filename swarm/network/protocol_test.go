@@ -30,6 +30,8 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
+const DefaultVersion = 5
+
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
@@ -127,23 +129,30 @@ type bzzTester struct {
 	*p2ptest.ProtocolTester
 	addr *BzzAddr
 	cs   map[string]chan bool
+	bzz  *Bzz
 }
 
-func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr) *bzzTester {
+func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 	config := &BzzConfig{
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
 		HiveParams:   NewHiveParams(),
 		NetworkID:    DefaultNetworkID,
+		LightNode:    lightNode,
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
 	bzz := NewBzz(config, kad, nil, nil, nil)
+	return bzz
+}
 
-	s := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, bzz.runBzz)
+func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr, lightNode bool) *bzzTester {
+	bzz := newBzz(addr, lightNode)
+	pt := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), n, bzz.runBzz)
 
 	return &bzzTester{
 		addr:           addr,
-		ProtocolTester: s,
+		ProtocolTester: pt,
+		bzz:            bzz,
 	}
 }
 
@@ -184,22 +193,24 @@ func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptes
 	return nil
 }
 
-func correctBzzHandshake(addr *BzzAddr) *HandshakeMsg {
+func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	return &HandshakeMsg{
-		Version:   5,
+		Version:   DefaultVersion,
 		NetworkID: DefaultNetworkID,
 		Addr:      addr,
+		LightNode: lightNode,
 	}
 }
 
 func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
+	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr)
+	s := newBzzHandshakeTester(t, 1, addr, lightNode)
 	id := s.IDs[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 5, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
+		correctBzzHandshake(addr, lightNode),
+		&HandshakeMsg{Version: DefaultVersion, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
 	)
 
@@ -209,14 +220,15 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeVersionMismatch(t *testing.T) {
+	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr)
+	s := newBzzHandshakeTester(t, 1, addr, lightNode)
 	id := s.IDs[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 0, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
-		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= 5)")},
+		correctBzzHandshake(addr, lightNode),
+		&HandshakeMsg{Version: 0, NetworkID: DefaultNetworkID, Addr: NewAddrFromNodeID(id)},
+		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", DefaultVersion)},
 	)
 
 	if err != nil {
@@ -225,16 +237,59 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeSuccess(t *testing.T) {
+	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr)
+	s := newBzzHandshakeTester(t, 1, addr, lightNode)
 	id := s.IDs[0]
 
 	err := s.testHandshake(
-		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 5, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
+		correctBzzHandshake(addr, lightNode),
+		&HandshakeMsg{Version: DefaultVersion, NetworkID: DefaultNetworkID, Addr: NewAddrFromNodeID(id)},
 	)
 
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBzzHandshakeLightNodeOff(t *testing.T) {
+	randomAddr := RandomAddr()
+	pt := newBzzHandshakeTester(t, 1, randomAddr, false)
+	id := pt.IDs[0]
+	addr := NewAddrFromNodeID(id)
+	peerLightNode := false
+
+	err := pt.testHandshake(
+		correctBzzHandshake(randomAddr, false),
+		&HandshakeMsg{Version: DefaultVersion, NetworkID: DefaultNetworkID, Addr: addr, LightNode: peerLightNode},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pt.bzz.handshakes[id].LightNode != peerLightNode {
+		t.Fatal(fmt.Sprintf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[id].LightNode, peerLightNode))
+	}
+}
+
+func TestBzzHandshakeLightNodeOn(t *testing.T) {
+	randomAddr := RandomAddr()
+	pt := newBzzHandshakeTester(t, 1, randomAddr, false)
+	id := pt.IDs[0]
+	addr := NewAddrFromNodeID(id)
+	peerLightNode := true
+
+	err := pt.testHandshake(
+		correctBzzHandshake(randomAddr, false),
+		&HandshakeMsg{Version: DefaultVersion, NetworkID: DefaultNetworkID, Addr: addr, LightNode: peerLightNode},
+	)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pt.bzz.handshakes[id].LightNode != peerLightNode {
+		t.Fatal(fmt.Sprintf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[id].LightNode, peerLightNode))
 	}
 }

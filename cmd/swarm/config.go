@@ -70,6 +70,7 @@ const (
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
 	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
 	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_LIGHT_NODE_ENABLE    = "SWARM_LIGHT_NODE_ENABLE"
 	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
@@ -206,6 +207,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncUpdateDelay = d
 	}
 
+	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
+		currentConfig.LightNodeEnabled = true
+	}
+
 	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
 		currentConfig.DeliverySkipCheck = true
 	}
@@ -300,6 +305,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
 		if d, err := time.ParseDuration(v); err != nil {
 			currentConfig.SyncUpdateDelay = d
+		}
+	}
+
+	if lightnodeenable := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lightnodeenable != "" {
+		if lightnode, err := strconv.ParseBool(lightnodeenable); err != nil {
+			currentConfig.LightNodeEnabled = lightnode
 		}
 	}
 
