@@ -174,12 +174,13 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		arch = flag.String("arch", "", "Architecture to cross build for")
-		cc   = flag.String("cc", "", "C compiler to cross build with")
+		arch   = flag.String("arch", "", "Architecture to cross build for")
+		cc     = flag.String("cc", "", "C compiler to cross build with")
+		static = flag.Bool("static", false, "Build a static linked binary")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
-
+	env.Static = *static
 	// Check Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
 	if !strings.Contains(runtime.Version(), "devel") {
@@ -247,13 +248,14 @@ func buildFlags(env build.Environment) (flags []string) {
 	if env.Commit != "" {
 		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
 	}
-	if runtime.GOOS == "darwin" {
-		ld = append(ld, "-s")
+	ld = append(ld, "-s")
+	ld = append(ld, "-w")
+
+	if env.Static {
+		ld = append(ld, "-extldflags -static")
 	}
 
-	if len(ld) > 0 {
-		flags = append(flags, "-ldflags", strings.Join(ld, " "))
-	}
+	flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	return flags
 }
 

@@ -41,11 +41,12 @@ type Environment struct {
 	Buildnum            string
 	IsPullRequest       bool
 	IsCronJob           bool
+	Static              bool
 }
 
 func (env Environment) String() string {
-	return fmt.Sprintf("%s env (commit:%s branch:%s tag:%s buildnum:%s pr:%t)",
-		env.Name, env.Commit, env.Branch, env.Tag, env.Buildnum, env.IsPullRequest)
+	return fmt.Sprintf("%s env (commit:%s branch:%s tag:%s buildnum:%s pr:%t static:%t)",
+		env.Name, env.Commit, env.Branch, env.Tag, env.Buildnum, env.IsPullRequest, env.Static)
 }
 
 // Env returns metadata about the current CI environment, falling back to LocalEnv
