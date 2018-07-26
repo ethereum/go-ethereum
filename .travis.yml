@@ -38,7 +38,7 @@ jobs:
     - while sleep 540; do echo "[ still running ]"; done &
     - go run build/ci.go test -coverage
     - kill %1
-  - stage: Build and push Docker image
+  - stage: Build and push tomochain/tomochain and tomochain/bootnode containers
     services:
       - docker
     before_install:
@@ -49,7 +49,7 @@ jobs:
       script: bash docker_push.sh
       on:
         branch: master
-  - stage: Trigger rebuild of infrastructure image
+  - stage: Trigger rebuild of tomochain/infra-tomochain image
     sudo: false
     script: bash docker_rebuild.sh
 
