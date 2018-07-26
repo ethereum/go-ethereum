@@ -7,9 +7,10 @@ import (
 
 var blockExplorerDb *sql.DB
 
+// @NOTE:SHYFT - TODO: Move connection parameters into an env file
 const (
-	// connStr     = "user=postgres dbname=shyftdb password=docker sslmode=disable"
-	connStr     = "postgresql://postgres:docker@pg:5432/shyftdb"
+	connStr = "user=postgres dbname=shyftdb host=pg password=docker sslmode=disable"
+	// connStr     = "postgresql://postgres:docker@pg:5432/shyftdb"
 	connStrTest = "user=postgres dbname=shyftdbtest password=docker sslmode=disable"
 )
 

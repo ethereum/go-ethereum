@@ -1,2 +1,2 @@
 #!/bin/sh
-./geth --identity "ShyftTestnetNode" --keystore ./ --datadir "./shyftData" init ShyftNetwork.json
+/bin/geth --identity "ShyftTestnetNode" --keystore ./ --datadir "./shyftData" init ShyftNetwork.json

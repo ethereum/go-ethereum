@@ -1,6 +1,6 @@
- version: '3'
+version: '3'
 
- services:
+services:
   shyftgeth:
     build:
       context: $PWD 
@@ -14,26 +14,34 @@
       - "5432:5432"
     volumes:
       - .:/go/src/ShyftNetwork/go-empyrean
-    # working_dir: /go/src/ShyftNetwork/go-empyrean
+    working_dir: /go/src/ShyftNetwork/go-empyrean
     depends_on: 
       - pg
-    # command: ["./wait-for-postgres.sh", "pg:5432","./initShyftGeth.sh" ]
-    entrypoint: ["/go/src/ShyftNetwork/go-empyrean/wait-for-postgres.sh", "pg:5432","/go/src/ShyftNetwork/go-empyrean/shyft-cli/initShyftGeth.sh"]
+    networks:
+      - shyftnet
+    command: >
+      sh -c '/go/src/ShyftNetwork/go-empyrean/wait-for.sh pg:5432 &&
+           /initShyftGeth.sh &&
+            /startShyftGeth.sh'
   pg:
     build: 
       context: $PWD
       dockerfile: containers/docker/develop-alpine/pg/Dockerfile
     volumes:
-      - ./pg-data:/var/lib/postgresql/data
+      - ./pg-data/data:/var/lib/postgresql/data
     ports:
-      - "5432"
+      - "8001:5432"
+    networks:
+      - shyftnet
     environment:
       - POSTGRES_USER=postgres
       - POSGRES_PASSWORD=docker
       - PGDATA=/pg-data
 
-  
-  
+networks:
+  shyftnet:
+    driver: bridge
+
 
   # api:
   #   build:
