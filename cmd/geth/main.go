@@ -83,6 +83,7 @@ var (
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
 		utils.FastSyncFlag,
+		utils.ExitWhenSynced,
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
@@ -317,6 +318,24 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 	}()
+
+	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSynced.Name); exitWhenSynced >= 0 {
+		go func() {
+						if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+							log.Warn("Exit after block synchronisation disabled for light mode")
+						} else {
+							var ethereum *eth.Ethereum
+							if err := stack.Service(&ethereum); err != nil {
+								utils.Fatalf("Ethereum service not running: %v", err)
+							}
+							<-ethereum.Downloader().SyncedCh
+							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+							time.Sleep(exitWhenSynced)
+							stack.Stop()
+						}
+		}()
+	}
+
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running

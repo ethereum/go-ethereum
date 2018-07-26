@@ -162,6 +162,11 @@ var (
 		Name:  "fast",
 		Usage: "Enable fast syncing through state downloads (replaced by --syncmode)",
 	}
+	ExitWhenSynced = cli.DurationFlag{
+		Name: "exitwhensynced",
+		Usage: "Exists syncing by given time (default 0) after block synchronisation",
+		Value: -1,
+	}
 	LightModeFlag = cli.BoolFlag{
 		Name:  "light",
 		Usage: "Enable light client mode (replaced by --syncmode)",
@@ -1077,7 +1082,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
 	}
-
+	if ctx.GlobalIsSet(ExitWhenSynced.Name) {
+		cfg.NetworkId = ctx.GlobalUint64(ExitWhenSynced.Name)
+	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
