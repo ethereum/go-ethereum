@@ -9,6 +9,7 @@ import (
   "github.com/ShyftNetwork/go-empyrean/crypto"
   "bytes"
   "github.com/ShyftNetwork/go-empyrean/common/hexutil"
+  "io"
 )
 
 const (
@@ -62,10 +63,18 @@ func handleRequest(conn net.Conn) {
 
 		for {
 			msg, err := conn.Read(buf)
-
-			if err == nil {
-				msgBuf = append(msgBuf, buf[:msg]...)
+			if err == io.EOF {
+				fmt.Println("END OF FILE, CLOSING CONNECTION")
+				conn.Close()
+				conn = nil
+				break
 			}
+			if err != nil {
+				fmt.Println("Connection error: ", err)
+				break
+			}
+
+			msgBuf = append(msgBuf, buf[:msg]...)
 			index := bytes.IndexByte(msgBuf, 0x0a)
 			for index != -1 {
 				newMsg := msgBuf[:index]
