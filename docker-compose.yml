@@ -21,14 +21,15 @@ services:
       - shyftnet
     command: >
       sh -c '/go/src/ShyftNetwork/go-empyrean/wait-for.sh pg:5432 &&
-           /initShyftGeth.sh &&
+            DBENV=docker export DBENV &&
+            /initShyftGeth.sh &&
             /startShyftGeth.sh'
   pg:
     build: 
       context: $PWD
       dockerfile: containers/docker/develop-alpine/pg/Dockerfile
     volumes:
-      - ./pg-data/data:/var/lib/postgresql/data
+      - ./pg-data:/var/lib/postgresql/
     ports:
       - "8001:5432"
     networks:
@@ -36,12 +37,19 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSGRES_PASSWORD=docker
-      - PGDATA=/pg-data
+  # api:
+  #   build:
+  #     context: $PWD 
+  #     dockerfile: containers/docker/develop-alpine/shyftApi/Dockerfile   
+  # volumes: -
+
+
 
 networks:
   shyftnet:
     driver: bridge
-
+# volumes: 
+#   pg-data:
 
   # api:
   #   build:

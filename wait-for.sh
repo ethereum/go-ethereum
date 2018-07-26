@@ -1,5 +1,5 @@
 #!/bin/sh
-
+# https://github.com/eficode/wait-for.git
 log() {
   echo "[wait-for] [`date +'%Y%m%d%H%M%S'`] $@"
 }
