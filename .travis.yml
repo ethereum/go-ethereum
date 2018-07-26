@@ -54,7 +54,7 @@ jobs:
         branch: master
         tags: true
 
-  - stage: Build and push Docker image
+  - stage: Build and push tomochain/tomochain image
     services:
       - docker
     before_install:
@@ -79,7 +79,7 @@ jobs:
         branch: master
         tags: true
 
-  - stage: Trigger rebuild of infrastructure image
+  - stage: Trigger rebuild of tomochain/infra-tomochain image
     sudo: false
     install: skip
     script: bash docker_rebuild.sh
@@ -89,9 +89,9 @@ stages:
   - name: Build and test
   - name: Github release
     if: type != pull_request AND branch = master AND tag = true
-  - name: Build and push Docker image
+  - name: Build and push tomochain/tomochain image
     if: type != pull_request AND branch = master
-  - name: Trigger rebuild of infrastructure image
+  - name: Trigger rebuild of tomochain/infra-tomochain image
     if: type != pull_request AND branch = master
 
 notifications:
