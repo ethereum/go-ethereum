@@ -12,6 +12,7 @@ import (
 	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
 	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
 	"strings"
+	"fmt"
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -38,6 +39,19 @@ type SBlock struct {
 	TxCount  	int
 	UncleCount 	int
 	Blocks 		[]SBlock
+}
+
+type InteralWrite struct {
+	Hash    string
+	Type    string
+	From    string
+	To      string
+	Value   string
+	Gas     uint64
+	GasUsed uint64
+	Input   string
+	Output  string
+	Time    string
 }
 
 //blockRes struct
@@ -479,6 +493,16 @@ func InsertTx (sqldb *sql.DB, txData ShyftTxEntryPretty) {
 	err := sqldb.QueryRow(sqlStatement, strings.ToLower(txData.TxHash), txData.From, txData.To.String(), strings.ToLower(txData.BlockHash), txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, txData.IsContract, txData.Status, txData.Age, txData.Data).Scan(&retNonce)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func InsertInternalTx(sqldb *sql.DB, i InteralWrite) {
+	var returnValue string
+	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
+	qerr := sqldb.QueryRow(sqlStatement, i.Type, i.Hash, i.From, i.To, i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
+	if qerr != nil {
+		fmt.Println(qerr)
+		panic(qerr)
 	}
 }
 

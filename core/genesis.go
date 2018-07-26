@@ -190,7 +190,7 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 			InsertTx(sqldb, txData)
 
 		default:
-			 log.Info("Found Genesis Block")
+			log.Info("Found Genesis Block")
 		}}
 }
 
@@ -259,11 +259,20 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 			log.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db)
-		//@NOTE:SHYFT WRITE TO BLOCK ZERO DB
-		WriteShyftBlockZero(block, genesis)
-		//@NOTE:SHYFT WRITE TO DB
-		WriteShyftGen(genesis, block)
-
+		//@NOTE:SHYFT SWITCH CASE ENSURES SHYFT GENESIS FUNCTIONS ARE ONLY CALLED ONCE
+		sqldb, _ := DBConnection()
+		serror := BlockExists(sqldb, block.Hash().String())
+		switch {
+		case serror == sql.ErrNoRows:
+			//@NOTE:SHYFT WRITE TO BLOCK ZERO DB
+			WriteShyftBlockZero(block, genesis)
+			//@NOTE:SHYFT WRITE TO DB
+			WriteShyftGen(genesis, block)
+		case serror != nil:
+			panic(serror)
+		default:
+			log.Info("Genesis Block Written")
+		}
 		return genesis.Config, block.Hash(), err
 	}
 
