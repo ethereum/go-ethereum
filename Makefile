@@ -16,6 +16,13 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
+geth-static:
+	build/env.sh go run build/ci.go install -static ./cmd/geth
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+static: geth-static
+
 swarm:
 	build/env.sh go run build/ci.go install ./cmd/swarm
 	@echo "Done building."
@@ -23,6 +30,9 @@ swarm:
 
 all:
 	build/env.sh go run build/ci.go install
+
+all-static:
+	build/env.sh go run build/ci.go install -static
 
 android:
 	build/env.sh go run build/ci.go aar --local
