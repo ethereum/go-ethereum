@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	HexSignMethod           = "2fb1b25f"
+	HexSignMethod           = "e341eaa4"
 	RewardMasterPercent     = 30
 	RewardVoterPercent      = 60
 	RewardFoundationPercent = 10
@@ -43,7 +44,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 
 		// Create and send tx to smart contract for sign validate block.
 		nonce := pool.State().GetNonce(account.Address)
-		tx := CreateTxSign(block.Number(), nonce, common.HexToAddress(common.BlockSigners))
+		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.HexToAddress(common.BlockSigners))
 		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 		if err != nil {
 			log.Error("Fail to create tx sign", "error", err)
@@ -58,24 +59,24 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 }
 
 // Create tx sign.
-func CreateTxSign(blockNumber *big.Int, nonce uint64, blockSigner common.Address) *types.Transaction {
-	blockHex := common.LeftPadBytes(blockNumber.Bytes(), 32)
+func CreateTxSign(blockNumber *big.Int, blockHash common.Hash, nonce uint64, blockSigner common.Address) *types.Transaction {
 	data := common.Hex2Bytes(HexSignMethod)
-	inputData := append(data, blockHex...)
-	tx := types.NewTransaction(nonce, blockSigner, big.NewInt(0), 100000, big.NewInt(0), inputData)
+	inputData := append(data, common.LeftPadBytes(blockNumber.Bytes(), 32)...)
+	inputData = append(inputData, common.LeftPadBytes(blockHash.Bytes(), 32)...)
+	tx := types.NewTransaction(nonce, blockSigner, big.NewInt(0), 200000, big.NewInt(0), inputData)
 
 	return tx
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(addrBlockSigner common.Address, client bind.ContractBackend, blockNumber uint64) ([]common.Address, error) {
+func GetSignersFromContract(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
 	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
 	if err != nil {
 		log.Error("Fail get instance of blockSigner", "error", err)
 		return nil, err
 	}
 	opts := new(bind.CallOpts)
-	addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(blockNumber))
+	addrs, err := blockSigner.GetSigners(opts, blockHash)
 	if err != nil {
 		log.Error("Fail get block signers", "error", err)
 		return nil, err
@@ -85,14 +86,15 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	startBlockNumber := number - (rCheckpoint * 2) + 1
 	endBlockNumber := startBlockNumber + rCheckpoint - 1
 	signers := make(map[common.Address]*rewardLog)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
-		addrs, err := GetSignersFromContract(blockSignerAddr, client, i)
+		block := chain.GetHeaderByNumber(i)
+		addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
 		if err != nil {
 			log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
 			return nil, err

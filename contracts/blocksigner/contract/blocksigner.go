@@ -16,18 +16,18 @@ import (
 )
 
 // BlockSignerABI is the input ABI used to generate the binding from.
-const BlockSignerABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"sign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"getSigners\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"_blockNumber\",\"type\":\"uint256\"}],\"name\":\"Sign\",\"type\":\"event\"}]"
+const BlockSignerABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_blockNumber\",\"type\":\"uint256\"},{\"name\":\"_blockHash\",\"type\":\"bytes32\"}],\"name\":\"sign\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_blockHash\",\"type\":\"bytes32\"}],\"name\":\"getSigners\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"epochNumber\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_epochNumber\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_signer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"_blockNumber\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"_blockHash\",\"type\":\"bytes32\"}],\"name\":\"Sign\",\"type\":\"event\"}]"
 
 // BlockSignerBin is the compiled bytecode used for deploying new contracts.
-const BlockSignerBin = `0x6060604052341561000f57600080fd5b6102d88061001e6000396000f30060606040526004361061004b5763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632fb1b25f8114610050578063dfceceae14610068575b600080fd5b341561005b57600080fd5b6100666004356100d1565b005b341561007357600080fd5b61007e6004356101b3565b60405160208082528190810183818151815260200191508051906020019060200280838360005b838110156100bd5780820151838201526020016100a5565b505050509050019250505060405180910390f35b43819010156100df57600080fd5b6100f1816107bc63ffffffff61023a16565b4311156100fd57600080fd5b600081815260208190526040902080546001810161011b8382610250565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff19163373ffffffffffffffffffffffffffffffffffffffff8116919091179091557f9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059908260405173ffffffffffffffffffffffffffffffffffffffff909216825260208201526040908101905180910390a150565b6101bb610279565b60008083815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561022e57602002820191906000526020600020905b815473ffffffffffffffffffffffffffffffffffffffff168152600190910190602001808311610203575b50505050509050919050565b60008282018381101561024957fe5b9392505050565b8154818355818115116102745760008381526020902061027491810190830161028b565b505050565b60206040519081016040526000815290565b6102a991905b808211156102a55760008155600101610291565b5090565b905600a165627a7a7230582072c605c43392422edd0a185ff1131c536a80cb5329c717d23fc954f2afb51b5e0029`
+const BlockSignerBin = `0x6060604052341561000f57600080fd5b60405160208061034083398101604052808051600255505061030a806100366000396000f3006060604052600436106100565763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035041663e341eaa4811461005b578063e7ec6aef14610076578063f4145a83146100df575b600080fd5b341561006657600080fd5b610074600435602435610104565b005b341561008157600080fd5b61008c6004356101f7565b60405160208082528190810183818151815260200191508051906020019060200280838360005b838110156100cb5780820151838201526020016100b3565b505050509050019250505060405180910390f35b34156100ea57600080fd5b6100f261027c565b60405190815260200160405180910390f35b60008281526001602081905260409091208054909181016101258382610282565b506000918252602080832091909101839055828252819052604090208054600181016101518382610282565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff19163373ffffffffffffffffffffffffffffffffffffffff8116919091179091557f62855fa22e051687c32ac285857751f6d3f2c100c72756d8d30cb7ecb1f64f5490838360405173ffffffffffffffffffffffffffffffffffffffff909316835260208301919091526040808301919091526060909101905180910390a15050565b6101ff6102ab565b6000828152602081815260409182902080549092909182810201905190810160405280929190818152602001828054801561027057602002820191906000526020600020905b815473ffffffffffffffffffffffffffffffffffffffff168152600190910190602001808311610245575b50505050509050919050565b60025481565b8154818355818115116102a6576000838152602090206102a69181019083016102bd565b505050565b60206040519081016040526000815290565b6102db91905b808211156102d757600081556001016102c3565b5090565b905600a165627a7a72305820fd1c307716c14d8f8b179bb09b89555ec490e6b216e2c1018c7232361b947bc40029`
 
 // DeployBlockSigner deploys a new Ethereum contract, binding an instance of BlockSigner to it.
-func DeployBlockSigner(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *BlockSigner, error) {
+func DeployBlockSigner(auth *bind.TransactOpts, backend bind.ContractBackend, _epochNumber *big.Int) (common.Address, *types.Transaction, *BlockSigner, error) {
 	parsed, err := abi.JSON(strings.NewReader(BlockSignerABI))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(BlockSignerBin), backend)
+	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(BlockSignerBin), backend, _epochNumber)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -176,51 +176,77 @@ func (_BlockSigner *BlockSignerTransactorRaw) Transact(opts *bind.TransactOpts, 
 	return _BlockSigner.Contract.contract.Transact(opts, method, params...)
 }
 
-// GetSigners is a free data retrieval call binding the contract method 0xdfceceae.
+// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
 //
-// Solidity: function getSigners(_blockNumber uint256) constant returns(address[])
-func (_BlockSigner *BlockSignerCaller) GetSigners(opts *bind.CallOpts, _blockNumber *big.Int) ([]common.Address, error) {
+// Solidity: function epochNumber() constant returns(uint256)
+func (_BlockSigner *BlockSignerCaller) EpochNumber(opts *bind.CallOpts) (*big.Int, error) {
+	var (
+		ret0 = new(*big.Int)
+	)
+	out := ret0
+	err := _BlockSigner.contract.Call(opts, out, "epochNumber")
+	return *ret0, err
+}
+
+// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
+//
+// Solidity: function epochNumber() constant returns(uint256)
+func (_BlockSigner *BlockSignerSession) EpochNumber() (*big.Int, error) {
+	return _BlockSigner.Contract.EpochNumber(&_BlockSigner.CallOpts)
+}
+
+// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
+//
+// Solidity: function epochNumber() constant returns(uint256)
+func (_BlockSigner *BlockSignerCallerSession) EpochNumber() (*big.Int, error) {
+	return _BlockSigner.Contract.EpochNumber(&_BlockSigner.CallOpts)
+}
+
+// GetSigners is a free data retrieval call binding the contract method 0xe7ec6aef.
+//
+// Solidity: function getSigners(_blockHash bytes32) constant returns(address[])
+func (_BlockSigner *BlockSignerCaller) GetSigners(opts *bind.CallOpts, _blockHash [32]byte) ([]common.Address, error) {
 	var (
 		ret0 = new([]common.Address)
 	)
 	out := ret0
-	err := _BlockSigner.contract.Call(opts, out, "getSigners", _blockNumber)
+	err := _BlockSigner.contract.Call(opts, out, "getSigners", _blockHash)
 	return *ret0, err
 }
 
-// GetSigners is a free data retrieval call binding the contract method 0xdfceceae.
+// GetSigners is a free data retrieval call binding the contract method 0xe7ec6aef.
 //
-// Solidity: function getSigners(_blockNumber uint256) constant returns(address[])
-func (_BlockSigner *BlockSignerSession) GetSigners(_blockNumber *big.Int) ([]common.Address, error) {
-	return _BlockSigner.Contract.GetSigners(&_BlockSigner.CallOpts, _blockNumber)
+// Solidity: function getSigners(_blockHash bytes32) constant returns(address[])
+func (_BlockSigner *BlockSignerSession) GetSigners(_blockHash [32]byte) ([]common.Address, error) {
+	return _BlockSigner.Contract.GetSigners(&_BlockSigner.CallOpts, _blockHash)
 }
 
-// GetSigners is a free data retrieval call binding the contract method 0xdfceceae.
+// GetSigners is a free data retrieval call binding the contract method 0xe7ec6aef.
 //
-// Solidity: function getSigners(_blockNumber uint256) constant returns(address[])
-func (_BlockSigner *BlockSignerCallerSession) GetSigners(_blockNumber *big.Int) ([]common.Address, error) {
-	return _BlockSigner.Contract.GetSigners(&_BlockSigner.CallOpts, _blockNumber)
+// Solidity: function getSigners(_blockHash bytes32) constant returns(address[])
+func (_BlockSigner *BlockSignerCallerSession) GetSigners(_blockHash [32]byte) ([]common.Address, error) {
+	return _BlockSigner.Contract.GetSigners(&_BlockSigner.CallOpts, _blockHash)
 }
 
-// Sign is a paid mutator transaction binding the contract method 0x2fb1b25f.
+// Sign is a paid mutator transaction binding the contract method 0xe341eaa4.
 //
-// Solidity: function sign(_blockNumber uint256) returns()
-func (_BlockSigner *BlockSignerTransactor) Sign(opts *bind.TransactOpts, _blockNumber *big.Int) (*types.Transaction, error) {
-	return _BlockSigner.contract.Transact(opts, "sign", _blockNumber)
+// Solidity: function sign(_blockNumber uint256, _blockHash bytes32) returns()
+func (_BlockSigner *BlockSignerTransactor) Sign(opts *bind.TransactOpts, _blockNumber *big.Int, _blockHash [32]byte) (*types.Transaction, error) {
+	return _BlockSigner.contract.Transact(opts, "sign", _blockNumber, _blockHash)
 }
 
-// Sign is a paid mutator transaction binding the contract method 0x2fb1b25f.
+// Sign is a paid mutator transaction binding the contract method 0xe341eaa4.
 //
-// Solidity: function sign(_blockNumber uint256) returns()
-func (_BlockSigner *BlockSignerSession) Sign(_blockNumber *big.Int) (*types.Transaction, error) {
-	return _BlockSigner.Contract.Sign(&_BlockSigner.TransactOpts, _blockNumber)
+// Solidity: function sign(_blockNumber uint256, _blockHash bytes32) returns()
+func (_BlockSigner *BlockSignerSession) Sign(_blockNumber *big.Int, _blockHash [32]byte) (*types.Transaction, error) {
+	return _BlockSigner.Contract.Sign(&_BlockSigner.TransactOpts, _blockNumber, _blockHash)
 }
 
-// Sign is a paid mutator transaction binding the contract method 0x2fb1b25f.
+// Sign is a paid mutator transaction binding the contract method 0xe341eaa4.
 //
-// Solidity: function sign(_blockNumber uint256) returns()
-func (_BlockSigner *BlockSignerTransactorSession) Sign(_blockNumber *big.Int) (*types.Transaction, error) {
-	return _BlockSigner.Contract.Sign(&_BlockSigner.TransactOpts, _blockNumber)
+// Solidity: function sign(_blockNumber uint256, _blockHash bytes32) returns()
+func (_BlockSigner *BlockSignerTransactorSession) Sign(_blockNumber *big.Int, _blockHash [32]byte) (*types.Transaction, error) {
+	return _BlockSigner.Contract.Sign(&_BlockSigner.TransactOpts, _blockNumber, _blockHash)
 }
 
 // BlockSignerSignIterator is returned from FilterSign and is used to iterate over the raw logs and unpacked data for Sign events raised by the BlockSigner contract.
@@ -294,12 +320,13 @@ func (it *BlockSignerSignIterator) Close() error {
 type BlockSignerSign struct {
 	Signer      common.Address
 	BlockNumber *big.Int
+	BlockHash   [32]byte
 	Raw         types.Log // Blockchain specific contextual infos
 }
 
-// FilterSign is a free log retrieval operation binding the contract event 0x9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059.
+// FilterSign is a free log retrieval operation binding the contract event 0x62855fa22e051687c32ac285857751f6d3f2c100c72756d8d30cb7ecb1f64f54.
 //
-// Solidity: event Sign(_signer address, _blockNumber uint256)
+// Solidity: event Sign(_signer address, _blockNumber uint256, _blockHash bytes32)
 func (_BlockSigner *BlockSignerFilterer) FilterSign(opts *bind.FilterOpts) (*BlockSignerSignIterator, error) {
 
 	logs, sub, err := _BlockSigner.contract.FilterLogs(opts, "Sign")
@@ -309,9 +336,9 @@ func (_BlockSigner *BlockSignerFilterer) FilterSign(opts *bind.FilterOpts) (*Blo
 	return &BlockSignerSignIterator{contract: _BlockSigner.contract, event: "Sign", logs: logs, sub: sub}, nil
 }
 
-// WatchSign is a free log subscription operation binding the contract event 0x9a10b6124411386407c4a174729b856d293832181c352e98b5cb316b96cd3059.
+// WatchSign is a free log subscription operation binding the contract event 0x62855fa22e051687c32ac285857751f6d3f2c100c72756d8d30cb7ecb1f64f54.
 //
-// Solidity: event Sign(_signer address, _blockNumber uint256)
+// Solidity: event Sign(_signer address, _blockNumber uint256, _blockHash bytes32)
 func (_BlockSigner *BlockSignerFilterer) WatchSign(opts *bind.WatchOpts, sink chan<- *BlockSignerSign) (event.Subscription, error) {
 
 	logs, sub, err := _BlockSigner.contract.WatchLogs(opts, "Sign")

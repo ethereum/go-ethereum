@@ -5,20 +5,27 @@ import "./libs/SafeMath.sol";
 contract BlockSigner {
     using SafeMath for uint256;
 
-    event Sign(address _signer, uint256 _blockNumber);
+    event Sign(address _signer, uint256 _blockNumber, bytes32 _blockHash);
 
-    mapping(uint256 => address[]) blockSigners;
+    mapping(bytes32 => address[]) blockSigners;
+    mapping(uint256 => bytes32[]) blocks;
+    uint256 public epochNumber;
 
-    function sign(uint256 _blockNumber) external {
-        // consensus should validate all senders are validators, gas = 0
-        require(block.number >= _blockNumber);
-        require(block.number <= _blockNumber.add(990 * 2));
-        blockSigners[_blockNumber].push(msg.sender);
-
-        emit Sign(msg.sender, _blockNumber);
+    function BlockSigner(uint256 _epochNumber) public {
+        epochNumber = _epochNumber;
     }
 
-    function getSigners(uint256 _blockNumber) public view returns(address[]) {
-        return blockSigners[_blockNumber];
+    function sign(uint256 _blockNumber, bytes32 _blockHash) external {
+        // consensus should validate all senders are validators, gas = 0
+        //require(block.number >= _blockNumber);
+        //require(block.number <= _blockNumber.add(epochNumber * 2));
+        blocks[_blockNumber].push(_blockHash);
+        blockSigners[_blockHash].push(msg.sender);
+
+        emit Sign(msg.sender, _blockNumber, _blockHash);
+    }
+
+    function getSigners(bytes32 _blockHash) public view returns(address[]) {
+        return blockSigners[_blockHash];
     }
 }
