@@ -79,14 +79,23 @@ type account struct {
 	Unlocks   []string `toml:"unlocks"`
 	Passwords []string `toml:"passwords"`
 }
+
+type Bootnodes struct {
+	Mainnet     []string `toml:"main"`
+	Testnet     []string `toml:"test"`
+	Rinkeby     []string `toml:"rinkeby"`
+	DiscoveryV5 []string `toml:"discoveryv5"`
+}
+
 type tomoConfig struct {
-	Eth        eth.Config       `toml:"eth"`
-	Shh        whisper.Config   `toml:"ssh"`
-	Node       node.Config      `toml:"node"`
-	Ethstats   ethstatsConfig   `toml:"ethstats"`
-	Dashboard  dashboard.Config `toml:"dashboard"`
-	Account    account          `toml:"account"`
-	MineEnable bool             `toml:"mine"`
+	Eth         eth.Config       `toml:"eth"`
+	Shh         whisper.Config   `toml:"ssh"`
+	Node        node.Config      `toml:"node"`
+	Ethstats    ethstatsConfig   `toml:"ethstats"`
+	Dashboard   dashboard.Config `toml:"dashboard"`
+	Account     account          `toml:"account"`
+	StakeEnable bool             `toml:"stake"`
+	Bootnodes   Bootnodes        `toml:"bootnodes"`
 }
 
 func loadConfig(file string, cfg *tomoConfig) error {
@@ -134,14 +143,18 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		if trimmed := strings.TrimSpace(env); trimmed != "" {
 			value := os.Getenv(trimmed)
 			for _, info := range strings.Split(value, ",") {
-				trimmed2 := strings.TrimSpace(info)
-				if (trimmed2 != "") {
+				if trimmed2 := strings.TrimSpace(info); trimmed2 != "" {
 					passwords = append(passwords, trimmed2)
 				}
 			}
 		}
 	}
 	cfg.Account.Passwords = passwords
+	//Apply Bootnodes
+	applyValues(cfg.Bootnodes.Mainnet, &params.MainnetBootnodes)
+	applyValues(cfg.Bootnodes.Testnet, &params.TestnetBootnodes)
+	applyValues(cfg.Bootnodes.Rinkeby, &params.RinkebyBootnodes)
+	applyValues(cfg.Bootnodes.DiscoveryV5, &params.DiscoveryV5Bootnodes)
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
@@ -158,6 +171,19 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
 	return stack, cfg
+}
+
+func applyValues(values []string, params *[]string) {
+	data := []string{}
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			data = append(data, trimmed)
+		}
+	}
+	if len(data) > 0 {
+		*params = data
+	}
+
 }
 
 // enableWhisper returns true in case one of the whisper flags is set.
