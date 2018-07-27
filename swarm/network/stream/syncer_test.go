@@ -181,10 +181,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			}
 		}
 		// here we distribute chunks of a random file into stores 1...nodes
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		// collect hashes in po 1 bin for each node

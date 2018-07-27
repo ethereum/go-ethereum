@@ -96,12 +96,13 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	defer sim.Close()
 
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectFull(nodes)
+	_, err := sim.AddNodesAndConnectChain(nodes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -139,11 +140,9 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				log.Error("WaitKademlia error: %v", "err", err)
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			log.Error("WaitKademlia error: %v", "err", err)
+			return err
 		}
 
 		log.Debug("Watching for disconnections")

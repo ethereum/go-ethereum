@@ -424,11 +424,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			}
 		}()
 
-		if *waitKademlia {
-			log.Debug("Waiting for kademlia")
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		log.Debug("Waiting for kademlia")
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		log.Debug("Watching for disconnections")
@@ -560,10 +558,8 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		}
 		netStore := item.(*storage.NetStore)
 
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		disconnections := sim.PeerEvents(
