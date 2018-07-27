@@ -5,11 +5,13 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	//"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"io"
 	"net"
 	"os"
+
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 const (
@@ -52,7 +54,10 @@ func main() {
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 
-	go readerConn(conn)
+	messages := make(chan []byte)
+
+	go readerConn(conn, messages)
+	go handleMessages(messages)
 
 	key, _ := crypto.HexToECDSA(testPrivHex)
 
@@ -78,30 +83,16 @@ func handleRequest(conn net.Conn) {
 
 }
 
-func readerConn(conn net.Conn) {
+func handleMessages(channel chan []byte) {
 	var prevMsg []byte
 	var addressOfClient []byte
 	var signatureFromClient []byte
 	var msgFromClient []byte
-	bufReader := bufio.NewReader(conn)
 
 	for {
-		msg, err := bufReader.ReadBytes(NEW_LINE_BYTE)
+		msg := <-channel
 
-		if err == io.EOF {
-			fmt.Println("END OF FILE, CLOSING CONNECTION")
-			conn.Close()
-			conn = nil
-			break
-		}
-		if err != nil {
-			fmt.Println("Connection error: ", err)
-			break
-		}
-
-		msg = msg[:len(msg)-1] // remove trailing new line byte
-
-		// similar to shift in bash
+		//similar to shift in bash
 		if prevMsg != nil {
 			s := string(prevMsg[:])
 			if s == "-- ADDRESS --" {
@@ -140,5 +131,28 @@ func readerConn(conn net.Conn) {
 			recoveredAddr := crypto.PubkeyToAddress(*pubKey)
 			fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
 		}
+	}
+}
+
+func readerConn(conn net.Conn, channel chan []byte) {
+	bufReader := bufio.NewReader(conn)
+
+	for {
+		msg, err := bufReader.ReadBytes(NEW_LINE_BYTE)
+
+		if err == io.EOF {
+			fmt.Println("END OF FILE, CLOSING CONNECTION")
+			conn.Close()
+			conn = nil
+			break
+		}
+		if err != nil {
+			fmt.Println("Connection error: ", err)
+			break
+		}
+
+		msg = msg[:len(msg)-1] // remove trailing new line byte
+
+		channel <- msg
 	}
 }
