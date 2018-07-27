@@ -90,18 +90,14 @@ type HTTPTimeouts struct {
 	IdleTimeout time.Duration
 }
 
-const (
-	DefaultHTTPReadTimeout  = 5 * time.Second
-	DefaultHTTPWriteTimeout = 10 * time.Second
-	DefaultHTTPIdleTimeout  = 120 * time.Second
-)
+var DefaultHTTPTimeouts = HTTPTimeouts{
+	ReadTimeout:  5 * time.Second,
+	WriteTimeout: 10 * time.Second,
+	IdleTimeout:  120 * time.Second,
+}
 
 func NewDefaultHTTPTimeouts() HTTPTimeouts {
-	return HTTPTimeouts{
-		ReadTimeout:  DefaultHTTPReadTimeout,
-		WriteTimeout: DefaultHTTPWriteTimeout,
-		IdleTimeout:  DefaultHTTPIdleTimeout,
-	}
+	return DefaultHTTPTimeouts
 }
 
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
