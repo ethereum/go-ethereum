@@ -38,7 +38,7 @@ func TestBlockSigner(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
-	blockSignerAddress, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend)
+	blockSignerAddress, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend, big.NewInt(99))
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}

@@ -170,7 +170,8 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("How many blocks per checkpoint? (default = 990)")
-		genesis.Config.Clique.RewardCheckpoint = uint64(w.readDefaultInt(990))
+		epochNumber := w.readDefaultInt(990)
+		genesis.Config.Clique.RewardCheckpoint = uint64(epochNumber)
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -201,7 +202,7 @@ func (w *wizard) makeGenesis() {
 		}
 
 		// Block Signers Smart Contract
-		blockSignerAddress, _, err := blockSignerContract.DeployBlockSigner(transactOpts, contractBackend)
+		blockSignerAddress, _, err := blockSignerContract.DeployBlockSigner(transactOpts, contractBackend, big.NewInt(int64(epochNumber)))
 		if err != nil {
 			fmt.Println("Can't deploy root registry")
 		}
