@@ -93,7 +93,7 @@ func (msg *jsonrpcMessage) isNotification() bool {
 	return msg.ID == nil && msg.Method != ""
 }
 
-// The message is a JSON-RPC 2.0 reponse if (1)it has a valid ID (2) empty in Mehod and Params field.
+// The message is a JSON-RPC 2.0 response if (1)it has a valid ID (2) empty in Mehod and Params field.
 func (msg *jsonrpcMessage) isResponse() bool {
 	return msg.hasValidID() && msg.Method == "" && len(msg.Params) == 0
 }
@@ -226,7 +226,7 @@ func DialStdIO(ctx context.Context) (*Client, error) {
 	})
 }
 
-// newClient creates a new connection to a RPC server.
+// newClient creates a new connection to an RPC server.
 func newClient(initctx context.Context, connectFunc func(context.Context) (net.Conn, error)) (*Client, error) {
 	conn, err := connectFunc(initctx)
 	if err != nil {
