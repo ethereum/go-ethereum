@@ -63,21 +63,20 @@ jobs:
     install: skip
     script: skip
     deploy:
-      provider: script
-      script:
-        - bash docker_push.sh latest
-        - bash docker_push.sh $TRAVIS_BUILD_ID
-      on:
-        branch: master
-        tags: false
-    deploy:
-      provider: script
-      script:
-        - bash docker_push.sh latest
-        - bash docker_push.sh $TRAVIS_TAG
-      on:
-        branch: master
-        tags: true
+      - provider: script
+        script:
+          - bash docker_push.sh latest
+          - bash docker_push.sh $TRAVIS_BUILD_ID
+        on:
+          branch: master
+          tags: false
+      - provider: script
+        script:
+          - bash docker_push.sh latest
+          - bash docker_push.sh $TRAVIS_TAG
+        on:
+          branch: master
+          tags: true
 
   - stage: Trigger rebuild of tomochain/infra-tomochain image
     sudo: false
