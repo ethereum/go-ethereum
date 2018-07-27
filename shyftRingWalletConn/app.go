@@ -5,12 +5,10 @@ package main
 import (
 	"bufio"
 	"fmt"
-	//"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"io"
 	"net"
 	"os"
-
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
