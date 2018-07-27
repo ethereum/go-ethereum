@@ -84,7 +84,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 				store, datadir, err = createMockStore(globalStore, id, addr)
 			} else {
-				store, datadir, err = createTestLocalStorageForId(id, addr)
+				store, datadir, err = createTestLocalStorageForID(id, addr)
 			}
 			if err != nil {
 				return nil, nil, err

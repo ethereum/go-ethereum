@@ -60,7 +60,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -132,10 +132,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			return fmt.Errorf("No registry")
 		}
 		registry := item.(*Registry)
-		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
-		if err != nil {
-			return err
-		}
 
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
@@ -174,7 +170,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 			// live stream
 			var liveHashesChan chan []byte
-			liveHashesChan, err = getHashes(registry, ctx, storer, NewStream(externalStreamName, "", true))
+			liveHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", true))
 			if err != nil {
 				log.Error("Subscription error: %v", "err", err)
 				return
@@ -218,7 +214,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 			// history stream
 			var historyHashesChan chan []byte
-			historyHashesChan, err = getHashes(registry, ctx, storer, NewStream(externalStreamName, "", false))
+			historyHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", false))
 			if err != nil {
 				return
 			}
@@ -256,6 +252,10 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			}
 		}()
 
+		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
+		if err != nil {
+			return err
+		}
 		if err := <-liveErrC; err != nil {
 			return err
 		}
@@ -271,8 +271,8 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	}
 }
 
-func getHashes(r *Registry, ctx context.Context, peerId discover.NodeID, s Stream) (chan []byte, error) {
-	peer := r.getPeer(peerId)
+func getHashes(ctx context.Context, r *Registry, peerID discover.NodeID, s Stream) (chan []byte, error) {
+	peer := r.getPeer(peerID)
 
 	client, err := peer.getClient(ctx, s)
 	if err != nil {
@@ -284,8 +284,8 @@ func getHashes(r *Registry, ctx context.Context, peerId discover.NodeID, s Strea
 	return c.hashes, nil
 }
 
-func enableNotifications(r *Registry, peerId discover.NodeID, s Stream) error {
-	peer := r.getPeer(peerId)
+func enableNotifications(r *Registry, peerID discover.NodeID, s Stream) error {
+	peer := r.getPeer(peerID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -320,9 +320,16 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
 		return nil
 	}
 	c.hashes <- hash
-	return func() {
-		chunk.WaitToStore()
-	}
+	//NOTE: This was failing on go1.9.x with a deadlock.
+	//Sometimes this function would just block
+	//It is commented now, but it may be well worth after the chunk refactor
+	//to re-enable this and see if the problem has been addressed
+	/*
+		return func() {
+			return chunk.WaitToStore()
+		}
+	*/
+	return nil
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {

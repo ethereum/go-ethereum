@@ -314,7 +314,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -501,7 +501,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}

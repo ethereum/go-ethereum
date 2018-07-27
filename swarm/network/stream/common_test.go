@@ -49,7 +49,6 @@ var (
 	chunks       = flag.Int("chunks", 0, "number of chunks")
 	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
 	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
-	waitKademlia = flag.Bool("waitkademlia", true, "wait for healthy kademlia before checking files availability")
 
 	bucketKeyDB        = simulation.BucketKey("db")
 	bucketKeyStore     = simulation.BucketKey("store")
@@ -236,7 +235,7 @@ func generateRandomFile() (string, error) {
 }
 
 //create a local store for the given node
-func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
+func createTestLocalStorageForID(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
 	var datadir string
 	var err error
 	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))

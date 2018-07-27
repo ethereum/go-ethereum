@@ -119,7 +119,7 @@ func runFileRetrievalTest(nodeCount int) error {
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -153,7 +153,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -175,7 +175,7 @@ func runFileRetrievalTest(nodeCount int) error {
 			//the proximity calculation is on overlay addr,
 			//the p2p/simulations check func triggers on discover.NodeID,
 			//so we need to know which overlay addr maps to which nodeID
-			conf.addrToIdMap[string(a)] = n
+			conf.addrToIDMap[string(a)] = n
 		}
 
 		//an array for the random files
@@ -262,7 +262,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -295,7 +295,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -315,7 +315,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			//the proximity calculation is on overlay addr,
 			//the p2p/simulations check func triggers on discover.NodeID,
 			//so we need to know which overlay addr maps to which nodeID
-			conf.addrToIdMap[string(a)] = n
+			conf.addrToIDMap[string(a)] = n
 		}
 
 		//an array for the random files

@@ -47,7 +47,7 @@ type synctestConfig struct {
 	hashes           []storage.Address
 	idToChunksMap    map[discover.NodeID][]int
 	chunksToNodesMap map[string][]int
-	addrToIdMap      map[string]discover.NodeID
+	addrToIDMap      map[string]discover.NodeID
 }
 
 //This test is a syncing test for nodes.
@@ -125,7 +125,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -157,7 +157,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -179,7 +179,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			//the proximity calculation is on overlay addr,
 			//the p2p/simulations check func triggers on discover.NodeID,
 			//so we need to know which overlay addr maps to which nodeID
-			conf.addrToIdMap[string(a)] = n
+			conf.addrToIDMap[string(a)] = n
 		}
 
 		//get the the node at that index
@@ -281,7 +281,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 
 			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForId(id, addr)
+			store, datadir, err := createTestLocalStorageForID(id, addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -314,7 +314,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -333,7 +333,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 			//the proximity calculation is on overlay addr,
 			//the p2p/simulations check func triggers on discover.NodeID,
 			//so we need to know which overlay addr maps to which nodeID
-			conf.addrToIdMap[string(a)] = n
+			conf.addrToIDMap[string(a)] = n
 		}
 
 		var subscriptionCount int
@@ -466,7 +466,7 @@ func startSyncing(r *Registry, conf *synctestConfig) (int, error) {
 		histRange := &Range{}
 
 		subCnt++
-		err = r.RequestSubscription(conf.addrToIdMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), histRange, Top)
+		err = r.RequestSubscription(conf.addrToIDMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), histRange, Top)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
 			return false
@@ -499,7 +499,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 				return false
 			}
 			if pl == 256 || pl == po {
-				log.Trace(fmt.Sprintf("appending %s", conf.addrToIdMap[string(a)]))
+				log.Trace(fmt.Sprintf("appending %s", conf.addrToIDMap[string(a)]))
 				nns = append(nns, indexmap[string(a)])
 				nodemap[string(a)] = append(nodemap[string(a)], i)
 			}
@@ -514,7 +514,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 	}
 	for addr, chunks := range nodemap {
 		//this selects which chunks are expected to be found with the given node
-		conf.idToChunksMap[conf.addrToIdMap[addr]] = chunks
+		conf.idToChunksMap[conf.addrToIDMap[addr]] = chunks
 	}
 	log.Debug(fmt.Sprintf("Map of expected chunks by ID: %v", conf.idToChunksMap))
 	conf.chunksToNodesMap = kmap
