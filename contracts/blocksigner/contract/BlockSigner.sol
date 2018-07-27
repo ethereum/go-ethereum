@@ -17,8 +17,8 @@ contract BlockSigner {
 
     function sign(uint256 _blockNumber, bytes32 _blockHash) external {
         // consensus should validate all senders are validators, gas = 0
-        require(block.number >= _blockNumber);
-        require(block.number <= _blockNumber.add(epochNumber * 2));
+        //require(block.number >= _blockNumber);
+        //require(block.number <= _blockNumber.add(epochNumber * 2));
         blocks[_blockNumber].push(_blockHash);
         blockSigners[_blockHash].push(msg.sender);
 

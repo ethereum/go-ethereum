@@ -1,3 +1,18 @@
+// Copyright (c) 2018 Tomochain
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 package blocksigner
 
 import (
@@ -11,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"math/rand"
 )
 
 var (
@@ -39,7 +55,16 @@ func TestBlockSigner(t *testing.T) {
 	}
 	contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 
-	byte0 := [32]byte{}
+	byte0 := randomHash()
+
+	// Test sign.
+	tx, err := blockSigner.Sign(big.NewInt(50), byte0)
+	if err != nil {
+		t.Fatalf("can't sign: %v", err)
+	}
+	contractBackend.Commit()
+	t.Log("tx", tx)
+
 	signers, err := blockSigner.GetSigners(byte0)
 	if err != nil {
 		t.Fatalf("can't get candidates: %v", err)
@@ -47,11 +72,15 @@ func TestBlockSigner(t *testing.T) {
 	for _, it := range signers {
 		t.Log("signer", it.String())
 	}
+}
 
-	s, err := blockSigner.Sign(big.NewInt(1), byte0)
-	if err != nil {
-		t.Fatalf("can't sign: %v", err)
+// Generate random string.
+func randomHash() common.Hash {
+	letterBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
+	var b common.Hash
+	for i := range b {
+		rand.Seed(time.Now().UnixNano())
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
-	t.Log("tx data", s)
-	contractBackend.Commit()
+	return b
 }
