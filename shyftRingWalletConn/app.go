@@ -3,7 +3,8 @@ package main
 //@NOTE SHYFT main func for api, sets up router and spins up a server
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
-	"bytes"
+	//"bytes"
+	"bufio"
 	"fmt"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
@@ -13,9 +14,10 @@ import (
 )
 
 const (
-	CONN_HOST = "localhost"
-	CONN_PORT = "3333"
-	CONN_TYPE = "tcp"
+	CONN_HOST     = "localhost"
+	CONN_PORT     = "3333"
+	CONN_TYPE     = "tcp"
+	NEW_LINE_BYTE = 0x0a
 )
 
 var testAddrHex = "14791697260E4c9A71f18484C9f997B308e59325"
@@ -50,19 +52,17 @@ func main() {
 
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
-	// Make a buffer to hold incoming data.
-	// Read the incoming connection into the buffer.
 
 	go func() {
-		buf := make([]byte, 1024)
-		msgBuf := make([]byte, 0)
 		var prevMsg []byte
 		var addressOfClient []byte
 		var signatureFromClient []byte
 		var msgFromClient []byte
+		bufReader := bufio.NewReader(conn)
 
 		for {
-			msg, err := conn.Read(buf)
+			msg, err := bufReader.ReadBytes(NEW_LINE_BYTE)
+
 			if err == io.EOF {
 				fmt.Println("END OF FILE, CLOSING CONNECTION")
 				conn.Close()
@@ -74,28 +74,23 @@ func handleRequest(conn net.Conn) {
 				break
 			}
 
-			msgBuf = append(msgBuf, buf[:msg]...)
-			index := bytes.IndexByte(msgBuf, 0x0a)
-			for index != -1 {
-				newMsg := msgBuf[:index]
-				rest := msgBuf[(index + 1):len(msgBuf)]
-				msgBuf = rest
-				index = bytes.IndexByte(msgBuf, 0x0a)
-				if prevMsg != nil {
-					s := string(prevMsg[:])
-					if s == "-- ADDRESS --" {
-						addressOfClient = newMsg
-					}
-					if s == "-- SIGNATURE --" {
-						signatureFromClient = newMsg
-					}
-					if s == "-- MESSAGE --" {
-						msgFromClient = newMsg
-					}
-					prevMsg = nil
-				} else {
-					prevMsg = newMsg
+			msg = msg[:len(msg)-1] // remove trailing new line byte
+
+			// similar to shift in bash
+			if prevMsg != nil {
+				s := string(prevMsg[:])
+				if s == "-- ADDRESS --" {
+					addressOfClient = msg
 				}
+				if s == "-- SIGNATURE --" {
+					signatureFromClient = msg
+				}
+				if s == "-- MESSAGE --" {
+					msgFromClient = msg
+				}
+				prevMsg = nil
+			} else {
+				prevMsg = msg
 			}
 
 			if addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil {
@@ -122,27 +117,27 @@ func handleRequest(conn net.Conn) {
 			}
 		}
 	}()
-	go func() {
-		key, _ := crypto.HexToECDSA(testPrivHex)
 
-		f_msg := "Hello World"
-		first_message := []byte(f_msg)
-		new_msg2 := crypto.Keccak256(first_message)
-		fmt.Println("HASH IS ::", hexutil.Encode(new_msg2))
+	key, _ := crypto.HexToECDSA(testPrivHex)
 
-		//send_message := append(new_msg2, []byte{byte(10)}...)
-		new_sig, err := crypto.Sign(new_msg2, key)
-		if err != nil {
-			fmt.Println("The crypto.Sign err is ", err)
-		}
-		hex_sig := hexutil.Encode(new_sig)
-		fmt.Println("HEX SIG ::", hex_sig)
+	f_msg := "Hello World"
+	first_message := []byte(f_msg)
+	new_msg2 := crypto.Keccak256(first_message)
+	fmt.Println("HASH IS ::", hexutil.Encode(new_msg2))
 
-		conn.Write([]byte("Broadcasting Message"))
-		conn.Write([]byte("\n"))
-		conn.Write([]byte(f_msg))
-		conn.Write([]byte("\n"))
-		conn.Write(new_sig)
-		conn.Write([]byte("\n"))
-	}()
+	//send_message := append(new_msg2, []byte{byte(10)}...)
+	new_sig, err := crypto.Sign(new_msg2, key)
+	if err != nil {
+		fmt.Println("The crypto.Sign err is ", err)
+	}
+	hex_sig := hexutil.Encode(new_sig)
+	fmt.Println("HEX SIG ::", hex_sig)
+
+	conn.Write([]byte("Broadcasting Message"))
+	conn.Write([]byte("\n"))
+	conn.Write([]byte(f_msg))
+	conn.Write([]byte("\n"))
+	conn.Write(new_sig)
+	conn.Write([]byte("\n"))
+
 }
