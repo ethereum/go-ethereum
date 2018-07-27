@@ -213,8 +213,8 @@ func main() {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func tomo(ctx *cli.Context) error {
-	node,cfg := makeFullNode(ctx)
-	startNode(ctx, node,cfg)
+	node, cfg := makeFullNode(ctx)
+	startNode(ctx, node, cfg)
 	node.Wait()
 	return nil
 }
@@ -222,19 +222,19 @@ func tomo(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node,cfg tomoConfig) {
+func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 	// Start up the node itself
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	if(ctx.GlobalIsSet(utils.UnlockedAccountFlag.Name)) {
-		cfg.Account.Unlocks=strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	if ctx.GlobalIsSet(utils.UnlockedAccountFlag.Name) {
+		cfg.Account.Unlocks = strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	}
 
-	if(ctx.GlobalIsSet(utils.PasswordFileFlag.Name)) {
-		cfg.Account.Passwords=utils.MakePasswordList(ctx)
+	if ctx.GlobalIsSet(utils.PasswordFileFlag.Name) {
+		cfg.Account.Passwords = utils.MakePasswordList(ctx)
 	}
 
 	for i, account := range cfg.Account.Unlocks {

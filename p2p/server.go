@@ -121,7 +121,7 @@ type Config struct {
 	// If the port is zero, the operating system will pick a port. The
 	// ListenAddr field will be updated with the actual address when
 	// the server is started.
-	ListenAddr string   `toml:"listenaddr,default=30303"`
+	ListenAddr string `toml:"listenaddr,default=30303"`
 
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the

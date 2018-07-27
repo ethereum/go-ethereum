@@ -81,10 +81,8 @@ type account struct {
 }
 
 type Bootnodes struct {
-	Mainnet     []string `toml:"main"`
-	Testnet     []string `toml:"test"`
-	Rinkeby     []string `toml:"rinkeby"`
-	DiscoveryV5 []string `toml:"discoveryv5"`
+	Mainnet []string `toml:"main"`
+	Testnet []string `toml:"test"`
 }
 
 type tomoConfig struct {
@@ -153,8 +151,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	//Apply Bootnodes
 	applyValues(cfg.Bootnodes.Mainnet, &params.MainnetBootnodes)
 	applyValues(cfg.Bootnodes.Testnet, &params.TestnetBootnodes)
-	applyValues(cfg.Bootnodes.Rinkeby, &params.RinkebyBootnodes)
-	applyValues(cfg.Bootnodes.DiscoveryV5, &params.DiscoveryV5Bootnodes)
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
