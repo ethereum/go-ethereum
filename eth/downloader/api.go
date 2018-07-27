@@ -22,28 +22,51 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+const (
+	// startChanSize is the size of channel listening to StartEvent.
+	startChanSize = 10
+	// finishChanSize is the size of channel listening to FinishEvent.
+	finishChanSize = 10
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.
 // It offers only methods that operates on data that can be available to anyone without security risks.
 type PublicDownloaderAPI struct {
-	d                         *Downloader
-	mux                       *event.TypeMux
+	d *Downloader
+
+	// Channels
+	startCh                   chan StartEvent
+	finishCh                  chan FinishEvent
 	installSyncSubscription   chan chan interface{}
 	uninstallSyncSubscription chan *uninstallSyncSubscriptionRequest
+
+	// Subscriptions
+	startSub  event.Subscription
+	finishSub event.Subscription
 }
 
 // NewPublicDownloaderAPI create a new PublicDownloaderAPI. The API has an internal event loop that
 // listens for events from the downloader through the global event mux. In case it receives one of
 // these events it broadcasts it to all syncing subscriptions that are installed through the
 // installSyncSubscription channel.
-func NewPublicDownloaderAPI(d *Downloader, m *event.TypeMux) *PublicDownloaderAPI {
+func NewPublicDownloaderAPI(d *Downloader) *PublicDownloaderAPI {
 	api := &PublicDownloaderAPI{
-		d:   d,
-		mux: m,
+		d:                         d,
+		startCh:                   make(chan StartEvent, startChanSize),
+		finishCh:                  make(chan FinishEvent, finishChanSize),
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
+	}
+
+	// Subscribe downloader events
+	api.startSub = d.SubscribeStartEvent(api.startCh)
+	api.finishSub = d.SubscribeFinishEvent(api.finishCh)
+	if api.startSub == nil || api.finishSub == nil {
+		log.Crit("Subscribe downloader events failed")
 	}
 
 	go api.eventLoop()
@@ -54,37 +77,42 @@ func NewPublicDownloaderAPI(d *Downloader, m *event.TypeMux) *PublicDownloaderAP
 // eventLoop runs a loop until the event mux closes. It will install and uninstall new
 // sync subscriptions and broadcasts sync status updates to the installed sync subscriptions.
 func (api *PublicDownloaderAPI) eventLoop() {
-	var (
-		sub               = api.mux.Subscribe(StartEvent{}, DoneEvent{}, FailedEvent{})
-		syncSubscriptions = make(map[chan interface{}]struct{})
-	)
+	var syncSubscriptions = make(map[chan interface{}]struct{})
+
+	defer func() {
+		api.startSub.Unsubscribe()
+		api.finishSub.Unsubscribe()
+	}()
+
+	broadcast := func(notification interface{}) {
+		for c := range syncSubscriptions {
+			c <- notification
+		}
+	}
 
 	for {
 		select {
 		case i := <-api.installSyncSubscription:
 			syncSubscriptions[i] = struct{}{}
+
 		case u := <-api.uninstallSyncSubscription:
 			delete(syncSubscriptions, u.c)
 			close(u.uninstalled)
-		case event := <-sub.Chan():
-			if event == nil {
-				return
-			}
 
-			var notification interface{}
-			switch event.Data.(type) {
-			case StartEvent:
-				notification = &SyncingResult{
-					Syncing: true,
-					Status:  api.d.Progress(),
-				}
-			case DoneEvent, FailedEvent:
-				notification = false
-			}
-			// broadcast
-			for c := range syncSubscriptions {
-				c <- notification
-			}
+		case <-api.startCh:
+			broadcast(&SyncingResult{
+				Syncing: true,
+				Status:  api.d.Progress(),
+			})
+
+		case <-api.finishCh:
+			broadcast(false)
+
+		case <-api.startSub.Err():
+			return
+
+		case <-api.finishSub.Err():
+			return
 		}
 	}
 }

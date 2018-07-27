@@ -16,6 +16,11 @@
 
 package downloader
 
-type DoneEvent struct{}
+// StartEvent is posted when downloader starts synchronization
 type StartEvent struct{}
-type FailedEvent struct{ Err error }
+
+// FinishEvent is posted when downloader finishes synchronization.
+// If synchronization is not successful, a relevant error will be returned.
+type FinishEvent struct {
+	Err error
+}
