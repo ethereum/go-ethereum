@@ -62,7 +62,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
-		// Gather the set of all and fresly modified files
+		// Gather the set of all freshly modified files
 		all.Add(path)
 
 		modified := fi.ModTime()
@@ -95,7 +95,8 @@ func skipKeyFile(fi os.FileInfo) bool {
 		return true
 	}
 	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || fi.Mode()&os.ModeType != 0 {
+	excludedModes := os.ModeDir | os.ModeNamedPipe | os.ModeSocket | os.ModeDevice
+	if fi.IsDir() || fi.Mode()&excludedModes != 0 {
 		return true
 	}
 	return false
