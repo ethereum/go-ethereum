@@ -11,7 +11,6 @@ services:
       - "30301:30301"
       - "30303:30303/udp"
       - "30304:30304"
-      - "5432:5432"
     volumes:
       - .:/go/src/ShyftNetwork/go-empyrean
     working_dir: /go/src/ShyftNetwork/go-empyrean
@@ -20,16 +19,17 @@ services:
     networks:
       - shyftnet
     command: >
-      sh -c '/go/src/ShyftNetwork/go-empyrean/wait-for.sh pg:5432 &&
+      sh -c 'cd /go/src/ShyftNetwork/go-empyrean &&
+            ./wait-for.sh pg:5432 &&
             DBENV=docker export DBENV &&
-            /initShyftGeth.sh &&
-            /startShyftGeth.sh'
+            ./shyft-cli/initShyftGeth.sh &&
+            ./shyft-cli/startShyftGeth.sh'
   pg:
     build: 
       context: $PWD
       dockerfile: containers/docker/develop-alpine/pg/Dockerfile
     volumes:
-      - ./pg-data:/var/lib/postgresql/
+      - ./pg-data:/var/lib/postgresql/data
     ports:
       - "8001:5432"
     networks:
@@ -41,18 +41,9 @@ services:
   #   build:
   #     context: $PWD 
   #     dockerfile: containers/docker/develop-alpine/shyftApi/Dockerfile   
-  # volumes: -
-
-
 
 networks:
   shyftnet:
     driver: bridge
-# volumes: 
-#   pg-data:
-
-  # api:
-  #   build:
-  #     context: ./containers/docker/develop-alpine/shyftApi
 
 

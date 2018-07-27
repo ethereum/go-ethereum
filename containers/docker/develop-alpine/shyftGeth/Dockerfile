@@ -8,10 +8,7 @@ RUN \
   apk add --update git make gcc musl-dev linux-headers ca-certificates && \
   (cd /go/src/github.com/ShyftEthereum/go-empyrean && make geth) && \
   cp -v /go/src/github.com/ShyftEthereum/go-empyrean/build/bin/geth /bin 
-COPY ./shyft-cli/initShyftGeth.sh /
-COPY ./shyft-cli/resetShyftGeth.sh /
-COPY ./shyft-cli/startShyftGeth.sh /
-# COPY ./containers/docker/develop-alpine/shyftGeth/wait-for-postgres.sh /
+
 COPY config.toml /
 COPY unlockPasswords.txt /
 COPY ShyftNetwork.json /
@@ -22,6 +19,6 @@ COPY UTC--2018-03-18T22-37-04.212101982Z--5bd738164c61fb50eb12e227846cbaef2de965
 COPY UTC--2018-03-18T22-37-12.082606217Z--c04ee4131895f1d0c294d508af65d94060aa42bb /
 COPY UTC--2018-03-18T22-37-19.650676366Z--07d899c4ac0c1725c35c5f816e60273b33a964f7 /
 
-WORKDIR /
+WORKDIR /go/src/github.com/ShyftEthereum/go-empyrean
 
-CMD ["./initShyftGeth.sh", "/go/src/ShyftNetwork/go-empyrean/shyft-cli/initShyftGeth.sh/startShyftGeth.sh"]
+CMD ["./shyft-cli/initShyftGeth.sh", "./shyft-cli/startShyftGeth.sh"]
