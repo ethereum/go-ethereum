@@ -3,7 +3,6 @@ package main
 //@NOTE SHYFT main func for api, sets up router and spins up a server
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
-	//"bytes"
 	"bufio"
 	"fmt"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
@@ -53,70 +52,7 @@ func main() {
 // Handles incoming requests.
 func handleRequest(conn net.Conn) {
 
-	go func() {
-		var prevMsg []byte
-		var addressOfClient []byte
-		var signatureFromClient []byte
-		var msgFromClient []byte
-		bufReader := bufio.NewReader(conn)
-
-		for {
-			msg, err := bufReader.ReadBytes(NEW_LINE_BYTE)
-
-			if err == io.EOF {
-				fmt.Println("END OF FILE, CLOSING CONNECTION")
-				conn.Close()
-				conn = nil
-				break
-			}
-			if err != nil {
-				fmt.Println("Connection error: ", err)
-				break
-			}
-
-			msg = msg[:len(msg)-1] // remove trailing new line byte
-
-			// similar to shift in bash
-			if prevMsg != nil {
-				s := string(prevMsg[:])
-				if s == "-- ADDRESS --" {
-					addressOfClient = msg
-				}
-				if s == "-- SIGNATURE --" {
-					signatureFromClient = msg
-				}
-				if s == "-- MESSAGE --" {
-					msgFromClient = msg
-				}
-				prevMsg = nil
-			} else {
-				prevMsg = msg
-			}
-
-			if addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil {
-				sig := string(signatureFromClient[:])
-				var sigByteArr, error = hexutil.Decode(sig)
-
-				if error != nil {
-					fmt.Println(error)
-				}
-
-				var sigHex = hexutil.Bytes(sigByteArr)
-				sigHex[64] -= 27
-
-				signedMsgHash := signHash(msgFromClient)
-
-				var rpk, err = crypto.Ecrecover(signedMsgHash, sigHex)
-				if err != nil {
-					fmt.Println(err)
-				}
-
-				pubKey := crypto.ToECDSAPub(rpk)
-				recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-				fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
-			}
-		}
-	}()
+	go readerConn(conn)
 
 	key, _ := crypto.HexToECDSA(testPrivHex)
 
@@ -140,4 +76,69 @@ func handleRequest(conn net.Conn) {
 	conn.Write(new_sig)
 	conn.Write([]byte("\n"))
 
+}
+
+func readerConn(conn net.Conn) {
+	var prevMsg []byte
+	var addressOfClient []byte
+	var signatureFromClient []byte
+	var msgFromClient []byte
+	bufReader := bufio.NewReader(conn)
+
+	for {
+		msg, err := bufReader.ReadBytes(NEW_LINE_BYTE)
+
+		if err == io.EOF {
+			fmt.Println("END OF FILE, CLOSING CONNECTION")
+			conn.Close()
+			conn = nil
+			break
+		}
+		if err != nil {
+			fmt.Println("Connection error: ", err)
+			break
+		}
+
+		msg = msg[:len(msg)-1] // remove trailing new line byte
+
+		// similar to shift in bash
+		if prevMsg != nil {
+			s := string(prevMsg[:])
+			if s == "-- ADDRESS --" {
+				addressOfClient = msg
+			}
+			if s == "-- SIGNATURE --" {
+				signatureFromClient = msg
+			}
+			if s == "-- MESSAGE --" {
+				msgFromClient = msg
+			}
+			prevMsg = nil
+		} else {
+			prevMsg = msg
+		}
+
+		if addressOfClient != nil && signatureFromClient != nil && msgFromClient != nil {
+			sig := string(signatureFromClient[:])
+			var sigByteArr, error = hexutil.Decode(sig)
+
+			if error != nil {
+				fmt.Println(error)
+			}
+
+			var sigHex = hexutil.Bytes(sigByteArr)
+			sigHex[64] -= 27
+
+			signedMsgHash := signHash(msgFromClient)
+
+			var rpk, err = crypto.Ecrecover(signedMsgHash, sigHex)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			pubKey := crypto.ToECDSAPub(rpk)
+			recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+			fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
+		}
+	}
 }
