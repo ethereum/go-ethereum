@@ -77,7 +77,7 @@ type BatchElem struct {
 	Error error
 }
 
-// A value of this type can a JSON-RPC request, notification, successful response or
+// A value of this type can be a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
 	Version string          `json:"jsonrpc"`
@@ -88,18 +88,22 @@ type jsonrpcMessage struct {
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
+// The message is a notification if its ID is nill and Method is non-empty. 
 func (msg *jsonrpcMessage) isNotification() bool {
 	return msg.ID == nil && msg.Method != ""
 }
 
+// The message is a JSON-RPC 2.0 response if (1)it has a valid ID (2) empty in Mehod and Params field.
 func (msg *jsonrpcMessage) isResponse() bool {
 	return msg.hasValidID() && msg.Method == "" && len(msg.Params) == 0
 }
 
+// The message has a valid ID if 
 func (msg *jsonrpcMessage) hasValidID() bool {
 	return len(msg.ID) > 0 && msg.ID[0] != '{' && msg.ID[0] != '['
 }
 
+// String converts a message into JSON encoding format.
 func (msg *jsonrpcMessage) String() string {
 	b, _ := json.Marshal(msg)
 	return string(b)
@@ -135,6 +139,8 @@ type requestOp struct {
 	sub  *ClientSubscription  // only set for EthSubscribe requests
 }
 
+// wait will wait until either the context is cancelled and returns a response,
+// or return a JSON-RPC 2.0 message.
 func (op *requestOp) wait(ctx context.Context) (*jsonrpcMessage, error) {
 	select {
 	case <-ctx.Done():
@@ -220,6 +226,7 @@ func DialStdIO(ctx context.Context) (*Client, error) {
 	})
 }
 
+// newClient creates a new connection to an RPC server.
 func newClient(initctx context.Context, connectFunc func(context.Context) (net.Conn, error)) (*Client, error) {
 	conn, err := connectFunc(initctx)
 	if err != nil {
@@ -304,7 +311,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		return err
 	}
 
-	// dispatch has accepted the request and will close the channel when it quits.
+	// dispatch has accepted the request and will close the channel it when it quits.
 	switch resp, err := op.wait(ctx); {
 	case err != nil:
 		return err
@@ -390,12 +397,12 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	return err
 }
 
-// EthSubscribe registers a subscripion under the "eth" namespace.
+// EthSubscribe registers a subscription under the "eth" namespace.
 func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "eth", channel, args...)
 }
 
-// ShhSubscribe registers a subscripion under the "shh" namespace.
+// ShhSubscribe registers a subscription under the "shh" namespace.
 func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	return c.Subscribe(ctx, "shh", channel, args...)
 }
@@ -446,6 +453,7 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	return op.sub, nil
 }
 
+// newMessage creates a JSON-RPC 2.0 message with given arguments.
 func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMessage, error) {
 	params, err := json.Marshal(paramsIn)
 	if err != nil {
