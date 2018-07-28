@@ -5,11 +5,11 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"io"
 	"net"
 	"os"
-	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 )
 
 const (
@@ -53,24 +53,24 @@ func main() {
 func handleRequest(conn net.Conn) {
 
 	messages := make(chan []byte)
+	checkBalanceChan := make(chan []byte)
 
 	go readerConn(conn, messages)
-	go handleMessages(messages)
+	go handleMessages(messages, checkBalanceChan)
+
+	go checkBalance(checkBalanceChan)
 
 	key, _ := crypto.HexToECDSA(testPrivHex)
 
 	f_msg := "Hello World"
 	first_message := []byte(f_msg)
 	new_msg2 := crypto.Keccak256(first_message)
-	fmt.Println("HASH IS ::", hexutil.Encode(new_msg2))
 
 	//send_message := append(new_msg2, []byte{byte(10)}...)
 	new_sig, err := crypto.Sign(new_msg2, key)
 	if err != nil {
 		fmt.Println("The crypto.Sign err is ", err)
 	}
-	hex_sig := hexutil.Encode(new_sig)
-	fmt.Println("HEX SIG ::", hex_sig)
 
 	conn.Write([]byte("Broadcasting Message"))
 	conn.Write([]byte("\n"))
@@ -78,10 +78,9 @@ func handleRequest(conn net.Conn) {
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
 	conn.Write([]byte("\n"))
-
 }
 
-func handleMessages(channel chan []byte) {
+func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 	var prevMsg []byte
 	var addressOfClient []byte
 	var signatureFromClient []byte
@@ -95,6 +94,7 @@ func handleMessages(channel chan []byte) {
 			s := string(prevMsg[:])
 			if s == "-- ADDRESS --" {
 				addressOfClient = msg
+				checkBalancesChan <- addressOfClient
 			}
 			if s == "-- SIGNATURE --" {
 				signatureFromClient = msg
@@ -153,4 +153,9 @@ func readerConn(conn net.Conn, channel chan []byte) {
 
 		channel <- msg
 	}
+}
+
+func checkBalance(checkBalanceChan chan []byte) {
+	address := <-checkBalanceChan
+	fmt.Println("The address for balance check is ", address)
 }
