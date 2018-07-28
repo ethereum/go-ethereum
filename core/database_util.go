@@ -255,6 +255,18 @@ func GetTxLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64,
 // GetTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
 func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+	// Retrieve the lookup metadata and resolve the transaction from the body
+	blockHash, blockNumber, txIndex := GetTxLookupEntry(db, hash)
+
+	if blockHash != (common.Hash{}) {
+		body := GetBody(db, blockHash, blockNumber)
+		if body == nil || len(body.Transactions) <= int(txIndex) {
+			glog.V(logger.Error).Infof("Transaction referenced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
+			return nil, common.Hash{}, 0, 0
+		}
+		return body.Transactions[txIndex], blockHash, blockNumber, txIndex
+	}
+	// Old transaction representation, load the transaction and it's metadata separately
 	// Retrieve the transaction itself from the database
 	data, _ := db.Get(hash.Bytes())
 	if len(data) == 0 {
