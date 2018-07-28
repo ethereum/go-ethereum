@@ -17,13 +17,12 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type NotificationTestService struct {

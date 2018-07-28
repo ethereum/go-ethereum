@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -31,7 +32,6 @@ import (
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/pow"
 	"github.com/hashicorp/golang-lru"
-	"golang.org/x/net/context"
 )
 
 // So we can deterministically seed different blockchains

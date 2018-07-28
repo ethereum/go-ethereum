@@ -18,6 +18,7 @@ package swarm
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 
@@ -36,7 +37,6 @@ import (
 	httpapi "github.com/ubiq/go-ubiq/swarm/api/http"
 	"github.com/ubiq/go-ubiq/swarm/network"
 	"github.com/ubiq/go-ubiq/swarm/storage"
-	"golang.org/x/net/context"
 )
 
 // the swarm stack

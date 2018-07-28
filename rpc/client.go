@@ -19,6 +19,7 @@ package rpc
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 )
 
 var (

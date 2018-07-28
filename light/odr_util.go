@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/rlp"
-	"golang.org/x/net/context"
 )
 
 var sha3_nil = crypto.Keccak256Hash(nil)

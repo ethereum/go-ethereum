@@ -17,6 +17,7 @@
 package backends
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -32,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
-	"golang.org/x/net/context"
 )
 
 // Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)

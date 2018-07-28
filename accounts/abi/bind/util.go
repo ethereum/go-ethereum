@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 )
 
 // WaitMined waits for tx to be mined on the blockchain.

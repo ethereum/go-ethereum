@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq"
@@ -26,7 +27,6 @@ import (
 	"github.com/ubiq/go-ubiq/internal/ethapi"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 // ContractBackend implements bind.ContractBackend with direct calls to Ethereum

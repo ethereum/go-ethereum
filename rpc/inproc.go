@@ -17,9 +17,8 @@
 package rpc
 
 import (
+	"context"
 	"net"
-
-	"golang.org/x/net/context"
 )
 
 // NewInProcClient attaches an in-process connection to the given RPC server.

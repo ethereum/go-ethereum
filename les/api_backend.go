@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/accounts"
@@ -32,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/light"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 type LesApiBackend struct {

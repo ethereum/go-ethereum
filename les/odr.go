@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"sync"
@@ -27,7 +28,6 @@ import (
 	"github.com/ubiq/go-ubiq/light"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 )
 
 var (

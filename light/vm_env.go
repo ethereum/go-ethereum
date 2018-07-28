@@ -17,13 +17,13 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
-	"golang.org/x/net/context"
 )
 
 // VMState is a wrapper for the light state that holds the actual context and

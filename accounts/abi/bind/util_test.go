@@ -17,6 +17,7 @@
 package bind_test
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
-	"golang.org/x/net/context"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

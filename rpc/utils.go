@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"bufio"
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -29,8 +30,6 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/net/context"
 )
 
 var (

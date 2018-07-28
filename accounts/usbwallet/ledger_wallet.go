@@ -21,6 +21,7 @@
 package usbwallet
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -38,7 +39,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/rlp"
-	"golang.org/x/net/context"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.

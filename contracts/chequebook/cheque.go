@@ -26,6 +26,7 @@ package chequebook
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -43,7 +44,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/swarm/services/swap/swap"
-	"golang.org/x/net/context"
 )
 
 // TODO(zelig): watch peer solvency and notify of bouncing cheques

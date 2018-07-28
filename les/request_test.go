@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/light"
-	"golang.org/x/net/context"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -88,7 +88,9 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
 			if req := fn(ldb, bhash, i); req != nil {
-				ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				defer cancel()
+
 				err := odr.Retrieve(ctx, req)
 				got := err == nil
 				exp := i < expFail

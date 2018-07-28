@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
@@ -34,7 +35,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/swarm/services/swap/swap"
-	"golang.org/x/net/context"
 )
 
 // SwAP       Swarm Accounting Protocol with

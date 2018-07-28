@@ -18,6 +18,7 @@
 package ethclient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -28,7 +29,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.

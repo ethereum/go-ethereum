@@ -21,6 +21,7 @@ The resulting handler is a standard net/http handler.
 package cors
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -28,7 +29,6 @@ import (
 	"strings"
 
 	"github.com/rs/xhandler"
-	"golang.org/x/net/context"
 )
 
 // Options is a configuration container to setup the CORS middleware.

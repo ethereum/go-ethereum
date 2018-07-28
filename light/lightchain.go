@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -33,7 +34,6 @@ import (
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rlp"
-	"golang.org/x/net/context"
 )
 
 var (

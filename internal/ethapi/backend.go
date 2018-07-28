@@ -18,6 +18,7 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/accounts"
@@ -30,7 +31,6 @@ import (
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 // Backend interface provides the common API services (that are provided by

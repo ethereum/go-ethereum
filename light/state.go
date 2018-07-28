@@ -17,13 +17,13 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 )
 
 // LightState is a memory representation of a state.

@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,7 +27,6 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
-	"golang.org/x/net/context"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to

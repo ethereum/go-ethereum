@@ -17,6 +17,7 @@
 package gasprice
 
 import (
+	"context"
 	"math/big"
 	"sort"
 	"sync"
@@ -24,7 +25,6 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/internal/ethapi"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 const (

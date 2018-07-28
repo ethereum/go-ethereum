@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 	"gopkg.in/fatih/set.v0"
 )
 

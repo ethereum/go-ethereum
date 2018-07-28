@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
@@ -29,7 +30,6 @@ import (
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
-	"golang.org/x/net/context"
 )
 
 type testTxRelay struct {
@@ -106,10 +106,11 @@ func TestTxPool(t *testing.T) {
 	lightchain.SetValidator(bproc{})
 	txPermanent = 50
 	pool := NewTxPool(testChainConfig(), evmux, lightchain, relay)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	for ii, block := range gchain {
 		i := ii + 1
-		ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		s := sentTx(i - 1)
 		e := sentTx(i)
 		for i := s; i < e; i++ {

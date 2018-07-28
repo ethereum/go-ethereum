@@ -17,13 +17,13 @@
 package bind
 
 import (
+	"context"
 	"errors"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
-	"golang.org/x/net/context"
 )
 
 var (

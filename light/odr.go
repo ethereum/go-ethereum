@@ -19,6 +19,7 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
@@ -27,7 +28,6 @@ import (
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/rlp"
-	"golang.org/x/net/context"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR

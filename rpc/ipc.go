@@ -17,11 +17,11 @@
 package rpc
 
 import (
+	"context"
 	"net"
 
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"golang.org/x/net/context"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on

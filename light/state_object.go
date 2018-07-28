@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/big"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/rlp"
-	"golang.org/x/net/context"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)

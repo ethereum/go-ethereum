@@ -17,14 +17,13 @@
 package filters
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"

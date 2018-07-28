@@ -17,6 +17,7 @@
 package filters
 
 import (
+	"context"
 	"math"
 	"time"
 	"math/big"
@@ -27,7 +28,6 @@ import (
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 type Backend interface {

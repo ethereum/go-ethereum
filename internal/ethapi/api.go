@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -41,7 +42,6 @@ import (
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/rpc"
-	"golang.org/x/net/context"
 )
 
 const defaultGas = 90000

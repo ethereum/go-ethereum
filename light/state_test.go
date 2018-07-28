@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
-	"golang.org/x/net/context"
 )
 
 func makeTestState() (common.Hash, ethdb.Database) {

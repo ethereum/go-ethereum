@@ -7,7 +7,6 @@ go: 1.7
 install:
   - go get -u github.com/golang/lint/golint
   - go get -u github.com/Masterminds/glide
-  - go get -u golang.org/x/net/context
   - go get -u github.com/HewlettPackard/gas
   - go get -u gopkg.in/godo.v2/cmd/godo
   - export GO15VENDOREXPERIMENT=1

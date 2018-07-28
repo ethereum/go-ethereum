@@ -1,10 +1,9 @@
 package xhandler
 
 import (
+	"context"
 	"net/http"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // CloseHandler returns a Handler, cancelling the context when the client

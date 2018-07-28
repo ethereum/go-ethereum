@@ -14,15 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains all the wrappers from the golang.org/x/net/context package to support
-// client side context management on mobile platforms.
-
 package gubiq
 
 import (
+	"context"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // Context carries a deadline, a cancelation signal, and other values across API

@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -34,7 +35,6 @@ import (
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/trie"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -273,7 +273,8 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(sdb, i)
 			b1 := fn(NoOdr, sdb, blockchain, nil, bhash)
-			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
 			b2 := fn(ctx, ldb, nil, lightchain, bhash)
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail

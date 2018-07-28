@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,7 +30,6 @@ import (
 	"time"
 
 	"github.com/rs/cors"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -115,11 +115,11 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	if err != nil {
 		return nil, err
 	}
-	client, req := requestWithContext(hc.client, hc.req, ctx)
+	req := hc.req.WithContext(ctx)
 	req.Body = ioutil.NopCloser(bytes.NewReader(body))
 	req.ContentLength = int64(len(body))
 
-	resp, err := client.Do(req)
+	resp, err := hc.client.Do(req)
 	if err != nil {
 		return nil, err
 	}

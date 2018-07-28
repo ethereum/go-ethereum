@@ -17,11 +17,10 @@
 package event
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 var errInts = errors.New("error in subscribeInts")

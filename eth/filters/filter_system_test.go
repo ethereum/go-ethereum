@@ -17,12 +17,11 @@
 package filters
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"

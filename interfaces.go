@@ -18,12 +18,12 @@
 package ethereum
 
 import (
+	"context"
 	"errors"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
-	"golang.org/x/net/context"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.

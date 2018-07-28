@@ -52,19 +52,10 @@ func MustRunCommand(cmd string, args ...string) {
 // GOPATH returns the value that the GOPATH environment
 // variable should be set to.
 func GOPATH() string {
-	path := filepath.SplitList(os.Getenv("GOPATH"))
-	if len(path) == 0 {
+	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH is not set")
 	}
-	// Ensure that our internal vendor folder is on GOPATH
-	vendor, _ := filepath.Abs(filepath.Join("build", "_vendor"))
-	for _, dir := range path {
-		if dir == vendor {
-			return strings.Join(path, string(filepath.ListSeparator))
-		}
-	}
-	newpath := append(path[:1], append([]string{vendor}, path[1:]...)...)
-	return strings.Join(newpath, string(filepath.ListSeparator))
+	return os.Getenv("GOPATH")
 }
 
 // VERSION returns the content of the VERSION file.
