@@ -363,6 +363,7 @@ func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int)
 		if err != nil {
 			return err
 		}
+	default:
+		return nil
 	}
-	return nil
 }

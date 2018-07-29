@@ -1146,8 +1146,7 @@ func TestEIP155Transition(t *testing.T) {
 				return types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
 			}
 		)
-		switch i {
-		case 0:
+		if i == 0 {
 			tx, err = basicTx(types.NewEIP155Signer(big.NewInt(2)))
 			if err != nil {
 				t.Fatal(err)
