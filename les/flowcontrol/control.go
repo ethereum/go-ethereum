@@ -66,13 +66,19 @@ func (peer *ClientNode) recalcBV(time mclock.AbsTime) {
 	peer.lastTime = time
 }
 
-func (peer *ClientNode) AcceptRequest() (uint64, bool) {
+func (peer *ClientNode) AcceptRequest(maxCost uint64) (uint64, bool) {
 	peer.lock.Lock()
 	defer peer.lock.Unlock()
 
 	time := mclock.Now()
 	peer.recalcBV(time)
-	return peer.bufValue, peer.cm.accept(peer.cmNode, time)
+	// Reject request directly if the client doesn't comply with the rate limit rules.
+	if peer.bufValue < maxCost {
+		return peer.bufValue, false
+	}
+	peer.cm.accept(peer.cmNode, time)
+	peer.recalcBV(time)
+	return peer.bufValue, true
 }
 
 func (peer *ClientNode) RequestProcessed(cost uint64) (bv, realCost uint64) {

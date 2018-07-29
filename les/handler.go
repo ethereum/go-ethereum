@@ -350,12 +350,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if p.fcClient == nil || reqCnt > maxCnt {
 			return true
 		}
-		bufValue, _ := p.fcClient.AcceptRequest()
 		cost := costs.baseCost + reqCnt*costs.reqCost
 		if cost > pm.server.defParams.BufLimit {
 			cost = pm.server.defParams.BufLimit
 		}
-		if cost > bufValue {
+		bufValue, serve := p.fcClient.AcceptRequest(cost)
+		if !serve {
 			recharge := time.Duration((cost - bufValue) * 1000000 / pm.server.defParams.MinRecharge)
 			p.Log().Error("Request came too early", "recharge", common.PrettyDuration(recharge))
 			return true

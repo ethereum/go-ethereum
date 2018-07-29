@@ -184,7 +184,7 @@ func (self *ClientManager) queueProc() {
 	}
 }
 
-func (self *ClientManager) accept(node *cmNode, time mclock.AbsTime) bool {
+func (self *ClientManager) accept(node *cmNode, time mclock.AbsTime) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -196,14 +196,13 @@ func (self *ClientManager) accept(node *cmNode, time mclock.AbsTime) bool {
 		<-resume
 		self.lock.Lock()
 		if _, ok := self.nodes[node]; !ok {
-			return false // reject if node has been removed or manager has been stopped
+			panic("the node should never be removed during the request waiting")
 		}
 	}
 	self.simReqCnt++
 	node.set(true, self.simReqCnt, self.sumWeight)
 	node.startValue = node.rcValue
 	self.update(self.time)
-	return true
 }
 
 func (self *ClientManager) stop(node *cmNode, time mclock.AbsTime) {
