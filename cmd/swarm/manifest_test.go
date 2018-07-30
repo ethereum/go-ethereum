@@ -226,7 +226,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			t.Fatal(err)
 		}
 
-		humansManifestHash := runSwarmExpectHash(t,
+		indexManifestHash := runSwarmExpectHash(t,
 			"--bzzapi",
 			cluster.Nodes[0].URL,
 			"up",
@@ -240,7 +240,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			"update",
 			origManifestHash,
 			"index.html",
-			humansManifestHash,
+			indexManifestHash,
 		)
 
 		checkHashLength(t, newManifestHash, encrypt)
@@ -269,6 +269,14 @@ func testManifestChange(t *testing.T, encrypt bool) {
 		}
 
 		checkFile(t, client, newManifestHash, "index.html", indexData)
+
+		// check default entry change
+		// TODO: encrypted uploads generate manifest with default entry
+		// with different hash compared to the same file that is used
+		// for default entry.
+		if !encrypt {
+			checkFile(t, client, newManifestHash, "", indexData)
+		}
 	})
 
 	// upload a new file and use its manifest to change the file it the original manifest,
@@ -392,6 +400,129 @@ func testManifestChange(t *testing.T, encrypt bool) {
 			t.Fatal("robots.html in not removed")
 		}
 	})
+}
+
+// TestNestedDefaultEntryUpdate tests if the default entry is updated
+// if the file in nested manifest used for it is also updated.
+// TODO: create a similar test for encrypted uploads when it becomes
+// functional.
+func TestNestedDefaultEntryUpdate(t *testing.T) {
+	testNestedDefaultEntryUpdate(t, false)
+}
+
+func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
+	t.Parallel()
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+
+	tmp, err := ioutil.TempDir("", "swarm-manifest-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	origDir := filepath.Join(tmp, "orig")
+	if err := os.Mkdir(origDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+
+	indexData := []byte("<h1>Test</h1>")
+	indexDataFilename := filepath.Join(origDir, "index.html")
+	err = ioutil.WriteFile(indexDataFilename, indexData, 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Add another file with common prefix as the default entry to test updates of
+	// default entry with nested manifests.
+	err = ioutil.WriteFile(filepath.Join(origDir, "index.txt"), []byte("Test"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	args := []string{
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"--recursive",
+		"--defaultpath",
+		indexDataFilename,
+		"up",
+		origDir,
+	}
+	if encrypt {
+		args = append(args, "--encrypt")
+	}
+
+	origManifestHash := runSwarmExpectHash(t, args...)
+
+	checkHashLength(t, origManifestHash, encrypt)
+
+	client := swarm.NewClient(cluster.Nodes[0].URL)
+
+	newIndexData := []byte("<h1>Ethereum Swarm</h1>")
+	newIndexDataFilename := filepath.Join(tmp, "index.html")
+	err = ioutil.WriteFile(newIndexDataFilename, newIndexData, 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newIndexManifestHash := runSwarmExpectHash(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"up",
+		newIndexDataFilename,
+	)
+
+	newManifestHash := runSwarmExpectHash(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"manifest",
+		"update",
+		origManifestHash,
+		"index.html",
+		newIndexManifestHash,
+	)
+
+	checkHashLength(t, newManifestHash, encrypt)
+
+	newManifest := downloadManifest(t, client, newManifestHash, encrypt)
+
+	var found bool
+	for _, e := range newManifest.Entries {
+		if e.Path == "index." {
+			found = true
+			newManifest = downloadManifest(t, client, e.Hash, encrypt)
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no index. path in new manifest")
+	}
+
+	found = false
+	for _, e := range newManifest.Entries {
+		if e.Path == "html" {
+			found = true
+			if e.Size != int64(len(newIndexData)) {
+				t.Errorf("expected index.html size %v, got %v", len(newIndexData), e.Size)
+			}
+			if e.ModTime.IsZero() {
+				t.Errorf("got zero mod time for index.html")
+			}
+			ct := "text/html; charset=utf-8"
+			if e.ContentType != ct {
+				t.Errorf("expected content type %q, got %q", ct, e.ContentType)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no html in new manifest")
+	}
+
+	checkFile(t, client, newManifestHash, "index.html", newIndexData)
+
+	// check default entry change
+	checkFile(t, client, newManifestHash, "", newIndexData)
 }
 
 func runSwarmExpectHash(t *testing.T, args ...string) (hash string) {

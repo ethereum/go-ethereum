@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -91,7 +92,13 @@ func manifestUpdate(ctx *cli.Context) {
 		utils.Fatalf("Too many entries in manifest %s", hash)
 	}
 
-	newManifest := updateEntryInManifest(client, mhash, path, m.Entries[0])
+	newManifest, _, defaultEntryUpdated := updateEntryInManifest(client, mhash, path, m.Entries[0], true)
+	if defaultEntryUpdated {
+		// Print informational message to stderr
+		// allowing the user to get the new manifest hash from stdout
+		// without the need to parse the complete output.
+		fmt.Fprintln(os.Stderr, "Manifest default entry is updated, too")
+	}
 	fmt.Println(newManifest)
 }
 
@@ -165,7 +172,13 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 	return newManifestHash
 }
 
-func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry) string {
+// updateEntryInManifest updates an existing entry o path with a new one in the manifest with provided mhash
+// finding the path recursively through all nested manifests. Argument isRoot is used for default
+// entry update detection. If the updated entry has the same hash as the default entry, then the
+// default entry in root manifest will be updated too.
+// Returned values are the new manifest hash, hash of the entry that was replaced by the new entry and
+// a a bool that is true if default entry is updated.
+func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry, isRoot bool) (newManifestHash, oldHash string, defaultEntryUpdated bool) {
 	var (
 		newEntry         = api.ManifestEntry{}
 		longestPathEntry = api.ManifestEntry{}
@@ -180,6 +193,9 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 	for _, e := range mroot.Entries {
 		if path == e.Path {
 			newEntry = e
+			// keep the reference of the hash of the entry that should be replaced
+			// for default entry detection
+			oldHash = e.Hash
 		} else {
 			if e.ContentType == api.ManifestType {
 				prfxlen := strings.HasPrefix(path, e.Path)
@@ -197,7 +213,8 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 	if longestPathEntry.Path != "" {
 		// Load the child Manifest add the entry there
 		newPath := path[len(longestPathEntry.Path):]
-		newHash := updateEntryInManifest(client, longestPathEntry.Hash, newPath, entry)
+		var newHash string
+		newHash, oldHash, _ = updateEntryInManifest(client, longestPathEntry.Hash, newPath, entry, false)
 
 		// Replace the hash for parent Manifests
 		newMRoot := &api.Manifest{}
@@ -211,13 +228,19 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 		mroot = newMRoot
 	}
 
-	if newEntry.Path != "" {
+	// update the manifest if the new entry is found and
+	// check if default entry should be updated
+	if newEntry.Path != "" || isRoot {
 		// Replace the hash for leaf Manifest
 		newMRoot := &api.Manifest{}
 		for _, e := range mroot.Entries {
 			if newEntry.Path == e.Path {
 				entry.Path = e.Path
 				newMRoot.Entries = append(newMRoot.Entries, entry)
+			} else if isRoot && e.Path == "" && e.Hash == oldHash {
+				entry.Path = e.Path
+				newMRoot.Entries = append(newMRoot.Entries, entry)
+				defaultEntryUpdated = true
 			} else {
 				newMRoot.Entries = append(newMRoot.Entries, e)
 			}
@@ -225,11 +248,11 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
+	newManifestHash, err = client.UploadManifest(mroot, isEncrypted)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
-	return newManifestHash
+	return newManifestHash, oldHash, defaultEntryUpdated
 }
 
 func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
