@@ -120,6 +120,8 @@ type Config struct {
 	// exposed.
 	HTTPModules []string `toml:",omitempty"`
 
+	// HTTPTimeouts allows for customization of the timeout values used by the HTTP RPC
+	// interface.
 	HTTPTimeouts rpc.HTTPTimeouts
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
