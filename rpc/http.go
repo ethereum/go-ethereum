@@ -96,10 +96,6 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 	IdleTimeout:  120 * time.Second,
 }
 
-func NewDefaultHTTPTimeouts() HTTPTimeouts {
-	return DefaultHTTPTimeouts
-}
-
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
