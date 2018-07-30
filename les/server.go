@@ -276,6 +276,9 @@ func (s *LesServer) checkpointLoop(checkpoint *light.TrustedCheckpoint) (err err
 			if number < light.CheckpointConfirmations+light.CheckpointFrequency {
 				continue
 			}
+			if checkpoint == nil {
+				checkpoint = s.recoverCheckpoint()
+			}
 			idx := (number-light.CheckpointConfirmations)/light.CheckpointFrequency - 1
 			if checkpoint == nil || idx > checkpoint.SectionIdx {
 				hash, ok := announcement[idx]
