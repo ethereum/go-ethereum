@@ -308,8 +308,8 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		}
 	}
 
-	if lightnodeenable := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lightnodeenable != "" {
-		if lightnode, err := strconv.ParseBool(lightnodeenable); err != nil {
+	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
+		if lightnode, err := strconv.ParseBool(lne); err != nil {
 			currentConfig.LightNodeEnabled = lightnode
 		}
 	}
