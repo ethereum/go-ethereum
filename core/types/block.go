@@ -137,6 +137,12 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
+func hash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	hw.Sum(h[:0])
+	return h
+}
+
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
 type Body struct {
@@ -351,7 +357,7 @@ func (c *writeCounter) Write(b []byte) (int, error) {
 }
 
 func CalcUncleHash(uncles []*Header) common.Hash {
-	return rlpHash(uncles)
+	return hash(uncles)
 }
 
 // WithSeal returns a new block with the data from b but the header replaced with
