@@ -123,7 +123,7 @@ var (
 		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
 		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
 	}
-	SwarmLightNodeEnabled = cli.BoolTFlag{
+	SwarmLightNodeEnabled = cli.BoolFlag{
 		Name:   "lightnode",
 		Usage:  "Enable Swarm LightNode (default false)",
 		EnvVar: SWARM_ENV_LIGHT_NODE_ENABLE,
