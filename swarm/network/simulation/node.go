@@ -195,7 +195,7 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
-//Upload a snapshot
+//UploadSnapshot uploads a snapshot to the simulation
 //This method tries to open the json file provided, applies the config to all nodes
 //and then loads the snapshot into the Simulation network
 func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
@@ -203,7 +203,12 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			log.Error("Error closing snapshot file", "err", err)
+		}
+	}()
 	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		return err
@@ -294,7 +299,7 @@ func (s *Simulation) StopNode(id discover.NodeID) (err error) {
 
 // StopRandomNode stops a random node.
 func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
-	n := s.randomUpNode()
+	n := s.RandomUpNode()
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
@@ -324,18 +329,18 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// randomUpNode returns a random SimNode that is up.
+// RandomUpNode returns a random SimNode that is up.
 // Arguments are NodeIDs for nodes that should not be returned.
-func (s *Simulation) randomUpNode(exclude ...discover.NodeID) *adapters.SimNode {
+func (s *Simulation) RandomUpNode(exclude ...discover.NodeID) *adapters.SimNode {
 	return s.randomNode(s.UpNodeIDs(), exclude...)
 }
 
-// randomUpNode returns a random SimNode that is not up.
+// randomDownNode returns a random SimNode that is not up.
 func (s *Simulation) randomDownNode(exclude ...discover.NodeID) *adapters.SimNode {
 	return s.randomNode(s.DownNodeIDs(), exclude...)
 }
 
-// randomUpNode returns a random SimNode from the slice of NodeIDs.
+// randomNode returns a random SimNode from the slice of NodeIDs.
 func (s *Simulation) randomNode(ids []discover.NodeID, exclude ...discover.NodeID) *adapters.SimNode {
 	for _, e := range exclude {
 		var i int
