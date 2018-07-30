@@ -30,7 +30,10 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
-const TestProtocolVersion = 5
+const (
+	TestProtocolVersion   = 5
+	TestProtocolNetworkID = 3
+)
 
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
@@ -196,7 +199,7 @@ func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptes
 func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 	return &HandshakeMsg{
 		Version:   TestProtocolVersion,
-		NetworkID: DefaultNetworkID,
+		NetworkID: TestProtocolNetworkID,
 		Addr:      addr,
 		LightNode: lightNode,
 	}
@@ -227,7 +230,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr, lightNode),
-		&HandshakeMsg{Version: 0, NetworkID: DefaultNetworkID, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 0, NetworkID: TestProtocolNetworkID, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= %d)", TestProtocolVersion)},
 	)
 
@@ -244,7 +247,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr, lightNode),
-		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: DefaultNetworkID, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: NewAddrFromNodeID(id)},
 	)
 
 	if err != nil {
@@ -261,7 +264,7 @@ func TestBzzHandshakeLightNodeOff(t *testing.T) {
 
 	err := pt.testHandshake(
 		correctBzzHandshake(randomAddr, false),
-		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: DefaultNetworkID, Addr: addr, LightNode: peerLightNode},
+		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: addr, LightNode: peerLightNode},
 	)
 
 	if err != nil {
@@ -282,7 +285,7 @@ func TestBzzHandshakeLightNodeOn(t *testing.T) {
 
 	err := pt.testHandshake(
 		correctBzzHandshake(randomAddr, false),
-		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: DefaultNetworkID, Addr: addr, LightNode: peerLightNode},
+		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: addr, LightNode: peerLightNode},
 	)
 
 	if err != nil {
