@@ -215,7 +215,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			LightNode:  handshake.LightNode,
 		}
 
-		log.Info("peer created: %s", handshake.peerAddr.String())
+		log.Debug("peer created", "addr", handshake.peerAddr.String())
 
 		return run(peer)
 	}
