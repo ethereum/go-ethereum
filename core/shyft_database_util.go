@@ -139,7 +139,6 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 		Age:   			age,
 	}
 
-
 	//Inserts block data into DB
 	InsertBlock(sqldb, blockData)
 
@@ -490,7 +489,7 @@ func InsertBlock(sqldb *sql.DB, blockData SBlock) {
 func InsertTx (sqldb *sql.DB, txData ShyftTxEntryPretty) {
 	var retNonce string
 	sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-	err := sqldb.QueryRow(sqlStatement, strings.ToLower(txData.TxHash), txData.From, txData.To.String(), strings.ToLower(txData.BlockHash), txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, txData.IsContract, txData.Status, txData.Age, txData.Data).Scan(&retNonce)
+	err := sqldb.QueryRow(sqlStatement, strings.ToLower(txData.TxHash), strings.ToLower(txData.From), strings.ToLower(txData.To.String()), strings.ToLower(txData.BlockHash), txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, txData.IsContract, txData.Status, txData.Age, txData.Data).Scan(&retNonce)
 	if err != nil {
 		panic(err)
 	}
@@ -499,7 +498,7 @@ func InsertTx (sqldb *sql.DB, txData ShyftTxEntryPretty) {
 func InsertInternalTx(sqldb *sql.DB, i InteralWrite) {
 	var returnValue string
 	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
-	qerr := sqldb.QueryRow(sqlStatement, i.Type, i.Hash, i.From, i.To, i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
+	qerr := sqldb.QueryRow(sqlStatement, i.Type, strings.ToLower(i.Hash), strings.ToLower(i.From), strings.ToLower(i.To), i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
 	if qerr != nil {
 		fmt.Println(qerr)
 		panic(qerr)
