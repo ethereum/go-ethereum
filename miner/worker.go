@@ -316,7 +316,9 @@ func (self *worker) wait() {
 			for _, log := range work.state.Logs() {
 				log.BlockHash = block.Hash()
 			}
+			self.currentMu.Lock()
 			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
+			self.currentMu.Unlock()
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
