@@ -62,7 +62,6 @@ const (
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	BlockChainVersion = 3
-	M1Gap             = 5
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -1193,7 +1192,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
-			if (chain[i].NumberU64() % bc.chainConfig.Clique.Epoch) == (bc.chainConfig.Clique.Epoch - M1Gap) {
+			if (chain[i].NumberU64() % bc.chainConfig.Clique.Epoch) == (bc.chainConfig.Clique.Epoch - bc.chainConfig.Clique.Gap) {
 				M1Ch <- 1
 			}
 		}

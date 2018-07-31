@@ -108,6 +108,10 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Clique.Epoch = uint64(w.readDefaultInt(990))
 		genesis.Config.Clique.RewardCheckpoint = genesis.Config.Clique.Epoch
 
+		fmt.Println()
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
+		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
+
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
 	}

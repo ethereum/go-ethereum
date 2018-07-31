@@ -588,7 +588,7 @@ func (self *worker) commitNewWork() {
 			core.CheckpointCh <- 1
 		}
 		// prepare set of masternodes for the next epoch
-		if (work.Block.NumberU64() % work.config.Clique.Epoch) == (work.config.Clique.Epoch - core.M1Gap) {
+		if (work.Block.NumberU64() % work.config.Clique.Epoch) == (work.config.Clique.Epoch - work.config.Clique.Gap) {
 			core.M1Ch <- 1
 		}
 	}
