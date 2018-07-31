@@ -255,44 +255,34 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	}
 }
 
-func TestBzzHandshakeLightNodeOff(t *testing.T) {
-	randomAddr := RandomAddr()
-	pt := newBzzHandshakeTester(t, 1, randomAddr, false)
-	id := pt.IDs[0]
-	addr := NewAddrFromNodeID(id)
-	peerLightNode := false
-
-	err := pt.testHandshake(
-		correctBzzHandshake(randomAddr, false),
-		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: addr, LightNode: peerLightNode},
-	)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if pt.bzz.handshakes[id].LightNode != peerLightNode {
-		t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[id].LightNode, peerLightNode)
-	}
+var lightNodeTests = []struct {
+	name      string
+	lightNode bool
+}{
+	{"on", true},
+	{"off", false},
 }
 
-func TestBzzHandshakeLightNodeOn(t *testing.T) {
-	randomAddr := RandomAddr()
-	pt := newBzzHandshakeTester(t, 1, randomAddr, false)
-	id := pt.IDs[0]
-	addr := NewAddrFromNodeID(id)
-	peerLightNode := true
+func TestBzzHandshakeLightNode(t *testing.T) {
+	for _, test := range lightNodeTests {
+		t.Run(test.name, func(t *testing.T) {
+			randomAddr := RandomAddr()
+			pt := newBzzHandshakeTester(t, 1, randomAddr, false)
+			id := pt.IDs[0]
+			addr := NewAddrFromNodeID(id)
 
-	err := pt.testHandshake(
-		correctBzzHandshake(randomAddr, false),
-		&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: addr, LightNode: peerLightNode},
-	)
+			err := pt.testHandshake(
+				correctBzzHandshake(randomAddr, false),
+				&HandshakeMsg{Version: TestProtocolVersion, NetworkID: TestProtocolNetworkID, Addr: addr, LightNode: test.lightNode},
+			)
 
-	if err != nil {
-		t.Fatal(err)
-	}
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	if pt.bzz.handshakes[id].LightNode != peerLightNode {
-		t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[id].LightNode, peerLightNode)
+			if pt.bzz.handshakes[id].LightNode != test.lightNode {
+				t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[id].LightNode, test.lightNode)
+			}
+		})
 	}
 }
