@@ -175,8 +175,13 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	if _, err := os.Stat(filepath.Join(dir, defaultPath)); err != nil {
-		return "", fmt.Errorf("default path: %v", err)
+	if defaultPath != "" {
+		if _, err := os.Stat(filepath.Join(dir, defaultPath)); err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("the default path %q was not found in the upload directory %q", defaultPath, dir)
+			}
+			return "", fmt.Errorf("default path: %v", err)
+		}
 	}
 	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt)
 }
