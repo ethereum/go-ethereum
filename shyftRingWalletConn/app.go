@@ -10,9 +10,10 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"bytes"
-	"encoding/json"
 	"os"
+	"github.com/ShyftNetwork/go-empyrean/ethclient"
+	"github.com/ShyftNetwork/go-empyrean/common"
+	"context"
 )
 
 const (
@@ -143,11 +144,20 @@ func readerConn(conn net.Conn, channel chan []byte) {
 
 func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 	address := <-checkBalanceChan
-	bal := getBalance(string(address[:]), client)
-	fmt.Println("The balance for address ", address, " is ", bal)
+	c, err := ethclient.Dial("http://127.0.0.1:8545")
+	if err != nil {
+		fmt.Println("Eth Client not initialized: " , err)
+	}
+
+	balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])),nil)
+	if error != nil {
+		fmt.Println("Balance at error ", error)
+	}
+	fmt.Println("the bal is ", balance)
+	fmt.Println("The balance for address ", address, " is ", balance)
 	conn.Write([]byte("Broadcasting Balance"))
 	conn.Write([]byte("\n"))
-	conn.Write([]byte(bal))
+	conn.Write([]byte(balance.String()))
 	conn.Write([]byte("\n"))
 }
 
@@ -170,25 +180,4 @@ func sendRingSignedMsg(conn net.Conn){
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
 	conn.Write([]byte("\n"))
-}
-
-// http request to the rpc server to get balance for an address
-func getBalance(address string, client *http.Client) string {
-	jsonStr := fmt.Sprintf(`{"jsonrpc":"2.0","method":"eth_getBalance","params":["%s", "latest"],"id":67}` , address)
-	jsonBytes := []byte(jsonStr)
-	fmt.Println(string(jsonBytes))
-
-	req, err := http.NewRequest("POST", "http://localhost:8545", bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		fmt.Println("Error: " , err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error: ", err)
-	}
-	var target map[string]interface{}
-	decoder := json.NewDecoder(resp.Body)
-	decoder.Decode(&target)
-	return target["result"].(string)
 }
