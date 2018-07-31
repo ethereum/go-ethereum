@@ -42,8 +42,7 @@ jobs:
 
   - stage: Github release
     script:
-      - make tomo
-      - mv build/bin/tomo build/bin/tomo-linux-amd64
+      - make tomo-linux-amd64
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
