@@ -9,6 +9,9 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"io"
 	"net"
+	"net/http"
+	"bytes"
+	"encoding/json"
 	"os"
 )
 
@@ -22,6 +25,8 @@ const (
 var testAddrHex = "14791697260E4c9A71f18484C9f997B308e59325"
 var testPrivHex = "0123456789012345678901234567890123456789012345678901234567890123"
 
+var client = &http.Client{}
+
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
@@ -29,7 +34,6 @@ func signHash(data []byte) []byte {
 }
 
 func main() {
-
 	l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
@@ -139,7 +143,8 @@ func readerConn(conn net.Conn, channel chan []byte) {
 
 func checkBalance(checkBalanceChan chan []byte) {
 	address := <-checkBalanceChan
-	fmt.Println("The address for balance check is ", address)
+	bal := getBalance(string(address[:]), client)
+	fmt.Println("The balance for address ", address, " is ", bal)
 }
 
 func sendRingSignedMsg(conn net.Conn){
@@ -161,4 +166,25 @@ func sendRingSignedMsg(conn net.Conn){
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
 	conn.Write([]byte("\n"))
+}
+
+// http request to the rpc server to get balance for an address
+func getBalance(address string, client *http.Client) string {
+	jsonStr := fmt.Sprintf(`{"jsonrpc":"2.0","method":"eth_getBalance","params":["%s", "latest"],"id":67}` , address)
+	jsonBytes := []byte(jsonStr)
+	fmt.Println(string(jsonBytes))
+
+	req, err := http.NewRequest("POST", "http://localhost:8545", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		fmt.Println("Error: " , err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	var target map[string]interface{}
+	decoder := json.NewDecoder(resp.Body)
+	decoder.Decode(&target)
+	return target["result"].(string)
 }
