@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	TestProtocolVersion   = 5
+	TestProtocolVersion   = 6
 	TestProtocolNetworkID = 3
 )
 
