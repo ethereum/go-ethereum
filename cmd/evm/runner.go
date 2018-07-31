@@ -128,13 +128,13 @@ func runCmd(ctx *cli.Context) error {
 		if ctx.GlobalString(CodeFileFlag.Name) == "-" {
 			//Try reading from stdin
 			if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
-				fmt.Fprintf(ctx.App.ErrWriter,"Could not load code from stdin: %v\n", err)
+				fmt.Fprintf(ctx.App.ErrWriter, "Could not load code from stdin: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
 			// Codefile with hex assembly
 			if hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name)); err != nil {
-				fmt.Fprintf(ctx.App.ErrWriter,"Could not load code from file: %v\n", err)
+				fmt.Fprintf(ctx.App.ErrWriter, "Could not load code from file: %v\n", err)
 				os.Exit(1)
 			}
 		}
@@ -172,11 +172,11 @@ func runCmd(ctx *cli.Context) error {
 	if cpuProfilePath := ctx.GlobalString(CPUProfileFlag.Name); cpuProfilePath != "" {
 		f, err := os.Create(cpuProfilePath)
 		if err != nil {
-			fmt.Fprintf(ctx.App.ErrWriter,"could not create CPU profile: %v\n", err)
+			fmt.Fprintf(ctx.App.ErrWriter, "could not create CPU profile: %v\n", err)
 			os.Exit(1)
 		}
 		if err := pprof.StartCPUProfile(f); err != nil {
-			fmt.Fprintf(ctx.App.ErrWriter,"could not start CPU profile: %v\n", err)
+			fmt.Fprintf(ctx.App.ErrWriter, "could not start CPU profile: %v\n", err)
 			os.Exit(1)
 		}
 		defer pprof.StopCPUProfile()
@@ -206,11 +206,11 @@ func runCmd(ctx *cli.Context) error {
 	if memProfilePath := ctx.GlobalString(MemProfileFlag.Name); memProfilePath != "" {
 		f, err := os.Create(memProfilePath)
 		if err != nil {
-			fmt.Fprintln(ctx.App.ErrWriter,"could not create memory profile: %v\n", err)
+			fmt.Fprintf(ctx.App.ErrWriter, "could not create memory profile: %v\n", err)
 			os.Exit(1)
 		}
 		if err := pprof.WriteHeapProfile(f); err != nil {
-			fmt.Fprintln(ctx.App.ErrWriter,"could not create memory profile: %v\n", err)
+			fmt.Fprintf(ctx.App.ErrWriter, "could not create memory profile: %v\n", err)
 			os.Exit(1)
 		}
 		f.Close()
