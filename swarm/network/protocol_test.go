@@ -255,15 +255,15 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	}
 }
 
-var lightNodeTests = []struct {
-	name      string
-	lightNode bool
-}{
-	{"on", true},
-	{"off", false},
-}
-
 func TestBzzHandshakeLightNode(t *testing.T) {
+	var lightNodeTests = []struct {
+		name      string
+		lightNode bool
+	}{
+		{"on", true},
+		{"off", false},
+	}
+
 	for _, test := range lightNodeTests {
 		t.Run(test.name, func(t *testing.T) {
 			randomAddr := RandomAddr()
