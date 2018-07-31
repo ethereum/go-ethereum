@@ -107,7 +107,7 @@ func stateTestCmd(ctx *cli.Context) error {
 			}
 			// print state root for evmlab tracing (already committed above, so no need to delete objects again
 			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
-				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
+				fmt.Fprintf(ctx.App.ErrWriter, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
 			}
 
 			results = append(results, *result)
@@ -115,13 +115,13 @@ func stateTestCmd(ctx *cli.Context) error {
 			// Print any structured logs collected
 			if ctx.GlobalBool(DebugFlag.Name) {
 				if debugger != nil {
-					fmt.Fprintln(os.Stderr, "#### TRACE ####")
-					vm.WriteTrace(os.Stderr, debugger.StructLogs())
+					fmt.Fprintln(ctx.App.ErrWriter, "#### TRACE ####")
+					vm.WriteTrace(ctx.App.ErrWriter, debugger.StructLogs())
 				}
 			}
 		}
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
-	fmt.Println(string(out))
+	fmt.Fprintln(ctx.App.Writer, string(out))
 	return nil
 }
