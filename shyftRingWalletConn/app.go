@@ -61,7 +61,7 @@ func handleRequest(conn net.Conn) {
 
 	go readerConn(conn, messages)
 	go handleMessages(messages, checkBalanceChan)
-	go checkBalance(checkBalanceChan)
+	go checkBalance(checkBalanceChan, conn)
 
 	sendRingSignedMsg(conn)
 }
@@ -141,10 +141,14 @@ func readerConn(conn net.Conn, channel chan []byte) {
 	}
 }
 
-func checkBalance(checkBalanceChan chan []byte) {
+func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 	address := <-checkBalanceChan
 	bal := getBalance(string(address[:]), client)
 	fmt.Println("The balance for address ", address, " is ", bal)
+	conn.Write([]byte("Broadcasting Balance"))
+	conn.Write([]byte("\n"))
+	conn.Write([]byte(bal))
+	conn.Write([]byte("\n"))
 }
 
 func sendRingSignedMsg(conn net.Conn){
