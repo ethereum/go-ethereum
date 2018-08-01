@@ -260,13 +260,39 @@ func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	case err == sql.ErrNoRows:
 		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
 		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
-		balanceHelper(sqldb, sendAndReceiveData, value)
+		adjustBalanceFromAddr(sqldb, sendAndReceiveData, value)
 	case err != nil:
 		log.Fatal(err)
 	default:
 		balanceHelper(sqldb, sendAndReceiveData, value)
 	}
 	return nil
+}
+
+func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
+	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
+	switch {
+	case err == sql.ErrNoRows:
+		accountNonce := "1"
+		//s.Amount should be 0?
+		CreateAccount(sqldb, s.From, s.Amount, accountNonce)
+	case err != nil:
+		log.Fatal(err)
+	default:
+		var newBalanceSender, newAccountNonceSender big.Int
+		var nonceIncrement = big.NewInt(1)
+
+		fromBalance := new(big.Int)
+		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
+
+		fromNonce := new(big.Int)
+		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
+
+		newBalanceSender.Sub(fromBalance, value)
+		newAccountNonceSender.Add(fromNonce, nonceIncrement)
+
+		UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
+	}
 }
 
 func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
@@ -277,12 +303,12 @@ func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	}
 	var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender big.Int
 	var nonceIncrement = big.NewInt(1)
-	fmt.Println(toAddressBalance)
+
 	//STRING TO BIG INT
 	//BALANCES TO AND FROM ADDR
 	toBalance := new(big.Int)
 	toBalance, _ = toBalance.SetString(toAddressBalance, 10)
-	fmt.Println(toBalance)
+
 	fromBalance := new(big.Int)
 	fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
 

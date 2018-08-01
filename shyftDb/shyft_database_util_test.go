@@ -2,7 +2,6 @@ package shyftdb
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -68,7 +67,6 @@ func TestBlock(t *testing.T) {
 
 		receipts := []*types.Receipt{receipt}
 		block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
-
 		// Write and verify the block in the database
 		if err := core.SWriteBlock(block, receipts); err != nil {
 			t.Fatalf("Failed to write block into database: %v", err)
@@ -126,7 +124,6 @@ func TestBlock(t *testing.T) {
 		if getAllBlocksMinedByAddress := core.SGetAllBlocksMinedByAddress(sqldb, block.Coinbase().String()); len(getAllBlocksMinedByAddress) == 0 {
 			t.Fatalf("GetAllBlocksMinedByAddress [%v]: GetAllBlocksMinedByAddress did not return correctly", getAllBlocksMinedByAddress)
 		}
-		fmt.Println("passed")
 		core.ClearTables()
 	})
 
@@ -215,7 +212,6 @@ func TestBlock(t *testing.T) {
 		if allTxsFromBlock := core.SGetAllTransactionsFromBlock(sqldb, block2.Number().String()); len(allTxsFromBlock) == 0 {
 			t.Fatalf("GetAllTransactionsFromBlock [%v]: GetAllTransactionsFromBlock did not return correctly", allTxsFromBlock)
 		}
-		fmt.Println("Passed 2")
 		core.ClearTables()
 	})
 
@@ -316,7 +312,6 @@ func TestBlock(t *testing.T) {
 				t.Fatalf("isContract [%v]: isContract bool is incorrect", isContract)
 			}
 		}
-		fmt.Println("Passed 3")
 		core.ClearTables()
 	})
 	//
@@ -420,7 +415,6 @@ func TestBlock(t *testing.T) {
 		if getAllTx := core.SGetAllTransactions(sqldb); len(getAllTx) == 0 {
 			t.Fatalf("GetAllTransactions [%v]: GetAllTransactions did not return correctly", getAllTx)
 		}
-		fmt.Println("Passed 4")
 		core.ClearTables()
 	})
 	//
@@ -434,6 +428,9 @@ func TestBlock(t *testing.T) {
 		}
 
 		fromAddr := "0x71562b71999873db5b286df957af199ec94617f7"
+		fromAddrEndBalance := "35"
+		fromAddrEndNonce := "4"
+
 		core.CreateAccount(sqldb, fromAddr, "50", "1")
 		toAddr := common.BytesToAddress([]byte{0x11})
 
@@ -486,19 +483,23 @@ func TestBlock(t *testing.T) {
 		var accountDataFrom core.SAccounts
 		json.Unmarshal(byts, &accountDataFrom)
 
-		fmt.Println("FROM", accountDataFrom)
+		if fromAddr != accountDataFrom.Addr {
+			t.Fatalf("To address [%v]: To address not found", accountDataFrom.Addr)
+		}
+		if fromAddrEndBalance != accountDataFrom.Balance {
+			t.Fatalf("To address balance [%v]: To address balance not found", accountDataFrom.Balance)
+		}
+		if fromAddrEndNonce != accountDataFrom.AccountNonce {
+			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataFrom.AccountNonce)
+		}
 
 		if getAllAccountTxs := core.SGetAccountTxs(sqldb, toAddr.String()); len(getAllAccountTxs) == 0 {
 			t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
 		}
-
 		if getAllAccounts := core.SGetAllAccounts(sqldb); len(getAllAccounts) == 0 {
 			t.Fatalf("GetAllAccounts [%v]: GetAllAccounts did not return correctly", getAllAccounts)
 		}
-
-		fmt.Println("Passed 5")
 		core.ClearTables()
 	})
-
 	core.ClearTables()
 }
