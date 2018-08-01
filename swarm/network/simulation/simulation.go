@@ -190,6 +190,14 @@ func (s *Simulation) Close() {
 		close(s.runC)
 	}
 	s.shutdownWG.Wait()
+	// Close all connections before calling the Network Shutdown.
+	// It is possible that p2p.Server.Stop will block if there are
+	// existing connections.
+	for _, c := range s.Net.Conns {
+		if c.Up {
+			s.Net.Disconnect(c.One, c.Other)
+		}
+	}
 	s.Net.Shutdown()
 }
 
