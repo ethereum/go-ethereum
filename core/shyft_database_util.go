@@ -1,18 +1,19 @@
 package core
 
 import (
-	"math/big"
-	"time"
-	"strconv"
 	"database/sql"
-	"log"
-	_ "github.com/lib/pq"
-	"github.com/ShyftNetwork/go-empyrean/common"
-	"github.com/ShyftNetwork/go-empyrean/core/types"
-	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
-	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
-	"strings"
 	"fmt"
+	"log"
+	"math/big"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ShyftNetwork/go-empyrean/common"
+	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
+	_ "github.com/lib/pq"
 )
 
 var IShyftTracer shyfttracerinterface.IShyftTracer
@@ -23,22 +24,22 @@ func SetIShyftTracer(st shyfttracerinterface.IShyftTracer) {
 
 //SBlock type
 type SBlock struct {
-	Hash     	string
-	Coinbase 	string
-	AgeGet      string
-	Age 		time.Time
-	ParentHash 	string
-	UncleHash 	string
-	Difficulty 	string
-	Size 		string
-	Rewards 	string
-	Number   	string
-	GasUsed	 	uint64
-	GasLimit 	uint64
-	Nonce 		uint64
-	TxCount  	int
-	UncleCount 	int
-	Blocks 		[]SBlock
+	Hash       string
+	Coinbase   string
+	AgeGet     string
+	Age        time.Time
+	ParentHash string
+	UncleHash  string
+	Difficulty string
+	Size       string
+	Rewards    string
+	Number     string
+	GasUsed    uint64
+	GasLimit   uint64
+	Nonce      uint64
+	TxCount    int
+	UncleCount int
+	Blocks     []SBlock
 }
 
 type InteralWrite struct {
@@ -63,9 +64,9 @@ type blockRes struct {
 }
 
 type SAccounts struct {
-	Addr    		string
-	Balance 		string
-	AccountNonce	string
+	Addr         string
+	Balance      string
+	AccountNonce string
 }
 
 type accountRes struct {
@@ -79,30 +80,30 @@ type txRes struct {
 }
 
 type ShyftTxEntryPretty struct {
-	TxHash    		string
-	To				*common.Address
-	ToGet			string
-	From      		string
-	BlockHash 		string
-	BlockNumber 	string
-	Amount   		string
-	GasPrice  		uint64
-	Gas       		uint64
-	GasLimit  		uint64
-	Cost	  		uint64
-	Nonce     		uint64
-	Status	  		string
-	IsContract 		bool
-	Age        		time.Time
-	Data      		[]byte
+	TxHash      string
+	To          *common.Address
+	ToGet       string
+	From        string
+	BlockHash   string
+	BlockNumber string
+	Amount      string
+	GasPrice    uint64
+	Gas         uint64
+	GasLimit    uint64
+	Cost        uint64
+	Nonce       uint64
+	Status      string
+	IsContract  bool
+	Age         time.Time
+	Data        []byte
 }
 
 type SendAndReceive struct {
-	To        	 string
-	From      	 string
-	Amount    	 string
-	Address   	 string
-	Balance   	 string
+	To           string
+	From         string
+	Amount       string
+	Address      string
+	Balance      string
 	AccountNonce uint64 `json:",string"`
 }
 
@@ -114,7 +115,7 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	}
 
 	//Get miner rewards
-	rewards := swriteMinerRewards(sqldb,block)
+	rewards := swriteMinerRewards(sqldb, block)
 	//Format block time to be stored
 	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
 	if err != nil {
@@ -123,20 +124,20 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	age := time.Unix(i, 0)
 
 	blockData := SBlock{
-		Hash: 			block.Header().Hash().Hex(),
-		Coinbase: 		block.Header().Coinbase.String(),
-		Number: 		block.Header().Number.String(),
-		GasUsed: 		block.Header().GasUsed,
-		GasLimit: 		block.Header().GasLimit,
-		TxCount: 		block.Transactions().Len(),
-		UncleCount: 	len(block.Uncles()),
-		ParentHash: 	block.ParentHash().String(),
-		UncleHash: 		block.UncleHash().String(),
-		Difficulty: 	block.Difficulty().String(),
-		Size: 			block.Size().String(),
-		Nonce: 			block.Nonce(),
-		Rewards:        rewards,
-		Age:   			age,
+		Hash:       block.Header().Hash().Hex(),
+		Coinbase:   block.Header().Coinbase.String(),
+		Number:     block.Header().Number.String(),
+		GasUsed:    block.Header().GasUsed,
+		GasLimit:   block.Header().GasLimit,
+		TxCount:    block.Transactions().Len(),
+		UncleCount: len(block.Uncles()),
+		ParentHash: block.ParentHash().String(),
+		UncleHash:  block.UncleHash().String(),
+		Difficulty: block.Difficulty().String(),
+		Size:       block.Size().String(),
+		Nonce:      block.Nonce(),
+		Rewards:    rewards,
+		Age:        age,
 	}
 
 	//Inserts block data into DB
@@ -157,7 +158,7 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 }
 
 //swriteTransactions writes to sqldb, a SHYFT postgres instance
-func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
+func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string, receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	var isContract bool
 	var statusFromReciept string
 	var toAddr *common.Address
@@ -191,21 +192,21 @@ func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 	}
 
 	txData := ShyftTxEntryPretty{
-		TxHash:    	 tx.Hash().Hex(),
-		From:      	 tx.From().Hex(),
-		To:        	 toAddr,
-		BlockHash: 	 blockHash.Hex(),
+		TxHash:      tx.Hash().Hex(),
+		From:        tx.From().Hex(),
+		To:          toAddr,
+		BlockHash:   blockHash.Hex(),
 		BlockNumber: blockNumber,
-		Amount:    	 tx.Value().String(),
-		Cost:	   	 tx.Cost().Uint64(),
-		GasPrice:  	 tx.GasPrice().Uint64(),
-		GasLimit:  	 gasLimit,
-		Gas:       	 tx.Gas(),
-		Nonce:     	 tx.Nonce(),
-		Age: 	   	 age,
-		Data:      	 tx.Data(),
-		Status: 	statusFromReciept,
-		IsContract: isContract,
+		Amount:      tx.Value().String(),
+		Cost:        tx.Cost().Uint64(),
+		GasPrice:    tx.GasPrice().Uint64(),
+		GasLimit:    gasLimit,
+		Gas:         tx.Gas(),
+		Nonce:       tx.Nonce(),
+		Age:         age,
+		Data:        tx.Data(),
+		Status:      statusFromReciept,
+		IsContract:  isContract,
 	}
 	//Inserts Tx into DB
 	InsertTx(sqldb, txData)
@@ -217,9 +218,9 @@ func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 
 func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	sendAndReceiveData := SendAndReceive{
-		From:   		tx.From().Hex(),
-		Amount: 		tx.Value().String(),
-		AccountNonce: 	tx.Nonce(),
+		From:         tx.From().Hex(),
+		Amount:       tx.Value().String(),
+		AccountNonce: tx.Nonce(),
 	}
 
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
@@ -229,7 +230,7 @@ func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
 		CreateAccount(sqldb, sendAndReceiveData.From, sendAndReceiveData.Amount, accountNonce)
 	default:
-		var newBalanceSender,newAccountNonceSender  big.Int
+		var newBalanceSender, newAccountNonceSender big.Int
 		var nonceIncrement = big.NewInt(1)
 
 		fromBalance := new(big.Int)
@@ -249,57 +250,64 @@ func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 //writeFromBalance writes senders balance to accounts db
 func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	sendAndReceiveData := SendAndReceive{
-		To: tx.To().Hex(),
-		From: tx.From().Hex(),
+		To:     tx.To().Hex(),
+		From:   tx.From().Hex(),
 		Amount: tx.Value().String(),
 	}
-
-	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.To)
-
+	value := tx.Value()
+	_, _, err := AccountExists(sqldb, sendAndReceiveData.To)
 	switch {
 	case err == sql.ErrNoRows:
 		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
 		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
+		balanceHelper(sqldb, sendAndReceiveData, value)
 	case err != nil:
 		log.Fatal(err)
 	default:
-		fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
-		if err != nil {
-			log.Fatal(err)
-		}
-		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender  big.Int
-		var nonceIncrement = big.NewInt(1)
-
-		//STRING TO BIG INT
-		//BALANCES TO AND FROM ADDR
-		toBalance := new(big.Int)
-		toBalance, _ = toBalance.SetString(toAddressBalance, 10)
-		fromBalance := new(big.Int)
-		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
-
-		//ACCOUNT NONCES
-		toNonce := new(big.Int)
-		toNonce, _ = toNonce.SetString(toAccountNonce, 10)
-		fromNonce := new(big.Int)
-		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
-
-		newBalanceReceiver.Add(toBalance, tx.Value())
-		newBalanceSender.Sub(fromBalance, tx.Value())
-
-		newAccountNonceReceiver.Add(toNonce, nonceIncrement)
-		newAccountNonceSender.Add(fromNonce, nonceIncrement)
-
-		//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
-		UpdateAccount(sqldb, sendAndReceiveData.To,   newBalanceReceiver.String(), newAccountNonceReceiver.String())
-		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(),   newAccountNonceSender.String())
+		balanceHelper(sqldb, sendAndReceiveData, value)
 	}
 	return nil
 }
 
+func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
+	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
+	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, s.To)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender big.Int
+	var nonceIncrement = big.NewInt(1)
+	fmt.Println(toAddressBalance)
+	//STRING TO BIG INT
+	//BALANCES TO AND FROM ADDR
+	toBalance := new(big.Int)
+	toBalance, _ = toBalance.SetString(toAddressBalance, 10)
+	fmt.Println(toBalance)
+	fromBalance := new(big.Int)
+	fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
+
+	//ACCOUNT NONCES
+	toNonce := new(big.Int)
+	toNonce, _ = toNonce.SetString(toAccountNonce, 10)
+	fromNonce := new(big.Int)
+	fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
+
+	newBalanceReceiver.Add(toBalance, value)
+	newBalanceSender.Sub(fromBalance, value)
+
+	newAccountNonceReceiver.Add(toNonce, nonceIncrement)
+	newAccountNonceSender.Add(fromNonce, nonceIncrement)
+
+	//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
+	UpdateAccount(sqldb, s.To, newBalanceReceiver.String(), newAccountNonceReceiver.String())
+	UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
+}
+
+//SWriteInternalTxBalances Writes internal txs and updates balances
 func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amount string) error {
 	sendAndReceiveData := SendAndReceive{
-		To: 	toAddr,
-		From: 	fromAddr,
+		To:     toAddr,
+		From:   fromAddr,
 		Amount: amount,
 	}
 
@@ -316,7 +324,7 @@ func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amo
 		if err != nil {
 			log.Fatal(err)
 		}
-		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender  big.Int
+		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender big.Int
 		var nonceIncrement = big.NewInt(1)
 
 		//STRING TO BIG INT
@@ -341,8 +349,8 @@ func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amo
 		newAccountNonceSender.Add(fromNonce, nonceIncrement)
 
 		//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
-		UpdateAccount(sqldb, sendAndReceiveData.To,   newBalanceReceiver.String(), newAccountNonceReceiver.String())
-		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(),   newAccountNonceSender.String())
+		UpdateAccount(sqldb, sendAndReceiveData.To, newBalanceReceiver.String(), newAccountNonceReceiver.String())
+		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(), newAccountNonceSender.String())
 	}
 	return nil
 }
@@ -366,7 +374,7 @@ func swriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	// https://ethereum.stackexchange.com/questions/27172/different-uncles-reward
 	// line 551 in consensus.go (shyft_go-ethereum/consensus/ethash/consensus.go)
 	// Some weird constants to avoid constant memory allocs for them.
-	var big8   = big.NewInt(8)
+	var big8 = big.NewInt(8)
 	var uncleRewards []*big.Int
 	var uncleAddrs []string
 
@@ -435,7 +443,7 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 ///////////////////////
 //DB Utility functions
 //////////////////////
-func CreateAccount (sqldb *sql.DB, addr string, balance string, accountNonce string) {
+func CreateAccount(sqldb *sql.DB, addr string, balance string, accountNonce string) {
 	sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
 	insertErr := sqldb.QueryRow(sqlStatement, strings.ToLower(addr), balance, accountNonce).Scan(&addr)
 	if insertErr != nil {
@@ -443,7 +451,7 @@ func CreateAccount (sqldb *sql.DB, addr string, balance string, accountNonce str
 	}
 }
 
-func AccountExists (sqldb *sql.DB, addr string) (string, string, error) {
+func AccountExists(sqldb *sql.DB, addr string) (string, string, error) {
 	var addressBalance, accountNonce string
 	sqlExistsStatement := `SELECT balance, accountNonce from accounts WHERE addr = ($1)`
 	err := sqldb.QueryRow(sqlExistsStatement, strings.ToLower(addr)).Scan(&addressBalance, &accountNonce)
@@ -457,7 +465,7 @@ func AccountExists (sqldb *sql.DB, addr string) (string, string, error) {
 	}
 }
 
-func BlockExists (sqldb *sql.DB, hash string) (error) {
+func BlockExists(sqldb *sql.DB, hash string) error {
 	var res string
 	sqlExistsStatement := `SELECT hash from blocks WHERE hash= ($1)`
 	err := sqldb.QueryRow(sqlExistsStatement, strings.ToLower(hash)).Scan(&res)
@@ -486,7 +494,7 @@ func InsertBlock(sqldb *sql.DB, blockData SBlock) {
 	}
 }
 
-func InsertTx (sqldb *sql.DB, txData ShyftTxEntryPretty) {
+func InsertTx(sqldb *sql.DB, txData ShyftTxEntryPretty) {
 	var retNonce string
 	sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
 	err := sqldb.QueryRow(sqlStatement, strings.ToLower(txData.TxHash), strings.ToLower(txData.From), strings.ToLower(txData.To.String()), strings.ToLower(txData.BlockHash), txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, txData.IsContract, txData.Status, txData.Age, txData.Data).Scan(&retNonce)
@@ -504,5 +512,3 @@ func InsertInternalTx(sqldb *sql.DB, i InteralWrite) {
 		panic(qerr)
 	}
 }
-
-
