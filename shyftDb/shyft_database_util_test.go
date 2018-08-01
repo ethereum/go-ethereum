@@ -45,11 +45,11 @@ func TestBlock(t *testing.T) {
 		signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 		//Nonce, To Address,Value, GasLimit, Gasprice, data
-		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(5), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
 		mytx, _ := types.SignTx(tx1, signer, key)
-		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
+		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(5), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
 		mytx2, _ := types.SignTx(tx2, signer, key)
-		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
+		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(5), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
 		mytx3, _ := types.SignTx(tx3, signer, key)
 		txs := []*types.Transaction{mytx, mytx2, mytx3}
 
@@ -67,14 +67,17 @@ func TestBlock(t *testing.T) {
 
 		receipts := []*types.Receipt{receipt}
 		block := types.NewBlock(&types.Header{Number: big.NewInt(315)}, txs, nil, receipts)
-		// Write and verify the block in the database
-		if err := core.SWriteBlock(block, receipts); err != nil {
-			t.Fatalf("Failed to write block into database: %v", err)
-		}
 
 		sqldb, err := core.DBConnection()
 		if err != nil {
 			panic(err)
+		}
+		fromAddr := "0x71562b71999873db5b286df957af199ec94617f7"
+		core.CreateAccount(sqldb, fromAddr, "50", "1")
+
+		// Write and verify the block in the database
+		if err := core.SWriteBlock(block, receipts); err != nil {
+			t.Fatalf("Failed to write block into database: %v", err)
 		}
 
 		entry := core.SGetBlock(sqldb, block.Number().String())
@@ -132,11 +135,11 @@ func TestBlock(t *testing.T) {
 		signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 		//Nonce, To Address,Value, GasLimit, Gasprice, data
-		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(5), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
 		mytx, _ := types.SignTx(tx1, signer, key)
-		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
+		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(5), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
 		mytx2, _ := types.SignTx(tx2, signer, key)
-		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
+		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(5), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
 		mytx3, _ := types.SignTx(tx3, signer, key)
 		txs := []*types.Transaction{mytx, mytx2}
 		txs1 := []*types.Transaction{mytx3}
@@ -158,16 +161,19 @@ func TestBlock(t *testing.T) {
 		block2 := types.NewBlock(&types.Header{Number: big.NewInt(320)}, txs1, nil, receipts)
 		blocks := []*types.Block{block, block2}
 
+		sqldb, err := core.DBConnection()
+		if err != nil {
+			panic(err)
+		}
+
+		fromAddr := "0x71562b71999873db5b286df957af199ec94617f7"
+		core.CreateAccount(sqldb, fromAddr, "50", "1")
+
 		for _, bc := range blocks {
 			// Write and verify the block in the database
 			if err := core.SWriteBlock(bc, receipts); err != nil {
 				t.Fatalf("Failed to write block into database: %v", err)
 			}
-		}
-
-		sqldb, err := core.DBConnection()
-		if err != nil {
-			panic(err)
 		}
 
 		response := core.SGetRecentBlock(sqldb)
@@ -320,11 +326,11 @@ func TestBlock(t *testing.T) {
 		signer := types.NewEIP155Signer(big.NewInt(2147483647))
 
 		//Nonce, To Address,Value, GasLimit, Gasprice, data
-		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
+		tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(5), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
 		mytx, _ := types.SignTx(tx1, signer, key)
-		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(222), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
+		tx2 := types.NewTransaction(2, common.BytesToAddress([]byte{0x22}), big.NewInt(5), 2222, big.NewInt(22222), []byte{0x22, 0x22, 0x22})
 		mytx2, _ := types.SignTx(tx2, signer, key)
-		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(333), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
+		tx3 := types.NewTransaction(3, common.BytesToAddress([]byte{0x33}), big.NewInt(5), 3333, big.NewInt(33333), []byte{0x33, 0x33, 0x33})
 		mytx3, _ := types.SignTx(tx3, signer, key)
 		txs := []*types.Transaction{mytx, mytx2, mytx3}
 
@@ -343,12 +349,16 @@ func TestBlock(t *testing.T) {
 		receipts := []*types.Receipt{receipt1}
 		block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, receipts)
 
-		if err := core.SWriteBlock(block, receipts); err != nil {
-			t.Fatalf("Failed to write block into database: %v", err)
-		}
 		sqldb, err := core.DBConnection()
 		if err != nil {
 			panic(err)
+		}
+
+		fromAddr := "0x71562b71999873db5b286df957af199ec94617f7"
+		core.CreateAccount(sqldb, fromAddr, "50", "1")
+
+		if err := core.SWriteBlock(block, receipts); err != nil {
+			t.Fatalf("Failed to write block into database: %v", err)
 		}
 
 		for _, tx := range txs {
@@ -417,7 +427,7 @@ func TestBlock(t *testing.T) {
 		}
 		core.ClearTables()
 	})
-	//
+
 	t.Run("TestAccountsToReturnAccounts", func(t *testing.T) {
 		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		signer := types.NewEIP155Signer(big.NewInt(2147483647))
@@ -492,7 +502,6 @@ func TestBlock(t *testing.T) {
 		if fromAddrEndNonce != accountDataFrom.AccountNonce {
 			t.Fatalf("To account nonce [%v]: To account nonce not found", accountDataFrom.AccountNonce)
 		}
-
 		if getAllAccountTxs := core.SGetAccountTxs(sqldb, toAddr.String()); len(getAllAccountTxs) == 0 {
 			t.Fatalf("GetAccountTxs [%v]: GetAccountTxs did not return correctly", getAllAccountTxs)
 		}
