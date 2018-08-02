@@ -293,7 +293,7 @@ Run `./shyft-geth.sh` with one of the following flags:
 
 Docker Images are available for ShyftGeth and the Postgresql Database which can be used for development and testing. To launch these containers you will need to have docker-compose installed on your computer. Installation instructions for docker-compose are available [here](https://docs.docker.com/install/).
 
-To launch ShyftGeth and PG - issue the following command from the root of the project directory:
+To launch ShyftGeth, PG, the ShyftBlock Explorer Api and UI - issue the following command from the root of the project directory:
 
 `docker-compose up`
 
@@ -301,12 +301,13 @@ If you would like to reinitialize/rebuild the docker images you can issue the fo
 
 `docker-compose up --build`
 
-The Postgresql Database Container will persist the database data to the the pg-data/ directory. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001
+The Postgresql Database Container will persist the database data to the the pg-data/ directory. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
+
+NB: The Shyft Geth docker image size is 5+ GB so make sure you have adequate space on your disk drive/
 
 _TODO_
 
-- Dockerize shyftBlockExplorerAPI
-- Dockerize shyftBlockExplorerUI
+- Reduce size of the ShytfGeth docker container which is responsible for mining and running the blockchain
 - Adjust docker scripts and ports to facilitate sending of test transactions
 - Modify Docker scripts to facilitate hot reloading during development
 

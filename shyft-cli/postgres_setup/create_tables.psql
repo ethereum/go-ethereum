@@ -55,4 +55,4 @@ CREATE TABLE IF NOT EXISTS internalTxs (
   time text,
   input text,
   output text
-)
+);

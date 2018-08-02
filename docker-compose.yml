@@ -36,7 +36,7 @@ services:
       - shyftnet
     environment:
       - POSTGRES_USER=postgres
-      - POSGRES_PASSWORD=docker
+      - POSTGRES_PASSWORD=docker
   shyft_block_api:
     build:
       context: $PWD 
