@@ -1,15 +1,12 @@
 package core
 
 import (
-"encoding/json"
-"fmt"
-"math/big"
-"time"
-"strconv"
-"database/sql"
-"log"
-_ "github.com/lib/pq"
-
+	"math/big"
+	"time"
+	"strconv"
+	"database/sql"
+	"log"
+	_ "github.com/lib/pq"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
@@ -24,20 +21,22 @@ func SetIShyftTracer(st shyfttracerinterface.IShyftTracer) {
 
 //SBlock type
 type SBlock struct {
-	Hash     string
-	Coinbase string
-	Number   string
-	GasUsed	 uint64
-	GasLimit uint64
-	TxCount  int
-	UncleCount int
-	Age        string
-	ParentHash string
-	UncleHash string
-	Difficulty string
-	Size string
-	Nonce uint64
-	Rewards string
+	Hash     	string
+	Coinbase 	string
+	AgeGet      string
+	Age 		time.Time
+	ParentHash 	string
+	UncleHash 	string
+	Difficulty 	string
+	Size 		string
+	Rewards 	string
+	Number   	string
+	GasUsed	 	uint64
+	GasLimit 	uint64
+	Nonce 		uint64
+	TxCount  	int
+	UncleCount 	int
+	Blocks 		[]SBlock
 }
 
 //blockRes struct
@@ -49,9 +48,9 @@ type blockRes struct {
 }
 
 type SAccounts struct {
-	Addr    string
-	Balance string
-	TxCountAccount string
+	Addr    		string
+	Balance 		string
+	AccountNonce	string
 }
 
 type accountRes struct {
@@ -60,76 +59,62 @@ type accountRes struct {
 	AllAccounts []SAccounts
 }
 
-//ShyftTxEntry structure
-type ShyftTxEntry struct {
-	TxHash    common.Hash
-	To        *common.Address
-	From      *common.Address
-	BlockHash string
-	Amount    *big.Int
-	GasPrice  *big.Int
-	Gas       uint64
-	Cost	  *big.Int
-	Nonce     uint64
-	Data      []byte
-}
-
 type txRes struct {
 	TxEntry []ShyftTxEntryPretty
 }
 
 type ShyftTxEntryPretty struct {
-	TxHash    string
-	To        string
-	From      string
-	BlockHash string
-	BlockNumber string
-	Amount   string
-	GasPrice  uint64
-	Gas       uint64
-	GasLimit  uint64
-	Cost	  uint64
-	Nonce     uint64
-	Status	  string
-	IsContract bool
-	Age        time.Time
-	Data      []byte
-}
-
-type ShyftAccountEntry struct {
-	Balance string
-	Txs     []string
+	TxHash    		string
+	To				*common.Address
+	ToGet			string
+	From      		string
+	BlockHash 		string
+	BlockNumber 	string
+	Amount   		string
+	GasPrice  		uint64
+	Gas       		uint64
+	GasLimit  		uint64
+	Cost	  		uint64
+	Nonce     		uint64
+	Status	  		string
+	IsContract 		bool
+	Age        		time.Time
+	Data      		[]byte
 }
 
 type SendAndReceive struct {
-	To        string
-	From      string
-	Amount    string
-	Address   string
-	Balance   string
-	TxCountAccount string
+	To        	 string
+	From      	 string
+	Amount    	 string
+	Address   	 string
+	Balance   	 string
+	AccountNonce uint64 `json:",string"`
 }
 
 //WriteBlock writes to block info to sql db
 func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
-
 	sqldb, err := DBConnection()
 	if err != nil {
 		panic(err)
 	}
 
 	rewards := swriteMinerRewards(sqldb,block)
-	coinbase := block.Header().Coinbase.String()
-	number := block.Header().Number.String()
-	gasUsed := block.Header().GasUsed
-	gasLimit := block.Header().GasLimit
-	txCount := block.Transactions().Len()
-	uncleCount := len(block.Uncles())
-	parentHash := block.ParentHash().String()
-	uncleHash := block.UncleHash().String()
-	blockDifficulty := block.Difficulty().String()
-	blockSize := block.Size().String()
-	blockNonce := block.Nonce()
+
+	blockData := SBlock{
+		Hash: 			block.Header().Hash().Hex(),
+		Coinbase: 		block.Header().Coinbase.String(),
+		Number: 		block.Header().Number.String(),
+		GasUsed: 		block.Header().GasUsed,
+		GasLimit: 		block.Header().GasLimit,
+		TxCount: 		block.Transactions().Len(),
+		UncleCount: 	len(block.Uncles()),
+		ParentHash: 	block.ParentHash().String(),
+		UncleHash: 		block.UncleHash().String(),
+		Difficulty: 	block.Difficulty().String(),
+		Size: 			block.Size().String(),
+		Nonce: 			block.Nonce(),
+		Rewards:        rewards,
+	}
 
 	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
 	if err != nil {
@@ -137,15 +122,16 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	}
 	age := time.Unix(i, 0)
 
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, rewards, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13), ($14)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, rewards, blockNonce).Scan(&number)
-	if qerr != nil {
-		panic(qerr)
+	blockAge := SBlock {
+		Age:   age,
 	}
+
+	//Inserts block data into DB
+	InsertBlock(sqldb, blockData, blockAge)
 
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
-			SwriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
+			swriteTransactions(sqldb, tx, block.Header().Hash(), blockData.Number, receipts, age, blockData.GasLimit)
 			if block.Transactions()[0].To() != nil {
 				swriteFromBalance(sqldb, tx)
 			}
@@ -157,255 +143,151 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	return nil
 }
 
-//writeTransactions writes to sqldb
-func SwriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
-	txData := ShyftTxEntry{
-		TxHash:    tx.Hash(),
-		From:      tx.From(),
-		To:        tx.To(),
-		BlockHash: blockHash.Hex(),
-		Amount:    tx.Value(),
-		Cost:	   tx.Cost(),
-		GasPrice:  tx.GasPrice(),
-		Gas:       tx.Gas(),
-		Nonce:     tx.Nonce(),
-		Data:      tx.Data(),
-	}
-
-	hash := txData.TxHash
-	txHash := txData.TxHash.Hex()
-
-	from := txData.From.Hex()
-	blockHasher := txData.BlockHash
-	amount := txData.Amount.String()
-	gasPrice := txData.GasPrice.String()
-	txFee := txData.Cost.String()
-	nonce := txData.Nonce
-	gas := txData.Gas
-	data := txData.Data
-	to := txData.To
+//swriteTransactions writes to sqldb, a SHYFT postgres instance
+func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	var isContract bool
 	var statusFromReciept string
+	var contractAddressFromReciept common.Address
 
-	if (to == nil){
-		var contractAddressFromReciept string
+	txData := ShyftTxEntryPretty{
+		TxHash:    	 tx.Hash().Hex(),
+		From:      	 tx.From().Hex(),
+		To:        	 tx.To(),
+		BlockHash: 	 blockHash.Hex(),
+		BlockNumber: blockNumber,
+		Amount:    	 tx.Value().String(),
+		Cost:	   	 tx.Cost().Uint64(),
+		GasPrice:  	 tx.GasPrice().Uint64(),
+		GasLimit:  	 gasLimit,
+		Gas:       	 tx.Gas(),
+		Nonce:     	 tx.Nonce(),
+		Age: 	   	 age,
+		Data:      	 tx.Data(),
+	}
+
+	if tx.To() == nil {
 		for _, receipt := range receipts {
 			statusReciept := (*types.ReceiptForStorage)(receipt).Status
-			contractAddressFromReciept = (*types.ReceiptForStorage)(receipt).ContractAddress.String()
-			if statusReciept == 1 {
+			contractAddressFromReciept = (*types.ReceiptForStorage)(receipt).ContractAddress
+			switch {
+			case statusReciept == 0:
+				statusFromReciept = "FAIL"
+			case statusReciept == 1:
 				statusFromReciept = "SUCCESS"
 			}
-			if statusReciept == 0 {
-				statusFromReciept = "FAIL"
-			}
 		}
-
-		var retNonce string
 		isContract = true
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit,txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
-		if qerr != nil {
-			panic(qerr)
+		contractData := ShyftTxEntryPretty{
+			Status: 	statusFromReciept,
+			IsContract: isContract,
+			To:         &contractAddressFromReciept,
 		}
+		//Insert Tx into DB
+		InsertTx(sqldb, txData, contractData)
 	} else {
-		var retNonce string
 		isContract = false
 		for _, receipt := range receipts {
 			statusReciept := (*types.ReceiptForStorage)(receipt).Status
-			if statusReciept == 1 {
+			switch {
+			case statusReciept == 0:
+				statusFromReciept = "FAIL"
+			case statusReciept == 1:
 				statusFromReciept = "SUCCESS"
 			}
-			if statusReciept == 0 {
-				statusFromReciept = "FAIL"
-			}
 		}
-
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
-
-		if qerr != nil {
-			panic(qerr)
+		data := ShyftTxEntryPretty{
+			Status: 	statusFromReciept,
+			IsContract: isContract,
+			To:			tx.To(),
 		}
+		//Insert Tx into DB
+		InsertTx(sqldb, txData, data)
 	}
-	IShyftTracer.GetTracerToRun(hash)
+	//Runs necessary functions for tracing internal transactions through tracers.go
+	IShyftTracer.GetTracerToRun(tx.Hash())
 
 	return nil
 }
 
 func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	sendAndReceiveData := SendAndReceive{
-		From:   tx.From().Hex(),
-		Amount: tx.Value().String(),
+		From:   		tx.From().Hex(),
+		Amount: 		tx.Value().String(),
+		AccountNonce: 	tx.Nonce(),
 	}
 
-	fromAddr := sendAndReceiveData.From
-	amount := sendAndReceiveData.Amount
-	accountNonceSen := tx.Nonce()
+	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
 
-	var response string
-	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	err := sqldb.QueryRow(sqlExistsStatement, fromAddr).Scan(&response)
 	switch {
 	case err == sql.ErrNoRows:
-		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, fromAddr, amount, accountNonceSen).Scan(&fromAddr)
-		if insertErr != nil {
-			panic(insertErr)
-		}
+		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
+		CreateAccount(sqldb, sendAndReceiveData.From, sendAndReceiveData.Amount, accountNonce)
 	default:
-		getAccountBalanceSender:= SGetAccount(sqldb, fromAddr)
-		var senderBalance SendAndReceive
-		if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
-			log.Fatal(err)
-		}
-
-		balanceSender := senderBalance.Balance
-		var newBalanceSender big.Int
-		var newAccountNonceSender big.Int
+		var newBalanceSender,newAccountNonceSender  big.Int
 		var nonceIncrement = big.NewInt(1)
-		updateSQLStatement := `UPDATE accounts SET balance = ($2), txCountAccount = ($3) WHERE addr = ($1)`
 
-		s := new(big.Int)
-		_, error := fmt.Sscan(balanceSender, s)
-		if error != nil {
-			log.Println("error scanning value:", error)
-		}
+		fromBalance := new(big.Int)
+		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
 
-		senderAccountNonce := new(big.Int).SetUint64(accountNonceSen)
+		fromNonce := new(big.Int)
+		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
 
-		newBalanceSender.Sub(s, tx.Value())
-		newAccountNonceSender.Add(senderAccountNonce, nonceIncrement)
+		newBalanceSender.Sub(fromBalance, tx.Value())
+		newAccountNonceSender.Add(fromNonce, nonceIncrement)
 
-		_, err := sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
-		if err != nil {
-			panic(err)
-		}
+		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(), newAccountNonceSender.String())
 	}
 	return nil
-}
-
-func swriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
-	sendAndReceiveData := SendAndReceive{
-		From: tx.From().Hex(),
-		Amount: tx.Value().String(),
-	}
-
-	fromAddr := sendAndReceiveData.From
-	getAccountBalanceSender:= SGetAccount(sqldb, fromAddr)
-
-	var senderBalance SendAndReceive
-	if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
-		log.Fatal(err)
-	}
-	balanceSender := senderBalance.Balance
-	accountNonceSender := senderBalance.TxCountAccount
-
-	return sendAndReceiveData, balanceSender, accountNonceSender
 }
 
 //writeFromBalance writes senders balance to accounts db
 func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := swriteBalanceHelper(sqldb, tx)
-	toAddr := sendAndReceiveData.To
-	fromAddr := sendAndReceiveData.From
-	amount := sendAndReceiveData.Amount
-	balanceReceiver := balanceRec
-	balanceSender := balanceSen
-
-	var response string
-	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
-
-	switch {
-	case err == sql.ErrNoRows:
-		txCountAccount := strconv.FormatUint(tx.Nonce(), 10)
-		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, txCountAccount).Scan(&toAddr)
-		if insertErr != nil {
-			panic(insertErr)
-		}
-	case err != nil:
-		log.Fatal(err)
-	default:
-		var newBalanceReceiver big.Int
-		var newBalanceSender big.Int
-		var newAccountNonceReceiver big.Int
-		var newAccountNonceSender big.Int
-		var nonceIncrement = big.NewInt(1)
-		updateSQLStatement := `UPDATE accounts SET balance = ($2), txCountAccount = ($3) WHERE addr = ($1)`
-
-		r := new(big.Int)
-		_, err := fmt.Sscan(balanceReceiver, r)
-		if err != nil {
-			log.Println("error scanning value:", err)
-		}
-
-		s := new(big.Int)
-		_, error := fmt.Sscan(balanceSender, s)
-		if error != nil {
-			log.Println("error scanning value:", error)
-		}
-
-		accountR := new(big.Int)
-		_, er := fmt.Sscan(accountNonceRec, accountR)
-		if er != nil {
-			log.Println("error scanning value:", er)
-		}
-
-		accountS := new(big.Int)
-		_, errors := fmt.Sscan(accountNonceSen, accountS)
-		if errors != nil {
-			log.Println("error scanning value:", error)
-		}
-
-		newBalanceReceiver.Add(r, tx.Value())
-		newBalanceSender.Sub(s, tx.Value())
-
-		newAccountNonceReceiver.Add(accountR, nonceIncrement)
-		newAccountNonceSender.Add(accountS, nonceIncrement)
-
-		_, err = sqldb.Exec(updateSQLStatement, toAddr, newBalanceReceiver.String(), newAccountNonceReceiver.String())
-		if err != nil {
-			panic(err)
-		}
-
-		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
-		if err != nil {
-			panic(err)
-		}
-	}
-	return nil
-}
-
-func swriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		To: tx.To().Hex(),
 		From: tx.From().Hex(),
 		Amount: tx.Value().String(),
 	}
 
-	toAddr := sendAndReceiveData.To
-	fromAddr := sendAndReceiveData.From
+	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.To)
 
-	getAccountBalanceReceiver := SGetAccount(sqldb, toAddr)
-	getAccountBalanceSender:= SGetAccount(sqldb, fromAddr)
-
-	var receiverBalance SendAndReceive
-	if err := json.Unmarshal([]byte(getAccountBalanceReceiver), &receiverBalance); err != nil {
+	switch {
+	case err == sql.ErrNoRows:
+		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
+		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
+	case err != nil:
 		log.Fatal(err)
+	default:
+		fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
+		if err != nil {
+			log.Fatal(err)
+		}
+		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender  big.Int
+		var nonceIncrement = big.NewInt(1)
+
+		//STRING TO BIG INT
+		//BALANCES TO AND FROM ADDR
+		toBalance := new(big.Int)
+		toBalance, _ = toBalance.SetString(toAddressBalance, 10)
+		fromBalance := new(big.Int)
+		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
+
+		//ACCOUNT NONCES
+		toNonce := new(big.Int)
+		toNonce, _ = toNonce.SetString(toAccountNonce, 10)
+		fromNonce := new(big.Int)
+		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
+
+		newBalanceReceiver.Add(toBalance, tx.Value())
+		newBalanceSender.Sub(fromBalance, tx.Value())
+
+		newAccountNonceReceiver.Add(toNonce, nonceIncrement)
+		newAccountNonceSender.Add(fromNonce, nonceIncrement)
+
+		//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
+		UpdateAccount(sqldb, sendAndReceiveData.To,   newBalanceReceiver.String(), newAccountNonceReceiver.String())
+		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(),   newAccountNonceSender.String())
 	}
-
-	var senderBalance SendAndReceive
-	if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
-		log.Fatal(err)
-	}
-
-	balanceReceiver := receiverBalance.Balance
-	balanceSender := senderBalance.Balance
-	accountNonceReceiver := receiverBalance.TxCountAccount
-	accountNonceSender := senderBalance.TxCountAccount
-
-	return sendAndReceiveData, balanceReceiver, balanceSender, accountNonceReceiver, accountNonceSender
+	return nil
 }
 
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
@@ -446,8 +328,7 @@ func swriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	sstoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
 	var uncRewards = new(big.Int)
 	for i := 0; i < len(uncleAddrs); i++ {
-		uncRewards := uncleRewards[i]
-		fmt.Println(uncRewards)
+		_ = uncleRewards[i]
 		sstoreReward(sqldb, uncleAddrs[i], uncleRewards[i])
 	}
 
@@ -460,19 +341,12 @@ func swriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 
 func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 	// Check if address exists
-	var addressBalance string
-	addressExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	err := sqldb.QueryRow(addressExistsStatement, address).Scan(&addressBalance)
+	addressBalance, accountNonce, err := AccountExists(sqldb, address)
 
 	if err == sql.ErrNoRows {
 		// Addr does not exist, thus create new entry
-		createAddressSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-
 		// We convert totalReward into a string and postgres converts into number
-		_, insertErr := sqldb.Exec(createAddressSqlStatement, address, reward.String(), 0)
-		if insertErr != nil {
-			panic(insertErr)
-		}
+		CreateAccount(sqldb, address, reward.String(), "1")
 		return
 	} else if err != nil {
 		// Something went wrong panic
@@ -480,593 +354,77 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 	} else {
 		// Addr exists, update existing balance
 		bigBalance := new(big.Int)
-		bigBalance, err := bigBalance.SetString(addressBalance, 0)
+		var nonceIncrement = big.NewInt(1)
+		currentAccountNonce := new(big.Int)
+		currentAccountNonce, errorr := currentAccountNonce.SetString(accountNonce, 10)
+		if !errorr {
+			panic(errorr)
+		}
+		bigBalance, err := bigBalance.SetString(addressBalance, 10)
 		if !err {
 			panic(err)
 		}
 		newBalance := new(big.Int)
+		newAccountNonce := new(big.Int)
 		newBalance.Add(newBalance, bigBalance)
 		newBalance.Add(newBalance, reward)
-
-		updateAddressSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
-
-		// We convert totalReward into a string and postgres converts into number
-		_, updateErr := sqldb.Exec(updateAddressSQLStatement, newBalance.String(), address)
-		if updateErr != nil {
-			panic(updateErr)
-		}
+		newAccountNonce.Add(currentAccountNonce, nonceIncrement)
+		//Update the balance and nonce
+		UpdateAccount(sqldb, address, newBalance.String(), newAccountNonce.String())
 		return
 	}
 }
 
-///////////
-// Getters
-//////////
-//GetAllBlocks returns []SBlock blocks for API
+///////////////////////
+//DB Utility functions
+//////////////////////
+func CreateAccount (sqldb *sql.DB, addr string, balance string, accountNonce string) {
+	sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
+	insertErr := sqldb.QueryRow(sqlStatement, addr, balance, accountNonce).Scan(&addr)
+	if insertErr != nil {
+		panic(insertErr)
+	}
+}
 
-//Look into postgres functions array_to_json(array_agg(lap))
-//Example select array_to_json(array_agg(lap))
-//from ( select * from blocks)lap;
-func SGetAllBlocks(sqldb *sql.DB) string {
-	var arr blockRes
-	var blockArr string
-	rows, err := sqldb.Query(`
-		SELECT * FROM blocks`)
+func AccountExists (sqldb *sql.DB, addr string) (string, string, error) {
+	var addressBalance, accountNonce string
+	sqlExistsStatement := `SELECT balance, accountNonce from accounts WHERE addr = ($1)`
+	err := sqldb.QueryRow(sqlExistsStatement, addr).Scan(&addressBalance, &accountNonce)
+
+	switch {
+	case err == sql.ErrNoRows:
+		return addressBalance, accountNonce, err
+	case err != nil:
+		panic(err)
+	default:
+		return addressBalance, accountNonce, err
+	}
+}
+
+func UpdateAccount(sqldb *sql.DB, addr string, balance string, accountNonce string) {
+	updateSQLStatement := `UPDATE accounts SET balance = ($2), accountNonce = ($3) WHERE addr = ($1)`
+	_, updateErr := sqldb.Exec(updateSQLStatement, addr, balance, accountNonce)
+	if updateErr != nil {
+		panic(updateErr)
+	}
+}
+
+func InsertBlock(sqldb *sql.DB, blockData SBlock, blockAge SBlock) {
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, rewards, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13), ($14)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, blockData.Hash, blockData.Coinbase, blockData.Number, blockData.GasUsed, blockData.GasLimit, blockData.TxCount, blockData.UncleCount, blockAge.Age, blockData.ParentHash, blockData.UncleHash, blockData.Difficulty, blockData.Size, blockData.Rewards, blockData.Nonce).Scan(&blockData.Number)
+	if qerr != nil {
+		panic(qerr)
+	}
+}
+
+
+func InsertTx (sqldb *sql.DB, txData ShyftTxEntryPretty, data ShyftTxEntryPretty) {
+	var retNonce string
+	sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
+	err := sqldb.QueryRow(sqlStatement, txData.TxHash, txData.From, data.To.String(), txData.BlockHash, txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, data.IsContract, data.Status, txData.Age, txData.Data).Scan(&retNonce)
 	if err != nil {
-		fmt.Println("err")
+		panic(err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var hash string
-		var coinbase string
-		var gasUsed uint64
-		var gasLimit uint64
-		var txCount int
-		var uncleCount int
-		var age string
-		var parentHash string
-		var uncleHash string
-		var difficulty string
-		var size string
-		var nonce uint64
-		var rewards string
-		var num string
-
-		err = rows.Scan(
-			&hash,
-			&coinbase,
-			&gasUsed,
-			&gasLimit,
-			&txCount,
-			&uncleCount,
-			&age,
-			&parentHash,
-			&uncleHash,
-			&difficulty,
-			&size,
-			&nonce,
-			&rewards,
-			&num,)
-
-		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     hash,
-			Coinbase: coinbase,
-			GasUsed: gasUsed,
-			GasLimit: gasLimit,
-			TxCount: txCount,
-			UncleCount: uncleCount,
-			Age: age,
-			ParentHash:parentHash,
-			UncleHash:uncleHash,
-			Difficulty:difficulty,
-			Size: size,
-			Nonce:nonce,
-			Rewards: rewards,
-			Number:   num,
-		})
-
-		blocks, _ := json.Marshal(arr.Blocks)
-		blocksFmt := string(blocks)
-		blockArr = blocksFmt
-	}
-	return blockArr
 }
 
-//GetBlock queries to send single block info
-//TODO provide blockHash arg passed from handler.go
-func SGetBlock(sqldb *sql.DB, blockNumber string) string {
-	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
-	row := sqldb.QueryRow(sqlStatement, blockNumber)
-	var hash string
-	var coinbase string
-	var gasUsed uint64
-	var gasLimit uint64
-	var txCount int
-	var uncleCount int
-	var age string
-	var parentHash string
-	var uncleHash string
-	var difficulty string
-	var size string
-	var nonce uint64
-	var rewards string
-	var num string
-	row.Scan(
-		&hash,
-		&coinbase,
-		&gasUsed,
-		&gasLimit,
-		&txCount,
-		&uncleCount,
-		&age,
-		&parentHash,
-		&uncleHash,
-		&difficulty,
-		&size,
-		&nonce,
-		&rewards,
-		&num,)
 
-	block := SBlock{
-		Hash:     hash,
-		Coinbase: coinbase,
-		GasUsed: gasUsed,
-		GasLimit: gasLimit,
-		TxCount: txCount,
-		UncleCount: uncleCount,
-		Age: age,
-		ParentHash:parentHash,
-		UncleHash:uncleHash,
-		Difficulty:difficulty,
-		Size: size,
-		Nonce:nonce,
-		Rewards: rewards,
-		Number:   num,
-	}
-	json, _ := json.Marshal(block)
-	return string(json)
-}
-
-func SGetRecentBlock(sqldb *sql.DB) string {
-	sqlStatement := `SELECT * FROM blocks WHERE number=(SELECT MAX(number) FROM blocks);`
-	row := sqldb.QueryRow(sqlStatement)
-	var hash string
-	var coinbase string
-	var gasUsed uint64
-	var gasLimit uint64
-	var txCount int
-	var uncleCount int
-	var age string
-	var parentHash string
-	var uncleHash string
-	var difficulty string
-	var size string
-	var nonce uint64
-	var rewards string
-	var num string
-	row.Scan(
-		&hash,
-		&coinbase,
-		&gasUsed,
-		&gasLimit,
-		&txCount,
-		&uncleCount,
-		&age,
-		&parentHash,
-		&uncleHash,
-		&difficulty,
-		&size,
-		&nonce,
-		&rewards,
-		&num,)
-
-	block := SBlock{
-		Hash:     hash,
-		Coinbase: coinbase,
-		GasUsed: gasUsed,
-		GasLimit: gasLimit,
-		TxCount: txCount,
-		UncleCount: uncleCount,
-		Age: age,
-		ParentHash:parentHash,
-		UncleHash:uncleHash,
-		Difficulty:difficulty,
-		Size: size,
-		Nonce:nonce,
-		Rewards: rewards,
-		Number:   num,
-	}
-	json, _ := json.Marshal(block)
-	return string(json)
-}
-
-func SGetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
-	var arr txRes
-	var txx string
-	sqlStatement := `SELECT * FROM txs WHERE blocknumber=$1`
-	rows, err := sqldb.Query(sqlStatement, blockNumber)
-	if err != nil {
-		fmt.Println("err")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var txhash string
-		var to_addr string
-		var from_addr string
-		var blockhash string
-		var blocknumber string
-		var amount string
-		var gasprice uint64
-		var gas uint64
-		var gasLimit uint64
-		var txfee uint64
-		var nonce uint64
-		var status string
-		var isContract bool
-		var age time.Time
-		var data []byte
-		err = rows.Scan(
-			&txhash,
-			&to_addr,
-			&from_addr,
-			&blockhash,
-			&blocknumber,
-			&amount,
-			&gasprice,
-			&gas,
-			&gasLimit,
-			&txfee,
-			&nonce,
-			&status,
-			&isContract,
-			&age,
-			&data,
-		)
-
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
-			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
-		})
-
-		tx, _ := json.Marshal(arr.TxEntry)
-		newtx := string(tx)
-		txx = newtx
-	}
-	return txx
-}
-
-func SGetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
-	var arr blockRes
-	var blockArr string
-	sqlStatement := `SELECT * FROM blocks WHERE coinbase=$1`
-	rows, err := sqldb.Query(sqlStatement, coinbase)
-	if err != nil {
-		fmt.Println("err")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var hash string
-		var coinbase string
-		var gasUsed uint64
-		var gasLimit uint64
-		var txCount int
-		var uncleCount int
-		var age string
-		var parentHash string
-		var uncleHash string
-		var difficulty string
-		var size string
-		var nonce uint64
-		var rewards string
-		var num string
-
-		err = rows.Scan(
-			&hash,
-			&coinbase,
-			&gasUsed,
-			&gasLimit,
-			&txCount,
-			&uncleCount,
-			&age,
-			&parentHash,
-			&uncleHash,
-			&difficulty,
-			&size,
-			&nonce,
-			&rewards,
-			&num,)
-
-		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     hash,
-			Coinbase: coinbase,
-			GasUsed: gasUsed,
-			GasLimit: gasLimit,
-			TxCount: txCount,
-			UncleCount: uncleCount,
-			Age: age,
-			ParentHash:parentHash,
-			UncleHash:uncleHash,
-			Difficulty:difficulty,
-			Size: size,
-			Nonce:nonce,
-			Rewards: rewards,
-			Number:   num,
-		})
-
-		blocks, _ := json.Marshal(arr.Blocks)
-		blocksFmt := string(blocks)
-		blockArr = blocksFmt
-	}
-	return blockArr
-}
-
-//GetAllTransactions getter fn for API
-func SGetAllTransactions(sqldb *sql.DB) string {
-	var arr txRes
-	var txx string
-	rows, err := sqldb.Query(`
-		SELECT * FROM txs`)
-	if err != nil {
-		fmt.Println("err")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var txhash string
-		var to_addr string
-		var from_addr string
-		var blockhash string
-		var blocknumber string
-		var amount string
-		var gasprice uint64
-		var gas uint64
-		var gasLimit uint64
-		var txfee uint64
-		var nonce uint64
-		var status string
-		var isContract bool
-		var age time.Time
-		var data []byte
-		err = rows.Scan(
-			&txhash,
-			&to_addr,
-			&from_addr,
-			&blockhash,
-			&blocknumber,
-			&amount,
-			&gasprice,
-			&gas,
-			&gasLimit,
-			&txfee,
-			&nonce,
-			&status,
-			&isContract,
-			&age,
-			&data,
-		)
-
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
-			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
-		})
-
-		tx, _ := json.Marshal(arr.TxEntry)
-		newtx := string(tx)
-		txx = newtx
-	}
-	return txx
-}
-
-//GetTransaction fn returns single tx
-func SGetTransaction(sqldb *sql.DB, txHash string) string {
-	sqlStatement := `SELECT * FROM txs WHERE txhash=$1;`
-	row := sqldb.QueryRow(sqlStatement, txHash)
-	var txhash string
-	var to_addr string
-	var from_addr string
-	var blockhash string
-	var blocknumber string
-	var amount string
-	var gasprice uint64
-	var gas uint64
-	var gasLimit uint64
-	var txfee uint64
-	var nonce uint64
-	var status string
-	var isContract bool
-	var age time.Time
-	var data []byte
-	row.Scan(
-		&txhash,
-		&to_addr,
-		&from_addr,
-		&blockhash,
-		&blocknumber,
-		&amount,
-		&gasprice,
-		&gas,
-		&gasLimit,
-		&txfee,
-		&nonce,
-		&status,
-		&isContract,
-		&age,
-		&data)
-
-	tx := ShyftTxEntryPretty{
-		TxHash:    txhash,
-		To:        to_addr,
-		From:      from_addr,
-		BlockHash: blockhash,
-		BlockNumber: blocknumber,
-		Amount:    amount,
-		GasPrice:  gasprice,
-		Gas:       gas,
-		GasLimit:	gasLimit,
-		Cost:      txfee,
-		Nonce:     nonce,
-		Status:    status,
-		IsContract: isContract,
-		Age:		age,
-		Data:	   data,
-	}
-	json, _ := json.Marshal(tx)
-
-	return string(json)
-}
-
-//GetAccount returns account balances
-func SGetAccount(sqldb *sql.DB, address string) string {
-	sqlStatement := `SELECT * FROM accounts WHERE addr=$1;`
-	row := sqldb.QueryRow(sqlStatement, address)
-	var addr string
-	var balance string
-	var txCountAccount string
-	row.Scan(
-		&addr,
-		&balance,
-		&txCountAccount)
-
-	account := SAccounts{
-		Addr:    addr,
-		Balance: balance,
-		TxCountAccount: txCountAccount,
-	}
-	json, _ := json.Marshal(account)
-	return string(json)
-}
-
-//GetAllAccounts returns all accounts and balances
-func SGetAllAccounts(sqldb *sql.DB) string {
-	var array accountRes
-	var accountsArr string
-	var txCountAccount string
-	accs, err := sqldb.Query(`
-		SELECT
-			addr,
-			balance,
-			txCountAccount
-		FROM accounts`)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	defer accs.Close()
-
-	for accs.Next() {
-		var addr string
-		var balance string
-		err = accs.Scan(
-			&addr,
-			&balance,
-			&txCountAccount,
-		)
-
-		array.AllAccounts = append(array.AllAccounts, SAccounts{
-			Addr:    addr,
-			Balance: balance,
-			TxCountAccount: txCountAccount,
-		})
-
-		accounts, _ := json.Marshal(array.AllAccounts)
-		accountsFmt := string(accounts)
-		accountsArr = accountsFmt
-	}
-	return accountsArr
-}
-
-//GetAccount returns account balances
-func SGetAccountTxs(sqldb *sql.DB, address string) string {
-	var arr txRes
-	var txx string
-	sqlStatement := `SELECT * FROM txs WHERE to_addr=$1 OR from_addr=$1;`
-	rows, err := sqldb.Query(sqlStatement, address)
-	if err != nil {
-		fmt.Println("err")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var txhash string
-		var to_addr string
-		var from_addr string
-		var blockhash string
-		var blocknumber string
-		var amount string
-		var gasprice uint64
-		var gas uint64
-		var gasLimit uint64
-		var txfee uint64
-		var nonce uint64
-		var status string
-		var isContract bool
-		var age time.Time
-		var data []byte
-		err = rows.Scan(
-			&txhash,
-			&to_addr,
-			&from_addr,
-			&blockhash,
-			&blocknumber,
-			&amount,
-			&gasprice,
-			&gas,
-			&gasLimit,
-			&txfee,
-			&nonce,
-			&status,
-			&isContract,
-			&age,
-			&data,
-		)
-
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    txhash,
-			To:        to_addr,
-			From:      from_addr,
-			BlockHash: blockhash,
-			BlockNumber: blocknumber,
-			Amount:    amount,
-			GasPrice:  gasprice,
-			Gas:       gas,
-			GasLimit: gasLimit,
-			Cost:      txfee,
-			Nonce:     nonce,
-			Status:    status,
-			IsContract: isContract,
-			Age:		age,
-			Data: 		data,
-		})
-
-		tx, _ := json.Marshal(arr.TxEntry)
-		newtx := string(tx)
-		txx = newtx
-	}
-	return txx
-}

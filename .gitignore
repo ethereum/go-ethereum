@@ -55,3 +55,6 @@ shyft-cli/web3/transfer-through-master/build
 
 # Remove pg data
 pg-data/*
+
+# Ignore shyftBlockExplorerApi vendored dependencies used for docker build
+shyftBlockExplorerApi/vendor/**/.git
