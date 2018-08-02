@@ -37,13 +37,43 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSGRES_PASSWORD=docker
-  # api:
-  #   build:
-  #     context: $PWD 
-  #     dockerfile: containers/docker/develop-alpine/shyftApi/Dockerfile   
-
+  shyft_block_api:
+    build:
+      context: $PWD 
+      dockerfile: containers/docker/develop-alpine/shyftApi/Dockerfile
+    # volumes:
+    #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    working_dir: /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    ports:
+      - "8080:8080"
+    depends_on:
+      - pg
+    networks:
+      - shyftnet
+    command: >
+      sh -c '
+            pwd && ls -a && cd vendor/ && ls -a && cat vendor.json && cd ../ &&
+            /wait-for.sh pg:5432 &&
+            DBENV=docker export DBENV &&
+            go run -v *.go'
+  shyft_block_ui:
+    build:
+      context: $PWD 
+      dockerfile: containers/docker/develop-alpine/shyftUi/Dockerfile
+      # volumes:
+      #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    ports:
+      - "3000:3000"
+    depends_on:
+      - shyft_block_api
+    networks:
+      - shyftnet
+      # - shyftui
+    # command: sh -c 'bin/sh'
 networks:
   shyftnet:
     driver: bridge
+  # shyftui:
+  #   external: true
 
 
