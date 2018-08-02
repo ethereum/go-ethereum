@@ -271,6 +271,10 @@ func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 
 func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
+	switch {
+	case err == sql.ErrNoRows:
+		fmt.Println("wtf", s.From)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -288,7 +292,6 @@ func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	newAccountNonceSender.Add(fromNonce, nonceIncrement)
 
 	UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
-	//}
 }
 
 func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
