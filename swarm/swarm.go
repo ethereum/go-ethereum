@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
@@ -78,6 +79,7 @@ type Swarm struct {
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
+	swap        *swap.Swap
 
 	tracerClose io.Closer
 }
@@ -206,6 +208,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
+	self.swap, err = swap.NewSwap(config.Swap.Params)
+	if err != nil {
+		return nil, err
+	}
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
@@ -362,6 +368,13 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		return err
 	}
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
+
+	err = self.swap.Start(srv)
+	if err != nil {
+		log.Error("swap failed", "err", err)
+		return err
+	}
+	log.Debug("Swap accounting initialized")
 
 	if self.ps != nil {
 		self.ps.Start(srv)
