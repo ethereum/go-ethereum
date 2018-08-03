@@ -32,7 +32,7 @@ wait_for() {
 trap 'kill $(jobs -p) &>/dev/null' EXIT
 
 START=$(date +%s)
-timeout=20
+timeout=30
 pids=""
 for i in $@ ; do
   case $i in

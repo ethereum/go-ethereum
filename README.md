@@ -329,7 +329,7 @@ govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
 
 
 
-NB: The Shyft Geth docker image size is 5+ GB so make sure you have adequate space on your disk drive/
+NB: The Shyft Geth docker image size is 1+ GB so make sure you have adequate space on your disk drive/
 
 _TODO_
 

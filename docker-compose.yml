@@ -47,6 +47,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - shyftgeth
       - pg
     networks:
       - shyftnet
@@ -68,12 +69,8 @@ services:
       - shyft_block_api
     networks:
       - shyftnet
-      # - shyftui
-    # command: sh -c 'bin/sh'
 networks:
   shyftnet:
     driver: bridge
-  # shyftui:
-  #   external: true
-
+  
 

@@ -4,10 +4,8 @@ RUN apk add --update git make gcc musl-dev linux-headers ca-certificates
 
 COPY ./shyftBlockExplorerApi /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
 COPY ./wait-for.sh /
-RUN cat /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi/vendor/vendor.json
 WORKDIR /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
 
-RUN echo `pwd && ls -a`
 RUN go get -u github.com/kardianos/govendor
 RUN govendor sync
 RUN cat /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi/vendor/vendor.json
