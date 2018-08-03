@@ -58,3 +58,6 @@ pg-data/*
 
 # Ignore shyftBlockExplorerApi vendored dependencies used for docker build
 shyftBlockExplorerApi/vendor/**/.git
+shyftBlockExplorerApi/vendor/*
+!shyftBlockExplorerApi/vendor/*.json
+

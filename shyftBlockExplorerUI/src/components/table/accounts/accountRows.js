@@ -38,7 +38,7 @@ class AccountTable extends Component {
                 Percentage={percentage.toFixed(2)}
                 Addr={data.Addr}
                 Balance={conversion}
-                TxCountAccount={data.TxCountAccount}
+                AcountNonce={data.AccountNonce}
                 detailAccountHandler={this.props.detailAccountHandler}
             />
         });

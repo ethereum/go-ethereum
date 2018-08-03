@@ -303,10 +303,37 @@ If you would like to reinitialize/rebuild the docker images you can issue the fo
 
 The Postgresql Database Container will persist the database data to the the pg-data/ directory. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
 
+The docker container for the ShyftBlockExplorerApi utilizes govendor to minimize its image size. As a result, if you would like the docker image for this container to reflect any uncommitted changes which may have occurred in the go-empyrean repository, especially changes with respect to go-empyrean core (ie. cryptographic functions and database). Prior to launching the docker containers you should rebuild the vendor directory for the shyftBlockExplorerApi - by executing the following steps:
+
+```
+# remove existing shyftBlockExplorerApi vendor.json and vendored components:
+
+rm -rf shyftBlockExplorerApi/vendor
+
+# reinitialize vendor.json
+
+cd shyftBlockExplorerApi && govendor init
+
+# rebuild vendor.json using latest uncommitted changes
+
+govendor add -tree -uncommitted +external
+
+# due to a bug in govendor and it not being able to pull in some dependencies that are c-header files 
+# you should execute the following commands - see these issues - which whilst closed
+# appears to have not been fixed: https://github.com/kardianos/govendor/issues/124 && https://github.com/kardianos/govendor/issues/61
+
+govendor remove github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
+govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
+
+```
+
+
+
 NB: The Shyft Geth docker image size is 5+ GB so make sure you have adequate space on your disk drive/
 
 _TODO_
 
+- Find better dependency management solution that pulls in c header files without manual intervention
 - Reduce size of the ShytfGeth docker container which is responsible for mining and running the blockchain
 - Adjust docker scripts and ports to facilitate sending of test transactions
 - Modify Docker scripts to facilitate hot reloading during development
