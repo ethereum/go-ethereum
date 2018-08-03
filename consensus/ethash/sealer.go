@@ -235,7 +235,6 @@ func (ethash *Ethash) remote() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-running:
 	for {
 		select {
 		case block := <-ethash.workCh:
@@ -251,18 +250,17 @@ running:
 			// Return current mining work to remote miner.
 			miningWork, err := getWork()
 			if err != nil {
-				work.errCh <- err
+				work.errc <- err
 			} else {
-				close(work.errCh)
-				work.resCh <- miningWork
+				work.res <- miningWork
 			}
 
 		case result := <-ethash.submitWorkCh:
 			// Verify submitted PoW solution based on maintained mining blocks.
 			if submitWork(result.nonce, result.mixDigest, result.hash) {
-				close(result.errCh)
+				result.errc <- nil
 			} else {
-				result.errCh <- errInvalidSealResult
+				result.errc <- errInvalidSealResult
 			}
 
 		case result := <-ethash.submitRateCh:
@@ -287,11 +285,11 @@ running:
 				}
 			}
 
-		case errCh := <-ethash.exitCh:
+		case errc := <-ethash.exitCh:
 			// Exit remote loop if ethash is closed and return relevant error.
-			errCh <- nil
-			break running
+			errc <- nil
+			log.Trace("Ethash remote sealer is exiting")
+			return
 		}
 	}
-	log.Trace("Ethash remote sealer is exiting")
 }

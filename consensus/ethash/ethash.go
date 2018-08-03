@@ -397,7 +397,7 @@ type mineResult struct {
 	mixDigest common.Hash
 	hash      common.Hash
 
-	errCh chan error
+	errc chan error
 }
 
 // hashrate wraps the hash rate submitted by the remote sealer.
@@ -411,8 +411,8 @@ type hashrate struct {
 
 // sealWork wraps a seal work package for remote sealer.
 type sealWork struct {
-	errCh chan error
-	resCh chan [3]string
+	errc chan error
+	res  chan [3]string
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
@@ -447,7 +447,7 @@ type Ethash struct {
 	exitCh    chan chan error // Notification channel to exiting backend threads
 }
 
-// New creates a full sized ethash PoW scheme.
+// New creates a full sized ethash PoW scheme and starts a background thread for remote mining.
 func New(config Config) *Ethash {
 	if config.CachesInMem <= 0 {
 		log.Warn("One ethash cache must always be in memory", "requested", config.CachesInMem)
@@ -557,9 +557,9 @@ func (ethash *Ethash) Close() error {
 		if ethash.exitCh == nil {
 			return
 		}
-		errCh := make(chan error)
-		ethash.exitCh <- errCh
-		err = <-errCh
+		errc := make(chan error)
+		ethash.exitCh <- errc
+		err = <-errc
 		close(ethash.exitCh)
 	})
 	return err
@@ -644,18 +644,17 @@ func (ethash *Ethash) Hashrate() float64 {
 	if ethash.config.PowMode != ModeNormal && ethash.config.PowMode != ModeTest {
 		return ethash.hashrate.Rate1()
 	}
-	var resCh = make(chan uint64, 1)
+	var res = make(chan uint64, 1)
 
 	select {
-	case ethash.fetchRateCh <- resCh:
+	case ethash.fetchRateCh <- res:
 	case <-ethash.exitCh:
 		// Return local hashrate only if ethash is stopped.
 		return ethash.hashrate.Rate1()
 	}
 
 	// Gather total submitted hash rate of remote sealers.
-	total := <-resCh
-	return ethash.hashrate.Rate1() + float64(total)
+	return ethash.hashrate.Rate1() + float64(<-res)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.

@@ -24,10 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-var (
-	errEthashStopped   = errors.New("ethash stopped")
-	errAPINotSupported = errors.New("the current ethash running mode does not support this API")
-)
+var errEthashStopped = errors.New("ethash stopped")
 
 // API exposes ethash related methods for the RPC interface.
 type API struct {
@@ -42,25 +39,26 @@ type API struct {
 //   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 func (api *API) GetWork() ([3]string, error) {
 	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
-		return [3]string{}, errAPINotSupported
+		return [3]string{}, errors.New("not supported")
 	}
 
 	var (
 		workCh = make(chan [3]string, 1)
-		errCh  = make(chan error, 1)
-		err    error
+		errc   = make(chan error, 1)
 	)
 
 	select {
-	case api.ethash.fetchWorkCh <- &sealWork{errCh: errCh, resCh: workCh}:
+	case api.ethash.fetchWorkCh <- &sealWork{errc: errc, res: workCh}:
 	case <-api.ethash.exitCh:
 		return [3]string{}, errEthashStopped
 	}
 
-	if err = <-errCh; err == nil {
-		return <-workCh, nil
+	select {
+	case work := <-workCh:
+		return work, nil
+	case err := <-errc:
+		return [3]string{}, err
 	}
-	return [3]string{}, err
 }
 
 // SubmitWork can be used by external miner to submit their POW solution.
@@ -71,20 +69,20 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 		return false
 	}
 
-	var errCh = make(chan error, 1)
+	var errc = make(chan error, 1)
 
 	select {
 	case api.ethash.submitWorkCh <- &mineResult{
 		nonce:     nonce,
 		mixDigest: digest,
 		hash:      hash,
-		errCh:     errCh,
+		errc:      errc,
 	}:
 	case <-api.ethash.exitCh:
 		return false
 	}
 
-	err := <-errCh
+	err := <-errc
 	return err == nil
 }
 
@@ -99,16 +97,16 @@ func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
 		return false
 	}
 
-	var doneCh = make(chan struct{}, 1)
+	var done = make(chan struct{}, 1)
 
 	select {
-	case api.ethash.submitRateCh <- &hashrate{done: doneCh, rate: uint64(rate), id: id}:
+	case api.ethash.submitRateCh <- &hashrate{done: done, rate: uint64(rate), id: id}:
 	case <-api.ethash.exitCh:
 		return false
 	}
 
 	// Block until hash rate submitted successfully.
-	<-doneCh
+	<-done
 
 	return true
 }

@@ -672,7 +672,7 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 	return new(big.Int).Set(diffNoTurn)
 }
 
-// Close implements consensus.Engine, returning internal error and close the clique.
+// Close implements consensus.Engine. It's a noop for clique as there is are no background threads.
 func (c *Clique) Close() error {
 	return nil
 }
