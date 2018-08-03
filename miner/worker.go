@@ -126,10 +126,11 @@ type worker struct {
 	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 
 	// atomic status counters
-	atWork int32 // The number of in-flight consensus engine work.
+	atWork  int32 // The number of in-flight consensus engine work.
+	running int32 // The indicator whether the consensus engine is running or not.
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -143,7 +144,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		chain:          eth.BlockChain(),
 		proc:           eth.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
-		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 	}
@@ -189,8 +189,7 @@ func (self *worker) pendingBlock() *types.Block {
 func (self *worker) start() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
-	self.engine.Start()
+	atomic.StoreInt32(&self.running, 1)
 	for agent := range self.agents {
 		agent.Start()
 	}
@@ -200,11 +199,15 @@ func (self *worker) stop() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	self.engine.Stop()
+	atomic.StoreInt32(&self.running, 0)
 	for agent := range self.agents {
 		agent.Stop()
 	}
 	atomic.StoreInt32(&self.atWork, 0)
+}
+
+func (self *worker) isRunning() bool {
+	return atomic.LoadInt32(&self.running) == 1
 }
 
 func (self *worker) register(agent Agent) {
@@ -212,7 +215,9 @@ func (self *worker) register(agent Agent) {
 	defer self.mu.Unlock()
 	self.agents[agent] = struct{}{}
 	agent.SetReturnCh(self.recv)
-	agent.Start()
+	if self.isRunning() {
+		agent.Start()
+	}
 }
 
 func (self *worker) unregister(agent Agent) {
@@ -226,11 +231,6 @@ func (self *worker) update() {
 	defer self.txsSub.Unsubscribe()
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	var started bool // Indication whether consensus engine is started
 
 	for {
 		// A real event arrived, process interesting content
@@ -252,7 +252,7 @@ func (self *worker) update() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if !self.engine.IsRunning() {
+			if !self.isRunning() {
 				self.currentMu.Lock()
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
@@ -268,17 +268,6 @@ func (self *worker) update() {
 				if self.config.Clique != nil && self.config.Clique.Period == 0 {
 					self.commitNewWork()
 				}
-			}
-
-		// Commit new work when consensus engine is started.
-		case <-ticker.C:
-			if self.engine.IsRunning() {
-				if !started {
-					self.commitNewWork()
-					started = true
-				}
-			} else {
-				started = false
 			}
 
 		// System stopped
@@ -340,11 +329,6 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
-	// Never send task to consensus engine if the etherbase is not specified.
-	if self.engine.IsRunning() && work.header.Coinbase == (common.Address{}) {
-		log.Info("Please explicitly specifies the etherbase")
-		return
-	}
 	for agent := range self.agents {
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
@@ -416,7 +400,11 @@ func (self *worker) commitNewWork() {
 		Time:       big.NewInt(tstamp),
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
-	if self.engine.IsRunning() {
+	if self.isRunning() {
+		if self.coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+			return
+		}
 		header.Coinbase = self.coinbase
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
@@ -479,10 +467,10 @@ func (self *worker) commitNewWork() {
 		// Push empty work in advance without applying pending transaction.
 		// The reason is transactions execution can cost a lot and sealer need to
 		// take advantage of this part time.
-		if self.engine.IsRunning() {
+		if self.isRunning() {
 			log.Info("Commit new empty mining work", "number", work.Block.Number(), "uncles", len(uncles))
+			self.push(work)
 		}
-		self.push(work)
 	}
 
 	// Fill the block with all available pending transactions.
@@ -500,12 +488,11 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	// We only care about logging if we're actually mining.
-	if self.engine.IsRunning() {
+	if self.isRunning() {
 		log.Info("Commit new full mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
+		self.push(work)
 	}
-	// Push full work to sealer, which will replace the empty work sent before automatically.
-	self.push(work)
 	self.updateSnapshot()
 }
 

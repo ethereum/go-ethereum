@@ -54,13 +54,12 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, coinbase common.Address) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		coinbase: coinbase,
-		worker:   newWorker(config, engine, coinbase, eth, mux),
+		worker:   newWorker(config, engine, eth, mux),
 		canStart: 1,
 	}
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
@@ -110,6 +109,7 @@ func (self *Miner) Start(coinbase common.Address) {
 		return
 	}
 	self.worker.start()
+	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
@@ -126,7 +126,7 @@ func (self *Miner) Unregister(agent Agent) {
 }
 
 func (self *Miner) Mining() bool {
-	return self.engine.IsRunning()
+	return self.worker.isRunning()
 }
 
 func (self *Miner) HashRate() uint64 {

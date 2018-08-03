@@ -112,14 +112,16 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 		log.Info("Updated mining threads", "threads", *threads)
 		th.SetThreads(*threads)
 	}
-	// Propagate the initial price point to the transaction pool
-	api.e.lock.RLock()
-	price := api.e.gasPrice
-	api.e.lock.RUnlock()
-	api.e.txPool.SetGasPrice(price)
-
 	// Start the miner and return
-	return api.e.StartMining(true)
+	if !api.e.IsMining() {
+		// Propagate the initial price point to the transaction pool
+		api.e.lock.RLock()
+		price := api.e.gasPrice
+		api.e.lock.RUnlock()
+		api.e.txPool.SetGasPrice(price)
+		return api.e.StartMining(true)
+	}
+	return nil
 }
 
 // Stop the miner

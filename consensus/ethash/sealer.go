@@ -50,10 +50,6 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	if ethash.shared != nil {
 		return ethash.shared.Seal(chain, block, stop)
 	}
-	// Make sure ethash engine is started.
-	if !ethash.IsRunning() {
-		return nil, consensus.ErrEngineNotStart
-	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
 

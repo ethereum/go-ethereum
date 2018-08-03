@@ -167,12 +167,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	// Specify etherbase explicitly.
-	var etherbase common.Address
-	if addr, err := eth.Etherbase(); err == nil {
-		etherbase = addr
-	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, etherbase)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{eth, nil}
@@ -344,7 +339,7 @@ func (s *Ethereum) StartMining(local bool) error {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	if clique, ok := s.engine.(*clique.Clique); ok && !clique.IsRunning() {
+	if clique, ok := s.engine.(*clique.Clique); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
 			log.Error("Etherbase account unavailable locally", "err", err)

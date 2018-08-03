@@ -62,9 +62,7 @@ func (self *CpuAgent) Stop() {
 	if !atomic.CompareAndSwapInt32(&self.started, 1, 0) {
 		return // agent already stopped
 	}
-	// Close the pending routines.
-	close(self.stop)
-
+	self.stop <- struct{}{}
 done:
 	// Empty work channel
 	for {
@@ -105,7 +103,7 @@ func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
 		self.returnCh <- &Result{work, result}
 	} else {
-		if err != nil && err != consensus.ErrEngineNotStart {
+		if err != nil {
 			log.Warn("Block sealing failed", "err", err)
 		}
 		self.returnCh <- nil
