@@ -18,6 +18,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"net"
 	"time"
 )
 
@@ -34,8 +35,8 @@ type Message struct {
 type ChartEntries []*ChartEntry
 
 type ChartEntry struct {
-	Time  time.Time `json:"time,omitempty"`
-	Value float64   `json:"value,omitempty"`
+	Time  time.Time `json:"time"`
+	Value float64   `json:"value"`
 }
 
 type GeneralMessage struct {
@@ -56,14 +57,29 @@ type TxPoolMessage struct {
 }
 
 type NetworkMessage struct {
-	Peers   []*Peer `json:"peers,omitempty"`
-	Changed []string `json:"changed,omitempty"`
+	Peers map[uint]*Peer `json:"peers,omitempty"`
 }
 
 type Peer struct {
-	ID      string `json:"id,omitempty"`
-	Ingress int64  `json:"ingress,omitempty"`
-	Egress  int64  `json:"egress,omitempty"`
+	ID        string         `json:"id,omitempty"`
+	IP        net.IP         `json:"ip,omitempty"`
+	Location  *PeerLocation  `json:"location,omitempty"`
+	Lifecycle *PeerLifecycle `json:"lifecycle,omitempty"`
+	Ingress   ChartEntries   `json:"ingress,omitempty"`
+	Egress    ChartEntries   `json:"egress,omitempty"`
+}
+
+type PeerLocation struct {
+	Country   string  `json:"country,omitempty"`
+	City      string  `json:"city,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
+}
+
+type PeerLifecycle struct {
+	Connected    *time.Time `json:"connected,omitempty"`
+	Handshake    *time.Time `json:"handshake,omitempty"`
+	Disconnected *time.Time `json:"disconnected,omitempty"`
 }
 
 type SystemMessage struct {

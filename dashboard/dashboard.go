@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
-	"encoding/json"
 )
 
 const (
@@ -54,6 +53,10 @@ const (
 	systemCPUSampleLimit      = 200 // Maximum number of system cpu data samples
 	diskReadSampleLimit       = 200 // Maximum number of disk read data samples
 	diskWriteSampleLimit      = 200 // Maximum number of disk write data samples
+
+	storedDisconnectedPeerLimit = p2p.MeteredPeerLimit - p2p.DefaultMaxPendingPeers
+	peerIngressSampleLimit      = 200
+	peerEgressSampleLimit       = 200
 )
 
 var nextID uint32 // Next connection id
@@ -67,7 +70,9 @@ type Dashboard struct {
 	history  *Message
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
 
-	logdir string
+	geodb               *GeoDB
+	disconnectedPeerIDs chan uint
+	logdir              string
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup
@@ -106,8 +111,12 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
 				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 			},
+			Network: &NetworkMessage{
+				Peers: make(map[uint]*Peer),
+			},
 		},
-		logdir: logdir,
+		disconnectedPeerIDs: make(chan uint, storedDisconnectedPeerLimit),
+		logdir:              logdir,
 	}
 }
 
@@ -133,6 +142,13 @@ func (db *Dashboard) APIs() []rpc.API { return nil }
 func (db *Dashboard) Start(server *p2p.Server) error {
 	log.Info("Starting dashboard")
 
+	var err error
+	db.geodb, err = OpenGeoDB()
+	if err != nil {
+		log.Warn("Failed to open geodb", "err", err)
+		return err
+	}
+
 	db.wg.Add(2)
 	go db.collectData()
 	go db.streamLogs()
@@ -154,6 +170,8 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 // Stop stops the data collection thread and the connection listener of the dashboard.
 // Implements the node.Service interface.
 func (db *Dashboard) Stop() error {
+	db.geodb.Close()
+
 	// Close the connection listener.
 	var errs []error
 	if err := db.listener.Close(); err != nil {
@@ -262,7 +280,7 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 
 // meterCollector returns a function, which retrieves a specific meter.
 func meterCollector(name string) func() int64 {
-	if meter := metrics.DefaultRegistry.Get(name); meter != nil {
+	if meter := metrics.Get(name); meter != nil {
 		m := meter.(metrics.Meter)
 		return func() int64 {
 			return m.Count()
@@ -282,8 +300,8 @@ func (db *Dashboard) collectData() {
 	var (
 		mem runtime.MemStats
 
-		collectNetworkIngress = meterCollector("p2p/InboundTraffic")
-		collectNetworkEgress  = meterCollector("p2p/OutboundTraffic")
+		collectNetworkIngress = meterCollector(p2p.MetricsInboundTraffic)
+		collectNetworkEgress  = meterCollector(p2p.MetricsOutboundTraffic)
 		collectDiskRead       = meterCollector("eth/db/chaindata/disk/read")
 		collectDiskWrite      = meterCollector("eth/db/chaindata/disk/write")
 
@@ -374,21 +392,83 @@ func (db *Dashboard) collectData() {
 			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
 			db.lock.Unlock()
 
-			peerIDs := p2p.TrafficMeterCollector.GetIDs()
-			nm := &NetworkMessage{
-				Changed: p2p.TrafficMeterCollector.GetAndClearChanged(),
+			peers := p2p.PeerTrafficMeters.Peers()
+			network := new(NetworkMessage)
+			if len(peers) > 0 {
+				network.Peers = make(map[uint]*Peer)
 			}
-			for _, id := range peerIDs {
-				nm.Peers = append(nm.Peers, &Peer{
-					ID:      id[len(id)-6:],
-					Ingress: p2p.PeerIngressRegistry.Get(id).(metrics.Meter).Count(),
-					Egress:  p2p.PeerEgressRegistry.Get(id).(metrics.Meter).Count(),
-				})
-				fmt.Println(metrics.DefaultRegistry.Get(fmt.Sprintf("%s/%s", p2p.IngressPrefix, id)).(metrics.Meter).Count())
-				fmt.Println(metrics.DefaultRegistry.Get(fmt.Sprintf("%s/%s", p2p.EgressPrefix, id)).(metrics.Meter).Count())
+			for id, peer := range peers {
+				peerIngress := &ChartEntry{
+					Time:  now,
+					Value: float64(peer.Ingress),
+				}
+				peerEgress := &ChartEntry{
+					Time:  now,
+					Value: float64(peer.Egress),
+				}
+				p := &Peer{
+					Ingress: ChartEntries{peerIngress},
+					Egress:  ChartEntries{peerEgress},
+				}
+				if prevMetrics, ok := db.history.Network.Peers[id]; !ok {
+					p.ID = peer.ID
+					p.IP = peer.IP
+					location := db.geodb.Lookup(peer.IP)
+					p.Location = &PeerLocation{
+						Country:   location.Country.Names.English,
+						City:      location.City.Names.English,
+						Latitude:  location.Location.Latitude,
+						Longitude: location.Location.Longitude,
+					}
+					p.Lifecycle = &PeerLifecycle{
+						Connected: peer.Connected,
+					}
+					if peer.Handshake != nil {
+						p.Lifecycle.Handshake = peer.Handshake
+					}
+					if peer.Disconnected != nil {
+						p.Lifecycle.Disconnected = peer.Disconnected
+					}
+					db.history.Network.Peers[id] = p
+				} else {
+					if prevMetrics.ID != peer.ID {
+						prevMetrics.ID, p.ID = peer.ID, peer.ID
+					}
+					if prevMetrics.Lifecycle.Handshake == nil && peer.Handshake != nil {
+						p.Lifecycle = new(PeerLifecycle)
+						prevMetrics.Lifecycle.Handshake, p.Lifecycle.Handshake = peer.Handshake, peer.Handshake
+					}
+					if prevMetrics.Lifecycle.Disconnected == nil && peer.Disconnected != nil {
+						if p.Lifecycle == nil {
+							p.Lifecycle = new(PeerLifecycle)
+						}
+						prevMetrics.Lifecycle.Disconnected, p.Lifecycle.Disconnected = peer.Disconnected, peer.Disconnected
+					}
+					first := 0
+					if len(prevMetrics.Ingress) >= peerIngressSampleLimit {
+						first = len(prevMetrics.Ingress) - peerIngressSampleLimit + 1
+					}
+					prevMetrics.Ingress = append(prevMetrics.Ingress[first:], peerIngress)
+					first = 0
+					if len(prevMetrics.Egress) >= peerEgressSampleLimit {
+						first = len(prevMetrics.Egress) - peerEgressSampleLimit + 1
+					}
+					prevMetrics.Egress = append(prevMetrics.Egress[first:], peerEgress)
+				}
+				if p.Lifecycle != nil && p.Lifecycle.Disconnected != nil {
+					select {
+					case db.disconnectedPeerIDs <- id:
+					default:
+						// if the number of the stored disconnected peers exceeds the limit, remove the firstly disconnected peer
+						delete(db.history.Network.Peers, <-db.disconnectedPeerIDs)
+						db.disconnectedPeerIDs <- id
+					}
+				}
+				network.Peers[id] = p
 			}
-			s, _ := json.Marshal(nm)
-			fmt.Println(string(s))
+			db.lock.Unlock()
+			//s, _ := json.MarshalIndent(network, "", "    ")
+			//fmt.Println(string(s))
 
 			db.sendToAll(&Message{
 				System: &SystemMessage{
@@ -401,7 +481,7 @@ func (db *Dashboard) collectData() {
 					DiskRead:       ChartEntries{diskRead},
 					DiskWrite:      ChartEntries{diskWrite},
 				},
-				Network: nm,
+				Network: network,
 			})
 		}
 	}

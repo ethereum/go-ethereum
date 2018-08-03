@@ -18,41 +18,68 @@
 
 import React, {Component} from 'react';
 
-import type {Content, Network as NetworkType} from '../types/content';
-
+import Table, {TableBody, TableHeader, TableHeaderColumn, TableRow, TableCell} from 'material-ui/Table';
+import type {Network as NetworkType, Peer} from '../types/content';
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
-export const inserter = (update: NetworkType, prev: LogsType) => prev;
+export const inserter = (update: {[number]: Peer}, prev: {[number]: Peer}) => {
+	Object.keys(update).forEach((k) => {
+		if (!prev[k]) {
+			prev[k] = update[k];
+			return;
+		}
+		const u: Peer = update[k];
+		const p: Peer = prev[k];
+		if (u.id) {
+			p.id = u.id;
+		}
+		if (u.ip) {
+			p.ip = u.ip;
+		}
+		if (u.lifecycle) {
+			if (u.lifecycle.handshake) {
+				p.lifecycle.handshake = u.lifecycle.handshake;
+			}
+			if (u.lifecycle.disconnected) {
+				p.lifecycle.disconnected = u.lifecycle.disconnected;
+			}
+		}
+		p.ingress = [...p.ingress, ...u.ingress].slice(-200);
+		p.egress = [...p.egress, ...u.egress].slice(-200);
+		prev[k] = p;
+	});
+	return prev;
+};
 
 // styles contains the constant styles of the component.
 const styles = {};
 
 export type Props = {
     container:    Object,
-    content:      Content,
+    content:      NetworkType,
     shouldUpdate: Object,
-};
-
-type State = {
-    peers: List<string>,
 };
 
 // Network renders the network page.
 class Network extends Component<Props, State> {
-	constructor(props: Props) {
-		super(props);
-		this.content = React.createRef();
-		this.state = {
-			peers: [],
-		};
-	}
-
 	render() {
 		return (
-			<div>
-				Alma
-			</div>
+			<Table>
+				<TableBody>
+					{Object.entries(this.props.content.peers).map(([k, v]) => (
+						<TableRow>
+							<TableCell>{k}</TableCell>
+							<TableCell>{v.id ? v.id.substring(0, 6) : ''}</TableCell>
+							<TableCell>{v.ip}</TableCell>
+							<TableCell>{v.ingress.value}</TableCell>
+							<TableCell>{v.egress.value}</TableCell>
+							<TableCell>{JSON.stringify(v.location)}</TableCell>
+							<TableCell>{JSON.stringify(v.lifecycle)}</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
 		);
 	}
 }

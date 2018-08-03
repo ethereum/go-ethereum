@@ -586,9 +586,6 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 	// we use an all-zeroes IV for AES because the key used
 	// for encryption is ephemeral.
 	iv := make([]byte, encc.BlockSize())
-	if c, ok := conn.(*meteredConn); ok {
-		c.setPeerID(s.RemoteID.String())
-	}
 	return &rlpxFrameRW{
 		conn:       conn,
 		enc:        cipher.NewCTR(encc, iv),

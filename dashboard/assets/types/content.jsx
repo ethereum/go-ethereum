@@ -51,7 +51,29 @@ export type TxPool = {
 };
 
 export type Network = {
-	/* TODO (kurkomisi) */
+	peers: {[number]: Peer},
+};
+
+export type Peer = {
+	id:        string,
+	ip:        string,
+	location:  PeerLocation,
+	lifecycle: PeerLifecycle,
+	ingress:   ChartEntries,
+	egress:    ChartEntries,
+};
+
+export type PeerLocation = {
+	country:   string,
+	city:      string,
+	latitude:  number,
+	longitude: number,
+};
+
+export type PeerLifecycle = {
+	connected:    Date,
+	handshake:    Date,
+	disconnected: Date,
 };
 
 export type System = {
