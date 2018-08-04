@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -208,6 +207,8 @@ type Clique struct {
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
+
+	HookReward func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -606,8 +607,10 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
 	// FIXME: unit Ether could be too plump
-	if err := c.accumulateRewards(chain, state, header); err != nil {
-		return nil, err
+	if c.HookReward != nil {
+		if error := c.HookReward(chain, state, header); error != nil {
+			return nil, error
+		}
 	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
@@ -722,58 +725,6 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 		Service:   &API{chain: chain, clique: c},
 		Public:    false,
 	}}
-}
-
-func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
-	type rewardLog struct {
-		Sign   uint64  `json:"sign"`
-		Reward float64 `json:"reward"`
-	}
-
-	number := header.Number.Uint64()
-	rCheckpoint := chain.Config().Clique.RewardCheckpoint
-
-	if number > 0 && rCheckpoint > 0 && number%rCheckpoint == 0 {
-		// Not reward for singer of genesis block and only calculate reward at checkpoint block.
-		parentHeader := chain.GetHeaderByHash(header.ParentHash)
-		startBlockNumber := number - rCheckpoint + 1
-		endBlockNumber := parentHeader.Number.Uint64()
-		signers := make(map[common.Address]*rewardLog)
-		totalSigner := uint64(0)
-
-		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			blockHeader := chain.GetHeaderByNumber(i)
-			if signer, err := ecrecover(blockHeader, c.signatures); err != nil {
-				return err
-			} else {
-				_, exist := signers[signer]
-				if exist {
-					signers[signer].Sign++
-				} else {
-					signers[signer] = &rewardLog{1, 0}
-				}
-				totalSigner++
-			}
-		}
-
-		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
-		// Update balance reward.
-		calcReward := new(big.Int)
-		for signer, rLog := range signers {
-			calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
-			calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
-			rLog.Reward = float64(calcReward.Int64())
-
-			state.AddBalance(signer, calcReward)
-		}
-		jsonSigners, err := json.Marshal(signers)
-		if err != nil {
-			return err
-		}
-		log.Info("XDC - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
-	}
-
-	return nil
 }
 
 func (c *Clique) RecoverSigner(header *types.Header) (common.Address, error) {
