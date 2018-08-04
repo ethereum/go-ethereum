@@ -51,7 +51,7 @@ func reportBug(ctx *cli.Context) error {
 
 	fmt.Fprintln(&buff, "#### System information")
 	fmt.Fprintln(&buff)
-	fmt.Fprintln(&buff, "Version:", params.Version)
+	fmt.Fprintln(&buff, "Version:", params.VersionWithMeta)
 	fmt.Fprintln(&buff, "Go Version:", runtime.Version())
 	fmt.Fprintln(&buff, "OS:", runtime.GOOS)
 	printOSDetails(&buff)

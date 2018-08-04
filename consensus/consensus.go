@@ -96,6 +96,9 @@ type Engine interface {
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
+
+	// Close terminates any background threads maintained by the consensus engine.
+	Close() error
 }
 
 // PoW is a consensus engine based on proof-of-work.

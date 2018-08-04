@@ -609,7 +609,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	}
 	template.Must(template.New("").Parse(dashboardContent)).Execute(indexfile, map[string]interface{}{
 		"Network":          network,
-		"NetworkID":        conf.Genesis.Config.ChainId,
+		"NetworkID":        conf.Genesis.Config.ChainID,
 		"NetworkTitle":     strings.Title(network),
 		"EthstatsPage":     config.ethstats,
 		"ExplorerPage":     config.explorer,
@@ -678,9 +678,9 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 
 	// Build and deploy the dashboard service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
 }
 
 // dashboardInfos is returned from a dashboard status check to allow reporting

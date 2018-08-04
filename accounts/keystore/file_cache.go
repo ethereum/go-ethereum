@@ -24,20 +24,20 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/log"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // fileCache is a cache of files seen during scan of keystore.
 type fileCache struct {
-	all     *set.SetNonTS // Set of all files from the keystore folder
-	lastMod time.Time     // Last time instance when a file was modified
+	all     mapset.Set // Set of all files from the keystore folder
+	lastMod time.Time  // Last time instance when a file was modified
 	mu      sync.RWMutex
 }
 
 // scan performs a new scan on the given directory, compares against the already
 // cached filenames, and returns file sets: creates, deletes, updates.
-func (fc *fileCache) scan(keyDir string) (set.Interface, set.Interface, set.Interface, error) {
+func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, error) {
 	t0 := time.Now()
 
 	// List all the failes from the keystore folder
@@ -51,14 +51,14 @@ func (fc *fileCache) scan(keyDir string) (set.Interface, set.Interface, set.Inte
 	defer fc.mu.Unlock()
 
 	// Iterate all the files and gather their metadata
-	all := set.NewNonTS()
-	mods := set.NewNonTS()
+	all := mapset.NewThreadUnsafeSet()
+	mods := mapset.NewThreadUnsafeSet()
 
 	var newLastMod time.Time
 	for _, fi := range files {
-		// Skip any non-key files from the folder
 		path := filepath.Join(keyDir, fi.Name())
-		if skipKeyFile(fi) {
+		// Skip any non-key files from the folder
+		if nonKeyFile(fi) {
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
@@ -76,9 +76,9 @@ func (fc *fileCache) scan(keyDir string) (set.Interface, set.Interface, set.Inte
 	t2 := time.Now()
 
 	// Update the tracked files and return the three sets
-	deletes := set.Difference(fc.all, all)   // Deletes = previous - current
-	creates := set.Difference(all, fc.all)   // Creates = current - previous
-	updates := set.Difference(mods, creates) // Updates = modified - creates
+	deletes := fc.all.Difference(all)   // Deletes = previous - current
+	creates := all.Difference(fc.all)   // Creates = current - previous
+	updates := mods.Difference(creates) // Updates = modified - creates
 
 	fc.all, fc.lastMod = all, newLastMod
 	t3 := time.Now()
@@ -88,8 +88,8 @@ func (fc *fileCache) scan(keyDir string) (set.Interface, set.Interface, set.Inte
 	return creates, deletes, updates, nil
 }
 
-// skipKeyFile ignores editor backups, hidden files and folders/symlinks.
-func skipKeyFile(fi os.FileInfo) bool {
+// nonKeyFile ignores editor backups, hidden files and folders/symlinks.
+func nonKeyFile(fi os.FileInfo) bool {
 	// Skip editor backups and UNIX-style hidden files.
 	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
 		return true
