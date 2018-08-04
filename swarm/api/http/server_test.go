@@ -576,7 +576,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			pageFragments: []string{
 				fmt.Sprintf("Swarm index of bzz:/%s/a/", ref),
 				`<a class="normal-link" href="b/">b/</a>`,
-				`<a class="normal-link" href="a">a</a>`,
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/a">a</a>`, ref),
 			},
 		},
 		{
@@ -584,8 +584,8 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			json: `{"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/b","mod_time":"0001-01-01T00:00:00Z"},{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/c","mod_time":"0001-01-01T00:00:00Z"}]}`,
 			pageFragments: []string{
 				fmt.Sprintf("Swarm index of bzz:/%s/a/b/", ref),
-				`<a class="normal-link" href="b">b</a>`,
-				`<a class="normal-link" href="c">c</a>`,
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/b/b">b</a>`, ref),
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/b/c">c</a>`, ref),
 			},
 		},
 		{
