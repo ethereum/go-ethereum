@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
@@ -69,7 +70,7 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 			for chunk := range c {
 				wg.Add(1)
 				chunk := chunk
-				store.Put(chunk)
+				store.Put(context.TODO(), chunk)
 				go func() {
 					defer wg.Done()
 					<-chunk.dbStoredC
@@ -103,7 +104,7 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk *Chunk) error)
 	for _, k := range hs {
 		go func(h Address) {
 			defer wg.Done()
-			chunk, err := store.Get(h)
+			chunk, err := store.Get(context.TODO(), h)
 			if err != nil {
 				errc <- err
 				return

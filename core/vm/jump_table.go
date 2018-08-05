@@ -24,7 +24,7 @@ import (
 )
 
 type (
-	executionFunc       func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
+	executionFunc       func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
 	gasFunc             func(params.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	stackValidationFunc func(*Stack) error
 	memorySizeFunc      func(*Stack) *big.Int
@@ -79,6 +79,21 @@ func newConstantinopleInstructionSet() [256]operation {
 		gasCost:       constGasFunc(GasFastestStep),
 		validateStack: makeStackFunc(2, 1),
 		valid:         true,
+	}
+	instructionSet[EXTCODEHASH] = operation{
+		execute:       opExtCodeHash,
+		gasCost:       gasExtCodeHash,
+		validateStack: makeStackFunc(1, 1),
+		valid:         true,
+	}
+	instructionSet[CREATE2] = operation{
+		execute:       opCreate2,
+		gasCost:       gasCreate2,
+		validateStack: makeStackFunc(4, 1),
+		memorySize:    memoryCreate2,
+		valid:         true,
+		writes:        true,
+		returns:       true,
 	}
 	return instructionSet
 }

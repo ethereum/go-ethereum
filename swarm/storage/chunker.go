@@ -16,6 +16,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 /*
@@ -92,9 +96,12 @@ type JoinerParams struct {
 	getter Getter
 	// TODO: there is a bug, so depth can only be 0 today, see: https://github.com/ethersphere/go-ethereum/issues/344
 	depth int
+	ctx   context.Context
 }
 
 type TreeChunker struct {
+	ctx context.Context
+
 	branches int64
 	hashFunc SwarmHasher
 	dataSize int64
@@ -126,7 +133,7 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
+func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
 	jp := &JoinerParams{
 		ChunkerParams: ChunkerParams{
 			chunkSize: DefaultChunkSize,
@@ -135,16 +142,17 @@ func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
 		addr:   addr,
 		getter: getter,
 		depth:  depth,
+		ctx:    ctx,
 	}
 
-	return NewTreeJoiner(jp).Join()
+	return NewTreeJoiner(jp).Join(ctx)
 }
 
 /*
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
+func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
@@ -156,7 +164,7 @@ func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(
 		},
 		size: size,
 	}
-	return NewTreeSplitter(tsp).Split()
+	return NewTreeSplitter(tsp).Split(ctx)
 }
 
 func NewTreeJoiner(params *JoinerParams) *TreeChunker {
@@ -172,6 +180,8 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	tc.wg = &sync.WaitGroup{}
 	tc.errC = make(chan error)
 	tc.quitC = make(chan bool)
+
+	tc.ctx = params.ctx
 
 	return tc
 }
@@ -224,7 +234,7 @@ func (tc *TreeChunker) decrementWorkerCount() {
 	tc.workerCount -= 1
 }
 
-func (tc *TreeChunker) Split() (k Address, wait func(), err error) {
+func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	if tc.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
@@ -350,7 +360,7 @@ func (tc *TreeChunker) runWorker() {
 					return
 				}
 
-				h, err := tc.putter.Put(job.chunk)
+				h, err := tc.putter.Put(tc.ctx, job.chunk)
 				if err != nil {
 					tc.errC <- err
 					return
@@ -370,6 +380,7 @@ func (tc *TreeChunker) Append() (Address, func(), error) {
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
+	Ctx       context.Context
 	key       Address // root key
 	chunkData ChunkData
 	off       int64 // offset
@@ -380,7 +391,7 @@ type LazyChunkReader struct {
 	getter    Getter
 }
 
-func (tc *TreeChunker) Join() *LazyChunkReader {
+func (tc *TreeChunker) Join(ctx context.Context) *LazyChunkReader {
 	return &LazyChunkReader{
 		key:       tc.addr,
 		chunkSize: tc.chunkSize,
@@ -388,16 +399,28 @@ func (tc *TreeChunker) Join() *LazyChunkReader {
 		hashSize:  tc.hashSize,
 		depth:     tc.depth,
 		getter:    tc.getter,
+		Ctx:       tc.ctx,
 	}
 }
 
+func (r *LazyChunkReader) Context() context.Context {
+	return r.Ctx
+}
+
 // Size is meant to be called on the LazySectionReader
-func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
+func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
+
+	var sp opentracing.Span
+	var cctx context.Context
+	cctx, sp = spancontext.StartSpan(
+		ctx,
+		"lcr.size")
+	defer sp.Finish()
 
 	log.Debug("lazychunkreader.size", "key", r.key)
 	if r.chunkData == nil {
-		chunkData, err := r.getter.Get(Reference(r.key))
+		chunkData, err := r.getter.Get(cctx, Reference(r.key))
 		if err != nil {
 			return 0, err
 		}
@@ -420,12 +443,25 @@ func (r *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.readat", nil).Inc(1)
 
+	var sp opentracing.Span
+	var cctx context.Context
+	cctx, sp = spancontext.StartSpan(
+		r.Ctx,
+		"lcr.read")
+	defer sp.Finish()
+
+	defer func() {
+		sp.LogFields(
+			olog.Int("off", int(off)),
+			olog.Int("read", read))
+	}()
+
 	// this is correct, a swarm doc cannot be zero length, so no EOF is expected
 	if len(b) == 0 {
 		return 0, nil
 	}
 	quitC := make(chan bool)
-	size, err := r.Size(quitC)
+	size, err := r.Size(cctx, quitC)
 	if err != nil {
 		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
@@ -448,7 +484,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		length *= r.chunkSize
 	}
 	wg.Add(1)
-	go r.join(b, off, off+length, depth, treeSize/r.branches, r.chunkData, &wg, errC, quitC)
+	go r.join(cctx, b, off, off+length, depth, treeSize/r.branches, r.chunkData, &wg, errC, quitC)
 	go func() {
 		wg.Wait()
 		close(errC)
@@ -466,7 +502,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	return len(b), nil
 }
 
-func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
+func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// find appropriate block level
 	for chunkData.Size() < treeSize && depth > r.depth {
@@ -513,7 +549,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
-			chunkData, err := r.getter.Get(Reference(childKey))
+			chunkData, err := r.getter.Get(ctx, Reference(childKey))
 			if err != nil {
 				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childKey), "err", err)
 				select {
@@ -532,7 +568,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 			if soff < off {
 				soff = off
 			}
-			r.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/r.branches, chunkData, wg, errC, quitC)
+			r.join(ctx, b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/r.branches, chunkData, wg, errC, quitC)
 		}(i)
 	} //for
 }
@@ -569,7 +605,7 @@ func (r *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 		offset += r.off
 	case 2:
 		if r.chunkData == nil { //seek from the end requires rootchunk for size. call Size first
-			_, err := r.Size(nil)
+			_, err := r.Size(context.TODO(), nil)
 			if err != nil {
 				return 0, fmt.Errorf("can't get size: %v", err)
 			}

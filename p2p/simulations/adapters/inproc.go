@@ -296,6 +296,13 @@ func (sn *SimNode) Stop() error {
 	return sn.node.Stop()
 }
 
+// Service returns a running service by name
+func (sn *SimNode) Service(name string) node.Service {
+	sn.lock.RLock()
+	defer sn.lock.RUnlock()
+	return sn.running[name]
+}
+
 // Services returns a copy of the underlying services
 func (sn *SimNode) Services() []node.Service {
 	sn.lock.RLock()
@@ -303,6 +310,17 @@ func (sn *SimNode) Services() []node.Service {
 	services := make([]node.Service, 0, len(sn.running))
 	for _, service := range sn.running {
 		services = append(services, service)
+	}
+	return services
+}
+
+// ServiceMap returns a map by names of the underlying services
+func (sn *SimNode) ServiceMap() map[string]node.Service {
+	sn.lock.RLock()
+	defer sn.lock.RUnlock()
+	services := make(map[string]node.Service, len(sn.running))
+	for name, service := range sn.running {
+		services[name] = service
 	}
 	return services
 }
@@ -335,8 +353,7 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 }
 
 func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int) error {
-	switch v := conn.(type) {
-	case *net.UnixConn:
+	if v, ok := conn.(*net.UnixConn); ok {
 		err := v.SetReadBuffer(socketReadBuffer)
 		if err != nil {
 			return err

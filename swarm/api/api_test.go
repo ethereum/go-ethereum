@@ -85,12 +85,12 @@ func expResponse(content string, mimeType string, status int) *Response {
 
 func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	addr := storage.Address(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, _, err := api.Get(addr, path)
+	reader, mimeType, status, _, err := api.Get(context.TODO(), addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	quitC := make(chan bool)
-	size, err := reader.Size(quitC)
+	size, err := reader.Size(context.TODO(), quitC)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,12 +109,15 @@ func TestApiPut(t *testing.T) {
 	testAPI(t, func(api *API, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
-		// exp := expResponse([]byte(content), "text/plain", 0)
-		addr, wait, err := api.Put(content, exp.MimeType, toEncrypt)
+		ctx := context.TODO()
+		addr, wait, err := api.Put(ctx, content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		wait()
+		err = wait(ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 	})
@@ -226,7 +229,7 @@ func TestAPIResolve(t *testing.T) {
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
 			}
-			res, err := api.Resolve(uri)
+			res, err := api.Resolve(context.TODO(), uri)
 			if err == nil {
 				if x.expectErr != nil {
 					t.Fatalf("expected error %q, got result %q", x.expectErr, res)

@@ -17,6 +17,7 @@
 package api
 
 import (
+	"context"
 	"path"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -45,8 +46,8 @@ func NewStorage(api *API) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(), error) {
-	return s.api.Put(content, contentType, toEncrypt)
+func (s *Storage) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (storage.Address, func(context.Context) error, error) {
+	return s.api.Put(ctx, content, contentType, toEncrypt)
 }
 
 // Get retrieves the content from bzzpath and reads the response in full
@@ -57,21 +58,21 @@ func (s *Storage) Put(content, contentType string, toEncrypt bool) (storage.Addr
 // size is resp.Size
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Get(bzzpath string) (*Response, error) {
+func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	uri, err := Parse(path.Join("bzz:/", bzzpath))
 	if err != nil {
 		return nil, err
 	}
-	addr, err := s.api.Resolve(uri)
+	addr, err := s.api.Resolve(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, _, err := s.api.Get(addr, uri.Path)
+	reader, mimeType, status, _, err := s.api.Get(ctx, addr, uri.Path)
 	if err != nil {
 		return nil, err
 	}
 	quitC := make(chan bool)
-	expsize, err := reader.Size(quitC)
+	expsize, err := reader.Size(ctx, quitC)
 	if err != nil {
 		return nil, err
 	}
@@ -87,16 +88,16 @@ func (s *Storage) Get(bzzpath string) (*Response, error) {
 // and merge on  to it. creating an entry w conentType (mime)
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
+func (s *Storage) Modify(ctx context.Context, rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
 	uri, err := Parse("bzz:/" + rootHash)
 	if err != nil {
 		return "", err
 	}
-	addr, err := s.api.Resolve(uri)
+	addr, err := s.api.Resolve(ctx, uri)
 	if err != nil {
 		return "", err
 	}
-	addr, err = s.api.Modify(addr, path, contentHash, contentType)
+	addr, err = s.api.Modify(ctx, addr, path, contentHash, contentType)
 	if err != nil {
 		return "", err
 	}

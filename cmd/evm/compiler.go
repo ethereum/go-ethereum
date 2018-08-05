@@ -50,6 +50,6 @@ func compileCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(bin)
+	fmt.Fprintln(ctx.App.Writer, bin)
 	return nil
 }

@@ -58,7 +58,7 @@ An example server which uses the JSON codec:
 	return a + b
  }
 
- func (s *CalculatorService Div(a, b int) (int, error) {
+ func (s *CalculatorService) Div(a, b int) (int, error) {
 	if b == 0 {
 		return 0, errors.New("divide by zero")
 	}

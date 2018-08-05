@@ -17,9 +17,12 @@
 package storage
 
 import (
+	"context"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -43,10 +46,10 @@ var (
 // access by calling network is blocking with a timeout
 type NetStore struct {
 	localStore *LocalStore
-	retrieve   func(chunk *Chunk) error
+	retrieve   func(ctx context.Context, chunk *Chunk) error
 }
 
-func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *NetStore {
+func NewNetStore(localStore *LocalStore, retrieve func(ctx context.Context, chunk *Chunk) error) *NetStore {
 	return &NetStore{localStore, retrieve}
 }
 
@@ -56,7 +59,14 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 // Get uses get method to retrieve request, but retries if the
 // ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
 // is reached.
-func (ns *NetStore) Get(addr Address) (chunk *Chunk, err error) {
+func (ns *NetStore) Get(ctx context.Context, addr Address) (chunk *Chunk, err error) {
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"netstore.get.global")
+	defer sp.Finish()
+
 	timer := time.NewTimer(netStoreRetryTimeout)
 	defer timer.Stop()
 
@@ -84,7 +94,7 @@ func (ns *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 		defer limiter.Stop()
 
 		for {
-			chunk, err := ns.get(addr, 0)
+			chunk, err := ns.get(ctx, addr, 0)
 			if err != ErrChunkNotFound {
 				// break retry only if the error is nil
 				// or other error then ErrChunkNotFound
@@ -122,16 +132,23 @@ func (ns *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 }
 
 // GetWithTimeout makes a single retrieval attempt for a chunk with a explicit timeout parameter
-func (ns *NetStore) GetWithTimeout(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
-	return ns.get(addr, timeout)
+func (ns *NetStore) GetWithTimeout(ctx context.Context, addr Address, timeout time.Duration) (chunk *Chunk, err error) {
+	return ns.get(ctx, addr, timeout)
 }
 
-func (ns *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
+func (ns *NetStore) get(ctx context.Context, addr Address, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
 	}
+
+	var sp opentracing.Span
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		"netstore.get")
+	defer sp.Finish()
+
 	if ns.retrieve == nil {
-		chunk, err = ns.localStore.Get(addr)
+		chunk, err = ns.localStore.Get(ctx, addr)
 		if err == nil {
 			return chunk, nil
 		}
@@ -140,14 +157,14 @@ func (ns *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err 
 		}
 	} else {
 		var created bool
-		chunk, created = ns.localStore.GetOrCreateRequest(addr)
+		chunk, created = ns.localStore.GetOrCreateRequest(ctx, addr)
 
 		if chunk.ReqC == nil {
 			return chunk, nil
 		}
 
 		if created {
-			err := ns.retrieve(chunk)
+			err := ns.retrieve(ctx, chunk)
 			if err != nil {
 				// mark chunk request as failed so that we can retry it later
 				chunk.SetErrored(ErrChunkUnavailable)
@@ -171,8 +188,8 @@ func (ns *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err 
 }
 
 // Put is the entrypoint for local store requests coming from storeLoop
-func (ns *NetStore) Put(chunk *Chunk) {
-	ns.localStore.Put(chunk)
+func (ns *NetStore) Put(ctx context.Context, chunk *Chunk) {
+	ns.localStore.Put(ctx, chunk)
 }
 
 // Close chunk store

@@ -16,7 +16,10 @@
 
 package storage
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 /*
 ChunkStore interface is implemented by :
@@ -28,8 +31,8 @@ ChunkStore interface is implemented by :
 - FakeChunkStore: dummy store which doesn't store anything just implements the interface
 */
 type ChunkStore interface {
-	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Address) (*Chunk, error)
+	Put(context.Context, *Chunk) // effectively there is no error even if there is an error
+	Get(context.Context, Address) (*Chunk, error)
 	Close()
 }
 
@@ -45,14 +48,14 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(chunk *Chunk) {
+func (m *MapChunkStore) Put(ctx context.Context, chunk *Chunk) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chunks[chunk.Addr.Hex()] = chunk
 	chunk.markAsStored()
 }
 
-func (m *MapChunkStore) Get(addr Address) (*Chunk, error) {
+func (m *MapChunkStore) Get(ctx context.Context, addr Address) (*Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[addr.Hex()]

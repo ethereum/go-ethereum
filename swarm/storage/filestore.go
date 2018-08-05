@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"io"
 )
 
@@ -78,18 +79,18 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (f *FileStore) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
-	reader = TreeJoin(addr, getter, 0)
+	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (f *FileStore) Store(data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(), err error) {
+func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
-	return PyramidSplit(data, putter, putter)
+	return PyramidSplit(ctx, data, putter, putter)
 }
 
 func (f *FileStore) HashSize() int {

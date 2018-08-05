@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package bmt provides a binary merkle tree implementation
+// Package bmt provides a binary merkle tree implementation used for swarm chunk hash
 package bmt
 
 import (
@@ -26,16 +26,16 @@ import (
 )
 
 /*
-Binary Merkle Tree Hash is a hash function over arbitrary datachunks of limited size
+Binary Merkle Tree Hash is a hash function over arbitrary datachunks of limited size.
 It is defined as the root hash of the binary merkle tree built over fixed size segments
-of the underlying chunk using any base hash function (e.g keccak 256 SHA3).
-Chunk with data shorter than the fixed size are hashed as if they had zero padding
+of the underlying chunk using any base hash function (e.g., keccak 256 SHA3).
+Chunks with data shorter than the fixed size are hashed as if they had zero padding.
 
 BMT hash is used as the chunk hash function in swarm which in turn is the basis for the
 128 branching swarm hash http://swarm-guide.readthedocs.io/en/latest/architecture.html#swarm-hash
 
 The BMT is optimal for providing compact inclusion proofs, i.e. prove that a
-segment is a substring of a chunk starting at a particular offset
+segment is a substring of a chunk starting at a particular offset.
 The size of the underlying segments is fixed to the size of the base hash (called the resolution
 of the BMT hash), Using Keccak256 SHA3 hash is 32 bytes, the EVM word size to optimize for on-chain BMT verification
 as well as the hash size optimal for inclusion proofs in the merkle tree of the swarm hash.
@@ -46,11 +46,12 @@ Two implementations are provided:
   that is simple to understand
 * Hasher is optimized for speed taking advantage of concurrency with minimalistic
   control structure to coordinate the concurrent routines
-  It implements the following interfaces
-	* standard golang hash.Hash
-	* SwarmHash
-	* io.Writer
-	* TODO: SegmentWriter
+
+  BMT Hasher implements the following interfaces
+	* standard golang hash.Hash - synchronous, reusable
+	* SwarmHash - SumWithSpan provided
+	* io.Writer - synchronous left-to-right datawriter
+	* AsyncWriter - concurrent section writes and asynchronous Sum call
 */
 
 const (
@@ -69,7 +70,7 @@ type BaseHasherFunc func() hash.Hash
 // Hasher a reusable hasher for fixed maximum size chunks representing a BMT
 // - implements the hash.Hash interface
 // - reuses a pool of trees for amortised memory allocation and resource control
-// - supports order-agnostic concurrent segment writes (TODO:)
+// - supports order-agnostic concurrent segment writes and section (double segment) writes
 //   as well as sequential read and write
 // - the same hasher instance must not be called concurrently on more than one chunk
 // - the same hasher instance is synchronously reuseable
@@ -81,8 +82,7 @@ type Hasher struct {
 	bmt  *tree     // prebuilt BMT resource for flowcontrol and proofs
 }
 
-// New creates a reusable Hasher
-// implements the hash.Hash interface
+// New creates a reusable BMT Hasher that
 // pulls a new tree from a resource pool for hashing each chunk
 func New(p *TreePool) *Hasher {
 	return &Hasher{
@@ -90,9 +90,9 @@ func New(p *TreePool) *Hasher {
 	}
 }
 
-// TreePool provides a pool of trees used as resources by Hasher
-// a tree popped from the pool is guaranteed to have clean state
-// for hashing a new chunk
+// TreePool provides a pool of trees used as resources by the BMT Hasher.
+// A tree popped from the pool is guaranteed to have a clean state ready
+// for hashing a new chunk.
 type TreePool struct {
 	lock         sync.Mutex
 	c            chan *tree     // the channel to obtain a resource from the pool
@@ -101,7 +101,7 @@ type TreePool struct {
 	SegmentCount int            // the number of segments on the base level of the BMT
 	Capacity     int            // pool capacity, controls concurrency
 	Depth        int            // depth of the bmt trees = int(log2(segmentCount))+1
-	Datalength   int            // the total length of the data (count * size)
+	Size         int            // the total length of the data (count * size)
 	count        int            // current count of (ever) allocated resources
 	zerohashes   [][]byte       // lookup table for predictable padding subtrees for all levels
 }
@@ -112,15 +112,12 @@ func NewTreePool(hasher BaseHasherFunc, segmentCount, capacity int) *TreePool {
 	// initialises the zerohashes lookup table
 	depth := calculateDepthFor(segmentCount)
 	segmentSize := hasher().Size()
-	zerohashes := make([][]byte, depth)
+	zerohashes := make([][]byte, depth+1)
 	zeros := make([]byte, segmentSize)
 	zerohashes[0] = zeros
 	h := hasher()
-	for i := 1; i < depth; i++ {
-		h.Reset()
-		h.Write(zeros)
-		h.Write(zeros)
-		zeros = h.Sum(nil)
+	for i := 1; i < depth+1; i++ {
+		zeros = doSum(h, nil, zeros, zeros)
 		zerohashes[i] = zeros
 	}
 	return &TreePool{
@@ -129,7 +126,7 @@ func NewTreePool(hasher BaseHasherFunc, segmentCount, capacity int) *TreePool {
 		SegmentSize:  segmentSize,
 		SegmentCount: segmentCount,
 		Capacity:     capacity,
-		Datalength:   segmentCount * segmentSize,
+		Size:         segmentCount * segmentSize,
 		Depth:        depth,
 		zerohashes:   zerohashes,
 	}
@@ -158,7 +155,7 @@ func (p *TreePool) reserve() *tree {
 	select {
 	case t = <-p.c:
 	default:
-		t = newTree(p.SegmentSize, p.Depth)
+		t = newTree(p.SegmentSize, p.Depth, p.hasher)
 		p.count++
 	}
 	return t
@@ -176,29 +173,28 @@ func (p *TreePool) release(t *tree) {
 // the tree is 'locked' while not in the pool
 type tree struct {
 	leaves  []*node     // leaf nodes of the tree, other nodes accessible via parent links
-	cur     int         // index of rightmost currently open segment
+	cursor  int         // index of rightmost currently open segment
 	offset  int         // offset (cursor position) within currently open segment
-	segment []byte      // the rightmost open segment (not complete)
 	section []byte      // the rightmost open section (double segment)
-	depth   int         // number of levels
 	result  chan []byte // result channel
-	hash    []byte      // to record the result
 	span    []byte      // The span of the data subsumed under the chunk
 }
 
 // node is a reuseable segment hasher representing a node in a BMT
 type node struct {
-	isLeft      bool   // whether it is left side of the parent double segment
-	parent      *node  // pointer to parent node in the BMT
-	state       int32  // atomic increment impl concurrent boolean toggle
-	left, right []byte // this is where the content segment is set
+	isLeft      bool      // whether it is left side of the parent double segment
+	parent      *node     // pointer to parent node in the BMT
+	state       int32     // atomic increment impl concurrent boolean toggle
+	left, right []byte    // this is where the two children sections are written
+	hasher      hash.Hash // preconstructed hasher on nodes
 }
 
 // newNode constructs a segment hasher node in the BMT (used by newTree)
-func newNode(index int, parent *node) *node {
+func newNode(index int, parent *node, hasher hash.Hash) *node {
 	return &node{
 		parent: parent,
 		isLeft: index%2 == 0,
+		hasher: hasher,
 	}
 }
 
@@ -256,16 +252,21 @@ func (t *tree) draw(hash []byte) string {
 
 // newTree initialises a tree by building up the nodes of a BMT
 // - segment size is stipulated to be the size of the hash
-func newTree(segmentSize, depth int) *tree {
-	n := newNode(0, nil)
+func newTree(segmentSize, depth int, hashfunc func() hash.Hash) *tree {
+	n := newNode(0, nil, hashfunc())
 	prevlevel := []*node{n}
 	// iterate over levels and creates 2^(depth-level) nodes
+	// the 0 level is on double segment sections so we start at depth - 2 since
 	count := 2
 	for level := depth - 2; level >= 0; level-- {
 		nodes := make([]*node, count)
 		for i := 0; i < count; i++ {
 			parent := prevlevel[i/2]
-			nodes[i] = newNode(i, parent)
+			var hasher hash.Hash
+			if level == 0 {
+				hasher = hashfunc()
+			}
+			nodes[i] = newNode(i, parent, hasher)
 		}
 		prevlevel = nodes
 		count *= 2
@@ -273,13 +274,12 @@ func newTree(segmentSize, depth int) *tree {
 	// the datanode level is the nodes on the last level
 	return &tree{
 		leaves:  prevlevel,
-		result:  make(chan []byte, 1),
-		segment: make([]byte, segmentSize),
+		result:  make(chan []byte),
 		section: make([]byte, 2*segmentSize),
 	}
 }
 
-// methods needed by hash.Hash
+// methods needed to implement hash.Hash
 
 // Size returns the size
 func (h *Hasher) Size() int {
@@ -288,227 +288,367 @@ func (h *Hasher) Size() int {
 
 // BlockSize returns the block size
 func (h *Hasher) BlockSize() int {
-	return h.pool.SegmentSize
+	return 2 * h.pool.SegmentSize
 }
 
-// Hash hashes the data and the span using the bmt hasher
-func Hash(h *Hasher, span, data []byte) []byte {
-	h.ResetWithLength(span)
-	h.Write(data)
-	return h.Sum(nil)
-}
-
-// Datalength returns the maximum data size that is hashed by the hasher =
-// segment count times segment size
-func (h *Hasher) DataLength() int {
-	return h.pool.Datalength
-}
-
-// Sum returns the hash of the buffer
+// Sum returns the BMT root hash of the buffer
+// using Sum presupposes sequential synchronous writes (io.Writer interface)
 // hash.Hash interface Sum method appends the byte slice to the underlying
 // data before it calculates and returns the hash of the chunk
 // caller must make sure Sum is not called concurrently with Write, writeSection
-// and WriteSegment (TODO:)
-func (h *Hasher) Sum(b []byte) (r []byte) {
-	return h.sum(b, true, true)
-}
-
-// sum implements Sum taking parameters
-// * if the tree is released right away
-// * if sequential write is used (can read sections)
-func (h *Hasher) sum(b []byte, release, section bool) (r []byte) {
-	t := h.bmt
-	h.finalise(section)
-	if t.offset > 0 { // get the last node (double segment)
-
-		// padding the segment  with zero
-		copy(t.segment[t.offset:], h.pool.zerohashes[0])
-	}
-	if section {
-		if t.cur%2 == 1 {
-			// if just finished current segment, copy it to the right half of the chunk
-			copy(t.section[h.pool.SegmentSize:], t.segment)
-		} else {
-			// copy segment to front of section, zero pad the right half
-			copy(t.section, t.segment)
-			copy(t.section[h.pool.SegmentSize:], h.pool.zerohashes[0])
-		}
-		h.writeSection(t.cur, t.section)
-	} else {
-		// TODO: h.writeSegment(t.cur, t.segment)
-		panic("SegmentWriter not implemented")
-	}
-	bmtHash := <-t.result
+func (h *Hasher) Sum(b []byte) (s []byte) {
+	t := h.getTree()
+	// write the last section with final flag set to true
+	go h.writeSection(t.cursor, t.section, true, true)
+	// wait for the result
+	s = <-t.result
 	span := t.span
-
-	if release {
-		h.releaseTree()
+	// release the tree resource back to the pool
+	h.releaseTree()
+	// b + sha3(span + BMT(pure_chunk))
+	if len(span) == 0 {
+		return append(b, s...)
 	}
-	// sha3(span + BMT(pure_chunk))
-	if span == nil {
-		return bmtHash
-	}
-	bh := h.pool.hasher()
-	bh.Reset()
-	bh.Write(span)
-	bh.Write(bmtHash)
-	return bh.Sum(b)
+	return doSum(h.pool.hasher(), b, span, s)
 }
 
-// Hasher implements the SwarmHash interface
+// methods needed to implement the SwarmHash and the io.Writer interfaces
 
-// Hasher implements the io.Writer interface
-
-// Write fills the buffer to hash,
-// with every full segment calls writeSection
+// Write calls sequentially add to the buffer to be hashed,
+// with every full segment calls writeSection in a go routine
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
-	if l <= 0 {
+	if l == 0 {
 		return 0, nil
 	}
-	t := h.bmt
-	need := (h.pool.SegmentCount - t.cur) * h.pool.SegmentSize
-	if l < need {
-		need = l
-	}
-	// calculate missing bit to complete current open segment
-	rest := h.pool.SegmentSize - t.offset
-	if need < rest {
-		rest = need
-	}
-	copy(t.segment[t.offset:], b[:rest])
-	need -= rest
-	size := (t.offset + rest) % h.pool.SegmentSize
-	// read full segments and the last possibly partial segment
-	for need > 0 {
-		// push all finished chunks we read
-		if t.cur%2 == 0 {
-			copy(t.section, t.segment)
-		} else {
-			copy(t.section[h.pool.SegmentSize:], t.segment)
-			h.writeSection(t.cur, t.section)
+	t := h.getTree()
+	secsize := 2 * h.pool.SegmentSize
+	// calculate length of missing bit to complete current open section
+	smax := secsize - t.offset
+	// if at the beginning of chunk or middle of the section
+	if t.offset < secsize {
+		// fill up current segment from buffer
+		copy(t.section[t.offset:], b)
+		// if input buffer consumed and open section not complete, then
+		// advance offset and return
+		if smax == 0 {
+			smax = secsize
 		}
-		size = h.pool.SegmentSize
-		if need < size {
-			size = need
+		if l <= smax {
+			t.offset += l
+			return l, nil
 		}
-		copy(t.segment, b[rest:rest+size])
-		need -= size
-		rest += size
-		t.cur++
+	} else {
+		// if end of a section
+		if t.cursor == h.pool.SegmentCount*2 {
+			return 0, nil
+		}
 	}
-	t.offset = size % h.pool.SegmentSize
+	// read full sections and the last possibly partial section from the input buffer
+	for smax < l {
+		// section complete; push to tree asynchronously
+		go h.writeSection(t.cursor, t.section, true, false)
+		// reset section
+		t.section = make([]byte, secsize)
+		// copy from input buffer at smax to right half of section
+		copy(t.section, b[smax:])
+		// advance cursor
+		t.cursor++
+		// smax here represents successive offsets in the input buffer
+		smax += secsize
+	}
+	t.offset = l - smax + secsize
 	return l, nil
 }
 
 // Reset needs to be called before writing to the hasher
 func (h *Hasher) Reset() {
-	h.getTree()
+	h.releaseTree()
 }
 
-// Hasher implements the SwarmHash interface
+// methods needed to implement the SwarmHash interface
 
 // ResetWithLength needs to be called before writing to the hasher
 // the argument is supposed to be the byte slice binary representation of
 // the length of the data subsumed under the hash, i.e., span
 func (h *Hasher) ResetWithLength(span []byte) {
 	h.Reset()
-	h.bmt.span = span
+	h.getTree().span = span
 }
 
 // releaseTree gives back the Tree to the pool whereby it unlocks
 // it resets tree, segment and index
 func (h *Hasher) releaseTree() {
 	t := h.bmt
-	if t != nil {
-		t.cur = 0
+	if t == nil {
+		return
+	}
+	h.bmt = nil
+	go func() {
+		t.cursor = 0
 		t.offset = 0
 		t.span = nil
-		t.hash = nil
-		h.bmt = nil
-		h.pool.release(t)
-	}
-}
-
-// TODO: writeSegment writes the ith segment into the BMT tree
-// func (h *Hasher) writeSegment(i int, s []byte) {
-// 	go h.run(h.bmt.leaves[i/2], h.pool.hasher(), i%2 == 0, s)
-// }
-
-// writeSection writes the hash of i/2-th segction into right level 1 node of the BMT tree
-func (h *Hasher) writeSection(i int, section []byte) {
-	n := h.bmt.leaves[i/2]
-	isLeft := n.isLeft
-	n = n.parent
-	bh := h.pool.hasher()
-	bh.Write(section)
-	go func() {
-		sum := bh.Sum(nil)
-		if n == nil {
-			h.bmt.result <- sum
-			return
+		t.section = make([]byte, h.pool.SegmentSize*2)
+		select {
+		case <-t.result:
+		default:
 		}
-		h.run(n, bh, isLeft, sum)
+		h.pool.release(t)
 	}()
 }
 
-// run pushes the data to the node
-// if it is the first of 2 sisters written the routine returns
+// NewAsyncWriter extends Hasher with an interface for concurrent segment/section writes
+func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
+	secsize := h.pool.SegmentSize
+	if double {
+		secsize *= 2
+	}
+	write := func(i int, section []byte, final bool) {
+		h.writeSection(i, section, double, final)
+	}
+	return &AsyncHasher{
+		Hasher:  h,
+		double:  double,
+		secsize: secsize,
+		write:   write,
+	}
+}
+
+// SectionWriter is an asynchronous segment/section writer interface
+type SectionWriter interface {
+	Reset()                                       // standard init to be called before reuse
+	Write(index int, data []byte)                 // write into section of index
+	Sum(b []byte, length int, span []byte) []byte // returns the hash of the buffer
+	SectionSize() int                             // size of the async section unit to use
+}
+
+// AsyncHasher extends BMT Hasher with an asynchronous segment/section writer interface
+// AsyncHasher is unsafe and does not check indexes and section data lengths
+// it must be used with the right indexes and length and the right number of sections
+//
+// behaviour is undefined if
+// * non-final sections are shorter or longer than secsize
+// * if final section does not match length
+// * write a section with index that is higher than length/secsize
+// * set length in Sum call when length/secsize < maxsec
+//
+// * if Sum() is not called on a Hasher that is fully written
+//   a process will block, can be terminated with Reset
+// * it will not leak processes if not all sections are written but it blocks
+//   and keeps the resource which can be released calling Reset()
+type AsyncHasher struct {
+	*Hasher            // extends the Hasher
+	mtx     sync.Mutex // to lock the cursor access
+	double  bool       // whether to use double segments (call Hasher.writeSection)
+	secsize int        // size of base section (size of hash or double)
+	write   func(i int, section []byte, final bool)
+}
+
+// methods needed to implement AsyncWriter
+
+// SectionSize returns the size of async section unit to use
+func (sw *AsyncHasher) SectionSize() int {
+	return sw.secsize
+}
+
+// Write writes the i-th section of the BMT base
+// this function can and is meant to be called concurrently
+// it sets max segment threadsafely
+func (sw *AsyncHasher) Write(i int, section []byte) {
+	sw.mtx.Lock()
+	defer sw.mtx.Unlock()
+	t := sw.getTree()
+	// cursor keeps track of the rightmost section written so far
+	// if index is lower than cursor then just write non-final section as is
+	if i < t.cursor {
+		// if index is not the rightmost, safe to write section
+		go sw.write(i, section, false)
+		return
+	}
+	// if there is a previous rightmost section safe to write section
+	if t.offset > 0 {
+		if i == t.cursor {
+			// i==cursor implies cursor was set by Hash call so we can write section as final one
+			// since it can be shorter, first we copy it to the padded buffer
+			t.section = make([]byte, sw.secsize)
+			copy(t.section, section)
+			go sw.write(i, t.section, true)
+			return
+		}
+		// the rightmost section just changed, so we write the previous one as non-final
+		go sw.write(t.cursor, t.section, false)
+	}
+	// set i as the index of the righmost section written so far
+	// set t.offset to cursor*secsize+1
+	t.cursor = i
+	t.offset = i*sw.secsize + 1
+	t.section = make([]byte, sw.secsize)
+	copy(t.section, section)
+}
+
+// Sum can be called any time once the length and the span is known
+// potentially even before all segments have been written
+// in such cases Sum will block until all segments are present and
+// the hash for the length can be calculated.
+//
+// b: digest is appended to b
+// length: known length of the input (unsafe; undefined if out of range)
+// meta: metadata to hash together with BMT root for the final digest
+//   e.g., span for protection against existential forgery
+func (sw *AsyncHasher) Sum(b []byte, length int, meta []byte) (s []byte) {
+	sw.mtx.Lock()
+	t := sw.getTree()
+	if length == 0 {
+		sw.mtx.Unlock()
+		s = sw.pool.zerohashes[sw.pool.Depth]
+	} else {
+		// for non-zero input the rightmost section is written to the tree asynchronously
+		// if the actual last section has been written (t.cursor == length/t.secsize)
+		maxsec := (length - 1) / sw.secsize
+		if t.offset > 0 {
+			go sw.write(t.cursor, t.section, maxsec == t.cursor)
+		}
+		// set cursor to maxsec so final section is written when it arrives
+		t.cursor = maxsec
+		t.offset = length
+		result := t.result
+		sw.mtx.Unlock()
+		// wait for the result or reset
+		s = <-result
+	}
+	// relesase the tree back to the pool
+	sw.releaseTree()
+	// if no meta is given just append digest to b
+	if len(meta) == 0 {
+		return append(b, s...)
+	}
+	// hash together meta and BMT root hash using the pools
+	return doSum(sw.pool.hasher(), b, meta, s)
+}
+
+// writeSection writes the hash of i-th section into level 1 node of the BMT tree
+func (h *Hasher) writeSection(i int, section []byte, double bool, final bool) {
+	// select the leaf node for the section
+	var n *node
+	var isLeft bool
+	var hasher hash.Hash
+	var level int
+	t := h.getTree()
+	if double {
+		level++
+		n = t.leaves[i]
+		hasher = n.hasher
+		isLeft = n.isLeft
+		n = n.parent
+		// hash the section
+		section = doSum(hasher, nil, section)
+	} else {
+		n = t.leaves[i/2]
+		hasher = n.hasher
+		isLeft = i%2 == 0
+	}
+	// write hash into parent node
+	if final {
+		// for the last segment use writeFinalNode
+		h.writeFinalNode(level, n, hasher, isLeft, section)
+	} else {
+		h.writeNode(n, hasher, isLeft, section)
+	}
+}
+
+// writeNode pushes the data to the node
+// if it is the first of 2 sisters written, the routine terminates
 // if it is the second, it calculates the hash and writes it
 // to the parent node recursively
-func (h *Hasher) run(n *node, bh hash.Hash, isLeft bool, s []byte) {
+// since hashing the parent is synchronous the same hasher can be used
+func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
+	level := 1
 	for {
+		// at the root of the bmt just write the result to the result channel
+		if n == nil {
+			h.getTree().result <- s
+			return
+		}
+		// otherwise assign child hash to left or right segment
 		if isLeft {
 			n.left = s
 		} else {
 			n.right = s
 		}
-		// the child-thread first arriving will quit
+		// the child-thread first arriving will terminate
 		if n.toggle() {
 			return
 		}
-		// the second thread now can be sure both left and right children are written
-		// it calculates the hash of left|right and take it to the next level
-		bh.Reset()
-		bh.Write(n.left)
-		bh.Write(n.right)
-		s = bh.Sum(nil)
-
-		// at the root of the bmt just write the result to the result channel
-		if n.parent == nil {
-			h.bmt.result <- s
-			return
-		}
-
-		// otherwise iterate on parent
+		// the thread coming second now can be sure both left and right children are written
+		// so it calculates the hash of left|right and pushes it to the parent
+		s = doSum(bh, nil, n.left, n.right)
 		isLeft = n.isLeft
 		n = n.parent
+		level++
 	}
 }
 
-// finalise is following the path starting from the final datasegment to the
+// writeFinalNode is following the path starting from the final datasegment to the
 // BMT root via parents
 // for unbalanced trees it fills in the missing right sister nodes using
 // the pool's lookup table for BMT subtree root hashes for all-zero sections
-func (h *Hasher) finalise(skip bool) {
-	t := h.bmt
-	isLeft := t.cur%2 == 0
-	n := t.leaves[t.cur/2]
-	for level := 0; n != nil; level++ {
-		// when the final segment's path is going via left child node
-		// we include an all-zero subtree hash for the right level and toggle the node.
-		// when the path is going through right child node, nothing to do
-		if isLeft && !skip {
-			n.right = h.pool.zerohashes[level]
-			n.toggle()
+// otherwise behaves like `writeNode`
+func (h *Hasher) writeFinalNode(level int, n *node, bh hash.Hash, isLeft bool, s []byte) {
+
+	for {
+		// at the root of the bmt just write the result to the result channel
+		if n == nil {
+			if s != nil {
+				h.getTree().result <- s
+			}
+			return
 		}
-		skip = false
+		var noHash bool
+		if isLeft {
+			// coming from left sister branch
+			// when the final section's path is going via left child node
+			// we include an all-zero subtree hash for the right level and toggle the node.
+			n.right = h.pool.zerohashes[level]
+			if s != nil {
+				n.left = s
+				// if a left final node carries a hash, it must be the first (and only thread)
+				// so the toggle is already in passive state no need no call
+				// yet thread needs to carry on pushing hash to parent
+				noHash = false
+			} else {
+				// if again first thread then propagate nil and calculate no hash
+				noHash = n.toggle()
+			}
+		} else {
+			// right sister branch
+			if s != nil {
+				// if hash was pushed from right child node, write right segment change state
+				n.right = s
+				// if toggle is true, we arrived first so no hashing just push nil to parent
+				noHash = n.toggle()
+
+			} else {
+				// if s is nil, then thread arrived first at previous node and here there will be two,
+				// so no need to do anything and keep s = nil for parent
+				noHash = true
+			}
+		}
+		// the child-thread first arriving will just continue resetting s to nil
+		// the second thread now can be sure both left and right children are written
+		// it calculates the hash of left|right and pushes it to the parent
+		if noHash {
+			s = nil
+		} else {
+			s = doSum(bh, nil, n.left, n.right)
+		}
+		// iterate to parent
 		isLeft = n.isLeft
 		n = n.parent
+		level++
 	}
 }
 
-// getTree obtains a BMT resource by reserving one from the pool
+// getTree obtains a BMT resource by reserving one from the pool and assigns it to the bmt field
 func (h *Hasher) getTree() *tree {
 	if h.bmt != nil {
 		return h.bmt
@@ -525,6 +665,16 @@ func (n *node) toggle() bool {
 	return atomic.AddInt32(&n.state, 1)%2 == 1
 }
 
+// calculates the hash of the data using hash.Hash
+func doSum(h hash.Hash, b []byte, data ...[]byte) []byte {
+	h.Reset()
+	for _, v := range data {
+		h.Write(v)
+	}
+	return h.Sum(b)
+}
+
+// hashstr is a pretty printer for bytes used in tree.draw
 func hashstr(b []byte) string {
 	end := len(b)
 	if end > 4 {

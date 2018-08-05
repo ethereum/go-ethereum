@@ -80,6 +80,5 @@ func (rh *RefHasher) hash(data []byte, length int) []byte {
 	}
 	rh.hasher.Reset()
 	rh.hasher.Write(section)
-	s := rh.hasher.Sum(nil)
-	return s
+	return rh.hasher.Sum(nil)
 }

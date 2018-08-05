@@ -44,7 +44,7 @@ const (
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
 	Name:       "bzz",
-	Version:    4,
+	Version:    5,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		HandshakeMsg{},
@@ -54,7 +54,7 @@ var BzzSpec = &protocols.Spec{
 // DiscoverySpec is the spec for the bzz discovery subprotocols
 var DiscoverySpec = &protocols.Spec{
 	Name:       "hive",
-	Version:    4,
+	Version:    5,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		peersMsg{},
@@ -82,9 +82,9 @@ type Peer interface {
 type Conn interface {
 	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
-	Send(interface{}) error                                                               // can send messages
+	Send(context.Context, interface{}) error                                              // can send messages
 	Drop(error)                                                                           // disconnect this peer
-	Run(func(interface{}) error) error                                                    // the run function to run a protocol
+	Run(func(context.Context, interface{}) error) error                                   // the run function to run a protocol
 	Off() OverlayAddr
 }
 

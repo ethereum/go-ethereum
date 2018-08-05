@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -48,7 +49,7 @@ func newDiscovery(p *BzzPeer, o Overlay) *discPeer {
 }
 
 // HandleMsg is the message handler that delegates incoming messages
-func (d *discPeer) HandleMsg(msg interface{}) error {
+func (d *discPeer) HandleMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
 	case *peersMsg:
@@ -99,14 +100,14 @@ func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) {
 	resp := &peersMsg{
 		Peers: []*BzzAddr{ToAddr(a)},
 	}
-	go d.Send(resp)
+	go d.Send(context.TODO(), resp)
 }
 
 // NotifyDepth sends a subPeers Msg to the receiver notifying them about
 // a change in the depth of saturation
 func (d *discPeer) NotifyDepth(po uint8) {
 	// log.Trace(fmt.Sprintf("%08x peer %08x notified of new depth %v", d.localAddr.Over()[:4], d.Address()[:4], po))
-	go d.Send(&subPeersMsg{Depth: po})
+	go d.Send(context.TODO(), &subPeersMsg{Depth: po})
 }
 
 /*
@@ -178,7 +179,7 @@ func (d *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		if len(peers) > 0 {
 			// log.Debug(fmt.Sprintf("%08x: %v peers sent to %v", d.overlay.BaseAddr(), len(peers), d))
-			go d.Send(&peersMsg{Peers: peers})
+			go d.Send(context.TODO(), &peersMsg{Peers: peers})
 		}
 	}
 	d.sentPeers = true
