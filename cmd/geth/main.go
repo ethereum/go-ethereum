@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
@@ -83,7 +84,7 @@ var (
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
 		utils.FastSyncFlag,
-		utils.ExitWhenSynced,
+		utils.ExitWhenSyncedFlag,
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
@@ -319,10 +320,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}()
 
-	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSynced.Name); exitWhenSynced >= 0 {
+	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
 		go func() {
+						//TODO addd in light mode support
 						if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-							log.Warn("Exit after block synchronisation disabled for light mode")
+
 						} else {
 							var ethereum *eth.Ethereum
 							if err := stack.Service(&ethereum); err != nil {

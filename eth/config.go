@@ -116,7 +116,7 @@ type Config struct {
 	DocRoot string `toml:"-"`
 
 	// specify time to exit after syncing
-	ExitInSync time.Duration
+	ExitWhenSynced time.Duration
 }
 
 type configMarshaling struct {
