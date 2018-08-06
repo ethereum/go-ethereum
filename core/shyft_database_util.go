@@ -147,7 +147,7 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 		for _, tx := range block.Transactions() {
 			swriteTransactions(sqldb, tx, block.Header().Hash(), blockData.Number, receipts, age, blockData.GasLimit)
 			if block.Transactions()[0].To() != nil {
-				swriteFromBalance(sqldb, tx)
+				swriteBalance(sqldb, tx)
 			}
 			if block.Transactions()[0].To() == nil {
 				swriteContractBalance(sqldb, tx)
@@ -247,8 +247,8 @@ func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-//writeFromBalance writes senders balance to accounts db
-func swriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
+//writeBalance writes senders balance to accounts db
+func swriteBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	sendAndReceiveData := SendAndReceive{
 		To:     tx.To().Hex(),
 		From:   tx.From().Hex(),
@@ -278,7 +278,6 @@ func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	var newBalanceSender, newAccountNonceSender big.Int
 	var nonceIncrement = big.NewInt(1)
 
@@ -335,13 +334,14 @@ func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amo
 		From:   fromAddr,
 		Amount: amount,
 	}
-
 	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.To)
-
+	value := new(big.Int)
+	value, _ = value.SetString(amount, 10)
 	switch {
 	case err == sql.ErrNoRows:
 		accountNonce := "1"
 		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
+		adjustBalanceFromAddr(sqldb, sendAndReceiveData, value)
 	case err != nil:
 		log.Fatal(err)
 	default:

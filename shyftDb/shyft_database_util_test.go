@@ -362,7 +362,3 @@ func TestBlock(t *testing.T) {
 		}
 	})
 }
-
-//Genesis.go functions
-// WriteBlockZero
-// WriteShyftGen
