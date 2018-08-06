@@ -14,7 +14,7 @@
 */**/*tx_database*
 */**/*dapps*
 build/_vendor/pkg
-
+privatenet/
 #*
 .#*
 *#

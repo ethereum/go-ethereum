@@ -9,9 +9,13 @@ WORKDIR /usr/src/shyftBlockExplorerUI
 ENV PATH /usr/src/shyftBlockExplorerUI/node_modules/.bin:$PATH
 
 # install and cache app dependencies
-COPY ./shyftBlockExplorerUI /usr/src/shyftBlockExplorerUI
+COPY ./shyftBlockExplorerUI/package.json /usr/src/shyftBlockExplorerUI/package.json
 RUN npm install
 # RUN npm add react-scripts@1.1.1 -g --silent
+COPY ./shyftBlockExplorerUI/src /usr/src/shyftBlockExplorerUI/src
+COPY ./shyftBlockExplorerUI/scripts /usr/src/shyftBlockExplorerUI/scripts
+COPY ./shyftBlockExplorerUI/config /usr/src/shyftBlockExplorerUI/config
+COPY ./shyftBlockExplorerUI/public /usr/src/shyftBlockExplorerUI/public
 
 # start app
 

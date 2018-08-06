@@ -301,11 +301,19 @@ If you would like to reinitialize/rebuild the docker images you can issue the fo
 
 `docker-compose up --build`
 
-The Postgresql Database Container will persist the database data to the the pg-data/ directory. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
+To rebuild any one of the services - issue the following commands:
 
-Blockchain data is persisted to ~/.ethash so if you would like to reset the test blockchain you will need to delete the ~/.ethash directory.
+```
+docker-compose up -d --no-deps --build <docker compose file service name> 
 
-The docker container for the ShyftBlockExplorerApi utilizes govendor to minimize its image size. As a result, if you would like the docker image for this container to reflect any uncommitted changes which may have occurred in the go-empyrean repository, especially changes with respect to go-empyrean core (ie. cryptographic functions and database). Prior to launching the docker containers you should rebuild the vendor directory for the shyftBlockExplorerApi - by executing the following steps:
+# ie. for shyftBlockExplorerApi:
+# docker-compose up -d --no-deps --build shyft_block_api
+```
+__The Postgresql Database Container will persist the database data to the the ./pg-data  directory__. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
+
+__Blockchain data is persisted to ./privatenet/.ethash__. If you would like to reset the test blockchain you will need to delete the ./privatenet directory.
+
+The docker container for the ShyftBlockExplorerApi utilizes govendor to minimize its image size. __If you would like the docker image for this container to reflect any uncommitted changes which may have occurred in the go-empyrean repository, ie. changes with respect to go-empyrean core (ie. cryptographic functions and database). Prior to launching the docker containers you should rebuild the vendor directory for the shyftBlockExplorerApi - by executing the following steps:__
 
 ```
 # remove existing shyftBlockExplorerApi vendor.json and vendored components:
@@ -328,8 +336,6 @@ govendor remove github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
 govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
 
 ```
-
-
 
 NB: The Shyft Geth docker image size is 1+ GB so make sure you have adequate space on your disk drive/
 

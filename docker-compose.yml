@@ -53,7 +53,8 @@ services:
       - shyftnet
     command: >
       sh -c '
-            pwd && ls -a && cd vendor/ && ls -a && cat vendor.json && cd ../ &&
+            pwd && govendor remove github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^ && 
+            govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^  && 
             /wait-for.sh pg:5432 &&
             DBENV=docker export DBENV &&
             go run -v *.go'
