@@ -347,7 +347,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	}
 
 	if !found {
-		t.Error("mainfest default entry was not found")
+		t.Error("manifest default entry was not found")
 	}
 
 	if entriesCount != 3 {
