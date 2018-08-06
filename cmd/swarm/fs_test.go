@@ -44,6 +44,11 @@ type testFile struct {
 
 // TestCLISwarmFs is a high-level test of swarmfs
 func TestCLISwarmFs(t *testing.T) {
+	// This test fails on travis as this executable exits with code 1
+	// and without any log messages in the log.
+	// /Library/Filesystems/osxfuse.fs/Contents/Resources/load_osxfuse
+	t.Skip()
+
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
