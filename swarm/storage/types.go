@@ -27,9 +27,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/swarm/bmt"
+	"github.com/pavelkrolevets/go-ethereum/common"
+	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
+	"github.com/pavelkrolevets/go-ethereum/swarm/bmt"
 )
 
 const MaxPO = 16

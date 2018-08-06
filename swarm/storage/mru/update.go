@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/pavelkrolevets/go-ethereum/swarm/log"
+	"github.com/pavelkrolevets/go-ethereum/swarm/multihash"
 )
 
 // resourceUpdate encapsulates the information sent as part of a resource update

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/pavelkrolevets/go-ethereum/common/hexutil"
 )
 
 func getTestUpdateLookup() *UpdateLookup {

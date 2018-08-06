@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/pavelkrolevets/go-ethereum/cmd/utils"
+	"github.com/pavelkrolevets/go-ethereum/log"
+	"github.com/pavelkrolevets/go-ethereum/swarm/api"
+	swarm "github.com/pavelkrolevets/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 

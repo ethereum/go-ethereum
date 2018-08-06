@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/pavelkrolevets/go-ethereum/p2p/discover"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/pavelkrolevets/go-ethereum/p2p"
 )
 
 // PeerEvent is the type of the channel returned by Simulation.PeerEvents.
