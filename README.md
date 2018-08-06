@@ -303,6 +303,8 @@ If you would like to reinitialize/rebuild the docker images you can issue the fo
 
 The Postgresql Database Container will persist the database data to the the pg-data/ directory. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
 
+Blockchain data is persisted to ~/.ethash so if you would like to reset the test blockchain you will need to delete the ~/.ethash directory.
+
 The docker container for the ShyftBlockExplorerApi utilizes govendor to minimize its image size. As a result, if you would like the docker image for this container to reflect any uncommitted changes which may have occurred in the go-empyrean repository, especially changes with respect to go-empyrean core (ie. cryptographic functions and database). Prior to launching the docker containers you should rebuild the vendor directory for the shyftBlockExplorerApi - by executing the following steps:
 
 ```
