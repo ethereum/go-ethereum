@@ -258,13 +258,18 @@ func (c *conn) is(f connFlag) bool {
 }
 
 func (c *conn) set(f connFlag, val bool) {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
-	if val {
-		flags |= f
-	} else {
-		flags &= ^f
+	for {
+		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		flags := oldFlags
+		if val {
+			flags |= f
+		} else {
+			flags &= ^f
+		}
+		if atomic.CompareAndSwapInt32((*int32)(&c.flags), int32(oldFlags), int32(flags)) {
+			return
+		}
 	}
-	atomic.StoreInt32((*int32)(&c.flags), int32(flags))
 }
 
 // Peers returns all connected peers.
