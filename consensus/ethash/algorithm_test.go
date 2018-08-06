@@ -695,6 +695,98 @@ func TestHashimoto(t *testing.T) {
 	}
 }
 
+func TestProgpow(t *testing.T) {
+	tests := []struct {
+		blockNumber uint64
+		nonce       uint64
+		headerHash  []byte
+		digest      []byte
+		result      []byte
+	}{
+		{
+			blockNumber: 568971,
+			nonce:       2698189332257848714,
+			headerHash:  hexutil.MustDecode("0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
+			digest:      hexutil.MustDecode("0xfb8dc4fa5ec9df003efea48e54d6e6b9ad14febf76461fcc17abf547c623c671"),
+			result:      hexutil.MustDecode("0x4b9f8eea14bc2b7e60b128199a9b3a39cf531cdac098708a74a34dce7e155dfc"),
+		},
+		{
+			blockNumber: 388535,
+			nonce:       11350685028073024571,
+			headerHash:  hexutil.MustDecode("0xd0671f757312d0b37ef62adeda2ca64de098e6dd5f324eb208387f03f0d70973"),
+			digest:      hexutil.MustDecode("0xfe530a6872d58e129e15a38250e33e38932c433108dfa5cd477c7c100de293f0"),
+			result:      hexutil.MustDecode("0x50d672a1f6e9fd158fab54fd04ec07d379c25c1a1df8bc00755ac28afbed1812"),
+		},
+		{
+			blockNumber: 536645,
+			nonce:       3296326097221485749,
+			headerHash:  hexutil.MustDecode("0x008e92dc6fc10a01a5671c98925b84007b024dc21b4af9ad103f0204df9b5592"),
+			digest:      hexutil.MustDecode("0x4f1d0473b5cbaf80e1e891f7386086d63b73cabcd6818b4b5c3053e1925e84c9"),
+			result:      hexutil.MustDecode("0x4d7887a10744ab51ae2bf126cf549987b0606c7a144d72be939e4c3ad3880e84"),
+		},
+		{
+			blockNumber: 876552,
+			nonce:       11383401966936408197,
+			headerHash:  hexutil.MustDecode("0x3151819557f29f286cbf68674c939144fdb2fd34375ee47a0f06e7cbec080e3d"),
+			digest:      hexutil.MustDecode("0x07446153288feaf2c760a8836771c9e7066234a4af6ef6ba68851e1163af9c38"),
+			result:      hexutil.MustDecode("0x071f817be7d53b9237969a3fc9a5279ac4f2b341228ed329b3932c9430b45778"),
+		},
+		{
+			blockNumber: 764687,
+			nonce:       5351638945881873441,
+			headerHash:  hexutil.MustDecode("0x9e17a493a550bdcee9043baf5a8940ac8642298cc50fb9fe3f22dd228c8f8f7c"),
+			digest:      hexutil.MustDecode("0x8dea18269c515dcf977cf93fc589ebd0074482fa3c66de8125cbc2ccd85e7994"),
+			result:      hexutil.MustDecode("0x7ccb1ea27b3ab0812b2d74e22623f0978b5364c9753d52ebddc4960c9812cc00"),
+		},
+		{
+			blockNumber: 458302,
+			nonce:       2803265429648281870,
+			headerHash:  hexutil.MustDecode("0x79cd62c4f2fbf05abfee36cec6f6ba4a1100acec3f78939eaeb1d5345da2081b"),
+			digest:      hexutil.MustDecode("0x919eda85e25ad1880d371fea3f544972e08a1b0550d0e06567943eb29e48e26a"),
+			result:      hexutil.MustDecode("0x73347af72e0ad745a90ba61467607af9c152e963a3c24f24f1b411d521985355"),
+		},
+	}
+	// Test the light ProgPoW
+	for i, tt := range tests {
+		cacheSize   := cacheSize(tt.blockNumber)
+		datasetSize := datasetSize(tt.blockNumber)
+		seedHash    := seedHash(tt.blockNumber)
+		cache       := make([]uint32, cacheSize/4)
+		epoch       := tt.blockNumber / epochLength
+
+		generateCache(cache, epoch, seedHash)
+
+		digest, result := progpowLight(datasetSize, cache, tt.headerHash, tt.nonce, tt.blockNumber)
+		if !bytes.Equal(digest, tt.digest) {
+			t.Errorf("%d Light ProgPoW digest mismatch: have %x, want %x", i, digest, tt.digest)
+		}
+		if !bytes.Equal(result, tt.result) {
+			t.Errorf("%d Light ProgPoW result mismatch: have %x, want %x", i, result, tt.result)
+		}
+	}
+	// Test the full ProgPoW
+	// Restricted to testing for one case due to large execution time
+	for i, tt := range tests[0:1] {
+		cacheSize   := cacheSize(tt.blockNumber)
+		datasetSize := datasetSize(tt.blockNumber)
+		seedHash    := seedHash(tt.blockNumber)
+		cache       := make([]uint32, cacheSize/4)
+		epoch       := tt.blockNumber / epochLength
+		dataset     := make([]uint32, datasetSize/4)
+
+		generateCache(cache, epoch, seedHash)
+		generateDataset(dataset, epoch, cache)
+
+		digest, result := progpowFull(dataset, tt.headerHash, tt.nonce, tt.blockNumber)
+		if !bytes.Equal(digest, tt.digest) {
+			t.Errorf("%d Full ProgPoW digest mismatch: have %x, want %x", i, digest, tt.digest)
+		}
+		if !bytes.Equal(result, tt.result) {
+			t.Errorf("%d Full ProgPoW result mismatch: have %x, want %x", i, result, tt.result)
+		}
+	}
+}
+
 // Tests that caches generated on disk may be done concurrently.
 func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	// Create a temp folder to generate the caches into
