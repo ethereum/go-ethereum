@@ -123,6 +123,11 @@ var (
 		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
 		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
 	}
+	SwarmLightNodeEnabled = cli.BoolFlag{
+		Name:   "lightnode",
+		Usage:  "Enable Swarm LightNode (default false)",
+		EnvVar: SWARM_ENV_LIGHT_NODE_ENABLE,
+	}
 	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
 		Name:   "delivery-skip-check",
 		Usage:  "Skip chunk delivery check (default false)",
@@ -464,6 +469,7 @@ pv(1) tool to get a progress bar:
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
+		SwarmLightNodeEnabled,
 		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
