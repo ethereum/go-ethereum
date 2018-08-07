@@ -54,9 +54,9 @@ const (
 	diskReadSampleLimit       = 200 // Maximum number of disk read data samples
 	diskWriteSampleLimit      = 200 // Maximum number of disk write data samples
 
-	storedDisconnectedPeerLimit = p2p.MeteredPeerLimit - p2p.DefaultMaxPendingPeers
-	peerIngressSampleLimit      = 200
-	peerEgressSampleLimit       = 200
+	peerTrafficSampleLimit = 200
+	peerIngressSampleLimit = peerTrafficSampleLimit
+	peerEgressSampleLimit  = peerTrafficSampleLimit
 )
 
 var nextID uint32 // Next connection id
@@ -68,11 +68,14 @@ type Dashboard struct {
 	listener net.Listener
 	conns    map[uint32]*client // Currently live websocket connections
 	history  *Message
+	peerHistory *NetworkMessage
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
+	peerLock sync.RWMutex
 
-	geodb               *GeoDB
-	disconnectedPeerIDs chan uint
-	logdir              string
+	geodb     *GeoDB
+	peersByIP map[string]*Peer
+	peersByID map[string]*Peer
+	logdir    string
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup
@@ -111,12 +114,11 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
 				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 			},
-			Network: &NetworkMessage{
-				Peers: make(map[uint]*Peer),
-			},
 		},
-		disconnectedPeerIDs: make(chan uint, storedDisconnectedPeerLimit),
-		logdir:              logdir,
+		peerHistory: &NetworkMessage{
+			Peers: make(map[string]map[string]*Peer),
+		},
+		logdir: logdir,
 	}
 }
 
@@ -142,16 +144,10 @@ func (db *Dashboard) APIs() []rpc.API { return nil }
 func (db *Dashboard) Start(server *p2p.Server) error {
 	log.Info("Starting dashboard")
 
-	var err error
-	db.geodb, err = OpenGeoDB()
-	if err != nil {
-		log.Warn("Failed to open geodb", "err", err)
-		return err
-	}
-
-	db.wg.Add(2)
+	db.wg.Add(3)
 	go db.collectData()
 	go db.streamLogs()
+	go db.collectPeerData()
 
 	http.HandleFunc("/", db.webHandler)
 	http.Handle("/api", websocket.Handler(db.apiHandler))
@@ -170,8 +166,6 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 // Stop stops the data collection thread and the connection listener of the dashboard.
 // Implements the node.Service interface.
 func (db *Dashboard) Stop() error {
-	db.geodb.Close()
-
 	// Close the connection listener.
 	var errs []error
 	if err := db.listener.Close(); err != nil {
@@ -179,7 +173,7 @@ func (db *Dashboard) Stop() error {
 	}
 	// Close the collectors.
 	errc := make(chan error, 1)
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
 		db.quit <- errc
 		if err := <-errc; err != nil {
 			errs = append(errs, err)
@@ -252,10 +246,17 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		}
 	}()
 
-	db.lock.Lock()
 	// Send the past data.
-	client.msg <- deepcopy.Copy(db.history).(*Message)
+	db.lock.RLock()
+	h := deepcopy.Copy(db.history).(*Message)
+	db.lock.RUnlock()
+	db.peerLock.RLock()
+	h.Network = deepcopy.Copy(db.peerHistory).(*NetworkMessage)
+	db.peerLock.RUnlock()
+	client.msg <- h
+
 	// Start tracking the connection and drop at connection loss.
+	db.lock.Lock()
 	db.conns[id] = client
 	db.lock.Unlock()
 	defer func() {
@@ -392,84 +393,6 @@ func (db *Dashboard) collectData() {
 			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
 			db.lock.Unlock()
 
-			peers := p2p.PeerTrafficMeters.Peers()
-			network := new(NetworkMessage)
-			if len(peers) > 0 {
-				network.Peers = make(map[uint]*Peer)
-			}
-			for id, peer := range peers {
-				peerIngress := &ChartEntry{
-					Time:  now,
-					Value: float64(peer.Ingress),
-				}
-				peerEgress := &ChartEntry{
-					Time:  now,
-					Value: float64(peer.Egress),
-				}
-				p := &Peer{
-					Ingress: ChartEntries{peerIngress},
-					Egress:  ChartEntries{peerEgress},
-				}
-				if prevMetrics, ok := db.history.Network.Peers[id]; !ok {
-					p.ID = peer.ID
-					p.IP = peer.IP
-					location := db.geodb.Lookup(peer.IP)
-					p.Location = &PeerLocation{
-						Country:   location.Country.Names.English,
-						City:      location.City.Names.English,
-						Latitude:  location.Location.Latitude,
-						Longitude: location.Location.Longitude,
-					}
-					p.Lifecycle = &PeerLifecycle{
-						Connected: peer.Connected,
-					}
-					if peer.Handshake != nil {
-						p.Lifecycle.Handshake = peer.Handshake
-					}
-					if peer.Disconnected != nil {
-						p.Lifecycle.Disconnected = peer.Disconnected
-					}
-					db.history.Network.Peers[id] = p
-				} else {
-					if prevMetrics.ID != peer.ID {
-						prevMetrics.ID, p.ID = peer.ID, peer.ID
-					}
-					if prevMetrics.Lifecycle.Handshake == nil && peer.Handshake != nil {
-						p.Lifecycle = new(PeerLifecycle)
-						prevMetrics.Lifecycle.Handshake, p.Lifecycle.Handshake = peer.Handshake, peer.Handshake
-					}
-					if prevMetrics.Lifecycle.Disconnected == nil && peer.Disconnected != nil {
-						if p.Lifecycle == nil {
-							p.Lifecycle = new(PeerLifecycle)
-						}
-						prevMetrics.Lifecycle.Disconnected, p.Lifecycle.Disconnected = peer.Disconnected, peer.Disconnected
-					}
-					first := 0
-					if len(prevMetrics.Ingress) >= peerIngressSampleLimit {
-						first = len(prevMetrics.Ingress) - peerIngressSampleLimit + 1
-					}
-					prevMetrics.Ingress = append(prevMetrics.Ingress[first:], peerIngress)
-					first = 0
-					if len(prevMetrics.Egress) >= peerEgressSampleLimit {
-						first = len(prevMetrics.Egress) - peerEgressSampleLimit + 1
-					}
-					prevMetrics.Egress = append(prevMetrics.Egress[first:], peerEgress)
-				}
-				if p.Lifecycle != nil && p.Lifecycle.Disconnected != nil {
-					select {
-					case db.disconnectedPeerIDs <- id:
-					default:
-						// if the number of the stored disconnected peers exceeds the limit, remove the firstly disconnected peer
-						delete(db.history.Network.Peers, <-db.disconnectedPeerIDs)
-						db.disconnectedPeerIDs <- id
-					}
-				}
-				network.Peers[id] = p
-			}
-			db.lock.Unlock()
-			//s, _ := json.MarshalIndent(network, "", "    ")
-			//fmt.Println(string(s))
-
 			db.sendToAll(&Message{
 				System: &SystemMessage{
 					ActiveMemory:   ChartEntries{activeMemory},
@@ -481,7 +404,6 @@ func (db *Dashboard) collectData() {
 					DiskRead:       ChartEntries{diskRead},
 					DiskWrite:      ChartEntries{diskWrite},
 				},
-				Network: network,
 			})
 		}
 	}

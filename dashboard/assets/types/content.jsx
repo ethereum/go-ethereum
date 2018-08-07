@@ -51,16 +51,16 @@ export type TxPool = {
 };
 
 export type Network = {
-	peers: {[number]: Peer},
+	peers: {[string]: {[string]: Peer}},
 };
 
 export type Peer = {
-	id:        string,
-	ip:        string,
-	location:  PeerLocation,
-	lifecycle: PeerLifecycle,
-	ingress:   ChartEntries,
-	egress:    ChartEntries,
+	location:     PeerLocation,
+	connected:    Array<Date>,
+	handshake:    Array<Date>,
+	disconnected: Array<Date>,
+	ingress:      ChartEntries,
+	egress:       ChartEntries,
 };
 
 export type PeerLocation = {
@@ -68,12 +68,6 @@ export type PeerLocation = {
 	city:      string,
 	latitude:  number,
 	longitude: number,
-};
-
-export type PeerLifecycle = {
-	connected:    Date,
-	handshake:    Date,
-	disconnected: Date,
 };
 
 export type System = {

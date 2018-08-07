@@ -388,6 +388,7 @@ func (srv *Server) Stop() {
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()
+	closeNME()
 }
 
 // sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns

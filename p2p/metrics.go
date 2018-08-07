@@ -21,12 +21,13 @@ package p2p
 import (
 	"net"
 
+	"github.com/ethereum/go-ethereum/event"
+		"github.com/ethereum/go-ethereum/metrics"
+		"sync"
+		"time"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/mohae/deepcopy"
-	"sync"
 	"sync/atomic"
-	"time"
+	"fmt"
 )
 
 const (
@@ -34,9 +35,6 @@ const (
 	MetricsInboundConnects  = "p2p/InboundConnects"
 	MetricsOutboundTraffic  = "p2p/OutboundTraffic"
 	MetricsOutboundConnects = "p2p/OutboundConnects"
-
-	MetricsRegistryIngressPrefix = MetricsInboundTraffic + "/"
-	MetricsRegistryEgressPrefix  = MetricsOutboundTraffic + "/"
 
 	MeteredPeerLimit = 16384
 )
@@ -47,101 +45,79 @@ var (
 	egressConnectMeter  = metrics.NewRegisteredMeter(MetricsOutboundConnects, nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)
 
-	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsRegistryIngressPrefix)
-	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsRegistryEgressPrefix)
-	PeerTrafficMeters   = newPeerTrafficMeters()
-
-	nextDefaultID uint32
+	NME = &networkMeterEvents{}
 )
 
-type PeerMetrics struct {
-	ID string
-	IP net.IP
+type networkMeterEvents struct {
+	connectFeed    event.Feed
+	handshakeFeed  event.Feed
+	disconnectFeed event.Feed
 
-	// TODO: -*
-	Connected    *time.Time
-	Handshake    *time.Time
-	Disconnected *time.Time
+	readFeed  event.Feed
+	writeFeed event.Feed
 
-	Ingress int64
-	Egress  int64
+	scope event.SubscriptionScope
 
-	traffic func() (ingress, egress int64)
+	defaultID uint64
 }
 
-type peerTrafficMeters struct {
-	peers map[uint]*PeerMetrics
-	lock  sync.RWMutex
+type PeerConnectEvent struct {
+	IP        net.IP
+	ID        string
+	Connected time.Time
 }
 
-func newPeerTrafficMeters() *peerTrafficMeters {
-	return &peerTrafficMeters{
-		peers: make(map[uint]*PeerMetrics),
-	}
+type PeerHandshakeEvent struct {
+	IP        net.IP
+	DefaultID string
+	ID        string
+	Handshake time.Time
 }
 
-func (m *peerTrafficMeters) register(id uint, ip net.IP, traffic func() (ingress, egress int64)) error {
-	now := time.Now()
-	peer := &PeerMetrics{
-		IP:           ip,
-		Connected:    &now,
-		traffic:      traffic,
-	}
-	m.lock.Lock()
-	m.peers[id] = peer
-	m.lock.Unlock()
-
-	return nil
+type PeerDisconnectEvent struct {
+	IP           net.IP
+	ID           string
+	Disconnected time.Time
 }
 
-func (m *peerTrafficMeters) handshakeDone(id uint, peerID string, traffic func() (ingress, egress int64)) {
-	now := time.Now()
-	m.lock.Lock()
-	if peer, ok := m.peers[id]; ok {
-		peer.Handshake = &now
-		peer.ID = peerID
-		peer.traffic = traffic
-	}
-	m.lock.Unlock()
+type PeerReadEvent struct {
+	IP      net.IP
+	ID      string
+	Ingress int
 }
 
-func (m *peerTrafficMeters) close(id uint) {
-	now := time.Now()
-	m.lock.Lock()
-	m.peers[id].Disconnected = &now
-	m.lock.Unlock()
+type PeerWriteEvent struct {
+	IP     net.IP
+	ID     string
+	Egress int
 }
 
-func (m *peerTrafficMeters) Peers() map[uint]*PeerMetrics {
-	peers := make(map[uint]*PeerMetrics)
-	m.lock.Lock()
-	for id, peer := range m.peers {
-		peer.Ingress, peer.Egress = peer.traffic()
-		peers[id] = deepcopy.Copy(peer).(*PeerMetrics)
-		if peer.Disconnected != nil {
-			PeerIngressRegistry.Unregister(peer.ID)
-			PeerEgressRegistry.Unregister(peer.ID)
-			delete(m.peers, id)
-		}
-	}
-	m.lock.Unlock()
-	return peers
+func SubscribePeerConnectEvent(ch chan<- PeerConnectEvent) event.Subscription {
+	return NME.scope.Track(NME.connectFeed.Subscribe(ch))
+}
+func SubscribePeerHandshakeEvent(ch chan<- PeerHandshakeEvent) event.Subscription {
+	return NME.scope.Track(NME.handshakeFeed.Subscribe(ch))
+}
+func SubscribePeerDisconnectEvent(ch chan<- PeerDisconnectEvent) event.Subscription {
+	return NME.scope.Track(NME.disconnectFeed.Subscribe(ch))
+}
+func SubscribePeerReadEvent(ch chan<- PeerReadEvent) event.Subscription {
+	return NME.scope.Track(NME.readFeed.Subscribe(ch))
+}
+func SubscribePeerWriteEvent(ch chan<- PeerWriteEvent) event.Subscription {
+	return NME.scope.Track(NME.writeFeed.Subscribe(ch))
 }
 
-type networkMeter struct {
-	ingress metrics.Meter
-	egress  metrics.Meter
+func closeNME() {
+	NME.scope.Close()
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
 // inbound and outbound network traffic.
 type meteredConn struct {
 	net.Conn // Network connection to wrap with metering
-	id       uint
-	meter    *networkMeter
-
-	ingressBeforeHandshake int64
-	egressBeforeHandshake  int64
+	ip net.IP
+	id string
 
 	lock sync.RWMutex
 }
@@ -154,8 +130,8 @@ func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	if !metrics.Enabled {
 		return conn
 	}
-	if len(PeerTrafficMeters.peers) >= MeteredPeerLimit {
-		log.Warn("Metered peer limit exceeded")
+	if ip.IsUnspecified() {
+		log.Warn("peer IP is unspecified")
 		return conn
 	}
 	// Otherwise bump the connection counters and wrap the connection
@@ -164,15 +140,17 @@ func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	} else {
 		egressConnectMeter.Mark(1)
 	}
-	id := uint(atomic.AddUint32(&nextDefaultID, 1))
-	c := &meteredConn{
+	id := fmt.Sprintf("peer_%d", atomic.AddUint64(&NME.defaultID, 1))
+	NME.connectFeed.Send(PeerConnectEvent{
+		IP:        ip,
+		ID:        id,
+		Connected: time.Now(),
+	})
+	return &meteredConn{
 		Conn: conn,
+		ip:   ip,
 		id:   id,
 	}
-	PeerTrafficMeters.register(id, ip, func() (ingress, egress int64) {
-		return atomic.LoadInt64(&c.ingressBeforeHandshake), atomic.LoadInt64(&c.egressBeforeHandshake)
-	})
-	return c
 }
 
 // Read delegates a network read to the underlying connection, bumping the ingress
@@ -181,12 +159,13 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.meter == nil {
-		atomic.AddInt64(&c.ingressBeforeHandshake, int64(n))
-	} else {
-		c.meter.ingress.Mark(int64(n))
-	}
+	id := c.id
 	c.lock.RUnlock()
+	NME.readFeed.Send(PeerReadEvent{
+		IP:      c.ip,
+		ID:      id,
+		Ingress: n,
+	})
 	return n, err
 }
 
@@ -196,42 +175,37 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.meter == nil {
-		atomic.AddInt64(&c.egressBeforeHandshake, int64(n))
-	} else {
-		c.meter.egress.Mark(int64(n))
-	}
+	id := c.id
 	c.lock.RUnlock()
+	NME.writeFeed.Send(PeerWriteEvent{
+		IP:     c.ip,
+		ID:     id,
+		Egress: n,
+	})
 	return n, err
 }
 
 func (c *meteredConn) Close() error {
-	PeerTrafficMeters.close(c.id)
+	c.lock.RLock()
+	id := c.id
+	c.lock.RUnlock()
+	NME.disconnectFeed.Send(PeerDisconnectEvent{
+		IP:           c.ip,
+		ID:           id,
+		Disconnected: time.Now(),
+	})
 	return c.Conn.Close()
 }
 
 func (c *meteredConn) handshakeDone(peerID string) {
-	m := &networkMeter{
-		ingress: metrics.NewRegisteredMeter(peerID, PeerIngressRegistry),
-		egress:  metrics.NewRegisteredMeter(peerID, PeerEgressRegistry),
-	}
 	c.lock.Lock()
-	m.ingress.Mark(atomic.LoadInt64(&c.ingressBeforeHandshake))
-	m.egress.Mark(atomic.LoadInt64(&c.egressBeforeHandshake))
-	c.meter = m
+	defaultID := c.id
+	c.id = peerID
 	c.lock.Unlock()
-
-	ingressMeter, oki := PeerIngressRegistry.Get(peerID).(metrics.Meter)
-	egressMeter, oke := PeerEgressRegistry.Get(peerID).(metrics.Meter)
-	traffic := func() (ingress, egress int64) {
-		return 0, 0
-	}
-	if oki && oke {
-		traffic = func() (ingress, egress int64) {
-			return ingressMeter.Count(), egressMeter.Count()
-		}
-	} else {
-		log.Warn("Failed to get traffic meter", "peerID", peerID)
-	}
-	PeerTrafficMeters.handshakeDone(c.id, peerID, traffic)
+	NME.handshakeFeed.Send(PeerHandshakeEvent{
+		IP:        c.ip,
+		DefaultID: defaultID,
+		ID:        peerID,
+		Handshake: time.Now(),
+	})
 }

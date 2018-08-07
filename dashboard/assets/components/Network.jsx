@@ -18,36 +18,59 @@
 
 import React, {Component} from 'react';
 
-import Table, {TableBody, TableHeader, TableHeaderColumn, TableRow, TableCell} from 'material-ui/Table';
+import Table, {TableHead, TableBody, TableRow, TableCell} from 'material-ui/Table';
 import type {Network as NetworkType, Peer} from '../types/content';
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
-export const inserter = (update: {[number]: Peer}, prev: {[number]: Peer}) => {
-	Object.keys(update).forEach((k) => {
-		if (!prev[k]) {
-			prev[k] = update[k];
+export const inserter = (update: {[string]: {[string]: Peer}}, prev: {[string]: {[string]: Peer}}) => {
+	Object.keys(update).forEach((ip) => {
+		if (!prev[ip]) {
+			prev[ip] = update[ip];
 			return;
 		}
-		const u: Peer = update[k];
-		const p: Peer = prev[k];
-		if (u.id) {
-			p.id = u.id;
+		if (!update[ip]) {
+			return;
 		}
-		if (u.ip) {
-			p.ip = u.ip;
-		}
-		if (u.lifecycle) {
-			if (u.lifecycle.handshake) {
-				p.lifecycle.handshake = u.lifecycle.handshake;
+		Object.keys(update[ip]).forEach((id) => {
+			if (!prev[ip][id]) {
+				prev[ip][id] = update[ip][id];
+				return;
 			}
-			if (u.lifecycle.disconnected) {
-				p.lifecycle.disconnected = u.lifecycle.disconnected;
+			const u: Peer = update[ip][id];
+			const p: Peer = prev[ip][id];
+			if (u.connected) {
+				if (!Array.isArray(p.connected)) {
+					p.connected = [];
+				}
+				p.connected = [...p.connected, ...u.connected];
 			}
-		}
-		p.ingress = [...p.ingress, ...u.ingress].slice(-200);
-		p.egress = [...p.egress, ...u.egress].slice(-200);
-		prev[k] = p;
+			if (u.handshake) {
+				if (!Array.isArray(p.handshake)) {
+					p.handshake = [];
+				}
+				p.handshake = [...p.handshake, ...u.handshake];
+			}
+			if (u.disconnected) {
+				if (!Array.isArray(p.disconnected)) {
+					p.disconnected = [];
+				}
+				p.disconnected = [...p.disconnected, ...u.disconnected];
+			}
+			if (Array.isArray(u.ingress)) {
+				if (!Array.isArray(p.ingress)) {
+					p.ingress = [];
+				}
+				p.ingress = [...p.ingress, ...u.ingress].slice(-200);
+			}
+			if (Array.isArray(u.egress)) {
+				if (!Array.isArray(p.egress)) {
+					p.egress = [];
+				}
+				p.egress = [...p.egress, ...u.egress].slice(-200);
+			}
+			prev[ip][id] = p;
+		});
 	});
 	return prev;
 };
@@ -63,19 +86,65 @@ export type Props = {
 
 // Network renders the network page.
 class Network extends Component<Props, State> {
+	formatTime = (t) => {
+		const time = new Date(t);
+		if (isNaN(time)) {
+			return '';
+		}
+		const month = `0${time.getMonth() + 1}`.slice(-2);
+		const date = `0${time.getDate()}`.slice(-2);
+		const hours = `0${time.getHours()}`.slice(-2);
+		const minutes = `0${time.getMinutes()}`.slice(-2);
+		const seconds = `0${time.getSeconds()}`.slice(-2);
+		return `${month}/${date}/${hours}:${minutes}:${seconds}`;
+	};
+
 	render() {
 		return (
 			<Table>
+				<TableHead>
+					<TableRow>
+						<TableCell>IP</TableCell>
+						<TableCell>Peer ID</TableCell>
+						<TableCell>Location</TableCell>
+						<TableCell>Ingress</TableCell>
+						<TableCell>Egress</TableCell>
+						<TableCell>Connected</TableCell>
+						<TableCell>Handshake</TableCell>
+						<TableCell>Disconnected</TableCell>
+					</TableRow>
+				</TableHead>
 				<TableBody>
-					{Object.entries(this.props.content.peers).map(([k, v]) => (
-						<TableRow>
-							<TableCell>{k}</TableCell>
-							<TableCell>{v.id ? v.id.substring(0, 6) : ''}</TableCell>
-							<TableCell>{v.ip}</TableCell>
-							<TableCell>{v.ingress.value}</TableCell>
-							<TableCell>{v.egress.value}</TableCell>
-							<TableCell>{JSON.stringify(v.location)}</TableCell>
-							<TableCell>{JSON.stringify(v.lifecycle)}</TableCell>
+					{Object.entries(this.props.content.peers).map(([ip, peers]) => (
+						<TableRow key={ip}>
+							<TableCell>{ip}</TableCell>
+							<TableCell>
+								{Object.keys(peers).map(id => id.substring(0, 10)).join(' ')}
+							</TableCell>
+							<TableCell>
+								{(() => {
+									const k = Object.keys(peers)[0];
+									return k && peers[k].location ? (() => {
+										const l = peers[k].location;
+										return `${l.country}${l.city ? `/${l.city}` : ''} ${l.latitude} ${l.longitude}`;
+									})() : '';
+								})()}
+							</TableCell>
+							<TableCell>
+								{Object.keys(peers).map((id) => peers[id].ingress && peers[id].ingress.map(sample => sample.value).join(' ')).join(', ')}
+							</TableCell>
+							<TableCell>
+								{Object.keys(peers).map((id) => peers[id].egress && peers[id].egress.map(sample => sample.value).join(' ')).join(', ')}
+							</TableCell>
+							<TableCell>
+								{Object.keys(peers).map((id) => peers[id].connected && peers[id].connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+							</TableCell>
+							<TableCell>
+								{Object.keys(peers).map((id) => peers[id].handshake && peers[id].handshake.map(time => this.formatTime(time)).join(' ')).join(', ')}
+							</TableCell>
+							<TableCell>
+								{Object.keys(peers).map((id) => peers[id].disconnected && peers[id].disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+							</TableCell>
 						</TableRow>
 					))}
 				</TableBody>

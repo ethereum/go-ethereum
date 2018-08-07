@@ -18,7 +18,6 @@ package dashboard
 
 import (
 	"encoding/json"
-	"net"
 	"time"
 )
 
@@ -56,17 +55,18 @@ type TxPoolMessage struct {
 	/* TODO (kurkomisi) */
 }
 
+// k1: IP, k2: ID
 type NetworkMessage struct {
-	Peers map[uint]*Peer `json:"peers,omitempty"`
+	Peers map[string]map[string]*Peer `json:"peers,omitempty"`
 }
 
 type Peer struct {
-	ID        string         `json:"id,omitempty"`
-	IP        net.IP         `json:"ip,omitempty"`
-	Location  *PeerLocation  `json:"location,omitempty"`
-	Lifecycle *PeerLifecycle `json:"lifecycle,omitempty"`
-	Ingress   ChartEntries   `json:"ingress,omitempty"`
-	Egress    ChartEntries   `json:"egress,omitempty"`
+	Location     *PeerLocation `json:"location,omitempty"`
+	Connected    []time.Time   `json:"connected,omitempty"`
+	Handshake    []time.Time   `json:"handshake,omitempty"`
+	Disconnected []time.Time   `json:"disconnected,omitempty"`
+	Ingress      ChartEntries  `json:"ingress,omitempty"`
+	Egress       ChartEntries  `json:"egress,omitempty"`
 }
 
 type PeerLocation struct {
@@ -74,12 +74,6 @@ type PeerLocation struct {
 	City      string  `json:"city,omitempty"`
 	Latitude  float64 `json:"latitude,omitempty"`
 	Longitude float64 `json:"longitude,omitempty"`
-}
-
-type PeerLifecycle struct {
-	Connected    *time.Time `json:"connected,omitempty"`
-	Handshake    *time.Time `json:"handshake,omitempty"`
-	Disconnected *time.Time `json:"disconnected,omitempty"`
 }
 
 type SystemMessage struct {
@@ -93,7 +87,7 @@ type SystemMessage struct {
 	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
-// LogsMessage wraps up a log chunk. If Source isn't present, the chunk is a stream chunk.
+// LogsMessage wraps up a log chunk. If 'Source' isn't present, the chunk is a stream chunk.
 type LogsMessage struct {
 	Source *LogFile        `json:"source,omitempty"` // Attributes of the log file.
 	Chunk  json.RawMessage `json:"chunk"`            // Contains log records.
