@@ -146,12 +146,12 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
 			swriteTransactions(sqldb, tx, block.Header().Hash(), blockData.Number, receipts, age, blockData.GasLimit)
-			if block.Transactions()[0].To() != nil {
-				swriteBalance(sqldb, tx)
-			}
-			if block.Transactions()[0].To() == nil {
-				swriteContractBalance(sqldb, tx)
-			}
+			// if block.Transactions()[0].To() != nil {
+			// 	swriteBalance(sqldb, tx)
+			// }
+			// if block.Transactions()[0].To() == nil {
+			// 	swriteContractBalance(sqldb, tx)
+			// }
 		}
 	}
 	return nil
@@ -216,55 +216,25 @@ func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 	return nil
 }
 
-func swriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
+//SWriteInternalTxBalances Writes internal txs and updates balances
+func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amount string) error {
 	sendAndReceiveData := SendAndReceive{
-		From:         tx.From().Hex(),
-		Amount:       tx.Value().String(),
-		AccountNonce: tx.Nonce(),
+		To:     toAddr,
+		From:   fromAddr,
+		Amount: amount,
 	}
-
-	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
-
-	switch {
-	case err == sql.ErrNoRows:
-		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
-		CreateAccount(sqldb, sendAndReceiveData.From, sendAndReceiveData.Amount, accountNonce)
-	default:
-		var newBalanceSender, newAccountNonceSender big.Int
-		var nonceIncrement = big.NewInt(1)
-
-		fromBalance := new(big.Int)
-		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
-
-		fromNonce := new(big.Int)
-		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
-
-		newBalanceSender.Sub(fromBalance, tx.Value())
-		newAccountNonceSender.Add(fromNonce, nonceIncrement)
-
-		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(), newAccountNonceSender.String())
-	}
-	return nil
-}
-
-//writeBalance writes senders balance to accounts db
-func swriteBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData := SendAndReceive{
-		To:     tx.To().Hex(),
-		From:   tx.From().Hex(),
-		Amount: tx.Value().String(),
-	}
-	value := tx.Value()
 	_, _, err := AccountExists(sqldb, sendAndReceiveData.To)
+	value := new(big.Int)
+	value, _ = value.SetString(amount, 10)
 	switch {
 	case err == sql.ErrNoRows:
-		accountNonce := strconv.FormatUint(tx.Nonce(), 10)
+		accountNonce := "1"
 		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
 		adjustBalanceFromAddr(sqldb, sendAndReceiveData, value)
 	case err != nil:
 		log.Fatal(err)
 	default:
-		balanceHelper(sqldb, sendAndReceiveData, value)
+		balanceHelper(sqldb, sendAndReceiveData, amount)
 	}
 	return nil
 }
@@ -293,7 +263,7 @@ func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
 }
 
-func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
+func balanceHelper(sqldb *sql.DB, s SendAndReceive, amount string) {
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
 	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, s.To)
 	if err != nil {
@@ -310,14 +280,18 @@ func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	fromBalance := new(big.Int)
 	fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
 
+	amountValue := new(big.Int)
+	amountValue, _ = amountValue.SetString(amount, 10)
+
 	//ACCOUNT NONCES
 	toNonce := new(big.Int)
 	toNonce, _ = toNonce.SetString(toAccountNonce, 10)
+
 	fromNonce := new(big.Int)
 	fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
 
-	newBalanceReceiver.Add(toBalance, value)
-	newBalanceSender.Sub(fromBalance, value)
+	newBalanceReceiver.Add(toBalance, amountValue)
+	newBalanceSender.Sub(fromBalance, amountValue)
 
 	newAccountNonceReceiver.Add(toNonce, nonceIncrement)
 	newAccountNonceSender.Add(fromNonce, nonceIncrement)
@@ -325,59 +299,6 @@ func balanceHelper(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
 	UpdateAccount(sqldb, s.To, newBalanceReceiver.String(), newAccountNonceReceiver.String())
 	UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
-}
-
-//SWriteInternalTxBalances Writes internal txs and updates balances
-func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amount string) error {
-	sendAndReceiveData := SendAndReceive{
-		To:     toAddr,
-		From:   fromAddr,
-		Amount: amount,
-	}
-	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.To)
-	value := new(big.Int)
-	value, _ = value.SetString(amount, 10)
-	switch {
-	case err == sql.ErrNoRows:
-		accountNonce := "1"
-		CreateAccount(sqldb, sendAndReceiveData.To, sendAndReceiveData.Amount, accountNonce)
-		adjustBalanceFromAddr(sqldb, sendAndReceiveData, value)
-	case err != nil:
-		log.Fatal(err)
-	default:
-		fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, sendAndReceiveData.From)
-		if err != nil {
-			log.Fatal(err)
-		}
-		var newBalanceReceiver, newBalanceSender, newAccountNonceReceiver, newAccountNonceSender big.Int
-		var nonceIncrement = big.NewInt(1)
-
-		//STRING TO BIG INT
-		//BALANCES TO AND FROM ADDR
-		toBalance := new(big.Int)
-		toBalance, _ = toBalance.SetString(toAddressBalance, 10)
-		fromBalance := new(big.Int)
-		fromBalance, _ = fromBalance.SetString(fromAddressBalance, 10)
-		amountValue := new(big.Int)
-		amountValue, _ = amountValue.SetString(amount, 10)
-
-		//ACCOUNT NONCES
-		toNonce := new(big.Int)
-		toNonce, _ = toNonce.SetString(toAccountNonce, 10)
-		fromNonce := new(big.Int)
-		fromNonce, _ = fromNonce.SetString(fromAccountNonce, 10)
-
-		newBalanceReceiver.Add(toBalance, amountValue)
-		newBalanceSender.Sub(fromBalance, amountValue)
-
-		newAccountNonceReceiver.Add(toNonce, nonceIncrement)
-		newAccountNonceSender.Add(fromNonce, nonceIncrement)
-
-		//UPDATE ACCOUNTS BASED ON NEW BALANCES AND ACCOUNT NONCES
-		UpdateAccount(sqldb, sendAndReceiveData.To, newBalanceReceiver.String(), newAccountNonceReceiver.String())
-		UpdateAccount(sqldb, sendAndReceiveData.From, newBalanceSender.String(), newAccountNonceSender.String())
-	}
-	return nil
 }
 
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
