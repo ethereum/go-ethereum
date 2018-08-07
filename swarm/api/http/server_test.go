@@ -27,8 +27,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -905,4 +907,270 @@ func TestMethodsNotAllowed(t *testing.T) {
 		}
 	}
 
+}
+
+// HTTP convenience function
+func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
+	// Build the Request
+	req, err := http.NewRequest(httpMethod, url, reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	if verbose {
+		t.Log(req.Method, req.URL, req.Header, req.Body)
+	}
+
+	// Send Request out
+	httpClient := &http.Client{}
+	res, err := httpClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the HTTP Body
+	buffer, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body := string(buffer)
+
+	return res, body
+}
+
+func TestGet(t *testing.T) {
+	// Setup Swarm
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	testCases := []struct {
+		uri                string
+		method             string
+		headers            map[string]string
+		expectedStatusCode int
+		assertResponseBody string
+		verbose            bool
+	}{
+		{
+			// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
+			expectedStatusCode: 200,
+			assertResponseBody: "<a href=\"/bzz:/theswarm.eth\">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution",
+			verbose:            false,
+		},
+		{
+			// Accept: application/json GET / -> 200 'Welcome to Swarm'
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "application/json"},
+			expectedStatusCode: 200,
+			assertResponseBody: "Welcome to Swarm!",
+			verbose:            false,
+		},
+		{
+			// GET /robots.txt -> 200
+			uri:                fmt.Sprintf("%s/robots.txt", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
+			expectedStatusCode: 200,
+			assertResponseBody: "User-agent: *\nDisallow: /",
+			verbose:            false,
+		},
+		{
+			// GET /path_that_doesnt exist -> 400
+			uri:                fmt.Sprintf("%s/nonexistent_path", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: 400,
+			verbose:            false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri:                fmt.Sprintf("%s/bzz:asdf/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: 400,
+			verbose:            false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri:                fmt.Sprintf("%s/tbz2/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: 400,
+			verbose:            false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri:                fmt.Sprintf("%s/bzz-rack:/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: 400,
+			verbose:            false,
+		},
+		{
+			// GET bzz-invalid:/ -> 400
+			uri:                fmt.Sprintf("%s/bzz-ls", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: 400,
+			verbose:            false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run("GET "+testCase.uri, func(t *testing.T) {
+			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected %s %s to return a %v but it didn't", testCase.method, testCase.uri, testCase.expectedStatusCode)
+			}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+			}
+		})
+	}
+}
+
+func TestModify(t *testing.T) {
+	// Setup Swarm and upload a test file to it
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	swarmClient := swarm.NewClient(srv.URL)
+	data := []byte("data")
+	file := &swarm.File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+		ManifestEntry: api.ManifestEntry{
+			Path:        "",
+			ContentType: "text/plain",
+			Size:        int64(len(data)),
+		},
+	}
+
+	hash, err := swarmClient.Upload(file, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		uri                   string
+		method                string
+		headers               map[string]string
+		requestBody           []byte
+		expectedStatusCode    int
+		assertResponseBody    string
+		assertResponseHeaders map[string]string
+		verbose               bool
+	}{
+		{
+			// DELETE bzz:/hash -> 200 OK
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "DELETE",
+			headers:            map[string]string{},
+			expectedStatusCode: 200,
+			assertResponseBody: "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731",
+			verbose:            false,
+		},
+		{
+			// PUT bzz:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// PUT bzz-raw:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// PATCH bzz:/hash -> 405 Method Not Allowed
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PATCH",
+			headers:            map[string]string{},
+			expectedStatusCode: 405,
+			verbose:            false,
+		},
+		{
+			// POST bzz-raw:/ -> 200 OK
+			uri:                   fmt.Sprintf("%s/bzz-raw:/", srv.URL),
+			method:                "POST",
+			headers:               map[string]string{},
+			requestBody:           []byte("POSTdata"),
+			expectedStatusCode:    200,
+			assertResponseHeaders: map[string]string{"Content-Length": "64"},
+			verbose:               false,
+		},
+		{
+			// POST bzz-raw:/encrypt -> 200 OK
+			uri:                   fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL),
+			method:                "POST",
+			headers:               map[string]string{},
+			requestBody:           []byte("POSTdata"),
+			expectedStatusCode:    200,
+			assertResponseHeaders: map[string]string{"Content-Length": "128"},
+			verbose:               false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.method+" "+testCase.uri, func(t *testing.T) {
+			reqBody := bytes.NewReader(testCase.requestBody)
+			res, body := httpDo(testCase.method, testCase.uri, reqBody, testCase.headers, testCase.verbose, t)
+
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected %s %s to return a %v but it returned a %v instead", testCase.method, testCase.uri, testCase.expectedStatusCode, res.StatusCode)
+			}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Log(body)
+				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+			}
+			for key, value := range testCase.assertResponseHeaders {
+				if res.Header.Get(key) != value {
+					t.Logf("expected %s=%s in HTTP response header but got %s", key, value, res.Header.Get(key))
+				}
+			}
+		})
+	}
+}
+
+func TestMultiPartUpload(t *testing.T) {
+	// POST /bzz:/ Content-Type: multipart/form-data
+	verbose := false
+	// Setup Swarm
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+
+	buf := new(bytes.Buffer)
+	form := multipart.NewWriter(buf)
+	form.WriteField("name", "John Doe")
+	file1, _ := form.CreateFormFile("cv", "cv.txt")
+	file1.Write([]byte("John Doe's Credentials"))
+	file2, _ := form.CreateFormFile("profile_picture", "profile.jpg")
+	file2.Write([]byte("imaginethisisjpegdata"))
+	form.Close()
+
+	headers := map[string]string{
+		"Content-Type":   form.FormDataContentType(),
+		"Content-Length": strconv.Itoa(buf.Len()),
+	}
+	res, body := httpDo("POST", url, buf, headers, verbose, t)
+
+	if res.StatusCode != 200 {
+		t.Fatalf("expected POST multipart/form-data to return 200, but it returned %d", res.StatusCode)
+	}
+	if len(body) != 64 {
+		t.Fatalf("expected POST multipart/form-data to return a 64 char manifest but the answer was %d chars long", len(body))
+	}
 }
