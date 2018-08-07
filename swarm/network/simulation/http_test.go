@@ -96,7 +96,12 @@ func sendRunSignal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Error("Error closing response body", "err", err)
+		}
+	}()
 	log.Debug("Signal sent")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)

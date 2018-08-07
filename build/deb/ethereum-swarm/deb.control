@@ -8,12 +8,6 @@ Homepage: https://ethereum.org
 Vcs-Git: git://github.com/ethereum/go-ethereum.git
 Vcs-Browser: https://github.com/ethereum/go-ethereum
 
-Package: {{.Name}}
-Architecture: any
-Depends: ${misc:Depends}, {{.ExeList}}
-Description: Meta-package to install geth and other tools
- Meta-package to install geth and other tools
-
 {{range .Executables}}
 Package: {{$.ExeName .}}
 Conflicts: {{$.ExeConflicts .}}
