@@ -71,6 +71,10 @@ func (ctx *ServiceContext) Service(service interface{}) error {
 // registered for service instantiation.
 type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 
+// ServiceCallback is the function signature of the callbacks needed to be invoked
+// after associated service is started.
+type ServiceCallback func(service Service) error
+
 // Service is an individual protocol that can be registered into a node.
 //
 // Notes:

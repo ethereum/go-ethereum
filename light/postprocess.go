@@ -29,9 +29,16 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+)
+
+var (
+	ErrNoTrustedCht       = errors.New("No trusted canonical hash trie")
+	ErrNoTrustedBloomTrie = errors.New("No trusted bloom trie")
+	ErrNoHeader           = errors.New("Header not found")
+	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
+	ChtTablePrefix        = "cht-"
 )
 
 const (
@@ -47,47 +54,6 @@ const (
 	HelperTrieProcessConfirmations = 256  // number of confirmations before a HelperTrie is generated
 )
 
-// trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
-// the appropriate section index and head hash. It is used to start light syncing from this checkpoint
-// and avoid downloading the entire header chain while still being able to securely access old headers/logs.
-type trustedCheckpoint struct {
-	name                                string
-	sectionIdx                          uint64
-	sectionHead, chtRoot, bloomTrieRoot common.Hash
-}
-
-var (
-	mainnetCheckpoint = trustedCheckpoint{
-		name:          "mainnet",
-		sectionIdx:    179,
-		sectionHead:   common.HexToHash("ae778e455492db1183e566fa0c67f954d256fdd08618f6d5a393b0e24576d0ea"),
-		chtRoot:       common.HexToHash("646b338f9ca74d936225338916be53710ec84020b89946004a8605f04c817f16"),
-		bloomTrieRoot: common.HexToHash("d0f978f5dbc86e5bf931d8dd5b2ecbebbda6dc78f8896af6a27b46a3ced0ac25"),
-	}
-
-	ropstenCheckpoint = trustedCheckpoint{
-		name:          "ropsten",
-		sectionIdx:    107,
-		sectionHead:   common.HexToHash("e1988f95399debf45b873e065e5cd61b416ef2e2e5deec5a6f87c3127086e1ce"),
-		chtRoot:       common.HexToHash("15cba18e4de0ab1e95e202625199ba30147aec8b0b70384b66ebea31ba6a18e0"),
-		bloomTrieRoot: common.HexToHash("e00fa6389b2e597d9df52172cd8e936879eed0fca4fa59db99e2c8ed682562f2"),
-	}
-)
-
-// trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
-var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
-	params.MainnetGenesisHash: mainnetCheckpoint,
-	params.TestnetGenesisHash: ropstenCheckpoint,
-}
-
-var (
-	ErrNoTrustedCht       = errors.New("No trusted canonical hash trie")
-	ErrNoTrustedBloomTrie = errors.New("No trusted bloom trie")
-	ErrNoHeader           = errors.New("Header not found")
-	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-	ChtTablePrefix        = "cht-"
-)
-
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
 type ChtNode struct {
 	Hash common.Hash
@@ -95,7 +61,7 @@ type ChtNode struct {
 }
 
 // GetChtRoot reads the CHT root assoctiated to the given section from the database
-// Note that sectionIdx is specified according to LES/1 CHT section size
+// Note that SectionIdx is specified according to LES/1 CHT section size
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -104,13 +70,13 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 }
 
 // GetChtV2Root reads the CHT root assoctiated to the given section from the database
-// Note that sectionIdx is specified according to LES/2 CHT section size
+// Note that SectionIdx is specified according to LES/2 CHT section size
 func GetChtV2Root(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	return GetChtRoot(db, (sectionIdx+1)*(CHTFrequencyClient/CHTFrequencyServer)-1, sectionHead)
 }
 
 // StoreChtRoot writes the CHT root assoctiated to the given section into the database
-// Note that sectionIdx is specified according to LES/1 CHT section size
+// Note that SectionIdx is specified according to LES/1 CHT section size
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)

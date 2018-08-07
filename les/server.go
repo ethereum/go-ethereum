@@ -19,26 +19,35 @@ package les
 
 import (
 	"crypto/ecdsa"
-	"encoding/binary"
-	"math"
+	"errors"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/registrar"
+	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 )
+
+// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+const SubscribeChainHeadEvent = 10
 
 type LesServer struct {
 	config          *eth.Config
+	backend         *eth.EthAPIBackend
+	chaindb         ethdb.Database
 	protocolManager *ProtocolManager
 	fcManager       *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats     *requestCostStats
@@ -47,28 +56,38 @@ type LesServer struct {
 	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
 
-	chtIndexer, bloomTrieIndexer *core.ChainIndexer
+	// Checkpoint contract relative fields
+	genesis   common.Hash          // Genesis block hash for contract address detection
+	registrar *registrar.Registrar // Handler for checkpoint contract, initialized after server is started.
+	watching  int32                // Indicator whether the checkpoint contract is being watched
+
+	// Indexers
+	chtIndexer       *core.ChainIndexer // Indexers for creating cht root for each block section
+	bloomTrieIndexer *core.ChainIndexer // Indexers for creating bloom trie root for each block section
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
-	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, ServerProtocolVersions, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, nil, quitSync, new(sync.WaitGroup))
+	pm, err := NewProtocolManager(e.BlockChain().Config(), false, ServerProtocolVersions, config.NetworkId, e.EventMux(), e.Engine(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
 
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
+		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
 	}
 
 	srv := &LesServer{
 		config:           config,
+		backend:          e.APIBackend,
+		chaindb:          e.ChainDb(),
 		protocolManager:  pm,
 		quitSync:         quitSync,
 		lesTopics:        lesTopics,
-		chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false),
+		chtIndexer:       light.NewChtIndexer(e.ChainDb(), false),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), false),
+		genesis:          e.BlockChain().Genesis().Hash(),
 	}
 	logger := log.New()
 
@@ -80,18 +99,18 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
 		chtLastSectionV1 := (chtLastSection+1)*(light.CHTFrequencyClient/light.CHTFrequencyServer) - 1
 		chtSectionHead := srv.chtIndexer.SectionHead(chtLastSectionV1)
-		chtRoot := light.GetChtV2Root(pm.chainDb, chtLastSection, chtSectionHead)
+		chtRoot := light.GetChtV2Root(srv.chaindb, chtLastSection, chtSectionHead)
 		logger.Info("Loaded CHT", "section", chtLastSection, "head", chtSectionHead, "root", chtRoot)
 	}
 	bloomTrieSectionCount, _, _ := srv.bloomTrieIndexer.Sections()
 	if bloomTrieSectionCount != 0 {
 		bloomTrieLastSection := bloomTrieSectionCount - 1
 		bloomTrieSectionHead := srv.bloomTrieIndexer.SectionHead(bloomTrieLastSection)
-		bloomTrieRoot := light.GetBloomTrieRoot(pm.chainDb, bloomTrieLastSection, bloomTrieSectionHead)
+		bloomTrieRoot := light.GetBloomTrieRoot(srv.chaindb, bloomTrieLastSection, bloomTrieSectionHead)
 		logger.Info("Loaded bloom trie", "section", bloomTrieLastSection, "head", bloomTrieSectionHead, "root", bloomTrieRoot)
 	}
 
-	srv.chtIndexer.Start(eth.BlockChain())
+	srv.chtIndexer.Start(e.BlockChain())
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -99,7 +118,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		MinRecharge: 50000,
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
-	srv.fcCostStats = newCostStats(eth.ChainDb())
+	srv.fcCostStats = newCostStats(e.ChainDb())
 	return srv, nil
 }
 
@@ -130,6 +149,26 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
+// SetClient sets the rpc client and starts watching checkpoint contract if it is not yet watched.
+func (s *LesServer) SetClient(client *ethclient.Client) {
+	addr, ok := registrar.RegistrarAddr[s.genesis]
+	if !ok {
+		log.Info("The registrar contract is not deployed")
+		return
+	}
+	registrar, err := registrar.NewRegistrar(addr, client)
+	if err != nil {
+		log.Info("Bind registrar contract failed", "err", err)
+		return
+	}
+	if !atomic.CompareAndSwapInt32(&s.watching, 0, 1) {
+		log.Info("Already bound and listening to registrar contract")
+		return
+	}
+	s.registrar = registrar
+	go s.checkpointLoop(s.recoverCheckpoint())
+}
+
 // Stop stops the LES service
 func (s *LesServer) Stop() {
 	s.chtIndexer.Close()
@@ -140,179 +179,187 @@ func (s *LesServer) Stop() {
 		<-s.protocolManager.noMorePeers
 	}()
 	s.protocolManager.Stop()
+	atomic.StoreInt32(&s.watching, 0)
 }
 
-type requestCosts struct {
-	baseCost, reqCost uint64
-}
-
-type requestCostTable map[uint64]*requestCosts
-
-type RequestCostList []struct {
-	MsgCode, BaseCost, ReqCost uint64
-}
-
-func (list RequestCostList) decode() requestCostTable {
-	table := make(requestCostTable)
-	for _, e := range list {
-		table[e.MsgCode] = &requestCosts{
-			baseCost: e.BaseCost,
-			reqCost:  e.ReqCost,
-		}
+// APIs implements LesServer, returns all API service provided by les server.
+func (s *LesServer) APIs() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "les",
+			Version:   "1.0",
+			Service:   NewPrivateLesServerAPI(s),
+			Public:    false,
+		},
 	}
-	return table
 }
 
-type linReg struct {
-	sumX, sumY, sumXX, sumXY float64
-	cnt                      uint64
-}
-
-const linRegMaxCnt = 100000
-
-func (l *linReg) add(x, y float64) {
-	if l.cnt >= linRegMaxCnt {
-		sub := float64(l.cnt+1-linRegMaxCnt) / linRegMaxCnt
-		l.sumX -= l.sumX * sub
-		l.sumY -= l.sumY * sub
-		l.sumXX -= l.sumXX * sub
-		l.sumXY -= l.sumXY * sub
-		l.cnt = linRegMaxCnt - 1
+// latestCheckpoint finds the common stored section index and returns a set of
+// post-processed trie roots (CHT and BloomTrie) associated with
+// the appropriate section index and head hash as a local checkpoint package.
+//
+// Note for cht, the section size in LES1 is 4K, so indexer still uses LES/1
+// 4k section size for backwards server compatibility. For bloomTrie, the size
+// of the section used for indexer is 32K.
+func (s *LesServer) latestCheckpoint() (uint64, common.Hash, common.Hash, common.Hash) {
+	chtCount, _, _ := s.chtIndexer.Sections()
+	bloomTrieCount, _, _ := s.bloomTrieIndexer.Sections()
+	count := chtCount / (light.CHTFrequencyClient / light.CHTFrequencyServer)
+	// Cap the section index if the two sections are not consistent.
+	if count > bloomTrieCount {
+		count = bloomTrieCount
 	}
-	l.cnt++
-	l.sumX += x
-	l.sumY += y
-	l.sumXX += x * x
-	l.sumXY += x * y
-}
-
-func (l *linReg) calc() (b, m float64) {
-	if l.cnt == 0 {
-		return 0, 0
+	if count == 0 {
+		// No checkpoint information can be provided.
+		return 0, common.Hash{}, common.Hash{}, common.Hash{}
 	}
-	cnt := float64(l.cnt)
-	d := cnt*l.sumXX - l.sumX*l.sumX
-	if d < 0.001 {
-		return l.sumY / cnt, 0
+	sectionHead, chtRoot, bloomTrieRoot := s.getCheckpoint(count - 1)
+	return count - 1, sectionHead, chtRoot, bloomTrieRoot
+}
+
+// getCheckpoint returns a set of post-processed trie roots (CHT and BloomTrie)
+// associated with the appropriate head hash by specific section index.
+//
+// The returned checkpoint is only the checkpoint generated by the local indexers,
+// not the stable checkpoint registered in the registrar contract.
+func (s *LesServer) getCheckpoint(index uint64) (common.Hash, common.Hash, common.Hash) {
+	// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
+	latest := (index+1)*(light.CHTFrequencyClient/light.CHTFrequencyServer) - 1
+
+	sectionHead := s.chtIndexer.SectionHead(latest)
+	chtRoot := light.GetChtRoot(s.protocolManager.chainDb, latest, sectionHead)
+	bloomTrieRoot := light.GetBloomTrieRoot(s.protocolManager.chainDb, index, sectionHead)
+	return sectionHead, chtRoot, bloomTrieRoot
+}
+
+// checkpointLoop starts a standalone goroutine to watch new checkpoint events and updates local's stable checkpoint.
+func (s *LesServer) checkpointLoop(checkpoint *light.TrustedCheckpoint) (err error) {
+	var (
+		eventCh      = make(chan *contract.ContractNewCheckpointEvent)
+		headCh       = make(chan core.ChainHeadEvent, SubscribeChainHeadEvent)
+		announcement = make(map[uint64]common.Hash)
+	)
+	eventSub, err := s.registrar.WatchNewCheckpointEvent(eventCh)
+	if err != nil {
+		return err
 	}
-	m = (cnt*l.sumXY - l.sumX*l.sumY) / d
-	b = (l.sumY / cnt) - (m * l.sumX / cnt)
-	return b, m
-}
-
-func (l *linReg) toBytes() []byte {
-	var arr [40]byte
-	binary.BigEndian.PutUint64(arr[0:8], math.Float64bits(l.sumX))
-	binary.BigEndian.PutUint64(arr[8:16], math.Float64bits(l.sumY))
-	binary.BigEndian.PutUint64(arr[16:24], math.Float64bits(l.sumXX))
-	binary.BigEndian.PutUint64(arr[24:32], math.Float64bits(l.sumXY))
-	binary.BigEndian.PutUint64(arr[32:40], l.cnt)
-	return arr[:]
-}
-
-func linRegFromBytes(data []byte) *linReg {
-	if len(data) != 40 {
-		return nil
-	}
-	l := &linReg{}
-	l.sumX = math.Float64frombits(binary.BigEndian.Uint64(data[0:8]))
-	l.sumY = math.Float64frombits(binary.BigEndian.Uint64(data[8:16]))
-	l.sumXX = math.Float64frombits(binary.BigEndian.Uint64(data[16:24]))
-	l.sumXY = math.Float64frombits(binary.BigEndian.Uint64(data[24:32]))
-	l.cnt = binary.BigEndian.Uint64(data[32:40])
-	return l
-}
-
-type requestCostStats struct {
-	lock  sync.RWMutex
-	db    ethdb.Database
-	stats map[uint64]*linReg
-}
-
-type requestCostStatsRlp []struct {
-	MsgCode uint64
-	Data    []byte
-}
-
-var rcStatsKey = []byte("_requestCostStats")
-
-func newCostStats(db ethdb.Database) *requestCostStats {
-	stats := make(map[uint64]*linReg)
-	for _, code := range reqList {
-		stats[code] = &linReg{cnt: 100}
+	headSub := s.backend.SubscribeChainHeadEvent(headCh)
+	if headSub == nil {
+		eventSub.Unsubscribe()
+		return errors.New("subscribe head event failed")
 	}
 
-	if db != nil {
-		data, err := db.Get(rcStatsKey)
-		var statsRlp requestCostStatsRlp
-		if err == nil {
-			err = rlp.DecodeBytes(data, &statsRlp)
-		}
-		if err == nil {
-			for _, r := range statsRlp {
-				if stats[r.MsgCode] != nil {
-					if l := linRegFromBytes(r.Data); l != nil {
-						stats[r.MsgCode] = l
-					}
+	ticker := time.NewTicker(5 * time.Minute)
+	defer func() {
+		eventSub.Unsubscribe()
+		headSub.Unsubscribe()
+		ticker.Stop()
+	}()
+
+	for {
+		select {
+		case event := <-eventCh:
+			if event == nil {
+				// This should never happen.
+				log.Info("Ignore empty checkpoint event")
+				continue
+			}
+			// Note several events have same index may be received because of chain reorg and
+			// the modification of the latest checkpoint.
+			if checkpoint == nil || event.Index.Uint64() > checkpoint.SectionIdx {
+				log.Info("Receive new checkpoint event", "section", event.Index, "hash", common.Hash(event.CheckpointHash).Hex(),
+					"grantor", event.Grantor.Hex())
+				announcement[event.Index.Uint64()] = common.Hash(event.CheckpointHash)
+			}
+		case head := <-headCh:
+			number := head.Block.NumberU64()
+			if number < light.CheckpointConfirmations+light.CheckpointFrequency {
+				continue
+			}
+			if checkpoint == nil {
+				checkpoint = s.recoverCheckpoint()
+			}
+			idx := (number-light.CheckpointConfirmations)/light.CheckpointFrequency - 1
+			if checkpoint == nil || idx > checkpoint.SectionIdx {
+				hash, ok := announcement[idx]
+				if !ok {
+					continue
+				}
+				sectionHead := s.bloomTrieIndexer.SectionHead(idx)
+				c := &light.TrustedCheckpoint{
+					SectionIdx:    idx,
+					SectionHead:   sectionHead,
+					ChtRoot:       light.GetChtV2Root(s.chaindb, idx, sectionHead),
+					BloomTrieRoot: light.GetBloomTrieRoot(s.chaindb, idx, sectionHead),
+				}
+				if c.HashEqual(common.Hash(hash)) {
+					light.WriteTrustedCheckpoint(s.chaindb, c)
+					checkpoint = c
+					delete(announcement, idx)
+					log.Info("Update stable checkpoint", "section", checkpoint.SectionIdx, "hash", checkpoint.Hash().Hex())
 				}
 			}
+		case <-ticker.C:
+			// Evict useless announcement every 5 minutes.
+			for idx := range announcement {
+				if checkpoint != nil && checkpoint.SectionIdx >= idx {
+					delete(announcement, idx)
+				}
+			}
+		case <-s.quitSync:
+			// Les server is closed.
+			return
 		}
-	}
-
-	return &requestCostStats{
-		db:    db,
-		stats: stats,
 	}
 }
 
-func (s *requestCostStats) store() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	statsRlp := make(requestCostStatsRlp, len(reqList))
-	for i, code := range reqList {
-		statsRlp[i].MsgCode = code
-		statsRlp[i].Data = s.stats[code].toBytes()
+// recoveryCheckpoint filters checkpoint announcement events and recovers stable checkpoint.
+func (s *LesServer) recoverCheckpoint() *light.TrustedCheckpoint {
+	var (
+		sectionCnt, _, _ = s.bloomTrieIndexer.Sections()
+		stable           = light.ReadTrustedCheckpoint(s.chaindb)
+		headHash         = rawdb.ReadHeadHeaderHash(s.chaindb)
+		headNumber       = rawdb.ReadHeaderNumber(s.chaindb, headHash)
+	)
+	// Short circuit if there is no local checkpoint generated.
+	if headNumber == nil || sectionCnt == 0 {
+		return nil
 	}
-
-	if data, err := rlp.EncodeToBytes(statsRlp); err == nil {
-		s.db.Put(rcStatsKey, data)
-	}
-}
-
-func (s *requestCostStats) getCurrentList() RequestCostList {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	list := make(RequestCostList, len(reqList))
-	//fmt.Println("RequestCostList")
-	for idx, code := range reqList {
-		b, m := s.stats[code].calc()
-		//fmt.Println(code, s.stats[code].cnt, b/1000000, m/1000000)
-		if m < 0 {
-			b += m
-			m = 0
+	unstableIdx := sectionCnt - 1
+	for stable == nil || stable.SectionIdx < unstableIdx {
+		if (unstableIdx+1)*light.CheckpointFrequency+light.CheckpointConfirmations <= *headNumber {
+			iter, err := s.registrar.FilterNewCheckpointEvent(*headNumber, unstableIdx, light.CheckpointFrequency, light.CheckpointProcessConfirmations)
+			if err != nil {
+				continue
+			}
+			for iter.Next() {
+				sectionHead := s.bloomTrieIndexer.SectionHead(unstableIdx)
+				checkpoint := &light.TrustedCheckpoint{
+					SectionIdx:    unstableIdx,
+					SectionHead:   sectionHead,
+					ChtRoot:       light.GetChtV2Root(s.chaindb, unstableIdx, sectionHead),
+					BloomTrieRoot: light.GetBloomTrieRoot(s.chaindb, unstableIdx, sectionHead),
+				}
+				if checkpoint.HashEqual(common.Hash(iter.Event.CheckpointHash)) {
+					light.WriteTrustedCheckpoint(s.chaindb, checkpoint)
+					iter.Close()
+					log.Info("Recover stable checkpoint", "index", checkpoint.SectionIdx, "hash", checkpoint.Hash().Hex())
+					return checkpoint
+				}
+			}
+			iter.Close()
 		}
-		if b < 0 {
-			b = 0
+		if unstableIdx == 0 {
+			break
 		}
-
-		list[idx].MsgCode = code
-		list[idx].BaseCost = uint64(b * 2)
-		list[idx].ReqCost = uint64(m * 2)
+		unstableIdx -= 1
 	}
-	return list
-}
-
-func (s *requestCostStats) update(msgCode, reqCnt, cost uint64) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	c, ok := s.stats[msgCode]
-	if !ok || reqCnt == 0 {
-		return
+	if stable == nil {
+		log.Info("No stable checkpoint")
+	} else {
+		log.Info("Recover stable checkpoint", "index", stable.SectionIdx, "hash", stable.Hash().Hex())
 	}
-	c.add(float64(reqCnt), float64(cost))
+	return stable
 }
 
 func (pm *ProtocolManager) blockLoop() {

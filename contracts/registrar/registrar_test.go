@@ -1,0 +1,297 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package registrar
+
+import (
+	"errors"
+	"math/big"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/light"
+)
+
+var (
+	key, _    = crypto.GenerateKey()
+	addr      = crypto.PubkeyToAddress(key.PublicKey)
+	emptyHash = [32]byte{}
+
+	checkpointHash0 = crypto.Keccak256Hash(common.FromHex("dead0"), common.FromHex("beef0"), common.FromHex("deadbeef0"))
+	checkpointHash1 = crypto.Keccak256Hash(common.FromHex("dead1"), common.FromHex("beef1"), common.FromHex("deadbeef1"))
+)
+
+// validateOperation executes the operation, watches and delivers all events fired by the backend and ensures the
+// correctness by assert function.
+func validateOperation(t *testing.T, c *contract.Contract, backend *backends.SimulatedBackend, operation func(),
+	assert func(<-chan *contract.ContractNewCheckpointEvent, <-chan *contract.ContractAddAdminEvent, <-chan *contract.ContractRemoveAdminEvent) error, opName string) {
+	// Watch all events and deliver them to assert function
+	var (
+		sink1 = make(chan *contract.ContractNewCheckpointEvent)
+		sink2 = make(chan *contract.ContractAddAdminEvent)
+		sink3 = make(chan *contract.ContractRemoveAdminEvent)
+	)
+	sub1, _ := c.WatchNewCheckpointEvent(nil, sink1, nil)
+	sub2, _ := c.WatchAddAdminEvent(nil, sink2)
+	sub3, _ := c.WatchRemoveAdminEvent(nil, sink3)
+	defer func() {
+		// Close all subscribers
+		sub1.Unsubscribe()
+		sub2.Unsubscribe()
+		sub3.Unsubscribe()
+	}()
+	operation()
+
+	// flush pending block
+	backend.Commit()
+	if err := assert(sink1, sink2, sink3); err != nil {
+		t.Errorf("operation {%s} failed, err %s", opName, err)
+	}
+}
+
+// validateEvents checks that the correct number of contract events
+// fired by contract backend.
+func validateEvents(target int, sink interface{}) bool {
+	chanval := reflect.ValueOf(sink)
+	chantyp := chanval.Type()
+	if chantyp.Kind() != reflect.Chan || chantyp.ChanDir()&reflect.RecvDir == 0 {
+		return false
+	}
+	count := 0
+	timeout := time.After(1 * time.Second)
+	cases := []reflect.SelectCase{{Chan: chanval, Dir: reflect.SelectRecv}, {Chan: reflect.ValueOf(timeout), Dir: reflect.SelectRecv}}
+	for {
+		chose, _, _ := reflect.Select(cases)
+		if chose == 1 {
+			// Not enough event received
+			return false
+		}
+		count += 1
+		if count == target {
+			break
+		}
+	}
+	done := time.After(50 * time.Millisecond)
+	cases = cases[:1]
+	cases = append(cases, reflect.SelectCase{Chan: reflect.ValueOf(done), Dir: reflect.SelectRecv})
+	chose, _, _ := reflect.Select(cases)
+	// If chose equal 0, it means receiving redundant events.
+	return chose == 1
+}
+
+// Tests contract administrator managements.
+func TestAdminManagement(t *testing.T) {
+	var (
+		adminCandidate  = common.HexToAddress("0xdead")
+		adminCandidate2 = common.HexToAddress("0xbeef")
+	)
+
+	// Deploy registrar contract
+	transactOpts := bind.NewKeyedTransactor(key)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	_, _, c, err := contract.DeployContract(transactOpts, contractBackend, nil)
+	if err != nil {
+		t.Error("deploy registrar contract failed", err)
+	}
+	contractBackend.Commit()
+
+	// Test AddAdmin function
+	validateOperation(t, c, contractBackend, func() {
+		for _, a := range []common.Address{addr, adminCandidate, adminCandidate2} {
+			c.AddAdmin(transactOpts, a, "")
+		}
+	}, func(sink1 <-chan *contract.ContractNewCheckpointEvent, sink2 <-chan *contract.ContractAddAdminEvent, sink3 <-chan *contract.ContractRemoveAdminEvent) error {
+		adminList, err := c.GetAllAdmin(nil)
+		if err != nil {
+			return errors.New("get admin list failed")
+		}
+		if !reflect.DeepEqual(adminList, []common.Address{addr, adminCandidate, adminCandidate2}) {
+			return errors.New("add admin failed")
+		}
+		if !validateEvents(2, sink2) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "add admin")
+
+	// Test Remove admin function
+	validateOperation(t, c, contractBackend, func() {
+		c.RemoveAdmin(transactOpts, adminCandidate, "")
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		adminList, err := c.GetAllAdmin(nil)
+		if err != nil {
+			return errors.New("get admin list failed")
+		}
+		if !reflect.DeepEqual(adminList, []common.Address{addr, adminCandidate2}) {
+			return errors.New("remove admin failed")
+		}
+		if !validateEvents(1, events3) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "remove admin at middle")
+
+	// Test RemoveAdmin function (remove at the head)
+	validateOperation(t, c, contractBackend, func() {
+		c.RemoveAdmin(transactOpts, addr, "")
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		adminList, err := c.GetAllAdmin(nil)
+		if err != nil {
+			return errors.New("get admin list failed")
+		}
+		if !reflect.DeepEqual(adminList, []common.Address{adminCandidate2}) {
+			return errors.New("remove admin failed")
+		}
+		if !validateEvents(1, events3) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "remove admin at head")
+
+	// Test unauthorized operation
+	validateOperation(t, c, contractBackend, func() {
+		c.AddAdmin(transactOpts, adminCandidate, "")
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		adminList, err := c.GetAllAdmin(nil)
+		if err != nil {
+			return errors.New("get admin list failed")
+		}
+		if !reflect.DeepEqual(adminList, []common.Address{adminCandidate2}) {
+			return errors.New("unauthorized operation should be banned")
+		}
+		return nil
+	}, "unauthorized operation")
+}
+
+// Tests checkpoint managements.
+func TestCheckpointRegister(t *testing.T) {
+	// Deploy registrar contract
+	transactOpts := bind.NewKeyedTransactor(key)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	_, _, c, err := contract.DeployContract(transactOpts, contractBackend, []common.Address{addr})
+	if err != nil {
+		t.Error("deploy registrar contract failed", err)
+	}
+	contractBackend.Commit()
+
+	// Register unstable checkpoint
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpointHash0)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(0))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != emptyHash {
+			return errors.New("unstable checkpoint should be banned")
+		}
+		return nil
+	}, "register unstable checkpoint")
+
+	contractBackend.ShiftBlocks(light.CheckpointFrequency + light.CheckpointProcessConfirmations)
+
+	// Register by unauthorized user
+	validateOperation(t, c, contractBackend, func() {
+		user2, _ := crypto.GenerateKey()
+		unauthorized := bind.NewKeyedTransactor(user2)
+		c.SetCheckpoint(unauthorized, big.NewInt(0), checkpointHash0)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(0))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != emptyHash {
+			return errors.New("checkpoint from unauthorized user should be banned")
+		}
+		return nil
+	}, "register by unauthorized user")
+
+	// Register a stable checkpoint
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(0), checkpointHash0)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(0))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != checkpointHash0 {
+			return errors.New("register stable checkpoint failed")
+		}
+		if !validateEvents(1, events) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "register stable checkpoint")
+
+	newHash := crypto.Keccak256Hash(common.FromHex("dead00"), common.FromHex("beef00"), common.FromHex("deadbeef00"))
+	// Modify the latest checkpoint
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(0), newHash)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(0))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != newHash {
+			return errors.New("register stable checkpoint failed")
+		}
+		if !validateEvents(1, events) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "modify latest checkpoint")
+
+	contractBackend.ShiftBlocks(light.CheckpointFrequency)
+	// Register checkpoint 1
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(1), checkpointHash1)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(1))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != checkpointHash1 {
+			return errors.New("register stable checkpoint failed")
+		}
+		if !validateEvents(1, events) {
+			return errors.New("receive incorrect number of events")
+		}
+		return nil
+	}, "register stable checkpoint 1")
+
+	contractBackend.ShiftBlocks(light.CheckpointConfirmations)
+	newHash1 := crypto.Keccak256Hash(common.FromHex("dead11"), common.FromHex("beef11"), common.FromHex("deadbeef11"))
+	// Modify the registered checkpoint after a very long time
+	validateOperation(t, c, contractBackend, func() {
+		c.SetCheckpoint(transactOpts, big.NewInt(1), newHash1)
+	}, func(events <-chan *contract.ContractNewCheckpointEvent, events2 <-chan *contract.ContractAddAdminEvent, events3 <-chan *contract.ContractRemoveAdminEvent) error {
+		hash, err := c.GetCheckpoint(nil, big.NewInt(1))
+		if err != nil {
+			return errors.New("get checkpoint failed")
+		}
+		if hash != checkpointHash1 {
+			return errors.New("checkpoint modified out of allowed time range")
+		}
+		return nil
+	}, "modify checkpoint out of allowed time range")
+}
