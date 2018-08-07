@@ -50,7 +50,7 @@ func TestSendTxSign(t *testing.T) {
 	ctx := context.Background()
 
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
-	blockSignerAddr, blockSigner, err := blocksigner.DeployBlockSigner(transactOpts, backend)
+	blockSignerAddr, blockSigner, err := blocksigner.DeployBlockSigner(transactOpts, backend, big.NewInt(99))
 	if err != nil {
 		t.Fatalf("Can't get block signer: %v", err)
 	}
