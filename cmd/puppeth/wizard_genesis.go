@@ -118,6 +118,10 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Clique.Epoch = uint64(w.readDefaultInt(990))
 		genesis.Config.Clique.RewardCheckpoint = genesis.Config.Clique.Epoch
 
+		fmt.Println()
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
+		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
+
 	case choice == "3":
 		genesis.Difficulty = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
@@ -169,9 +173,13 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("How many blocks per checkpoint? (default = 990)")
+		fmt.Println("How many blocks per epoch? (default = 990)")
 		epochNumber := w.readDefaultInt(990)
 		genesis.Config.Clique.RewardCheckpoint = uint64(epochNumber)
+
+		fmt.Println()
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
+		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

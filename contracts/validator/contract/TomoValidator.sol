@@ -9,12 +9,12 @@ contract TomoValidator {
     event Unvote(address _voter, address _candidate, uint256 _cap);
     event Propose(address _owner, address _candidate, uint256 _cap);
     event Resign(address _owner, address _candidate);
-    event SetNodeUrl(address _owner, address _candidate, string _nodeUrl);
+    event SetNodeId(address _owner, address _candidate, string _nodeId);
     event Withdraw(address _owner, uint256 _blockNumber, uint256 _cap);
 
     struct ValidatorState {
         address owner;
-        string nodeUrl;
+        string nodeId;
         bool isCandidate;
         uint256 cap;
         mapping(address => uint256) voters;
@@ -94,7 +94,7 @@ contract TomoValidator {
             candidates.push(_candidates[i]);
             validatorsState[_candidates[i]] = ValidatorState({
                 owner: _firstOwner,
-                nodeUrl: '',
+                nodeId: '',
                 isCandidate: true,
                 cap: _caps[i]
             });
@@ -103,11 +103,11 @@ contract TomoValidator {
         }
     }
 
-    function propose(address _candidate, string _nodeUrl) external payable onlyValidCandidateCap onlyNotCandidate(_candidate) {
+    function propose(address _candidate, string _nodeId) external payable onlyValidCandidateCap onlyNotCandidate(_candidate) {
         candidates.push(_candidate);
         validatorsState[_candidate] = ValidatorState({
             owner: msg.sender,
-            nodeUrl: _nodeUrl,
+            nodeId: _nodeId,
             isCandidate: true,
             cap: msg.value
         });
@@ -134,8 +134,8 @@ contract TomoValidator {
         return validatorsState[_candidate].cap;
     }
 
-    function getCandidateNodeUrl(address _candidate) public view returns(string) {
-        return validatorsState[_candidate].nodeUrl;
+    function getCandidateNodeId(address _candidate) public view returns(string) {
+        return validatorsState[_candidate].nodeId;
     }
 
     function getCandidateOwner(address _candidate) public view returns(address) {
@@ -170,9 +170,9 @@ contract TomoValidator {
         emit Unvote(msg.sender, _candidate, _cap);
     }
 
-    function setNodeUrl(address _candidate, string _nodeUrl) public onlyOwner(_candidate) {
-        validatorsState[_candidate].nodeUrl = _nodeUrl;
-        emit SetNodeUrl(msg.sender, _candidate, _nodeUrl);
+    function setNodeId(address _candidate, string _nodeId) public onlyOwner(_candidate) {
+        validatorsState[_candidate].nodeId = _nodeId;
+        emit SetNodeId(msg.sender, _candidate, _nodeId);
     }
 
     function resign(address _candidate) public onlyOwner(_candidate) onlyCandidate(_candidate) {
