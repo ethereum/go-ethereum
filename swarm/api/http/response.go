@@ -29,14 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
-//metrics variables
 var (
 	htmlCounter      = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
 	jsonCounter      = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
 	plaintextCounter = metrics.NewRegisteredCounter("api.http.errorpage.plaintext.count", nil)
 )
 
-//parameters needed for formatting the correct HTML page
 type ResponseParams struct {
 	Msg       template.HTML
 	Code      int
@@ -45,12 +43,12 @@ type ResponseParams struct {
 	Details   template.HTML
 }
 
-//ShowMultipeChoices is used when a user requests a resource in a manifest which results
-//in ambiguous results. It returns a HTML page with clickable links of each of the entry
-//in the manifest which fits the request URI ambiguity.
-//For example, if the user requests bzz:/<hash>/read and that manifest contains entries
-//"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
-//This only applies if the manifest has no default entry
+// ShowMultipleChoices is used when a user requests a resource in a manifest which results
+// in ambiguous results. It returns a HTML page with clickable links of each of the entry
+// in the manifest which fits the request URI ambiguity.
+// For example, if the user requests bzz:/<hash>/read and that manifest contains entries
+// "readme.md" and "readinglist.txt", a HTML page is returned with this two links.
+// This only applies if the manifest has no default entry
 func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {
 	log.Debug("ShowMultipleChoices", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	msg := ""
@@ -66,7 +64,6 @@ func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.Manife
 	}
 
 	uri.Scheme = "bzz-list"
-	//request the same url just with bzz-list
 	msg += fmt.Sprintf("Disambiguation:<br/>Your request may refer to multiple choices.<br/>Click <a class=\"orange\" href='"+"/"+uri.String()+"'>here</a> if your browser does not redirect you within 5 seconds.<script>setTimeout(\"location.href='%s';\",5000);</script><br/>", "/"+uri.String())
 	RespondTemplate(w, r, "error", msg, http.StatusMultipleChoices)
 }
@@ -86,7 +83,6 @@ func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) 
 	RespondTemplate(w, r, "error", msg, code)
 }
 
-//evaluate if client accepts html or json response
 func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	w.WriteHeader(params.Code)
 
@@ -108,7 +104,6 @@ func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	}
 }
 
-//return a HTML page
 func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
 	log.Debug("respondHTML", "ruid", GetRUID(r.Context()))
@@ -118,7 +113,6 @@ func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 	}
 }
 
-//return JSON
 func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	jsonCounter.Inc(1)
 	log.Debug("respondJSON", "ruid", GetRUID(r.Context()))
@@ -126,7 +120,6 @@ func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 	return json.NewEncoder(w).Encode(params)
 }
 
-//return plaintext
 func respondPlaintext(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	plaintextCounter.Inc(1)
 	log.Debug("respondPlaintext", "ruid", GetRUID(r.Context()))
