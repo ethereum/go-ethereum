@@ -1,15 +1,16 @@
 package eth
 
-
 import (
+	"context"
+	"fmt"
+
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/params"
-	"context"
 )
 
 var EthereumObject interface{}
 
-type ShyftTracer struct {}
+type ShyftTracer struct{}
 
 var PrivateAPI *PrivateDebugAPI
 var Context context.Context
@@ -23,21 +24,22 @@ func InitTracerEnv() {
 	Context = ctx2
 	config := &TraceConfig{
 		LogConfig: nil,
-		Tracer: &jsTracer,  // needs to be non-nil
-		Timeout: nil,
-		Reexec: nil,
+		Tracer:    &jsTracer, // needs to be non-nil
+		Timeout:   nil,
+		Reexec:    nil,
 	}
 	TracerConfig = config
 	fullNode, _ := SNew(Global_config)
+	fmt.Println("FULL NODE", fullNode)
 	privateAPI := NewPrivateDebugAPI(config2, fullNode)
 	PrivateAPI = privateAPI
 }
 
-func (st ShyftTracer) GetTracerToRun (hash common.Hash) (interface{}, error) {
+func (st ShyftTracer) GetTracerToRun(hash common.Hash) (interface{}, error) {
 	return PrivateAPI.STraceTransaction(Context, hash, TracerConfig)
 }
 
-func setEthObject(ethobj interface{}){
+func setEthObject(ethobj interface{}) {
 	EthereumObject = ethobj
 }
 

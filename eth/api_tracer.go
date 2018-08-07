@@ -631,8 +631,6 @@ func (api *PrivateDebugAPI) StraceTx(ctx context.Context, message core.Message, 
 	}
 }
 
-
-
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
@@ -646,7 +644,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	case config != nil && config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
 
-		 timeout := defaultTraceTimeout
+		timeout := defaultTraceTimeout
 
 		if config.Timeout != nil {
 			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {

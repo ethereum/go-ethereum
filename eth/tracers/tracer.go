@@ -25,6 +25,8 @@ import (
 	"time"
 	"unsafe"
 
+	"strconv"
+
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/core"
@@ -32,7 +34,6 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/ShyftNetwork/go-empyrean/log"
 	"gopkg.in/olebedev/go-duktape.v3"
-	"strconv"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -604,18 +605,17 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	amount := strconv.FormatUint(value, 10)
 
 	iTx := core.InteralWrite{
-		Hash:      hash.Hex(),
-		Type:      i.Type,
-		From:      i.From,
-		To:        i.To,
-		Value:     amount,
-		Gas:       gas,
-		GasUsed:   gasUsed,
-		Input:     i.Input,
-		Output:    i.Output,
-		Time:      i.Time,
+		Hash:    hash.Hex(),
+		Type:    i.Type,
+		From:    i.From,
+		To:      i.To,
+		Value:   amount,
+		Gas:     gas,
+		GasUsed: gasUsed,
+		Input:   i.Input,
+		Output:  i.Output,
+		Time:    i.Time,
 	}
-
 	//@TODO WRITE OVER TRANSACTION STRUCT
 	core.SWriteInternalTxBalances(sqldb, i.To, i.From, amount)
 	core.InsertInternalTx(sqldb, iTx)

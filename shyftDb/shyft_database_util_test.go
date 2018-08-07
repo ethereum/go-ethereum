@@ -2,6 +2,7 @@ package shyftdb
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"strconv"
 	"strings"
@@ -318,13 +319,13 @@ func TestBlock(t *testing.T) {
 				t.Fatalf("isContract [%v]: isContract bool is incorrect", isContract)
 			}
 		}
-
 		if getAllTx := core.SGetAllTransactions(sqldb); len(getAllTx) == 0 {
 			t.Fatalf("GetAllTransactions [%v]: GetAllTransactions did not return correctly", getAllTx)
 		}
 	})
 	t.Run("TestAccountsToReturnAccounts", func(t *testing.T) {
 		for _, tx := range txs {
+			fmt.Println("test account", tx.To().String())
 			accountAddrTo := core.SGetAccount(sqldb, tx.To().String())
 			byts := []byte(accountAddrTo)
 			var accountDataTo core.SAccounts

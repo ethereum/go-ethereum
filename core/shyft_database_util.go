@@ -146,12 +146,6 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
 			swriteTransactions(sqldb, tx, block.Header().Hash(), blockData.Number, receipts, age, blockData.GasLimit)
-			// if block.Transactions()[0].To() != nil {
-			// 	swriteBalance(sqldb, tx)
-			// }
-			// if block.Transactions()[0].To() == nil {
-			// 	swriteContractBalance(sqldb, tx)
-			// }
 		}
 	}
 	return nil
@@ -243,7 +237,7 @@ func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
 	switch {
 	case err == sql.ErrNoRows:
-		fmt.Println("wtf", s.From)
+		fmt.Println("Need to write From", s.From)
 	}
 	if err != nil {
 		log.Fatal(err)

@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"math/big"
 	"fmt"
+	"math/big"
 
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
@@ -283,14 +283,7 @@ func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64,
 // its added positional metadata.
 func GetTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	// Retrieve the lookup metadata and resolve the transaction from the body
-	//fmt.Println("INSIDE GET TRANSACTION ++++++++")
-	//fmt.Println("The hash and db reader are")
-	//fmt.Println(hash)
-	//fmt.Println(db)
 	blockHash, blockNumber, txIndex := GetTxLookupEntry(db, hash)
-	//fmt.Println(blockHash)
-	//fmt.Println(blockNumber)
-
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)
 		if body == nil || len(body.Transactions) <= int(txIndex) {
