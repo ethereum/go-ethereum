@@ -909,7 +909,6 @@ func TestMethodsNotAllowed(t *testing.T) {
 
 }
 
-// HTTP convenience function
 func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
 	// Build the Request
 	req, err := http.NewRequest(httpMethod, url, reqBody)
@@ -942,11 +941,10 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 }
 
 func TestGet(t *testing.T) {
-	// Setup Swarm
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
-	testCases := []struct {
+	for _, testCase := range []struct {
 		uri                string
 		method             string
 		headers            map[string]string
@@ -955,25 +953,22 @@ func TestGet(t *testing.T) {
 		verbose            bool
 	}{
 		{
-			// Accept: text/html GET / -> 200 HTML, Swarm Landing Page
 			uri:                fmt.Sprintf("%s/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
 			expectedStatusCode: 200,
-			assertResponseBody: "<a href=\"/bzz:/theswarm.eth\">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution",
+			assertResponseBody: "Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution",
 			verbose:            false,
 		},
 		{
-			// Accept: application/json GET / -> 200 'Welcome to Swarm'
 			uri:                fmt.Sprintf("%s/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "application/json"},
 			expectedStatusCode: 200,
-			assertResponseBody: "Welcome to Swarm!",
+			assertResponseBody: "Swarm: Please request a valid ENS or swarm hash with the appropriate bzz scheme",
 			verbose:            false,
 		},
 		{
-			// GET /robots.txt -> 200
 			uri:                fmt.Sprintf("%s/robots.txt", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
@@ -982,62 +977,54 @@ func TestGet(t *testing.T) {
 			verbose:            false,
 		},
 		{
-			// GET /path_that_doesnt exist -> 400
 			uri:                fmt.Sprintf("%s/nonexistent_path", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 400,
+			expectedStatusCode: 404,
 			verbose:            false,
 		},
 		{
-			// GET bzz-invalid:/ -> 400
 			uri:                fmt.Sprintf("%s/bzz:asdf/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 400,
+			expectedStatusCode: 404,
 			verbose:            false,
 		},
 		{
-			// GET bzz-invalid:/ -> 400
 			uri:                fmt.Sprintf("%s/tbz2/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 400,
+			expectedStatusCode: 404,
 			verbose:            false,
 		},
 		{
-			// GET bzz-invalid:/ -> 400
 			uri:                fmt.Sprintf("%s/bzz-rack:/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 400,
+			expectedStatusCode: 404,
 			verbose:            false,
 		},
 		{
-			// GET bzz-invalid:/ -> 400
 			uri:                fmt.Sprintf("%s/bzz-ls", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 400,
+			expectedStatusCode: 404,
 			verbose:            false,
 		},
-	}
-
-	for _, testCase := range testCases {
+	} {
 		t.Run("GET "+testCase.uri, func(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
 			if res.StatusCode != testCase.expectedStatusCode {
-				t.Fatalf("expected %s %s to return a %v but it didn't", testCase.method, testCase.uri, testCase.expectedStatusCode)
+				t.Fatalf("expected status code %d but got %d", testCase.expectedStatusCode, res.StatusCode)
 			}
 			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
-				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+				t.Fatalf("expected response to be: %s but got: %s", testCase.assertResponseBody, body)
 			}
 		})
 	}
 }
 
 func TestModify(t *testing.T) {
-	// Setup Swarm and upload a test file to it
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
@@ -1057,7 +1044,7 @@ func TestModify(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testCases := []struct {
+	for _, testCase := range []struct {
 		uri                   string
 		method                string
 		headers               map[string]string
@@ -1068,7 +1055,6 @@ func TestModify(t *testing.T) {
 		verbose               bool
 	}{
 		{
-			// DELETE bzz:/hash -> 200 OK
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "DELETE",
 			headers:            map[string]string{},
@@ -1077,7 +1063,6 @@ func TestModify(t *testing.T) {
 			verbose:            false,
 		},
 		{
-			// PUT bzz:/hash -> 405 Method Not Allowed
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "PUT",
 			headers:            map[string]string{},
@@ -1085,7 +1070,6 @@ func TestModify(t *testing.T) {
 			verbose:            false,
 		},
 		{
-			// PUT bzz-raw:/hash -> 405 Method Not Allowed
 			uri:                fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash),
 			method:             "PUT",
 			headers:            map[string]string{},
@@ -1093,7 +1077,6 @@ func TestModify(t *testing.T) {
 			verbose:            false,
 		},
 		{
-			// PATCH bzz:/hash -> 405 Method Not Allowed
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "PATCH",
 			headers:            map[string]string{},
@@ -1101,7 +1084,6 @@ func TestModify(t *testing.T) {
 			verbose:            false,
 		},
 		{
-			// POST bzz-raw:/ -> 200 OK
 			uri:                   fmt.Sprintf("%s/bzz-raw:/", srv.URL),
 			method:                "POST",
 			headers:               map[string]string{},
@@ -1111,7 +1093,6 @@ func TestModify(t *testing.T) {
 			verbose:               false,
 		},
 		{
-			// POST bzz-raw:/encrypt -> 200 OK
 			uri:                   fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL),
 			method:                "POST",
 			headers:               map[string]string{},
@@ -1120,19 +1101,17 @@ func TestModify(t *testing.T) {
 			assertResponseHeaders: map[string]string{"Content-Length": "128"},
 			verbose:               false,
 		},
-	}
-
-	for _, testCase := range testCases {
+	} {
 		t.Run(testCase.method+" "+testCase.uri, func(t *testing.T) {
 			reqBody := bytes.NewReader(testCase.requestBody)
 			res, body := httpDo(testCase.method, testCase.uri, reqBody, testCase.headers, testCase.verbose, t)
 
 			if res.StatusCode != testCase.expectedStatusCode {
-				t.Fatalf("expected %s %s to return a %v but it returned a %v instead", testCase.method, testCase.uri, testCase.expectedStatusCode, res.StatusCode)
+				t.Fatalf("expected status code %d but got %d", testCase.expectedStatusCode, res.StatusCode)
 			}
 			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
 				t.Log(body)
-				t.Fatalf("expected %s %s to have %s within HTTP response body but it didn't", testCase.method, testCase.uri, testCase.assertResponseBody)
+				t.Fatalf("expected response %s but got %s", testCase.assertResponseBody, body)
 			}
 			for key, value := range testCase.assertResponseHeaders {
 				if res.Header.Get(key) != value {
