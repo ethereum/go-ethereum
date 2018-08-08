@@ -216,12 +216,18 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 				log.Error("Fail to get vote capacity", "error", err)
 				return nil, err
 			}
+
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
 		for addr, voteCap := range voterCaps {
-			balances[addr] = new(big.Int).Mul(totalVoterReward, voteCap)
-			balances[addr] = new(big.Int).Div(balances[addr], totalCap)
+			rcap := new(big.Int).Mul(totalVoterReward, voteCap)
+			rcap = new(big.Int).Div(rcap, totalCap)
+			if balances[addr] != nil {
+				balances[addr].Add(balances[addr], rcap)
+			} else {
+				balances[addr] = rcap
+			}
 		}
 	}
 
