@@ -152,7 +152,7 @@ func TestRewardBalance(t *testing.T) {
 		afterReward = new(big.Int).Add(afterReward, value)
 	}
 
-	if totalReward.Int64()+1 < afterReward.Int64() || totalReward.Int64()-1 > afterReward.Int64() {
+	if totalReward.Int64()+5 < afterReward.Int64() || totalReward.Int64()-5 > afterReward.Int64() {
 		callOpts := new(bind.CallOpts)
 		voters, err := baseValidator.GetVoters(callOpts, acc3Addr)
 		if err != nil {
