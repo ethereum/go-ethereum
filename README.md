@@ -2,10 +2,8 @@
 
 Official golang implementation of the Ethereum protocol.
 
-[![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
-)](https://godoc.org/github.com/ethereum/go-ethereum)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
+[![API Reference](https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667)](https://godoc.org/github.com/empyrean/go-ethereum)
+[![Go Report Card](https://goreportcard.com/badge/github.com/empyrean/go-ethereum)](https://goreportcard.com/report/github.com/empyrean/go-ethereum)
 [![Build Status](https://travis-ci.org/ShyftNetwork/shyft_go-ethereum.svg?branch=master)](https://travis-ci.org/ShyftNetwork/shyft_go-ethereum)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
@@ -15,7 +13,7 @@ Binary archives are published at https://geth.ethereum.org/downloads/.
 ## Building the source
 
 For prerequisites and detailed build instructions please read the
-[Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
+[Installation Instructions](https://github.com/empyrean/go-ethereum/wiki/Building-Ethereum)
 on the wiki.
 
 Building geth requires both a Go (version 1.7 or later) and a C compiler.
@@ -32,21 +30,21 @@ or, to build the full suite of utilities:
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd` directory.
 
-| Command    | Description |
-|:----------:|-------------|
-| **`geth`** | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options) for command line options. |
-| `abigen` | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
-| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
-| `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
-| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details. |
-| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
-| `swarm`    | swarm daemon and tools. This is the entrypoint for the swarm network. `swarm --help` for command line options and subcommands. See https://swarm-guide.readthedocs.io for swarm documentation. |
-| `puppeth`    | a CLI wizard that aids in creating a new Ethereum network. |
+|    Command    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| :-----------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  **`geth`**   | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/empyrean/go-ethereum/wiki/Command-Line-Options) for command line options.          |
+|   `abigen`    | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/empyrean/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
+|  `bootnode`   | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                                                |
+|     `evm`     | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`).                                                                                                                                                                                                                                                                    |
+| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details.                                                                                                                                                                                                    |
+|   `rlpdump`   | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                                                                |
+|    `swarm`    | swarm daemon and tools. This is the entrypoint for the swarm network. `swarm --help` for command line options and subcommands. See https://swarm-guide.readthedocs.io for swarm documentation.                                                                                                                                                                                                                                                                                                                                                      |
+|   `puppeth`   | a CLI wizard that aids in creating a new Ethereum network.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Running geth
 
 Going through all the possible command line flags is out of scope here (please consult our
-[CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)), but we've
+[CLI Wiki page](https://github.com/empyrean/go-ethereum/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own Geth instance.
 
@@ -63,14 +61,14 @@ $ geth console
 
 This command will:
 
- * Start geth in fast sync mode (default, can be changed with the `--syncmode` flag), causing it to
-   download more data in exchange for avoiding processing the entire history of the Ethereum network,
-   which is very CPU intensive.
- * Start up Geth's built-in interactive [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console),
-   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
-   as well as Geth's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
-   This too is optional and if you leave it out you can always attach to an already running Geth instance
-   with `geth attach`.
+- Start geth in fast sync mode (default, can be changed with the `--syncmode` flag), causing it to
+  download more data in exchange for avoiding processing the entire history of the Ethereum network,
+  which is very CPU intensive.
+- Start up Geth's built-in interactive [JavaScript console](https://github.com/empyrean/go-ethereum/wiki/JavaScript-Console),
+  (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
+  as well as Geth's own [management APIs](https://github.com/empyrean/go-ethereum/wiki/Management-APIs).
+  This too is optional and if you leave it out you can always attach to an already running Geth instance
+  with `geth attach`.
 
 ### Full node on the Ethereum test network
 
@@ -88,22 +86,22 @@ testnet too. Please see above for their explanations if you've skipped to here.
 
 Specifying the `--testnet` flag however will reconfigure your Geth instance a bit:
 
- * Instead of using the default data directory (`~/.ethereum` on Linux for example), Geth will nest
-   itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on Linux). Note, on OSX
-   and Linux this also means that attaching to a running testnet node requires the use of a custom
-   endpoint since `geth attach` will try to attach to a production node endpoint by default. E.g.
-   `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by this.
- * Instead of connecting the main Ethereum network, the client will connect to the test network,
-   which uses different P2P bootnodes, different network IDs and genesis states.
+- Instead of using the default data directory (`~/.ethereum` on Linux for example), Geth will nest
+  itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on Linux). Note, on OSX
+  and Linux this also means that attaching to a running testnet node requires the use of a custom
+  endpoint since `geth attach` will try to attach to a production node endpoint by default. E.g.
+  `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by this.
+- Instead of connecting the main Ethereum network, the client will connect to the test network,
+  which uses different P2P bootnodes, different network IDs and genesis states.
 
-*Note: Although there are some internal protective measures to prevent transactions from crossing
+_Note: Although there are some internal protective measures to prevent transactions from crossing
 over between the main network and test network, you should make sure to always use separate accounts
 for play-money and real-money. Unless you manually move accounts, Geth will by default correctly
-separate the two networks and will not make any accounts available between them.*
+separate the two networks and will not make any accounts available between them._
 
 ### Full node on the Rinkeby test network
 
-The above test network is a cross client one based on the ethash proof-of-work consensus algorithm. As such, it has certain extra overhead and is more susceptible to reorganization attacks due to the network's low difficulty / security. Go Ethereum also supports connecting to a proof-of-authority based test network called [*Rinkeby*](https://www.rinkeby.io) (operated by members of the community). This network is lighter, more secure, but is only supported by go-ethereum.
+The above test network is a cross client one based on the ethash proof-of-work consensus algorithm. As such, it has certain extra overhead and is more susceptible to reorganization attacks due to the network's low difficulty / security. Go Ethereum also supports connecting to a proof-of-authority based test network called [_Rinkeby_](https://www.rinkeby.io) (operated by members of the community). This network is lighter, more secure, but is only supported by go-ethereum.
 
 ```
 $ geth --rinkeby console
@@ -123,7 +121,7 @@ To get an idea how the file should look like you can use the `dumpconfig` subcom
 $ geth --your-favourite-flags dumpconfig
 ```
 
-*Note: This works only with geth v1.6.0 and above.*
+_Note: This works only with geth v1.6.0 and above._
 
 #### Docker quick start
 
@@ -135,7 +133,7 @@ docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
            ethereum/client-go
 ```
 
-This will start geth in fast-sync mode with a DB memory allowance of 1GB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
+This will start geth in fast-sync mode with a DB memory allowance of 1GB just as the above command does. It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
 
 Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containers and/or hosts. By default, `geth` binds to the local interface and RPC endpoints is not accessible from the outside.
 
@@ -144,7 +142,7 @@ Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containe
 As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
 network via your own programs and not manually through the console. To aid this, Geth has built in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
-[Geth specific APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)). These can be
+[Geth specific APIs](https://github.com/empyrean/go-ethereum/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platforms, and named pipes on Windows).
 
 The IPC interface is enabled by default and exposes all the APIs supported by Geth, whereas the HTTP
@@ -153,19 +151,19 @@ These can be turned on/off and configured as you'd expect.
 
 HTTP based JSON-RPC API options:
 
-  * `--rpc` Enable the HTTP-RPC server
-  * `--rpcaddr` HTTP-RPC server listening interface (default: "localhost")
-  * `--rpcport` HTTP-RPC server listening port (default: 8545)
-  * `--rpcapi` API's offered over the HTTP-RPC interface (default: "eth,net,web3")
-  * `--rpccorsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
-  * `--ws` Enable the WS-RPC server
-  * `--wsaddr` WS-RPC server listening interface (default: "localhost")
-  * `--wsport` WS-RPC server listening port (default: 8546)
-  * `--wsapi` API's offered over the WS-RPC interface (default: "eth,net,web3")
-  * `--wsorigins` Origins from which to accept websockets requests
-  * `--ipcdisable` Disable the IPC-RPC server
-  * `--ipcapi` API's offered over the IPC-RPC interface (default: "admin,debug,eth,miner,net,personal,shh,txpool,web3")
-  * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
+- `--rpc` Enable the HTTP-RPC server
+- `--rpcaddr` HTTP-RPC server listening interface (default: "localhost")
+- `--rpcport` HTTP-RPC server listening port (default: 8545)
+- `--rpcapi` API's offered over the HTTP-RPC interface (default: "eth,net,web3")
+- `--rpccorsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
+- `--ws` Enable the WS-RPC server
+- `--wsaddr` WS-RPC server listening interface (default: "localhost")
+- `--wsport` WS-RPC server listening port (default: 8546)
+- `--wsapi` API's offered over the WS-RPC interface (default: "eth,net,web3")
+- `--wsorigins` Origins from which to accept websockets requests
+- `--ipcdisable` Disable the IPC-RPC server
+- `--ipcapi` API's offered over the IPC-RPC interface (default: "admin,debug,eth,miner,net,personal,shh,txpool,web3")
+- `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
 You'll need to use your own programming environments' capabilities (libraries, tools, etc) to connect
 via HTTP, WS or IPC to a Geth node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
@@ -189,20 +187,22 @@ and agree upon. This consists of a small JSON file (e.g. call it `genesis.json`)
 ```json
 {
   "config": {
-        "chainId": 0,
-        "homesteadBlock": 0,
-        "eip155Block": 0,
-        "eip158Block": 0
-    },
-  "alloc"      : {},
-  "coinbase"   : "0x0000000000000000000000000000000000000000",
-  "difficulty" : "0x20000",
-  "extraData"  : "",
-  "gasLimit"   : "0x2fefd8",
-  "nonce"      : "0x0000000000000042",
-  "mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
-  "timestamp"  : "0x00"
+    "chainId": 0,
+    "homesteadBlock": 0,
+    "eip155Block": 0,
+    "eip158Block": 0
+  },
+  "alloc": {},
+  "coinbase": "0x0000000000000000000000000000000000000000",
+  "difficulty": "0x20000",
+  "extraData": "",
+  "gasLimit": "0x2fefd8",
+  "nonce": "0x0000000000000042",
+  "mixhash":
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "parentHash":
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "timestamp": "0x00"
 }
 ```
 
@@ -228,7 +228,8 @@ $ geth init path/to/genesis.json
 #### Creating the rendezvous point
 
 With all nodes that you want to run initialized to the desired genesis state, you'll need to start a
-bootstrap node that others can use to find each other in your network and/or over the internet. The
+bootstrap node that others can use to find each other in your
+network and/or over the internet. The
 clean way is to configure and run a dedicated bootnode:
 
 ```
@@ -241,7 +242,7 @@ that other nodes can use to connect to it and exchange peer information. Make su
 displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
 actual `enode` URL.
 
-*Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way.*
+_Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way._
 
 #### Starting up your member nodes
 
@@ -254,8 +255,8 @@ private network separated, so do also specify a custom `--datadir` flag.
 $ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
 ```
 
-*Note: Since your network will be completely cut off from the main and test networks, you'll also
-need to configure a miner to process transactions and create new blocks for you.*
+_Note: Since your network will be completely cut off from the main and test networks, you'll also
+need to configure a miner to process transactions and create new blocks for you._
 
 #### Running a private miner
 
@@ -280,12 +281,70 @@ limit blocks converge to (`--targetgaslimit`) and the price transactions are acc
 ## SHYFT NOTES
 
 #### CLI
-Run `./shyft-geth.sh` with one of the following flags: 
 
-- `--setup`               - Setups postgres and the shyft chain db.
-- `--start`               - Starts geth.
-- `--reset`               - Drops postgress and chain db, and reinstantiates both.
-- `--js [web3 filename]`  - Executes web3 calls with a passed file name. If the file name is `sendTransactions.js`, `./shyft-geth.sh --js sendTransactions`.
+Run `./shyft-geth.sh` with one of the following flags:
+
+- `--setup` - Setups postgres and the shyft chain db.
+- `--start` - Starts geth.
+- `--reset` - Drops postgress and chain db, and reinstantiates both.
+- `--js [web3 filename]` - Executes web3 calls with a passed file name. If the file name is `sendTransactions.js`, `./shyft-geth.sh --js sendTransactions`.
+
+#### Docker Images
+
+Docker Images are available for ShyftGeth and the Postgresql Database which can be used for development and testing. To launch these containers you will need to have docker-compose installed on your computer. Installation instructions for docker-compose are available [here](https://docs.docker.com/install/).
+
+To launch ShyftGeth, PG, the ShyftBlock Explorer Api and UI - issue the following command from the root of the project directory:
+
+`docker-compose up`
+
+If you would like to reinitialize/rebuild the docker images you can issue the following command:
+
+`docker-compose up --build`
+
+To rebuild any one of the services - issue the following commands:
+
+```
+docker-compose up -d --no-deps --build <docker compose file service name> 
+
+# ie. for shyftBlockExplorerApi:
+# docker-compose up -d --no-deps --build shyft_block_api
+```
+__The Postgresql Database Container will persist the database data to the the ./pg-data  directory__. So if you do want to reinitialize the database you should delete the content of this directory prior to launching the docker containers. From your local machine you can view the database by connecting to the database in the container at 127.0.0.1:8001. To access the shyftBlockExplorer open a browser and visit http://localhost:3000
+
+__Blockchain data is persisted to ./privatenet/.ethash__. If you would like to reset the test blockchain you will need to delete the ./privatenet directory.
+
+The docker container for the ShyftBlockExplorerApi utilizes govendor to minimize its image size. __If you would like the docker image for this container to reflect any uncommitted changes which may have occurred in the go-empyrean repository, ie. changes with respect to go-empyrean core (ie. cryptographic functions and database). Prior to launching the docker containers you should rebuild the vendor directory for the shyftBlockExplorerApi - by executing the following steps:__
+
+```
+# remove existing shyftBlockExplorerApi vendor.json and vendored components:
+
+rm -rf shyftBlockExplorerApi/vendor
+
+# reinitialize vendor.json
+
+cd shyftBlockExplorerApi && govendor init
+
+# rebuild vendor.json using latest uncommitted changes
+
+govendor add -tree -uncommitted +external
+
+# due to a bug in govendor and it not being able to pull in some dependencies that are c-header files 
+# you should execute the following commands - see these issues - which whilst closed
+# appears to have not been fixed: https://github.com/kardianos/govendor/issues/124 && https://github.com/kardianos/govendor/issues/61
+
+govendor remove github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
+govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^
+
+```
+
+NB: The Shyft Geth docker image size is 1+ GB so make sure you have adequate space on your disk drive/
+
+_TODO_
+
+- Find better dependency management solution that pulls in c header files without manual intervention
+- Reduce size of the ShytfGeth docker container which is responsible for mining and running the blockchain
+- Adjust docker scripts and ports to facilitate sending of test transactions
+- Modify Docker scripts to facilitate hot reloading during development
 
 ## Contribution
 
@@ -301,13 +360,13 @@ procedures quick and simple.
 
 Please make sure your contributions adhere to our coding guidelines:
 
- * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
- * Pull requests need to be based on and opened against the `master` branch.
- * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "eth, rpc: make trace configs optional"
+- Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
+- Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
+- Pull requests need to be based on and opened against the `master` branch.
+- Commit messages should be prefixed with the package(s) they modify.
+  - E.g. "eth, rpc: make trace configs optional"
 
-Please see the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
+Please see the [Developers' Guide](https://github.com/empyrean/go-ethereum/wiki/Developers'-Guide)
 for more details on configuring your environment, managing project dependencies and testing procedures.
 
 ## License

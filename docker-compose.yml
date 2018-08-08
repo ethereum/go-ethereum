@@ -1,0 +1,77 @@
+version: '3'
+
+services:
+  shyftgeth:
+    build:
+      context: $PWD 
+      dockerfile: docker/shyftGeth/Dockerfile.geth
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30301:30301"
+      - "30303:30303/udp"
+      - "30304:30304"
+    volumes:
+      - .:/go/src/ShyftNetwork/go-empyrean
+    working_dir: /go/src/ShyftNetwork/go-empyrean
+    depends_on: 
+      - pg
+    networks:
+      - shyftnet
+    command: >
+      sh -c 'cd /go/src/ShyftNetwork/go-empyrean &&
+            ./wait-for.sh pg:5432 &&
+            DBENV=docker export DBENV &&
+            ./shyft-cli/initShyftGeth.sh &&
+            ./shyft-cli/startShyftGeth.sh'
+  pg:
+    build: 
+      context: $PWD
+      dockerfile: docker/pg/Dockerfile.pg
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+    ports:
+      - "8001:5432"
+    networks:
+      - shyftnet
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=docker
+  shyft_block_api:
+    build:
+      context: $PWD 
+      dockerfile: docker/shyftApi/Dockerfile.api
+    # volumes:
+    #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    working_dir: /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    ports:
+      - "8080:8080"
+    depends_on:
+      - shyftgeth
+      - pg
+    networks:
+      - shyftnet
+    command: >
+      sh -c '
+            pwd && govendor remove github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^ && 
+            govendor fetch github.com/ShyftNetwork/go-empyrean/crypto/secp256k1/^  && 
+            /wait-for.sh pg:5432 &&
+            DBENV=docker export DBENV &&
+            go run -v *.go'
+  shyft_block_ui:
+    build:
+      context: $PWD 
+      dockerfile: docker/shyftUi/Dockerfile.ui
+      # volumes:
+      #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
+    ports:
+      - "3000:3000"
+    depends_on:
+      - shyft_block_api
+    networks:
+      - shyftnet
+networks:
+  shyftnet:
+    driver: bridge
+  
+
