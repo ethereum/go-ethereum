@@ -52,7 +52,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 		pool      = newFreeClientPool(db, connLimit, 10000, quit, &wg, &clock)
 		connected = make([]bool, clientCount)
 		connTicks = make([]int, clientCount)
-		disconnCh = make(chan int)
+		disconnCh = make(chan int, clientCount)
 	)
 	peerId := func(i int) string {
 		return fmt.Sprintf("test peer #%d", i)
@@ -78,8 +78,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	}
 
 	// randomly connect and disconnect peers, expect to have a similar total connection time at the end
-	tickCounter := 0
-	for ; tickCounter < testFreeClientPoolTicks; tickCounter++ {
+	for tickCounter := 0; tickCounter < testFreeClientPoolTicks; tickCounter++ {
 		clock.Run(1 * time.Second)
 
 		i := rand.Intn(clientCount)
@@ -115,7 +114,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	// check if the total connected time of peers are all in the expected range
 	for i, c := range connected {
 		if c {
-			connTicks[i] += tickCounter
+			connTicks[i] += testFreeClientPoolTicks
 		}
 		if connTicks[i] < expMin || connTicks[i] > expMax {
 			t.Errorf("Total connected time of test node #%d (%d) outside expected range (%d to %d)", i, connTicks[i], expMin, expMax)
@@ -124,7 +123,7 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 
 	// a previously unknown peer should be accepted now
 	if !pool.connect("newPeer", func() {}) {
-		t.Errorf("Previously unknown peer rejected")
+		t.Fatalf("Previously unknown peer rejected")
 	}
 
 	// close and restart pool

@@ -292,7 +292,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		// test peer address is not a tcp address, don't use client pool if can not typecast
 		if ok {
 			id := addr.IP.String()
-			if !pm.clientPool.connect(id, func() { pm.removePeer(p.id) }) {
+			if !pm.clientPool.connect(id, func() { go pm.removePeer(p.id) }) {
 				return p2p.DiscTooManyPeers
 			}
 			defer pm.clientPool.disconnect(id)

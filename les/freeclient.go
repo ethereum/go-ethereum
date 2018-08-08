@@ -90,6 +90,8 @@ func newFreeClientPool(db ethdb.Database, connectedLimit, totalLimit int, quit c
 
 // connect should be called after a successful handshake. If the connection was
 // rejected, there is no need to call disconnect.
+//
+// Note: the disconnectFn callback should not block.
 func (f *freeClientPool) connect(address string, disconnectFn func()) bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -121,7 +123,7 @@ func (f *freeClientPool) connect(address string, disconnectFn func()) bool {
 			i.connected = false
 			f.disconnPool.Push(i, -i.logUsage)
 			log.Debug("Client kicked out", "address", i.address)
-			go i.disconnectFn()
+			i.disconnectFn()
 		} else {
 			// keep the old client and reject the new one
 			f.connPool.Push(i, i.linUsage)
