@@ -22,13 +22,13 @@ func ClearTables() {
 		fmt.Println(err)
 	}
 
-	sqlStatementTx:= `DELETE FROM txs`
+	sqlStatementTx := `DELETE FROM txs`
 	_, err = blockExplorerDbTest.Exec(sqlStatementTx)
 	if err != nil {
 		panic(err)
 	}
 
-	sqlStatementAcc:= `DELETE FROM accounts`
+	sqlStatementAcc := `DELETE FROM accounts`
 	_, err = blockExplorerDbTest.Exec(sqlStatementAcc)
 	if err != nil {
 		panic(err)
