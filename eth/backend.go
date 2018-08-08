@@ -240,6 +240,15 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 	}
 }
 
+// Exposes internal/ethapi/GetAPIs function so that it can be used
+// by other application to construct RPC API service by simply
+// implementing ethapi.Backend (which is subject with change in
+// backwards incompatible way), rather than instantiating the
+// entire Ethereum node
+func GetAPIs(backend ethapi.Backend) []rpc.API {
+	return ethapi.GetAPIs(backend)
+}
+
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
