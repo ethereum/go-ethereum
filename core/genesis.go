@@ -18,16 +18,20 @@ package core
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
-	"database/sql"
+	"time"
+
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/common/math"
+	stypes "github.com/ShyftNetwork/go-empyrean/core/sTypes"
 	"github.com/ShyftNetwork/go-empyrean/core/state"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/ethdb"
@@ -35,8 +39,6 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/params"
 	"github.com/ShyftNetwork/go-empyrean/rlp"
 	_ "github.com/lib/pq"
-	"strconv"
-	"time"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -157,7 +159,7 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 			//Appending GENESIS to address stored as txHash and From Addr
 			Genesis := []string{"GENESIS_", k.String()}
 			GENESIS := "GENESIS"
-			txHash 	:= strings.Join(Genesis, k.String())
+			txHash := strings.Join(Genesis, k.String())
 			//Create the accountNonce, set to 1 (1 incoming tx), format type
 			accountNonce := v.Nonce + 1
 			accountNoncee := strconv.FormatUint(accountNonce, 10)
@@ -168,22 +170,22 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 			}
 			age := time.Unix(i, 0)
 
-			txData := ShyftTxEntryPretty {
-				TxHash: 	txHash,
-				From:		GENESIS,
-				To: 		toAddr,
-				BlockHash:  block.Header().Hash().Hex(),
-				BlockNumber:block.Header().Number.String(),
-				Amount:     v.Balance.String(),
-				Cost:       cost,
-				GasPrice:   gasPrice,
-				GasLimit:   block.GasLimit(),
-				Gas:        block.GasUsed(),
-				Nonce:      accountNonce,
-				Age:        age,
-				Data:		data,
-				Status:     "SUCCESS",
-				IsContract: false,
+			txData := stypes.ShyftTxEntryPretty{
+				TxHash:      txHash,
+				From:        GENESIS,
+				To:          toAddr,
+				BlockHash:   block.Header().Hash().Hex(),
+				BlockNumber: block.Header().Number.String(),
+				Amount:      v.Balance.String(),
+				Cost:        cost,
+				GasPrice:    gasPrice,
+				GasLimit:    block.GasLimit(),
+				Gas:         block.GasUsed(),
+				Nonce:       accountNonce,
+				Age:         age,
+				Data:        data,
+				Status:      "SUCCESS",
+				IsContract:  false,
 			}
 			//Create account and store tx
 			CreateAccount(sqldb, k.String(), v.Balance.String(), accountNoncee)
@@ -191,9 +193,11 @@ func WriteShyftGen(gen *Genesis, block *types.Block) {
 
 		default:
 			log.Info("Found Genesis Block")
-		}}
+		}
+	}
 }
 
+//WriteShyftBlockZero writes block 0 to postgres db
 func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
 	sqldb, _ := DBConnection()
 
@@ -203,21 +207,21 @@ func WriteShyftBlockZero(block *types.Block, gen *Genesis) error {
 	}
 	age := time.Unix(i, 0)
 
-	blockData := SBlock{
-		Hash: 			block.Header().Hash().Hex(),
-		Coinbase: 		block.Header().Coinbase.String(),
-		Number: 		block.Header().Number.String(),
-		GasUsed: 		block.Header().GasUsed,
-		GasLimit: 		block.Header().GasLimit,
-		TxCount: 		len(gen.Alloc),
-		UncleCount: 	len(block.Uncles()),
-		Age:            age,
-		ParentHash: 	block.ParentHash().String(),
-		UncleHash: 		block.UncleHash().String(),
-		Difficulty: 	block.Difficulty().String(),
-		Size: 			block.Size().String(),
-		Nonce: 			block.Nonce(),
-		Rewards:        "0",
+	blockData := stypes.SBlock{
+		Hash:       block.Header().Hash().Hex(),
+		Coinbase:   block.Header().Coinbase.String(),
+		Number:     block.Header().Number.String(),
+		GasUsed:    block.Header().GasUsed,
+		GasLimit:   block.Header().GasLimit,
+		TxCount:    len(gen.Alloc),
+		UncleCount: len(block.Uncles()),
+		Age:        age,
+		ParentHash: block.ParentHash().String(),
+		UncleHash:  block.UncleHash().String(),
+		Difficulty: block.Difficulty().String(),
+		Size:       block.Size().String(),
+		Nonce:      block.Nonce(),
+		Rewards:    "0",
 	}
 
 	err := BlockExists(sqldb, blockData.Hash)

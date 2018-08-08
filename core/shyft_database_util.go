@@ -11,103 +11,106 @@ import (
 
 	"github.com/ShyftNetwork/go-empyrean/common"
 	Rewards "github.com/ShyftNetwork/go-empyrean/consensus/ethash"
+	stypes "github.com/ShyftNetwork/go-empyrean/core/sTypes"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/shyfttracerinterface"
 	_ "github.com/lib/pq"
 )
 
+//IShyftTracer Used to initialize ShyftTracer
 var IShyftTracer shyfttracerinterface.IShyftTracer
 
+//SetIShyftTracer sets tracer type
 func SetIShyftTracer(st shyfttracerinterface.IShyftTracer) {
 	IShyftTracer = st
 }
 
-//SBlock type
-type SBlock struct {
-	Hash       string
-	Coinbase   string
-	AgeGet     string
-	Age        time.Time
-	ParentHash string
-	UncleHash  string
-	Difficulty string
-	Size       string
-	Rewards    string
-	Number     string
-	GasUsed    uint64
-	GasLimit   uint64
-	Nonce      uint64
-	TxCount    int
-	UncleCount int
-	Blocks     []SBlock
-}
+// //SBlock type
+// type SBlock struct {
+// 	Hash       string
+// 	Coinbase   string
+// 	AgeGet     string
+// 	Age        time.Time
+// 	ParentHash string
+// 	UncleHash  string
+// 	Difficulty string
+// 	Size       string
+// 	Rewards    string
+// 	Number     string
+// 	GasUsed    uint64
+// 	GasLimit   uint64
+// 	Nonce      uint64
+// 	TxCount    int
+// 	UncleCount int
+// 	Blocks     []SBlock
+// }
 
-type InteralWrite struct {
-	Hash    string
-	Type    string
-	From    string
-	To      string
-	Value   string
-	Gas     uint64
-	GasUsed uint64
-	Input   string
-	Output  string
-	Time    string
-}
+// type InteralWrite struct {
+// 	Hash    string
+// 	Type    string
+// 	From    string
+// 	To      string
+// 	Value   string
+// 	Gas     uint64
+// 	GasUsed uint64
+// 	Input   string
+// 	Output  string
+// 	Time    string
+// }
 
-//blockRes struct
-type blockRes struct {
-	hash     string
-	coinbase string
-	number   string
-	Blocks   []SBlock
-}
+// //blockRes struct
+// // type blockRes struct {
+// // 	hash     string
+// // 	coinbase string
+// // 	number   string
+// // 	Blocks   []SBlock
+// // }
 
-type SAccounts struct {
-	Addr         string
-	Balance      string
-	AccountNonce string
-}
+// type SAccounts struct {
+// 	Addr         string
+// 	Balance      string
+// 	AccountNonce string
+// }
 
-type accountRes struct {
-	addr        string
-	balance     string
-	AllAccounts []SAccounts
-}
+// type accountRes struct {
+// 	addr        string
+// 	balance     string
+// 	AllAccounts []SAccounts
+// }
 
-type txRes struct {
-	TxEntry []ShyftTxEntryPretty
-}
+// type txRes struct {
+// 	TxEntry []ShyftTxEntryPretty
+// }
 
-type ShyftTxEntryPretty struct {
-	TxHash      string
-	To          *common.Address
-	ToGet       string
-	From        string
-	BlockHash   string
-	BlockNumber string
-	Amount      string
-	GasPrice    uint64
-	Gas         uint64
-	GasLimit    uint64
-	Cost        uint64
-	Nonce       uint64
-	Status      string
-	IsContract  bool
-	Age         time.Time
-	Data        []byte
-}
+// type ShyftTxEntryPretty struct {
+// 	TxHash      string
+// 	To          *common.Address
+// 	ToGet       string
+// 	From        string
+// 	BlockHash   string
+// 	BlockNumber string
+// 	Amount      string
+// 	GasPrice    uint64
+// 	Gas         uint64
+// 	GasLimit    uint64
+// 	Cost        uint64
+// 	Nonce       uint64
+// 	Status      string
+// 	IsContract  bool
+// 	Age         time.Time
+// 	Data        []byte
+// }
 
-type SendAndReceive struct {
-	To           string
-	From         string
-	Amount       string
-	Address      string
-	Balance      string
-	AccountNonce uint64 `json:",string"`
-}
+// type SendAndReceive struct {
+// 	To           string
+// 	From         string
+// 	Amount       string
+// 	Address      string
+// 	Balance      string
+// 	AccountNonce uint64 `json:",string"`
+// }
 
-//WriteBlock writes to block info to sql db
+//SWriteBlock writes to block info to sql db
 func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	sqldb, err := DBConnection()
 	if err != nil {
@@ -123,7 +126,7 @@ func SWriteBlock(block *types.Block, receipts []*types.Receipt) error {
 	}
 	age := time.Unix(i, 0)
 
-	blockData := SBlock{
+	blockData := stypes.SBlock{
 		Hash:       block.Header().Hash().Hex(),
 		Coinbase:   block.Header().Coinbase.String(),
 		Number:     block.Header().Number.String(),
@@ -185,7 +188,7 @@ func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 		toAddr = tx.To()
 	}
 
-	txData := ShyftTxEntryPretty{
+	txData := stypes.ShyftTxEntryPretty{
 		TxHash:      tx.Hash().Hex(),
 		From:        tx.From().Hex(),
 		To:          toAddr,
@@ -212,7 +215,7 @@ func swriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.H
 
 //SWriteInternalTxBalances Writes internal txs and updates balances
 func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amount string) error {
-	sendAndReceiveData := SendAndReceive{
+	sendAndReceiveData := stypes.SendAndReceive{
 		To:     toAddr,
 		From:   fromAddr,
 		Amount: amount,
@@ -233,11 +236,12 @@ func SWriteInternalTxBalances(sqldb *sql.DB, toAddr string, fromAddr string, amo
 	return nil
 }
 
-func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
+func adjustBalanceFromAddr(sqldb *sql.DB, s stypes.SendAndReceive, value *big.Int) {
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
 	switch {
 	case err == sql.ErrNoRows:
-		fmt.Println("Need to write From", s.From)
+		CreateAccount(sqldb, s.From, "0", "1")
+		fmt.Println("New From account created")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -257,7 +261,7 @@ func adjustBalanceFromAddr(sqldb *sql.DB, s SendAndReceive, value *big.Int) {
 	UpdateAccount(sqldb, s.From, newBalanceSender.String(), newAccountNonceSender.String())
 }
 
-func balanceHelper(sqldb *sql.DB, s SendAndReceive, amount string) {
+func balanceHelper(sqldb *sql.DB, s stypes.SendAndReceive, amount string) {
 	fromAddressBalance, fromAccountNonce, err := AccountExists(sqldb, s.From)
 	toAddressBalance, toAccountNonce, err := AccountExists(sqldb, s.To)
 	if err != nil {
@@ -383,6 +387,8 @@ func sstoreReward(sqldb *sql.DB, address string, reward *big.Int) {
 ///////////////////////
 //DB Utility functions
 //////////////////////
+
+//CreateAccount writes new account to Postgres Db
 func CreateAccount(sqldb *sql.DB, addr string, balance string, accountNonce string) {
 	sqlStatement := `INSERT INTO accounts(addr, balance, accountNonce) VALUES(($1), ($2), ($3)) RETURNING addr`
 	insertErr := sqldb.QueryRow(sqlStatement, strings.ToLower(addr), balance, accountNonce).Scan(&addr)
@@ -391,6 +397,7 @@ func CreateAccount(sqldb *sql.DB, addr string, balance string, accountNonce stri
 	}
 }
 
+//AccountExists checks if account exists in Postgres Db
 func AccountExists(sqldb *sql.DB, addr string) (string, string, error) {
 	var addressBalance, accountNonce string
 	sqlExistsStatement := `SELECT balance, accountNonce from accounts WHERE addr = ($1)`
@@ -405,6 +412,7 @@ func AccountExists(sqldb *sql.DB, addr string) (string, string, error) {
 	}
 }
 
+//BlockExists checks if block exists in Postgres Db
 func BlockExists(sqldb *sql.DB, hash string) error {
 	var res string
 	sqlExistsStatement := `SELECT hash from blocks WHERE hash= ($1)`
@@ -418,6 +426,7 @@ func BlockExists(sqldb *sql.DB, hash string) error {
 	}
 }
 
+//UpdateAccount updates account in Postgres Db
 func UpdateAccount(sqldb *sql.DB, addr string, balance string, accountNonce string) {
 	updateSQLStatement := `UPDATE accounts SET balance = ($2), accountNonce = ($3) WHERE addr = ($1)`
 	_, updateErr := sqldb.Exec(updateSQLStatement, strings.ToLower(addr), balance, accountNonce)
@@ -426,7 +435,8 @@ func UpdateAccount(sqldb *sql.DB, addr string, balance string, accountNonce stri
 	}
 }
 
-func InsertBlock(sqldb *sql.DB, blockData SBlock) {
+//InsertBlock writes block to Postgres Db
+func InsertBlock(sqldb *sql.DB, blockData stypes.SBlock) {
 	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, rewards, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13), ($14)) RETURNING number`
 	qerr := sqldb.QueryRow(sqlStatement, strings.ToLower(blockData.Hash), blockData.Coinbase, blockData.Number, blockData.GasUsed, blockData.GasLimit, blockData.TxCount, blockData.UncleCount, blockData.Age, blockData.ParentHash, blockData.UncleHash, blockData.Difficulty, blockData.Size, blockData.Rewards, blockData.Nonce).Scan(&blockData.Number)
 	if qerr != nil {
@@ -434,7 +444,8 @@ func InsertBlock(sqldb *sql.DB, blockData SBlock) {
 	}
 }
 
-func InsertTx(sqldb *sql.DB, txData ShyftTxEntryPretty) {
+//InsertTx writes tx to Postgres Db
+func InsertTx(sqldb *sql.DB, txData stypes.ShyftTxEntryPretty) {
 	var retNonce string
 	sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
 	err := sqldb.QueryRow(sqlStatement, strings.ToLower(txData.TxHash), strings.ToLower(txData.From), strings.ToLower(txData.To.String()), strings.ToLower(txData.BlockHash), txData.BlockNumber, txData.Amount, txData.GasPrice, txData.Gas, txData.GasLimit, txData.Cost, txData.Nonce, txData.IsContract, txData.Status, txData.Age, txData.Data).Scan(&retNonce)
@@ -443,7 +454,8 @@ func InsertTx(sqldb *sql.DB, txData ShyftTxEntryPretty) {
 	}
 }
 
-func InsertInternalTx(sqldb *sql.DB, i InteralWrite) {
+//InsertInternalTx writes internal tx to Postgres Db
+func InsertInternalTx(sqldb *sql.DB, i stypes.InteralWrite) {
 	var returnValue string
 	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
 	qerr := sqldb.QueryRow(sqlStatement, i.Type, strings.ToLower(i.Hash), strings.ToLower(i.From), strings.ToLower(i.To), i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)

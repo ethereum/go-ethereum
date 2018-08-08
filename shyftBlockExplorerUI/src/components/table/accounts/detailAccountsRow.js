@@ -17,7 +17,7 @@ class AccountTransactionTable extends Component {
                     age={data.Age}
                     txHash={data.TxHash}
                     blockNumber={data.BlockNumber}
-                    to={data.To}
+                    to={data.ToGet}
                     from={data.From}
                     value={amountConversion}
                     cost={costConversion}

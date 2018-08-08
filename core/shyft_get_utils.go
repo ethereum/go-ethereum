@@ -1,17 +1,19 @@
 package core
 
 import (
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
+
+	stypes "github.com/ShyftNetwork/go-empyrean/core/sTypes"
 )
 
 ///////////
 // Getters
 //////////
 func SGetAllBlocks(sqldb *sql.DB) string {
-	var arr blockRes
+	var arr stypes.BlockRes
 	var blockArr string
 	rows, err := sqldb.Query(`SELECT * FROM blocks`)
 	if err != nil {
@@ -25,23 +27,23 @@ func SGetAllBlocks(sqldb *sql.DB) string {
 		var txCount, uncleCount int
 
 		err = rows.Scan(
-			&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num,)
+			&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num)
 
-		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     		hash,
-			Coinbase: 		coinbase,
-			GasUsed: 		gasUsed,
-			GasLimit: 		gasLimit,
-			TxCount: 		txCount,
-			UncleCount: 	uncleCount,
-			AgeGet: 		age,
-			ParentHash:		parentHash,
-			UncleHash:		uncleHash,
-			Difficulty:		difficulty,
-			Size: 			size,
-			Nonce:			nonce,
-			Rewards: 		rewards,
-			Number:   		num,
+		arr.Blocks = append(arr.Blocks, stypes.SBlock{
+			Hash:       hash,
+			Coinbase:   coinbase,
+			GasUsed:    gasUsed,
+			GasLimit:   gasLimit,
+			TxCount:    txCount,
+			UncleCount: uncleCount,
+			AgeGet:     age,
+			ParentHash: parentHash,
+			UncleHash:  uncleHash,
+			Difficulty: difficulty,
+			Size:       size,
+			Nonce:      nonce,
+			Rewards:    rewards,
+			Number:     num,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -61,23 +63,23 @@ func SGetBlock(sqldb *sql.DB, blockNumber string) string {
 	var txCount, uncleCount int
 
 	row.Scan(
-		&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num,)
+		&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num)
 
-	block := SBlock{
-		Hash:     	hash,
-		Coinbase: 	coinbase,
-		GasUsed: 	gasUsed,
-		GasLimit: 	gasLimit,
-		TxCount: 	txCount,
+	block := stypes.SBlock{
+		Hash:       hash,
+		Coinbase:   coinbase,
+		GasUsed:    gasUsed,
+		GasLimit:   gasLimit,
+		TxCount:    txCount,
 		UncleCount: uncleCount,
-		AgeGet: 	age,
-		ParentHash:	parentHash,
-		UncleHash:	uncleHash,
-		Difficulty:	difficulty,
-		Size: 		size,
-		Nonce:		nonce,
-		Rewards: 	rewards,
-		Number:   	num,
+		AgeGet:     age,
+		ParentHash: parentHash,
+		UncleHash:  uncleHash,
+		Difficulty: difficulty,
+		Size:       size,
+		Nonce:      nonce,
+		Rewards:    rewards,
+		Number:     num,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
@@ -91,30 +93,30 @@ func SGetRecentBlock(sqldb *sql.DB) string {
 	var txCount, uncleCount int
 
 	row.Scan(
-		&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num,)
+		&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num)
 
-	block := SBlock{
-		Hash:     	hash,
-		Coinbase: 	coinbase,
-		GasUsed: 	gasUsed,
-		GasLimit: 	gasLimit,
-		TxCount: 	txCount,
+	block := stypes.SBlock{
+		Hash:       hash,
+		Coinbase:   coinbase,
+		GasUsed:    gasUsed,
+		GasLimit:   gasLimit,
+		TxCount:    txCount,
 		UncleCount: uncleCount,
-		AgeGet: 	age,
-		ParentHash:	parentHash,
-		UncleHash:	uncleHash,
-		Difficulty:	difficulty,
-		Size: 		size,
-		Nonce:		nonce,
-		Rewards: 	rewards,
-		Number:   	num,
+		AgeGet:     age,
+		ParentHash: parentHash,
+		UncleHash:  uncleHash,
+		Difficulty: difficulty,
+		Size:       size,
+		Nonce:      nonce,
+		Rewards:    rewards,
+		Number:     num,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
 }
 
 func SGetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
-	var arr txRes
+	var arr stypes.TxRes
 	var txx string
 	sqlStatement := `SELECT * FROM txs WHERE blocknumber=$1`
 	rows, err := sqldb.Query(sqlStatement, blockNumber)
@@ -133,22 +135,22 @@ func SGetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 			&txhash, &to_addr, &from_addr, &blockhash, &blocknumber, &amount, &gasprice, &gas, &gasLimit, &txfee, &nonce, &status, &isContract, &age, &data,
 		)
 
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    	 txhash,
+		arr.TxEntry = append(arr.TxEntry, stypes.ShyftTxEntryPretty{
+			TxHash:      txhash,
 			ToGet:       to_addr,
-			From:      	 from_addr,
-			BlockHash: 	 blockhash,
+			From:        from_addr,
+			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    	 amount,
-			GasPrice:  	 gasprice,
-			Gas:       	 gas,
-			GasLimit: 	 gasLimit,
-			Cost:      	 txfee,
-			Nonce:     	 nonce,
-			Status:    	 status,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
 			IsContract:  isContract,
-			Age:		 age,
-			Data: 		 data,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)
@@ -159,7 +161,7 @@ func SGetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 }
 
 func SGetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
-	var arr blockRes
+	var arr stypes.BlockRes
 	var blockArr string
 	sqlStatement := `SELECT * FROM blocks WHERE coinbase=$1`
 	rows, err := sqldb.Query(sqlStatement, coinbase)
@@ -174,23 +176,23 @@ func SGetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
 		var txCount, uncleCount int
 
 		err = rows.Scan(
-			&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num,)
+			&hash, &coinbase, &gasUsed, &gasLimit, &txCount, &uncleCount, &age, &parentHash, &uncleHash, &difficulty, &size, &nonce, &rewards, &num)
 
-		arr.Blocks = append(arr.Blocks, SBlock{
-			Hash:     	hash,
-			Coinbase: 	coinbase,
-			GasUsed: 	gasUsed,
-			GasLimit: 	gasLimit,
-			TxCount: 	txCount,
+		arr.Blocks = append(arr.Blocks, stypes.SBlock{
+			Hash:       hash,
+			Coinbase:   coinbase,
+			GasUsed:    gasUsed,
+			GasLimit:   gasLimit,
+			TxCount:    txCount,
 			UncleCount: uncleCount,
-			AgeGet: 	age,
-			ParentHash:	parentHash,
-			UncleHash:	uncleHash,
-			Difficulty:	difficulty,
-			Size: 		size,
-			Nonce:		nonce,
-			Rewards: 	rewards,
-			Number:   	num,
+			AgeGet:     age,
+			ParentHash: parentHash,
+			UncleHash:  uncleHash,
+			Difficulty: difficulty,
+			Size:       size,
+			Nonce:      nonce,
+			Rewards:    rewards,
+			Number:     num,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -202,7 +204,7 @@ func SGetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
 
 //GetAllTransactions getter fn for API
 func SGetAllTransactions(sqldb *sql.DB) string {
-	var arr txRes
+	var arr stypes.TxRes
 	var txx string
 	rows, err := sqldb.Query(`SELECT * FROM txs`)
 	if err != nil {
@@ -220,22 +222,22 @@ func SGetAllTransactions(sqldb *sql.DB) string {
 			&txhash, &to_addr, &from_addr, &blockhash, &blocknumber, &amount, &gasprice, &gas, &gasLimit, &txfee, &nonce, &status, &isContract, &age, &data,
 		)
 
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    	 txhash,
+		arr.TxEntry = append(arr.TxEntry, stypes.ShyftTxEntryPretty{
+			TxHash:      txhash,
 			ToGet:       to_addr,
-			From:      	 from_addr,
-			BlockHash: 	 blockhash,
+			From:        from_addr,
+			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    	 amount,
-			GasPrice:  	 gasprice,
-			Gas:       	 gas,
-			GasLimit: 	 gasLimit,
-			Cost:      	 txfee,
-			Nonce:     	 nonce,
-			Status:    	 status,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
 			IsContract:  isContract,
-			Age:		 age,
-			Data: 		 data,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)
@@ -258,39 +260,39 @@ func SGetTransaction(sqldb *sql.DB, txHash string) string {
 	row.Scan(
 		&txhash, &to_addr, &from_addr, &blockhash, &blocknumber, &amount, &gasprice, &gas, &gasLimit, &txfee, &nonce, &status, &isContract, &age, &data)
 
-	tx := ShyftTxEntryPretty{
+	tx := stypes.ShyftTxEntryPretty{
 		TxHash:      txhash,
 		ToGet:       to_addr,
-		From:      	 from_addr,
-		BlockHash: 	 blockhash,
+		From:        from_addr,
+		BlockHash:   blockhash,
 		BlockNumber: blocknumber,
 		Amount:      amount,
 		GasPrice:    gasprice,
 		Gas:         gas,
-		GasLimit:	 gasLimit,
-		Cost:      	 txfee,
-		Nonce:     	 nonce,
-		Status:    	 status,
+		GasLimit:    gasLimit,
+		Cost:        txfee,
+		Nonce:       nonce,
+		Status:      status,
 		IsContract:  isContract,
-		Age:		 age,
-		Data:	     data,
+		Age:         age,
+		Data:        data,
 	}
 	json, _ := json.Marshal(tx)
 
 	return string(json)
 }
 
-func InnerSGetAccount(sqldb *sql.DB, address string) (SAccounts, bool) {
+func InnerSGetAccount(sqldb *sql.DB, address string) (stypes.SAccounts, bool) {
 	sqlStatement := `SELECT * FROM accounts WHERE addr=$1;`
 	var addr, balance, accountNonce string
 	err := sqldb.QueryRow(sqlStatement, address).Scan(&addr, &balance, &accountNonce)
 	if err == sql.ErrNoRows {
-		return SAccounts{}, false
+		return stypes.SAccounts{}, false
 	} else {
-		account := SAccounts{
-			Addr:    		addr,
-			Balance: 		balance,
-			AccountNonce: 	accountNonce,
+		account := stypes.SAccounts{
+			Addr:         addr,
+			Balance:      balance,
+			AccountNonce: accountNonce,
 		}
 		return account, true
 	}
@@ -305,7 +307,7 @@ func SGetAccount(sqldb *sql.DB, address string) string {
 
 //GetAllAccounts returns all accounts and balances
 func SGetAllAccounts(sqldb *sql.DB) string {
-	var array accountRes
+	var array stypes.AccountRes
 	var accountsArr, accountNonce string
 
 	accs, err := sqldb.Query(`
@@ -326,10 +328,10 @@ func SGetAllAccounts(sqldb *sql.DB) string {
 			&addr, &balance, &accountNonce,
 		)
 
-		array.AllAccounts = append(array.AllAccounts, SAccounts{
-			Addr:    		addr,
-			Balance: 		balance,
-			AccountNonce: 	accountNonce,
+		array.AllAccounts = append(array.AllAccounts, stypes.SAccounts{
+			Addr:         addr,
+			Balance:      balance,
+			AccountNonce: accountNonce,
 		})
 
 		accounts, _ := json.Marshal(array.AllAccounts)
@@ -341,7 +343,7 @@ func SGetAllAccounts(sqldb *sql.DB) string {
 
 //GetAccount returns account balances
 func SGetAccountTxs(sqldb *sql.DB, address string) string {
-	var arr txRes
+	var arr stypes.TxRes
 	var txx string
 	sqlStatement := `SELECT * FROM txs WHERE to_addr=$1 OR from_addr=$1;`
 	rows, err := sqldb.Query(sqlStatement, address)
@@ -360,22 +362,22 @@ func SGetAccountTxs(sqldb *sql.DB, address string) string {
 			&txhash, &to_addr, &from_addr, &blockhash, &blocknumber, &amount, &gasprice, &gas, &gasLimit, &txfee, &nonce, &status, &isContract, &age, &data,
 		)
 
-		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
-			TxHash:    	 txhash,
+		arr.TxEntry = append(arr.TxEntry, stypes.ShyftTxEntryPretty{
+			TxHash:      txhash,
 			ToGet:       to_addr,
-			From:      	 from_addr,
+			From:        from_addr,
 			BlockHash:   blockhash,
 			BlockNumber: blocknumber,
-			Amount:    	 amount,
-			GasPrice:  	 gasprice,
-			Gas:       	 gas,
-			GasLimit: 	 gasLimit,
-			Cost:      	 txfee,
-			Nonce:     	 nonce,
-			Status:    	 status,
+			Amount:      amount,
+			GasPrice:    gasprice,
+			Gas:         gas,
+			GasLimit:    gasLimit,
+			Cost:        txfee,
+			Nonce:       nonce,
+			Status:      status,
 			IsContract:  isContract,
-			Age:		 age,
-			Data: 		 data,
+			Age:         age,
+			Data:        data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)

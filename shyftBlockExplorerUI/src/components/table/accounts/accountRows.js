@@ -21,7 +21,6 @@ class AccountTable extends Component {
     }
 
     render() {
-
         let startNum = 1;
         const sorted = [...this.state.data];
             sorted.sort((a, b) => Number(a.Balance) > Number(b.Balance));
@@ -38,7 +37,7 @@ class AccountTable extends Component {
                 Percentage={percentage.toFixed(2)}
                 Addr={data.Addr}
                 Balance={conversion}
-                TxCountAccount={data.TxCountAccount}
+                AccountNonce={data.AccountNonce}
                 detailAccountHandler={this.props.detailAccountHandler}
             />
         });

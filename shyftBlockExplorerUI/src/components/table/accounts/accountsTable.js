@@ -12,7 +12,7 @@ const AccountsTable = (props) => {
                 </Link></td>
                 <td>{props.Balance}</td>
                 <td>{props.Percentage}%</td>
-                <td>{props.TxCountAccount}</td>
+                <td>{props.AccountNonce}</td>
             </tr>
             </tbody>
     )

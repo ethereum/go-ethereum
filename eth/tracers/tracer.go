@@ -30,6 +30,7 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/core"
+	stypes "github.com/ShyftNetwork/go-empyrean/core/sTypes"
 	"github.com/ShyftNetwork/go-empyrean/core/vm"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/ShyftNetwork/go-empyrean/log"
@@ -604,7 +605,7 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	value, _ := hexutil.DecodeUint64(i.Value)
 	amount := strconv.FormatUint(value, 10)
 
-	iTx := core.InteralWrite{
+	iTx := stypes.InteralWrite{
 		Hash:    hash.Hex(),
 		Type:    i.Type,
 		From:    i.From,
