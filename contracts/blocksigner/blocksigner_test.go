@@ -58,7 +58,7 @@ func TestBlockSigner(t *testing.T) {
 	byte0 := randomHash()
 
 	// Test sign.
-	tx, err := blockSigner.Sign(big.NewInt(50), byte0)
+	tx, err := blockSigner.Sign(big.NewInt(2), byte0)
 	if err != nil {
 		t.Fatalf("can't sign: %v", err)
 	}

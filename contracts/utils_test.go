@@ -103,37 +103,6 @@ func TestSendTxSign(t *testing.T) {
 			t.Error("Tx sign for block validators not match")
 		}
 	}
-
-	// Unit test for reward checkpoint.
-	//rCheckpoint := uint64(5)
-	//chainReward := new(big.Int).SetUint64(15 * params.Ether)
-	//total := new(uint64)
-	//for i := uint64(0); i < 100; i++ {
-	//	if i > 0 && i%rCheckpoint == 0 && i-rCheckpoint > 0 {
-	//		_, err := GetRewardForCheckpoint(blockSignerAddr, i, rCheckpoint, backend, total)
-	//		if err != nil {
-	//			t.Errorf("Fail to get signers for reward checkpoint: %v", err)
-	//		}
-	//	}
-	//}
-	//
-	//signers := make(map[common.Address]*rewardLog)
-	//totalSigner := uint64(17)
-	//signers[common.HexToAddress("0x12f588d7d03bb269b382b842fc15d874e8c055a7")] = &rewardLog{5, new(big.Int).SetUint64(0)}
-	//signers[common.HexToAddress("0x1f9e122c0921a4504fc116d967baf7a7bf2604ef")] = &rewardLog{6, new(big.Int).SetUint64(0)}
-	//signers[common.HexToAddress("0xea489e4e673c25ff0614617ebe88efd853efe00c")] = &rewardLog{6, new(big.Int).SetUint64(0)}
-	//rewardSigners, err := CalculateRewardForSigner(chainReward, signers, totalSigner)
-	//if err != nil {
-	//	t.Errorf("Fail to calculate reward for signers: %v", err)
-	//}
-	////t.Error("Reward", rewardSigners)
-	//rewards := new(big.Int)
-	//for _, reward := range rewardSigners {
-	//	rewards.Add(rewards, reward)
-	//}
-	//if rewards.Cmp(new(big.Int).SetUint64(14999999999999999996)) != 0 {
-	//	t.Errorf("Total reward not same reward checkpoint: %v - %v", chainReward, rewards)
-	//}
 }
 
 // Generate random string.

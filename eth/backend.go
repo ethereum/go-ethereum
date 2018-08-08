@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -97,9 +96,7 @@ type Ethereum struct {
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 
-	lock        sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-	IPCEndpoint string
-	Client      *ethclient.Client // Global ipc client instance.
+	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -186,17 +183,21 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
+	// Set global ipc endpoint.
+	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
+
 	if eth.chainConfig.Clique != nil {
 		c := eth.engine.(*clique.Clique)
-
-		// Set global ipc endpoint.
-		eth.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
 
 		// Inject hook for send tx sign to smartcontract after insert block into chain.
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
-				log.Error("Fail to get snapshot for sign tx validator.", "error", err)
+				if err == consensus.ErrUnknownAncestor {
+					log.Warn("Block chain forked.", "error", err)
+				} else {
+					log.Error("Fail to get snapshot for sign tx validator.", "error", err)
+				}
 				return
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
@@ -210,7 +211,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook reward for clique validator.
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
-			client, err := eth.GetClient()
+			client, err := eth.blockchain.GetClient()
 			if err != nil {
 				log.Error("Fail to connect IPC client for blockSigner", "error", err)
 			}
@@ -533,19 +534,4 @@ func (s *Ethereum) Stop() error {
 	close(s.shutdownChan)
 
 	return nil
-}
-
-// Get current IPC Client.
-func (s *Ethereum) GetClient() (*ethclient.Client, error) {
-	if s.Client == nil {
-		// Inject ipc client global instance.
-		client, err := ethclient.Dial(s.IPCEndpoint)
-		if err != nil {
-			log.Error("Fail to connect RPC", "error", err)
-			return nil, err
-		}
-		s.Client = client
-	}
-
-	return s.Client, nil
 }
