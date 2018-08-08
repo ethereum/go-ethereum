@@ -51,19 +51,24 @@ export type TxPool = {
 };
 
 export type Network = {
-	peers: {[string]: {[string]: Peer}},
+	peerBundles: {[string]: PeerBundle},
+};
+
+export type PeerBundle = {
+	location: GeoLocation,
+	peers:    {[string]: Peer},
 };
 
 export type Peer = {
-	location:     PeerLocation,
 	connected:    Array<Date>,
 	handshake:    Array<Date>,
 	disconnected: Array<Date>,
 	ingress:      ChartEntries,
 	egress:       ChartEntries,
+	defaultID:    string,
 };
 
-export type PeerLocation = {
+export type GeoLocation = {
 	country:   string,
 	city:      string,
 	latitude:  number,

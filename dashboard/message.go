@@ -55,27 +55,38 @@ type TxPoolMessage struct {
 	/* TODO (kurkomisi) */
 }
 
-// k1: IP, k2: ID
+// NetworkMessage contains information about the peers organized based on the IP address.
 type NetworkMessage struct {
-	Peers map[string]map[string]*Peer `json:"peers,omitempty"`
+	PeerBundles map[string]*PeerBundle `json:"peerBundles,omitempty"`
 }
 
-type Peer struct {
-	Location     *PeerLocation `json:"location,omitempty"`
-	Connected    []time.Time   `json:"connected,omitempty"`
-	Handshake    []time.Time   `json:"handshake,omitempty"`
-	Disconnected []time.Time   `json:"disconnected,omitempty"`
-	Ingress      ChartEntries  `json:"ingress,omitempty"`
-	Egress       ChartEntries  `json:"egress,omitempty"`
+// PeerBundle contains information about the peers pertaining to an IP address.
+type PeerBundle struct {
+	Location *GeoLocation     `json:"location,omitempty"` // geographical information based on IP
+	Peers    map[string]*Peer `json:"peers,omitempty"`    // the peers' node id is used as key
 }
 
-type PeerLocation struct {
+// GeoLocation contains geographical information.
+type GeoLocation struct {
 	Country   string  `json:"country,omitempty"`
 	City      string  `json:"city,omitempty"`
 	Latitude  float64 `json:"latitude,omitempty"`
 	Longitude float64 `json:"longitude,omitempty"`
 }
 
+// Peer contains lifecycle timestamps and traffic information of a given peer.
+type Peer struct {
+	Connected    []time.Time `json:"connected,omitempty"`
+	Handshake    []time.Time `json:"handshake,omitempty"`
+	Disconnected []time.Time `json:"disconnected,omitempty"`
+
+	Ingress ChartEntries `json:"ingress,omitempty"`
+	Egress  ChartEntries `json:"egress,omitempty"`
+
+	DefaultID string `json:"defaultID,omitempty"`
+}
+
+// SystemMessage contains the metered system data samples.
 type SystemMessage struct {
 	ActiveMemory   ChartEntries `json:"activeMemory,omitempty"`
 	VirtualMemory  ChartEntries `json:"virtualMemory,omitempty"`
@@ -104,6 +115,7 @@ type Request struct {
 	Logs *LogsRequest `json:"logs,omitempty"`
 }
 
+// LogsRequest contains the attributes of the log file the client wants to receive.
 type LogsRequest struct {
 	Name string `json:"name"` // The request handler searches for log file based on this file name.
 	Past bool   `json:"past"` // Denotes whether the client wants the previous or the next file.

@@ -90,7 +90,7 @@ const defaultContent: () => Content = () => ({
 	chain:   {},
 	txpool:  {},
 	network: {
-		peers: {},
+		peerBundles: {},
 	},
 	system:  {
 		activeMemory:   [],
@@ -123,7 +123,7 @@ const updaters = {
 	chain:   null,
 	txpool:  null,
 	network: {
-		peers: peerInserter,
+		peerBundles: peerInserter,
 	},
 	system:  {
 		activeMemory:   appender(200),

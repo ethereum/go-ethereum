@@ -1,27 +1,57 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package dashboard
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"time"
 	"github.com/mohae/deepcopy"
 )
 
-const eventBufferLimit = 128
+const eventBufferLimit = 128 // Maximum number of buffered peer events for each event type
 
-func getOrInitPeer(m *NetworkMessage, ip, id string) *Peer {
-	if _, ok := m.Peers[ip]; !ok {
-		m.Peers[ip] = make(map[string]*Peer)
+// getOrInitBundle returns the peer bundle belonging to the given IP, or
+// initializes the bundle if it doesn't exist.
+func getOrInitBundle(m *NetworkMessage, ip string) *PeerBundle {
+	if _, ok := m.PeerBundles[ip]; !ok {
+		m.PeerBundles[ip] = &PeerBundle{
+			Peers: make(map[string]*Peer),
+		}
 	}
-	if _, ok := m.Peers[ip][id]; !ok {
-		m.Peers[ip][id] = new(Peer)
-	}
-	return m.Peers[ip][id]
+	return m.PeerBundles[ip]
 }
 
+// getOrInitPeer returns the peer belonging to the given IP and node id, or
+// initializes the peer if it doesn't exist.
+func getOrInitPeer(m *NetworkMessage, ip, id string) *Peer {
+	b := getOrInitBundle(m, ip)
+	if _, ok := b.Peers[id]; !ok {
+		b.Peers[id] = new(Peer)
+	}
+	return b.Peers[id]
+}
+
+// collectPeerData gathers data about the peers and sends it to the clients.
 func (db *Dashboard) collectPeerData() {
 	defer db.wg.Done()
 
+	// Open the geodb database for IP to geographical information conversions.
 	var err error
 	db.geodb, err = OpenGeoDB()
 	if err != nil {
@@ -31,7 +61,9 @@ func (db *Dashboard) collectPeerData() {
 	defer db.geodb.Close()
 
 	var (
-		quit         = make(chan struct{})
+		quit = make(chan struct{})
+
+		// Channels used for avoiding the blocking of the event feeds.
 		connectCh    = make(chan *p2p.PeerConnectEvent, eventBufferLimit)
 		handshakeCh  = make(chan *p2p.PeerHandshakeEvent, eventBufferLimit)
 		disconnectCh = make(chan *p2p.PeerDisconnectEvent, eventBufferLimit)
@@ -40,12 +72,14 @@ func (db *Dashboard) collectPeerData() {
 	)
 	go func() {
 		var (
+			// Peer event channels.
 			peerConnectEventCh    = make(chan p2p.PeerConnectEvent, eventBufferLimit)
 			peerHandshakeEventCh  = make(chan p2p.PeerHandshakeEvent, eventBufferLimit)
 			peerDisconnectEventCh = make(chan p2p.PeerDisconnectEvent, eventBufferLimit)
 			peerReadEventCh       = make(chan p2p.PeerReadEvent, eventBufferLimit)
 			peerWriteEventCh      = make(chan p2p.PeerWriteEvent, eventBufferLimit)
 
+			// Subscribe to peer events.
 			subConnect    = p2p.SubscribePeerConnectEvent(peerConnectEventCh)
 			subHandshake  = p2p.SubscribePeerHandshakeEvent(peerHandshakeEventCh)
 			subDisconnect = p2p.SubscribePeerDisconnectEvent(peerDisconnectEventCh)
@@ -53,70 +87,87 @@ func (db *Dashboard) collectPeerData() {
 			subWrite      = p2p.SubscribePeerWriteEvent(peerWriteEventCh)
 		)
 		defer func() {
+			// Unsubscribe at the end.
 			subConnect.Unsubscribe()
 			subHandshake.Unsubscribe()
 			subDisconnect.Unsubscribe()
 			subRead.Unsubscribe()
 			subWrite.Unsubscribe()
 		}()
+		// Waiting for peer events.
 		for {
 			select {
 			case event := <-peerConnectEventCh:
 				select {
 				case connectCh <- &event:
 				default:
-					log.Warn("Failed to handle connect event", "event", event)
+					log.Warn("Failed to handle peer connect event", "event", event)
 				}
 			case event := <-peerHandshakeEventCh:
 				select {
 				case handshakeCh <- &event:
 				default:
-					log.Warn("Failed to handle handshake event", "event", event)
+					log.Warn("Failed to handle peer handshake event", "event", event)
 				}
 			case event := <-peerDisconnectEventCh:
 				select {
 				case disconnectCh <- &event:
 				default:
-					log.Warn("Failed to handle disconnect event", "event", event)
+					log.Warn("Failed to handle peer disconnect event", "event", event)
 				}
 			case event := <-peerReadEventCh:
 				select {
 				case readCh <- &event:
 				default:
-					log.Warn("Failed to handle read event", "event", event)
+					log.Warn("Failed to handle peer read event", "event", event)
 				}
 			case event := <-peerWriteEventCh:
 				select {
 				case writeCh <- &event:
 				default:
-					log.Warn("Failed to handle write event", "event", event)
+					log.Warn("Failed to handle peer write event", "event", event)
 				}
+			case err := <-subConnect.Err():
+				log.Warn("Peer connect subscription error", "err", err)
+				return
+			case err := <-subHandshake.Err():
+				log.Warn("Peer handshake subscription error", "err", err)
+				return
+			case err := <-subDisconnect.Err():
+				log.Warn("Peer disconnect subscription error", "err", err)
+				return
+			case err := <-subRead.Err():
+				log.Warn("Peer read subscription error", "err", err)
+				return
+			case err := <-subWrite.Err():
+				log.Warn("Peer write subscription error", "err", err)
+				return
 			case <-quit:
 				return
 			}
 		}
 	}()
-	go db.cleanPeerHistory(quit)
+	go db.keepPeerHistoryClean(quit)
 
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
-	network := &NetworkMessage{
-		Peers: make(map[string]map[string]*Peer),
+	// Listen for events, and prepare the difference between two metering.
+	diff := &NetworkMessage{
+		PeerBundles: make(map[string]*PeerBundle),
 	}
 	for {
 		select {
 		case event := <-connectCh:
 			ip := event.IP.String()
-			p := getOrInitPeer(network, ip, event.ID)
-			if p.Location == nil {
+			p := getOrInitPeer(diff, ip, event.ID)
+			if diff.PeerBundles[ip].Location == nil {
 				db.peerLock.RLock()
-				peers := db.peerHistory.Peers
-				lookup := peers[ip] == nil || peers[ip][event.ID] == nil || peers[ip][event.ID].Location == nil
+				lookup := db.networkHistory.PeerBundles[ip] == nil || db.networkHistory.PeerBundles[ip].Location == nil
 				db.peerLock.RUnlock()
 				if lookup {
 					location := db.geodb.Lookup(event.IP)
-					p.Location = &PeerLocation{
+					diff.PeerBundles[ip].Location = &GeoLocation{
 						Country:   location.Country.Names.English,
 						City:      location.City.Names.English,
 						Latitude:  location.Location.Latitude,
@@ -131,29 +182,30 @@ func (db *Dashboard) collectPeerData() {
 			}
 		case event := <-handshakeCh:
 			ip := event.IP.String()
-			p := getOrInitPeer(network, ip, event.DefaultID)
+			p := getOrInitPeer(diff, ip, event.DefaultID)
+			p.DefaultID = event.DefaultID
 			if p.Handshake == nil {
 				p.Handshake = []time.Time{event.Handshake}
 			} else {
 				p.Handshake = append(p.Handshake, event.Handshake)
 			}
-			delete(network.Peers[ip], event.DefaultID)
-			getOrInitPeer(network, ip, event.ID)
-			network.Peers[ip][event.ID] = p // interleave instead
+			delete(diff.PeerBundles[ip].Peers, event.DefaultID)
+			getOrInitPeer(diff, ip, event.ID)
+			diff.PeerBundles[ip].Peers[event.ID] = p // TODO (kurkomisi): Merge instead in order to keep the previous connection.
 			// Remove the peer from history in case the metering was before the handshake.
 			db.peerLock.RLock()
-			stored := db.peerHistory.Peers[ip] != nil && db.peerHistory.Peers[ip][event.DefaultID] != nil
+			stored := db.networkHistory.PeerBundles[ip] != nil && db.networkHistory.PeerBundles[ip].Peers[event.DefaultID] != nil
 			db.peerLock.RUnlock()
 			if stored {
 				db.peerLock.Lock()
-				hp := getOrInitPeer(db.peerHistory, ip, event.DefaultID)
-				delete(db.peerHistory.Peers[ip], event.DefaultID)
-				getOrInitPeer(db.peerHistory, ip, event.ID)
-				db.peerHistory.Peers[ip][event.ID] = hp // interleave instead
+				hp := getOrInitPeer(db.networkHistory, ip, event.DefaultID)
+				delete(db.networkHistory.PeerBundles[ip].Peers, event.DefaultID)
+				getOrInitPeer(db.networkHistory, ip, event.ID)
+				db.networkHistory.PeerBundles[ip].Peers[event.ID] = hp // TODO (kurkomisi): Merge.
 				db.peerLock.Unlock()
 			}
 		case event := <-disconnectCh:
-			p := getOrInitPeer(network, event.IP.String(), event.ID)
+			p := getOrInitPeer(diff, event.IP.String(), event.ID)
 			if p.Disconnected == nil {
 				p.Disconnected = []time.Time{event.Disconnected}
 			} else {
@@ -161,7 +213,7 @@ func (db *Dashboard) collectPeerData() {
 			}
 		case event := <-readCh:
 			// Sum up the ingress between two updates.
-			p := getOrInitPeer(network, event.IP.String(), event.ID)
+			p := getOrInitPeer(diff, event.IP.String(), event.ID)
 			if len(p.Ingress) <= 0 {
 				p.Ingress = ChartEntries{&ChartEntry{Value: float64(event.Ingress)}}
 			} else {
@@ -169,7 +221,7 @@ func (db *Dashboard) collectPeerData() {
 			}
 		case event := <-writeCh:
 			// Sum up the egress between two updates.
-			p := getOrInitPeer(network, event.IP.String(), event.ID)
+			p := getOrInitPeer(diff, event.IP.String(), event.ID)
 			if len(p.Egress) <= 0 {
 				p.Egress = ChartEntries{&ChartEntry{Value: float64(event.Egress)}}
 			} else {
@@ -177,13 +229,15 @@ func (db *Dashboard) collectPeerData() {
 			}
 		case <-ticker.C:
 			now := time.Now()
+			// Merge the diff with the history.
 			db.peerLock.Lock()
-			for ip, peers := range network.Peers {
-				for id, peer := range peers {
-					peerHistory := getOrInitPeer(db.peerHistory, ip, id)
-					if peer.Location != nil {
-						peerHistory.Location = peer.Location
-					}
+			for ip, bundle := range diff.PeerBundles {
+				if bundle.Location != nil {
+					b := getOrInitBundle(db.networkHistory, ip)
+					b.Location = bundle.Location
+				}
+				for id, peer := range bundle.Peers {
+					peerHistory := getOrInitPeer(db.networkHistory, ip, id)
 					if peer.Connected != nil {
 						peerHistory.Connected = append(peerHistory.Connected, peer.Connected...)
 					}
@@ -202,11 +256,9 @@ func (db *Dashboard) collectPeerData() {
 					if peerHistory.Ingress == nil {
 						peer.Ingress = append(emptyChartEntries(now.Add(-db.config.Refresh), peerIngressSampleLimit-1, db.config.Refresh), ingress)
 						peerHistory.Ingress = peer.Ingress
-						//peerHistory.Ingress = ChartEntries{ingress}
 					} else {
 						peer.Ingress = ChartEntries{ingress}
 						peerHistory.Ingress = append(peerHistory.Ingress[1:], ingress)
-						//peerHistory.Ingress = append(peerHistory.Ingress, ingress)
 					}
 					egress := &ChartEntry{
 						Time: now,
@@ -217,27 +269,23 @@ func (db *Dashboard) collectPeerData() {
 					if peerHistory.Egress == nil {
 						peer.Egress = append(emptyChartEntries(now.Add(-db.config.Refresh), peerEgressSampleLimit-1, db.config.Refresh), egress)
 						peerHistory.Egress = peer.Egress
-						//peerHistory.Egress = ChartEntries{egress}
 					} else {
 						peer.Egress = ChartEntries{egress}
 						peerHistory.Egress = append(peerHistory.Egress[1:], egress)
-						//peerHistory.Egress = append(peerHistory.Egress, egress)
 					}
 				}
 			}
 			db.peerLock.Unlock()
-			db.sendToAll(&Message{Network: deepcopy.Copy(network).(*NetworkMessage)})
+			// Send the diff to the clients.
+			db.sendToAll(&Message{Network: deepcopy.Copy(diff).(*NetworkMessage)})
 
-			//fmt.Println()
-			//s, _ := json.MarshalIndent(network, "", "    ")
-			//fmt.Println(string(s))
-
-			for ip, peers := range network.Peers {
-				for id := range peers {
-					peers[id] = nil
-					delete(peers, id)
+			// Prepare for the next metering, clear the diff variable.
+			for ip, bundle := range diff.PeerBundles {
+				for id := range bundle.Peers {
+					bundle.Peers[id] = nil
+					delete(bundle.Peers, id)
 				}
-				delete(network.Peers, ip)
+				delete(diff.PeerBundles, ip)
 			}
 		case errc := <-db.quit:
 			close(quit)
@@ -247,49 +295,54 @@ func (db *Dashboard) collectPeerData() {
 	}
 }
 
-func (db *Dashboard) cleanPeerHistory(quit chan struct{}) {
+// keepPeerHistoryClean purges the stored peer metrics with a given rate in
+// order to decrease the load. The inactive peers that disconnected before
+// the calculated time will be deleted. If the total amount of peers exceeds
+// the limit, the surplus will be chosen from the disconnected ones in the
+// iteration order, and will be deleted as well.
+func (db *Dashboard) keepPeerHistoryClean(quit chan struct{}) {
 	cleanRate := db.config.Refresh * peerTrafficSampleLimit
 	for {
 		select {
 		case <-time.After(cleanRate):
-			// clear disconnected
 			validAfter := time.Now().Add(-cleanRate)
 			db.peerLock.Lock()
-			for ip, peers := range db.peerHistory.Peers {
-				for id, peer := range peers {
+			for ip, bundle := range db.networkHistory.PeerBundles {
+				bundle.Location = nil
+				for id, peer := range bundle.Peers {
 					if len(peer.Disconnected) > 0 && peer.Disconnected[len(peer.Disconnected)-1].Before(validAfter) {
-						db.peerHistory.Peers[ip][id].Location = nil
-						db.peerHistory.Peers[ip][id] = nil
-						delete(db.peerHistory.Peers[ip], id)
+						bundle.Peers[id] = nil
+						delete(bundle.Peers, id)
 					}
 				}
-				if len(peers) <= 0 {
-					delete(db.peerHistory.Peers, ip)
+				if len(bundle.Peers) <= 0 {
+					delete(db.networkHistory.PeerBundles, ip)
 				}
 			}
+			// TODO (kurkomisi): Check the limit during the insertion.
 			var lenCount int
-			for _, peers := range db.peerHistory.Peers {
-				lenCount += len(peers)
+			for _, bundle := range db.networkHistory.PeerBundles {
+				lenCount += len(bundle.Peers)
 			}
-			if lenCount > p2p.MeteredPeerLimit {
+			if lenCount > peerLimit {
 			outerLoop:
-				for ip, peers := range db.peerHistory.Peers {
-					for id, peer := range peers {
+				for ip, bundle := range db.networkHistory.PeerBundles {
+					bundle.Location = nil
+					for id, peer := range bundle.Peers {
 						if peer.Disconnected != nil {
-							db.peerHistory.Peers[ip][id].Location = nil
-							db.peerHistory.Peers[ip][id] = nil
-							delete(db.peerHistory.Peers[ip], id)
+							bundle.Peers[id] = nil
+							delete(bundle.Peers, id)
 							lenCount--
-							if lenCount <= p2p.MeteredPeerLimit {
-								if len(peers) <= 0 {
-									delete(db.peerHistory.Peers, ip)
+							if lenCount <= peerLimit {
+								if len(bundle.Peers) <= 0 {
+									delete(bundle.Peers, ip)
 								}
 								break outerLoop
 							}
 						}
 					}
-					if len(peers) <= 0 {
-						delete(db.peerHistory.Peers, ip)
+					if len(bundle.Peers) <= 0 {
+						delete(db.networkHistory.PeerBundles, ip)
 					}
 				}
 			}

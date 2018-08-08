@@ -21,52 +21,54 @@ package p2p
 import (
 	"net"
 
-	"github.com/ethereum/go-ethereum/event"
-		"github.com/ethereum/go-ethereum/metrics"
-		"sync"
-		"time"
-	"github.com/ethereum/go-ethereum/log"
-	"sync/atomic"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 const (
-	MetricsInboundTraffic   = "p2p/InboundTraffic"
-	MetricsInboundConnects  = "p2p/InboundConnects"
-	MetricsOutboundTraffic  = "p2p/OutboundTraffic"
-	MetricsOutboundConnects = "p2p/OutboundConnects"
-
-	MeteredPeerLimit = 16384
+	MetricsInboundConnects  = "p2p/InboundConnects"  // Name for the registered inbound connects meter
+	MetricsInboundTraffic   = "p2p/InboundTraffic"   // Name for the registered inbound traffic meter
+	MetricsOutboundConnects = "p2p/OutboundConnects" // Name for the registered outbound connects meter
+	MetricsOutboundTraffic  = "p2p/OutboundTraffic"  // Name for the registered outbound traffic meter
 )
 
 var (
-	ingressConnectMeter = metrics.NewRegisteredMeter(MetricsInboundConnects, nil)
-	ingressTrafficMeter = metrics.NewRegisteredMeter(MetricsInboundTraffic, nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter(MetricsOutboundConnects, nil)
-	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)
+	ingressConnectMeter = metrics.NewRegisteredMeter(MetricsInboundConnects, nil)  // meter counting the ingress connections
+	ingressTrafficMeter = metrics.NewRegisteredMeter(MetricsInboundTraffic, nil)   // meter metering the cumulative ingress traffic
+	egressConnectMeter  = metrics.NewRegisteredMeter(MetricsOutboundConnects, nil) // meter counting the egress connections
+	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)  // meter metering the cumulative egress traffic
 
-	NME = &networkMeterEvents{}
+	metricsFeed = new(peerMetricsFeed) // Peer event feed for metrics
+
+	defaultMeteredPeerID uint64 // Used to create unique id for the metered connection before the handshake
 )
 
-type networkMeterEvents struct {
-	connectFeed    event.Feed
-	handshakeFeed  event.Feed
-	disconnectFeed event.Feed
+// peerMetricsFeed delivers the peer metrics to the subscribed channels.
+type peerMetricsFeed struct {
+	connect    event.Feed // Event feed to notify the connection of a peer
+	handshake  event.Feed // Event feed to notify the handshake with a peer
+	disconnect event.Feed // Event feed to notify the disconnection of a peer
+	read       event.Feed // Event feed to notify the amount of read bytes of a peer
+	write      event.Feed // Event feed to notify the amount of written bytes of a peer
 
-	readFeed  event.Feed
-	writeFeed event.Feed
-
-	scope event.SubscriptionScope
-
-	defaultID uint64
+	scope event.SubscriptionScope // Facility to unsubscribe all the subscriptions at once
 }
 
+// PeerConnectEvent contains information about the connection of a peer.
 type PeerConnectEvent struct {
 	IP        net.IP
 	ID        string
 	Connected time.Time
 }
 
+// PeerHandshakeEvent contains information about the handshake with a peer.
 type PeerHandshakeEvent struct {
 	IP        net.IP
 	DefaultID string
@@ -74,52 +76,65 @@ type PeerHandshakeEvent struct {
 	Handshake time.Time
 }
 
+// PeerDisconnectEvent contains information about the disconnection of a peer.
 type PeerDisconnectEvent struct {
 	IP           net.IP
 	ID           string
 	Disconnected time.Time
 }
 
+// PeerReadEvent contains information about the read operation of a peer.
 type PeerReadEvent struct {
 	IP      net.IP
 	ID      string
 	Ingress int
 }
 
+// PeerWriteEvent contains information about the write operation of a peer.
 type PeerWriteEvent struct {
 	IP     net.IP
 	ID     string
 	Egress int
 }
 
+// SubscribePeerConnectEvent registers a subscription of PeerConnectEvent
 func SubscribePeerConnectEvent(ch chan<- PeerConnectEvent) event.Subscription {
-	return NME.scope.Track(NME.connectFeed.Subscribe(ch))
-}
-func SubscribePeerHandshakeEvent(ch chan<- PeerHandshakeEvent) event.Subscription {
-	return NME.scope.Track(NME.handshakeFeed.Subscribe(ch))
-}
-func SubscribePeerDisconnectEvent(ch chan<- PeerDisconnectEvent) event.Subscription {
-	return NME.scope.Track(NME.disconnectFeed.Subscribe(ch))
-}
-func SubscribePeerReadEvent(ch chan<- PeerReadEvent) event.Subscription {
-	return NME.scope.Track(NME.readFeed.Subscribe(ch))
-}
-func SubscribePeerWriteEvent(ch chan<- PeerWriteEvent) event.Subscription {
-	return NME.scope.Track(NME.writeFeed.Subscribe(ch))
+	return metricsFeed.scope.Track(metricsFeed.connect.Subscribe(ch))
 }
 
-func closeNME() {
-	NME.scope.Close()
+// SubscribePeerHandshakeEvent registers a subscription of PeerHandshakeEvent
+func SubscribePeerHandshakeEvent(ch chan<- PeerHandshakeEvent) event.Subscription {
+	return metricsFeed.scope.Track(metricsFeed.handshake.Subscribe(ch))
+}
+
+// SubscribePeerDisconnectEvent registers a subscription of PeerDisconnectEvent
+func SubscribePeerDisconnectEvent(ch chan<- PeerDisconnectEvent) event.Subscription {
+	return metricsFeed.scope.Track(metricsFeed.disconnect.Subscribe(ch))
+}
+
+// SubscribePeerReadEvent registers a subscription of PeerReadEvent
+func SubscribePeerReadEvent(ch chan<- PeerReadEvent) event.Subscription {
+	return metricsFeed.scope.Track(metricsFeed.read.Subscribe(ch))
+}
+
+// SubscribePeerWriteEvent registers a subscription of PeerWriteEvent
+func SubscribePeerWriteEvent(ch chan<- PeerWriteEvent) event.Subscription {
+	return metricsFeed.scope.Track(metricsFeed.write.Subscribe(ch))
+}
+
+// closeMetricsFeed closes all the tracked subscriptions.
+func closeMetricsFeed() {
+	metricsFeed.scope.Close()
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
 // inbound and outbound network traffic.
 type meteredConn struct {
-	net.Conn // Network connection to wrap with metering
-	ip net.IP
-	id string
+	net.Conn        // Network connection to wrap with metering
+	ip       net.IP // The IP address of the peer
+	id       string // The node id of the peer
 
-	lock sync.RWMutex
+	lock sync.RWMutex // Lock protecting the metered connection's internals
 }
 
 // newMeteredConn creates a new metered connection, also bumping the ingress or
@@ -140,8 +155,8 @@ func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	} else {
 		egressConnectMeter.Mark(1)
 	}
-	id := fmt.Sprintf("peer_%d", atomic.AddUint64(&NME.defaultID, 1))
-	NME.connectFeed.Send(PeerConnectEvent{
+	id := fmt.Sprintf("peer_%d", atomic.AddUint64(&defaultMeteredPeerID, 1))
+	metricsFeed.connect.Send(PeerConnectEvent{
 		IP:        ip,
 		ID:        id,
 		Connected: time.Now(),
@@ -161,7 +176,7 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 	c.lock.RLock()
 	id := c.id
 	c.lock.RUnlock()
-	NME.readFeed.Send(PeerReadEvent{
+	metricsFeed.read.Send(PeerReadEvent{
 		IP:      c.ip,
 		ID:      id,
 		Ingress: n,
@@ -177,7 +192,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	c.lock.RLock()
 	id := c.id
 	c.lock.RUnlock()
-	NME.writeFeed.Send(PeerWriteEvent{
+	metricsFeed.write.Send(PeerWriteEvent{
 		IP:     c.ip,
 		ID:     id,
 		Egress: n,
@@ -185,11 +200,12 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	return n, err
 }
 
+// Close closes the underlying connection.
 func (c *meteredConn) Close() error {
 	c.lock.RLock()
 	id := c.id
 	c.lock.RUnlock()
-	NME.disconnectFeed.Send(PeerDisconnectEvent{
+	metricsFeed.disconnect.Send(PeerDisconnectEvent{
 		IP:           c.ip,
 		ID:           id,
 		Disconnected: time.Now(),
@@ -197,15 +213,16 @@ func (c *meteredConn) Close() error {
 	return c.Conn.Close()
 }
 
-func (c *meteredConn) handshakeDone(peerID string) {
+// handshakeDone changes the default id to the peer's node id.
+func (c *meteredConn) handshakeDone(id discover.NodeID) {
 	c.lock.Lock()
 	defaultID := c.id
-	c.id = peerID
+	c.id = id.String()
 	c.lock.Unlock()
-	NME.handshakeFeed.Send(PeerHandshakeEvent{
+	metricsFeed.handshake.Send(PeerHandshakeEvent{
 		IP:        c.ip,
 		DefaultID: defaultID,
-		ID:        peerID,
+		ID:        id.String(),
 		Handshake: time.Now(),
 	})
 }

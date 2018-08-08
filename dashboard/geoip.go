@@ -17,11 +17,11 @@
 package dashboard
 
 import (
-	"github.com/apilayer/freegeoip"
-	"time"
 	"net"
+	"time"
+
+	"github.com/apilayer/freegeoip"
 )
-// Package geoip contains utility methods for converting IPs to geographical data.
 
 // GeoDBInfo contains all the geographical information we could extract based on an IP
 // address.
@@ -48,7 +48,7 @@ type GeoDB struct {
 	geodb *freegeoip.DB
 }
 
-// Open creats a new geoip database with an up-to-date database from the internet.
+// Open creates a new geoip database with an up-to-date database from the internet.
 func OpenGeoDB() (*GeoDB, error) {
 	// Initiate a geoip database to cross reference locations
 	db, err := freegeoip.OpenURL(freegeoip.MaxMindDB, 24*time.Hour, time.Hour)

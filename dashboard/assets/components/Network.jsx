@@ -19,26 +19,37 @@
 import React, {Component} from 'react';
 
 import Table, {TableHead, TableBody, TableRow, TableCell} from 'material-ui/Table';
-import type {Network as NetworkType, Peer} from '../types/content';
+import type {Network as NetworkType, PeerBundle, Peer} from '../types/content';
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
-export const inserter = (update: {[string]: {[string]: Peer}}, prev: {[string]: {[string]: Peer}}) => {
+export const inserter = (update: {[string]: PeerBundle}, prev: {[string]: PeerBundle}) => {
 	Object.keys(update).forEach((ip) => {
+		if (!update[ip]) {
+			return;
+		}
 		if (!prev[ip]) {
 			prev[ip] = update[ip];
 			return;
 		}
-		if (!update[ip]) {
+		if (update[ip].location) {
+			prev[ip].location = update[ip].location;
+		}
+		if (!update[ip].peers) {
 			return;
 		}
-		Object.keys(update[ip]).forEach((id) => {
-			if (!prev[ip][id]) {
-				prev[ip][id] = update[ip][id];
+		Object.entries(update[ip].peers).forEach(([id, u]) => {
+			if (!prev[ip].peers[id]) {
+				prev[ip].peers[id] = u;
 				return;
 			}
-			const u: Peer = update[ip][id];
-			const p: Peer = prev[ip][id];
+			// If the handshake was between two metering
+			if (u.defaultID && prev[ip].peers[u.defaultID]) {
+				// TODO (kurkomisi): merge the two in order to keep the previous connection.
+				prev[ip].peers[id] = prev[ip].peers[u.defaultID];
+				delete prev[ip].peers[u.defaultID];
+			}
+			const p: Peer = prev[ip].peers[id];
 			if (u.connected) {
 				if (!Array.isArray(p.connected)) {
 					p.connected = [];
@@ -69,7 +80,7 @@ export const inserter = (update: {[string]: {[string]: Peer}}, prev: {[string]: 
 				}
 				p.egress = [...p.egress, ...u.egress].slice(-200);
 			}
-			prev[ip][id] = p;
+			prev[ip].peers[id] = p;
 		});
 	});
 	return prev;
@@ -105,8 +116,8 @@ class Network extends Component<Props, State> {
 				<TableHead>
 					<TableRow>
 						<TableCell>IP</TableCell>
-						<TableCell>Peer ID</TableCell>
 						<TableCell>Location</TableCell>
+						<TableCell>Peer ID</TableCell>
 						<TableCell>Ingress</TableCell>
 						<TableCell>Egress</TableCell>
 						<TableCell>Connected</TableCell>
@@ -115,35 +126,32 @@ class Network extends Component<Props, State> {
 					</TableRow>
 				</TableHead>
 				<TableBody>
-					{Object.entries(this.props.content.peers).map(([ip, peers]) => (
+					{Object.entries(this.props.content.peerBundles).map(([ip, bundle]) => (
 						<TableRow key={ip}>
 							<TableCell>{ip}</TableCell>
 							<TableCell>
-								{Object.keys(peers).map(id => id.substring(0, 10)).join(' ')}
+								{bundle.location ? (() => {
+									const l = bundle.location;
+									return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''} ${l.latitude} ${l.longitude}`;
+								})() : ''}
 							</TableCell>
 							<TableCell>
-								{(() => {
-									const k = Object.keys(peers)[0];
-									return k && peers[k].location ? (() => {
-										const l = peers[k].location;
-										return `${l.country}${l.city ? `/${l.city}` : ''} ${l.latitude} ${l.longitude}`;
-									})() : '';
-								})()}
+								{Object.keys(bundle.peers).map(id => id.substring(0, 10)).join(' ')}
 							</TableCell>
 							<TableCell>
-								{Object.keys(peers).map((id) => peers[id].ingress && peers[id].ingress.map(sample => sample.value).join(' ')).join(', ')}
+								{Object.values(bundle.peers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.keys(peers).map((id) => peers[id].egress && peers[id].egress.map(sample => sample.value).join(' ')).join(', ')}
+								{Object.values(bundle.peers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.keys(peers).map((id) => peers[id].connected && peers[id].connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{Object.values(bundle.peers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.keys(peers).map((id) => peers[id].handshake && peers[id].handshake.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{Object.values(bundle.peers).map(peer => peer.handshake && peer.handshake.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.keys(peers).map((id) => peers[id].disconnected && peers[id].disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{Object.values(bundle.peers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 						</TableRow>
 					))}

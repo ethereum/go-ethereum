@@ -27,16 +27,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"io"
 
-	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -54,31 +51,35 @@ const (
 	diskReadSampleLimit       = 200 // Maximum number of disk read data samples
 	diskWriteSampleLimit      = 200 // Maximum number of disk write data samples
 
-	peerTrafficSampleLimit = 200
-	peerIngressSampleLimit = peerTrafficSampleLimit
-	peerEgressSampleLimit  = peerTrafficSampleLimit
+	peerLimit              = 1000                   // Maximum number of metered peers
+	peerTrafficSampleLimit = 200                    // Maximum number of traffic data samples for a peer
+	peerIngressSampleLimit = peerTrafficSampleLimit // Maximum number of ingress data samples for a peer
+	peerEgressSampleLimit  = peerTrafficSampleLimit // Maximum number of egress data samples for a peer
 )
-
-var nextID uint32 // Next connection id
 
 // Dashboard contains the dashboard internals.
 type Dashboard struct {
-	config *Config
+	config *Config // Configuration values for the dashboard
 
-	listener net.Listener
-	conns    map[uint32]*client // Currently live websocket connections
-	history  *Message
-	peerHistory *NetworkMessage
+	listener   net.Listener       // Network listener listening for dashboard clients
+	conns      map[uint32]*client // Currently live websocket connections
+	nextConnID uint32             // Next connection id
+
+	history        *Message        // Stored general data
+	sysHistory     *SystemMessage  // Stored system data
+	networkHistory *NetworkMessage // Stored peer data
+	logHistory     *LogsMessage    // Stored log data
+
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
-	peerLock sync.RWMutex
+	sysLock  sync.RWMutex // Lock protecting the stored system data
+	peerLock sync.RWMutex // Lock protecting the stored peer data
+	logLock  sync.RWMutex // Lock protecting the stored log data
 
-	geodb     *GeoDB
-	peersByIP map[string]*Peer
-	peersByID map[string]*Peer
-	logdir    string
+	geodb  *GeoDB // geoip database instance for IP to geographical information conversions
+	logdir string // Directory containing the log files
 
 	quit chan chan error // Channel used for graceful exit
-	wg   sync.WaitGroup
+	wg   sync.WaitGroup  // Wait group used to close the data collector threads
 }
 
 // client represents active websocket connection with a remote browser.
@@ -104,19 +105,19 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				Commit:  commit,
 				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
 			},
-			System: &SystemMessage{
-				ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
-				VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
-				NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
-				NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
-				ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
-				SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
-				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
-				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
-			},
 		},
-		peerHistory: &NetworkMessage{
-			Peers: make(map[string]map[string]*Peer),
+		sysHistory: &SystemMessage{
+			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
+			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
+			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
+			NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
+			ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
+			SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
+			DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
+			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
+		},
+		networkHistory: &NetworkMessage{
+			PeerBundles: make(map[string]*PeerBundle),
 		},
 		logdir: logdir,
 	}
@@ -145,7 +146,7 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 	log.Info("Starting dashboard")
 
 	db.wg.Add(3)
-	go db.collectData()
+	go db.collectSystemData()
 	go db.streamLogs()
 	go db.collectPeerData()
 
@@ -219,7 +220,7 @@ func (db *Dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiHandler handles requests for the dashboard.
 func (db *Dashboard) apiHandler(conn *websocket.Conn) {
-	id := atomic.AddUint32(&nextID, 1)
+	id := atomic.AddUint32(&db.nextConnID, 1)
 	client := &client{
 		conn:   conn,
 		msg:    make(chan *Message, 128),
@@ -250,9 +251,15 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	db.lock.RLock()
 	h := deepcopy.Copy(db.history).(*Message)
 	db.lock.RUnlock()
+	db.sysLock.RLock()
+	h.System = deepcopy.Copy(db.sysHistory).(*SystemMessage)
+	db.sysLock.RUnlock()
 	db.peerLock.RLock()
-	h.Network = deepcopy.Copy(db.peerHistory).(*NetworkMessage)
+	h.Network = deepcopy.Copy(db.networkHistory).(*NetworkMessage)
 	db.peerLock.RUnlock()
+	db.logLock.RLock()
+	h.Logs = deepcopy.Copy(db.logHistory).(*LogsMessage)
+	db.logLock.RUnlock()
 	client.msg <- h
 
 	// Start tracking the connection and drop at connection loss.
@@ -275,136 +282,6 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		}
 		if r.Logs != nil {
 			db.handleLogRequest(r.Logs, client)
-		}
-	}
-}
-
-// meterCollector returns a function, which retrieves a specific meter.
-func meterCollector(name string) func() int64 {
-	if meter := metrics.Get(name); meter != nil {
-		m := meter.(metrics.Meter)
-		return func() int64 {
-			return m.Count()
-		}
-	}
-	return func() int64 {
-		return 0
-	}
-}
-
-// collectData collects the required data to plot on the dashboard.
-func (db *Dashboard) collectData() {
-	defer db.wg.Done()
-
-	systemCPUUsage := gosigar.Cpu{}
-	systemCPUUsage.Get()
-	var (
-		mem runtime.MemStats
-
-		collectNetworkIngress = meterCollector(p2p.MetricsInboundTraffic)
-		collectNetworkEgress  = meterCollector(p2p.MetricsOutboundTraffic)
-		collectDiskRead       = meterCollector("eth/db/chaindata/disk/read")
-		collectDiskWrite      = meterCollector("eth/db/chaindata/disk/write")
-
-		prevNetworkIngress = collectNetworkIngress()
-		prevNetworkEgress  = collectNetworkEgress()
-		prevProcessCPUTime = getProcessCPUTime()
-		prevSystemCPUUsage = systemCPUUsage
-		prevDiskRead       = collectDiskRead()
-		prevDiskWrite      = collectDiskWrite()
-
-		frequency = float64(db.config.Refresh / time.Second)
-		numCPU    = float64(runtime.NumCPU())
-	)
-
-	for {
-		select {
-		case errc := <-db.quit:
-			errc <- nil
-			return
-		case <-time.After(db.config.Refresh):
-			systemCPUUsage.Get()
-			var (
-				curNetworkIngress = collectNetworkIngress()
-				curNetworkEgress  = collectNetworkEgress()
-				curProcessCPUTime = getProcessCPUTime()
-				curSystemCPUUsage = systemCPUUsage
-				curDiskRead       = collectDiskRead()
-				curDiskWrite      = collectDiskWrite()
-
-				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
-				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
-				deltaProcessCPUTime = curProcessCPUTime - prevProcessCPUTime
-				deltaSystemCPUUsage = curSystemCPUUsage.Delta(prevSystemCPUUsage)
-				deltaDiskRead       = curDiskRead - prevDiskRead
-				deltaDiskWrite      = curDiskWrite - prevDiskWrite
-			)
-			prevNetworkIngress = curNetworkIngress
-			prevNetworkEgress = curNetworkEgress
-			prevProcessCPUTime = curProcessCPUTime
-			prevSystemCPUUsage = curSystemCPUUsage
-			prevDiskRead = curDiskRead
-			prevDiskWrite = curDiskWrite
-
-			now := time.Now()
-
-			runtime.ReadMemStats(&mem)
-			activeMemory := &ChartEntry{
-				Time:  now,
-				Value: float64(mem.Alloc) / frequency,
-			}
-			virtualMemory := &ChartEntry{
-				Time:  now,
-				Value: float64(mem.Sys) / frequency,
-			}
-			networkIngress := &ChartEntry{
-				Time:  now,
-				Value: deltaNetworkIngress / frequency,
-			}
-			networkEgress := &ChartEntry{
-				Time:  now,
-				Value: deltaNetworkEgress / frequency,
-			}
-			processCPU := &ChartEntry{
-				Time:  now,
-				Value: deltaProcessCPUTime / frequency / numCPU * 100,
-			}
-			systemCPU := &ChartEntry{
-				Time:  now,
-				Value: float64(deltaSystemCPUUsage.Sys+deltaSystemCPUUsage.User) / frequency / numCPU,
-			}
-			diskRead := &ChartEntry{
-				Time:  now,
-				Value: float64(deltaDiskRead) / frequency,
-			}
-			diskWrite := &ChartEntry{
-				Time:  now,
-				Value: float64(deltaDiskWrite) / frequency,
-			}
-			sys := db.history.System
-			db.lock.Lock()
-			sys.ActiveMemory = append(sys.ActiveMemory[1:], activeMemory)
-			sys.VirtualMemory = append(sys.VirtualMemory[1:], virtualMemory)
-			sys.NetworkIngress = append(sys.NetworkIngress[1:], networkIngress)
-			sys.NetworkEgress = append(sys.NetworkEgress[1:], networkEgress)
-			sys.ProcessCPU = append(sys.ProcessCPU[1:], processCPU)
-			sys.SystemCPU = append(sys.SystemCPU[1:], systemCPU)
-			sys.DiskRead = append(sys.DiskRead[1:], diskRead)
-			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
-			db.lock.Unlock()
-
-			db.sendToAll(&Message{
-				System: &SystemMessage{
-					ActiveMemory:   ChartEntries{activeMemory},
-					VirtualMemory:  ChartEntries{virtualMemory},
-					NetworkIngress: ChartEntries{networkIngress},
-					NetworkEgress:  ChartEntries{networkEgress},
-					ProcessCPU:     ChartEntries{processCPU},
-					SystemCPU:      ChartEntries{systemCPU},
-					DiskRead:       ChartEntries{diskRead},
-					DiskWrite:      ChartEntries{diskWrite},
-				},
-			})
 		}
 	}
 }

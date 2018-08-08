@@ -41,7 +41,7 @@ const (
 
 	// Connectivity defaults.
 	maxActiveDialTasks     = 16
-	DefaultMaxPendingPeers = 50
+	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
 	// Maximum time allowed for reading a complete message.
@@ -388,7 +388,7 @@ func (srv *Server) Stop() {
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()
-	closeNME()
+	closeMetricsFeed()
 }
 
 // sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
@@ -800,7 +800,7 @@ func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
 	srv.log.Info("RLPx listener up", "self", srv.makeSelf(srv.listener, srv.ntab))
 
-	tokens := DefaultMaxPendingPeers
+	tokens := defaultMaxPendingPeers
 	if srv.MaxPendingPeers > 0 {
 		tokens = srv.MaxPendingPeers
 	}
@@ -884,7 +884,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 		return err
 	}
 	if conn, ok := c.fd.(*meteredConn); ok {
-		conn.handshakeDone(c.id.String())
+		conn.handshakeDone(c.id)
 	}
 	clog := srv.log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// For dialed connections, check that the remote public key matches.
