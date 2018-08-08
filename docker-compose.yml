@@ -4,7 +4,7 @@ services:
   shyftgeth:
     build:
       context: $PWD 
-      dockerfile: containers/docker/develop-alpine/shyftGeth/Dockerfile
+      dockerfile: docker/shyftGeth/Dockerfile.geth
     ports:
       - "8545:8545"
       - "8546:8546"
@@ -27,7 +27,7 @@ services:
   pg:
     build: 
       context: $PWD
-      dockerfile: containers/docker/develop-alpine/pg/Dockerfile
+      dockerfile: docker/pg/Dockerfile.pg
     volumes:
       - ./pg-data:/var/lib/postgresql/data
     ports:
@@ -40,7 +40,7 @@ services:
   shyft_block_api:
     build:
       context: $PWD 
-      dockerfile: containers/docker/develop-alpine/shyftApi/Dockerfile
+      dockerfile: docker/shyftApi/Dockerfile.api
     # volumes:
     #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
     working_dir: /go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
@@ -61,7 +61,7 @@ services:
   shyft_block_ui:
     build:
       context: $PWD 
-      dockerfile: containers/docker/develop-alpine/shyftUi/Dockerfile
+      dockerfile: docker/shyftUi/Dockerfile.ui
       # volumes:
       #   - ./shyftBlockExplorerApi:/go/src/github.com/ShyftNetwork/go-empyrean/shyftBlockExplorerApi
     ports:
