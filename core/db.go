@@ -1,18 +1,25 @@
 package core
 
 import (
-  	"fmt"
-  	"database/sql"
+	"database/sql"
+	"fmt"
+	"os"
 )
 
 var blockExplorerDb *sql.DB
 
+// @NOTE: SHYFT - could be refactored to add a test db environment
 const (
-	connStr = "user=postgres dbname=shyftdb sslmode=disable"
-	connStrTest =  "user=postgres dbname=shyftdbtest sslmode=disable"
+	connStrTest = "user=postgres dbname=shyftdbtest password=docker sslmode=disable"
 )
 
-func InitDB() (*sql.DB, error){
+var connStr = connectionStr()
+
+// InitDB - initalizes a Postgresql Database for use by the Blockexplorer
+func InitDB() (*sql.DB, error) {
+	// To set the environment you can run the program with an ENV variable DBENV.
+	// DBENV defaults to local for purposes of running the correct local
+	// database connection parameters but will use docker connection parameters if DBENV=docker
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
@@ -24,7 +31,17 @@ func InitDB() (*sql.DB, error){
 	}
 }
 
-func InitDBTest() (*sql.DB, error){
+func connectionStr() string {
+	dbEnv := os.Getenv("DBENV")
+	switch dbEnv {
+	default:
+		return "user=postgres dbname=shyftdb host=localhost sslmode=disable"
+	case "docker":
+		return "user=postgres dbname=shyftdb host=pg password=docker sslmode=disable"
+	}
+}
+
+func InitDBTest() (*sql.DB, error) {
 	db, err := sql.Open("postgres", connStrTest)
 	if err != nil {
 		fmt.Println("ERROR OPENING DB, NOT INITIALIZING")
@@ -37,9 +54,9 @@ func InitDBTest() (*sql.DB, error){
 }
 
 func DBConnection() (*sql.DB, error) {
-	if (blockExplorerDb == nil) {
+	if blockExplorerDb == nil {
 		_, err := InitDB()
-		if(err != nil) {
+		if err != nil {
 			return nil, err
 		}
 	}
