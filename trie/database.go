@@ -51,7 +51,7 @@ const secureKeyLength = 11 + 32
 
 // DatabaseReader wraps the Get and Has method of a backing store for the trie.
 type DatabaseReader interface {
-	// Get retrieves the value associated with key form the database.
+	// Get retrieves the value associated with key from the database.
 	Get(key []byte) (value []byte, err error)
 
 	// Has retrieves whether a key is present in the database.
