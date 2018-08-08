@@ -357,7 +357,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					// get masternodes information from smart contract
 					client, err := ethclient.Dial(stack.IPCEndpoint())
 					if err != nil {
-						utils.Fatalf("Fail to connect RPC: %v", err)
+						utils.Fatalf("Fail to connect IPC: %v", err)
 					}
 					addr := common.HexToAddress(common.MasternodeVotingSMC)
 					validator, err := validatorContract.NewTomoValidator(addr, client)

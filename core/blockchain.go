@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -128,7 +129,9 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks *lru.Cache // Bad block cache
+	badBlocks   *lru.Cache // Bad block cache
+	IPCEndpoint string
+	Client      *ethclient.Client // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1571,4 +1574,19 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// Get current IPC Client.
+func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
+	if bc.Client == nil {
+		// Inject ipc client global instance.
+		client, err := ethclient.Dial(bc.IPCEndpoint)
+		if err != nil {
+			log.Error("Fail to connect IPC", "error", err)
+			return nil, err
+		}
+		bc.Client = client
+	}
+
+	return bc.Client, nil
 }

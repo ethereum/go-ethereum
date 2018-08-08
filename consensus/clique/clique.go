@@ -397,11 +397,7 @@ func position(list []common.Address, x common.Address) int {
 func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
 	lastCheckpointNumber := header.Number.Uint64() - (header.Number.Uint64() % c.config.Epoch)
 	preCheckpointHeader := chain.GetHeaderByNumber(lastCheckpointNumber)
-	masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
-	}
-	return masternodes
+	return c.GetMasternodesFromCheckpointHeader(preCheckpointHeader)
 }
 
 func (c *Clique) GetPeriod() uint64 { return c.config.Period }
@@ -802,4 +798,13 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 
 func (c *Clique) RecoverSigner(header *types.Header) (common.Address, error) {
 	return ecrecover(header, c.signatures)
+}
+
+// Get master nodes over extra data of previous checkpoint block.
+func (c *Clique) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header) []common.Address {
+	masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
+	for i := 0; i < len(masternodes); i++ {
+		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
+	}
+	return masternodes
 }
