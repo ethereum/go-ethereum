@@ -32,9 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
@@ -53,8 +51,8 @@ var (
 	autoDepositBuffer    = big.NewInt(100000000000000) // buffer that is surplus for fork protection etc (wei)
 	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
 	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
-	payAt                = 100                         // threshold that triggers payment {request} (units)
-	dropAt               = 10000                       // threshold that triggers disconnect (units)
+	payAt                = big.NewInt(4096 * 10000)    // threshold that triggers payment {request} (bytes)
+	dropAt               = big.NewInt(4096 * 10000)    // threshold that triggers disconnect (bytes)
 )
 
 const (
@@ -66,10 +64,38 @@ const (
 //      Swift Automatic  Payments
 // a peer to peer micropayment system
 type Swap struct {
-	lock    sync.Mutex // mutex for balance access
-	balance int        // units of chunk/retrieval request
-	local   *Params    // local peer's swap parameters
-	remote  *Profile   // remote peer's swap profile
+	lock  sync.RWMutex
+	peers map[discover.NodeID]*swapPeer
+	local *Params // local peer's swap parameters
+}
+
+type EntryDirection bool
+
+const (
+	DebitEntry  EntryDirection = true
+	CreditEntry EntryDirection = false
+)
+
+type SwapAccountedMsgType interface {
+	GetMsgPrice() (*big.Int, EntryDirection)
+}
+
+func (swap *Swap) AccountForMsg(ctx context.Context, msg interface{}, peer discover.NodeID) error {
+	if accounted, ok := msg.(SwapAccountedMsgType); ok {
+		if _, exists := swap.peers[peer]; !exists {
+			swap.lock.Lock()
+			swap.peers[peer] = &swapPeer{
+				peer:        peer,
+				swapAccount: swap,
+				balance:     big.NewInt(0),
+			}
+			swap.lock.Unlock()
+		}
+		price, direction := accounted.GetMsgPrice()
+		//TODO: Calculate total price and account
+		swap.peers[peer].AccountMsgForPeer(price, direction)
+	}
+	return nil
 }
 
 // Profile - public swap profile
@@ -77,8 +103,8 @@ type Swap struct {
 type Profile struct {
 	BuyAt  *big.Int // accepted max price for chunk
 	SellAt *big.Int // offered sale price for chunk
-	PayAt  uint     // threshold that triggers payment request
-	DropAt uint     // threshold that triggers disconnect
+	PayAt  *big.Int // threshold that triggers payment request
+	DropAt *big.Int // threshold that triggers disconnect
 }
 
 // Strategy encapsulates parameters relating to
@@ -130,15 +156,41 @@ type PayProfile struct {
 	lock        sync.RWMutex
 }
 
+type swapPeer struct {
+	lock        sync.RWMutex
+	peer        discover.NodeID
+	swapAccount *Swap
+	balance     *big.Int
+}
+
+func (sp *swapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) {
+	sp.lock.Lock()
+	defer sp.lock.Unlock()
+	//the peer is being credited (in its favor), so its balance increases
+	if direction == CreditEntry {
+		sp.balance = sp.balance.Add(sp.balance, price)
+		//the peer is being debited (in local favor), so its balance decreases
+	} else if direction == DebitEntry {
+		sp.balance = sp.balance.Sub(sp.balance, price)
+	}
+	if sp.balance.Cmp(payAt) > -1 {
+		//TODO: Issue Cheque
+	}
+	if sp.balance.Cmp(dropAt) < 0 {
+		//TODO: Drop peer
+	}
+	log.Error(fmt.Sprintf("balance for peer %s: %s", sp.peer, sp.balance.String()))
+}
+
 // New - swap constructor
 func NewSwap(local *Params) (swap *Swap, err error) {
 
 	swap = &Swap{
 		local: local,
+		peers: make(map[discover.NodeID]*swapPeer),
 	}
 
 	//swap.SetParams(local)
-
 	return
 }
 
@@ -150,8 +202,8 @@ func NewDefaultSwapParams() *LocalProfile {
 			Profile: &Profile{
 				BuyAt:  buyAt,
 				SellAt: sellAt,
-				PayAt:  uint(payAt),
-				DropAt: uint(dropAt),
+				PayAt:  payAt,
+				DropAt: dropAt,
 			},
 			Strategy: &Strategy{
 				AutoCashInterval:     autoCashInterval,
@@ -177,70 +229,6 @@ func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) 
 		publicKey:   pubkey,
 		owner:       crypto.PubkeyToAddress(*pubkey),
 	}
-}
-
-/////////////////////////////////////////////////////////////////////
-// SECTION: node.Service interface
-/////////////////////////////////////////////////////////////////////
-
-func (p *Swap) Start(srv *p2p.Server) error {
-	log.Debug("Started swap")
-	return nil
-}
-
-func (p *Swap) Stop() error {
-	log.Info("swap shutting down")
-	return nil
-}
-
-var swapSpec = &protocols.Spec{
-	Name:       swapProtocolName,
-	Version:    swapVersion,
-	MaxMsgSize: defaultMaxMsgSize,
-	Messages: []interface{}{
-		SwapMsg{},
-	},
-}
-
-func (p *Swap) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{
-		{
-			Name:    swapSpec.Name,
-			Version: swapSpec.Version,
-			Length:  swapSpec.Length(),
-			Run:     p.Run,
-		},
-	}
-}
-
-func (p *Swap) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	pp := protocols.NewPeer(peer, rw, swapSpec)
-	/*
-		p.fwdPoolMu.Lock()
-		p.fwdPool[peer.Info().ID] = pp
-		p.fwdPoolMu.Unlock()
-	*/
-	return pp.Run(p.handleSwapMsg)
-}
-
-func (p *Swap) APIs() []rpc.API {
-	apis := []rpc.API{
-		{
-			Namespace: "swap",
-			Version:   "1.0",
-			Service:   NewAPI(p),
-			Public:    true,
-		},
-	}
-	return apis
-}
-
-// Filters incoming messages for processing or forwarding.
-// Check if address partially matches
-// If yes, it CAN be for us, and we process it
-// Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Swap) handleSwapMsg(ctx context.Context, msg interface{}) error {
-	return nil
 }
 
 // Chequebook get's chequebook from the localProfile
@@ -351,12 +339,13 @@ func (lp *LocalProfile) newChequebookFromContract(path string, backend chequeboo
 	return nil
 }
 
+/*
 // Add (n)
 // n > 0 called when promised/provided n units of service
 // n < 0 called when used/requested n units of service
 func (swap *Swap) Add(n int) error {
-	defer swap.lock.Unlock()
-	swap.lock.Lock()
+	//defer swap.lock.Unlock()
+	//swap.lock.Lock()
 	swap.balance += n
 	if !swap.Sells && swap.balance > 0 {
 		log.Trace(fmt.Sprintf("<%v> remote peer cannot have debt (balance: %v)", swap.proto, swap.balance))
@@ -379,11 +368,12 @@ func (swap *Swap) Add(n int) error {
 
 // Balance accessor
 func (swap *Swap) Balance() int {
-	defer swap.lock.Unlock()
-	swap.lock.Lock()
+	//defer swap.lock.Unlock()
+	//swap.lock.Lock()
 	return swap.balance
 }
 
+/*
 // send (units) is called when payment is due
 // In case of insolvency no promise is issued and sent, safe against fraud
 // No return value: no error = payment is opportunistic = hang in till dropped
@@ -431,3 +421,4 @@ func (swap *Swap) Receive(units int, promise Promise) error {
 
 	return nil
 }
+*/

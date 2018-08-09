@@ -71,7 +71,7 @@ func newServiceNode(port int, httpport int, wsport int, modules ...string) (*nod
 	return stack, nil
 }
 
-func TestBasicSwap(t *testing.T) {
+func TestSwapProtocol(t *testing.T) {
 
 	// create the two nodes
 	stack_one, err := newServiceNode(p2pPort, 0, 0)
@@ -83,14 +83,11 @@ func TestBasicSwap(t *testing.T) {
 		log.Crit("Create servicenode #2 fail", "err", err)
 	}
 
-	instance, err := NewSwap(NewDefaultSwapParams().Params)
-	if err != nil {
-		t.Fatal("Couldn't create Swap instance")
-	}
+	instance := NewSwapProtocol()
 	// wrapper function for servicenode to start the service
 	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
 		return &API{
-			Swap: instance,
+			SwapProtocol: instance,
 		}, nil
 	}
 
