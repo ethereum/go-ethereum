@@ -158,6 +158,10 @@ contract TomoValidator {
         return withdrawsState[msg.sender].blockNumbers;
     }
 
+    function getWithdrawCap(uint256 _blockNumber) public view returns(uint256) {
+        return withdrawsState[msg.sender].caps[_blockNumber];
+    }
+
     function unvote(address _candidate, uint256 _cap) public onlyValidVote(_candidate, _cap) {
         validatorsState[_candidate].cap = validatorsState[_candidate].cap.sub(_cap);
         validatorsState[_candidate].voters[msg.sender] = validatorsState[_candidate].voters[msg.sender].sub(_cap);
