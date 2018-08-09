@@ -31,7 +31,7 @@ type APIMsg struct {
 
 // Additional public methods accessible through API for pss
 type API struct {
-	*Swap
+	*SwapProtocol
 }
 
 type SwapMetrics struct {
@@ -40,8 +40,8 @@ type SwapMetrics struct {
 type Cheque struct {
 }
 
-func NewAPI(swap *Swap) *API {
-	return &API{Swap: swap}
+func NewAPI(swap *SwapProtocol) *API {
+	return &API{SwapProtocol: swap}
 }
 
 func (swapapi *API) Balance(ctx context.Context) (balance int, err error) {

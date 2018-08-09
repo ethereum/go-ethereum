@@ -14,164 +14,186 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !nopssprotocol
-
 package swap
 
 import (
+	"context"
+	"fmt"
 	"sync"
-	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 const (
 	IsActiveProtocol = true
 )
 
-// Convenience wrapper for devp2p protocol messages for transport over pss
-type ProtocolMsg struct {
-	Code       uint64
-	Size       uint32
-	Payload    []byte
-	ReceivedAt time.Time
+type SwapProtocol struct {
+	peersMu sync.RWMutex
+	peers   map[discover.NodeID]*SwapPeer
 }
 
-// Creates a ProtocolMsg
-func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
+// Peer is the Peer extension for the streaming protocol
+type SwapPeer struct {
+	*protocols.Peer
+	swapProtocol *SwapProtocol
+}
 
-	rlpdata, err := rlp.EncodeToBytes(msg)
-	if err != nil {
-		return nil, err
+func NewSwapProtocol() *SwapProtocol {
+	proto := &SwapProtocol{
+		peers: make(map[discover.NodeID]*SwapPeer),
 	}
+	return proto
+}
 
-	// TODO verify that nested structs cannot be used in rlp
-	smsg := &ProtocolMsg{
-		Code:    code,
-		Size:    uint32(len(rlpdata)),
-		Payload: rlpdata,
+// NewPeer is the constructor for Peer
+func NewPeer(peer *protocols.Peer, swap *SwapProtocol) *SwapPeer {
+	p := &SwapPeer{
+		Peer:         peer,
+		swapProtocol: swap,
 	}
-
-	return rlp.EncodeToBytes(smsg)
+	return p
 }
 
-// Protocol options to be passed to a new Protocol instance
-//
-// The parameters specify which encryption schemes to allow
-type ProtocolParams struct {
+type IssueChequeMsg struct {
 }
 
-// Convenience object for emulation devp2p over pss
-type Protocol struct {
-	proto    *p2p.Protocol
-	spec     *protocols.Spec
-	RWPoolMu sync.Mutex
+type RedeemChequeMsg struct {
 }
 
-/*
-// Activates devp2p emulation over a specific pss topic
-//
-// One or both encryption schemes must be specified. If
-// only one is specified, the protocol will not be valid
-// for the other, and will make the message handler
-// return errors
-func RegisterProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *ProtocolParams) (*Protocol, error) {
-	if !options.Asymmetric && !options.Symmetric {
-		return nil, fmt.Errorf("specify at least one of asymmetric or symmetric messaging mode")
-	}
-	pp := &Protocol{
-		Pss:          ps,
-		proto:        targetprotocol,
-		topic:        topic,
-		spec:         spec,
-		pubKeyRWPool: make(map[string]p2p.MsgReadWriter),
-		symKeyRWPool: make(map[string]p2p.MsgReadWriter),
-		Asymmetric:   options.Asymmetric,
-		Symmetric:    options.Symmetric,
-	}
-	return pp, nil
-}
+/////////////////////////////////////////////////////////////////////
+// SECTION: node.Service interface
+/////////////////////////////////////////////////////////////////////
 
-*/
-// Generic handler for incoming messages over devp2p emulation
-//
-// To be passed to pss.Register()
-//
-// Will run the protocol on a new incoming peer, provided that
-// the encryption key of the message has a match in the internal
-// pss keypool
-//
-// Fails if protocol is not valid for the message encryption scheme,
-// if adding a new peer fails, or if the message is not a serialized
-// p2p.Msg (which it always will be if it is sent from this object).
-func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid string) error {
+func (p *SwapProtocol) Start(srv *p2p.Server) error {
+	log.Debug("Started swap")
 	return nil
 }
 
-/*
-// Runs an emulated pss Protocol on the specified peer,
-// linked to a specific topic
-// `key` and `asymmetric` specifies what encryption key
-// to link the peer to.
-// The key must exist in the pss store prior to adding the peer.
-func (p *Protocol) AddPeer(peer *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
-	rw := &PssReadWriter{
-		Pss:   p.Pss,
-		rw:    make(chan p2p.Msg),
-		spec:  p.spec,
-		topic: p.topic,
-		key:   key,
-	}
-	if asymmetric {
-		rw.sendFunc = p.Pss.SendAsym
-	} else {
-		rw.sendFunc = p.Pss.SendSym
-	}
-	if asymmetric {
-		p.Pss.pubKeyPoolMu.Lock()
-		if _, ok := p.Pss.pubKeyPool[key]; !ok {
-			return nil, fmt.Errorf("asym key does not exist: %s", key)
-		}
-		p.Pss.pubKeyPoolMu.Unlock()
-		p.RWPoolMu.Lock()
-		p.pubKeyRWPool[key] = rw
-		p.RWPoolMu.Unlock()
-	} else {
-		p.Pss.symKeyPoolMu.Lock()
-		if _, ok := p.Pss.symKeyPool[key]; !ok {
-			return nil, fmt.Errorf("symkey does not exist: %s", key)
-		}
-		p.Pss.symKeyPoolMu.Unlock()
-		p.RWPoolMu.Lock()
-		p.symKeyRWPool[key] = rw
-		p.RWPoolMu.Unlock()
-	}
-	go func() {
-		err := p.proto.Run(peer, rw)
-		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", peer, topic, err))
-	}()
-	return rw, nil
+func (p *SwapProtocol) Stop() error {
+	log.Info("swap shutting down")
+	return nil
 }
 
-func (p *Protocol) RemovePeer(asymmetric bool, key string) {
-	log.Debug("closing pss peer", "asym", asymmetric, "key", key)
-	p.RWPoolMu.Lock()
-	defer p.RWPoolMu.Unlock()
-	if asymmetric {
-		rw := p.pubKeyRWPool[key].(*PssReadWriter)
-		rw.closed = true
-		delete(p.pubKeyRWPool, key)
-	} else {
-		rw := p.symKeyRWPool[key].(*PssReadWriter)
-		rw.closed = true
-		delete(p.symKeyRWPool, key)
+var swapSpec = &protocols.Spec{
+	Name:       swapProtocolName,
+	Version:    swapVersion,
+	MaxMsgSize: defaultMaxMsgSize,
+	Messages: []interface{}{
+		SwapMsg{},
+	},
+}
+
+func (p *SwapProtocol) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{
+		{
+			Name:    swapSpec.Name,
+			Version: swapSpec.Version,
+			Length:  swapSpec.Length(),
+			Run:     p.Run,
+		},
 	}
 }
 
-// Uniform translation of protocol specifiers to topic
-func ProtocolTopic(spec *protocols.Spec) Topic {
-	return BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
+func (swap *SwapProtocol) DebitByteCount(peer *SwapPeer, numberOfBytes int) error {
+	return nil
 }
-*/
+
+func (swap *SwapProtocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	p := protocols.NewPeer(peer, rw, swapSpec)
+	sp := NewPeer(p, swap)
+	swap.setPeer(sp)
+	defer swap.deletePeer(sp)
+	defer swap.Close()
+	return sp.Run(sp.handleSwapMsg)
+}
+
+func (p *SwapProtocol) APIs() []rpc.API {
+	apis := []rpc.API{
+		{
+			Namespace: "swap",
+			Version:   "1.0",
+			Service:   NewAPI(p),
+			Public:    true,
+		},
+	}
+	return apis
+}
+
+//--------------------
+
+func (swap *SwapProtocol) NodeInfo() interface{} {
+	return nil
+}
+
+func (swap *SwapProtocol) PeerInfo(id discover.NodeID) interface{} {
+	return nil
+}
+
+func (swap *SwapProtocol) Close() error {
+	return nil
+}
+
+func (swap *SwapProtocol) getPeer(peerId discover.NodeID) *SwapPeer {
+	swap.peersMu.RLock()
+	defer swap.peersMu.RUnlock()
+
+	return swap.peers[peerId]
+}
+
+func (swap *SwapProtocol) setPeer(peer *SwapPeer) {
+	swap.peersMu.Lock()
+	defer swap.peersMu.Unlock()
+
+	swap.peers[peer.ID()] = peer
+	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(swap.peers)))
+}
+
+func (swap *SwapProtocol) deletePeer(peer *SwapPeer) {
+	swap.peersMu.Lock()
+	defer swap.peersMu.Unlock()
+
+	delete(swap.peers, peer.ID())
+	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(swap.peers)))
+	swap.peersMu.Unlock()
+}
+
+func (swap *SwapProtocol) peersCount() (c int) {
+	swap.peersMu.Lock()
+	c = len(swap.peers)
+	swap.peersMu.Unlock()
+	return
+}
+
+func (p *SwapPeer) handleSwapMsg(ctx context.Context, msg interface{}) error {
+	switch msg := msg.(type) {
+
+	case *IssueChequeMsg:
+		return p.handleIssueChequeMsg(ctx, msg)
+
+	case *RedeemChequeMsg:
+		return p.handleRedeemChequeMsg(ctx, msg)
+
+	/*
+		case *QuitMsg:
+			return p.handleQuitMsg(msg)
+	*/
+
+	default:
+		return fmt.Errorf("unknown message type: %T", msg)
+	}
+	return nil
+}
+
+func (sp *SwapPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
+	return err
+}
+
+func (sp *SwapPeer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
+	return err
+}
