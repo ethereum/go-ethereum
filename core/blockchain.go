@@ -1189,13 +1189,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if i == len(chain)-1 && bc.chainConfig.Clique != nil {
+		if i == len(chain)-1 && bc.chainConfig.Posv != nil {
 			// epoch block
-			if (chain[i].NumberU64() % bc.chainConfig.Clique.Epoch) == 0 {
+			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
-			if (chain[i].NumberU64() % bc.chainConfig.Clique.Epoch) == (bc.chainConfig.Clique.Epoch - bc.chainConfig.Clique.Gap) {
+			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == (bc.chainConfig.Posv.Epoch - bc.chainConfig.Posv.Gap) {
 				M1Ch <- 1
 			}
 		}

@@ -1,20 +1,19 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright (c) 2018 Tomochain
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package clique
+package posv
 
 import (
 	"bytes"
@@ -371,7 +370,7 @@ func TestVoting(t *testing.T) {
 			}
 			accounts.sign(headers[j], vote.signer)
 		}
-		// Pass all the headers through clique and ensure tallying succeeds
+		// Pass all the headers through posv and ensure tallying succeeds
 		head := headers[len(headers)-1]
 
 		snap, err := New(&params.PosvConfig{Epoch: tt.epoch}, db).snapshot(&testerChainReader{db: db}, head.Number.Uint64(), head.Hash(), headers)

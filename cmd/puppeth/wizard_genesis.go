@@ -58,10 +58,10 @@ func (w *wizard) makeGenesis() {
 	}
 	// Figure out which consensus engine to choose
 	fmt.Println()
-	fmt.Println("Which consensus engine to use? (default = clique)")
+	fmt.Println("Which consensus engine to use? (default = posv)")
 	fmt.Println(" 1. Ethash - proof-of-work")
-	fmt.Println(" 2. Clique - proof-of-authority")
-	fmt.Println(" 3. Tomo - proof-of-stake-voting")
+	fmt.Println(" 2. Posv - proof-of-authority")
+	fmt.Println(" 3. Posv - proof-of-stake-voting")
 
 	choice := w.read()
 	switch {
@@ -70,21 +70,16 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Ethash = new(params.EthashConfig)
 		genesis.ExtraData = make([]byte, 32)
 
-	case choice == "" || choice == "2":
+	case  choice == "2":
 		// In the case of clique, configure the consensus parameters
 		genesis.Difficulty = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
-			Reward: 0,
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 15)")
 		genesis.Config.Clique.Period = uint64(w.readDefaultInt(15))
-
-		fmt.Println()
-		fmt.Println("How many Ethers should be rewarded to signer? (default = 0)")
-		genesis.Config.Clique.Reward = uint64(w.readDefaultInt(0))
 
 		// We also need the initial list of signers
 		fmt.Println()
@@ -113,29 +108,20 @@ func (w *wizard) makeGenesis() {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
 
-		fmt.Println()
-		fmt.Println("How many blocks per checkpoint? (default = 990)")
-		genesis.Config.Clique.Epoch = uint64(w.readDefaultInt(990))
-		genesis.Config.Clique.RewardCheckpoint = genesis.Config.Clique.Epoch
-
-		fmt.Println()
-		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
-		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
-
-	case choice == "3":
+	case choice == "" || choice == "3":
 		genesis.Difficulty = big.NewInt(1)
-		genesis.Config.Clique = &params.CliqueConfig{
+		genesis.Config.Posv = &params.PosvConfig{
 			Period: 15,
 			Epoch:  30000,
 			Reward: 0,
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 2)")
-		genesis.Config.Clique.Period = uint64(w.readDefaultInt(2))
+		genesis.Config.Posv.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
 		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
-		genesis.Config.Clique.Reward = uint64(w.readDefaultInt(10))
+		genesis.Config.Posv.Reward = uint64(w.readDefaultInt(10))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
@@ -175,11 +161,11 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many blocks per epoch? (default = 990)")
 		epochNumber := w.readDefaultInt(990)
-		genesis.Config.Clique.RewardCheckpoint = uint64(epochNumber)
+		genesis.Config.Posv.RewardCheckpoint = uint64(epochNumber)
 
 		fmt.Println()
 		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
-		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
+		genesis.Config.Posv.Gap = uint64(w.readDefaultInt(50))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
