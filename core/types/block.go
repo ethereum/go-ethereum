@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"fmt"
 
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/common/hexutil"
@@ -70,6 +71,8 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 type Header struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	Validator   common.Address  `json:"validator"       gencodec:"required"`
+	DposContext *DposContextProto `json:"dposContext"   gencodec:"required"`
 	Coinbase    common.Address `json:"miner"            gencodec:"required"`
 	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
@@ -107,6 +110,7 @@ func (h *Header) HashNoNonce() common.Hash {
 	return rlpHash([]interface{}{
 		h.ParentHash,
 		h.UncleHash,
+		h.Validator,
 		h.Coinbase,
 		h.Root,
 		h.TxHash,
@@ -159,6 +163,7 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+	DposContext *DposContext
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the
@@ -253,6 +258,11 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+	// add dposContextProto to header
+	cpy.DposContext = &DposContextProto{}
+	if h.DposContext != nil {
+		cpy.DposContext = h.DposContext
+	}
 	return &cpy
 }
 
@@ -311,6 +321,7 @@ func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
 func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
 func (b *Block) Bloom() Bloom             { return b.header.Bloom }
+func (b *Block) Validator() common.Address { return b.header.Validator }
 func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
 func (b *Block) Root() common.Hash        { return b.header.Root }
 func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
@@ -360,7 +371,10 @@ func (b *Block) WithSeal(header *Header) *Block {
 		header:       &cpy,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		// add dposcontext
+		DposContext: b.DposContext,
 	}
+
 }
 
 // WithBody returns a new block with the given transaction and uncle contents.
@@ -386,6 +400,42 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+func (b *Block) String() string {
+	str := fmt.Sprintf(`Block(#%v): Size: %v {
+MinerHash: %x
+%v
+Transactions:
+%v
+Uncles:
+%v
+}
+`, b.Number(), b.Size(), b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
+	return str
+}
+
+func (h *Header) String() string {
+	return fmt.Sprintf(`Header(%x):
+[
+	ParentHash:	    %x
+	UncleHash:	    %x
+	Validator:	    %x
+	Coinbase:	    %x
+	Root:		    %x
+	TxSha		    %x
+	ReceiptSha:	    %x
+    DposContext:    %x
+	Bloom:		    %x
+	Difficulty:	    %v
+	Number:		    %v
+	GasLimit:	    %v
+	GasUsed:	    %v
+	Time:		    %v
+	Extra:		    %s
+	MixDigest:      %x
+	Nonce:		    %x
+]`, h.Hash(), h.ParentHash, h.UncleHash, h.Validator, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.DposContext, h.Bloom, h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce)
 }
 
 type Blocks []*Block

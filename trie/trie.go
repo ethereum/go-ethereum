@@ -25,6 +25,8 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/crypto"
 	"github.com/pavelkrolevets/go-ethereum/log"
 	"github.com/pavelkrolevets/go-ethereum/metrics"
+	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
+
 )
 
 var (
@@ -54,6 +56,10 @@ func CacheUnloads() int64 {
 	return cacheUnloadCounter.Count()
 }
 
+func init() {
+	sha3.NewKeccak256().Sum(emptyState[:0])
+}
+
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
 // node. It's used by state sync and commit to allow handling external references
 // between account and storage tries.
@@ -65,10 +71,10 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db           *Database
+	db           Database
 	root         node
 	originalRoot common.Hash
-
+	prefix       []byte
 	// Cache generation values.
 	// cachegen increases by one with each commit operation.
 	// new nodes are tagged with the current generation and unloaded
@@ -93,14 +99,17 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db *Database) (*Trie, error) {
-	if db == nil {
-		panic("trie.New called without a database")
-	}
+func New(root common.Hash, db Database) (*Trie, error) {
+
 	trie := &Trie{
 		db:           db,
 		originalRoot: root,
 	}
+
+	if db == nil {
+		panic("trie.New called without a database")
+	}
+
 	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
 		if err != nil {
@@ -109,6 +118,25 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		trie.root = rootnode
 	}
 	return trie, nil
+}
+// Creates trie with prefix for dpos content
+func NewTrieWithPrefix(root common.Hash, prefix []byte, db Database) (*Trie, error) {
+	trie, err := New(root, db)
+	if err != nil {
+		return nil, err
+	}
+	trie.prefix = prefix
+	return trie, nil
+}
+
+
+// PrefixIterator returns an iterator that returns nodes of the trie which has the prefix path specificed
+// Iteration starts at the key after the given start key.
+func (t *Trie) PrefixIterator(prefix []byte) NodeIterator {
+	if t.prefix != nil {
+		prefix = append(t.prefix, prefix...)
+	}
+	return newPrefixIterator(t, prefix)
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at

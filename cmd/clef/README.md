@@ -170,7 +170,7 @@ All hex encoded values must be prefixed with `0x`.
 
 #### Create new password protected account
 
-The signer will generate a new private key, encrypts it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and stores it in the keystore directory.
+The signer will generate a new private key, encrypts it according to [web3 keystore spec](https://github.com/pavelkrolevets/wiki/wiki/Web3-Secret-Storage-Definition) and stores it in the keystore directory.
 The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
 
 #### Arguments
@@ -423,7 +423,7 @@ Response
    format.
    
 #### Arguments
-  - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export) 
+  - account [object]: key in [web3 keystore format](https://github.com/pavelkrolevets/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export)
 
 #### Result
   - imported key [object]:
@@ -486,7 +486,7 @@ Response
   - account [address]: export private key that is associated with this account
 
 #### Result
-  - exported key, see [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) for
+  - exported key, see [web3 keystore format](https://github.com/pavelkrolevets/wiki/wiki/Web3-Secret-Storage-Definition) for
   more information
   
 #### Sample call

@@ -34,7 +34,7 @@ import (
 )
 
 // VMTest checks EVM execution without block or transaction context.
-// See https://github.com/ethereum/tests/wiki/VM-Tests for the test format specification.
+// See https://github.com/pavelkrolevets/tests/wiki/VM-Tests for the test format specification.
 type VMTest struct {
 	json vmJSON
 }

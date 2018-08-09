@@ -573,3 +573,94 @@ func (it *unionIterator) Error() error {
 	}
 	return nil
 }
+
+type prefixIterator struct {
+	prefix       []byte
+	nodeIterator NodeIterator
+}
+
+// newPrefixIterator constructs a NodeIterator, iterates over elements in trie that
+// has common prefix.
+func newPrefixIterator(trie *Trie, prefix []byte) NodeIterator {
+	if trie.Hash() == emptyState {
+		return new(prefixIterator)
+	}
+	// nodeIterator will convert prefix to hex
+	nodeIt := newNodeIterator(trie, prefix)
+	prefix = keybytesToHex(prefix)
+	return &prefixIterator{
+		nodeIterator: nodeIt,
+		prefix:       prefix[:len(prefix)-1], // remove the hex terminator
+	}
+}
+
+// hasPrefix return whether the nodeIterator has common prefix
+func (it *prefixIterator) hasPrefix() bool {
+	return bytes.HasPrefix(it.nodeIterator.Path(), it.prefix)
+}
+
+func (it *prefixIterator) Hash() common.Hash {
+	if it.hasPrefix() {
+		return it.nodeIterator.Hash()
+	}
+	return common.Hash{}
+}
+
+func (it *prefixIterator) Parent() common.Hash {
+	if it.hasPrefix() {
+		it.nodeIterator.Parent()
+	}
+	return common.Hash{}
+}
+
+func (it *prefixIterator) Leaf() bool {
+	if it.hasPrefix() {
+		return it.nodeIterator.Leaf()
+	}
+	return false
+}
+
+func (it *prefixIterator) LeafBlob() []byte {
+	if it.hasPrefix() {
+		return it.nodeIterator.LeafBlob()
+	}
+	return nil
+}
+
+func (it *prefixIterator) LeafKey() []byte {
+	if it.hasPrefix() {
+		return it.nodeIterator.LeafKey()
+	}
+	return nil
+}
+
+func (it *prefixIterator) Path() []byte {
+	if it.hasPrefix() {
+		return it.nodeIterator.Path()
+	}
+	return nil
+}
+
+// Next moves the iterator to the next node, returning whether there are any
+// further nodes which has common prefix. In case of an internal error this method
+// returns false and sets the Error field to the encountered failure.
+// If `descend` is false, skips iterating over any subnodes of the current node.
+func (it *prefixIterator) Next(descend bool) bool {
+	if it.nodeIterator.Next(descend) {
+		if it.hasPrefix() {
+			return true
+		}
+	}
+	return false
+}
+
+func (it *prefixIterator) Error() error {
+	return it.nodeIterator.Error()
+}
+
+func (it *prefixIterator) LeafProof() [][]byte {
+	if it.hasPrefix() {
+		return it.nodeIterator.LeafProof()
+	}
+	return nil
+}
