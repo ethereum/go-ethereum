@@ -195,6 +195,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				Reward float64 `json:"reward"`
 			}
 
+			number := header.Number.Uint64()
+			rCheckpoint := chain.Config().Clique.RewardCheckpoint
+			
 			// Call to smart contract signer.
 			config := ctx.GetConfig()
 			client, err := ethclient.Dial(config.IPCEndpoint())
@@ -208,12 +211,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			opts := new(bind.CallOpts)
 
-			number := header.Number.Uint64()
-			rCheckpoint := chain.Config().Clique.RewardCheckpoint
+			
 			prevCheckpoint := number - rCheckpoint
 
-			if number > 0 && prevCheckpoint > 0 && number%rCheckpoint == 0 {
-				// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+			if number > 0 && prevCheckpoint > 0 {
+			           // Not reward for singer of genesis block and only calculate reward at checkpoint block.
 				startBlockNumber := number - (rCheckpoint * 2) + 1
 				endBlockNumber := startBlockNumber + rCheckpoint - 2
 				signers := make(map[common.Address]*rewardLog)
