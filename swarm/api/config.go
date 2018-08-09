@@ -63,6 +63,7 @@ type Config struct {
 	SwapEnabled       bool
 	SyncEnabled       bool
 	DeliverySkipCheck bool
+	LightNodeEnabled  bool
 	SyncUpdateDelay   time.Duration
 	SwapAPI           string
 	Cors              string
