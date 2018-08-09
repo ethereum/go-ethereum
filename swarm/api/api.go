@@ -525,6 +525,10 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 
 			return nil
 		})
+		// close tar writer before closing pipew
+		// to flush remaining data to pipew
+		// regardless of error value
+		tw.Close()
 		if err != nil {
 			apiGetTarFail.Inc(1)
 			pipew.CloseWithError(err)
