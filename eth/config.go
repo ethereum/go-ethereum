@@ -98,6 +98,7 @@ type Config struct {
 	Etherbase    common.Address `toml:",omitempty"`
 	MinerThreads int            `toml:",omitempty"`
 	ExtraData    []byte         `toml:",omitempty"`
+	NotifyWork   string         `toml:",omitempty"`
 	GasPrice     *big.Int
 
 	// Ethash options

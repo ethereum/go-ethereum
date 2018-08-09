@@ -341,6 +341,10 @@ var (
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
 	}
+	NotifyWorkFlag = cli.StringFlag{
+		Name:  "notifywork",
+		Usage: "URLs to which work package notifications are pushed. URLS should be a comma-delimited list of HTTP URLs.",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1098,6 +1102,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(ExtraDataFlag.Name))
+	}
+	if ctx.GlobalIsSet(NotifyWorkFlag.Name) {
+		cfg.NotifyWork = ctx.GlobalString(NotifyWorkFlag.Name)
 	}
 	if ctx.GlobalIsSet(GasPriceFlag.Name) {
 		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)

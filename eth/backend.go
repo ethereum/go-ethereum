@@ -170,6 +170,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
+	// Set up mining work push notifications if requested
+	if len(config.NotifyWork) > 0 {
+		eth.miner.Register(miner.NewNotificationAgent(eth.blockchain, eth.engine, config.NotifyWork))
+	}
+
 	eth.APIBackend = &EthAPIBackend{eth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
