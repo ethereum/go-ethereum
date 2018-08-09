@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"math/rand"
 	"time"
 
@@ -29,6 +28,16 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+
+	"context"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner"
+	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
+	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.
@@ -52,6 +61,7 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("Which consensus engine to use? (default = clique)")
 	fmt.Println(" 1. Ethash - proof-of-work")
 	fmt.Println(" 2. Clique - proof-of-authority")
+	fmt.Println(" 3. Tomo - proof-of-stake-voting")
 
 	choice := w.read()
 	switch {
@@ -112,6 +122,125 @@ func (w *wizard) makeGenesis() {
 		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
 		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
 
+	case choice == "3":
+		genesis.Difficulty = big.NewInt(1)
+		genesis.Config.Clique = &params.CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+			Reward: 0,
+		}
+		fmt.Println()
+		fmt.Println("How many seconds should blocks take? (default = 2)")
+		genesis.Config.Clique.Period = uint64(w.readDefaultInt(2))
+
+		fmt.Println()
+		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
+		genesis.Config.Clique.Reward = uint64(w.readDefaultInt(10))
+
+		fmt.Println()
+		fmt.Println("Who own the first masternodes? (mandatory)")
+		owner := *w.readAddress()
+
+		// We also need the initial list of signers
+		fmt.Println()
+		fmt.Println("Which accounts are allowed to seal (signers)? (mandatory at least one)")
+
+		var signers []common.Address
+		for {
+			if address := w.readAddress(); address != nil {
+				signers = append(signers, *address)
+				continue
+			}
+			if len(signers) > 0 {
+				break
+			}
+		}
+		// Sort the signers and embed into the extra-data section
+		for i := 0; i < len(signers); i++ {
+			for j := i + 1; j < len(signers); j++ {
+				if bytes.Compare(signers[i][:], signers[j][:]) > 0 {
+					signers[i], signers[j] = signers[j], signers[i]
+				}
+			}
+		}
+		validatorCap := new(big.Int)
+		validatorCap.SetString("50000000000000000000000", 10)
+		var validatorCaps []*big.Int
+		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
+		for i, signer := range signers {
+			validatorCaps = append(validatorCaps, validatorCap)
+			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
+		}
+
+		fmt.Println()
+		fmt.Println("How many blocks per epoch? (default = 990)")
+		epochNumber := w.readDefaultInt(990)
+		genesis.Config.Clique.RewardCheckpoint = uint64(epochNumber)
+
+		fmt.Println()
+		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 50)")
+		genesis.Config.Clique.Gap = uint64(w.readDefaultInt(50))
+
+		// Validator Smart Contract Code
+		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr := crypto.PubkeyToAddress(pKey.PublicKey)
+		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+		transactOpts := bind.NewKeyedTransactor(pKey)
+
+		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend, signers, validatorCaps, owner)
+		if err != nil {
+			fmt.Println("Can't deploy root registry")
+		}
+		contractBackend.Commit()
+
+		d := time.Now().Add(1000 * time.Millisecond)
+		ctx, cancel := context.WithDeadline(context.Background(), d)
+		defer cancel()
+		code, _ := contractBackend.CodeAt(ctx, validatorAddress, nil)
+		storage := make(map[common.Hash]common.Hash)
+		f := func(key, val common.Hash) bool {
+			storage[key] = val
+			return true
+		}
+		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
+		genesis.Alloc[common.HexToAddress(common.MasternodeVotingSMC)] = core.GenesisAccount{
+			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
+			Code:    code,
+			Storage: storage,
+		}
+
+		// Block Signers Smart Contract
+		blockSignerAddress, _, err := blockSignerContract.DeployBlockSigner(transactOpts, contractBackend, big.NewInt(int64(epochNumber)))
+		if err != nil {
+			fmt.Println("Can't deploy root registry")
+		}
+		contractBackend.Commit()
+
+		code, _ = contractBackend.CodeAt(ctx, blockSignerAddress, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
+		genesis.Alloc[common.HexToAddress(common.BlockSigners)] = core.GenesisAccount{
+			Balance: big.NewInt(0),
+			Code:    code,
+			Storage: storage,
+		}
+
+		// Randomize Smart Contract Code
+		randomizeAddress, _, err := randomizeContract.DeployRandomize(transactOpts, contractBackend, big.NewInt(99))
+		if err != nil {
+			fmt.Println("Can't deploy root registry")
+		}
+		contractBackend.Commit()
+
+		code, _ = contractBackend.CodeAt(ctx, randomizeAddress, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, randomizeAddress, nil, f)
+		genesis.Alloc[common.HexToAddress(common.RandomizeSMC)] = core.GenesisAccount{
+			Balance: big.NewInt(0),
+			Code:    code,
+			Storage: storage,
+		}
+
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
 	}
@@ -129,7 +258,7 @@ func (w *wizard) makeGenesis() {
 		break
 	}
 	// Add a batch of precompile balances to avoid them getting deleted
-	for i := int64(0); i < 256; i++ {
+	for i := int64(0); i < 2; i++ {
 		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
 	}
 	// Query the user for some custom extras

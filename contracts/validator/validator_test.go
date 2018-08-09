@@ -16,17 +16,19 @@
 package validator
 
 import (
+	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/rand"
-	"time"
 )
 
 var (
@@ -46,11 +48,24 @@ func TestValidator(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
-	_, validator, err := DeployValidator(transactOpts, contractBackend)
+	validatorCap := new(big.Int)
+	validatorCap.SetString("50000000000000000000000", 10)
+	validatorAddress, validator, err := DeployValidator(transactOpts, contractBackend, []common.Address{addr}, []*big.Int{validatorCap}, addr)
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
 	contractBackend.Commit()
+
+	d := time.Now().Add(1000 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
+	code, _ := contractBackend.CodeAt(ctx, validatorAddress, nil)
+	t.Log("contract code", common.ToHex(code))
+	f := func(key, val common.Hash) bool {
+		t.Log(key.Hex(), val.Hex())
+		return true
+	}
+	contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
 
 	candidates, err := validator.GetCandidates()
 	if err != nil {
@@ -76,7 +91,20 @@ func TestRewardBalance(t *testing.T) {
 	accounts := []*bind.TransactOpts{acc1Opts, acc2Opts}
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
 
-	validatorAddr, _, baseValidator, err := contract.DeployTomoValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
+	// validatorAddr, _, baseValidator, err := contract.DeployTomoValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100), big.NewInt(100))
+	validatorCap := new(big.Int)
+	validatorCap.SetString("50000000000000000000000", 10)
+	validatorAddr, _, baseValidator, err := contract.DeployTomoValidator(
+		transactOpts,
+		contractBackend,
+		[]common.Address{addr},
+		[]*big.Int{validatorCap},
+		addr,
+		big.NewInt(50000),
+		big.NewInt(99),
+		big.NewInt(100),
+		big.NewInt(100),
+	)
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
@@ -124,7 +152,7 @@ func TestRewardBalance(t *testing.T) {
 		afterReward = new(big.Int).Add(afterReward, value)
 	}
 
-	if totalReward.Int64()+1 < afterReward.Int64() || totalReward.Int64()-1 > afterReward.Int64() {
+	if totalReward.Int64()+5 < afterReward.Int64() || totalReward.Int64()-5 > afterReward.Int64() {
 		callOpts := new(bind.CallOpts)
 		voters, err := baseValidator.GetVoters(callOpts, acc3Addr)
 		if err != nil {

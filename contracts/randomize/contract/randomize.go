@@ -175,18 +175,18 @@ func (_SafeMath *SafeMathTransactorRaw) Transact(opts *bind.TransactOpts, method
 }
 
 // TomoRandomizeABI is the input ABI used to generate the binding from.
-const TomoRandomizeABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_opening\",\"type\":\"bytes32[]\"}],\"name\":\"setOpening\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"blockTimeSecret\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_validator\",\"type\":\"address\"}],\"name\":\"getSecret\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_secret\",\"type\":\"bytes32[]\"}],\"name\":\"setSecret\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"blockTimeOpening\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_validator\",\"type\":\"address\"}],\"name\":\"getOpening\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"epochNumber\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_epochNumber\",\"type\":\"uint256\"},{\"name\":\"_blockTimeSecret\",\"type\":\"uint256\"},{\"name\":\"_blockTimeOpening\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
+const TomoRandomizeABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"_validator\",\"type\":\"address\"}],\"name\":\"getSecret\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_secret\",\"type\":\"bytes32[]\"}],\"name\":\"setSecret\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"randomNumber\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_validator\",\"type\":\"address\"}],\"name\":\"getOpening\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_opening\",\"type\":\"bytes32\"}],\"name\":\"setOpening\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_randomNumber\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
 
 // TomoRandomizeBin is the compiled bytecode used for deploying new contracts.
-const TomoRandomizeBin = `0x6060604052341561000f57600080fd5b6040516060806105d48339810160405280805191906020018051919060200180516000948555600255505060015561058790819061004d90396000f3006060604052600436106100825763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632141c7d98114610087578063257b03e9146100d8578063284180fc146100fd57806334d386001461016f57806337a52ecc146101be578063d442d6cc146101d1578063f4145a83146101f0575b600080fd5b341561009257600080fd5b6100d6600460248135818101908301358060208181020160405190810160405280939291908181526020018383602002808284375094965061020395505050505050565b005b34156100e357600080fd5b6100eb61029b565b60405190815260200160405180910390f35b341561010857600080fd5b61011c600160a060020a03600435166102a1565b60405160208082528190810183818151815260200191508051906020019060200280838360005b8381101561015b578082015183820152602001610143565b505050509050019250505060405180910390f35b341561017a57600080fd5b6100d6600460248135818101908301358060208181020160405190810160405280939291908181526020018383602002808284375094965061035795505050505050565b34156101c957600080fd5b6100eb6103c2565b34156101dc57600080fd5b61011c600160a060020a03600435166103c8565b34156101fb57600080fd5b6100eb61047c565b60008060005483511461021557600080fd5b60005443925061024c9061023f90610233858263ffffffff61048216565b9063ffffffff61049716565b839063ffffffff6104cd16565b90506001548111801561026157506002548111155b151561026c57600080fd5b600160a060020a03331660009081526004602052604090208380516102959291602001906104df565b50505050565b60015481565b6102a961052c565b600080544391906102c89061023f90610233858263ffffffff61048216565b60015490915081116102d957600080fd5b6003600085600160a060020a0316600160a060020a0316815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561034957602002820191906000526020600020905b81548152600190910190602001808311610334575b505050505092505050919050565b60008060005483511461036957600080fd5b6000544392506103879061023f90610233858263ffffffff61048216565b60015490915081111561039957600080fd5b600160a060020a03331660009081526003602052604090208380516102959291602001906104df565b60025481565b6103d061052c565b600080544391906103ef9061023f90610233858263ffffffff61048216565b600254909150811161040057600080fd5b6004600085600160a060020a0316600160a060020a0316815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561034957602002820191906000526020600020908154815260019091019060200180831161033457505050505092505050919050565b60005481565b6000818381151561048f57fe5b049392505050565b6000808315156104aa57600091506104c6565b508282028284828115156104ba57fe5b04146104c257fe5b8091505b5092915050565b6000828211156104d957fe5b50900390565b82805482825590600052602060002090810192821561051c579160200282015b8281111561051c57825182556020909201916001909101906104ff565b5061052892915061053e565b5090565b60206040519081016040526000815290565b61055891905b808211156105285760008155600101610544565b905600a165627a7a7230582031eb1183e55e5d47012ab3437f7e50e5d73edca48c1e66da1b1b45d7fa0d566b0029`
+const TomoRandomizeBin = `0x6060604052341561000f57600080fd5b604051602080610359833981016040528080516000555050610323806100366000396000f30060606040526004361061006c5763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035041663284180fc811461007157806334d38600146100e3578063ccbac9f514610134578063d442d6cc14610159578063e11f5ba214610178575b600080fd5b341561007c57600080fd5b610090600160a060020a036004351661018e565b60405160208082528190810183818151815260200191508051906020019060200280838360005b838110156100cf5780820151838201526020016100b7565b505050509050019250505060405180910390f35b34156100ee57600080fd5b610132600460248135818101908301358060208181020160405190810160405280939291908181526020018383602002808284375094965061021295505050505050565b005b341561013f57600080fd5b61014761023f565b60405190815260200160405180910390f35b341561016457600080fd5b610147600160a060020a0360043516610245565b341561018357600080fd5b610132600435610260565b61019661027b565b6001600083600160a060020a0316600160a060020a0316815260200190815260200160002080548060200260200160405190810160405280929190818152602001828054801561020657602002820191906000526020600020905b815481526001909101906020018083116101f1575b50505050509050919050565b600160a060020a033316600090815260016020526040902081805161023b92916020019061028d565b5050565b60005481565b600160a060020a031660009081526002602052604090205490565b600160a060020a033316600090815260026020526040902055565b60206040519081016040526000815290565b8280548282559060005260206000209081019282156102ca579160200282015b828111156102ca57825182556020909201916001909101906102ad565b506102d69291506102da565b5090565b6102f491905b808211156102d657600081556001016102e0565b905600a165627a7a7230582043a345787b9942e3361515ce1a0a4dbaab0ed6ce42c6ca0344119134351d9ffe0029`
 
 // DeployTomoRandomize deploys a new Ethereum contract, binding an instance of TomoRandomize to it.
-func DeployTomoRandomize(auth *bind.TransactOpts, backend bind.ContractBackend, _epochNumber *big.Int, _blockTimeSecret *big.Int, _blockTimeOpening *big.Int) (common.Address, *types.Transaction, *TomoRandomize, error) {
+func DeployTomoRandomize(auth *bind.TransactOpts, backend bind.ContractBackend, _randomNumber *big.Int) (common.Address, *types.Transaction, *TomoRandomize, error) {
 	parsed, err := abi.JSON(strings.NewReader(TomoRandomizeABI))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(TomoRandomizeBin), backend, _epochNumber, _blockTimeSecret, _blockTimeOpening)
+	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(TomoRandomizeBin), backend, _randomNumber)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -335,90 +335,12 @@ func (_TomoRandomize *TomoRandomizeTransactorRaw) Transact(opts *bind.TransactOp
 	return _TomoRandomize.Contract.contract.Transact(opts, method, params...)
 }
 
-// BlockTimeOpening is a free data retrieval call binding the contract method 0x37a52ecc.
-//
-// Solidity: function blockTimeOpening() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCaller) BlockTimeOpening(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _TomoRandomize.contract.Call(opts, out, "blockTimeOpening")
-	return *ret0, err
-}
-
-// BlockTimeOpening is a free data retrieval call binding the contract method 0x37a52ecc.
-//
-// Solidity: function blockTimeOpening() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeSession) BlockTimeOpening() (*big.Int, error) {
-	return _TomoRandomize.Contract.BlockTimeOpening(&_TomoRandomize.CallOpts)
-}
-
-// BlockTimeOpening is a free data retrieval call binding the contract method 0x37a52ecc.
-//
-// Solidity: function blockTimeOpening() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCallerSession) BlockTimeOpening() (*big.Int, error) {
-	return _TomoRandomize.Contract.BlockTimeOpening(&_TomoRandomize.CallOpts)
-}
-
-// BlockTimeSecret is a free data retrieval call binding the contract method 0x257b03e9.
-//
-// Solidity: function blockTimeSecret() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCaller) BlockTimeSecret(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _TomoRandomize.contract.Call(opts, out, "blockTimeSecret")
-	return *ret0, err
-}
-
-// BlockTimeSecret is a free data retrieval call binding the contract method 0x257b03e9.
-//
-// Solidity: function blockTimeSecret() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeSession) BlockTimeSecret() (*big.Int, error) {
-	return _TomoRandomize.Contract.BlockTimeSecret(&_TomoRandomize.CallOpts)
-}
-
-// BlockTimeSecret is a free data retrieval call binding the contract method 0x257b03e9.
-//
-// Solidity: function blockTimeSecret() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCallerSession) BlockTimeSecret() (*big.Int, error) {
-	return _TomoRandomize.Contract.BlockTimeSecret(&_TomoRandomize.CallOpts)
-}
-
-// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
-//
-// Solidity: function epochNumber() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCaller) EpochNumber(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _TomoRandomize.contract.Call(opts, out, "epochNumber")
-	return *ret0, err
-}
-
-// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
-//
-// Solidity: function epochNumber() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeSession) EpochNumber() (*big.Int, error) {
-	return _TomoRandomize.Contract.EpochNumber(&_TomoRandomize.CallOpts)
-}
-
-// EpochNumber is a free data retrieval call binding the contract method 0xf4145a83.
-//
-// Solidity: function epochNumber() constant returns(uint256)
-func (_TomoRandomize *TomoRandomizeCallerSession) EpochNumber() (*big.Int, error) {
-	return _TomoRandomize.Contract.EpochNumber(&_TomoRandomize.CallOpts)
-}
-
 // GetOpening is a free data retrieval call binding the contract method 0xd442d6cc.
 //
-// Solidity: function getOpening(_validator address) constant returns(bytes32[])
-func (_TomoRandomize *TomoRandomizeCaller) GetOpening(opts *bind.CallOpts, _validator common.Address) ([][32]byte, error) {
+// Solidity: function getOpening(_validator address) constant returns(bytes32)
+func (_TomoRandomize *TomoRandomizeCaller) GetOpening(opts *bind.CallOpts, _validator common.Address) ([32]byte, error) {
 	var (
-		ret0 = new([][32]byte)
+		ret0 = new([32]byte)
 	)
 	out := ret0
 	err := _TomoRandomize.contract.Call(opts, out, "getOpening", _validator)
@@ -427,15 +349,15 @@ func (_TomoRandomize *TomoRandomizeCaller) GetOpening(opts *bind.CallOpts, _vali
 
 // GetOpening is a free data retrieval call binding the contract method 0xd442d6cc.
 //
-// Solidity: function getOpening(_validator address) constant returns(bytes32[])
-func (_TomoRandomize *TomoRandomizeSession) GetOpening(_validator common.Address) ([][32]byte, error) {
+// Solidity: function getOpening(_validator address) constant returns(bytes32)
+func (_TomoRandomize *TomoRandomizeSession) GetOpening(_validator common.Address) ([32]byte, error) {
 	return _TomoRandomize.Contract.GetOpening(&_TomoRandomize.CallOpts, _validator)
 }
 
 // GetOpening is a free data retrieval call binding the contract method 0xd442d6cc.
 //
-// Solidity: function getOpening(_validator address) constant returns(bytes32[])
-func (_TomoRandomize *TomoRandomizeCallerSession) GetOpening(_validator common.Address) ([][32]byte, error) {
+// Solidity: function getOpening(_validator address) constant returns(bytes32)
+func (_TomoRandomize *TomoRandomizeCallerSession) GetOpening(_validator common.Address) ([32]byte, error) {
 	return _TomoRandomize.Contract.GetOpening(&_TomoRandomize.CallOpts, _validator)
 }
 
@@ -465,24 +387,50 @@ func (_TomoRandomize *TomoRandomizeCallerSession) GetSecret(_validator common.Ad
 	return _TomoRandomize.Contract.GetSecret(&_TomoRandomize.CallOpts, _validator)
 }
 
-// SetOpening is a paid mutator transaction binding the contract method 0x2141c7d9.
+// RandomNumber is a free data retrieval call binding the contract method 0xccbac9f5.
 //
-// Solidity: function setOpening(_opening bytes32[]) returns()
-func (_TomoRandomize *TomoRandomizeTransactor) SetOpening(opts *bind.TransactOpts, _opening [][32]byte) (*types.Transaction, error) {
+// Solidity: function randomNumber() constant returns(uint256)
+func (_TomoRandomize *TomoRandomizeCaller) RandomNumber(opts *bind.CallOpts) (*big.Int, error) {
+	var (
+		ret0 = new(*big.Int)
+	)
+	out := ret0
+	err := _TomoRandomize.contract.Call(opts, out, "randomNumber")
+	return *ret0, err
+}
+
+// RandomNumber is a free data retrieval call binding the contract method 0xccbac9f5.
+//
+// Solidity: function randomNumber() constant returns(uint256)
+func (_TomoRandomize *TomoRandomizeSession) RandomNumber() (*big.Int, error) {
+	return _TomoRandomize.Contract.RandomNumber(&_TomoRandomize.CallOpts)
+}
+
+// RandomNumber is a free data retrieval call binding the contract method 0xccbac9f5.
+//
+// Solidity: function randomNumber() constant returns(uint256)
+func (_TomoRandomize *TomoRandomizeCallerSession) RandomNumber() (*big.Int, error) {
+	return _TomoRandomize.Contract.RandomNumber(&_TomoRandomize.CallOpts)
+}
+
+// SetOpening is a paid mutator transaction binding the contract method 0xe11f5ba2.
+//
+// Solidity: function setOpening(_opening bytes32) returns()
+func (_TomoRandomize *TomoRandomizeTransactor) SetOpening(opts *bind.TransactOpts, _opening [32]byte) (*types.Transaction, error) {
 	return _TomoRandomize.contract.Transact(opts, "setOpening", _opening)
 }
 
-// SetOpening is a paid mutator transaction binding the contract method 0x2141c7d9.
+// SetOpening is a paid mutator transaction binding the contract method 0xe11f5ba2.
 //
-// Solidity: function setOpening(_opening bytes32[]) returns()
-func (_TomoRandomize *TomoRandomizeSession) SetOpening(_opening [][32]byte) (*types.Transaction, error) {
+// Solidity: function setOpening(_opening bytes32) returns()
+func (_TomoRandomize *TomoRandomizeSession) SetOpening(_opening [32]byte) (*types.Transaction, error) {
 	return _TomoRandomize.Contract.SetOpening(&_TomoRandomize.TransactOpts, _opening)
 }
 
-// SetOpening is a paid mutator transaction binding the contract method 0x2141c7d9.
+// SetOpening is a paid mutator transaction binding the contract method 0xe11f5ba2.
 //
-// Solidity: function setOpening(_opening bytes32[]) returns()
-func (_TomoRandomize *TomoRandomizeTransactorSession) SetOpening(_opening [][32]byte) (*types.Transaction, error) {
+// Solidity: function setOpening(_opening bytes32) returns()
+func (_TomoRandomize *TomoRandomizeTransactorSession) SetOpening(_opening [32]byte) (*types.Transaction, error) {
 	return _TomoRandomize.Contract.SetOpening(&_TomoRandomize.TransactOpts, _opening)
 }
 

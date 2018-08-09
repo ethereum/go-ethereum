@@ -42,8 +42,10 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 	}, nil
 }
 
-func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Validator, error) {
-	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
+func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, validatorAddress []common.Address, caps []*big.Int, ownerAddress common.Address) (common.Address, *Validator, error) {
+	minDeposit := new(big.Int)
+	minDeposit.SetString("50000000000000000000000", 10)
+	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, big.NewInt(99), big.NewInt(100), big.NewInt(100))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
