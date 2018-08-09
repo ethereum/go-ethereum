@@ -74,7 +74,7 @@ type testerChainReader struct {
 	db ethdb.Database
 }
 
-func (r *testerChainReader) Config() *params.ChainConfig                 { return params.AllPosvProtocolChanges }
+func (r *testerChainReader) Config() *params.ChainConfig                 { return params.AllCliqueProtocolChanges }
 func (r *testerChainReader) CurrentHeader() *types.Header                { panic("not supported") }
 func (r *testerChainReader) GetHeader(common.Hash, uint64) *types.Header { panic("not supported") }
 func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block   { panic("not supported") }
@@ -374,7 +374,7 @@ func TestVoting(t *testing.T) {
 		// Pass all the headers through clique and ensure tallying succeeds
 		head := headers[len(headers)-1]
 
-		snap, err := New(&params.PosvConfig{Epoch: tt.epoch}, db).snapshot(&testerChainReader{db: db}, head.Number.Uint64(), head.Hash(), headers)
+		snap, err := New(&params.CliqueConfig{Epoch: tt.epoch}, db).snapshot(&testerChainReader{db: db}, head.Number.Uint64(), head.Hash(), headers)
 		if err != nil {
 			t.Errorf("test %d: failed to create voting snapshot: %v", i, err)
 			continue
