@@ -1287,12 +1287,12 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	// Create transaction (both pending and queued) with a linearly growing gasprice
 	for i := uint64(0); i < 500; i++ {
 		// Add pending
-		p_tx := pricedTransaction(i, 100000, big.NewInt(int64(i)), keys[2])
+		p_tx := pricedTransaction(i, 100000, big.NewInt(int64(i+1)), keys[2])
 		if err := pool.AddLocal(p_tx); err != nil {
 			t.Fatal(err)
 		}
 		// Add queued
-		q_tx := pricedTransaction(i+501, 100000, big.NewInt(int64(i)), keys[2])
+		q_tx := pricedTransaction(i+501, 100000, big.NewInt(int64(i+1)), keys[2])
 		if err := pool.AddLocal(q_tx); err != nil {
 			t.Fatal(err)
 		}
@@ -1411,7 +1411,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Ensure that adding local transactions can push out even higher priced ones
-	tx := pricedTransaction(1, 100000, big.NewInt(0), keys[2])
+	tx := pricedTransaction(1, 100000, big.NewInt(1), keys[2])
 	if err := pool.AddLocal(tx); err != nil {
 		t.Fatalf("failed to add underpriced local transaction: %v", err)
 	}

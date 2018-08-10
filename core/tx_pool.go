@@ -78,6 +78,8 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	ErrZeroGasPrice = errors.New("zero gas price")
 )
 
 var (
@@ -586,7 +588,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
-	if tx.To() != nil && tx.To().String() != common.BlockSigners {
+
+	if tx.To() == nil || (tx.To() != nil && tx.To().String() != common.BlockSigners) {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err
@@ -594,6 +597,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		// Exclude check smart contract sign address.
 		if tx.Gas() < intrGas {
 			return ErrIntrinsicGas
+		}
+
+		// Check zero gas price.
+		if tx.GasPrice().Cmp(new(big.Int).SetInt64(0)) == 0 {
+			return ErrZeroGasPrice
 		}
 	}
 
