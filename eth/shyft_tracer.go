@@ -30,7 +30,6 @@ func InitTracerEnv() {
 	}
 	TracerConfig = config
 	fullNode, _ := SNew(Global_config)
-	fmt.Println("FULL NODE", fullNode)
 	privateAPI := NewPrivateDebugAPI(config2, fullNode)
 	PrivateAPI = privateAPI
 }
