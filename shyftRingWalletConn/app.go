@@ -14,6 +14,8 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/ethclient"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"context"
+	"time"
+	"sync"
 )
 
 const (
@@ -27,6 +29,8 @@ var testAddrHex = "14791697260E4c9A71f18484C9f997B308e59325"
 var testPrivHex = "0123456789012345678901234567890123456789012345678901234567890123"
 
 var client = &http.Client{}
+
+var mutex = &sync.Mutex{}
 
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
@@ -80,8 +84,13 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 		if prevMsg != nil {
 			s := string(prevMsg[:])
 			if s == "-- ADDRESS --" {
+				fmt.Println("putting on channel 1")
 				addressOfClient = msg
 				checkBalancesChan <- addressOfClient
+			}
+			if s == "-- GET_BALANCE --" {
+				fmt.Println("putting on channel 3")
+				checkBalancesChan <- msg
 			}
 			if s == "-- SIGNATURE --" {
 				signatureFromClient = msg
@@ -115,6 +124,8 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 			pubKey := crypto.ToECDSAPub(rpk)
 			recoveredAddr := crypto.PubkeyToAddress(*pubKey)
 			fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
+			signatureFromClient = nil
+			msgFromClient = nil
 		}
 	}
 }
@@ -143,22 +154,35 @@ func readerConn(conn net.Conn, channel chan []byte) {
 }
 
 func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
-	address := <-checkBalanceChan
+	fmt.Println("in check balance function")
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
 		fmt.Println("Eth Client not initialized: " , err)
 	}
 
-	balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])),nil)
-	if error != nil {
-		fmt.Println("Balance at error ", error)
+	for {
+		address := <-checkBalanceChan
+		fmt.Println("the address is ", string(address[:]))
+
+
+		balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])),nil)
+		if error != nil {
+			fmt.Println("Balance at error ", error)
+		}
+		mutex.Lock()
+		fmt.Println("in broadcasting balance")
+		fmt.Println("the bal is ", balance)
+		fmt.Println("The balance for address ", string(address[:]), " is ", balance)
+		fmt.Println([]byte("Broadcasting Balance"))
+		fmt.Println([]byte("\n"))
+		fmt.Println([]byte(balance.String()))
+		fmt.Println([]byte("\n"))
+		conn.Write([]byte("Broadcasting Balance"))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(balance.String()))
+		conn.Write([]byte("\n"))
+		mutex.Unlock()
 	}
-	fmt.Println("the bal is ", balance)
-	fmt.Println("The balance for address ", address, " is ", balance)
-	conn.Write([]byte("Broadcasting Balance"))
-	conn.Write([]byte("\n"))
-	conn.Write([]byte(balance.String()))
-	conn.Write([]byte("\n"))
 }
 
 func sendRingSignedMsg(conn net.Conn){
@@ -174,10 +198,23 @@ func sendRingSignedMsg(conn net.Conn){
 		fmt.Println("The crypto.Sign err is ", err)
 	}
 
+	mutex.Lock()
+	fmt.Println("in broadcasting message")
+	fmt.Println([]byte("Broadcasting Message"))
+	fmt.Println([]byte("\n"))
+	fmt.Println([]byte(f_msg))
+	fmt.Println([]byte("\n"))
+	fmt.Println(new_sig)
+	fmt.Println([]byte("\n"))
 	conn.Write([]byte("Broadcasting Message"))
+	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
+	time.Sleep(3000 * time.Millisecond)
 	conn.Write([]byte(f_msg))
+	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
+	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
+	mutex.Unlock()
 }
