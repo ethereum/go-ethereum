@@ -704,11 +704,12 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	return fkey, newMkey.String(), nil
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) (storage.Address, error) {
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
 	apiUploadTarCount.Inc(1)
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
 	defer bodyReader.Close()
+	var defaultPathFound bool
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -737,6 +738,25 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			apiUploadTarFail.Inc(1)
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
+		if hdr.Name == defaultPath {
+			entry := &ManifestEntry{
+				Hash:        contentKey.Hex(),
+				Path:        "", // default entry
+				ContentType: hdr.Xattrs["user.swarm.content-type"],
+				Mode:        hdr.Mode,
+				Size:        hdr.Size,
+				ModTime:     hdr.ModTime,
+			}
+			contentKey, err = mw.AddEntry(ctx, nil, entry)
+			if err != nil {
+				apiUploadTarFail.Inc(1)
+				return nil, fmt.Errorf("error adding default manifest entry from tar stream: %s", err)
+			}
+			defaultPathFound = true
+		}
+	}
+	if defaultPath != "" && !defaultPathFound {
+		return contentKey, fmt.Errorf("default path %q not found", defaultPath)
 	}
 	return contentKey, nil
 }
