@@ -113,7 +113,7 @@ contract TomoValidator {
         });
         validatorsState[_candidate].voters[msg.sender] = msg.value;
         candidateCount = candidateCount + 1;
-        voters[_candidate].push(_candidate);
+        voters[_candidate].push(msg.sender);
         emit Propose(msg.sender, _candidate, msg.value);
     }
 
