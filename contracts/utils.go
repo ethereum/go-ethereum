@@ -143,14 +143,16 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
 	resultSigners := make(map[common.Address]*big.Int)
 	// Add reward for signers.
-	for signer, rLog := range signers {
-		// Add reward for signer.
-		calcReward := new(big.Int)
-		calcReward.Div(chainReward, new(big.Int).SetUint64(totalSigner))
-		calcReward.Mul(calcReward, new(big.Int).SetUint64(rLog.Sign))
-		rLog.Reward = calcReward
+	if totalSigner > 0 {
+		for signer, rLog := range signers {
+			// Add reward for signer.
+			calcReward := new(big.Int)
+			calcReward.Div(chainReward, new(big.Int).SetUint64(totalSigner))
+			calcReward.Mul(calcReward, new(big.Int).SetUint64(rLog.Sign))
+			rLog.Reward = calcReward
 
-		resultSigners[signer] = calcReward
+			resultSigners[signer] = calcReward
+		}
 	}
 	jsonSigners, err := json.Marshal(signers)
 	if err != nil {
@@ -220,13 +222,18 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
-		for addr, voteCap := range voterCaps {
-			rcap := new(big.Int).Mul(totalVoterReward, voteCap)
-			rcap = new(big.Int).Div(rcap, totalCap)
-			if balances[addr] != nil {
-				balances[addr].Add(balances[addr], rcap)
-			} else {
-				balances[addr] = rcap
+		if totalCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
+			for addr, voteCap := range voterCaps {
+				// Only valid voter has cap > 0.
+				if voteCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
+					rcap := new(big.Int).Mul(totalVoterReward, voteCap)
+					rcap = new(big.Int).Div(rcap, totalCap)
+					if balances[addr] != nil {
+						balances[addr].Add(balances[addr], rcap)
+					} else {
+						balances[addr] = rcap
+					}
+				}
 			}
 		}
 	}
