@@ -20,7 +20,7 @@ package web3ext
 var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
-	"posv":       Posv_JS,
+	"clique":       Clique_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -63,47 +63,47 @@ web3._extend({
 });
 `
 
-const Posv_JS = `
+const Clique_JS = `
 web3._extend({
-	property: 'posv',
+	property: 'clique',
 	methods: [
 		new web3._extend.Method({
 			name: 'getSnapshot',
-			call: 'posv_getSnapshot',
+			call: 'clique_getSnapshot',
 			params: 1,
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
-			call: 'posv_getSnapshotAtHash',
+			call: 'clique_getSnapshotAtHash',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getSigners',
-			call: 'posv_getSigners',
+			call: 'clique_getSigners',
 			params: 1,
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getSignersAtHash',
-			call: 'posv_getSignersAtHash',
+			call: 'clique_getSignersAtHash',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'propose',
-			call: 'posv_propose',
+			call: 'clique_propose',
 			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'discard',
-			call: 'posv_discard',
+			call: 'clique_discard',
 			params: 1
 		}),
 	],
 	properties: [
 		new web3._extend.Property({
 			name: 'proposals',
-			getter: 'posv_proposals'
+			getter: 'clique_proposals'
 		}),
 	]
 });

@@ -819,12 +819,7 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 // APIs implements consensus.Engine, returning the user facing RPC API to allow
 // controlling the signer voting.
 func (c *Posv) APIs(chain consensus.ChainReader) []rpc.API {
-	return []rpc.API{{
-		Namespace: "posv",
-		Version:   "1.0",
-		Service:   &API{chain: chain, posv: c},
-		Public:    false,
-	}}
+	return []rpc.API{}
 }
 
 func (c *Posv) RecoverSigner(header *types.Header) (common.Address, error) {
