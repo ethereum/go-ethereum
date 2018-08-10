@@ -297,7 +297,9 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				database.TrieDB().Reference(root, common.Hash{})
 			}
 			// Dereference all past tries we ourselves are done working with
-			database.TrieDB().Dereference(proot)
+			if proot != (common.Hash{}) {
+				database.TrieDB().Dereference(proot)
+			}
 			proot = root
 
 			// TODO(karalabe): Do we need the preimages? Won't they accumulate too much?
@@ -526,7 +528,9 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 		database.TrieDB().Reference(root, common.Hash{})
-		database.TrieDB().Dereference(proot)
+		if proot != (common.Hash{}) {
+			database.TrieDB().Dereference(proot)
+		}
 		proot = root
 	}
 	nodes, imgs := database.TrieDB().Size()
