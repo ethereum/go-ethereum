@@ -113,7 +113,7 @@ contract TomoValidator {
         });
         validatorsState[_candidate].voters[msg.sender] = msg.value;
         candidateCount = candidateCount + 1;
-        voters[_candidate].push(_candidate);
+        voters[_candidate].push(msg.sender);
         emit Propose(msg.sender, _candidate, msg.value);
     }
 
@@ -156,6 +156,10 @@ contract TomoValidator {
 
     function getWithdrawBlockNumbers() public view returns(uint256[]) {
         return withdrawsState[msg.sender].blockNumbers;
+    }
+
+    function getWithdrawCap(uint256 _blockNumber) public view returns(uint256) {
+        return withdrawsState[msg.sender].caps[_blockNumber];
     }
 
     function unvote(address _candidate, uint256 _cap) public onlyValidVote(_candidate, _cap) {
