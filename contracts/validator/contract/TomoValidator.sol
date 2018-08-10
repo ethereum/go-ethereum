@@ -65,6 +65,9 @@ contract TomoValidator {
 
     modifier onlyValidVote (address _candidate, uint256 _cap) {
         require(validatorsState[_candidate].voters[msg.sender] >= _cap);
+        if (validatorsState[_candidate].owner == msg.sender) {
+            require(validatorsState[_candidate].voters[msg.sender].sub(_cap) >= minCandidateCap);
+        }
         _;
     }
 
