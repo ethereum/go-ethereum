@@ -194,7 +194,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// upload the directory
 	client := NewClient(srv.URL)
-	defaultPath := filepath.Join(dir, testDirFiles[0])
+	defaultPath := testDirFiles[0]
 	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)

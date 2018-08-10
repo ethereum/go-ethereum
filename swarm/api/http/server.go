@@ -336,7 +336,9 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter) (storage.Address, error) {
 	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()))
 
-	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, mw)
+	defaultPath := r.URL.Query().Get("defaultpath")
+
+	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, defaultPath, mw)
 	if err != nil {
 		return nil, err
 	}
