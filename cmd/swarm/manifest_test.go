@@ -271,12 +271,7 @@ func testManifestChange(t *testing.T, encrypt bool) {
 		checkFile(t, client, newManifestHash, "index.html", indexData)
 
 		// check default entry change
-		// TODO: encrypted uploads generate manifest with default entry
-		// with different hash compared to the same file that is used
-		// for default entry.
-		if !encrypt {
-			checkFile(t, client, newManifestHash, "", indexData)
-		}
+		checkFile(t, client, newManifestHash, "", indexData)
 	})
 
 	// upload a new file and use its manifest to change the file it the original manifest,
@@ -404,10 +399,15 @@ func testManifestChange(t *testing.T, encrypt bool) {
 
 // TestNestedDefaultEntryUpdate tests if the default entry is updated
 // if the file in nested manifest used for it is also updated.
-// TODO: create a similar test for encrypted uploads when it becomes
-// functional.
 func TestNestedDefaultEntryUpdate(t *testing.T) {
 	testNestedDefaultEntryUpdate(t, false)
+}
+
+// TestNestedDefaultEntryUpdateEncrypted tests if the default entry
+// of encrypted upload is updated if the file in nested manifest
+// used for it is also updated.
+func TestNestedDefaultEntryUpdateEncrypted(t *testing.T) {
+	testNestedDefaultEntryUpdate(t, true)
 }
 
 func testNestedDefaultEntryUpdate(t *testing.T, encrypt bool) {
