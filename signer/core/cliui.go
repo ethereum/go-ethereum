@@ -190,7 +190,7 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, 
 
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
-func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListAccountsResponse, error) {
+func (ui *CommandlineUI) ApproveListing(request *ListAccountsRequest) (ListAccountsResponse, error) {
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
@@ -199,7 +199,7 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListAccountsRespo
 	fmt.Printf("A request has been made to list all accounts. \n")
 	fmt.Printf("You can select which accounts the caller can see\n")
 	for _, account := range request.Accounts {
-		fmt.Printf("\t[x] %v\n", account.Address.Hex())
+		fmt.Printf("\t[x] %v\n", account.Hex())
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

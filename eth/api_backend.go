@@ -20,7 +20,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
@@ -217,10 +216,6 @@ func (b *EthAPIBackend) EventMux() *event.TypeMux {
 	return b.eth.EventMux()
 }
 
-func (b *EthAPIBackend) AccountManager() *accounts.Manager {
-	return b.eth.AccountManager()
-}
-
 func (b *EthAPIBackend) BloomStatus() (uint64, uint64) {
 	sections, _, _ := b.eth.bloomIndexer.Sections()
 	return params.BloomBitsBlocks, sections
@@ -231,3 +226,8 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+func (b *EthAPIBackend) ExternalSigner() string {
+	return b.eth.externalSigner
+}
+
+

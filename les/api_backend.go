@@ -20,7 +20,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
@@ -181,10 +180,6 @@ func (b *LesApiBackend) ChainDb() ethdb.Database {
 
 func (b *LesApiBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
-}
-
-func (b *LesApiBackend) AccountManager() *accounts.Manager {
-	return b.eth.accountManager
 }
 
 func (b *LesApiBackend) ExternalSigner() string {

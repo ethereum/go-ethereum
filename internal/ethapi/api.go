@@ -177,33 +177,10 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	return content
 }
 
-// PublicAccountAPI provides an API to access accounts managed by this node.
-// It offers only methods that can retrieve accounts.
-type PublicAccountAPI struct {
-	am *accounts.Manager
-}
-
-// NewPublicAccountAPI creates a new PublicAccountAPI.
-func NewPublicAccountAPI(am *accounts.Manager) *PublicAccountAPI {
-	return &PublicAccountAPI{am: am}
-}
-
-// Accounts returns the collection of accounts this node manages
-func (s *PublicAccountAPI) Accounts() []common.Address {
-	addresses := make([]common.Address, 0) // return [] instead of nil if empty
-	for _, wallet := range s.am.Wallets() {
-		for _, account := range wallet.Accounts() {
-			addresses = append(addresses, account.Address)
-		}
-	}
-	return addresses
-}
-
 // PrivateAccountAPI provides an API to access accounts managed by this node.
 // It offers methods to create, (un)lock en list accounts. Some methods accept
 // passwords and are therefore considered private by default.
 type PrivateAccountAPI struct {
-	am        *accounts.Manager
 	nonceLock *AddrLocker
 	b         Backend
 	extapi    *ExternalSignerAPI // external signer, nil if not used
@@ -212,7 +189,6 @@ type PrivateAccountAPI struct {
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
 	p := &PrivateAccountAPI{
-		am:        b.AccountManager(),
 		nonceLock: nonceLock,
 		b:         b,
 	}
@@ -236,11 +212,6 @@ func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 		}
 		return addresses
 	}
-	for _, wallet := range s.am.Wallets() {
-		for _, account := range wallet.Accounts() {
-			addresses = append(addresses, account.Address)
-		}
-	}
 	return addresses
 }
 
@@ -253,78 +224,9 @@ type rawWallet struct {
 	Accounts []accounts.Account `json:"accounts,omitempty"`
 }
 
-// ListWallets will return a list of wallets this node manages.
-func (s *PrivateAccountAPI) ListWallets() []rawWallet {
-	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
-	if s.extapi != nil {
-		return wallets
-	}
-	for _, wallet := range s.am.Wallets() {
-		status, failure := wallet.Status()
-
-		raw := rawWallet{
-			URL:      wallet.URL().String(),
-			Status:   status,
-			Accounts: wallet.Accounts(),
-		}
-		if failure != nil {
-			raw.Failure = failure.Error()
-		}
-		wallets = append(wallets, raw)
-	}
-	return wallets
-}
-
-// OpenWallet initiates a hardware wallet opening procedure, establishing a USB
-// connection and attempting to authenticate via the provided passphrase. Note,
-// the method may return an extra challenge requiring a second open (e.g. the
-// Trezor PIN matrix challenge).
-func (s *PrivateAccountAPI) OpenWallet(url string, passphrase *string) error {
-	if s.extapi != nil {
-		return errors.New("openWallet disabled when external signer is used")
-	}
-
-	wallet, err := s.am.Wallet(url)
-	if err != nil {
-		return err
-	}
-	pass := ""
-	if passphrase != nil {
-		pass = *passphrase
-	}
-	return wallet.Open(pass)
-}
-
-// DeriveAccount requests a HD wallet to derive a new account, optionally pinning
-// it for later reuse.
-func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
-	if s.extapi != nil {
-		return accounts.Account{}, errors.New("deriveAccount disabled when external signer is used")
-	}
-	wallet, err := s.am.Wallet(url)
-	if err != nil {
-		return accounts.Account{}, err
-	}
-	derivPath, err := accounts.ParseDerivationPath(path)
-	if err != nil {
-		return accounts.Account{}, err
-	}
-	if pin == nil {
-		pin = new(bool)
-	}
-	return wallet.Derive(derivPath, *pin)
-}
-
 // NewAccount will create a new account and returns the address for the new account.
 func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
-	if s.extapi != nil {
-		return s.extapi.newAccount()
-	}
-	acc, err := fetchKeystore(s.am).NewAccount(password)
-	if err == nil {
-		return acc.Address, nil
-	}
-	return common.Address{}, err
+	return s.extapi.newAccount()
 }
 
 // fetchKeystore retrives the encrypted keystore from the account manager.
@@ -335,44 +237,19 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
 // encrypting it with the passphrase.
 func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
-	if s.extapi != nil {
-		return common.Address{}, errors.New("Importing of raw keys is disabled when external signer is used.")
-	}
-
-	key, err := crypto.HexToECDSA(privkey)
-	if err != nil {
-		return common.Address{}, err
-	}
-	acc, err := fetchKeystore(s.am).ImportECDSA(key, password)
-	return acc.Address, err
+	return common.Address{}, errors.New("Importing of raw keys is disabled when external signer is used.")
 }
 
 // UnlockAccount will unlock the account associated with the given address with
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
 func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *uint64) (bool, error) {
-	if s.extapi != nil {
-		return false, errors.New("Unlock is disabled when external signer is used.")
-	}
-	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
-	var d time.Duration
-	if duration == nil {
-		d = 300 * time.Second
-	} else if *duration > max {
-		return false, errors.New("unlock duration too large")
-	} else {
-		d = time.Duration(*duration) * time.Second
-	}
-	err := fetchKeystore(s.am).TimedUnlock(accounts.Account{Address: addr}, password, d)
-	return err == nil, err
+	return false, errors.New("Unlock is disabled when external signer is used.")
 }
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
 func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
-	if s.extapi != nil {
-		return false
-	}
-	return fetchKeystore(s.am).Lock(addr) == nil
+	return false
 }
 
 // signTransactions sets defaults and signs the given transaction
@@ -383,24 +260,7 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args SendTxArgs
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
-	if s.extapi != nil {
-		return s.extapi.signTransaction(ctx, args)
-	}
-
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: args.From}
-	wallet, err := s.am.Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Assemble the transaction and sign with the wallet
-	tx := args.toTransaction()
-
-	var chainID *big.Int
-	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
-		chainID = config.ChainID
-	}
-	return wallet.SignTxWithPassphrase(account, passwd, tx, chainID)
+	return s.extapi.signTransaction(ctx, args)
 }
 
 // SendTransaction will create a transaction from the given arguments and
@@ -459,32 +319,6 @@ func signHash(data []byte) []byte {
 	return crypto.Keccak256([]byte(msg))
 }
 
-// Sign calculates an Ethereum ECDSA signature for:
-// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
-//
-// The key used to calculate the signature is decrypted with the given password.
-//
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr}
-
-	wallet, err := s.b.AccountManager().Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Assemble sign the data with the wallet
-	signature, err := wallet.SignHashWithPassphrase(account, passwd, signHash(data))
-	if err != nil {
-		return nil, err
-	}
-	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	return signature, nil
-}
-
 // EcRecover returns the address for the account that was used to create the signature.
 // Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 // the address of:
@@ -514,7 +348,7 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
 // and will be removed in the future. It primary goal is to give clients time to update.
 func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {
-	return s.SendTransaction(ctx, args, passwd)
+	return common.Hash{}, errors.New("SignAndSend is deprecated, please use sendTransaction instead")
 }
 
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
@@ -661,15 +495,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}
-	// Set sender address or use a default if none specified
+	// Set sender address
 	addr := args.From
-	if addr == (common.Address{}) {
-		if wallets := s.b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accts := wallets[0].Accounts(); len(accts) > 0 {
-				addr = accts[0].Address
-			}
-		}
-	}
 	// Set default gas & gas price if none were set
 	gas, gasPrice := uint64(args.Gas), args.GasPrice.ToInt()
 	if gas == 0 {
@@ -1145,23 +972,6 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	return fields, nil
 }
 
-// sign is a helper function that signs a transaction with the private key of the given address.
-func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr}
-
-	wallet, err := s.b.AccountManager().Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Request the wallet to sign the transaction
-	var chainID *big.Int
-	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
-		chainID = config.ChainID
-	}
-	return wallet.SignTx(account, tx, chainID)
-}
-
 // SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
 type SendTxArgs struct {
 	From     common.Address  `json:"from"`
@@ -1292,19 +1102,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr}
-
-	wallet, err := s.b.AccountManager().Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Sign the requested hash with the wallet
-	signature, err := wallet.SignHash(account, signHash(data))
-	if err == nil {
-		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	}
-	return signature, err
+	return nil, errors.New("Sign data not implemented")
 }
 
 // SignTransactionResult represents a RLP encoded signed transaction.
@@ -1333,11 +1131,9 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 		tx  *types.Transaction
 		err error
 	)
-	if s.extapi != nil {
-		tx, err = s.extapi.signTransaction(ctx, args)
-	} else {
-		tx, err = s.sign(args.From, args.toTransaction())
-	}
+
+	tx, err = s.extapi.signTransaction(ctx, args)
+
 	if err != nil {
 		return nil, err
 	}
@@ -1351,28 +1147,9 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 // PendingTransactions returns the transactions that are in the transaction pool
 // and have a from address that is one of the accounts this node manages.
 func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, error) {
-	pending, err := s.b.GetPoolTransactions()
-	if err != nil {
-		return nil, err
-	}
-	accounts := make(map[common.Address]struct{})
-	for _, wallet := range s.b.AccountManager().Wallets() {
-		for _, account := range wallet.Accounts() {
-			accounts[account.Address] = struct{}{}
-		}
-	}
-	transactions := make([]*RPCTransaction, 0, len(pending))
-	for _, tx := range pending {
-		var signer types.Signer = types.HomesteadSigner{}
-		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainId())
-		}
-		from, _ := types.Sender(signer, tx)
-		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx))
-		}
-	}
-	return transactions, nil
+	return nil, errors.New("Not implemented")
+	// TODO @holiman, make this call take a list of addresses, and show the penading transactions that are from that
+	// set of addresses
 }
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove
@@ -1407,11 +1184,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			if s.extapi != nil {
-				signedTx, err = s.extapi.signTransaction(ctx, sendArgs)
-			} else {
-				signedTx, err = s.sign(sendArgs.From, sendArgs.toTransaction())
-			}
+			signedTx, err = s.extapi.signTransaction(ctx, sendArgs)
 			if err != nil {
 				return common.Hash{}, err
 			}
