@@ -17,9 +17,11 @@
 package vm
 
 import (
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
 )
 
 // memoryGasCosts calculates the quadratic gas for memory expansion. It does so
@@ -115,7 +117,7 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 	return gas, nil
 }
 
-func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasSStoreOld(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
 		val  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
@@ -135,6 +137,61 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 		// non 0 => non 0 (or 0 => 0)
 		return params.SstoreResetGas, nil
 	}
+}
+
+func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		y, x = stack.Back(1), stack.Back(0)
+		current  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
+	)
+	//1. If current value equals new value (this is a no-op), 200 gas is deducted.
+	//2. If current value does not equal new value
+	//  2.1 If original value equals current value (this storage slot has not been changed by the current execution context)
+	//    2.1.1 If original value is 0, 20000 gas is deducted.
+	//	  2.1.2 Otherwise, 5000 gas is deducted. If new value is 0, add 15000 gas to refund counter.
+	//	2.2 If original value does not equal current value (this storage slot is dirty), 200 gas is deducted. Apply both of the following clauses.
+	//	  2.2.1 If original value is not 0
+	//      2.2.1.1 If current value is 0 (also means that new value is not 0), remove 15000 gas from refund counter. We can prove that refund counter will never go below 0.
+	//      2.2.1.2 If new value is 0 (also means that current value is not 0), add 15000 gas to refund counter.
+	//	  2.2.2 If original value equals new value (this storage slot is reset)
+	//      2.2.2.1 If original value is 0, add 19800 gas to refund counter.
+	//	    2.2.2.2 Otherwise, add 4800 gas to refund counter.
+	new := common.BigToHash(y)
+	if current == new {
+		// 1. current == new
+		return 200, nil
+	}
+	// Todo, get this value
+	original := common.Hash{}
+
+	// 2
+	if original == current { // 2.1
+		if original == (common.Hash{}){ // 2.1.1
+			return 20000, nil
+		}
+		// 2.1.2
+		if new == (common.Hash{}){
+			evm.StateDB.AddRefund(15000)
+		}
+		return 5000, nil
+	}
+	// 2.2
+	if original != (common.Hash{}){ // 2.2.1
+		if current == (common.Hash{}){ // 2.2.1.1
+			evm.StateDB.SubRefund(15000)
+		}else{
+			// 2.2.1.2
+			evm.StateDB.AddRefund(15000)
+		}
+	}
+	if original == new { // 2.2.2
+		if original == (common.Hash{}){
+			evm.StateDB.AddRefund(19800)
+		}else{
+			evm.StateDB.AddRefund(4800)
+		}
+	}
+	return 200, nil
 }
 
 func makeGasLog(n uint64) gasFunc {

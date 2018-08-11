@@ -79,7 +79,7 @@ type stateObject struct {
 
 	cachedStorage Storage // Storage entry cache to avoid duplicate reads
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
-
+	originalValue Storage // Map of original storage values, at the beginning of current call context
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
 	// during the "update" phase of the state transition.
@@ -117,6 +117,7 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data:          data,
 		cachedStorage: make(Storage),
 		dirtyStorage:  make(Storage),
+		originalValue: make(Storage),
 	}
 }
 
@@ -184,11 +185,16 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 
 // SetState updates a value in account storage.
 func (self *stateObject) SetState(db Database, key, value common.Hash) {
+	prev := self.GetState(db, key)
 	self.db.journal.append(storageChange{
 		account:  &self.address,
 		key:      key,
-		prevalue: self.GetState(db, key),
+		prevalue: prev,
 	})
+	if _, isSet := self.originalValue[key]; !isSet {
+		// original value has not been set, so set it now
+		self.originalValue[key] = prev
+	}
 	self.setState(key, value)
 }
 
@@ -209,6 +215,10 @@ func (self *stateObject) updateTrie(db Database) Trie {
 		// Encoding []byte cannot fail, ok to ignore the error.
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
 		self.setError(tr.TryUpdate(key[:], v))
+	}
+	// Clean the map containing 'original' value of storage entries
+	for k, _ := range self.originalValue {
+		delete(self.originalValue, k)
 	}
 	return tr
 }
@@ -280,6 +290,7 @@ func (self *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
+	stateObject.originalValue = self.originalValue.Copy()
 	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
