@@ -16,6 +16,8 @@ import (
 	"context"
 	"time"
 	"sync"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 const (
@@ -63,15 +65,18 @@ func handleRequest(conn net.Conn) {
 
 	messages := make(chan []byte)
 	checkBalanceChan := make(chan []byte)
+	sendTransactionChan := make(chan []byte)
+
 
 	go readerConn(conn, messages)
-	go handleMessages(messages, checkBalanceChan)
+	go handleMessages(messages, checkBalanceChan, sendTransactionChan)
 	go checkBalance(checkBalanceChan, conn)
+	go sendTransaction(sendTransactionChan)
 
 	sendRingSignedMsg(conn)
 }
 
-func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
+func handleMessages(channel chan []byte, checkBalancesChan chan []byte, sendTransactionChan chan []byte) {
 	var prevMsg []byte
 	var addressOfClient []byte
 	var signatureFromClient []byte
@@ -91,6 +96,9 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 			if s == "-- GET_BALANCE --" {
 				fmt.Println("putting on channel 3")
 				checkBalancesChan <- msg
+			}
+			if s == "-- SEND_TRANSACTION --" {
+				sendTransactionChan <- msg
 			}
 			if s == "-- SIGNATURE --" {
 				signatureFromClient = msg
@@ -182,6 +190,27 @@ func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 		conn.Write([]byte(balance.String()))
 		conn.Write([]byte("\n"))
 		mutex.Unlock()
+	}
+}
+
+func sendTransaction(sendTransactionChan chan []byte) {
+	fmt.Println("in sendTransaction function")
+	c, err := ethclient.Dial("http://127.0.0.1:8545")
+	if err != nil {
+		fmt.Println("Eth Client not initialized: " , err)
+	}
+
+	for {
+		signedTransactionBytes := <-sendTransactionChan
+		signedTransaction := string(signedTransactionBytes[:])
+		bytes, err := hexutil.Decode(signedTransaction)
+		if err != nil {
+			fmt.Println("error decoding signed transaction into bytes ", bytes)
+		}
+		var tx types.Transaction
+		rlp.DecodeBytes(bytes, &tx)
+		fmt.Println(tx.String())
+		c.SendTransaction(context.Background(), &tx)
 	}
 }
 
