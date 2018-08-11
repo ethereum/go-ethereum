@@ -1208,6 +1208,11 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 
 // submitTransaction is a helper function that submits tx to txPool and logs a message.
 func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
+	if tx.To() != nil && tx.To().String() == common.BlockSigners {
+		log.Debug("Dont Allow submitTransaction to  BlockSigners through api ",  tx.String())
+		return tx.Hash(), nil
+	}
+	log.Debug("Allow submitTransaction through api ",  tx.String())
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
 	}
