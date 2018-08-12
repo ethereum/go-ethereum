@@ -17,7 +17,7 @@ RUN apt-get update                              &&\
     cd /go-ethereum                             &&\
     make geth                                   &&\
     cp /go-ethereum/build/bin/geth /geth        &&\
-    #Cleanup
+    #CleanUp
     apt-get remove -y                             \
     golang-1.10                                   \
             git                                   \

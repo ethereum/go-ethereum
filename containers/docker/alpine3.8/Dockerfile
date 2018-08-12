@@ -7,8 +7,8 @@ RUN apk add --no-cache --update                                   \
             go                                                    \
             linux-headers                                         \
             make                                                  \
-            musl-dev                                            &&\  
-    #Clone
+            musl-dev                                            &&\
+    #Clone and build
     git clone --depth 1 https://github.com/ethereum/go-ethereum &&\
     cd /go-ethereum                                             &&\
     make geth                                                   &&\
