@@ -255,6 +255,14 @@ func (self *StateDB) GetState(addr common.Address, bhash common.Hash) common.Has
 	return common.Hash{}
 }
 
+func (self *StateDB) GetStateOriginal(addr common.Address, bhash common.Hash) common.Hash {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetOriginalStateValue(self.db, bhash)
+	}
+	return common.Hash{}
+}
+
 // Database retrieves the low level database supporting the lower level trie ops.
 func (self *StateDB) Database() Database {
 	return self.db

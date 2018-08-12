@@ -183,6 +183,16 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	return value
 }
 
+// GetOriginalStateValue returns the state value that is currently in the Trie, that is, ignoring any
+// changes that have been made but not yet written to trie.
+func (self *stateObject) GetOriginalStateValue(db Database, key common.Hash) common.Hash{
+	if original, exist:= self.originalValue[key]; exist {
+		// original value has been set, return it
+		return original
+	}
+	return self.GetState(db, key)
+}
+
 // SetState updates a value in account storage.
 func (self *stateObject) SetState(db Database, key, value common.Hash) {
 	prev := self.GetState(db, key)

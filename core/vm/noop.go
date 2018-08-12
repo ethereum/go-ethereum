@@ -59,6 +59,7 @@ func (NoopStateDB) AddRefund(uint64)                                            
 func (NoopStateDB) SubRefund(uint64)                                                   {}
 func (NoopStateDB) GetRefund() uint64                                                  { return 0 }
 func (NoopStateDB) GetState(common.Address, common.Hash) common.Hash                   { return common.Hash{} }
+func (NoopStateDB) GetStateOriginal(common.Address, common.Hash) common.Hash           { return common.Hash{} }
 func (NoopStateDB) SetState(common.Address, common.Hash, common.Hash)                  {}
 func (NoopStateDB) Suicide(common.Address) bool                                        { return false }
 func (NoopStateDB) HasSuicided(common.Address) bool                                    { return false }

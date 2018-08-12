@@ -44,6 +44,7 @@ type StateDB interface {
 	GetRefund() uint64
 
 	GetState(common.Address, common.Hash) common.Hash
+	GetStateOriginal(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
 
 	Suicide(common.Address) bool

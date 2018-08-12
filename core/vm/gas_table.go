@@ -17,11 +17,9 @@
 package vm
 
 import (
-	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 // memoryGasCosts calculates the quadratic gas for memory expansion. It does so
@@ -117,7 +115,7 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 	return gas, nil
 }
 
-func gasSStoreOld(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
 		val  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
@@ -139,10 +137,11 @@ func gasSStoreOld(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack
 	}
 }
 
-func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+// gasSStoreEip1283 calculates SSTORE gas cost according to EIP-1283
+func gasSStoreEip1283(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
-		y, x = stack.Back(1), stack.Back(0)
-		current  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
+		y, x    = stack.Back(1), stack.Back(0)
+		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
 	//1. If current value equals new value (this is a no-op), 200 gas is deducted.
 	//2. If current value does not equal new value
@@ -161,33 +160,31 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 		// 1. current == new
 		return 200, nil
 	}
-	// Todo, get this value
-	original := common.Hash{}
-
+	original := evm.StateDB.GetStateOriginal(contract.Address(), common.BigToHash(x))
 	// 2
 	if original == current { // 2.1
-		if original == (common.Hash{}){ // 2.1.1
+		if original == (common.Hash{}) { // 2.1.1
 			return 20000, nil
 		}
 		// 2.1.2
-		if new == (common.Hash{}){
+		if new == (common.Hash{}) {
 			evm.StateDB.AddRefund(15000)
 		}
 		return 5000, nil
 	}
 	// 2.2
-	if original != (common.Hash{}){ // 2.2.1
-		if current == (common.Hash{}){ // 2.2.1.1
+	if original != (common.Hash{}) { // 2.2.1
+		if current == (common.Hash{}) { // 2.2.1.1
 			evm.StateDB.SubRefund(15000)
-		}else{
+		} else {
 			// 2.2.1.2
 			evm.StateDB.AddRefund(15000)
 		}
 	}
 	if original == new { // 2.2.2
-		if original == (common.Hash{}){
+		if original == (common.Hash{}) {
 			evm.StateDB.AddRefund(19800)
-		}else{
+		} else {
 			evm.StateDB.AddRefund(4800)
 		}
 	}
