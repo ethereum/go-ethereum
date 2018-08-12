@@ -441,8 +441,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-// ValidateMiner checks if node's address is in set of validators
-func (s *Ethereum) ValidateMiner() (bool, error) {
+// ValidateStaker checks if node's address is in set of validators
+func (s *Ethereum) ValidateStaker() (bool, error) {
 	eb, err := s.Etherbase()
 	if err != nil {
 		return false, err
@@ -464,7 +464,7 @@ func (s *Ethereum) ValidateMiner() (bool, error) {
 	return true, nil
 }
 
-func (s *Ethereum) StartMining(local bool) error {
+func (s *Ethereum) StartStaking(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		log.Error("Cannot start mining without etherbase", "err", err)
