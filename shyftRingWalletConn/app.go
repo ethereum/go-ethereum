@@ -14,7 +14,6 @@ import (
 	"github.com/ShyftNetwork/go-empyrean/ethclient"
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"context"
-	"time"
 	"sync"
 	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/rlp"
@@ -236,14 +235,10 @@ func sendRingSignedMsg(conn net.Conn){
 	fmt.Println(new_sig)
 	fmt.Println([]byte("\n"))
 	conn.Write([]byte("Broadcasting Message"))
-	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
-	time.Sleep(3000 * time.Millisecond)
 	conn.Write([]byte(f_msg))
-	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
-	time.Sleep(1000 * time.Millisecond)
 	conn.Write([]byte("\n"))
 	mutex.Unlock()
 }
