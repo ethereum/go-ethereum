@@ -469,7 +469,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
 
 	// update our resources map entry if the new update is older than the one we have, if we have it.
-	if rsrc != nil && r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version) {
+	if rsrc != nil && (r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version)) {
 		rsrc.period = r.period
 		rsrc.version = r.version
 		rsrc.data = make([]byte, len(r.data))

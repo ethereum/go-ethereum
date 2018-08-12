@@ -246,6 +246,8 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 					if err != nil {
 						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 						localSuccess = false
+						// Do not get crazy with logging the warn message
+						time.Sleep(500 * time.Millisecond)
 					} else {
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
@@ -426,6 +428,8 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 					if err != nil {
 						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 						localSuccess = false
+						// Do not get crazy with logging the warn message
+						time.Sleep(500 * time.Millisecond)
 					} else {
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}

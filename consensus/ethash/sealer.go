@@ -18,16 +18,23 @@ package ethash
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"math"
 	"math/big"
 	"math/rand"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	errNoMiningWork      = errors.New("no mining work available yet")
+	errInvalidSealResult = errors.New("invalid or stale proof-of-work solution")
 )
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
@@ -45,7 +52,6 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
-	found := make(chan *types.Block)
 
 	ethash.lock.Lock()
 	threads := ethash.threads
@@ -64,12 +70,16 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	if threads < 0 {
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
 	}
+	// Push new work to remote sealer
+	if ethash.workCh != nil {
+		ethash.workCh <- block
+	}
 	var pend sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, nonce, abort, found)
+			ethash.mine(block, id, nonce, abort, ethash.resultCh)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -78,7 +88,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	case <-stop:
 		// Outside abort, stop all miner threads
 		close(abort)
-	case result = <-found:
+	case result = <-ethash.resultCh:
 		// One of the threads found a block, abort all others
 		close(abort)
 	case <-ethash.update:
@@ -149,4 +159,137 @@ search:
 	// Datasets are unmapped in a finalizer. Ensure that the dataset stays live
 	// during sealing so it's not unmapped while being read.
 	runtime.KeepAlive(dataset)
+}
+
+// remote starts a standalone goroutine to handle remote mining related stuff.
+func (ethash *Ethash) remote() {
+	var (
+		works       = make(map[common.Hash]*types.Block)
+		rates       = make(map[common.Hash]hashrate)
+		currentWork *types.Block
+	)
+
+	// getWork returns a work package for external miner.
+	//
+	// The work package consists of 3 strings:
+	//   result[0], 32 bytes hex encoded current block header pow-hash
+	//   result[1], 32 bytes hex encoded seed hash used for DAG
+	//   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+	getWork := func() ([3]string, error) {
+		var res [3]string
+		if currentWork == nil {
+			return res, errNoMiningWork
+		}
+		res[0] = currentWork.HashNoNonce().Hex()
+		res[1] = common.BytesToHash(SeedHash(currentWork.NumberU64())).Hex()
+
+		// Calculate the "target" to be returned to the external sealer.
+		n := big.NewInt(1)
+		n.Lsh(n, 255)
+		n.Div(n, currentWork.Difficulty())
+		n.Lsh(n, 1)
+		res[2] = common.BytesToHash(n.Bytes()).Hex()
+
+		// Trace the seal work fetched by remote sealer.
+		works[currentWork.HashNoNonce()] = currentWork
+		return res, nil
+	}
+
+	// submitWork verifies the submitted pow solution, returning
+	// whether the solution was accepted or not (not can be both a bad pow as well as
+	// any other error, like no pending work or stale mining result).
+	submitWork := func(nonce types.BlockNonce, mixDigest common.Hash, hash common.Hash) bool {
+		// Make sure the work submitted is present
+		block := works[hash]
+		if block == nil {
+			log.Info("Work submitted but none pending", "hash", hash)
+			return false
+		}
+
+		// Verify the correctness of submitted result.
+		header := block.Header()
+		header.Nonce = nonce
+		header.MixDigest = mixDigest
+		if err := ethash.VerifySeal(nil, header); err != nil {
+			log.Warn("Invalid proof-of-work submitted", "hash", hash, "err", err)
+			return false
+		}
+
+		// Make sure the result channel is created.
+		if ethash.resultCh == nil {
+			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
+			return false
+		}
+
+		// Solutions seems to be valid, return to the miner and notify acceptance.
+		select {
+		case ethash.resultCh <- block.WithSeal(header):
+			delete(works, hash)
+			return true
+		default:
+			log.Info("Work submitted is stale", "hash", hash)
+			return false
+		}
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case block := <-ethash.workCh:
+			if currentWork != nil && block.ParentHash() != currentWork.ParentHash() {
+				// Start new round mining, throw out all previous work.
+				works = make(map[common.Hash]*types.Block)
+			}
+			// Update current work with new received block.
+			// Note same work can be past twice, happens when changing CPU threads.
+			currentWork = block
+
+		case work := <-ethash.fetchWorkCh:
+			// Return current mining work to remote miner.
+			miningWork, err := getWork()
+			if err != nil {
+				work.errc <- err
+			} else {
+				work.res <- miningWork
+			}
+
+		case result := <-ethash.submitWorkCh:
+			// Verify submitted PoW solution based on maintained mining blocks.
+			if submitWork(result.nonce, result.mixDigest, result.hash) {
+				result.errc <- nil
+			} else {
+				result.errc <- errInvalidSealResult
+			}
+
+		case result := <-ethash.submitRateCh:
+			// Trace remote sealer's hash rate by submitted value.
+			rates[result.id] = hashrate{rate: result.rate, ping: time.Now()}
+			close(result.done)
+
+		case req := <-ethash.fetchRateCh:
+			// Gather all hash rate submitted by remote sealer.
+			var total uint64
+			for _, rate := range rates {
+				// this could overflow
+				total += rate.rate
+			}
+			req <- total
+
+		case <-ticker.C:
+			// Clear stale submitted hash rate.
+			for id, rate := range rates {
+				if time.Since(rate.ping) > 10*time.Second {
+					delete(rates, id)
+				}
+			}
+
+		case errc := <-ethash.exitCh:
+			// Exit remote loop if ethash is closed and return relevant error.
+			errc <- nil
+			log.Trace("Ethash remote sealer is exiting")
+			return
+		}
+	}
 }

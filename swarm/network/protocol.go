@@ -94,12 +94,14 @@ type BzzConfig struct {
 	UnderlayAddr []byte // node's underlay address
 	HiveParams   *HiveParams
 	NetworkID    uint64
+	LightNode    bool
 }
 
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
 	NetworkID    uint64
+	LightNode    bool
 	localAddr    *BzzAddr
 	mtx          sync.Mutex
 	handshakes   map[discover.NodeID]*HandshakeMsg
@@ -116,6 +118,7 @@ func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *pro
 	return &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
+		LightNode:    config.LightNode,
 		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
 		streamerRun:  streamerRun,
@@ -209,7 +212,11 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			localAddr:  b.localAddr,
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
+			LightNode:  handshake.LightNode,
 		}
+
+		log.Debug("peer created", "addr", handshake.peerAddr.String())
+
 		return run(peer)
 	}
 }
@@ -228,6 +235,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		return err
 	}
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
+	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
 }
 
@@ -263,6 +271,7 @@ type BzzPeer struct {
 	localAddr       *BzzAddr  // local Peers address
 	*BzzAddr                  // remote address -> implements Addr interface = protocols.Peer
 	lastActive      time.Time // time is updated whenever mutexes are releasing
+	LightNode       bool
 }
 
 func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
@@ -294,6 +303,7 @@ type HandshakeMsg struct {
 	Version   uint64
 	NetworkID uint64
 	Addr      *BzzAddr
+	LightNode bool
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr *BzzAddr
@@ -305,7 +315,7 @@ type HandshakeMsg struct {
 
 // String pretty prints the handshake
 func (bh *HandshakeMsg) String() string {
-	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v", bh.Version, bh.NetworkID, bh.Addr)
+	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, LightNode: %v, peerAddr: %v", bh.Version, bh.NetworkID, bh.Addr, bh.LightNode, bh.peerAddr)
 }
 
 // Perform initiates the handshake and validates the remote handshake message
@@ -338,6 +348,7 @@ func (b *Bzz) GetHandshake(peerID discover.NodeID) (*HandshakeMsg, bool) {
 			Version:   uint64(BzzSpec.Version),
 			NetworkID: b.NetworkID,
 			Addr:      b.localAddr,
+			LightNode: b.LightNode,
 			init:      make(chan bool, 1),
 			done:      make(chan struct{}),
 		}

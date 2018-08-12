@@ -68,7 +68,7 @@ func TestRun(t *testing.T) {
 		defer cancel()
 
 		r := sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Second)
 			return nil
 		})
 

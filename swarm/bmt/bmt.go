@@ -318,7 +318,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 // with every full segment calls writeSection in a go routine
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
-	if l == 0 {
+	if l == 0 || l > 4096 {
 		return 0, nil
 	}
 	t := h.getTree()

@@ -51,7 +51,7 @@ const secureKeyLength = 11 + 32
 
 // DatabaseReader wraps the Get and Has method of a backing store for the trie.
 type DatabaseReader interface {
-	// Get retrieves the value associated with key form the database.
+	// Get retrieves the value associated with key from the database.
 	Get(key []byte) (value []byte, err error)
 
 	// Has retrieves whether a key is present in the database.
@@ -431,6 +431,11 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 
 // Dereference removes an existing reference from a root node.
 func (db *Database) Dereference(root common.Hash) {
+	// Sanity check to ensure that the meta-root is not removed
+	if root == (common.Hash{}) {
+		log.Error("Attempted to dereference the trie cache meta root")
+		return
+	}
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
