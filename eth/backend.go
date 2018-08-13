@@ -217,7 +217,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if number > 0 && prevCheckpoint > 0 {
 			           // Not reward for singer of genesis block and only calculate reward at checkpoint block.
 				startBlockNumber := number - (rCheckpoint * 2) + 1
-				endBlockNumber := startBlockNumber + rCheckpoint - 2
+				endBlockNumber := startBlockNumber + rCheckpoint - 1
 				signers := make(map[common.Address]*rewardLog)
 				validators := make(map[common.Address]*rewardLog)
 				totalSigner := uint64(0)
