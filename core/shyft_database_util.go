@@ -372,7 +372,7 @@ func InsertTx(sqldb *sql.DB, txData stypes.ShyftTxEntryPretty) {
 //InsertInternalTx writes internal tx to Postgres Db
 func InsertInternalTx(sqldb *sql.DB, i stypes.InteralWrite) {
 	var returnValue string
-	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
+	sqlStatement := `INSERT INTO internaltxs(action, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
 	qerr := sqldb.QueryRow(sqlStatement, i.Action, strings.ToLower(i.Hash), strings.ToLower(i.From), strings.ToLower(i.To), i.Value, i.Gas, i.GasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
 	if qerr != nil {
 		fmt.Println(qerr)

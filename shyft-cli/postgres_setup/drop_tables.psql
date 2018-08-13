@@ -1,5 +1,4 @@
-\connect
-shyftdb;
+\connect shyftdb;
 DROP TABLE internalTxs;
 DROP TABLE txs;
 DROP TABLE blocks;
