@@ -4,19 +4,19 @@ package main
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/ethclient"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"github.com/ShyftNetwork/go-empyrean/ethclient"
-	"github.com/ShyftNetwork/go-empyrean/common"
-	"context"
 	"sync"
-	"github.com/ShyftNetwork/go-empyrean/core/types"
-	"github.com/ShyftNetwork/go-empyrean/rlp"
 )
 
 const (
@@ -65,7 +65,6 @@ func handleRequest(conn net.Conn) {
 	messages := make(chan []byte)
 	checkBalanceChan := make(chan []byte)
 	sendTransactionChan := make(chan []byte)
-
 
 	go readerConn(conn, messages)
 	go handleMessages(messages, checkBalanceChan, sendTransactionChan)
@@ -161,15 +160,14 @@ func readerConn(conn net.Conn, channel chan []byte) {
 func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
-		fmt.Println("Eth Client not initialized: " , err)
+		fmt.Println("Eth Client not initialized: ", err)
 	}
 
 	for {
 		address := <-checkBalanceChan
 		fmt.Println("the address is ", string(address[:]))
 
-
-		balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])),nil)
+		balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])), nil)
 		if error != nil {
 			fmt.Println("Balance at error ", error)
 		}
@@ -186,7 +184,7 @@ func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 func sendTransaction(sendTransactionChan chan []byte) {
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
-		fmt.Println("Eth Client not initialized: " , err)
+		fmt.Println("Eth Client not initialized: ", err)
 	}
 
 	for {
@@ -203,7 +201,7 @@ func sendTransaction(sendTransactionChan chan []byte) {
 	}
 }
 
-func sendRingSignedMsg(conn net.Conn){
+func sendRingSignedMsg(conn net.Conn) {
 	key, _ := crypto.HexToECDSA(testPrivHex)
 
 	f_msg := "Hello World"
