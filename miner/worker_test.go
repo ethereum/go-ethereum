@@ -111,7 +111,7 @@ func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
 	b.chain.PostChainEvents(events, nil)
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) (*Worker, *testWorkerBackend) {
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(chainConfig, engine, backend, new(event.TypeMux))
@@ -168,7 +168,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		taskIndex int
 	)
 
-	checkEqual := func(t *testing.T, task *Task, index int) {
+	checkEqual := func(t *testing.T, task *task, index int) {
 		receiptLen, balance := 0, big.NewInt(0)
 		if index == 1 {
 			receiptLen, balance = 1, big.NewInt(1000)
@@ -181,7 +181,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 		}
 	}
 
-	w.newTaskHook = func(task *Task) {
+	w.newTaskHook = func(task *task) {
 		if task.block.NumberU64() == 1 {
 			checkEqual(t, task, taskIndex)
 			taskIndex += 1

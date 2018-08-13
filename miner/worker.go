@@ -166,17 +166,17 @@ func (env *Env) commitTransactions(mux *event.TypeMux, txs *types.TransactionsBy
 	}
 }
 
-// Task contains all information for consensus engine sealing and result submitting.
-type Task struct {
+// task contains all information for consensus engine sealing and result submitting.
+type task struct {
 	receipts  []*types.Receipt
 	state     *state.StateDB
 	block     *types.Block
 	createdAt time.Time
 }
 
-// Worker is the main object which takes care of submitting new work to consensus engine
+// worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
-type Worker struct {
+type worker struct {
 	config *params.ChainConfig
 	engine consensus.Engine
 	eth    Backend
@@ -193,8 +193,8 @@ type Worker struct {
 
 	// Channels
 	newWork  chan struct{}
-	taskCh   chan *Task
-	resultCh chan *Task
+	taskCh   chan *task
+	resultCh chan *task
 	exitCh   chan struct{}
 
 	current        *Env                         // An environment for current running cycle.
@@ -213,12 +213,12 @@ type Worker struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 
 	// Test hooks
-	newTaskHook      func(*Task) // Method to call upon receiving a new sealing task
+	newTaskHook      func(*task) // Method to call upon receiving a new sealing task
 	fullTaskInterval func()      // Method to call before pushing the full sealing task
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *Worker {
-	worker := &Worker{
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *worker {
+	worker := &worker{
 		config:         config,
 		engine:         engine,
 		eth:            eth,
@@ -230,8 +230,8 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
 		newWork:        make(chan struct{}, 1),
-		taskCh:         make(chan *Task),
-		resultCh:       make(chan *Task, resultQueueSize),
+		taskCh:         make(chan *task),
+		resultCh:       make(chan *task, resultQueueSize),
 		exitCh:         make(chan struct{}),
 	}
 	// Subscribe NewTxsEvent for tx pool
@@ -250,21 +250,21 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
-func (w *Worker) setEtherbase(addr common.Address) {
+func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
 }
 
 // setExtra sets the content used to initialize the block extra field.
-func (w *Worker) setExtra(extra []byte) {
+func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
 }
 
 // pending returns the pending state and corresponding block.
-func (w *Worker) pending() (*types.Block, *state.StateDB) {
+func (w *worker) pending() (*types.Block, *state.StateDB) {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
@@ -275,7 +275,7 @@ func (w *Worker) pending() (*types.Block, *state.StateDB) {
 }
 
 // pendingBlock returns pending block.
-func (w *Worker) pendingBlock() *types.Block {
+func (w *worker) pendingBlock() *types.Block {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
@@ -283,24 +283,24 @@ func (w *Worker) pendingBlock() *types.Block {
 }
 
 // start sets the running status as 1 and triggers new work submitting.
-func (w *Worker) start() {
+func (w *worker) start() {
 	atomic.StoreInt32(&w.running, 1)
 	w.newWork <- struct{}{}
 }
 
 // stop sets the running status as 0.
-func (w *Worker) stop() {
+func (w *worker) stop() {
 	atomic.StoreInt32(&w.running, 0)
 }
 
 // isRunning returns an indicator whether worker is running or not.
-func (w *Worker) isRunning() bool {
+func (w *worker) isRunning() bool {
 	return atomic.LoadInt32(&w.running) == 1
 }
 
 // close terminates all background threads maintained by the worker and cleans up buffered channels.
 // Note the worker does not support being closed multiple times.
-func (w *Worker) close() {
+func (w *worker) close() {
 	close(w.exitCh)
 	// Clean up buffered channels
 	for empty := false; !empty; {
@@ -313,7 +313,7 @@ func (w *Worker) close() {
 }
 
 // mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
-func (w *Worker) mainLoop() {
+func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
@@ -339,13 +339,17 @@ func (w *Worker) mainLoop() {
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
 			if !w.isRunning() && w.current != nil {
+				w.mu.Lock()
+				coinbase := w.coinbase
+				w.mu.Unlock()
+
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
-				w.current.commitTransactions(w.mux, txset, w.chain, w.coinbase)
+				w.current.commitTransactions(w.mux, txset, w.chain, coinbase)
 				w.updateSnapshot()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -368,10 +372,10 @@ func (w *Worker) mainLoop() {
 }
 
 // seal pushes a sealing task to consensus engine and submits the result.
-func (w *Worker) seal(t *Task, stop <-chan struct{}) {
+func (w *worker) seal(t *task, stop <-chan struct{}) {
 	var (
 		err error
-		res *Task
+		res *task
 	)
 
 	if t.block, err = w.engine.Seal(w.chain, t.block, stop); t.block != nil {
@@ -392,7 +396,7 @@ func (w *Worker) seal(t *Task, stop <-chan struct{}) {
 
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
 // push them to consensus engine.
-func (w *Worker) taskLoop() {
+func (w *worker) taskLoop() {
 	var stopCh chan struct{}
 
 	// interrupt aborts the in-flight sealing task.
@@ -420,15 +424,15 @@ func (w *Worker) taskLoop() {
 
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
-func (w *Worker) resultLoop() {
+func (w *worker) resultLoop() {
 	for {
 		select {
 		case result := <-w.resultCh:
 			if result == nil {
 				continue
 			}
-
 			block := result.block
+
 			// Update the block hash in all logs since it is now available and not when the
 			// receipt/log of individual transactions were created.
 			for _, r := range result.receipts {
@@ -469,8 +473,8 @@ func (w *Worker) resultLoop() {
 	}
 }
 
-// makeCurrent creates an new environment for the current cycle.
-func (w *Worker) makeCurrent(parent *types.Block, header *types.Header) error {
+// makeCurrent creates a new environment for the current cycle.
+func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	state, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
@@ -501,7 +505,7 @@ func (w *Worker) makeCurrent(parent *types.Block, header *types.Header) error {
 }
 
 // commitUncle adds the given block to uncle block set, returns error if failed to add.
-func (w *Worker) commitUncle(env *Env, uncle *types.Header) error {
+func (w *worker) commitUncle(env *Env, uncle *types.Header) error {
 	hash := uncle.Hash()
 	if env.uncles.Contains(hash) {
 		return fmt.Errorf("uncle not unique")
@@ -518,7 +522,7 @@ func (w *Worker) commitUncle(env *Env, uncle *types.Header) error {
 
 // updateSnapshot updates pending snapshot block and state.
 // Note this function assumes the current variable is thread safe.
-func (w *Worker) updateSnapshot() {
+func (w *worker) updateSnapshot() {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
 
@@ -547,7 +551,7 @@ func (w *Worker) updateSnapshot() {
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
-func (w *Worker) commitNewWork() {
+func (w *worker) commitNewWork() {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -649,7 +653,7 @@ func (w *Worker) commitNewWork() {
 		// take advantage of this part time.
 		if w.isRunning() {
 			select {
-			case w.taskCh <- &Task{receipts: nil, state: emptyState, block: emptyBlock, createdAt: time.Now()}:
+			case w.taskCh <- &task{receipts: nil, state: emptyState, block: emptyBlock, createdAt: time.Now()}:
 				log.Info("Commit new empty mining work", "number", emptyBlock.Number(), "uncles", len(uncles))
 			case <-w.exitCh:
 				log.Info("Worker has exited")
@@ -691,7 +695,7 @@ func (w *Worker) commitNewWork() {
 		}
 
 		select {
-		case w.taskCh <- &Task{receipts: cpy, state: fullState, block: fullBlock, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: cpy, state: fullState, block: fullBlock, createdAt: time.Now()}:
 			w.unconfirmed.Shift(fullBlock.NumberU64() - 1)
 			log.Info("Commit new full mining work", "number", fullBlock.Number(), "txs", env.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		case <-w.exitCh:

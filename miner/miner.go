@@ -41,7 +41,7 @@ type Backend interface {
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
 	mux      *event.TypeMux
-	worker   *Worker
+	worker   *worker
 	coinbase common.Address
 	eth      Backend
 	engine   consensus.Engine
