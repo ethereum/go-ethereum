@@ -156,7 +156,7 @@ type lru struct {
 	futureItem interface{}
 }
 
-// newlru create a new least-recently-used cache for ither the verification caches
+// newlru create a new least-recently-used cache for either the verification caches
 // or the mining datasets.
 func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru {
 	if maxItems <= 0 {
@@ -389,7 +389,7 @@ type Config struct {
 	PowMode        Mode
 }
 
-// Ethash is a consensus engine based on proot-of-work implementing the ethash
+// Ethash is a consensus engine based on proof-of-work implementing the ethash
 // algorithm.
 type Ethash struct {
 	config Config

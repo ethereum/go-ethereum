@@ -127,7 +127,7 @@ func (hub *Hub) refreshWallets() {
 		// breaking the Ledger protocol if that is waiting for user confirmation. This
 		// is a bug acknowledged at Ledger, but it won't be fixed on old devices so we
 		// need to prevent concurrent comms ourselves. The more elegant solution would
-		// be to ditch enumeration in favor of hutplug events, but that don't work yet
+		// be to ditch enumeration in favor of hotplug events, but that don't work yet
 		// on Windows so if we need to hack it anyway, this is more elegant for now.
 		hub.commsLock.Lock()
 		if hub.commsPend > 0 { // A confirmation is pending, don't refresh
