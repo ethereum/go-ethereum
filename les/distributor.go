@@ -23,6 +23,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 // ErrNoPeers is returned if no peers capable of serving a queued request are available
@@ -32,6 +34,7 @@ var ErrNoPeers = errors.New("no suitable peers available")
 // suitable peers, obeying flow control rules and prioritizing them in creation
 // order (even when a resend is necessary).
 type requestDistributor struct {
+	clock            mclock.Clock
 	reqQueue         *list.List
 	lastReqOrder     uint64
 	peers            map[distPeer]struct{}
@@ -71,8 +74,9 @@ type distReq struct {
 }
 
 // newRequestDistributor creates a new request distributor
-func newRequestDistributor(peers *peerSet, stopChn chan struct{}) *requestDistributor {
+func newRequestDistributor(peers *peerSet, stopChn chan struct{}, clock mclock.Clock) *requestDistributor {
 	d := &requestDistributor{
+		clock:    clock,
 		reqQueue: list.New(),
 		loopChn:  make(chan struct{}, 2),
 		stopChn:  stopChn,
@@ -150,7 +154,7 @@ func (d *requestDistributor) loop() {
 						wait = distMaxWait
 					}
 					go func() {
-						time.Sleep(wait)
+						d.clock.Sleep(wait)
 						d.loopChn <- struct{}{}
 					}()
 					break loop
