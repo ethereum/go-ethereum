@@ -30,7 +30,7 @@ class BlocksTable extends Component {
                 Hash={data.Hash}
                 Number={data.Number}
                 Coinbase={data.Coinbase}
-                Age={data.Age}
+                AgeGet={data.AgeGet}
                 GasUsed={data.GasUsed}
                 GasLimit={data.GasLimit}
                 UncleCount={data.UncleCount}

@@ -7,11 +7,12 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+
 	"github.com/ShyftNetwork/go-empyrean/core"
 	"github.com/gorilla/mux"
-	"bytes"
-	"io/ioutil"
-	"encoding/json"
 )
 
 // GetTransaction gets txs
@@ -239,7 +240,7 @@ func BroadcastTx(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "ERROR parsing json")
 	}
 	tx_hash := dat["result"]
-	if(tx_hash == nil) {
+	if tx_hash == nil {
 		errMap := dat["error"].(map[string]interface{})
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusOK)

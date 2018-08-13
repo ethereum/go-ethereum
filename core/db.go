@@ -62,3 +62,28 @@ func DBConnection() (*sql.DB, error) {
 	}
 	return blockExplorerDb, nil
 }
+
+func ClearTables() {
+	sqldb, err := DBConnection()
+	if err != nil {
+		panic(err)
+	}
+
+	sqlStatementTx:= `DELETE FROM txs`
+	_, err = sqldb.Exec(sqlStatementTx)
+	if err != nil {
+		panic(err)
+	}
+
+	sqlStatementAcc:= `DELETE FROM accounts`
+	_, err = sqldb.Exec(sqlStatementAcc)
+	if err != nil {
+		panic(err)
+	}
+
+	sqlStatement := `DELETE FROM blocks`
+	_, err = sqldb.Exec(sqlStatement)
+	if err != nil {
+		panic(err)
+	}
+}
