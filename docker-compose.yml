@@ -1,5 +1,6 @@
 version: '3'
-
+volumes:
+  pg-data:
 services:
   shyftgeth:
     build:
@@ -33,7 +34,7 @@ services:
       context: $PWD
       dockerfile: docker/pg/Dockerfile.pg
     volumes:
-      - ./pg-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql/data
     ports:
       - "8001:5432"
     networks:
