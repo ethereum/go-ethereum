@@ -12,6 +12,7 @@ services:
       - "30303:30303/udp"
       - "30304:30304"
       - "31333:31333"
+      - "31333:31333/udp"
     volumes:
       - .:/go/src/ShyftNetwork/go-empyrean
     working_dir: /go/src/ShyftNetwork/go-empyrean
