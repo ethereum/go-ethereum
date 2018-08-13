@@ -23,7 +23,7 @@ var Modules = map[string]string{
 	"clique":     Clique_JS,
 	"ethash":     Ethash_JS,
 	"debug":      Debug_JS,
-	"eth":        Eth_JS,
+	"eth": 	      Eth_JS,
 	"miner":      Miner_JS,
 	"net":        Net_JS,
 	"personal":   Personal_JS,
@@ -430,6 +430,8 @@ web3._extend({
 `
 
 const Eth_JS = `
+var address = "0xe5acd4bca588bf3d8fe9b6189ecf434da21f6f76";
+var abi = [{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"registry","outputs":[{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"registryIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVariableNameAtIndex","outputs":[{"name":"varName","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"name","type":"string"}],"name":"getVar","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getHoldersCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"}],"name":"getVariablesCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"isHolder","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"index","type":"uint256"}],"name":"getHolderRegistryAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getHolderAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"holderAddress","type":"address"},{"name":"name","type":"string"},{"name":"value","type":"string"}],"name":"setVar","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"holderAddress","type":"address"},{"indexed":false,"name":"name","type":"string"},{"indexed":false,"name":"value","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"LogSetVariable","type":"event"}];
 web3._extend({
 	property: 'eth',
 	methods: [
@@ -470,7 +472,94 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
-	],
+		// FoodCoin method to send transaction with formatted data payload
+		new web3._extend.Method({
+			name: 'sendTransactionWithData',
+			call: 'eth_sendTransactionWithData',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
+		}),
+		// FoodCoin method to get formatted transaction info
+		new web3._extend.Method({
+        	name: 'getTransactionFormatted',
+        	call: 'eth_getTransactionByHash',
+        	params: 1,
+        	outputFormatter: function (tx) {
+    			if(tx.blockNumber !== null)
+        			tx.blockNumber = web3.toDecimal(tx.blockNumber);
+    			if(tx.transactionIndex !== null)
+        			tx.transactionIndex = web3.toDecimal(tx.transactionIndex);
+	    		tx.nonce = web3.toDecimal(tx.nonce);
+    			tx.gas = web3.toDecimal(tx.gas);
+    			tx.gasPrice = web3.toBigNumber(tx.gasPrice);
+    			tx.value = web3.toBigNumber(tx.value);				
+				inputStr = web3.toUtf8(tx.input);
+				tx.input = inputStr;
+				if (web3._extend.utils.isJson(inputStr)) {
+					tx.input = JSON.parse(inputStr);
+				} else {
+					tx.input = inputStr;
+				}
+    			return tx;
+			}
+    	}),
+		// FoodCoin Registry method: get variable from registry
+		// Example: food.getRegistryVar({accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', creatorAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name'});
+		new web3._extend.Method({
+        	name: 'getRegistryVar',
+        	call: 'eth_getVarFR',				
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter]			
+    	}),
+		// FoodCoin Registry method: set variable to registry
+		// Example: food.setRegistryVar({from:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name', varValue:'John'});
+		new web3._extend.Method({
+        	name: 'setRegistryVar',
+        	call: 'eth_setVarFR',
+        	params: 1,
+			inputFormatter: [null]			
+    	}),
+		// Adds verificator to the list of verificators.
+    	// parameters: 
+    	//     VerificatorAddress - address of a verificator
+    	//     IssuedTimeStamp - verificator's license issued timestamp
+    	//     ValidUntilTimeStamp - verificator's license valid until timestamp
+		new web3._extend.Method({
+        	name: 'addVerificator',
+        	call: 'eth_addVerificator',
+        	params: 1,
+			inputFormatter: [null]
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorsCount',
+        	call: 'eth_getVerificatorsCount',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: function (tx) {
+    			if(tx !== null)
+        			tx = web3.toDecimal(tx);
+    			return tx;
+			}
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorsIndex',
+        	call: 'eth_getVerificatorsIndex',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],			
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorAtIndex',
+        	call: 'eth_getVerificatorAtIndex',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],			
+    	}),
+		new web3._extend.Method({
+        	name: 'updateVerificatorLicenseExpiration',
+        	call: 'eth_updateVerificatorLicenseExpiration',
+        	params: 1,
+			inputFormatter: [null],
+    	}),
+	],	
 	properties: [
 		new web3._extend.Property({
 			name: 'pendingTransactions',
@@ -483,7 +572,7 @@ web3._extend({
 				}
 				return formatted;
 			}
-		}),
+		})		
 	]
 });
 `

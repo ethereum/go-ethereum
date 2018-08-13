@@ -121,6 +121,13 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
+	} else {
+		// Load config file from default place.
+		if err := loadConfig("./geth_conf.toml", &cfg); err != nil {
+			if ctx.Command.Name != "dumpconfig" {
+				utils.Fatalf("Config not found: %v. Put config file here or set config path with flag --config /path/to/your_config.toml", err)
+			}
+		}
 	}
 
 	// Apply flags.

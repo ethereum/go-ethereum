@@ -239,6 +239,8 @@ func doInstall(cmdline []string) {
 		goinstall.Args = append(goinstall.Args, "-v")
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
+		os.Rename(filepath.Join(GOBIN, "geth"), filepath.Join(GOBIN, "fgeth"))
+		os.Rename(filepath.Join(GOBIN, "geth.exe"), filepath.Join(GOBIN, "fgeth.exe"))
 		return
 	}
 	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any previous builds

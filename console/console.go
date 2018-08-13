@@ -137,7 +137,7 @@ func (c *Console) init(preload []string) error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	flatten := "var eth = web3.eth; var personal = web3.personal; "
+	flatten := "var food = web3.eth; var personal = web3.personal; "
 	for api := range apis {
 		if api == "web3" {
 			continue // manually mapped or ignore
@@ -147,7 +147,11 @@ func (c *Console) init(preload []string) error {
 			if err = c.jsre.Compile(fmt.Sprintf("%s.js", api), file); err != nil {
 				return fmt.Errorf("%s.js: %v", api, err)
 			}
-			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
+			if api == "eth" {
+				flatten += fmt.Sprintf("var food = web3.%s; ", api)
+			} else {
+				flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
+			}
 		} else if obj, err := c.jsre.Run("web3." + api); err == nil && obj.IsObject() {
 			// Enable web3.js built-in extension if available.
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
