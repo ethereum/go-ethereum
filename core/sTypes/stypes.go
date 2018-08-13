@@ -27,8 +27,9 @@ type SBlock struct {
 }
 
 type InteralWrite struct {
+	ID      int
 	Hash    string
-	Type    string
+	Action  string
 	From    string
 	To      string
 	Value   string
@@ -37,6 +38,10 @@ type InteralWrite struct {
 	Input   string
 	Output  string
 	Time    string
+}
+
+type InternalArray struct {
+	InternalEntry []InteralWrite
 }
 
 //blockRes struct

@@ -199,6 +199,12 @@ func GetInternalTransactions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
 
+	// mostRecentBlock := core.SGetRecentBlock(sqldb)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
+
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
@@ -210,6 +216,11 @@ func GetInternalTransactionsHash(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	transactionHash := vars["transaction_hash"]
 
+	//mostRecentBlock := core.SGetRecentBlock(sqldb)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 

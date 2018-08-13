@@ -386,3 +386,74 @@ func SGetAccountTxs(sqldb *sql.DB, address string) string {
 	}
 	return txx
 }
+
+//GetAllInternalTransactions getter fn for API
+func SGetAllInternalTransactions(sqldb *sql.DB) string {
+	var arr stypes.InternalArray
+	var internaltx string
+	rows, err := sqldb.Query(`SELECT * FROM internaltxs`)
+	if err != nil {
+		fmt.Println("err")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var txhash, action, to_addr, from_addr, amount, input, output string
+		var gas, gasUsed uint64
+		var id int
+		var age string
+
+		err = rows.Scan(
+			&id, &txhash, &action, &to_addr, &from_addr, &amount, &gas, &gasUsed, &age, &input, &output,
+		)
+
+		arr.InternalEntry = append(arr.InternalEntry, stypes.InteralWrite{
+			ID:      id,
+			Hash:    txhash,
+			Action:  action,
+			To:      to_addr,
+			From:    from_addr,
+			Value:   amount,
+			Gas:     gas,
+			GasUsed: gasUsed,
+			Time:    age,
+			Input:   input,
+			Output:  output,
+		})
+
+		tx, _ := json.Marshal(arr.InternalEntry)
+		newtx := string(tx)
+		internaltx = newtx
+	}
+	return internaltx
+}
+
+//GetInternalTransaction fn returns single tx
+func SGetInternalTransaction(sqldb *sql.DB, txHash string) string {
+	sqlStatement := `SELECT * FROM internaltxs WHERE txhash=$1;`
+	row := sqldb.QueryRow(sqlStatement, txHash)
+	var txhash, action, to_addr, from_addr, amount, input, output string
+	var id int
+	var gas, gasUsed uint64
+	var age string
+
+	row.Scan(
+		&id, &txhash, &action, &to_addr, &from_addr, &amount, &gas, &gasUsed, &age, &input, &output,
+	)
+
+	internaltx := stypes.InteralWrite{
+		ID:      id,
+		Hash:    txhash,
+		Action:  action,
+		To:      to_addr,
+		From:    from_addr,
+		Value:   amount,
+		Gas:     gas,
+		GasUsed: gasUsed,
+		Time:    age,
+		Input:   input,
+		Output:  output,
+	}
+	json, _ := json.Marshal(internaltx)
+
+	return string(json)
+}
