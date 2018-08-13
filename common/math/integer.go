@@ -21,8 +21,8 @@ import (
 	"strconv"
 )
 
+// Integer limit values.
 const (
-	// Integer limit values.
 	MaxInt8   = 1<<7 - 1
 	MinInt8   = -1 << 7
 	MaxInt16  = 1<<15 - 1

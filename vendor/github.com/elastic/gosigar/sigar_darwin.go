@@ -91,6 +91,10 @@ func (self *Swap) Get() error {
 	return nil
 }
 
+func (self *HugeTLBPages) Get() error {
+	return ErrNotImplemented{runtime.GOOS}
+}
+
 func (self *Cpu) Get() error {
 	var count C.mach_msg_type_number_t = C.HOST_CPU_LOAD_INFO_COUNT
 	var cpuload C.host_cpu_load_info_data_t

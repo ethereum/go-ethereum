@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -54,19 +53,19 @@ func NewDbKey(t uint32, h common.Hash) *DBKey {
 	return &k
 }
 
-func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) {
+func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) error {
 	var err error
 	if len(path) == 0 {
-		utils.Fatalf("DB file is not specified")
+		return fmt.Errorf("DB file is not specified")
 	}
 
 	if len(password) == 0 {
-		utils.Fatalf("Password is not specified for MailServer")
+		return fmt.Errorf("password is not specified")
 	}
 
 	s.db, err = leveldb.OpenFile(path, nil)
 	if err != nil {
-		utils.Fatalf("Failed to open DB file: %s", err)
+		return fmt.Errorf("open DB file: %s", err)
 	}
 
 	s.w = shh
@@ -74,12 +73,13 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 
 	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
-		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
+		return fmt.Errorf("create symmetric key: %s", err)
 	}
 	s.key, err = s.w.GetSymKey(MailServerKeyID)
 	if err != nil {
-		utils.Fatalf("Failed to save symmetric key for MailServer")
+		return fmt.Errorf("save symmetric key: %s", err)
 	}
+	return nil
 }
 
 func (s *WMailServer) Close() {
