@@ -88,12 +88,10 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte, sendTran
 		if prevMsg != nil {
 			s := string(prevMsg[:])
 			if s == "-- ADDRESS --" {
-				fmt.Println("putting on channel 1")
 				addressOfClient = msg
-				checkBalancesChan <- addressOfClient
+				//checkBalancesChan <- addressOfClient
 			}
 			if s == "-- GET_BALANCE --" {
-				fmt.Println("putting on channel 3")
 				checkBalancesChan <- msg
 			}
 			if s == "-- SEND_TRANSACTION --" {
@@ -130,7 +128,7 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte, sendTran
 
 			pubKey := crypto.ToECDSAPub(rpk)
 			recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-			fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
+			fmt.Println("Client connected with address :", recoveredAddr.Hex())
 			signatureFromClient = nil
 			msgFromClient = nil
 		}
@@ -161,7 +159,6 @@ func readerConn(conn net.Conn, channel chan []byte) {
 }
 
 func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
-	fmt.Println("in check balance function")
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
 		fmt.Println("Eth Client not initialized: " , err)
@@ -177,13 +174,7 @@ func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 			fmt.Println("Balance at error ", error)
 		}
 		mutex.Lock()
-		fmt.Println("in broadcasting balance")
-		fmt.Println("the bal is ", balance)
 		fmt.Println("The balance for address ", string(address[:]), " is ", balance)
-		fmt.Println([]byte("Broadcasting Balance"))
-		fmt.Println([]byte("\n"))
-		fmt.Println([]byte(balance.String()))
-		fmt.Println([]byte("\n"))
 		conn.Write([]byte("Broadcasting Balance"))
 		conn.Write([]byte("\n"))
 		conn.Write([]byte(balance.String()))
@@ -193,7 +184,6 @@ func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
 }
 
 func sendTransaction(sendTransactionChan chan []byte) {
-	fmt.Println("in sendTransaction function")
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
 		fmt.Println("Eth Client not initialized: " , err)
@@ -227,13 +217,6 @@ func sendRingSignedMsg(conn net.Conn){
 	}
 
 	mutex.Lock()
-	fmt.Println("in broadcasting message")
-	fmt.Println([]byte("Broadcasting Message"))
-	fmt.Println([]byte("\n"))
-	fmt.Println([]byte(f_msg))
-	fmt.Println([]byte("\n"))
-	fmt.Println(new_sig)
-	fmt.Println([]byte("\n"))
 	conn.Write([]byte("Broadcasting Message"))
 	conn.Write([]byte("\n"))
 	conn.Write([]byte(f_msg))
