@@ -417,8 +417,7 @@ func (self *worker) commitNewWork() {
 		}
 	}
 	// Could potentially happen if starting to mine in an odd state.
-	err := self.makeCurrent(parent, header)
-	if err != nil {
+	if err := self.makeCurrent(parent, header); err != nil {
 		log.Error("Failed to create mining context", "err", err)
 		return
 	}
