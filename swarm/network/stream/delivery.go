@@ -245,7 +245,7 @@ R:
 			continue R
 		default:
 		}
-		if len(req.SData) > int(cp.DefaultSize) {
+		if len(req.SData) > cp.DefaultSize {
 			log.Warn("received chunk is bigger than expected", "len", len(req.SData))
 			continue R
 		}
