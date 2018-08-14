@@ -18,7 +18,7 @@
 
 import React, {Component} from 'react';
 
-import Typography from 'material-ui/Typography';
+import Typography from '@material-ui/core/Typography';
 import {styles} from '../common';
 
 // multiplier multiplies a number by another.
@@ -70,7 +70,8 @@ export const bytePerSecPlotter = <T>(text: string, mapper: (T => T) = multiplier
 	}
 	return (
 		<Typography type='caption' color='inherit'>
-			<span style={styles.light}>{text}</span> {simplifyBytes(p)}/s
+			<span style={styles.light}>{text}</span>
+			{simplifyBytes(p)}/s
 		</Typography>
 	);
 };

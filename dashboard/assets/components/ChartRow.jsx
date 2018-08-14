@@ -19,7 +19,7 @@
 import React, {Component} from 'react';
 import type {ChildrenArray} from 'react';
 
-import Grid from 'material-ui/Grid';
+import Grid from '@material-ui/core/Grid';
 
 // styles contains the constant styles of the component.
 const styles = {
@@ -33,7 +33,7 @@ const styles = {
 		flex:    1,
 		padding: 0,
 	},
-}
+};
 
 export type Props = {
 	children: ChildrenArray<React$Element<any>>,

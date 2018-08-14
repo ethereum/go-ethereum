@@ -15,23 +15,48 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 const webpack = require('webpack');
+const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const path = require('path');
 
 module.exports = {
+	mode:   'development',
+	target: 'web',
+	entry:  {
+		bundle: './index',
+	},
+	output: {
+		filename: '[name].js',
+		path:     path.resolve(__dirname, ''),
+		// sourceMapFilename: '[file].map',
+	},
 	resolve: {
+		modules: [
+			'node_modules',
+			path.resolve(__dirname, 'components'), // import './components/Component' -> import 'Component'
+		],
+		// alias: {
+		// 	root: path.resolve(__dirname, ''),
+		// },
 		extensions: ['.js', '.jsx'],
 	},
-	entry:  './index',
-	output: {
-		path:     path.resolve(__dirname, ''),
-		filename: 'bundle.js',
+	// devtool:      'source-map',
+	optimization: {
+		minimize:     true,
+		namedModules: true, // Module names instead of numbers - resolves the large diff problem.
+		minimizer:    [
+			new UglifyJsPlugin({
+				uglifyOptions: {
+					compress: true,
+					output:   {
+						comments: false,
+						beautify: true,
+					},
+				},
+				// sourceMap: true,
+			}),
+		],
 	},
 	plugins: [
-		new webpack.optimize.UglifyJsPlugin({
-			comments: false,
-			mangle:   false,
-			beautify: true,
-		}),
 		new webpack.DefinePlugin({
 			PROD: process.env.NODE_ENV === 'production',
 		}),
@@ -61,11 +86,22 @@ module.exports = {
 				],
 			},
 			{
-				test: /font-awesome\.css$/,
-				use:  [
-					'style-loader',
-					'css-loader',
-					path.resolve(__dirname, './fa-only-woff-loader.js'),
+				test:  /\.css$/,
+				oneOf: [
+					{
+						test: /font-awesome/,
+						use:  [
+							'style-loader',
+							'css-loader',
+							path.resolve(__dirname, './fa-only-woff-loader.js'),
+						],
+					},
+					{
+						use: [
+							'style-loader',
+							'css-loader',
+						],
+					},
 				],
 			},
 			{
@@ -73,5 +109,9 @@ module.exports = {
 				use:  'url-loader',
 			},
 		],
+	},
+	devServer: {
+		port:     8081,
+		compress: true,
 	},
 };

@@ -18,14 +18,14 @@
 
 import React, {Component} from 'react';
 
-import withStyles from 'material-ui/styles/withStyles';
+import withStyles from '@material-ui/core/styles/withStyles';
 
-import Header from './Header';
-import Body from './Body';
+import Header from 'Header';
+import Body from 'Body';
+import {inserter as logInserter, SAME} from 'Logs';
+import {inserter as peerInserter} from 'Network';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
-import {inserter as logInserter, SAME} from './Logs';
-import {inserter as peerInserter} from './Network';
 
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same
@@ -38,7 +38,6 @@ import {inserter as peerInserter} from './Network';
 // of the update.
 const deepUpdate = (updater: Object, update: Object, prev: Object): $Shape<Content> => {
 	if (typeof update === 'undefined') {
-		// TODO (kurkomisi): originally this was deep copy, investigate it.
 		return prev;
 	}
 	if (typeof updater === 'function') {
@@ -92,7 +91,7 @@ const defaultContent: () => Content = () => ({
 	network: {
 		peerBundles: {},
 	},
-	system:  {
+	system: {
 		activeMemory:   [],
 		virtualMemory:  [],
 		networkIngress: [],
@@ -125,7 +124,7 @@ const updaters = {
 	network: {
 		peerBundles: peerInserter,
 	},
-	system:  {
+	system: {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),
 		networkIngress: appender(200),

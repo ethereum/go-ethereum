@@ -18,11 +18,14 @@
 
 import React, {Component} from 'react';
 
-import Table, {TableHead, TableBody, TableRow, TableCell} from 'material-ui/Table';
+import Table from '@material-ui/core/Table';
+import TableHead from '@material-ui/core/TableHead';
+import TableBody from '@material-ui/core/TableBody';
+import TableRow from '@material-ui/core/TableRow';
+import TableCell from '@material-ui/core/TableCell';
 import type {Network as NetworkType, PeerBundle, Peer} from '../types/content';
 
-// inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
-// limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
+// inserter is a state updater function for the main component, which handles the peers.
 export const inserter = (update: {[string]: PeerBundle}, prev: {[string]: PeerBundle}) => {
 	Object.keys(update).forEach((ip) => {
 		if (!update[ip]) {
@@ -94,6 +97,8 @@ export type Props = {
     content:      NetworkType,
     shouldUpdate: Object,
 };
+
+type State = {};
 
 // Network renders the network page.
 class Network extends Component<Props, State> {

@@ -18,13 +18,16 @@
 
 import React, {Component} from 'react';
 
-import withStyles from 'material-ui/styles/withStyles';
-import Typography from 'material-ui/Typography';
-import Grid from 'material-ui/Grid';
-import {ResponsiveContainer, AreaChart, Area, Tooltip} from 'recharts';
+import withStyles from '@material-ui/core/styles/withStyles';
+import Typography from '@material-ui/core/Typography';
+import Grid from '@material-ui/core/Grid';
+import ResponsiveContainer from 'recharts/es6/component/ResponsiveContainer';
+import AreaChart from 'recharts/es6/chart/AreaChart';
+import Area from 'recharts/es6/cartesian/Area';
+import Tooltip from 'recharts/es6/component/Tooltip';
 
-import ChartRow from './ChartRow';
-import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from './CustomTooltip';
+import ChartRow from 'ChartRow';
+import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from 'CustomTooltip';
 import {styles as commonStyles} from '../common';
 import type {General, System} from '../types/content';
 
@@ -53,6 +56,10 @@ const styles = {
 		height: '100%',
 		width:  '99%',
 	},
+	link: {
+		color:          'inherit',
+		textDecoration: 'none',
+	},
 };
 
 // themeStyles returns the styles generated from the theme for the component.
@@ -73,16 +80,18 @@ export type Props = {
 	shouldUpdate: Object,
 };
 
+type State = {};
+
 // Footer renders the footer of the dashboard.
-class Footer extends Component<Props> {
-	shouldComponentUpdate(nextProps) {
+class Footer extends Component<Props, State> {
+	shouldComponentUpdate(nextProps: Readonly<Props>, nextState: Readonly<State>, nextContext: any) {
 		return typeof nextProps.shouldUpdate.general !== 'undefined' || typeof nextProps.shouldUpdate.system !== 'undefined';
 	}
 
 	// halfHeightChart renders an area chart with half of the height of its parent.
 	halfHeightChart = (chartProps, tooltip, areaProps) => (
 		<ResponsiveContainer width='100%' height='50%'>
-			<AreaChart {...chartProps} >
+			<AreaChart {...chartProps}>
 				{!tooltip || (<Tooltip cursor={false} content={<CustomTooltip tooltip={tooltip} />} />)}
 				<Area isAnimationActive={false} type='monotone' {...areaProps} />
 			</AreaChart>
@@ -158,14 +167,19 @@ class Footer extends Component<Props> {
 						)}
 					</ChartRow>
 				</Grid>
-				<Grid item >
+				<Grid item>
 					<Typography type='caption' color='inherit'>
 						<span style={commonStyles.light}>Geth</span> {general.version}
 					</Typography>
 					{general.commit && (
 						<Typography type='caption' color='inherit'>
 							<span style={commonStyles.light}>{'Commit '}</span>
-							<a href={`https://github.com/ethereum/go-ethereum/commit/${general.commit}`} target='_blank' style={{color: 'inherit', textDecoration: 'none'}} >
+							<a
+								href={`https://github.com/ethereum/go-ethereum/commit/${general.commit}`}
+								target='_blank'
+								rel='noopener noreferrer'
+								style={styles.link}
+							>
 								{general.commit.substring(0, 8)}
 							</a>
 						</Typography>

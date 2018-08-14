@@ -7,3 +7,4 @@ node_modules/jss/flow-typed
 
 [options]
 include_warnings=true
+module.name_mapper='\(.*\)$' -> '<PROJECT_ROOT>/\1'
