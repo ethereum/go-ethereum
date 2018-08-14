@@ -318,12 +318,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.lock.Lock()
 		head := p.headInfo
 		p.lock.Unlock()
-		if pm.fetcher != nil {
-			go func() {
-				time.Sleep(time.Second * 2)
-				pm.fetcher.announce(p, head, true)
-			}()
-		}
+		pm.fetcher.announce(p, head)
 
 		if p.poolEntry != nil {
 			pm.serverPool.registered(p.poolEntry)
@@ -419,7 +414,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
 		if pm.fetcher != nil {
-			pm.fetcher.announce(p, &req, false)
+			pm.fetcher.announce(p, &req)
 		}
 
 	case GetBlockHeadersMsg:

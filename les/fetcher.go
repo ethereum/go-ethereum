@@ -242,7 +242,7 @@ func (f *lightFetcher) unregisterPeer(p *peer) {
 
 // announce processes a new announcement message received from a peer, adding new
 // nodes to the peer's block tree and removing old nodes if necessary
-func (f *lightFetcher) announce(p *peer, head *announceData, acceptNonMonotonic bool) {
+func (f *lightFetcher) announce(p *peer, head *announceData) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
@@ -254,9 +254,6 @@ func (f *lightFetcher) announce(p *peer, head *announceData, acceptNonMonotonic 
 	}
 
 	if fp.lastAnnounced != nil && head.Td.Cmp(fp.lastAnnounced.td) <= 0 {
-		if acceptNonMonotonic {
-			return
-		}
 		// announced tds should be strictly monotonic
 		p.Log().Debug("Received non-monotonic td", "current", head.Td, "previous", fp.lastAnnounced.td)
 		go f.pm.removePeer(p.id)
