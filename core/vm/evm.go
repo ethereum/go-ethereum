@@ -427,7 +427,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 // Create2 creates a new contract using code as deployment code.
 //
-// The different between Create2 with Create is Create2 uses sha3(msg.sender ++ salt ++ init_code)[12:]
+// The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress2(caller.Address(), common.BigToHash(salt), code)
