@@ -20,6 +20,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 var (
@@ -61,7 +63,7 @@ func TestValidator(t *testing.T) {
 	// add content address validator and check puts
 	// bad should fail, good should pass
 	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.SData, goodChunk.SData)
@@ -79,7 +81,7 @@ func TestValidator(t *testing.T) {
 	var negV boolTestValidator
 	store.Validators = append(store.Validators, negV)
 
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.SData, goodChunk.SData)
@@ -97,7 +99,7 @@ func TestValidator(t *testing.T) {
 	var posV boolTestValidator = true
 	store.Validators = append(store.Validators, posV)
 
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
 	copy(badChunk.SData, goodChunk.SData)

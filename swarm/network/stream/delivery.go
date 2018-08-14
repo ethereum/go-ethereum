@@ -244,6 +244,11 @@ R:
 			continue R
 		default:
 		}
+		if len(req.SData) > chunk.DefaultSize {
+			log.Warn("received chunk is bigger than expected", "len", len(req.SData))
+			continue R
+		}
+
 		chunk.SData = req.SData
 		d.db.Put(context.TODO(), chunk)
 

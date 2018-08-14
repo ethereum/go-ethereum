@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 const MaxPO = 16
@@ -230,8 +231,8 @@ func GenerateRandomChunk(dataSize int64) *Chunk {
 func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 	var i int
 	hasher := MakeHashFunc(DefaultHash)()
-	if dataSize > DefaultChunkSize {
-		dataSize = DefaultChunkSize
+	if dataSize > chunk.DefaultSize {
+		dataSize = chunk.DefaultSize
 	}
 
 	for i = 0; i < count; i++ {
