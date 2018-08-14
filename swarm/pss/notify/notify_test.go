@@ -203,12 +203,12 @@ func TestStart(t *testing.T) {
 
 func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewInmemoryStore()
-	kademlias := make(map[discover.NodeID]*network.Kademlia)
-	kademlia := func(id discover.NodeID) *network.Kademlia {
+	kademlias := make(map[discover.ESSNodeID]*network.Kademlia)
+	kademlia := func(id discover.ESSNodeID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := network.NewAddrFromNodeID(id)
+		addr := network.NewAddrFromESSNodeID(id)
 		params := network.NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -238,7 +238,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

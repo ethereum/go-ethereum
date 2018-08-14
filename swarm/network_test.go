@@ -235,14 +235,14 @@ type testSwarmNetworkStep struct {
 type file struct {
 	addr   storage.Address
 	data   string
-	nodeID discover.NodeID
+	nodeID discover.ESSNodeID
 }
 
 // check represents a reference to a file that is retrieved
 // from a particular node.
 type check struct {
 	key    string
-	nodeID discover.NodeID
+	nodeID discover.ESSNodeID
 }
 
 // testSwarmNetworkOptions contains optional parameters for running
@@ -312,7 +312,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 	for i, step := range steps {
 		log.Debug("test sync step", "n", i+1, "nodes", step.nodeCount)
 
-		change := step.nodeCount - len(sim.UpNodeIDs())
+		change := step.nodeCount - len(sim.UpESSNodeIDs())
 
 		if change > 0 {
 			_, err := sim.AddNodesAndConnectChain(change)
@@ -334,7 +334,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		var totalFoundCount uint64
 
 		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-			nodeIDs := sim.UpNodeIDs()
+			nodeIDs := sim.UpESSNodeIDs()
 			shuffle(len(nodeIDs), func(i, j int) {
 				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 			})
@@ -411,7 +411,7 @@ func retrieve(
 	var totalWg sync.WaitGroup
 	errc := make(chan error)
 
-	nodeIDs := sim.UpNodeIDs()
+	nodeIDs := sim.UpESSNodeIDs()
 
 	totalCheckCount := len(nodeIDs) * len(files)
 
@@ -440,7 +440,7 @@ func retrieve(
 
 			checkCount++
 			wg.Add(1)
-			go func(f file, id discover.NodeID) {
+			go func(f file, id discover.ESSNodeID) {
 				defer wg.Done()
 
 				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", atomic.LoadUint64(totalFoundCount))
@@ -466,7 +466,7 @@ func retrieve(
 			}(f, id)
 		}
 
-		go func(id discover.NodeID) {
+		go func(id discover.ESSNodeID) {
 			defer totalWg.Done()
 			wg.Wait()
 

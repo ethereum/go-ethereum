@@ -64,7 +64,7 @@ func NewDockerAdapter() (*DockerAdapter, error) {
 
 	return &DockerAdapter{
 		ExecAdapter{
-			nodes: make(map[discover.NodeID]*ExecNode),
+			nodes: make(map[discover.ESSNodeID]*ExecNode),
 		},
 	}, nil
 }

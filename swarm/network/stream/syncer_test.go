@@ -46,7 +46,7 @@ func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
 }
 
-func createMockStore(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+func createMockStore(id discover.ESSNodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
 	var err error
 	address := common.BytesToAddress(id.Bytes())
 	mockStore := globalStore.NewNodeStore(address)
@@ -65,7 +65,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	defer setDefaultSkipCheck(defaultSkipCheck)
 	defaultSkipCheck = skipCheck
 	//data directories for each node and store
-	datadirs = make(map[discover.NodeID]string)
+	datadirs = make(map[discover.ESSNodeID]string)
 	if *useMockStore {
 		createStoreFunc = createMockStore
 		createGlobalStore()
@@ -74,9 +74,9 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 	defer datadirsCleanup()
 
-	registries = make(map[discover.NodeID]*TestRegistry)
-	toAddr = func(id discover.NodeID) *network.BzzAddr {
-		addr := network.NewAddrFromNodeID(id)
+	registries = make(map[discover.ESSNodeID]*TestRegistry)
+	toAddr = func(id discover.ESSNodeID) *network.BzzAddr {
+		addr := network.NewAddrFromESSNodeID(id)
 		//hack to put addresses in same space
 		addr.OAddr[0] = byte(0)
 		return addr
@@ -93,8 +93,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	// the service constructor function
 	// TODO: will this work with exec/docker adapter?
 	// localstore of nodes made available for action and check calls
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
 	// create context for simulation run
 	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -112,7 +112,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		t.Fatal(err.Error())
 	}
 
-	nodeIndex := make(map[discover.NodeID]int)
+	nodeIndex := make(map[discover.ESSNodeID]int)
 	for i, id := range sim.IDs {
 		nodeIndex[id] = i
 		if !*useMockStore {
@@ -123,7 +123,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	// peerCount function gives the number of peer connections for a nodeID
 	// this is needed for the service run function to wait until
 	// each protocol  instance runs and the streamer peers are available
-	peerCount = func(id discover.NodeID) int {
+	peerCount = func(id discover.ESSNodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
 		}
@@ -216,7 +216,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 
 	// this makes sure check is not called before the previous call finishes
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case err := <-errc:
 			return false, err

@@ -82,7 +82,7 @@ func TestMocker(t *testing.T) {
 	defer sub.Unsubscribe()
 	//wait until all nodes are started and connected
 	//store every node up event in a map (value is irrelevant, mimic Set datatype)
-	nodemap := make(map[discover.NodeID]bool)
+	nodemap := make(map[discover.ESSNodeID]bool)
 	wg.Add(1)
 	nodesComplete := false
 	connCount := 0

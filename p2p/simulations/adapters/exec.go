@@ -54,7 +54,7 @@ type ExecAdapter struct {
 	// simulation node are created.
 	BaseDir string
 
-	nodes map[discover.NodeID]*ExecNode
+	nodes map[discover.ESSNodeID]*ExecNode
 }
 
 // NewExecAdapter returns an ExecAdapter which stores node data in
@@ -62,7 +62,7 @@ type ExecAdapter struct {
 func NewExecAdapter(baseDir string) *ExecAdapter {
 	return &ExecAdapter{
 		BaseDir: baseDir,
-		nodes:   make(map[discover.NodeID]*ExecNode),
+		nodes:   make(map[discover.ESSNodeID]*ExecNode),
 	}
 }
 
@@ -122,7 +122,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 // ExecNode starts a simulation node by exec'ing the current binary and
 // running the configured services
 type ExecNode struct {
-	ID     discover.NodeID
+	ID     discover.ESSNodeID
 	Dir    string
 	Config *execNodeConfig
 	Cmd    *exec.Cmd
@@ -492,7 +492,7 @@ type wsRPCDialer struct {
 
 // DialRPC implements the RPCDialer interface by creating a WebSocket RPC
 // client of the given node
-func (w *wsRPCDialer) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+func (w *wsRPCDialer) DialRPC(id discover.ESSNodeID) (*rpc.Client, error) {
 	addr, ok := w.addrs[id.String()]
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)

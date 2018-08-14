@@ -38,8 +38,8 @@ import (
 var (
 	currentNetworkID int
 	cnt              int
-	nodeMap          map[int][]discover.NodeID
-	kademlias        map[discover.NodeID]*Kademlia
+	nodeMap          map[int][]discover.ESSNodeID
+	kademlias        map[discover.ESSNodeID]*Kademlia
 )
 
 const (
@@ -70,7 +70,7 @@ func TestNetworkID(t *testing.T) {
 	//arbitrarily set the number of nodes. It could be any number
 	numNodes := 24
 	//the nodeMap maps all nodes (slice value) with the same network ID (key)
-	nodeMap = make(map[int][]discover.NodeID)
+	nodeMap = make(map[int][]discover.ESSNodeID)
 	//set up the network and connect nodes
 	net, err := setupNetwork(numNodes)
 	if err != nil {
@@ -183,12 +183,12 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 }
 
 func newServices() adapters.Services {
-	kademlias = make(map[discover.NodeID]*Kademlia)
-	kademlia := func(id discover.NodeID) *Kademlia {
+	kademlias = make(map[discover.ESSNodeID]*Kademlia)
+	kademlia := func(id discover.ESSNodeID) *Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := NewAddrFromNodeID(id)
+		addr := NewAddrFromESSNodeID(id)
 		params := NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -201,14 +201,14 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := NewAddrFromNodeID(ctx.Config.ID)
+			addr := NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := NewHiveParams()
 			hp.Discovery = false
 			cnt++
 			//assign the network ID
 			currentNetworkID = cnt % NumberOfNets
 			if ok := nodeMap[currentNetworkID]; ok == nil {
-				nodeMap[currentNetworkID] = make([]discover.NodeID, 0)
+				nodeMap[currentNetworkID] = make([]discover.ESSNodeID, 0)
 			}
 			//add this node to the group sharing the same network ID
 			nodeMap[currentNetworkID] = append(nodeMap[currentNetworkID], ctx.Config.ID)
@@ -224,7 +224,7 @@ func newServices() adapters.Services {
 	}
 }
 
-func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) {
+func watchSubscriptionEvents(ctx context.Context, id discover.ESSNodeID, client *rpc.Client, errc chan error, quitC chan struct{}) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {

@@ -55,7 +55,7 @@ type bucket struct {
 	replacements []*Node
 }
 
-func newTable(ourID NodeID, ourAddr *net.UDPAddr) *Table {
+func newTable(ourID ESSNodeID, ourAddr *net.UDPAddr) *Table {
 	self := NewNode(ourID, ourAddr.IP, uint16(ourAddr.Port), uint16(ourAddr.Port))
 	tab := &Table{self: self}
 	for i := range tab.buckets {

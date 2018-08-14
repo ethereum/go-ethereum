@@ -84,7 +84,7 @@ type (
 
 	// findnode is a query for nodes close to the given target.
 	findnode struct {
-		Target     NodeID // doesn't need to be an actual public key
+		Target     ESSNodeID // doesn't need to be an actual public key
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
@@ -127,7 +127,7 @@ type (
 		IP  net.IP // len 4 for IPv4 or 16 for IPv6
 		UDP uint16 // for discovery protocol
 		TCP uint16 // for RLPx protocol
-		ID  NodeID
+		ID  ESSNodeID
 	}
 
 	rpcEndpoint struct {
@@ -205,7 +205,7 @@ func nodeToRPC(n *Node) rpcNode {
 }
 
 type ingressPacket struct {
-	remoteID   NodeID
+	remoteID   ESSNodeID
 	remoteAddr *net.UDPAddr
 	ev         nodeEvent
 	hash       []byte
@@ -273,7 +273,7 @@ func (t *udp) sendPing(remote *Node, toaddr *net.UDPAddr, topics []Topic) (hash 
 	return hash
 }
 
-func (t *udp) sendFindnode(remote *Node, target NodeID) {
+func (t *udp) sendFindnode(remote *Node, target ESSNodeID) {
 	t.sendPacket(remote.ID, remote.addr(), byte(findnodePacket), findnode{
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -326,7 +326,7 @@ func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 	}
 }
 
-func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
+func (t *udp) sendPacket(toid ESSNodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
 	//fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
 	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
@@ -411,7 +411,7 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 	if !bytes.Equal(prefix, versionPrefix) {
 		return errBadPrefix
 	}
-	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
+	fromID, err := recoverESSNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
 		return err
 	}

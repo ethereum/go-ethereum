@@ -85,8 +85,8 @@ type Table struct {
 // it is an interface so we can test without opening lots of UDP
 // sockets and without generating a private key.
 type transport interface {
-	ping(NodeID, *net.UDPAddr) error
-	findnode(toid NodeID, addr *net.UDPAddr, target NodeID) ([]*Node, error)
+	ping(ESSNodeID, *net.UDPAddr) error
+	findnode(toid ESSNodeID, addr *net.UDPAddr, target ESSNodeID) ([]*Node, error)
 	close()
 }
 
@@ -98,7 +98,7 @@ type bucket struct {
 	ips          netutil.DistinctNetSet
 }
 
-func newTable(t transport, ourID NodeID, ourAddr *net.UDPAddr, nodeDBPath string, bootnodes []*Node) (*Table, error) {
+func newTable(t transport, ourID ESSNodeID, ourAddr *net.UDPAddr, nodeDBPath string, bootnodes []*Node) (*Table, error) {
 	// If no node database was given, use an in-memory one
 	db, err := newNodeDB(nodeDBPath, nodeDBVersion, ourID)
 	if err != nil {
@@ -231,7 +231,7 @@ func (tab *Table) isInitDone() bool {
 
 // Resolve searches for a specific node with the given ID.
 // It returns nil if the node could not be found.
-func (tab *Table) Resolve(targetID NodeID) *Node {
+func (tab *Table) Resolve(targetID ESSNodeID) *Node {
 	// If the node is present in the local table, no
 	// network interaction is required.
 	hash := crypto.Keccak256Hash(targetID[:])
@@ -256,15 +256,15 @@ func (tab *Table) Resolve(targetID NodeID) *Node {
 // nodes that are closer to it on each iteration.
 // The given target does not need to be an actual node
 // identifier.
-func (tab *Table) Lookup(targetID NodeID) []*Node {
+func (tab *Table) Lookup(targetID ESSNodeID) []*Node {
 	return tab.lookup(targetID, true)
 }
 
-func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
+func (tab *Table) lookup(targetID ESSNodeID, refreshIfEmpty bool) []*Node {
 	var (
 		target         = crypto.Keccak256Hash(targetID[:])
-		asked          = make(map[NodeID]bool)
-		seen           = make(map[NodeID]bool)
+		asked          = make(map[ESSNodeID]bool)
+		seen           = make(map[ESSNodeID]bool)
 		reply          = make(chan []*Node, alpha)
 		pendingQueries = 0
 		result         *nodesByDistance
@@ -315,7 +315,7 @@ func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
 	return result.entries
 }
 
-func (tab *Table) findnode(n *Node, targetID NodeID, reply chan<- []*Node) {
+func (tab *Table) findnode(n *Node, targetID ESSNodeID, reply chan<- []*Node) {
 	fails := tab.db.findFails(n.ID)
 	r, err := tab.net.findnode(n.ID, n.addr(), targetID)
 	if err != nil || len(r) == 0 {
@@ -430,7 +430,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// sha3 preimage that falls into a chosen bucket.
 	// We perform a few lookups with a random target instead.
 	for i := 0; i < 3; i++ {
-		var target NodeID
+		var target ESSNodeID
 		crand.Read(target[:])
 		tab.lookup(target, false)
 	}

@@ -35,7 +35,7 @@ var errTimedOut = errors.New("timed out")
 // receive (expect) messages
 type ProtocolSession struct {
 	Server  *p2p.Server
-	IDs     []discover.NodeID
+	IDs     []discover.ESSNodeID
 	adapter *adapters.SimAdapter
 	events  chan *p2p.PeerEvent
 }
@@ -58,7 +58,7 @@ type Exchange struct {
 type Trigger struct {
 	Msg     interface{}     // type of message to be sent
 	Code    uint64          // code of message is given
-	Peer    discover.NodeID // the peer to send the message to
+	Peer    discover.ESSNodeID // the peer to send the message to
 	Timeout time.Duration   // timeout duration for the sending
 }
 
@@ -67,13 +67,13 @@ type Trigger struct {
 type Expect struct {
 	Msg     interface{}     // type of message to expect
 	Code    uint64          // code of message is now given
-	Peer    discover.NodeID // the peer that expects the message
+	Peer    discover.ESSNodeID // the peer that expects the message
 	Timeout time.Duration   // timeout duration for receiving
 }
 
 // Disconnect represents a disconnect event, used and checked by TestDisconnected
 type Disconnect struct {
-	Peer  discover.NodeID // discconnected peer
+	Peer  discover.ESSNodeID // discconnected peer
 	Error error           // disconnect reason
 }
 
@@ -111,7 +111,7 @@ func (s *ProtocolSession) trigger(trig Trigger) error {
 // expect checks an expectation of a message sent out by the pivot node
 func (s *ProtocolSession) expect(exps []Expect) error {
 	// construct a map of expectations for each node
-	peerExpects := make(map[discover.NodeID][]Expect)
+	peerExpects := make(map[discover.ESSNodeID][]Expect)
 	for _, exp := range exps {
 		if exp.Msg == nil {
 			return errors.New("no message to expect")
@@ -120,7 +120,7 @@ func (s *ProtocolSession) expect(exps []Expect) error {
 	}
 
 	// construct a map of mockNodes for each node
-	mockNodes := make(map[discover.NodeID]*mockNode)
+	mockNodes := make(map[discover.ESSNodeID]*mockNode)
 	for nodeID := range peerExpects {
 		simNode, ok := s.adapter.GetNode(nodeID)
 		if !ok {
@@ -253,7 +253,7 @@ func (s *ProtocolSession) testExchange(e Exchange) error {
 // TestDisconnected tests the disconnections given as arguments
 // the disconnect structs describe what disconnect error is expected on which peer
 func (s *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
-	expects := make(map[discover.NodeID]error)
+	expects := make(map[discover.ESSNodeID]error)
 	for _, disconnect := range disconnects {
 		expects[disconnect.Peer] = disconnect.Error
 	}

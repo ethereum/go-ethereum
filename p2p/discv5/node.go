@@ -39,7 +39,7 @@ import (
 type Node struct {
 	IP       net.IP // len 4 for IPv4 or 16 for IPv6
 	UDP, TCP uint16 // port numbers
-	ID       NodeID // the node's public key
+	ID       ESSNodeID // the node's public key
 
 	// Network-related fields are contained in nodeNetGuts.
 	// These fields are not supposed to be used off the
@@ -49,7 +49,7 @@ type Node struct {
 
 // NewNode creates a new node. It is mostly meant to be used for
 // testing purposes.
-func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+func NewNode(id ESSNodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
 	}
@@ -161,7 +161,7 @@ func ParseNode(rawurl string) (*Node, error) {
 
 func parseComplete(rawurl string) (*Node, error) {
 	var (
-		id               NodeID
+		id               ESSNodeID
 		ip               net.IP
 		tcpPort, udpPort uint64
 	)
@@ -259,29 +259,29 @@ func (n *Node) UnmarshalText(text []byte) error {
 
 const nodeIDBits = 512
 
-// NodeID is a unique identifier for each node.
+// ESSNodeID is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
-type NodeID [nodeIDBits / 8]byte
+type ESSNodeID [nodeIDBits / 8]byte
 
-// NodeID prints as a long hexadecimal number.
-func (n NodeID) String() string {
+// ESSNodeID prints as a long hexadecimal number.
+func (n ESSNodeID) String() string {
 	return fmt.Sprintf("%x", n[:])
 }
 
-// The Go syntax representation of a NodeID is a call to HexID.
-func (n NodeID) GoString() string {
+// The Go syntax representation of a ESSNodeID is a call to HexID.
+func (n ESSNodeID) GoString() string {
 	return fmt.Sprintf("discover.HexID(\"%x\")", n[:])
 }
 
 // TerminalString returns a shortened hex string for terminal logging.
-func (n NodeID) TerminalString() string {
+func (n ESSNodeID) TerminalString() string {
 	return hex.EncodeToString(n[:8])
 }
 
-// HexID converts a hex string to a NodeID.
+// HexID converts a hex string to a ESSNodeID.
 // The string may be prefixed with 0x.
-func HexID(in string) (NodeID, error) {
-	var id NodeID
+func HexID(in string) (ESSNodeID, error) {
+	var id ESSNodeID
 	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		return id, err
@@ -292,9 +292,9 @@ func HexID(in string) (NodeID, error) {
 	return id, nil
 }
 
-// MustHexID converts a hex string to a NodeID.
-// It panics if the string is not a valid NodeID.
-func MustHexID(in string) NodeID {
+// MustHexID converts a hex string to a ESSNodeID.
+// It panics if the string is not a valid ESSNodeID.
+func MustHexID(in string) ESSNodeID {
 	id, err := HexID(in)
 	if err != nil {
 		panic(err)
@@ -303,8 +303,8 @@ func MustHexID(in string) NodeID {
 }
 
 // PubkeyID returns a marshaled representation of the given public key.
-func PubkeyID(pub *ecdsa.PublicKey) NodeID {
-	var id NodeID
+func PubkeyID(pub *ecdsa.PublicKey) ESSNodeID {
+	var id ESSNodeID
 	pbytes := elliptic.Marshal(pub.Curve, pub.X, pub.Y)
 	if len(pbytes)-1 != len(id) {
 		panic(fmt.Errorf("need %d bit pubkey, got %d bits", (len(id)+1)*8, len(pbytes)))
@@ -315,7 +315,7 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 
 // Pubkey returns the public key represented by the node ID.
 // It returns an error if the ID is not a point on the curve.
-func (n NodeID) Pubkey() (*ecdsa.PublicKey, error) {
+func (n ESSNodeID) Pubkey() (*ecdsa.PublicKey, error) {
 	p := &ecdsa.PublicKey{Curve: crypto.S256(), X: new(big.Int), Y: new(big.Int)}
 	half := len(n) / 2
 	p.X.SetBytes(n[:half])
@@ -326,7 +326,7 @@ func (n NodeID) Pubkey() (*ecdsa.PublicKey, error) {
 	return p, nil
 }
 
-func (id NodeID) mustPubkey() ecdsa.PublicKey {
+func (id ESSNodeID) mustPubkey() ecdsa.PublicKey {
 	pk, err := id.Pubkey()
 	if err != nil {
 		panic(err)
@@ -334,9 +334,9 @@ func (id NodeID) mustPubkey() ecdsa.PublicKey {
 	return *pk
 }
 
-// recoverNodeID computes the public key used to sign the
+// recoverESSNodeID computes the public key used to sign the
 // given hash from the signature.
-func recoverNodeID(hash, sig []byte) (id NodeID, err error) {
+func recoverESSNodeID(hash, sig []byte) (id ESSNodeID, err error) {
 	pubkey, err := crypto.Ecrecover(hash, sig)
 	if err != nil {
 		return id, err

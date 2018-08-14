@@ -41,7 +41,7 @@ type Simulation struct {
 	Net    *simulations.Network
 	Stores []storage.ChunkStore
 	Addrs  []network.Addr
-	IDs    []discover.NodeID
+	IDs    []discover.ESSNodeID
 }
 
 func SetStores(addrs ...network.Addr) ([]storage.ChunkStore, func(), error) {
@@ -122,7 +122,7 @@ type RunConfig struct {
 	Step            *simulations.Step
 	NodeCount       int
 	ConnLevel       int
-	ToAddr          func(discover.NodeID) *network.BzzAddr
+	ToAddr          func(discover.ESSNodeID) *network.BzzAddr
 	Services        adapters.Services
 	DefaultService  string
 	EnableMsgEvents bool
@@ -147,7 +147,7 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 		adapterTeardown()
 		net.Shutdown()
 	}
-	ids := make([]discover.NodeID, nodes)
+	ids := make([]discover.ESSNodeID, nodes)
 	addrs := make([]network.Addr, nodes)
 	// start nodes
 	for i := 0; i < nodes; i++ {
@@ -221,7 +221,7 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 // errors to the errc channel. Channel quitC signals the termination of the event loop.
 // Returned doneC will be closed after the rpc subscription is unsubscribed,
 // signaling that simulations network is safe to shutdown.
-func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}, err error) {
+func WatchDisconnections(id discover.ESSNodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}, err error) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
@@ -260,8 +260,8 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 	return c, nil
 }
 
-func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
-	trigger := make(chan discover.NodeID)
+func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.ESSNodeID) chan discover.ESSNodeID {
+	trigger := make(chan discover.ESSNodeID)
 	go func() {
 		defer close(trigger)
 		ticker := time.NewTicker(d)
@@ -280,7 +280,7 @@ func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan 
 	return trigger
 }
 
-func (sim *Simulation) CallClient(id discover.NodeID, f func(*rpc.Client) error) error {
+func (sim *Simulation) CallClient(id discover.ESSNodeID, f func(*rpc.Client) error) error {
 	node := sim.Net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)

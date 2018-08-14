@@ -262,12 +262,12 @@ func (r RequestID) String() string {
 	return fmt.Sprintf("%#x", uint64(r))
 }
 
-// A NodeID is a number identifying a directory or file.
+// A ESSNodeID is a number identifying a directory or file.
 // It must be unique among IDs returned in LookupResponses
 // that have not yet been forgotten by ForgetRequests.
-type NodeID uint64
+type ESSNodeID uint64
 
-func (n NodeID) String() string {
+func (n ESSNodeID) String() string {
 	return fmt.Sprintf("%#x", uint64(n))
 }
 
@@ -280,13 +280,13 @@ func (h HandleID) String() string {
 }
 
 // The RootID identifies the root directory of a FUSE file system.
-const RootID NodeID = rootID
+const RootID ESSNodeID = rootID
 
 // A Header describes the basic information sent in every request.
 type Header struct {
 	Conn *Conn     `json:"-"` // connection this request was received on
 	ID   RequestID // unique ID for request
-	Node NodeID    // file or directory the request is about
+	Node ESSNodeID    // file or directory the request is about
 	Uid  uint32    // user ID of process making request
 	Gid  uint32    // group ID of process making request
 	Pid  uint32    // process ID of process making request
@@ -468,7 +468,7 @@ func (m *message) Header() Header {
 	return Header{
 		Conn: m.conn,
 		ID:   RequestID(h.Unique),
-		Node: NodeID(h.Nodeid),
+		Node: ESSNodeID(h.Nodeid),
 		Uid:  h.Uid,
 		Gid:  h.Gid,
 		Pid:  h.Pid,
@@ -696,7 +696,7 @@ loop:
 		newName = newName[:len(newName)-1]
 		req = &LinkRequest{
 			Header:  m.Header(),
-			OldNode: NodeID(in.Oldnodeid),
+			OldNode: ESSNodeID(in.Oldnodeid),
 			NewName: string(newName),
 		}
 
@@ -763,7 +763,7 @@ loop:
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
-		newDirNodeID := NodeID(in.Newdir)
+		newDirESSNodeID := ESSNodeID(in.Newdir)
 		oldNew := m.bytes()[unsafe.Sizeof(*in):]
 		// oldNew should be "old\x00new\x00"
 		if len(oldNew) < 4 {
@@ -779,7 +779,7 @@ loop:
 		oldName, newName := string(oldNew[:i]), string(oldNew[i+1:len(oldNew)-1])
 		req = &RenameRequest{
 			Header:  m.Header(),
-			NewDir:  newDirNodeID,
+			NewDir:  newDirESSNodeID,
 			OldName: oldName,
 			NewName: newName,
 		}
@@ -1021,8 +1021,8 @@ loop:
 		if m.len() < unsafe.Sizeof(*in) {
 			goto corrupt
 		}
-		oldDirNodeID := NodeID(in.Olddir)
-		newDirNodeID := NodeID(in.Newdir)
+		oldDirESSNodeID := ESSNodeID(in.Olddir)
+		newDirESSNodeID := ESSNodeID(in.Newdir)
 		oldNew := m.bytes()[unsafe.Sizeof(*in):]
 		// oldNew should be "oldname\x00newname\x00"
 		if len(oldNew) < 4 {
@@ -1038,8 +1038,8 @@ loop:
 		oldName, newName := string(oldNew[:i]), string(oldNew[i+1:len(oldNew)-1])
 		req = &ExchangeDataRequest{
 			Header:  m.Header(),
-			OldDir:  oldDirNodeID,
-			NewDir:  newDirNodeID,
+			OldDir:  oldDirESSNodeID,
+			NewDir:  newDirESSNodeID,
 			OldName: oldName,
 			NewName: newName,
 			// TODO options
@@ -1153,7 +1153,7 @@ func (c *Conn) sendInvalidate(msg []byte) error {
 //
 // Returns ErrNotCached if the kernel is not currently caching the
 // node.
-func (c *Conn) InvalidateNode(nodeID NodeID, off int64, size int64) error {
+func (c *Conn) InvalidateNode(nodeID ESSNodeID, off int64, size int64) error {
 	buf := newBuffer(unsafe.Sizeof(notifyInvalInodeOut{}))
 	h := (*outHeader)(unsafe.Pointer(&buf[0]))
 	// h.Unique is 0
@@ -1175,7 +1175,7 @@ func (c *Conn) InvalidateNode(nodeID NodeID, off int64, size int64) error {
 //
 // Returns ErrNotCached if the kernel is not currently caching the
 // node.
-func (c *Conn) InvalidateEntry(parent NodeID, name string) error {
+func (c *Conn) InvalidateEntry(parent ESSNodeID, name string) error {
 	const maxUint32 = ^uint32(0)
 	if uint64(len(name)) > uint64(maxUint32) {
 		// very unlikely, but we don't want to silently truncate
@@ -1602,7 +1602,7 @@ func (r *LookupRequest) Respond(resp *LookupResponse) {
 
 // A LookupResponse is the response to a LookupRequest.
 type LookupResponse struct {
-	Node       NodeID
+	Node       ESSNodeID
 	Generation uint64
 	EntryValid time.Duration
 	Attr       Attr
@@ -2167,7 +2167,7 @@ func (r *ReadlinkRequest) Respond(target string) {
 // A LinkRequest is a request to create a hard link.
 type LinkRequest struct {
 	Header  `json:"-"`
-	OldNode NodeID
+	OldNode ESSNodeID
 	NewName string
 }
 
@@ -2194,7 +2194,7 @@ func (r *LinkRequest) Respond(resp *LookupResponse) {
 // A RenameRequest is a request to rename a file.
 type RenameRequest struct {
 	Header           `json:"-"`
-	NewDir           NodeID
+	NewDir           ESSNodeID
 	OldName, NewName string
 }
 
@@ -2285,7 +2285,7 @@ func (r *InterruptRequest) String() string {
 // https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man2/exchangedata.2.html
 type ExchangeDataRequest struct {
 	Header           `json:"-"`
-	OldDir, NewDir   NodeID
+	OldDir, NewDir   ESSNodeID
 	OldName, NewName string
 	// TODO options
 }

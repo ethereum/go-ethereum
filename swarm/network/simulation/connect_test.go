@@ -143,7 +143,7 @@ func TestConnectNodesFull(t *testing.T) {
 	testFull(t, sim, ids)
 }
 
-func testFull(t *testing.T, sim *Simulation, ids []discover.NodeID) {
+func testFull(t *testing.T, sim *Simulation, ids []discover.ESSNodeID) {
 	n := len(ids)
 	var cc int
 	for i := 0; i < n; i++ {
@@ -182,7 +182,7 @@ func TestConnectNodesChain(t *testing.T) {
 	testChain(t, sim, ids)
 }
 
-func testChain(t *testing.T, sim *Simulation, ids []discover.NodeID) {
+func testChain(t *testing.T, sim *Simulation, ids []discover.ESSNodeID) {
 	n := len(ids)
 	for i := 0; i < n; i++ {
 		for j := i + 1; j < n; j++ {
@@ -221,7 +221,7 @@ func TestConnectNodesRing(t *testing.T) {
 	testRing(t, sim, ids)
 }
 
-func testRing(t *testing.T, sim *Simulation, ids []discover.NodeID) {
+func testRing(t *testing.T, sim *Simulation, ids []discover.ESSNodeID) {
 	n := len(ids)
 	for i := 0; i < n; i++ {
 		for j := i + 1; j < n; j++ {
@@ -262,7 +262,7 @@ func TestConnectToNodesStar(t *testing.T) {
 	testStar(t, sim, ids, centerIndex)
 }
 
-func testStar(t *testing.T, sim *Simulation, ids []discover.NodeID, centerIndex int) {
+func testStar(t *testing.T, sim *Simulation, ids []discover.ESSNodeID, centerIndex int) {
 	n := len(ids)
 	for i := 0; i < n; i++ {
 		for j := i + 1; j < n; j++ {

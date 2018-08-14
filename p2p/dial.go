@@ -74,10 +74,10 @@ type dialstate struct {
 	netrestrict *netutil.Netlist
 
 	lookupRunning bool
-	dialing       map[discover.NodeID]connFlag
+	dialing       map[discover.ESSNodeID]connFlag
 	lookupBuf     []*discover.Node // current discovery lookup results
 	randomNodes   []*discover.Node // filled from Table
-	static        map[discover.NodeID]*dialTask
+	static        map[discover.ESSNodeID]*dialTask
 	hist          *dialHistory
 
 	start     time.Time        // time when the dialer was first used
@@ -87,8 +87,8 @@ type dialstate struct {
 type discoverTable interface {
 	Self() *discover.Node
 	Close()
-	Resolve(target discover.NodeID) *discover.Node
-	Lookup(target discover.NodeID) []*discover.Node
+	Resolve(target discover.ESSNodeID) *discover.Node
+	Lookup(target discover.ESSNodeID) []*discover.Node
 	ReadRandomNodes([]*discover.Node) int
 }
 
@@ -97,7 +97,7 @@ type dialHistory []pastDial
 
 // pastDial is an entry in the dial history.
 type pastDial struct {
-	id  discover.NodeID
+	id  discover.ESSNodeID
 	exp time.Time
 }
 
@@ -132,8 +132,8 @@ func newDialState(static []*discover.Node, bootnodes []*discover.Node, ntab disc
 		maxDynDials: maxdyn,
 		ntab:        ntab,
 		netrestrict: netrestrict,
-		static:      make(map[discover.NodeID]*dialTask),
-		dialing:     make(map[discover.NodeID]connFlag),
+		static:      make(map[discover.ESSNodeID]*dialTask),
+		dialing:     make(map[discover.ESSNodeID]connFlag),
 		bootnodes:   make([]*discover.Node, len(bootnodes)),
 		randomNodes: make([]*discover.Node, maxdyn/2),
 		hist:        new(dialHistory),
@@ -159,7 +159,7 @@ func (s *dialstate) removeStatic(n *discover.Node) {
 	s.hist.remove(n.ID)
 }
 
-func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now time.Time) []task {
+func (s *dialstate) newTasks(nRunning int, peers map[discover.ESSNodeID]*Peer, now time.Time) []task {
 	if s.start.IsZero() {
 		s.start = now
 	}
@@ -260,7 +260,7 @@ var (
 	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
 )
 
-func (s *dialstate) checkDial(n *discover.Node, peers map[discover.NodeID]*Peer) error {
+func (s *dialstate) checkDial(n *discover.Node, peers map[discover.ESSNodeID]*Peer) error {
 	_, dialing := s.dialing[n.ID]
 	switch {
 	case dialing:
@@ -367,7 +367,7 @@ func (t *discoverTask) Do(srv *Server) {
 		time.Sleep(next.Sub(now))
 	}
 	srv.lastLookup = time.Now()
-	var target discover.NodeID
+	var target discover.ESSNodeID
 	rand.Read(target[:])
 	t.results = srv.ntab.Lookup(target)
 }
@@ -391,11 +391,11 @@ func (t waitExpireTask) String() string {
 func (h dialHistory) min() pastDial {
 	return h[0]
 }
-func (h *dialHistory) add(id discover.NodeID, exp time.Time) {
+func (h *dialHistory) add(id discover.ESSNodeID, exp time.Time) {
 	heap.Push(h, pastDial{id, exp})
 
 }
-func (h *dialHistory) remove(id discover.NodeID) bool {
+func (h *dialHistory) remove(id discover.ESSNodeID) bool {
 	for i, v := range *h {
 		if v.id == id {
 			heap.Remove(h, i)
@@ -404,7 +404,7 @@ func (h *dialHistory) remove(id discover.NodeID) bool {
 	}
 	return false
 }
-func (h dialHistory) contains(id discover.NodeID) bool {
+func (h dialHistory) contains(id discover.ESSNodeID) bool {
 	for _, v := range h {
 		if v.id == id {
 			return true

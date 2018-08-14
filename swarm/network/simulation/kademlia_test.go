@@ -30,7 +30,7 @@ import (
 func TestWaitTillHealthy(t *testing.T) {
 	sim := New(map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

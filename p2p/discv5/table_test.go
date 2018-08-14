@@ -35,7 +35,7 @@ type nullTransport struct{}
 
 func (nullTransport) sendPing(remote *Node, remoteAddr *net.UDPAddr) []byte { return []byte{1} }
 func (nullTransport) sendPong(remote *Node, pingHash []byte)                {}
-func (nullTransport) sendFindnode(remote *Node, target NodeID)              {}
+func (nullTransport) sendFindnode(remote *Node, target ESSNodeID)              {}
 func (nullTransport) sendNeighbours(remote *Node, nodes []*Node)            {}
 func (nullTransport) localAddr() *net.UDPAddr                               { return new(net.UDPAddr) }
 func (nullTransport) Close()                                                {}
@@ -43,7 +43,7 @@ func (nullTransport) Close()                                                {}
 // func TestTable_pingReplace(t *testing.T) {
 // 	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
 // 		transport := newPingRecorder()
-// 		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{})
+// 		tab, _ := newTable(transport, ESSNodeID{}, &net.UDPAddr{})
 // 		defer tab.Close()
 // 		pingSender := NewNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
 //
@@ -159,20 +159,20 @@ func nodeAtDistance(base common.Hash, ld int) (n *Node) {
 	return n
 }
 
-type pingRecorder struct{ responding, pinged map[NodeID]bool }
+type pingRecorder struct{ responding, pinged map[ESSNodeID]bool }
 
 func newPingRecorder() *pingRecorder {
-	return &pingRecorder{make(map[NodeID]bool), make(map[NodeID]bool)}
+	return &pingRecorder{make(map[ESSNodeID]bool), make(map[ESSNodeID]bool)}
 }
 
-func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+func (t *pingRecorder) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target ESSNodeID) ([]*Node, error) {
 	panic("findnode called on pingRecorder")
 }
 func (t *pingRecorder) close() {}
-func (t *pingRecorder) waitping(from NodeID) error {
+func (t *pingRecorder) waitping(from ESSNodeID) error {
 	return nil // remote always pings
 }
-func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
+func (t *pingRecorder) ping(toid ESSNodeID, toaddr *net.UDPAddr) error {
 	t.pinged[toid] = true
 	if t.responding[toid] {
 		return nil
@@ -244,7 +244,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		},
 	}
 	test := func(buf []*Node) bool {
-		tab := newTable(NodeID{}, &net.UDPAddr{})
+		tab := newTable(ESSNodeID{}, &net.UDPAddr{})
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
@@ -266,7 +266,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 }
 
 type closeTest struct {
-	Self   NodeID
+	Self   ESSNodeID
 	Target common.Hash
 	All    []*Node
 	N      int
@@ -274,18 +274,18 @@ type closeTest struct {
 
 func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &closeTest{
-		Self:   gen(NodeID{}, rand).(NodeID),
+		Self:   gen(ESSNodeID{}, rand).(ESSNodeID),
 		Target: gen(common.Hash{}, rand).(common.Hash),
 		N:      rand.Intn(bucketSize),
 	}
-	for _, id := range gen([]NodeID{}, rand).([]NodeID) {
+	for _, id := range gen([]ESSNodeID{}, rand).([]ESSNodeID) {
 		t.All = append(t.All, &Node{ID: id})
 	}
 	return reflect.ValueOf(t)
 }
 
 func hasDuplicates(slice []*Node) bool {
-	seen := make(map[NodeID]bool)
+	seen := make(map[ESSNodeID]bool)
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))
@@ -309,7 +309,7 @@ func sortedByDistanceTo(distbase common.Hash, slice []*Node) bool {
 	return true
 }
 
-func contains(ns []*Node, id NodeID) bool {
+func contains(ns []*Node, id ESSNodeID) bool {
 	for _, n := range ns {
 		if n.ID == id {
 			return true

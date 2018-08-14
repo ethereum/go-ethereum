@@ -75,7 +75,7 @@ type Network struct {
 	topictab      *topicTable
 	ticketStore   *ticketStore
 	nursery       []*Node
-	nodes         map[NodeID]*Node // tracks active nodes with state != known
+	nodes         map[ESSNodeID]*Node // tracks active nodes with state != known
 	timeoutTimers map[timeoutEvent]*time.Timer
 
 	// Revalidation queues.
@@ -163,7 +163,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netres
 		queryReq:         make(chan *findnodeQuery),
 		topicRegisterReq: make(chan topicRegisterReq),
 		topicSearchReq:   make(chan topicSearchReq),
-		nodes:            make(map[NodeID]*Node),
+		nodes:            make(map[ESSNodeID]*Node),
 	}
 	go net.loop()
 	return net, nil
@@ -214,7 +214,7 @@ func (net *Network) SetFallbackNodes(nodes []*Node) error {
 
 // Resolve searches for a specific node with the given ID.
 // It returns nil if the node could not be found.
-func (net *Network) Resolve(targetID NodeID) *Node {
+func (net *Network) Resolve(targetID ESSNodeID) *Node {
 	result := net.lookup(crypto.Keccak256Hash(targetID[:]), true)
 	for _, n := range result {
 		if n.ID == targetID {
@@ -231,14 +231,14 @@ func (net *Network) Resolve(targetID NodeID) *Node {
 // identifier.
 //
 // The local node may be included in the result.
-func (net *Network) Lookup(targetID NodeID) []*Node {
+func (net *Network) Lookup(targetID ESSNodeID) []*Node {
 	return net.lookup(crypto.Keccak256Hash(targetID[:]), false)
 }
 
 func (net *Network) lookup(target common.Hash, stopOnMatch bool) []*Node {
 	var (
-		asked          = make(map[NodeID]bool)
-		seen           = make(map[NodeID]bool)
+		asked          = make(map[ESSNodeID]bool)
+		seen           = make(map[ESSNodeID]bool)
 		reply          = make(chan []*Node, alpha)
 		result         = nodesByDistance{target: target}
 		pendingQueries = 0

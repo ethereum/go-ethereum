@@ -125,7 +125,7 @@ type serverPool struct {
 	discNodes     chan *discv5.Node
 	discLookups   chan bool
 
-	entries              map[discover.NodeID]*poolEntry
+	entries              map[discover.ESSNodeID]*poolEntry
 	timeout, enableRetry chan *poolEntry
 	adjustStats          chan poolStatAdjust
 
@@ -145,7 +145,7 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *s
 		db:           db,
 		quit:         quit,
 		wg:           wg,
-		entries:      make(map[discover.NodeID]*poolEntry),
+		entries:      make(map[discover.ESSNodeID]*poolEntry),
 		timeout:      make(chan *poolEntry, 1),
 		adjustStats:  make(chan poolStatAdjust, 100),
 		enableRetry:  make(chan *poolEntry, 1),
@@ -320,7 +320,7 @@ func (pool *serverPool) eventLoop() {
 			}
 
 		case node := <-pool.discNodes:
-			entry := pool.findOrNewNode(discover.NodeID(node.ID), node.IP, node.TCP)
+			entry := pool.findOrNewNode(discover.ESSNodeID(node.ID), node.IP, node.TCP)
 			pool.updateCheckDial(entry)
 
 		case conv := <-pool.discLookups:
@@ -401,7 +401,7 @@ func (pool *serverPool) eventLoop() {
 	}
 }
 
-func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16) *poolEntry {
+func (pool *serverPool) findOrNewNode(id discover.ESSNodeID, ip net.IP, port uint16) *poolEntry {
 	now := mclock.Now()
 	entry := pool.entries[id]
 	if entry == nil {
@@ -602,7 +602,7 @@ const (
 // poolEntry represents a server node and stores its current state and statistics.
 type poolEntry struct {
 	peer                  *peer
-	id                    discover.NodeID
+	id                    discover.ESSNodeID
 	addr                  map[string]*poolEntryAddress
 	lastConnected, dialed *poolEntryAddress
 	addrSelect            weightedRandomSelect
@@ -626,7 +626,7 @@ func (e *poolEntry) EncodeRLP(w io.Writer) error {
 
 func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
 	var entry struct {
-		ID                         discover.NodeID
+		ID                         discover.ESSNodeID
 		IP                         net.IP
 		Port                       uint16
 		Fails                      uint

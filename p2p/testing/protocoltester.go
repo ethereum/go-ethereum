@@ -52,7 +52,7 @@ type ProtocolTester struct {
 // NewProtocolTester constructs a new ProtocolTester
 // it takes as argument the pivot node id, the number of dummy peers and the
 // protocol run function called on a peer connection by the p2p server
-func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
+func NewProtocolTester(t *testing.T, id discover.ESSNodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
 		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			return &testNode{run}, nil
@@ -76,7 +76,7 @@ func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Pe
 
 	node := net.GetNode(id).Node.(*adapters.SimNode)
 	peers := make([]*adapters.NodeConfig, n)
-	peerIDs := make([]discover.NodeID, n)
+	peerIDs := make([]discover.ESSNodeID, n)
 	for i := 0; i < n; i++ {
 		peers[i] = adapters.RandomNodeConfig()
 		peers[i].Services = []string{"mock"}
@@ -108,7 +108,7 @@ func (t *ProtocolTester) Stop() error {
 
 // Connect brings up the remote peer node and connects it using the
 // p2p/simulations network connection with the in memory network adapter
-func (t *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
+func (t *ProtocolTester) Connect(selfID discover.ESSNodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.ID))
 		if _, err := t.network.NewNodeWithConfig(peer); err != nil {

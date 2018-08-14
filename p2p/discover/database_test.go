@@ -28,12 +28,12 @@ import (
 )
 
 var nodeDBKeyTests = []struct {
-	id    NodeID
+	id    ESSNodeID
 	field string
 	key   []byte
 }{
 	{
-		id:    NodeID{},
+		id:    ESSNodeID{},
 		field: "version",
 		key:   []byte{0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e}, // field
 	},
@@ -79,7 +79,7 @@ var nodeDBInt64Tests = []struct {
 }
 
 func TestNodeDBInt64(t *testing.T) {
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
+	db, _ := newNodeDB("", nodeDBVersion, ESSNodeID{})
 	defer db.close()
 
 	tests := nodeDBInt64Tests
@@ -111,7 +111,7 @@ func TestNodeDBFetchStore(t *testing.T) {
 	inst := time.Now()
 	num := 314
 
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
+	db, _ := newNodeDB("", nodeDBVersion, ESSNodeID{})
 	defer db.close()
 
 	// Check fetch/store operations on a node ping object
@@ -231,11 +231,11 @@ func TestNodeDBSeedQuery(t *testing.T) {
 
 	// Retrieve the entire batch and check for duplicates
 	seeds := db.querySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
-	have := make(map[NodeID]struct{})
+	have := make(map[ESSNodeID]struct{})
 	for _, seed := range seeds {
 		have[seed.ID] = struct{}{}
 	}
-	want := make(map[NodeID]struct{})
+	want := make(map[ESSNodeID]struct{})
 	for _, seed := range nodeDBSeedQueryNodes[2:] {
 		want[seed.node.ID] = struct{}{}
 	}
@@ -267,7 +267,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	)
 
 	// Create a persistent database and store some values
-	db, err := newNodeDB(filepath.Join(root, "database"), nodeDBVersion, NodeID{})
+	db, err := newNodeDB(filepath.Join(root, "database"), nodeDBVersion, ESSNodeID{})
 	if err != nil {
 		t.Fatalf("failed to create persistent database: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	db.close()
 
 	// Reopen the database and check the value
-	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion, NodeID{})
+	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion, ESSNodeID{})
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestNodeDBPersistency(t *testing.T) {
 	db.close()
 
 	// Change the database version and check flush
-	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion+1, NodeID{})
+	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion+1, ESSNodeID{})
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
@@ -324,7 +324,7 @@ var nodeDBExpirationNodes = []struct {
 }
 
 func TestNodeDBExpiration(t *testing.T) {
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
+	db, _ := newNodeDB("", nodeDBVersion, ESSNodeID{})
 	defer db.close()
 
 	// Add all the test nodes and set their last pong time
@@ -350,7 +350,7 @@ func TestNodeDBExpiration(t *testing.T) {
 
 func TestNodeDBSelfExpiration(t *testing.T) {
 	// Find a node in the tests that shouldn't expire, and assign it as self
-	var self NodeID
+	var self ESSNodeID
 	for _, node := range nodeDBExpirationNodes {
 		if !node.exp {
 			self = node.node.ID

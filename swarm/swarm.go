@@ -129,7 +129,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
-	nodeID, err := discover.HexID(config.NodeID)
+	nodeID, err := discover.HexID(config.ESSNodeID)
 	if err != nil {
 		return nil, err
 	}

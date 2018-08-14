@@ -87,7 +87,7 @@ type (
 
 	// findnode is a query for nodes close to the given target.
 	findnode struct {
-		Target     NodeID // doesn't need to be an actual public key
+		Target     ESSNodeID // doesn't need to be an actual public key
 		Expiration uint64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
@@ -105,7 +105,7 @@ type (
 		IP  net.IP // len 4 for IPv4 or 16 for IPv6
 		UDP uint16 // for discovery protocol
 		TCP uint16 // for RLPx protocol
-		ID  NodeID
+		ID  ESSNodeID
 	}
 
 	rpcEndpoint struct {
@@ -143,7 +143,7 @@ func nodeToRPC(n *Node) rpcNode {
 }
 
 type packet interface {
-	handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error
+	handle(t *udp, from *net.UDPAddr, fromID ESSNodeID, mac []byte) error
 	name() string
 }
 
@@ -181,7 +181,7 @@ type udp struct {
 // to all the callback functions for that node.
 type pending struct {
 	// these fields must match in the reply.
-	from  NodeID
+	from  ESSNodeID
 	ptype byte
 
 	// time when the request must complete
@@ -199,7 +199,7 @@ type pending struct {
 }
 
 type reply struct {
-	from  NodeID
+	from  ESSNodeID
 	ptype byte
 	data  interface{}
 	// loop indicates whether there was
@@ -269,13 +269,13 @@ func (t *udp) close() {
 }
 
 // ping sends a ping message to the given node and waits for a reply.
-func (t *udp) ping(toid NodeID, toaddr *net.UDPAddr) error {
+func (t *udp) ping(toid ESSNodeID, toaddr *net.UDPAddr) error {
 	return <-t.sendPing(toid, toaddr, nil)
 }
 
 // sendPing sends a ping message to the given node and invokes the callback
 // when the reply arrives.
-func (t *udp) sendPing(toid NodeID, toaddr *net.UDPAddr, callback func()) <-chan error {
+func (t *udp) sendPing(toid ESSNodeID, toaddr *net.UDPAddr, callback func()) <-chan error {
 	req := &ping{
 		Version:    4,
 		From:       t.ourEndpoint,
@@ -299,13 +299,13 @@ func (t *udp) sendPing(toid NodeID, toaddr *net.UDPAddr, callback func()) <-chan
 	return errc
 }
 
-func (t *udp) waitping(from NodeID) error {
+func (t *udp) waitping(from ESSNodeID) error {
 	return <-t.pending(from, pingPacket, func(interface{}) bool { return true })
 }
 
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
-func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+func (t *udp) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target ESSNodeID) ([]*Node, error) {
 	// If we haven't seen a ping from the destination node for a while, it won't remember
 	// our endpoint proof and reject findnode. Solicit a ping first.
 	if time.Since(t.db.lastPingReceived(toid)) > nodeDBNodeExpiration {
@@ -337,7 +337,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 
 // pending adds a reply callback to the pending reply queue.
 // see the documentation of type pending for a detailed explanation.
-func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-chan error {
+func (t *udp) pending(id ESSNodeID, ptype byte, callback func(interface{}) bool) <-chan error {
 	ch := make(chan error, 1)
 	p := &pending{from: id, ptype: ptype, callback: callback, errc: ch}
 	select {
@@ -349,7 +349,7 @@ func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-
 	return ch
 }
 
-func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
+func (t *udp) handleReply(from ESSNodeID, ptype byte, req packet) bool {
 	matched := make(chan bool, 1)
 	select {
 	case t.gotreply <- reply{from, ptype, req, matched}:
@@ -563,18 +563,18 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	return err
 }
 
-func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
+func decodePacket(buf []byte) (packet, ESSNodeID, []byte, error) {
 	if len(buf) < headSize+1 {
-		return nil, NodeID{}, nil, errPacketTooSmall
+		return nil, ESSNodeID{}, nil, errPacketTooSmall
 	}
 	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
 	shouldhash := crypto.Keccak256(buf[macSize:])
 	if !bytes.Equal(hash, shouldhash) {
-		return nil, NodeID{}, nil, errBadHash
+		return nil, ESSNodeID{}, nil, errBadHash
 	}
-	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
+	fromID, err := recoverESSNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
-		return nil, NodeID{}, hash, err
+		return nil, ESSNodeID{}, hash, err
 	}
 	var req packet
 	switch ptype := sigdata[0]; ptype {
@@ -594,7 +594,7 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	return req, fromID, hash, err
 }
 
-func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *ping) handle(t *udp, from *net.UDPAddr, fromID ESSNodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
@@ -619,7 +619,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 
 func (req *ping) name() string { return "PING/v4" }
 
-func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *pong) handle(t *udp, from *net.UDPAddr, fromID ESSNodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
@@ -632,7 +632,7 @@ func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 
 func (req *pong) name() string { return "PONG/v4" }
 
-func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID ESSNodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
@@ -672,7 +672,7 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 
 func (req *findnode) name() string { return "FINDNODE/v4" }
 
-func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
+func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromID ESSNodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}

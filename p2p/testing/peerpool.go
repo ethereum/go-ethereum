@@ -25,18 +25,18 @@ import (
 )
 
 type TestPeer interface {
-	ID() discover.NodeID
+	ID() discover.ESSNodeID
 	Drop(error)
 }
 
 // TestPeerPool is an example peerPool to demonstrate registration of peer connections
 type TestPeerPool struct {
 	lock  sync.Mutex
-	peers map[discover.NodeID]TestPeer
+	peers map[discover.ESSNodeID]TestPeer
 }
 
 func NewTestPeerPool() *TestPeerPool {
-	return &TestPeerPool{peers: make(map[discover.NodeID]TestPeer)}
+	return &TestPeerPool{peers: make(map[discover.ESSNodeID]TestPeer)}
 }
 
 func (p *TestPeerPool) Add(peer TestPeer) {
@@ -53,14 +53,14 @@ func (p *TestPeerPool) Remove(peer TestPeer) {
 	delete(p.peers, peer.ID())
 }
 
-func (p *TestPeerPool) Has(id discover.NodeID) bool {
+func (p *TestPeerPool) Has(id discover.ESSNodeID) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	_, ok := p.peers[id]
 	return ok
 }
 
-func (p *TestPeerPool) Get(id discover.NodeID) TestPeer {
+func (p *TestPeerPool) Get(id discover.ESSNodeID) TestPeer {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	return p.peers[id]

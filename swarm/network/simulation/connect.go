@@ -22,24 +22,24 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-// ConnectToPivotNode connects the node with provided NodeID
+// ConnectToPivotNode connects the node with provided ESSNodeID
 // to the pivot node, already set by Simulation.SetPivotNode method.
 // It is useful when constructing a star network topology
 // when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToPivotNode(id discover.NodeID) (err error) {
-	pid := s.PivotNodeID()
+func (s *Simulation) ConnectToPivotNode(id discover.ESSNodeID) (err error) {
+	pid := s.PivotESSNodeID()
 	if pid == nil {
 		return ErrNoPivotNode
 	}
 	return s.connect(*pid, id)
 }
 
-// ConnectToLastNode connects the node with provided NodeID
+// ConnectToLastNode connects the node with provided ESSNodeID
 // to the last node that is up, and avoiding connection to self.
 // It is useful when constructing a chain network topology
 // when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
-	ids := s.UpNodeIDs()
+func (s *Simulation) ConnectToLastNode(id discover.ESSNodeID) (err error) {
+	ids := s.UpESSNodeIDs()
 	l := len(ids)
 	if l < 2 {
 		return nil
@@ -51,9 +51,9 @@ func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 	return s.connect(lid, id)
 }
 
-// ConnectToRandomNode connects the node with provieded NodeID
+// ConnectToRandomNode connects the node with provieded ESSNodeID
 // to a random node that is up.
-func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
+func (s *Simulation) ConnectToRandomNode(id discover.ESSNodeID) (err error) {
 	n := s.randomUpNode(id)
 	if n == nil {
 		return ErrNodeNotFound
@@ -64,9 +64,9 @@ func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
 // ConnectNodesFull connects all nodes one to another.
 // It provides a complete connectivity in the network
 // which should be rarely needed.
-func (s *Simulation) ConnectNodesFull(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesFull(ids []discover.ESSNodeID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = s.UpESSNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
@@ -82,9 +82,9 @@ func (s *Simulation) ConnectNodesFull(ids []discover.NodeID) (err error) {
 
 // ConnectNodesChain connects all nodes in a chain topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesChain(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesChain(ids []discover.ESSNodeID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = s.UpESSNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l-1; i++ {
@@ -98,9 +98,9 @@ func (s *Simulation) ConnectNodesChain(ids []discover.NodeID) (err error) {
 
 // ConnectNodesRing connects all nodes in a ring topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesRing(ids []discover.ESSNodeID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = s.UpESSNodeIDs()
 	}
 	l := len(ids)
 	if l < 2 {
@@ -116,11 +116,11 @@ func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
 }
 
 // ConnectNodesStar connects all nodes in a star topology
-// with the center at provided NodeID.
+// with the center at provided ESSNodeID.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesStar(id discover.ESSNodeID, ids []discover.ESSNodeID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = s.UpESSNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
@@ -138,8 +138,8 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID)
 // ConnectNodesStar connects all nodes in a star topology
 // with the center at already set pivot node.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
-	id := s.PivotNodeID()
+func (s *Simulation) ConnectNodesStarPivot(ids []discover.ESSNodeID) (err error) {
+	id := s.PivotESSNodeID()
 	if id == nil {
 		return ErrNoPivotNode
 	}
@@ -147,7 +147,7 @@ func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
 }
 
 // connect connects two nodes but ignores already connected error.
-func (s *Simulation) connect(oneID, otherID discover.NodeID) error {
+func (s *Simulation) connect(oneID, otherID discover.ESSNodeID) error {
 	return ignoreAlreadyConnectedErr(s.Net.Connect(oneID, otherID))
 }
 

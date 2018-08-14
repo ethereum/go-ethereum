@@ -30,18 +30,18 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-// NodeIDs returns NodeIDs for all nodes in the network.
-func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
+// ESSNodeIDs returns ESSNodeIDs for all nodes in the network.
+func (s *Simulation) ESSNodeIDs() (ids []discover.ESSNodeID) {
 	nodes := s.Net.GetNodes()
-	ids = make([]discover.NodeID, len(nodes))
+	ids = make([]discover.ESSNodeID, len(nodes))
 	for i, node := range nodes {
 		ids[i] = node.ID()
 	}
 	return ids
 }
 
-// UpNodeIDs returns NodeIDs for nodes that are up in the network.
-func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
+// UpESSNodeIDs returns ESSNodeIDs for nodes that are up in the network.
+func (s *Simulation) UpESSNodeIDs() (ids []discover.ESSNodeID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
 		if node.Up {
@@ -51,8 +51,8 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
-// DownNodeIDs returns NodeIDs for nodes that are stopped in the network.
-func (s *Simulation) DownNodeIDs() (ids []discover.NodeID) {
+// DownESSNodeIDs returns ESSNodeIDs for nodes that are stopped in the network.
+func (s *Simulation) DownESSNodeIDs() (ids []discover.ESSNodeID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
 		if !node.Up {
@@ -88,7 +88,7 @@ func AddNodeWithService(serviceName string) AddNodeOption {
 // applies provided options to the config and adds the node to network.
 // By default all services will be started on a node. If one or more
 // AddNodeWithService option are provided, only specified services will be started.
-func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err error) {
+func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.ESSNodeID, err error) {
 	conf := adapters.RandomNodeConfig()
 	for _, o := range opts {
 		o(conf)
@@ -105,8 +105,8 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err err
 
 // AddNodes creates new nodes with random configurations,
 // applies provided options to the config and adds nodes to network.
-func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
+func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.ESSNodeID, err error) {
+	ids = make([]discover.ESSNodeID, 0, count)
 	for i := 0; i < count; i++ {
 		id, err := s.AddNode(opts...)
 		if err != nil {
@@ -119,7 +119,7 @@ func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.
 
 // AddNodesAndConnectFull is a helpper method that combines
 // AddNodes and ConnectNodesFull. Only new nodes will be connected.
-func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []discover.ESSNodeID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -137,7 +137,7 @@ func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (i
 // AddNodesAndConnectChain is a helpper method that combines
 // AddNodes and ConnectNodesChain. The chain will be continued from the last
 // added node, if there is one in simulation using ConnectToLastNode method.
-func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []discover.ESSNodeID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -153,7 +153,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 	if err != nil {
 		return nil, err
 	}
-	ids = append([]discover.NodeID{id}, ids...)
+	ids = append([]discover.ESSNodeID{id}, ids...)
 	err = s.ConnectNodesChain(ids)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 
 // AddNodesAndConnectRing is a helpper method that combines
 // AddNodes and ConnectNodesRing.
-func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []discover.ESSNodeID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -180,7 +180,7 @@ func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (i
 
 // AddNodesAndConnectStar is a helpper method that combines
 // AddNodes and ConnectNodesStar.
-func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []discover.ESSNodeID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -236,32 +236,32 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	return nil
 }
 
-// SetPivotNode sets the NodeID of the network's pivot node.
+// SetPivotNode sets the ESSNodeID of the network's pivot node.
 // Pivot node is just a specific node that should be treated
 // differently then other nodes in test. SetPivotNode and
-// PivotNodeID are just a convenient functions to set and
+// PivotESSNodeID are just a convenient functions to set and
 // retrieve it.
-func (s *Simulation) SetPivotNode(id discover.NodeID) {
+func (s *Simulation) SetPivotNode(id discover.ESSNodeID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pivotNodeID = &id
+	s.pivotESSNodeID = &id
 }
 
-// PivotNodeID returns NodeID of the pivot node set by
+// PivotESSNodeID returns ESSNodeID of the pivot node set by
 // Simulation.SetPivotNode method.
-func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
+func (s *Simulation) PivotESSNodeID() (id *discover.ESSNodeID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.pivotNodeID
+	return s.pivotESSNodeID
 }
 
-// StartNode starts a node by NodeID.
-func (s *Simulation) StartNode(id discover.NodeID) (err error) {
+// StartNode starts a node by ESSNodeID.
+func (s *Simulation) StartNode(id discover.ESSNodeID) (err error) {
 	return s.Net.Start(id)
 }
 
 // StartRandomNode starts a random node.
-func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
+func (s *Simulation) StartRandomNode() (id discover.ESSNodeID, err error) {
 	n := s.randomDownNode()
 	if n == nil {
 		return id, ErrNodeNotFound
@@ -270,9 +270,9 @@ func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
 }
 
 // StartRandomNodes starts random nodes.
-func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
-	downIDs := s.DownNodeIDs()
+func (s *Simulation) StartRandomNodes(count int) (ids []discover.ESSNodeID, err error) {
+	ids = make([]discover.ESSNodeID, 0, count)
+	downIDs := s.DownESSNodeIDs()
 	for i := 0; i < count; i++ {
 		n := s.randomNode(downIDs, ids...)
 		if n == nil {
@@ -287,13 +287,13 @@ func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err err
 	return ids, nil
 }
 
-// StopNode stops a node by NodeID.
-func (s *Simulation) StopNode(id discover.NodeID) (err error) {
+// StopNode stops a node by ESSNodeID.
+func (s *Simulation) StopNode(id discover.ESSNodeID) (err error) {
 	return s.Net.Stop(id)
 }
 
 // StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
+func (s *Simulation) StopRandomNode() (id discover.ESSNodeID, err error) {
 	n := s.randomUpNode()
 	if n == nil {
 		return id, ErrNodeNotFound
@@ -302,9 +302,9 @@ func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
 }
 
 // StopRandomNodes stops random nodes.
-func (s *Simulation) StopRandomNodes(count int) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
-	upIDs := s.UpNodeIDs()
+func (s *Simulation) StopRandomNodes(count int) (ids []discover.ESSNodeID, err error) {
+	ids = make([]discover.ESSNodeID, 0, count)
+	upIDs := s.UpESSNodeIDs()
 	for i := 0; i < count; i++ {
 		n := s.randomNode(upIDs, ids...)
 		if n == nil {
@@ -325,18 +325,18 @@ func init() {
 }
 
 // randomUpNode returns a random SimNode that is up.
-// Arguments are NodeIDs for nodes that should not be returned.
-func (s *Simulation) randomUpNode(exclude ...discover.NodeID) *adapters.SimNode {
-	return s.randomNode(s.UpNodeIDs(), exclude...)
+// Arguments are ESSNodeIDs for nodes that should not be returned.
+func (s *Simulation) randomUpNode(exclude ...discover.ESSNodeID) *adapters.SimNode {
+	return s.randomNode(s.UpESSNodeIDs(), exclude...)
 }
 
 // randomUpNode returns a random SimNode that is not up.
-func (s *Simulation) randomDownNode(exclude ...discover.NodeID) *adapters.SimNode {
-	return s.randomNode(s.DownNodeIDs(), exclude...)
+func (s *Simulation) randomDownNode(exclude ...discover.ESSNodeID) *adapters.SimNode {
+	return s.randomNode(s.DownESSNodeIDs(), exclude...)
 }
 
-// randomUpNode returns a random SimNode from the slice of NodeIDs.
-func (s *Simulation) randomNode(ids []discover.NodeID, exclude ...discover.NodeID) *adapters.SimNode {
+// randomUpNode returns a random SimNode from the slice of ESSNodeIDs.
+func (s *Simulation) randomNode(ids []discover.ESSNodeID, exclude ...discover.ESSNodeID) *adapters.SimNode {
 	for _, e := range exclude {
 		var i int
 		for _, id := range ids {

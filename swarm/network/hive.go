@@ -99,7 +99,7 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 }
 
 // Start stars the hive, receives p2p.Server only at startup
-// server is used to connect to a peer based on its NodeID or enode URL
+// server is used to connect to a peer based on its ESSNodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
 	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
@@ -194,9 +194,9 @@ func (h *Hive) NodeInfo() interface{} {
 }
 
 // PeerInfo function is used by the p2p.server RPC interface to display
-// protocol specific information any connected peer referred to by their NodeID
-func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
-	addr := NewAddrFromNodeID(id)
+// protocol specific information any connected peer referred to by their ESSNodeID
+func (h *Hive) PeerInfo(id discover.ESSNodeID) interface{} {
+	addr := NewAddrFromESSNodeID(id)
 	return struct {
 		OAddr hexutil.Bytes
 		UAddr hexutil.Bytes

@@ -37,7 +37,7 @@ import (
 type SimAdapter struct {
 	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
-	nodes    map[discover.NodeID]*SimNode
+	nodes    map[discover.ESSNodeID]*SimNode
 	services map[string]ServiceFunc
 }
 
@@ -48,7 +48,7 @@ type SimAdapter struct {
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     pipes.NetPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[discover.ESSNodeID]*SimNode),
 		services: services,
 	}
 }
@@ -56,7 +56,7 @@ func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     pipes.TCPPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[discover.ESSNodeID]*SimNode),
 		services: services,
 	}
 }
@@ -138,7 +138,7 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 
 // DialRPC implements the RPCDialer interface by creating an in-memory RPC
 // client of the given node
-func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+func (s *SimAdapter) DialRPC(id discover.ESSNodeID) (*rpc.Client, error) {
 	node, ok := s.GetNode(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
@@ -151,7 +151,7 @@ func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
 }
 
 // GetNode returns the node with the given ID if it exists
-func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
+func (s *SimAdapter) GetNode(id discover.ESSNodeID) (*SimNode, bool) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	node, ok := s.nodes[id]
@@ -163,7 +163,7 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // pipe
 type SimNode struct {
 	lock         sync.RWMutex
-	ID           discover.NodeID
+	ID           discover.ESSNodeID
 	config       *NodeConfig
 	adapter      *SimAdapter
 	node         *node.Node

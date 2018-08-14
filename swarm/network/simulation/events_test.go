@@ -38,7 +38,7 @@ func TestPeerEvents(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	events := sim.PeerEvents(ctx, sim.NodeIDs())
+	events := sim.PeerEvents(ctx, sim.ESSNodeIDs())
 
 	// two nodes -> two connection events
 	expectedEventCount := 2
@@ -59,7 +59,7 @@ func TestPeerEvents(t *testing.T) {
 		}
 	}()
 
-	err = sim.ConnectNodesChain(sim.NodeIDs())
+	err = sim.ConnectNodesChain(sim.ESSNodeIDs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestPeerEventsTimeout(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	events := sim.PeerEvents(ctx, sim.NodeIDs())
+	events := sim.PeerEvents(ctx, sim.ESSNodeIDs())
 
 	done := make(chan struct{})
 	go func() {

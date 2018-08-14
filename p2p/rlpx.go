@@ -165,7 +165,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 	if err := msg.Decode(&hs); err != nil {
 		return nil, err
 	}
-	if (hs.ID == discover.NodeID{}) {
+	if (hs.ID == discover.ESSNodeID{}) {
 		return nil, DiscInvalidIdentity
 	}
 	return &hs, nil
@@ -175,7 +175,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 // messages. the protocol handshake is the first authenticated message
 // and also verifies whether the encryption handshake 'worked' and the
 // remote side actually provided the right public key.
-func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *discover.Node) (discover.NodeID, error) {
+func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *discover.Node) (discover.ESSNodeID, error) {
 	var (
 		sec secrets
 		err error
@@ -186,7 +186,7 @@ func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *discover.Node) (disco
 		sec, err = initiatorEncHandshake(t.fd, prv, dial.ID)
 	}
 	if err != nil {
-		return discover.NodeID{}, err
+		return discover.ESSNodeID{}, err
 	}
 	t.wmu.Lock()
 	t.rw = newRLPXFrameRW(t.fd, sec)
@@ -197,7 +197,7 @@ func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *discover.Node) (disco
 // encHandshake contains the state of the encryption handshake.
 type encHandshake struct {
 	initiator bool
-	remoteID  discover.NodeID
+	remoteID  discover.ESSNodeID
 
 	remotePub            *ecies.PublicKey  // remote-pubk
 	initNonce, respNonce []byte            // nonce
@@ -208,7 +208,7 @@ type encHandshake struct {
 // secrets represents the connection secrets
 // which are negotiated during the encryption handshake.
 type secrets struct {
-	RemoteID              discover.NodeID
+	RemoteID              discover.ESSNodeID
 	AES, MAC              []byte
 	EgressMAC, IngressMAC hash.Hash
 	Token                 []byte
@@ -280,7 +280,7 @@ func (h *encHandshake) staticSharedSecret(prv *ecdsa.PrivateKey) ([]byte, error)
 // it should be called on the dialing side of the connection.
 //
 // prv is the local client's private key.
-func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID discover.NodeID) (s secrets, err error) {
+func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID discover.ESSNodeID) (s secrets, err error) {
 	h := &encHandshake{initiator: true, remoteID: remoteID}
 	authMsg, err := h.makeAuthMsg(prv)
 	if err != nil {

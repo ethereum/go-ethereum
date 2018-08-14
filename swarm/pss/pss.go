@@ -70,7 +70,7 @@ type pssCacheEntry struct {
 // abstraction to enable access to p2p.protocols.Peer.Send
 type senderPeer interface {
 	Info() *p2p.PeerInfo
-	ID() discover.NodeID
+	ID() discover.ESSNodeID
 	Address() []byte
 	Send(context.Context, interface{}) error
 }

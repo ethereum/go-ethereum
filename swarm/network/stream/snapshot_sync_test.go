@@ -49,8 +49,8 @@ var (
 	pof = pot.DefaultPof(256)
 
 	conf     *synctestConfig
-	ids      []discover.NodeID
-	datadirs map[discover.NodeID]string
+	ids      []discover.ESSNodeID
+	datadirs map[discover.ESSNodeID]string
 	ppmap    map[string]*network.PeerPot
 
 	live    bool
@@ -62,9 +62,9 @@ var (
 type synctestConfig struct {
 	addrs            [][]byte
 	hashes           []storage.Address
-	idToChunksMap    map[discover.NodeID][]int
+	idToChunksMap    map[discover.ESSNodeID][]int
 	chunksToNodesMap map[string][]int
-	addrToIdMap      map[string]discover.NodeID
+	addrToIdMap      map[string]discover.ESSNodeID
 }
 
 func init() {
@@ -77,8 +77,8 @@ func init() {
 //we thus need to initialize first as init() as well.
 func initSyncTest() {
 	//assign the toAddr func so NewStreamerService can build the addr
-	toAddr = func(id discover.NodeID) *network.BzzAddr {
-		addr := network.NewAddrFromNodeID(id)
+	toAddr = func(id discover.ESSNodeID) *network.BzzAddr {
+		addr := network.NewAddrFromESSNodeID(id)
 		return addr
 	}
 	//global func to create local store
@@ -88,17 +88,17 @@ func initSyncTest() {
 		createStoreFunc = createTestLocalStorageForId
 	}
 	//local stores
-	stores = make(map[discover.NodeID]storage.ChunkStore)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
 	//data directories for each node and store
-	datadirs = make(map[discover.NodeID]string)
+	datadirs = make(map[discover.ESSNodeID]string)
 	//deliveries for each node
-	deliveries = make(map[discover.NodeID]*Delivery)
-	//registries, map of discover.NodeID to its streamer
-	registries = make(map[discover.NodeID]*TestRegistry)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
+	//registries, map of discover.ESSNodeID to its streamer
+	registries = make(map[discover.ESSNodeID]*TestRegistry)
 	//not needed for this test but required from common_test for NewStreamService
 	waitPeerErrC = make(chan error)
 	//also not needed for this test but required for NewStreamService
-	peerCount = func(id discover.NodeID) int {
+	peerCount = func(id discover.ESSNodeID) int {
 		if ids[0] == id || ids[len(ids)-1] == id {
 			return 1
 		}
@@ -202,17 +202,17 @@ For every test run, a series of three tests will be executed:
 func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	initSyncTest()
 	//the ids of the snapshot nodes, initiate only now as we need nodeCount
-	ids = make([]discover.NodeID, nodeCount)
+	ids = make([]discover.ESSNodeID, nodeCount)
 	//initialize the test struct
 	conf = &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
-	conf.idToChunksMap = make(map[discover.NodeID][]int)
+	conf.idToChunksMap = make(map[discover.ESSNodeID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIdMap = make(map[string]discover.ESSNodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 	//channel to trigger node checks in the simulation
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 	//channel to check for disconnection errors
 	disconnectC := make(chan error)
 	//channel to close disconnection watcher routine
@@ -256,7 +256,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		//append it to the array of all overlay addresses
 		conf.addrs = append(conf.addrs, a)
 		//the proximity calculation is on overlay addr,
-		//the p2p/simulations check func triggers on discover.NodeID,
+		//the p2p/simulations check func triggers on discover.ESSNodeID,
 		//so we need to know which overlay addr maps to which nodeID
 		conf.addrToIdMap[string(a)] = ids[c]
 	}
@@ -404,7 +404,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	}
 
 	//check defines what will be checked during the test
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -574,7 +574,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 }
 
 //upload a file(chunks) to a single local node store
-func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.Address, error) {
+func uploadFileToSingleNodeStore(id discover.ESSNodeID, chunkCount int) ([]storage.Address, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
 	lstore := stores[id]
 	size := chunkSize
@@ -656,7 +656,7 @@ func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 
 //we want to wait for subscriptions to be established before uploading to test
 //that live syncing is working correctly
-func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}) {
+func watchSubscriptionEvents(ctx context.Context, id discover.ESSNodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
@@ -703,7 +703,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 }
 
 //create a local store for the given node
-func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+func createTestLocalStorageForId(id discover.ESSNodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
 	var datadir string
 	var err error
 	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))

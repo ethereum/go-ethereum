@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	nodeDBNilNodeID      = NodeID{}       // Special node ID to use as a nil element.
+	nodeDBNilESSNodeID      = ESSNodeID{}       // Special node ID to use as a nil element.
 	nodeDBNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
 	nodeDBCleanupCycle   = time.Hour      // Time period for running the expiration task.
 	nodeDBVersion        = 5
@@ -48,7 +48,7 @@ var (
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
 	lvl    *leveldb.DB   // Interface to the database itself
-	self   NodeID        // Own node id to prevent adding it into the database
+	self   ESSNodeID        // Own node id to prevent adding it into the database
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }
@@ -67,7 +67,7 @@ var (
 // newNodeDB creates a new node database for storing and retrieving infos about
 // known peers in the network. If no path is given, an in-memory, temporary
 // database is constructed.
-func newNodeDB(path string, version int, self NodeID) (*nodeDB, error) {
+func newNodeDB(path string, version int, self ESSNodeID) (*nodeDB, error) {
 	if path == "" {
 		return newMemoryNodeDB(self)
 	}
@@ -76,7 +76,7 @@ func newNodeDB(path string, version int, self NodeID) (*nodeDB, error) {
 
 // newMemoryNodeDB creates a new in-memory node database without a persistent
 // backend.
-func newMemoryNodeDB(self NodeID) (*nodeDB, error) {
+func newMemoryNodeDB(self ESSNodeID) (*nodeDB, error) {
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func newMemoryNodeDB(self NodeID) (*nodeDB, error) {
 
 // newPersistentNodeDB creates/opens a leveldb backed persistent node database,
 // also flushing its contents in case of a version mismatch.
-func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error) {
+func newPersistentNodeDB(path string, version int, self ESSNodeID) (*nodeDB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
 	db, err := leveldb.OpenFile(path, opts)
 	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
@@ -132,18 +132,18 @@ func newPersistentNodeDB(path string, version int, self NodeID) (*nodeDB, error)
 
 // makeKey generates the leveldb key-blob from a node id and its particular
 // field of interest.
-func makeKey(id NodeID, field string) []byte {
-	if bytes.Equal(id[:], nodeDBNilNodeID[:]) {
+func makeKey(id ESSNodeID, field string) []byte {
+	if bytes.Equal(id[:], nodeDBNilESSNodeID[:]) {
 		return []byte(field)
 	}
 	return append(nodeDBItemPrefix, append(id[:], field...)...)
 }
 
 // splitKey tries to split a database key into a node id and a field part.
-func splitKey(key []byte) (id NodeID, field string) {
+func splitKey(key []byte) (id ESSNodeID, field string) {
 	// If the key is not of a node, return it plainly
 	if !bytes.HasPrefix(key, nodeDBItemPrefix) {
-		return NodeID{}, string(key)
+		return ESSNodeID{}, string(key)
 	}
 	// Otherwise split the id and field
 	item := key[len(nodeDBItemPrefix):]
@@ -177,7 +177,7 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 }
 
 // node retrieves a node with a given id from the database.
-func (db *nodeDB) node(id NodeID) *Node {
+func (db *nodeDB) node(id ESSNodeID) *Node {
 	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
 	if err != nil {
 		return nil
@@ -201,7 +201,7 @@ func (db *nodeDB) updateNode(node *Node) error {
 }
 
 // deleteNode deletes all information/keys associated with a node.
-func (db *nodeDB) deleteNode(id NodeID) error {
+func (db *nodeDB) deleteNode(id ESSNodeID) error {
 	deleter := db.lvl.NewIterator(util.BytesPrefix(makeKey(id, "")), nil)
 	for deleter.Next() {
 		if err := db.lvl.Delete(deleter.Key(), nil); err != nil {
@@ -269,37 +269,37 @@ func (db *nodeDB) expireNodes() error {
 }
 
 // lastPingReceived retrieves the time of the last ping packet sent by the remote node.
-func (db *nodeDB) lastPingReceived(id NodeID) time.Time {
+func (db *nodeDB) lastPingReceived(id ESSNodeID) time.Time {
 	return time.Unix(db.fetchInt64(makeKey(id, nodeDBDiscoverPing)), 0)
 }
 
 // updateLastPing updates the last time remote node pinged us.
-func (db *nodeDB) updateLastPingReceived(id NodeID, instance time.Time) error {
+func (db *nodeDB) updateLastPingReceived(id ESSNodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPing), instance.Unix())
 }
 
 // lastPongReceived retrieves the time of the last successful pong from remote node.
-func (db *nodeDB) lastPongReceived(id NodeID) time.Time {
+func (db *nodeDB) lastPongReceived(id ESSNodeID) time.Time {
 	return time.Unix(db.fetchInt64(makeKey(id, nodeDBDiscoverPong)), 0)
 }
 
 // hasBond reports whether the given node is considered bonded.
-func (db *nodeDB) hasBond(id NodeID) bool {
+func (db *nodeDB) hasBond(id ESSNodeID) bool {
 	return time.Since(db.lastPongReceived(id)) < nodeDBNodeExpiration
 }
 
 // updateLastPongReceived updates the last pong time of a node.
-func (db *nodeDB) updateLastPongReceived(id NodeID, instance time.Time) error {
+func (db *nodeDB) updateLastPongReceived(id ESSNodeID, instance time.Time) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverPong), instance.Unix())
 }
 
 // findFails retrieves the number of findnode failures since bonding.
-func (db *nodeDB) findFails(id NodeID) int {
+func (db *nodeDB) findFails(id ESSNodeID) int {
 	return int(db.fetchInt64(makeKey(id, nodeDBDiscoverFindFails)))
 }
 
 // updateFindFails updates the number of findnode failures since bonding.
-func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
+func (db *nodeDB) updateFindFails(id ESSNodeID, fails int) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
 }
 
@@ -310,7 +310,7 @@ func (db *nodeDB) querySeeds(n int, maxAge time.Duration) []*Node {
 		now   = time.Now()
 		nodes = make([]*Node, 0, n)
 		it    = db.lvl.NewIterator(nil, nil)
-		id    NodeID
+		id    ESSNodeID
 	)
 	defer it.Release()
 

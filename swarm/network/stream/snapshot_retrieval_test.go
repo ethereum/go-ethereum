@@ -42,31 +42,31 @@ const (
 
 func initRetrievalTest() {
 	//global func to get overlay address from discover ID
-	toAddr = func(id discover.NodeID) *network.BzzAddr {
-		addr := network.NewAddrFromNodeID(id)
+	toAddr = func(id discover.ESSNodeID) *network.BzzAddr {
+		addr := network.NewAddrFromESSNodeID(id)
 		return addr
 	}
 	//global func to create local store
 	createStoreFunc = createTestLocalStorageForId
 	//local stores
-	stores = make(map[discover.NodeID]storage.ChunkStore)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
 	//data directories for each node and store
-	datadirs = make(map[discover.NodeID]string)
+	datadirs = make(map[discover.ESSNodeID]string)
 	//deliveries for each node
-	deliveries = make(map[discover.NodeID]*Delivery)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
 	//global retrieve func
-	getRetrieveFunc = func(id discover.NodeID) func(ctx context.Context, chunk *storage.Chunk) error {
+	getRetrieveFunc = func(id discover.ESSNodeID) func(ctx context.Context, chunk *storage.Chunk) error {
 		return func(ctx context.Context, chunk *storage.Chunk) error {
 			skipCheck := true
 			return deliveries[id].RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
 		}
 	}
-	//registries, map of discover.NodeID to its streamer
-	registries = make(map[discover.NodeID]*TestRegistry)
+	//registries, map of discover.ESSNodeID to its streamer
+	registries = make(map[discover.ESSNodeID]*TestRegistry)
 	//not needed for this test but required from common_test for NewStreamService
 	waitPeerErrC = make(chan error)
 	//also not needed for this test but required for NewStreamService
-	peerCount = func(id discover.NodeID) int {
+	peerCount = func(id discover.ESSNodeID) int {
 		if ids[0] == id || ids[len(ids)-1] == id {
 			return 1
 		}
@@ -202,7 +202,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	//for every run (live, history), int the variables
 	initRetrievalTest()
 	//the ids of the snapshot nodes, initiate only now as we need nodeCount
-	ids = make([]discover.NodeID, nodeCount)
+	ids = make([]discover.ESSNodeID, nodeCount)
 	//channel to check for disconnection errors
 	disconnectC := make(chan error)
 	//channel to close disconnection watcher routine
@@ -210,7 +210,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	//the test conf (using same as in `snapshot_sync_test`
 	conf = &synctestConfig{}
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIdMap = make(map[string]discover.ESSNodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 	//load nodes from the snapshot file
@@ -248,7 +248,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	//channel to signal when the upload has finished
 	uploadFinished := make(chan struct{})
 	//channel to trigger new node checks
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 	//simulation action
 	action := func(ctx context.Context) error {
 		//first run the health check on all nodes,
@@ -392,7 +392,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	}
 
 	//check defines what will be checked during the test
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 
 		select {
 		case <-ctx.Done():
@@ -485,7 +485,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//for every run (live, history), int the variables
 	initRetrievalTest()
 	//the ids of the snapshot nodes, initiate only now as we need nodeCount
-	ids = make([]discover.NodeID, nodeCount)
+	ids = make([]discover.ESSNodeID, nodeCount)
 	//channel to check for disconnection errors
 	disconnectC := make(chan error)
 	//channel to close disconnection watcher routine
@@ -493,7 +493,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//the test conf (using same as in `snapshot_sync_test`
 	conf = &synctestConfig{}
 	//map of overlay address to discover ID
-	conf.addrToIdMap = make(map[string]discover.NodeID)
+	conf.addrToIdMap = make(map[string]discover.ESSNodeID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 	//load nodes from the snapshot file
@@ -531,7 +531,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//needed for healthy call
 	ppmap = network.NewPeerPotMap(testMinProxBinSize, conf.addrs)
 
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 	//simulation action
 	action := func(ctx context.Context) error {
 		//first run the health check on all nodes,
@@ -674,7 +674,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	chunkSize := storage.DefaultChunkSize
 
 	//check defines what will be checked during the test
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 
 		//don't check the uploader node
 		if id == uploadNode.ID() {

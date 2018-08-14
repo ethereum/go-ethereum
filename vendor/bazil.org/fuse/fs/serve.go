@@ -86,7 +86,7 @@ type FSInodeGenerator interface {
 //
 // Methods returning Node should take care to return the same Node
 // when the result is logically the same instance. Without this, each
-// Node will get a new NodeID, causing spurious cache invalidations,
+// Node will get a new ESSNodeID, causing spurious cache invalidations,
 // extra lookups and aliasing anomalies. This may not matter for a
 // simple, read-only filesystem.
 type Node interface {
@@ -347,7 +347,7 @@ func New(conn *fuse.Conn, config *Config) *Server {
 	s := &Server{
 		conn:         conn,
 		req:          map[fuse.RequestID]*serveRequest{},
-		nodeRef:      map[Node]fuse.NodeID{},
+		nodeRef:      map[Node]fuse.ESSNodeID{},
 		dynamicInode: GenerateDynamicInode,
 	}
 	if config != nil {
@@ -374,9 +374,9 @@ type Server struct {
 	meta       sync.Mutex
 	req        map[fuse.RequestID]*serveRequest
 	node       []*serveNode
-	nodeRef    map[Node]fuse.NodeID
+	nodeRef    map[Node]fuse.ESSNodeID
 	handle     []*serveHandle
-	freeNode   []fuse.NodeID
+	freeNode   []fuse.ESSNodeID
 	freeHandle []fuse.HandleID
 	nodeGen    uint64
 
@@ -448,8 +448,8 @@ type serveNode struct {
 	node       Node
 	refs       uint64
 
-	// Delay freeing the NodeID until waitgroup is done. This allows
-	// using the NodeID for short periods of time without holding the
+	// Delay freeing the ESSNodeID until waitgroup is done. This allows
+	// using the ESSNodeID for short periods of time without holding the
 	// Server.meta lock.
 	//
 	// Rules:
@@ -470,7 +470,7 @@ func (sn *serveNode) attr(ctx context.Context, attr *fuse.Attr) error {
 type serveHandle struct {
 	handle   Handle
 	readData []byte
-	nodeID   fuse.NodeID
+	nodeID   fuse.ESSNodeID
 }
 
 // NodeRef is deprecated. It remains here to decrease code churn on
@@ -479,7 +479,7 @@ type serveHandle struct {
 // without needing NodeRef.
 type NodeRef struct{}
 
-func (c *Server) saveNode(inode uint64, node Node) (id fuse.NodeID, gen uint64) {
+func (c *Server) saveNode(inode uint64, node Node) (id fuse.ESSNodeID, gen uint64) {
 	c.meta.Lock()
 	defer c.meta.Unlock()
 
@@ -496,7 +496,7 @@ func (c *Server) saveNode(inode uint64, node Node) (id fuse.NodeID, gen uint64) 
 		c.node[id] = sn
 		c.nodeGen++
 	} else {
-		id = fuse.NodeID(len(c.node))
+		id = fuse.ESSNodeID(len(c.node))
 		c.node = append(c.node, sn)
 	}
 	sn.generation = c.nodeGen
@@ -504,7 +504,7 @@ func (c *Server) saveNode(inode uint64, node Node) (id fuse.NodeID, gen uint64) 
 	return id, sn.generation
 }
 
-func (c *Server) saveHandle(handle Handle, nodeID fuse.NodeID) (id fuse.HandleID) {
+func (c *Server) saveHandle(handle Handle, nodeID fuse.ESSNodeID) (id fuse.HandleID) {
 	c.meta.Lock()
 	shandle := &serveHandle{handle: handle, nodeID: nodeID}
 	if n := len(c.freeHandle); n > 0 {
@@ -522,14 +522,14 @@ func (c *Server) saveHandle(handle Handle, nodeID fuse.NodeID) (id fuse.HandleID
 type nodeRefcountDropBug struct {
 	N    uint64
 	Refs uint64
-	Node fuse.NodeID
+	Node fuse.ESSNodeID
 }
 
 func (n *nodeRefcountDropBug) String() string {
 	return fmt.Sprintf("bug: trying to drop %d of %d references to %v", n.N, n.Refs, n.Node)
 }
 
-func (c *Server) dropNode(id fuse.NodeID, n uint64) (forget bool) {
+func (c *Server) dropNode(id fuse.ESSNodeID, n uint64) (forget bool) {
 	c.meta.Lock()
 	defer c.meta.Unlock()
 	snode := c.node[id]
@@ -653,7 +653,7 @@ func (r response) String() string {
 
 type notification struct {
 	Op   string
-	Node fuse.NodeID
+	Node fuse.ESSNodeID
 	Out  interface{} `json:",omitempty"`
 	Err  string      `json:",omitempty"`
 }
@@ -679,7 +679,7 @@ func (n notification) String() string {
 }
 
 type logMissingNode struct {
-	MaxNode fuse.NodeID
+	MaxNode fuse.ESSNodeID
 }
 
 func opName(req fuse.Request) string {
@@ -786,7 +786,7 @@ func (c *Server) serve(r fuse.Request) {
 	c.meta.Lock()
 	hdr := r.Hdr()
 	if id := hdr.Node; id != 0 {
-		if id < fuse.NodeID(len(c.node)) {
+		if id < fuse.ESSNodeID(len(c.node)) {
 			snode = c.node[uint(id)]
 		}
 		if snode == nil {
@@ -799,7 +799,7 @@ func (c *Server) serve(r fuse.Request) {
 				// Out; not sure if i want to do that; might get rid
 				// of len(c.node) things altogether
 				Out: logMissingNode{
-					MaxNode: fuse.NodeID(len(c.node)),
+					MaxNode: fuse.ESSNodeID(len(c.node)),
 				},
 			})
 			r.RespondError(fuse.ESTALE)

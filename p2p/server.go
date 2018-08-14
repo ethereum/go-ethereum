@@ -177,7 +177,7 @@ type Server struct {
 	log           log.Logger
 }
 
-type peerOpFunc func(map[discover.NodeID]*Peer)
+type peerOpFunc func(map[discover.ESSNodeID]*Peer)
 
 type peerDrop struct {
 	*Peer
@@ -201,14 +201,14 @@ type conn struct {
 	transport
 	flags connFlag
 	cont  chan error      // The run loop uses cont to signal errors to SetupConn.
-	id    discover.NodeID // valid after the encryption handshake
+	id    discover.ESSNodeID // valid after the encryption handshake
 	caps  []Cap           // valid after the protocol handshake
 	name  string          // valid after the protocol handshake
 }
 
 type transport interface {
 	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *discover.Node) (discover.NodeID, error)
+	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *discover.Node) (discover.ESSNodeID, error)
 	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
 	// The MsgReadWriter can only be used after the encryption
 	// handshake has completed. The code uses conn.id to track this
@@ -222,7 +222,7 @@ type transport interface {
 
 func (c *conn) String() string {
 	s := c.flags.String()
-	if (c.id != discover.NodeID{}) {
+	if (c.id != discover.ESSNodeID{}) {
 		s += " " + c.id.String()
 	}
 	s += " " + c.fd.RemoteAddr().String()
@@ -260,7 +260,7 @@ func (srv *Server) Peers() []*Peer {
 	// Note: We'd love to put this function into a variable but
 	// that seems to cause a weird compiler error in some
 	// environments.
-	case srv.peerOp <- func(peers map[discover.NodeID]*Peer) {
+	case srv.peerOp <- func(peers map[discover.ESSNodeID]*Peer) {
 		for _, p := range peers {
 			ps = append(ps, p)
 		}
@@ -275,7 +275,7 @@ func (srv *Server) Peers() []*Peer {
 func (srv *Server) PeerCount() int {
 	var count int
 	select {
-	case srv.peerOp <- func(ps map[discover.NodeID]*Peer) { count = len(ps) }:
+	case srv.peerOp <- func(ps map[discover.ESSNodeID]*Peer) { count = len(ps) }:
 		<-srv.peerOpDone
 	case <-srv.quit:
 	}
@@ -529,7 +529,7 @@ func (srv *Server) startListening() error {
 }
 
 type dialer interface {
-	newTasks(running int, peers map[discover.NodeID]*Peer, now time.Time) []task
+	newTasks(running int, peers map[discover.ESSNodeID]*Peer, now time.Time) []task
 	taskDone(task, time.Time)
 	addStatic(*discover.Node)
 	removeStatic(*discover.Node)
@@ -538,9 +538,9 @@ type dialer interface {
 func (srv *Server) run(dialstate dialer) {
 	defer srv.loopWG.Done()
 	var (
-		peers        = make(map[discover.NodeID]*Peer)
+		peers        = make(map[discover.ESSNodeID]*Peer)
 		inboundCount = 0
-		trusted      = make(map[discover.NodeID]bool, len(srv.TrustedNodes))
+		trusted      = make(map[discover.ESSNodeID]bool, len(srv.TrustedNodes))
 		taskdone     = make(chan task, maxActiveDialTasks)
 		runningTasks []task
 		queuedTasks  []task // tasks that can't run yet
@@ -691,7 +691,7 @@ running:
 	}
 }
 
-func (srv *Server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) protoHandshakeChecks(peers map[discover.ESSNodeID]*Peer, inboundCount int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
@@ -701,7 +701,7 @@ func (srv *Server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, inbound
 	return srv.encHandshakeChecks(peers, inboundCount, c)
 }
 
-func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) encHandshakeChecks(peers map[discover.ESSNodeID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers

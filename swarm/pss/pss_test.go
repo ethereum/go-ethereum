@@ -940,11 +940,11 @@ func testSendAsym(t *testing.T) {
 
 type Job struct {
 	Msg      []byte
-	SendNode discover.NodeID
-	RecvNode discover.NodeID
+	SendNode discover.ESSNodeID
+	RecvNode discover.ESSNodeID
 }
 
-func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID]string, topic string) {
+func worker(id int, jobs <-chan Job, rpcs map[discover.ESSNodeID]*rpc.Client, pubkeys map[discover.ESSNodeID]string, topic string) {
 	for j := range jobs {
 		rpcs[j.SendNode].Call(nil, "pss_sendAsym", pubkeys[j.RecvNode], topic, hexutil.Encode(j.Msg))
 	}
@@ -994,7 +994,7 @@ func TestNetwork10000(t *testing.T) {
 
 func testNetwork(t *testing.T) {
 	type msgnotifyC struct {
-		id     discover.NodeID
+		id     discover.ESSNodeID
 		msgIdx int
 	}
 
@@ -1006,16 +1006,16 @@ func testNetwork(t *testing.T) {
 
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
-	nodes := make([]discover.NodeID, nodecount)
-	bzzaddrs := make(map[discover.NodeID]string, nodecount)
-	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
-	pubkeys := make(map[discover.NodeID]string, nodecount)
+	nodes := make([]discover.ESSNodeID, nodecount)
+	bzzaddrs := make(map[discover.ESSNodeID]string, nodecount)
+	rpcs := make(map[discover.ESSNodeID]*rpc.Client, nodecount)
+	pubkeys := make(map[discover.ESSNodeID]string, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
-	nodemsgcount := make(map[discover.NodeID]int, nodecount)
+	nodemsgcount := make(map[discover.ESSNodeID]int, nodecount)
 
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 
 	var a adapters.NodeAdapter
 	if adapter == "exec" {
@@ -1055,7 +1055,7 @@ func testNetwork(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
+	triggerChecks := func(trigger chan discover.ESSNodeID, id discover.ESSNodeID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -1559,12 +1559,12 @@ func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error
 
 func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewInmemoryStore()
-	kademlias := make(map[discover.NodeID]*network.Kademlia)
-	kademlia := func(id discover.NodeID) *network.Kademlia {
+	kademlias := make(map[discover.ESSNodeID]*network.Kademlia)
+	kademlia := func(id discover.ESSNodeID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := network.NewAddrFromNodeID(id)
+		addr := network.NewAddrFromESSNodeID(id)
 		params := network.NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -1623,7 +1623,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -1638,9 +1638,9 @@ func newServices(allowRaw bool) adapters.Services {
 
 func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *PssParams) *Pss {
 
-	var nid discover.NodeID
+	var nid discover.ESSNodeID
 	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
-	addr := network.NewAddrFromNodeID(nid)
+	addr := network.NewAddrFromESSNodeID(nid)
 
 	// set up routing if kademlia is not passed to us
 	if overlay == nil {
