@@ -16,9 +16,9 @@ var (
 	nodeID     []byte          // hardware for version 1 UUIDs
 )
 
-// NodeInterface returns the name of the interface from which the NodeID was
-// derived.  The interface "user" is returned if the NodeID was set by
-// SetNodeID.
+// NodeInterface returns the name of the interface from which the ESSNodeID was
+// derived.  The interface "user" is returned if the ESSNodeID was set by
+// SetESSNodeID.
 func NodeInterface() string {
 	defer nodeMu.Unlock()
 	nodeMu.Lock()
@@ -48,7 +48,7 @@ func setNodeInterface(name string) bool {
 
 	for _, ifs := range interfaces {
 		if len(ifs.HardwareAddr) >= 6 && (name == "" || name == ifs.Name) {
-			if setNodeID(ifs.HardwareAddr) {
+			if setESSNodeID(ifs.HardwareAddr) {
 				ifname = ifs.Name
 				return true
 			}
@@ -68,9 +68,9 @@ func setNodeInterface(name string) bool {
 	return false
 }
 
-// NodeID returns a slice of a copy of the current Node ID, setting the Node ID
+// ESSNodeID returns a slice of a copy of the current Node ID, setting the Node ID
 // if not already set.
-func NodeID() []byte {
+func ESSNodeID() []byte {
 	defer nodeMu.Unlock()
 	nodeMu.Lock()
 	if nodeID == nil {
@@ -81,20 +81,20 @@ func NodeID() []byte {
 	return nid
 }
 
-// SetNodeID sets the Node ID to be used for Version 1 UUIDs.  The first 6 bytes
+// SetESSNodeID sets the Node ID to be used for Version 1 UUIDs.  The first 6 bytes
 // of id are used.  If id is less than 6 bytes then false is returned and the
 // Node ID is not set.
-func SetNodeID(id []byte) bool {
+func SetESSNodeID(id []byte) bool {
 	defer nodeMu.Unlock()
 	nodeMu.Lock()
-	if setNodeID(id) {
+	if setESSNodeID(id) {
 		ifname = "user"
 		return true
 	}
 	return false
 }
 
-func setNodeID(id []byte) bool {
+func setESSNodeID(id []byte) bool {
 	if len(id) < 6 {
 		return false
 	}
@@ -105,9 +105,9 @@ func setNodeID(id []byte) bool {
 	return true
 }
 
-// NodeID returns the 6 byte node id encoded in uuid.  It returns nil if uuid is
-// not valid.  The NodeID is only well defined for version 1 and 2 UUIDs.
-func (uuid UUID) NodeID() []byte {
+// ESSNodeID returns the 6 byte node id encoded in uuid.  It returns nil if uuid is
+// not valid.  The ESSNodeID is only well defined for version 1 and 2 UUIDs.
+func (uuid UUID) ESSNodeID() []byte {
 	if len(uuid) != 16 {
 		return nil
 	}

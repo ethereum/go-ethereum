@@ -309,7 +309,7 @@ func TestDeliveryFromNodes(t *testing.T) {
 
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
-	toAddr = network.NewAddrFromNodeID
+	toAddr = network.NewAddrFromESSNodeID
 	createStoreFunc = createTestLocalStorageFromSim
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
@@ -329,13 +329,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	stores = make(map[discover.NodeID]storage.ChunkStore)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
-	registries = make(map[discover.NodeID]*TestRegistry)
-	deliveries = make(map[discover.NodeID]*Delivery)
-	peerCount = func(id discover.NodeID) int {
+	registries = make(map[discover.ESSNodeID]*TestRegistry)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
+	peerCount = func(id discover.ESSNodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
 		}
@@ -418,7 +418,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		}()
 		return nil
 	}
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case err := <-errc:
 			return false, err
@@ -491,9 +491,9 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
-	toAddr = network.NewAddrFromNodeID
+	toAddr = network.NewAddrFromESSNodeID
 	createStoreFunc = createTestLocalStorageFromSim
-	registries = make(map[discover.NodeID]*TestRegistry)
+	registries = make(map[discover.ESSNodeID]*TestRegistry)
 
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -517,12 +517,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		b.Fatal(err.Error())
 	}
 
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
-	peerCount = func(id discover.NodeID) int {
+	peerCount = func(id discover.ESSNodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
 		}
@@ -585,8 +585,8 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	}
 
 	// the check function is only triggered when the benchmark finishes
-	trigger := make(chan discover.NodeID)
-	check := func(ctx context.Context, id discover.NodeID) (_ bool, err error) {
+	trigger := make(chan discover.ESSNodeID)
+	check := func(ctx context.Context, id discover.ESSNodeID) (_ bool, err error) {
 		return true, nil
 	}
 
@@ -702,6 +702,6 @@ Loop:
 	}
 }
 
-func createTestLocalStorageFromSim(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+func createTestLocalStorageFromSim(id discover.ESSNodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
 	return stores[id], nil
 }

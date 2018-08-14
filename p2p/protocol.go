@@ -51,7 +51,7 @@ type Protocol struct {
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id discover.NodeID) interface{}
+	PeerInfo func(id discover.ESSNodeID) interface{}
 }
 
 func (p Protocol) cap() Cap {

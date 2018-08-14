@@ -237,8 +237,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodes)
+	trigger := make(chan discover.ESSNodeID)
+	ids := make([]discover.ESSNodeID, nodes)
 	for i := 0; i < nodes; i++ {
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
@@ -282,7 +282,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
 	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -351,8 +351,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodes)
+	trigger := make(chan discover.ESSNodeID)
+	ids := make([]discover.ESSNodeID, nodes)
 	var addrs [][]byte
 
 	for i := 0; i < nodes; i++ {
@@ -462,7 +462,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -510,7 +510,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node, and also every second to avoid a race between
 // peer events and kademlia becoming healthy
-func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
+func triggerChecks(trigger chan discover.ESSNodeID, net *simulations.Network, id discover.ESSNodeID) error {
 	node := net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
@@ -550,7 +550,7 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	host := adapters.ExternalIP()
 
-	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
+	addr := network.NewAddrFromESSNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

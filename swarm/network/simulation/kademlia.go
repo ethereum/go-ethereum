@@ -34,7 +34,7 @@ var BucketKeyKademlia BucketKey = "kademlia"
 
 // WaitTillHealthy is blocking until the health of all kademlias is true.
 // If error is not nil, a map of kademlia that was found not healthy is returned.
-func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (ill map[discover.NodeID]*network.Kademlia, err error) {
+func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (ill map[discover.ESSNodeID]*network.Kademlia, err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
@@ -48,7 +48,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
-	ill = make(map[discover.NodeID]*network.Kademlia)
+	ill = make(map[discover.ESSNodeID]*network.Kademlia)
 	for {
 		select {
 		case <-ctx.Done():
@@ -82,9 +82,9 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 
 // kademlias returns all Kademlia instances that are set
 // in simulation bucket.
-func (s *Simulation) kademlias() (ks map[discover.NodeID]*network.Kademlia) {
+func (s *Simulation) kademlias() (ks map[discover.ESSNodeID]*network.Kademlia) {
 	items := s.UpNodesItems(BucketKeyKademlia)
-	ks = make(map[discover.NodeID]*network.Kademlia, len(items))
+	ks = make(map[discover.ESSNodeID]*network.Kademlia, len(items))
 	for id, v := range items {
 		k, ok := v.(*network.Kademlia)
 		if !ok {

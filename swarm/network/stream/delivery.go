@@ -48,7 +48,7 @@ type Delivery struct {
 	db       *storage.DBAPI
 	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *Peer
+	getPeer  func(discover.ESSNodeID) *Peer
 }
 
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
@@ -257,7 +257,7 @@ R:
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(ctx context.Context, hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
+func (d *Delivery) RequestFromPeers(ctx context.Context, hash []byte, skipCheck bool, peersToSkip ...discover.ESSNodeID) error {
 	var success bool
 	var err error
 	requestFromPeersCount.Inc(1)

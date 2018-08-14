@@ -189,7 +189,7 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
 			},
-			PeerInfo: func(id discover.NodeID) interface{} {
+			PeerInfo: func(id discover.ESSNodeID) interface{} {
 				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
 					return p.Info()
 				}

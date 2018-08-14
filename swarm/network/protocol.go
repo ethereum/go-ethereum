@@ -80,7 +80,7 @@ type Peer interface {
 
 // Conn interface represents an live peer connection
 type Conn interface {
-	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
+	ID() discover.ESSNodeID                                                                  // the key that uniquely identifies the Node for the peerPool
 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
 	Send(context.Context, interface{}) error                                              // can send messages
 	Drop(error)                                                                           // disconnect this peer
@@ -102,7 +102,7 @@ type Bzz struct {
 	NetworkID    uint64
 	localAddr    *BzzAddr
 	mtx          sync.Mutex
-	handshakes   map[discover.NodeID]*HandshakeMsg
+	handshakes   map[discover.ESSNodeID]*HandshakeMsg
 	streamerSpec *protocols.Spec
 	streamerRun  func(*BzzPeer) error
 }
@@ -117,7 +117,7 @@ func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *pro
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
 		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
+		handshakes:   make(map[discover.ESSNodeID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
 	}
@@ -269,7 +269,7 @@ func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	return &BzzPeer{
 		Peer:      p,
 		localAddr: addr,
-		BzzAddr:   NewAddrFromNodeID(p.ID()),
+		BzzAddr:   NewAddrFromESSNodeID(p.ID()),
 	}
 }
 
@@ -322,14 +322,14 @@ func (b *Bzz) checkHandshake(hs interface{}) error {
 
 // removeHandshake removes handshake for peer with peerID
 // from the bzz handshake store
-func (b *Bzz) removeHandshake(peerID discover.NodeID) {
+func (b *Bzz) removeHandshake(peerID discover.ESSNodeID) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	delete(b.handshakes, peerID)
 }
 
 // GetHandshake returns the bzz handhake that the remote peer with peerID sent
-func (b *Bzz) GetHandshake(peerID discover.NodeID) (*HandshakeMsg, bool) {
+func (b *Bzz) GetHandshake(peerID discover.ESSNodeID) (*HandshakeMsg, bool) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	handshake, found := b.handshakes[peerID]
@@ -372,7 +372,7 @@ func (a *BzzAddr) Under() []byte {
 }
 
 // ID returns the nodeID from the underlay enode address
-func (a *BzzAddr) ID() discover.NodeID {
+func (a *BzzAddr) ID() discover.ESSNodeID {
 	return discover.MustParseNode(string(a.UAddr)).ID
 }
 
@@ -393,30 +393,30 @@ func RandomAddr() *BzzAddr {
 		panic("unable to generate key")
 	}
 	pubkey := crypto.FromECDSAPub(&key.PublicKey)
-	var id discover.NodeID
+	var id discover.ESSNodeID
 	copy(id[:], pubkey[1:])
-	return NewAddrFromNodeID(id)
+	return NewAddrFromESSNodeID(id)
 }
 
-// NewNodeIDFromAddr transforms the underlay address to an adapters.NodeID
-func NewNodeIDFromAddr(addr Addr) discover.NodeID {
+// NewESSNodeIDFromAddr transforms the underlay address to an adapters.ESSNodeID
+func NewESSNodeIDFromAddr(addr Addr) discover.ESSNodeID {
 	log.Info(fmt.Sprintf("uaddr=%s", string(addr.Under())))
 	node := discover.MustParseNode(string(addr.Under()))
 	return node.ID
 }
 
-// NewAddrFromNodeID constucts a BzzAddr from a discover.NodeID
+// NewAddrFromESSNodeID constucts a BzzAddr from a discover.ESSNodeID
 // the overlay address is derived as the hash of the nodeID
-func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
+func NewAddrFromESSNodeID(id discover.ESSNodeID) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
 }
 
-// NewAddrFromNodeIDAndPort constucts a BzzAddr from a discover.NodeID and port uint16
+// NewAddrFromESSNodeIDAndPort constucts a BzzAddr from a discover.ESSNodeID and port uint16
 // the overlay address is derived as the hash of the nodeID
-func NewAddrFromNodeIDAndPort(id discover.NodeID, host net.IP, port uint16) *BzzAddr {
+func NewAddrFromESSNodeIDAndPort(id discover.ESSNodeID, host net.IP, port uint16) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, host, port, port).String()),

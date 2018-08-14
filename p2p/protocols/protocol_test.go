@@ -36,7 +36,7 @@ type hs0 struct {
 
 // message to kill/drop the peer with nodeID
 type kill struct {
-	C discover.NodeID
+	C discover.ESSNodeID
 }
 
 // message to drop connection
@@ -144,7 +144,7 @@ func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTes
 	return p2ptest.NewProtocolTester(t, conf.ID, 2, newProtocol(pp))
 }
 
-func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest.Exchange {
+func protoHandshakeExchange(id discover.ESSNodeID, proto *protoHandshake) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -197,7 +197,7 @@ func TestProtoHandshakeSuccess(t *testing.T) {
 	runProtoHandshake(t, &protoHandshake{42, "420"})
 }
 
-func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
+func moduleHandshakeExchange(id discover.ESSNodeID, resp uint) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -249,7 +249,7 @@ func TestModuleHandshakeSuccess(t *testing.T) {
 }
 
 // testing complex interactions over multiple peers, relaying, dropping
-func testMultiPeerSetup(a, b discover.NodeID) []p2ptest.Exchange {
+func testMultiPeerSetup(a, b discover.ESSNodeID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{

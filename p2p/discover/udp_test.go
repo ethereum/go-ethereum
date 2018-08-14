@@ -46,7 +46,7 @@ func init() {
 // shared test variables
 var (
 	futureExp          = uint64(time.Now().Add(10 * time.Hour).Unix())
-	testTarget         = NodeID{0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}
+	testTarget         = ESSNodeID{0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}
 	testRemote         = rpcEndpoint{IP: net.ParseIP("1.1.1.1").To4(), UDP: 1, TCP: 2}
 	testLocalAnnounced = rpcEndpoint{IP: net.ParseIP("2.2.2.2").To4(), UDP: 3, TCP: 4}
 	testLocal          = rpcEndpoint{IP: net.ParseIP("3.3.3.3").To4(), UDP: 5, TCP: 6}
@@ -136,7 +136,7 @@ func TestUDP_pingTimeout(t *testing.T) {
 	defer test.table.Close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
-	toid := NodeID{1, 2, 3, 4}
+	toid := ESSNodeID{1, 2, 3, 4}
 	if err := test.udp.ping(toid, toaddr); err != errTimeout {
 		t.Error("expected timeout error, got", err)
 	}
@@ -220,8 +220,8 @@ func TestUDP_findnodeTimeout(t *testing.T) {
 	defer test.table.Close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
-	toid := NodeID{1, 2, 3, 4}
-	target := NodeID{4, 5, 6, 7}
+	toid := ESSNodeID{1, 2, 3, 4}
+	target := ESSNodeID{4, 5, 6, 7}
 	result, err := test.udp.findnode(toid, toaddr, target)
 	if err != errTimeout {
 		t.Error("expected timeout error, got", err)
@@ -476,7 +476,7 @@ var testPackets = []struct {
 
 func TestForwardCompatibility(t *testing.T) {
 	testkey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	wantNodeID := PubkeyID(&testkey.PublicKey)
+	wantESSNodeID := PubkeyID(&testkey.PublicKey)
 
 	for _, test := range testPackets {
 		input, err := hex.DecodeString(test.input)
@@ -491,8 +491,8 @@ func TestForwardCompatibility(t *testing.T) {
 		if !reflect.DeepEqual(packet, test.wantPacket) {
 			t.Errorf("got %s\nwant %s", spew.Sdump(packet), spew.Sdump(test.wantPacket))
 		}
-		if nodeid != wantNodeID {
-			t.Errorf("got id %v\nwant id %v", nodeid, wantNodeID)
+		if nodeid != wantESSNodeID {
+			t.Errorf("got id %v\nwant id %v", nodeid, wantESSNodeID)
 		}
 	}
 }

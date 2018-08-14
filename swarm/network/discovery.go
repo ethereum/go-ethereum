@@ -115,8 +115,8 @@ peersMsg is the message to pass peer information
 It is always a response to a peersRequestMsg
 
 The encoding of a peer address is identical the devp2p base protocol peers
-messages: [IP, Port, NodeID],
-Note that a node's FileStore address is not the NodeID but the hash of the NodeID.
+messages: [IP, Port, ESSNodeID],
+Note that a node's FileStore address is not the ESSNodeID but the hash of the ESSNodeID.
 
 TODO:
 To mitigate against spurious peers messages, requests should be remembered

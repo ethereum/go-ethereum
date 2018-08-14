@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-func TestUpDownNodeIDs(t *testing.T) {
+func TestUpDownESSNodeIDs(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
@@ -39,9 +39,9 @@ func TestUpDownNodeIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gotIDs := sim.NodeIDs()
+	gotIDs := sim.ESSNodeIDs()
 
-	if !equalNodeIDs(ids, gotIDs) {
+	if !equalESSNodeIDs(ids, gotIDs) {
 		t.Error("returned nodes are not equal to added ones")
 	}
 
@@ -50,7 +50,7 @@ func TestUpDownNodeIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gotIDs = sim.UpNodeIDs()
+	gotIDs = sim.UpESSNodeIDs()
 
 	for _, id := range gotIDs {
 		if !sim.Net.GetNode(id).Up {
@@ -58,11 +58,11 @@ func TestUpDownNodeIDs(t *testing.T) {
 		}
 	}
 
-	if !equalNodeIDs(ids, append(gotIDs, stoppedIDs...)) {
+	if !equalESSNodeIDs(ids, append(gotIDs, stoppedIDs...)) {
 		t.Error("returned nodes are not equal to added ones")
 	}
 
-	gotIDs = sim.DownNodeIDs()
+	gotIDs = sim.DownESSNodeIDs()
 
 	for _, id := range gotIDs {
 		if sim.Net.GetNode(id).Up {
@@ -70,12 +70,12 @@ func TestUpDownNodeIDs(t *testing.T) {
 		}
 	}
 
-	if !equalNodeIDs(stoppedIDs, gotIDs) {
+	if !equalESSNodeIDs(stoppedIDs, gotIDs) {
 		t.Error("returned nodes are not equal to the stopped ones")
 	}
 }
 
-func equalNodeIDs(one, other []discover.NodeID) bool {
+func equalESSNodeIDs(one, other []discover.ESSNodeID) bool {
 	if len(one) != len(other) {
 		return false
 	}
@@ -212,7 +212,7 @@ func TestAddNodesAndConnectChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testChain(t, sim, sim.UpNodeIDs())
+	testChain(t, sim, sim.UpESSNodeIDs())
 }
 
 func TestAddNodesAndConnectRing(t *testing.T) {
@@ -244,7 +244,7 @@ func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
 	s := New(map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -269,7 +269,7 @@ func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Starting simulation...")
 	s.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("Checking")
-		nodes := sim.UpNodeIDs()
+		nodes := sim.UpESSNodeIDs()
 		if len(nodes) != nodeCount {
 			t.Fatal("Simulation network node number doesn't match snapshot node number")
 		}
@@ -292,13 +292,13 @@ func TestPivotNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if sim.PivotNodeID() != nil {
+	if sim.PivotESSNodeID() != nil {
 		t.Error("expected no pivot node")
 	}
 
 	sim.SetPivotNode(id)
 
-	pid := sim.PivotNodeID()
+	pid := sim.PivotESSNodeID()
 
 	if pid == nil {
 		t.Error("pivot node not set")
@@ -308,7 +308,7 @@ func TestPivotNode(t *testing.T) {
 
 	sim.SetPivotNode(id2)
 
-	pid = sim.PivotNodeID()
+	pid = sim.PivotESSNodeID()
 
 	if pid == nil {
 		t.Error("pivot node not set")

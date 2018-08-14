@@ -78,7 +78,7 @@ type NodeAdapter interface {
 type NodeConfig struct {
 	// ID is the node's ID which is used to identify the node in the
 	// simulation network
-	ID discover.NodeID
+	ID discover.ESSNodeID
 
 	// PrivateKey is the node's private key which is used by the devp2p
 	// stack to encrypt communications
@@ -97,7 +97,7 @@ type NodeConfig struct {
 	Services []string
 
 	// function to sanction or prevent suggesting a peer
-	Reachable func(id discover.NodeID) bool
+	Reachable func(id discover.ESSNodeID) bool
 
 	Port uint16
 }
@@ -218,7 +218,7 @@ type ServiceContext struct {
 // other nodes in the network (for example a simulated Swarm node which needs
 // to connect to a Geth node to resolve ENS names)
 type RPCDialer interface {
-	DialRPC(id discover.NodeID) (*rpc.Client, error)
+	DialRPC(id discover.ESSNodeID) (*rpc.Client, error)
 }
 
 // Services is a collection of services which can be run in a simulation

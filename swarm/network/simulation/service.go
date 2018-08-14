@@ -24,7 +24,7 @@ import (
 
 // Service returns a single Service by name on a particular node
 // with provided id.
-func (s *Simulation) Service(name string, id discover.NodeID) node.Service {
+func (s *Simulation) Service(name string, id discover.ESSNodeID) node.Service {
 	simNode, ok := s.Net.GetNode(id).Node.(*adapters.SimNode)
 	if !ok {
 		return nil
@@ -48,9 +48,9 @@ func (s *Simulation) RandomService(name string) node.Service {
 
 // Services returns all services with a provided name
 // from nodes that are up.
-func (s *Simulation) Services(name string) (services map[discover.NodeID]node.Service) {
+func (s *Simulation) Services(name string) (services map[discover.ESSNodeID]node.Service) {
 	nodes := s.Net.GetNodes()
-	services = make(map[discover.NodeID]node.Service)
+	services = make(map[discover.ESSNodeID]node.Service)
 	for _, node := range nodes {
 		if !node.Up {
 			continue

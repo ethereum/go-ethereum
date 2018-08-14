@@ -26,8 +26,8 @@ import (
 
 // PeerEvent is the type of the channel returned by Simulation.PeerEvents.
 type PeerEvent struct {
-	// NodeID is the ID of node that the event is caught on.
-	NodeID discover.NodeID
+	// ESSNodeID is the ID of node that the event is caught on.
+	ESSNodeID discover.ESSNodeID
 	// Event is the event that is caught.
 	Event *p2p.PeerEvent
 	// Error is the error that may have happened during event watching.
@@ -66,25 +66,25 @@ func (f *PeerEventsFilter) MsgCode(c uint64) *PeerEventsFilter {
 }
 
 // PeerEvents returns a channel of events that are captured by admin peerEvents
-// subscription nodes with provided NodeIDs. Additional filters can be set to ignore
+// subscription nodes with provided ESSNodeIDs. Additional filters can be set to ignore
 // events that are not relevant.
-func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
+func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.ESSNodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
 	eventC := make(chan PeerEvent)
 
 	for _, id := range ids {
 		s.shutdownWG.Add(1)
-		go func(id discover.NodeID) {
+		go func(id discover.ESSNodeID) {
 			defer s.shutdownWG.Done()
 
 			client, err := s.Net.GetNode(id).Client()
 			if err != nil {
-				eventC <- PeerEvent{NodeID: id, Error: err}
+				eventC <- PeerEvent{ESSNodeID: id, Error: err}
 				return
 			}
 			events := make(chan *p2p.PeerEvent)
 			sub, err := client.Subscribe(ctx, "admin", events, "peerEvents")
 			if err != nil {
-				eventC <- PeerEvent{NodeID: id, Error: err}
+				eventC <- PeerEvent{ESSNodeID: id, Error: err}
 				return
 			}
 			defer sub.Unsubscribe()
@@ -94,7 +94,7 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 				case <-ctx.Done():
 					if err := ctx.Err(); err != nil {
 						select {
-						case eventC <- PeerEvent{NodeID: id, Error: err}:
+						case eventC <- PeerEvent{ESSNodeID: id, Error: err}:
 						case <-s.Done():
 						}
 					}
@@ -119,11 +119,11 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 					}
 					if match {
 						select {
-						case eventC <- PeerEvent{NodeID: id, Event: e}:
+						case eventC <- PeerEvent{ESSNodeID: id, Event: e}:
 						case <-ctx.Done():
 							if err := ctx.Err(); err != nil {
 								select {
-								case eventC <- PeerEvent{NodeID: id, Error: err}:
+								case eventC <- PeerEvent{ESSNodeID: id, Error: err}:
 								case <-s.Done():
 								}
 							}
@@ -135,11 +135,11 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 				case err := <-sub.Err():
 					if err != nil {
 						select {
-						case eventC <- PeerEvent{NodeID: id, Error: err}:
+						case eventC <- PeerEvent{ESSNodeID: id, Error: err}:
 						case <-ctx.Done():
 							if err := ctx.Err(); err != nil {
 								select {
-								case eventC <- PeerEvent{NodeID: id, Error: err}:
+								case eventC <- PeerEvent{ESSNodeID: id, Error: err}:
 								case <-s.Done():
 								}
 							}

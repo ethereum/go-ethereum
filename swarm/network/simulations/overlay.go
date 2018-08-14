@@ -64,12 +64,12 @@ func init() {
 
 type Simulation struct {
 	mtx    sync.Mutex
-	stores map[discover.NodeID]*state.InmemoryStore
+	stores map[discover.ESSNodeID]*state.InmemoryStore
 }
 
 func NewSimulation() *Simulation {
 	return &Simulation{
-		stores: make(map[discover.NodeID]*state.InmemoryStore),
+		stores: make(map[discover.ESSNodeID]*state.InmemoryStore),
 	}
 }
 
@@ -83,7 +83,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	}
 	s.mtx.Unlock()
 
-	addr := network.NewAddrFromNodeID(id)
+	addr := network.NewAddrFromESSNodeID(id)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = 2

@@ -81,7 +81,7 @@ func TestEncHandshake(t *testing.T) {
 func testEncHandshake(token []byte) error {
 	type result struct {
 		side string
-		id   discover.NodeID
+		id   discover.ESSNodeID
 		err  error
 	}
 	var (

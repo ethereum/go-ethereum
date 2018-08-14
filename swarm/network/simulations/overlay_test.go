@@ -86,7 +86,7 @@ func TestOverlaySim(t *testing.T) {
 
 	//variables needed to wait for nodes being up
 	var upCount int
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 
 	//wait for all nodes to be up
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -169,7 +169,7 @@ LOOP:
 }
 
 //watch for events so we know when all nodes are up
-func watchSimEvents(net *simulations.Network, ctx context.Context, trigger chan discover.NodeID) {
+func watchSimEvents(net *simulations.Network, ctx context.Context, trigger chan discover.ESSNodeID) {
 	events := make(chan *simulations.Event)
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()

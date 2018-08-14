@@ -66,7 +66,7 @@ func (t *testStore) Save(key string, v []byte) error {
 	return nil
 }
 
-func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id discover.NodeID) []p2ptest.Exchange {
+func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id discover.ESSNodeID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -106,11 +106,11 @@ func newBzzBaseTester(t *testing.T, n int, addr *BzzAddr, spec *protocols.Spec, 
 		return srv(&BzzPeer{
 			Peer:      protocols.NewPeer(p, rw, spec),
 			localAddr: addr,
-			BzzAddr:   NewAddrFromNodeID(p.ID()),
+			BzzAddr:   NewAddrFromESSNodeID(p.ID()),
 		})
 	}
 
-	s := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), n, protocol)
+	s := p2ptest.NewProtocolTester(t, NewESSNodeIDFromAddr(addr), n, protocol)
 
 	for _, id := range s.IDs {
 		cs[id.String()] = make(chan bool)
@@ -139,7 +139,7 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr) *bzzTester {
 	kad := NewKademlia(addr.OAddr, NewKadParams())
 	bzz := NewBzz(config, kad, nil, nil, nil)
 
-	s := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, bzz.runBzz)
+	s := p2ptest.NewProtocolTester(t, NewESSNodeIDFromAddr(addr), 1, bzz.runBzz)
 
 	return &bzzTester{
 		addr:           addr,
@@ -149,14 +149,14 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr) *bzzTester {
 
 // should test handshakes in one exchange? parallelisation
 func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptest.Disconnect) error {
-	var peers []discover.NodeID
-	id := NewNodeIDFromAddr(rhs.Addr)
+	var peers []discover.ESSNodeID
+	id := NewESSNodeIDFromAddr(rhs.Addr)
 	if len(disconnects) > 0 {
 		for _, d := range disconnects {
 			peers = append(peers, d.Peer)
 		}
 	} else {
-		peers = []discover.NodeID{id}
+		peers = []discover.ESSNodeID{id}
 	}
 
 	if err := s.TestExchanges(HandshakeMsgExchange(lhs, rhs, id)...); err != nil {
@@ -199,7 +199,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 5, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 5, NetworkID: 321, Addr: NewAddrFromESSNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
 	)
 
@@ -215,7 +215,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 0, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 0, NetworkID: 3, Addr: NewAddrFromESSNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= 5)")},
 	)
 
@@ -231,7 +231,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 5, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 5, NetworkID: 3, Addr: NewAddrFromESSNodeID(id)},
 	)
 
 	if err != nil {

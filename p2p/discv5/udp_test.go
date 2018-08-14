@@ -364,7 +364,7 @@ func TestForwardCompatibility(t *testing.T) {
 	t.Skip("skipped while working on discovery v5")
 
 	testkey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	wantNodeID := PubkeyID(&testkey.PublicKey)
+	wantESSNodeID := PubkeyID(&testkey.PublicKey)
 
 	for _, test := range testPackets {
 		input, err := hex.DecodeString(test.input)
@@ -379,8 +379,8 @@ func TestForwardCompatibility(t *testing.T) {
 		if !reflect.DeepEqual(pkt.data, test.wantPacket) {
 			t.Errorf("got %s\nwant %s", spew.Sdump(pkt.data), spew.Sdump(test.wantPacket))
 		}
-		if pkt.remoteID != wantNodeID {
-			t.Errorf("got id %v\nwant id %v", pkt.remoteID, wantNodeID)
+		if pkt.remoteID != wantESSNodeID {
+			t.Errorf("got id %v\nwant id %v", pkt.remoteID, wantESSNodeID)
 		}
 	}
 }

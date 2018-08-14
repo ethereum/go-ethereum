@@ -85,7 +85,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	defer setDefaultSkipCheck(defaultSkipCheck)
 	defaultSkipCheck = skipCheck
 
-	toAddr = network.NewAddrFromNodeID
+	toAddr = network.NewAddrFromESSNodeID
 	conf := &streamTesting.RunConfig{
 		Adapter:        *adapter,
 		NodeCount:      nodes,
@@ -105,13 +105,13 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		t.Fatal(err)
 	}
 
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
+	stores = make(map[discover.ESSNodeID]storage.ChunkStore)
+	deliveries = make(map[discover.ESSNodeID]*Delivery)
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
 
-	peerCount = func(id discover.NodeID) int {
+	peerCount = func(id discover.ESSNodeID) int {
 		return 1
 	}
 
@@ -282,7 +282,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		})
 		return err
 	}
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		select {
 		case err := <-errc:
 			return false, err

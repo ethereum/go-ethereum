@@ -55,7 +55,7 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 	}
 
 	// wait for all node expectations to either pass, error or timeout
-	nodes := make(map[discover.NodeID]struct{}, len(step.Expect.Nodes))
+	nodes := make(map[discover.ESSNodeID]struct{}, len(step.Expect.Nodes))
 	for _, id := range step.Expect.Nodes {
 		nodes[id] = struct{}{}
 	}
@@ -119,7 +119,7 @@ type Step struct {
 
 	// Trigger is a channel which receives node ids and triggers an
 	// expectation check for that node
-	Trigger chan discover.NodeID
+	Trigger chan discover.ESSNodeID
 
 	// Expect is the expectation to wait for when performing this step
 	Expect *Expectation
@@ -127,15 +127,15 @@ type Step struct {
 
 type Expectation struct {
 	// Nodes is a list of nodes to check
-	Nodes []discover.NodeID
+	Nodes []discover.ESSNodeID
 
 	// Check checks whether a given node meets the expectation
-	Check func(context.Context, discover.NodeID) (bool, error)
+	Check func(context.Context, discover.ESSNodeID) (bool, error)
 }
 
 func newStepResult() *StepResult {
 	return &StepResult{
-		Passes: make(map[discover.NodeID]time.Time),
+		Passes: make(map[discover.ESSNodeID]time.Time),
 	}
 }
 
@@ -150,7 +150,7 @@ type StepResult struct {
 	FinishedAt time.Time
 
 	// Passes are the timestamps of the successful node expectations
-	Passes map[discover.NodeID]time.Time
+	Passes map[discover.ESSNodeID]time.Time
 
 	// NetworkEvents are the network events which occurred during the step
 	NetworkEvents []*Event

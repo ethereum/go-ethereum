@@ -39,7 +39,7 @@ func TestNetworkSimulation(t *testing.T) {
 	})
 	defer network.Shutdown()
 	nodeCount := 20
-	ids := make([]discover.NodeID, nodeCount)
+	ids := make([]discover.ESSNodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		conf := adapters.RandomNodeConfig()
 		node, err := network.NewNodeWithConfig(conf)
@@ -64,7 +64,7 @@ func TestNetworkSimulation(t *testing.T) {
 		}
 		return nil
 	}
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+	check := func(ctx context.Context, id discover.ESSNodeID) (bool, error) {
 		// check we haven't run out of time
 		select {
 		case <-ctx.Done():
@@ -102,7 +102,7 @@ func TestNetworkSimulation(t *testing.T) {
 	defer cancel()
 
 	// trigger a check every 100ms
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan discover.ESSNodeID)
 	go triggerChecks(ctx, ids, trigger, 100*time.Millisecond)
 
 	result := NewSimulation(network).Run(ctx, &Step{
@@ -140,7 +140,7 @@ func TestNetworkSimulation(t *testing.T) {
 	}
 }
 
-func triggerChecks(ctx context.Context, ids []discover.NodeID, trigger chan discover.NodeID, interval time.Duration) {
+func triggerChecks(ctx context.Context, ids []discover.ESSNodeID, trigger chan discover.ESSNodeID, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {

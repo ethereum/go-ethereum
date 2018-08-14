@@ -36,7 +36,7 @@ import (
 func ExampleSimulation_WaitTillHealthy() {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddrFromESSNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -79,7 +79,7 @@ func ExampleSimulation_PeerEvents() {
 	sim := simulation.New(nil)
 	defer sim.Close()
 
-	events := sim.PeerEvents(context.Background(), sim.NodeIDs())
+	events := sim.PeerEvents(context.Background(), sim.ESSNodeIDs())
 
 	go func() {
 		for e := range events {
@@ -87,7 +87,7 @@ func ExampleSimulation_PeerEvents() {
 				log.Error("peer event", "err", e.Error)
 				continue
 			}
-			log.Info("peer event", "node", e.NodeID, "peer", e.Event.Peer, "msgcode", e.Event.MsgCode)
+			log.Info("peer event", "node", e.ESSNodeID, "peer", e.Event.Peer, "msgcode", e.Event.MsgCode)
 		}
 	}()
 }
@@ -99,7 +99,7 @@ func ExampleSimulation_PeerEvents_disconnections() {
 
 	disconnections := sim.PeerEvents(
 		context.Background(),
-		sim.NodeIDs(),
+		sim.ESSNodeIDs(),
 		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
 	)
 
@@ -109,7 +109,7 @@ func ExampleSimulation_PeerEvents_disconnections() {
 				log.Error("peer drop", "err", d.Error)
 				continue
 			}
-			log.Warn("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+			log.Warn("peer drop", "node", d.ESSNodeID, "peer", d.Event.Peer)
 		}
 	}()
 }
@@ -122,7 +122,7 @@ func ExampleSimulation_PeerEvents_multipleFilters() {
 
 	msgs := sim.PeerEvents(
 		context.Background(),
-		sim.NodeIDs(),
+		sim.ESSNodeIDs(),
 		// Watch when bzz messages 1 and 4 are received.
 		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("bzz").MsgCode(1),
 		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("bzz").MsgCode(4),
@@ -134,7 +134,7 @@ func ExampleSimulation_PeerEvents_multipleFilters() {
 				log.Error("bzz message", "err", m.Error)
 				continue
 			}
-			log.Info("bzz message", "node", m.NodeID, "peer", m.Event.Peer)
+			log.Info("bzz message", "node", m.ESSNodeID, "peer", m.Event.Peer)
 		}
 	}()
 }

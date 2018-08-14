@@ -180,7 +180,7 @@ func TestNodeString(t *testing.T) {
 }
 
 func TestHexID(t *testing.T) {
-	ref := NodeID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
+	ref := ESSNodeID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
 	id1 := MustHexID("0x000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
 	id2 := MustHexID("000000000000000000000000000000000000000000000000000000000000000000000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
 
@@ -192,7 +192,7 @@ func TestHexID(t *testing.T) {
 	}
 }
 
-func TestNodeID_recover(t *testing.T) {
+func TestESSNodeID_recover(t *testing.T) {
 	prv := newkey()
 	hash := make([]byte, 32)
 	sig, err := crypto.Sign(hash, prv)
@@ -201,7 +201,7 @@ func TestNodeID_recover(t *testing.T) {
 	}
 
 	pub := PubkeyID(&prv.PublicKey)
-	recpub, err := recoverNodeID(hash, sig)
+	recpub, err := recoverESSNodeID(hash, sig)
 	if err != nil {
 		t.Fatalf("recovery error: %v", err)
 	}
@@ -218,8 +218,8 @@ func TestNodeID_recover(t *testing.T) {
 	}
 }
 
-func TestNodeID_pubkeyBad(t *testing.T) {
-	ecdsa, err := NodeID{}.Pubkey()
+func TestESSNodeID_pubkeyBad(t *testing.T) {
+	ecdsa, err := ESSNodeID{}.Pubkey()
 	if err == nil {
 		t.Error("expected error for zero ID")
 	}
@@ -228,7 +228,7 @@ func TestNodeID_pubkeyBad(t *testing.T) {
 	}
 }
 
-func TestNodeID_distcmp(t *testing.T) {
+func TestESSNodeID_distcmp(t *testing.T) {
 	distcmpBig := func(target, a, b common.Hash) int {
 		tbig := new(big.Int).SetBytes(target[:])
 		abig := new(big.Int).SetBytes(a[:])
@@ -241,7 +241,7 @@ func TestNodeID_distcmp(t *testing.T) {
 }
 
 // the random tests is likely to miss the case where they're equal.
-func TestNodeID_distcmpEqual(t *testing.T) {
+func TestESSNodeID_distcmpEqual(t *testing.T) {
 	base := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	x := common.Hash{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
 	if distcmp(base, x, x) != 0 {
@@ -249,7 +249,7 @@ func TestNodeID_distcmpEqual(t *testing.T) {
 	}
 }
 
-func TestNodeID_logdist(t *testing.T) {
+func TestESSNodeID_logdist(t *testing.T) {
 	logdistBig := func(a, b common.Hash) int {
 		abig, bbig := new(big.Int).SetBytes(a[:]), new(big.Int).SetBytes(b[:])
 		return new(big.Int).Xor(abig, bbig).BitLen()
@@ -260,14 +260,14 @@ func TestNodeID_logdist(t *testing.T) {
 }
 
 // the random tests is likely to miss the case where they're equal.
-func TestNodeID_logdistEqual(t *testing.T) {
+func TestESSNodeID_logdistEqual(t *testing.T) {
 	x := common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	if logdist(x, x) != 0 {
 		t.Errorf("logdist(x, x) != 0")
 	}
 }
 
-func TestNodeID_hashAtDistance(t *testing.T) {
+func TestESSNodeID_hashAtDistance(t *testing.T) {
 	// we don't use quick.Check here because its output isn't
 	// very helpful when the test fails.
 	cfg := quickcfg()
@@ -295,8 +295,8 @@ func quickcfg() *quick.Config {
 // TODO: The Generate method can be dropped when we require Go >= 1.5
 // because testing/quick learned to generate arrays in 1.5.
 
-func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {
-	var id NodeID
+func (ESSNodeID) Generate(rand *rand.Rand, size int) reflect.Value {
+	var id ESSNodeID
 	m := rand.Intn(len(id))
 	for i := len(id) - 1; i > m; i-- {
 		id[i] = byte(rand.Uint32())

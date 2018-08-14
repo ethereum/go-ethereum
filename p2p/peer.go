@@ -60,7 +60,7 @@ type protoHandshake struct {
 	Name       string
 	Caps       []Cap
 	ListenPort uint64
-	ID         discover.NodeID
+	ID         discover.ESSNodeID
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
@@ -91,7 +91,7 @@ const (
 // a p2p.Server or when a message is sent or received on a peer connection
 type PeerEvent struct {
 	Type     PeerEventType   `json:"type"`
-	Peer     discover.NodeID `json:"peer"`
+	Peer     discover.ESSNodeID `json:"peer"`
 	Error    string          `json:"error,omitempty"`
 	Protocol string          `json:"protocol,omitempty"`
 	MsgCode  *uint64         `json:"msg_code,omitempty"`
@@ -115,7 +115,7 @@ type Peer struct {
 }
 
 // NewPeer returns a peer for testing purposes.
-func NewPeer(id discover.NodeID, name string, caps []Cap) *Peer {
+func NewPeer(id discover.ESSNodeID, name string, caps []Cap) *Peer {
 	pipe, _ := net.Pipe()
 	conn := &conn{fd: pipe, transport: nil, id: id, caps: caps, name: name}
 	peer := newPeer(conn, nil)
@@ -124,7 +124,7 @@ func NewPeer(id discover.NodeID, name string, caps []Cap) *Peer {
 }
 
 // ID returns the node's public key.
-func (p *Peer) ID() discover.NodeID {
+func (p *Peer) ID() discover.ESSNodeID {
 	return p.rw.id
 }
 

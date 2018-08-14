@@ -154,7 +154,7 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 				wg.Done()
 				continue
 			}
-			go func(id discover.NodeID) {
+			go func(id discover.ESSNodeID) {
 				time.Sleep(randWait)
 				err := net.Start(id)
 				if err != nil {
@@ -169,8 +169,8 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 }
 
 //connect nodeCount number of nodes in a ring
-func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) {
-	ids := make([]discover.NodeID, nodeCount)
+func connectNodesInRing(net *Network, nodeCount int) ([]discover.ESSNodeID, error) {
+	ids := make([]discover.ESSNodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)

@@ -24,7 +24,7 @@ import (
 type BucketKey string
 
 // NodeItem returns an item set in ServiceFunc function for a particualar node.
-func (s *Simulation) NodeItem(id discover.NodeID, key interface{}) (value interface{}, ok bool) {
+func (s *Simulation) NodeItem(id discover.ESSNodeID, key interface{}) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -34,9 +34,9 @@ func (s *Simulation) NodeItem(id discover.NodeID, key interface{}) (value interf
 	return s.buckets[id].Load(key)
 }
 
-// SetNodeItem sets a new item associated with the node with provided NodeID.
+// SetNodeItem sets a new item associated with the node with provided ESSNodeID.
 // Buckets should be used to avoid managing separate simulation global state.
-func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value interface{}) {
+func (s *Simulation) SetNodeItem(id discover.ESSNodeID, key interface{}, value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -45,12 +45,12 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value inte
 
 // NodeItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
-func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) NodesItems(key interface{}) (values map[discover.ESSNodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	ids := s.NodeIDs()
-	values = make(map[discover.NodeID]interface{}, len(ids))
+	ids := s.ESSNodeIDs()
+	values = make(map[discover.ESSNodeID]interface{}, len(ids))
 	for _, id := range ids {
 		if _, ok := s.buckets[id]; !ok {
 			continue
@@ -63,12 +63,12 @@ func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]int
 }
 
 // UpNodesItems returns a map of items with the same BucketKey from all nodes that are up.
-func (s *Simulation) UpNodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) UpNodesItems(key interface{}) (values map[discover.ESSNodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	ids := s.UpNodeIDs()
-	values = make(map[discover.NodeID]interface{})
+	ids := s.UpESSNodeIDs()
+	values = make(map[discover.ESSNodeID]interface{})
 	for _, id := range ids {
 		if _, ok := s.buckets[id]; !ok {
 			continue

@@ -190,7 +190,7 @@ func randomResolves(t *testing.T, s *simulation, net *Network) {
 	randtime := func() time.Duration {
 		return time.Duration(rand.Intn(50)+20) * time.Second
 	}
-	lookup := func(target NodeID) bool {
+	lookup := func(target ESSNodeID) bool {
 		result := net.Resolve(target)
 		return result != nil && result.ID == target
 	}
@@ -212,12 +212,12 @@ func randomResolves(t *testing.T, s *simulation, net *Network) {
 
 type simulation struct {
 	mu      sync.RWMutex
-	nodes   map[NodeID]*Network
+	nodes   map[ESSNodeID]*Network
 	nodectr uint32
 }
 
 func newSimulation() *simulation {
-	return &simulation{nodes: make(map[NodeID]*Network)}
+	return &simulation{nodes: make(map[ESSNodeID]*Network)}
 }
 
 func (s *simulation) shutdown() {
@@ -294,7 +294,7 @@ func (s *simulation) launchNode(log bool) *Network {
 	return net
 }
 
-func (s *simulation) dropNode(id NodeID) {
+func (s *simulation) dropNode(id ESSNodeID) {
 	s.mu.Lock()
 	n := s.nodes[id]
 	delete(s.nodes, id)
@@ -305,7 +305,7 @@ func (s *simulation) dropNode(id NodeID) {
 
 type simTransport struct {
 	joinTime   time.Time
-	sender     NodeID
+	sender     ESSNodeID
 	senderAddr *net.UDPAddr
 	sim        *simulation
 	hashctr    uint64
@@ -443,7 +443,7 @@ func (st *simTransport) nextHash() []byte {
 
 const packetLoss = 0 // 1/1000
 
-func (st *simTransport) sendPacket(remote NodeID, p ingressPacket) {
+func (st *simTransport) sendPacket(remote ESSNodeID, p ingressPacket) {
 	if rand.Int31n(1000) >= packetLoss {
 		st.sim.mu.RLock()
 		recipient := st.sim.nodes[remote]

@@ -49,7 +49,7 @@ func TestTable_pingReplace(t *testing.T) {
 
 func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding bool) {
 	transport := newPingRecorder()
-	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	tab, _ := newTable(transport, ESSNodeID{}, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
 	<-tab.initDone
@@ -134,7 +134,7 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 // This checks that the table-wide IP limit is applied correctly.
 func TestTable_IPLimit(t *testing.T) {
 	transport := newPingRecorder()
-	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	tab, _ := newTable(transport, ESSNodeID{}, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
 	for i := 0; i < tableIPLimit+1; i++ {
@@ -150,7 +150,7 @@ func TestTable_IPLimit(t *testing.T) {
 // This checks that the table-wide IP limit is applied correctly.
 func TestTable_BucketIPLimit(t *testing.T) {
 	transport := newPingRecorder()
-	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	tab, _ := newTable(transport, ESSNodeID{}, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
 	d := 3
@@ -188,21 +188,21 @@ func nodeAtDistance(base common.Hash, ld int) (n *Node) {
 
 type pingRecorder struct {
 	mu           sync.Mutex
-	dead, pinged map[NodeID]bool
+	dead, pinged map[ESSNodeID]bool
 }
 
 func newPingRecorder() *pingRecorder {
 	return &pingRecorder{
-		dead:   make(map[NodeID]bool),
-		pinged: make(map[NodeID]bool),
+		dead:   make(map[ESSNodeID]bool),
+		pinged: make(map[ESSNodeID]bool),
 	}
 }
 
-func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+func (t *pingRecorder) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target ESSNodeID) ([]*Node, error) {
 	return nil, nil
 }
 
-func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
+func (t *pingRecorder) ping(toid ESSNodeID, toaddr *net.UDPAddr) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -282,7 +282,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	}
 	test := func(buf []*Node) bool {
 		transport := newPingRecorder()
-		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+		tab, _ := newTable(transport, ESSNodeID{}, &net.UDPAddr{}, "", nil)
 		defer tab.Close()
 		<-tab.initDone
 
@@ -307,7 +307,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 }
 
 type closeTest struct {
-	Self   NodeID
+	Self   ESSNodeID
 	Target common.Hash
 	All    []*Node
 	N      int
@@ -315,11 +315,11 @@ type closeTest struct {
 
 func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &closeTest{
-		Self:   gen(NodeID{}, rand).(NodeID),
+		Self:   gen(ESSNodeID{}, rand).(ESSNodeID),
 		Target: gen(common.Hash{}, rand).(common.Hash),
 		N:      rand.Intn(bucketSize),
 	}
-	for _, id := range gen([]NodeID{}, rand).([]NodeID) {
+	for _, id := range gen([]ESSNodeID{}, rand).([]ESSNodeID) {
 		t.All = append(t.All, &Node{ID: id})
 	}
 	return reflect.ValueOf(t)
@@ -356,11 +356,11 @@ func TestTable_Lookup(t *testing.T) {
 }
 
 // This is the test network for the Lookup test.
-// The nodes were obtained by running testnet.mine with a random NodeID as target.
+// The nodes were obtained by running testnet.mine with a random ESSNodeID as target.
 var lookupTestnet = &preminedTestnet{
 	target:    MustHexID("166aea4f556532c6d34e8b740e5d314af7e9ac0ca79833bd751d6b665f12dfd38ec563c363b32f02aef4a80b44fd3def94612d497b99cb5f17fd24de454927ec"),
 	targetSha: common.Hash{0x5c, 0x94, 0x4e, 0xe5, 0x1c, 0x5a, 0xe9, 0xf7, 0x2a, 0x95, 0xec, 0xcb, 0x8a, 0xed, 0x3, 0x74, 0xee, 0xcb, 0x51, 0x19, 0xd7, 0x20, 0xcb, 0xea, 0x68, 0x13, 0xe8, 0xe0, 0xd6, 0xad, 0x92, 0x61},
-	dists: [257][]NodeID{
+	dists: [257][]ESSNodeID{
 		240: {
 			MustHexID("2001ad5e3e80c71b952161bc0186731cf5ffe942d24a79230a0555802296238e57ea7a32f5b6f18564eadc1c65389448481f8c9338df0a3dbd18f708cbc2cbcb"),
 			MustHexID("6ba3f4f57d084b6bf94cc4555b8c657e4a8ac7b7baf23c6874efc21dd1e4f56b7eb2721e07f5242d2f1d8381fc8cae535e860197c69236798ba1ad231b105794"),
@@ -551,12 +551,12 @@ var lookupTestnet = &preminedTestnet{
 }
 
 type preminedTestnet struct {
-	target    NodeID
+	target    ESSNodeID
 	targetSha common.Hash // sha3(target)
-	dists     [hashBits + 1][]NodeID
+	dists     [hashBits + 1][]ESSNodeID
 }
 
-func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+func (tn *preminedTestnet) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target ESSNodeID) ([]*Node, error) {
 	// current log distance is encoded in port number
 	// fmt.Println("findnode query at dist", toaddr.Port)
 	if toaddr.Port == 0 {
@@ -571,12 +571,12 @@ func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target Nod
 }
 
 func (*preminedTestnet) close()                                      {}
-func (*preminedTestnet) waitping(from NodeID) error                  { return nil }
-func (*preminedTestnet) ping(toid NodeID, toaddr *net.UDPAddr) error { return nil }
+func (*preminedTestnet) waitping(from ESSNodeID) error                  { return nil }
+func (*preminedTestnet) ping(toid ESSNodeID, toaddr *net.UDPAddr) error { return nil }
 
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.
-func (tn *preminedTestnet) mine(target NodeID) {
+func (tn *preminedTestnet) mine(target ESSNodeID) {
 	tn.target = target
 	tn.targetSha = crypto.Keccak256Hash(tn.target[:])
 	found := 0
@@ -594,12 +594,12 @@ func (tn *preminedTestnet) mine(target NodeID) {
 	fmt.Println("&preminedTestnet{")
 	fmt.Printf("	target: %#v,\n", tn.target)
 	fmt.Printf("	targetSha: %#v,\n", tn.targetSha)
-	fmt.Printf("	dists: [%d][]NodeID{\n", len(tn.dists))
+	fmt.Printf("	dists: [%d][]ESSNodeID{\n", len(tn.dists))
 	for ld, ns := range tn.dists {
 		if len(ns) == 0 {
 			continue
 		}
-		fmt.Printf("		%d: []NodeID{\n", ld)
+		fmt.Printf("		%d: []ESSNodeID{\n", ld)
 		for _, n := range ns {
 			fmt.Printf("			MustHexID(\"%x\"),\n", n[:])
 		}
@@ -610,7 +610,7 @@ func (tn *preminedTestnet) mine(target NodeID) {
 }
 
 func hasDuplicates(slice []*Node) bool {
-	seen := make(map[NodeID]bool)
+	seen := make(map[ESSNodeID]bool)
 	for i, e := range slice {
 		if e == nil {
 			panic(fmt.Sprintf("nil *Node at %d", i))
@@ -634,7 +634,7 @@ func sortedByDistanceTo(distbase common.Hash, slice []*Node) bool {
 	return true
 }
 
-func contains(ns []*Node, id NodeID) bool {
+func contains(ns []*Node, id ESSNodeID) bool {
 	for _, n := range ns {
 		if n.ID == id {
 			return true

@@ -45,8 +45,8 @@ type Simulation struct {
 
 	serviceNames []string
 	cleanupFuncs []func()
-	buckets      map[discover.NodeID]*sync.Map
-	pivotNodeID  *discover.NodeID
+	buckets      map[discover.ESSNodeID]*sync.Map
+	pivotESSNodeID  *discover.ESSNodeID
 	shutdownWG   sync.WaitGroup
 	done         chan struct{}
 	mu           sync.RWMutex
@@ -58,7 +58,7 @@ type Simulation struct {
 
 // ServiceFunc is used in New to declare new service constructor.
 // The first argument provides ServiceContext from the adapters package
-// giving for example the access to NodeID. Second argument is the sync.Map
+// giving for example the access to ESSNodeID. Second argument is the sync.Map
 // where all "global" state related to the service should be kept.
 // All cleanups needed for constructed service and any other constructed
 // objects should ne provided in a single returned cleanup function.
@@ -68,7 +68,7 @@ type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Se
 // simulations.Network initialized with provided services.
 func New(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
-		buckets: make(map[discover.NodeID]*sync.Map),
+		buckets: make(map[discover.ESSNodeID]*sync.Map),
 		done:    make(chan struct{}),
 	}
 

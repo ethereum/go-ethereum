@@ -46,10 +46,10 @@ import (
 )
 
 var (
-	deliveries   map[discover.NodeID]*Delivery
-	stores       map[discover.NodeID]storage.ChunkStore
-	toAddr       func(discover.NodeID) *network.BzzAddr
-	peerCount    func(discover.NodeID) int
+	deliveries   map[discover.ESSNodeID]*Delivery
+	stores       map[discover.ESSNodeID]storage.ChunkStore
+	toAddr       func(discover.ESSNodeID) *network.BzzAddr
+	peerCount    func(discover.ESSNodeID) int
 	adapter      = flag.String("adapter", "sim", "type of simulation: sim|exec|docker")
 	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
@@ -61,8 +61,8 @@ var (
 	defaultSkipCheck  bool
 	waitPeerErrC      chan error
 	chunkSize         = 4096
-	registries        map[discover.NodeID]*TestRegistry
-	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	registries        map[discover.ESSNodeID]*TestRegistry
+	createStoreFunc   func(id discover.ESSNodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 	getRetrieveFunc   = defaultRetrieveFunc
 	subscriptionCount = 0
 	globalStore       mock.GlobalStorer
@@ -126,7 +126,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	return testRegistry, nil
 }
 
-func defaultRetrieveFunc(id discover.NodeID) func(ctx context.Context, chunk *storage.Chunk) error {
+func defaultRetrieveFunc(id discover.ESSNodeID) func(ctx context.Context, chunk *storage.Chunk) error {
 	return nil
 }
 
@@ -181,7 +181,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		streamer.Close()
 		removeDataDir()
 	}
-	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
+	protocolTester := p2ptest.NewProtocolTester(t, network.NewESSNodeIDFromAddr(addr), 1, streamer.runProtocol)
 
 	err = waitForPeers(streamer, 1*time.Second, 1)
 	if err != nil {
@@ -292,7 +292,7 @@ func (r *TestExternalRegistry) APIs() []rpc.API {
 	return a
 }
 
-func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.NodeID, s Stream) (*rpc.Subscription, error) {
+func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.ESSNodeID, s Stream) (*rpc.Subscription, error) {
 	peer := r.getPeer(peerId)
 
 	client, err := peer.getClient(ctx, s)
@@ -336,7 +336,7 @@ func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.No
 	return sub, nil
 }
 
-func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Stream) error {
+func (r *TestExternalRegistry) EnableNotifications(peerId discover.ESSNodeID, s Stream) error {
 	peer := r.getPeer(peerId)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
