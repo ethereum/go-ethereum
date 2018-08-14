@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 /*
@@ -57,9 +55,9 @@ Two implementations are provided:
 */
 
 const (
-	// SegmentCount is the maximum number of segments of the underlying chunk
+	// segmentCount is the maximum number of segments of the underlying chunk
 	// Should be equal to max-chunk-data-size / hash-size
-	SegmentCount = 128
+	segmentCount = 128
 	// PoolSize is the maximum number of bmt trees used by the hashers, i.e,
 	// the maximum number of concurrent BMT hashing operations performed by the same hasher
 	PoolSize = 8
@@ -320,7 +318,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 // with every full segment calls writeSection in a go routine
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
-	if l == 0 || l > chunk.DefaultSize {
+	if l == 0 || l > h.pool.Size {
 		return 0, nil
 	}
 	t := h.getTree()

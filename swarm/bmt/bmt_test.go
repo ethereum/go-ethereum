@@ -224,14 +224,14 @@ func TestHasherReuse(t *testing.T) {
 // tests if bmt reuse is not corrupting result
 func testHasherReuse(poolsize int, t *testing.T) {
 	hasher := sha3.NewKeccak256
-	pool := NewTreePool(hasher, SegmentCount, poolsize)
+	pool := NewTreePool(hasher, segmentCount, poolsize)
 	defer pool.Drain(0)
 	bmt := New(pool)
 
 	for i := 0; i < 100; i++ {
 		data := newData(BufferSize)
 		n := rand.Intn(bmt.Size())
-		err := testHasherCorrectness(bmt, hasher, data, n, SegmentCount)
+		err := testHasherCorrectness(bmt, hasher, data, n, segmentCount)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,7 +241,7 @@ func testHasherReuse(poolsize int, t *testing.T) {
 // Tests if pool can be cleanly reused even in concurrent use by several hasher
 func TestBMTConcurrentUse(t *testing.T) {
 	hasher := sha3.NewKeccak256
-	pool := NewTreePool(hasher, SegmentCount, PoolSize)
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	defer pool.Drain(0)
 	cycles := 100
 	errc := make(chan error)
@@ -451,7 +451,7 @@ func benchmarkBMTBaseline(t *testing.B, n int) {
 func benchmarkBMT(t *testing.B, n int) {
 	data := newData(n)
 	hasher := sha3.NewKeccak256
-	pool := NewTreePool(hasher, SegmentCount, PoolSize)
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool)
 
 	t.ReportAllocs()
@@ -465,7 +465,7 @@ func benchmarkBMT(t *testing.B, n int) {
 func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 	data := newData(n)
 	hasher := sha3.NewKeccak256
-	pool := NewTreePool(hasher, SegmentCount, PoolSize)
+	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool).NewAsyncWriter(double)
 	idxs, segments := splitAndShuffle(bmt.SectionSize(), data)
 	shuffle(len(idxs), func(i int, j int) {
@@ -483,7 +483,7 @@ func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 func benchmarkPool(t *testing.B, poolsize, n int) {
 	data := newData(n)
 	hasher := sha3.NewKeccak256
-	pool := NewTreePool(hasher, SegmentCount, poolsize)
+	pool := NewTreePool(hasher, segmentCount, poolsize)
 	cycles := 100
 
 	t.ReportAllocs()

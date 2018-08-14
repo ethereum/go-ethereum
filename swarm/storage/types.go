@@ -115,7 +115,9 @@ func MakeHashFunc(hash string) SwarmHasher {
 	case "BMT":
 		return func() SwarmHash {
 			hasher := sha3.NewKeccak256
-			pool := bmt.NewTreePool(hasher, bmt.SegmentCount, bmt.PoolSize)
+			hasherSize := hasher().Size()
+			segmentCount := int(chunk.DefaultSize) / hasherSize
+			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
 	}

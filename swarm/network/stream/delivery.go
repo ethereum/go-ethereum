@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	cp "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -244,7 +245,7 @@ R:
 			continue R
 		default:
 		}
-		if len(req.SData) > chunk.DefaultSize {
+		if len(req.SData) > int(cp.DefaultSize) {
 			log.Warn("received chunk is bigger than expected", "len", len(req.SData))
 			continue R
 		}
