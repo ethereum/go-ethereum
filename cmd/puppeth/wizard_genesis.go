@@ -70,7 +70,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Ethash = new(params.EthashConfig)
 		genesis.ExtraData = make([]byte, 32)
 
-	case  choice == "2":
+	case choice == "2":
 		// In the case of clique, configure the consensus parameters
 		genesis.Difficulty = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
@@ -160,8 +160,9 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("How many blocks per epoch? (default = 900)")
-		epochNumber := w.readDefaultInt(900)
-		genesis.Config.Posv.RewardCheckpoint = uint64(epochNumber)
+		epochNumber := uint64(w.readDefaultInt(900))
+		genesis.Config.Posv.Epoch = genesis.Config.Posv.RewardCheckpoint
+		genesis.Config.Posv.RewardCheckpoint = epochNumber
 
 		fmt.Println()
 		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 450)")
