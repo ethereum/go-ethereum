@@ -114,7 +114,7 @@ func TestRewardBalance(t *testing.T) {
 	opts := bind.NewKeyedTransactor(acc4Key)
 	opts.Value = new(big.Int).SetUint64(50000)
 	acc4Validator, _ := NewValidator(opts, validatorAddr, contractBackend)
-	acc4Validator.Propose(acc3Addr, "http://")
+	acc4Validator.Propose(acc3Addr)
 	contractBackend.Commit()
 
 	totalVote := 0
