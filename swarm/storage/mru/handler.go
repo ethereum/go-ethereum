@@ -25,11 +25,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
-const chunkSize = 4096 // temporary until we implement FileStore in the resourcehandler
 
 type Handler struct {
 	chunkStore      *storage.NetStore
@@ -65,8 +64,7 @@ func init() {
 }
 
 // NewHandler creates a new Mutable Resource API
-func NewHandler(params *HandlerParams) (*Handler, error) {
-
+func NewHandler(params *HandlerParams) *Handler {
 	rh := &Handler{
 		resources:       make(map[uint64]*resource),
 		storeTimeout:    defaultStoreTimeout,
@@ -81,7 +79,7 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 		hashPool.Put(hashfunc)
 	}
 
-	return rh, nil
+	return rh
 }
 
 // SetStore sets the store backend for the Mutable Resource API
@@ -94,7 +92,7 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
-	if dataLength < minimumChunkLength {
+	if dataLength < minimumChunkLength || dataLength > chunk.DefaultSize+8 {
 		return false
 	}
 
@@ -168,11 +166,6 @@ func (h *Handler) GetVersion(rootAddr storage.Address) (uint32, error) {
 		return 0, NewError(ErrNotSynced, " is not synced")
 	}
 	return rsrc.version, nil
-}
-
-// \TODO should be hashsize * branches from the chosen chunker, implement with FileStore
-func (h *Handler) chunkSize() int64 {
-	return chunkSize
 }
 
 // New creates a new metadata chunk out of the request passed in.

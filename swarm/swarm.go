@@ -195,19 +195,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{}
 
-	resourceHandler, err = mru.NewHandler(rhparams)
-	if err != nil {
-		return nil, err
-	}
+	resourceHandler = mru.NewHandler(rhparams)
 	resourceHandler.SetStore(netStore)
 
-	validators := []storage.ChunkValidator{
+	self.lstore.Validators = []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
+		resourceHandler,
 	}
-	if resourceHandler != nil {
-		validators = append(validators, resourceHandler)
-	}
-	self.lstore.Validators = validators
 
 	// setup local store
 	log.Debug(fmt.Sprintf("Set up local storage"))

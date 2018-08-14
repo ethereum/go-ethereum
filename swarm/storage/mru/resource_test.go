@@ -777,10 +777,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	// set up resource handler and add is as a validator to the localstore
 	rhParams := &HandlerParams{}
-	rh, err := NewHandler(rhParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rh := NewHandler(rhParams)
 	store.Validators = append(store.Validators, rh)
 
 	// create content addressed chunks, one good, one faulty

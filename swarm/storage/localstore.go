@@ -99,6 +99,8 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk *Chunk) {
 	valid := true
+	// ls.Validators contains a list of one validator per chunk type.
+	// if one validator succeeds, then the chunk is valid
 	for _, v := range ls.Validators {
 		if valid = v.Validate(chunk.Addr, chunk.SData); valid {
 			break
