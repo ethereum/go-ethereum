@@ -32,7 +32,7 @@ class DetailTransactionTable extends Component {
                 </tr>
                 <tr>
                     <th scope="col">To:</th>
-                    <td>{ `${data.IsContract}` ? `${data.To} (Contract)` : `${data.To}` }</td>
+                    <td>{ `${data.IsContract}` ? `${data.ToGet} (Contract)` : `${data.ToGet}` }</td>
                 </tr>
                 <tr>
                     <th scope="col">Value:</th>

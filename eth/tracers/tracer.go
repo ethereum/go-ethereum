@@ -25,14 +25,16 @@ import (
 	"time"
 	"unsafe"
 
+	"strconv"
+
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
 	"github.com/ShyftNetwork/go-empyrean/core"
+	stypes "github.com/ShyftNetwork/go-empyrean/core/sTypes"
 	"github.com/ShyftNetwork/go-empyrean/core/vm"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
 	"github.com/ShyftNetwork/go-empyrean/log"
 	"gopkg.in/olebedev/go-duktape.v3"
-	"strconv"
 )
 
 // bigIntegerJS is the minified version of https://github.com/peterolson/BigInteger.js.
@@ -603,14 +605,21 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 	value, _ := hexutil.DecodeUint64(i.Value)
 	amount := strconv.FormatUint(value, 10)
 
-	var returnValue string
-	sqlStatement := `INSERT INTO internaltxs(type, txhash, from_addr, to_addr, amount, gas, gasUsed, time, input, output) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING txHash`
-	qerr := sqldb.QueryRow(sqlStatement, i.Type, hash.Hex(), i.From, i.To, amount, gas, gasUsed, i.Time, i.Input, i.Output).Scan(&returnValue)
-
-	if qerr != nil {
-		fmt.Println(qerr)
-		panic(qerr)
+	iTx := stypes.InteralWrite{
+		Hash:    hash.Hex(),
+		Type:    i.Type,
+		From:    i.From,
+		To:      i.To,
+		Value:   amount,
+		Gas:     gas,
+		GasUsed: gasUsed,
+		Input:   i.Input,
+		Output:  i.Output,
+		Time:    i.Time,
 	}
+	//@TODO WRITE OVER TRANSACTION STRUCT
+	core.SWriteInternalTxBalances(sqldb, i.To, i.From, amount)
+	core.InsertInternalTx(sqldb, iTx)
 }
 
 //@NOTE:SHYFT
