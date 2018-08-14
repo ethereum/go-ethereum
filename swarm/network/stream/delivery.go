@@ -230,6 +230,11 @@ R:
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
+		if len(req.SData) > cp.DefaultSize+8 {
+			log.Warn("received chunk is bigger than expected", "len", len(req.SData))
+			continue R
+		}
+
 		// this should be has locally
 		chunk, err := d.db.Get(context.TODO(), req.Addr)
 		if err == nil {
@@ -244,10 +249,6 @@ R:
 			log.Error("someone else delivered?", "hash", chunk.Addr.Hex())
 			continue R
 		default:
-		}
-		if len(req.SData) > cp.DefaultSize {
-			log.Warn("received chunk is bigger than expected", "len", len(req.SData))
-			continue R
 		}
 
 		chunk.SData = req.SData

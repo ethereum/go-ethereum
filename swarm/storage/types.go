@@ -355,3 +355,12 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 
 	return bytes.Equal(hash, addr[:])
 }
+
+// SizeValidator provides method for validation of max chunk data size
+type SizeValidator struct {
+}
+
+// Validate that the chunk has valid size
+func (v *SizeValidator) Validate(_ Address, data []byte) bool {
+	return len(data) <= 8+chunk.DefaultSize
+}
