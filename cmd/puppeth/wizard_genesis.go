@@ -161,7 +161,7 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many blocks per epoch? (default = 900)")
 		epochNumber := uint64(w.readDefaultInt(900))
-		genesis.Config.Posv.Epoch = genesis.Config.Posv.RewardCheckpoint
+		genesis.Config.Posv.Epoch = epochNumber
 		genesis.Config.Posv.RewardCheckpoint = epochNumber
 
 		fmt.Println()
