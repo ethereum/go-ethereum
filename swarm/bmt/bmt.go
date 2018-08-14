@@ -55,9 +55,6 @@ Two implementations are provided:
 */
 
 const (
-	// segmentCount is the maximum number of segments of the underlying chunk
-	// Should be equal to max-chunk-data-size / hash-size
-	segmentCount = 128
 	// PoolSize is the maximum number of bmt trees used by the hashers, i.e,
 	// the maximum number of concurrent BMT hashing operations performed by the same hasher
 	PoolSize = 8
