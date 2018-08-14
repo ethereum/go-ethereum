@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	cp "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
@@ -98,8 +99,8 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk *Chunk) {
-	if l := len(chunk.SData); l < 9 {
-		log.Debug("incomplete chunk data", "addr", chunk.Addr, "length", l)
+	if l := len(chunk.SData); l < 9 || l > cp.DefaultSize+8 {
+		log.Debug("invalid chunk data", "addr", chunk.Addr, "len", l)
 		chunk.SetErrored(ErrChunkInvalid)
 		chunk.markAsStored()
 		return

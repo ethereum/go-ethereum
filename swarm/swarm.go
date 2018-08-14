@@ -203,7 +203,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	validators := []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
-		&storage.SizeValidator{},
 	}
 	if resourceHandler != nil {
 		validators = append(validators, resourceHandler)
