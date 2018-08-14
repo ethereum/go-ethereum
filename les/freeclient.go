@@ -64,7 +64,7 @@ const (
 )
 
 // newFreeClientPool creates a new free client pool
-func newFreeClientPool(db ethdb.Database, connectedLimit, totalLimit int, quit chan struct{}, wg *sync.WaitGroup, clock mclock.Clock) *freeClientPool {
+func newFreeClientPool(db ethdb.Database, connectedLimit, totalLimit int, clock mclock.Clock) *freeClientPool {
 	pool := &freeClientPool{
 		db:             db,
 		clock:          clock,
@@ -75,17 +75,14 @@ func newFreeClientPool(db ethdb.Database, connectedLimit, totalLimit int, quit c
 		totalLimit:     totalLimit,
 	}
 	pool.loadFromDb()
-	wg.Add(1)
-	go func() {
-		<-quit
-		pool.lock.Lock()
-		pool.closed = true
-		pool.saveToDb()
-		pool.lock.Unlock()
-		wg.Done()
-	}()
-
 	return pool
+}
+
+func (f *freeClientPool) stop() {
+	f.lock.Lock()
+	f.closed = true
+	f.saveToDb()
+	f.lock.Unlock()
 }
 
 // connect should be called after a successful handshake. If the connection was

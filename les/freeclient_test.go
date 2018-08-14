@@ -21,7 +21,6 @@ package les
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -45,11 +44,9 @@ const testFreeClientPoolTicks = 500000
 
 func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	var (
-		quit      = make(chan struct{})
 		clock     mclock.Simulated
-		wg        sync.WaitGroup
 		db        = ethdb.NewMemDatabase()
-		pool      = newFreeClientPool(db, connLimit, 10000, quit, &wg, &clock)
+		pool      = newFreeClientPool(db, connLimit, 10000, &clock)
 		connected = make([]bool, clientCount)
 		connTicks = make([]int, clientCount)
 		disconnCh = make(chan int, clientCount)
@@ -127,11 +124,8 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	}
 
 	// close and restart pool
-	close(quit)
-	wg.Wait()
-	quit2 := make(chan struct{})
-	var wg2 sync.WaitGroup
-	pool = newFreeClientPool(db, connLimit, 10000, quit2, &wg2, &clock)
+	pool.stop()
+	pool = newFreeClientPool(db, connLimit, 10000, &clock)
 
 	// try connecting all known peers (connLimit should be filled up)
 	for i := 0; i < clientCount; i++ {
@@ -141,5 +135,5 @@ func testFreeClientPool(t *testing.T, connLimit, clientCount int) {
 	if !pool.connect("newPeer2", func() {}) {
 		t.Errorf("Previously unknown peer rejected after restarting pool")
 	}
-	close(quit2)
+	pool.stop()
 }
