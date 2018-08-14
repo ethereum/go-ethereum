@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS contracts (
 CREATE TABLE IF NOT EXISTS internalTxs (
   id SERIAL PRIMARY KEY,
   txHash text references txs(txHash),
-  type text,
+  action text,
   to_addr text,
   from_addr text,
   amount text,

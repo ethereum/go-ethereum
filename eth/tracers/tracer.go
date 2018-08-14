@@ -607,7 +607,7 @@ func (i *Internals) SWriteInteralTxs(hash common.Hash) {
 
 	iTx := stypes.InteralWrite{
 		Hash:    hash.Hex(),
-		Type:    i.Type,
+		Action:  i.Type,
 		From:    i.From,
 		To:      i.To,
 		Value:   amount,

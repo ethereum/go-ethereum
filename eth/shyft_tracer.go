@@ -2,7 +2,6 @@ package eth
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/params"

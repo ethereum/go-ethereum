@@ -195,25 +195,37 @@ func GetRecentBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 //GetInternalTransactions gets internal txs
-func GetInternalTransactions(w http.ResponseWriter, r *http.Request) {
+func GetInternalTransactionsByHash(w http.ResponseWriter, r *http.Request) {
+	sqldb, err := core.DBConnection()
+
 	vars := mux.Vars(r)
-	address := vars["address"]
+	txHash := vars["txHash"]
+
+	internalTxs := core.SGetInternalTransaction(sqldb, txHash)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "Get InternalTransactions", address)
+	fmt.Fprintln(w, internalTxs)
 }
 
 //GetInternalTransactionsHash gets internal txs hash
-func GetInternalTransactionsHash(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	transactionHash := vars["transaction_hash"]
+func GetInternalTransactions(w http.ResponseWriter, r *http.Request) {
+	sqldb, err := core.DBConnection()
 
+	internalTxs := core.SGetAllInternalTransactions(sqldb)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "Get Internal Transaction Hash", transactionHash)
+	fmt.Fprintln(w, internalTxs)
 }
 
 func BroadcastTx(w http.ResponseWriter, r *http.Request) {
