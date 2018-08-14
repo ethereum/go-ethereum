@@ -21,7 +21,6 @@ package mru
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 	"time"
 	"unsafe"
@@ -94,7 +93,6 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // If it looks like a resource update, the chunk address is checked against the ownerAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
-
 	dataLength := len(data)
 	if dataLength < minimumChunkLength {
 		return false
@@ -106,7 +104,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
-			log.Debug(fmt.Sprintf("Invalid root metadata chunk with address: %s", chunkAddr.Hex()))
+			log.Debug("Invalid root metadata chunk with address", "addr", chunkAddr.Hex())
 		}
 		return valid
 	}
@@ -118,7 +116,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// First, deserialize the chunk
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Debug("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error())
+		log.Debug("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
 		return false
 	}
 
@@ -126,7 +124,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(chunkAddr, r.updateHeader.UpdateAddr()) {
-		log.Debug("period,version,rootAddr contained in update chunk do not match updateAddr %s", chunkAddr.Hex())
+		log.Debug("period,version,rootAddr contained in update chunk do not match updateAddr", "addr", chunkAddr.Hex())
 		return false
 	}
 
@@ -134,7 +132,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// If it fails, it means either the signature is not valid, data is corrupted
 	// or someone is trying to update someone else's resource.
 	if err := r.Verify(); err != nil {
-		log.Debug("Invalid signature: %v", err)
+		log.Debug("Invalid signature", "err", err)
 		return false
 	}
 
