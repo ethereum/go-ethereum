@@ -1336,6 +1336,9 @@ func NewExternalSigner(endpoint string) (*ExternalSignerAPI, error) {
 }
 
 func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxArgs) (*types.Transaction, error) {
+	if api == nil{
+		return nil, errors.New("External API not initialized")
+	}
 	res := SignTransactionResult{}
 	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
 		return nil, err
@@ -1343,6 +1346,9 @@ func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxAr
 	return res.Tx, nil
 }
 func (api *ExternalSignerAPI) listAccounts() ([]common.Address, error) {
+	if api == nil{
+		return []common.Address{}, errors.New("External API not initialized")
+	}
 	var res []common.Address
 	if err := api.client.Call(&res, "account_listAccounts"); err != nil {
 		return nil, err
@@ -1350,6 +1356,9 @@ func (api *ExternalSignerAPI) listAccounts() ([]common.Address, error) {
 	return res, nil
 }
 func (api *ExternalSignerAPI) newAccount() (common.Address, error) {
+	if api == nil{
+		return common.Address{}, errors.New("External API not initialized")
+	}
 	var res accounts.Account
 
 	if err := api.client.Call(&res, "account_new"); err != nil {

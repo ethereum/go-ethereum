@@ -69,7 +69,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
-			utils.KeyStoreDirFlag,
 			utils.NoUSBFlag,
 			utils.NetworkIdFlag,
 			utils.TestnetFlag,
@@ -133,13 +132,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
 			utils.TrieCacheGenFlag,
-		},
-	},
-	{
-		Name: "ACCOUNT",
-		Flags: []cli.Flag{
-			utils.UnlockedAccountFlag,
-			utils.PasswordFileFlag,
 		},
 	},
 	{
