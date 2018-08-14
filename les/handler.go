@@ -321,7 +321,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.lock.Lock()
 		head := p.headInfo
 		p.lock.Unlock()
-		pm.fetcher.announce(p, head)
+		if pm.fetcher != nil {
+			pm.fetcher.announce(p, head)
+		}
 
 		if p.poolEntry != nil {
 			pm.serverPool.registered(p.poolEntry)
