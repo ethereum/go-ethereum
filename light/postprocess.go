@@ -294,11 +294,7 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 	resCh := make(chan res, types.BloomBitLength)
 	for i := 0; i < 20; i++ {
 		go func() {
-			for {
-				bitIndex, ok := <-indexCh
-				if !ok {
-					return
-				}
+			for bitIndex := range indexCh {
 				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIdxList: []uint64{section - 1}}
 				for {
 					if err := b.odr.Retrieve(ctx, r); err == ErrNoPeers {
