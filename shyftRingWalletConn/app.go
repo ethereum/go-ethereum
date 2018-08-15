@@ -4,16 +4,19 @@ package main
 //to run server 'go run shyftRingWalletConn/*.go'
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"github.com/ShyftNetwork/go-empyrean/common"
 	"github.com/ShyftNetwork/go-empyrean/common/hexutil"
+	"github.com/ShyftNetwork/go-empyrean/core/types"
 	"github.com/ShyftNetwork/go-empyrean/crypto"
+	"github.com/ShyftNetwork/go-empyrean/ethclient"
+	"github.com/ShyftNetwork/go-empyrean/rlp"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"github.com/ShyftNetwork/go-empyrean/ethclient"
-	"github.com/ShyftNetwork/go-empyrean/common"
-	"context"
+	"sync"
 )
 
 const (
@@ -27,6 +30,8 @@ var testAddrHex = "14791697260E4c9A71f18484C9f997B308e59325"
 var testPrivHex = "0123456789012345678901234567890123456789012345678901234567890123"
 
 var client = &http.Client{}
+
+var mutex = &sync.Mutex{}
 
 // This gives context to the signed message and prevents signing of transactions.
 func signHash(data []byte) []byte {
@@ -59,15 +64,17 @@ func handleRequest(conn net.Conn) {
 
 	messages := make(chan []byte)
 	checkBalanceChan := make(chan []byte)
+	sendTransactionChan := make(chan []byte)
 
 	go readerConn(conn, messages)
-	go handleMessages(messages, checkBalanceChan)
+	go handleMessages(messages, checkBalanceChan, sendTransactionChan)
 	go checkBalance(checkBalanceChan, conn)
+	go sendTransaction(sendTransactionChan)
 
 	sendRingSignedMsg(conn)
 }
 
-func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
+func handleMessages(channel chan []byte, checkBalancesChan chan []byte, sendTransactionChan chan []byte) {
 	var prevMsg []byte
 	var addressOfClient []byte
 	var signatureFromClient []byte
@@ -81,7 +88,13 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 			s := string(prevMsg[:])
 			if s == "-- ADDRESS --" {
 				addressOfClient = msg
-				checkBalancesChan <- addressOfClient
+				//checkBalancesChan <- addressOfClient
+			}
+			if s == "-- GET_BALANCE --" {
+				checkBalancesChan <- msg
+			}
+			if s == "-- SEND_TRANSACTION --" {
+				sendTransactionChan <- msg
 			}
 			if s == "-- SIGNATURE --" {
 				signatureFromClient = msg
@@ -114,7 +127,9 @@ func handleMessages(channel chan []byte, checkBalancesChan chan []byte) {
 
 			pubKey := crypto.ToECDSAPub(rpk)
 			recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-			fmt.Println("ADDRESS IS ::", recoveredAddr.Hex())
+			fmt.Println("Client connected with address :", recoveredAddr.Hex())
+			signatureFromClient = nil
+			msgFromClient = nil
 		}
 	}
 }
@@ -143,25 +158,50 @@ func readerConn(conn net.Conn, channel chan []byte) {
 }
 
 func checkBalance(checkBalanceChan chan []byte, conn net.Conn) {
-	address := <-checkBalanceChan
 	c, err := ethclient.Dial("http://127.0.0.1:8545")
 	if err != nil {
-		fmt.Println("Eth Client not initialized: " , err)
+		fmt.Println("Eth Client not initialized: ", err)
 	}
 
-	balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])),nil)
-	if error != nil {
-		fmt.Println("Balance at error ", error)
+	for {
+		address := <-checkBalanceChan
+		fmt.Println("the address is ", string(address[:]))
+
+		balance, error := c.BalanceAt(context.Background(), common.HexToAddress(string(address[:])), nil)
+		if error != nil {
+			fmt.Println("Balance at error ", error)
+		}
+		mutex.Lock()
+		fmt.Println("The balance for address ", string(address[:]), " is ", balance)
+		conn.Write([]byte("Broadcasting Balance"))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(balance.String()))
+		conn.Write([]byte("\n"))
+		mutex.Unlock()
 	}
-	fmt.Println("the bal is ", balance)
-	fmt.Println("The balance for address ", address, " is ", balance)
-	conn.Write([]byte("Broadcasting Balance"))
-	conn.Write([]byte("\n"))
-	conn.Write([]byte(balance.String()))
-	conn.Write([]byte("\n"))
 }
 
-func sendRingSignedMsg(conn net.Conn){
+func sendTransaction(sendTransactionChan chan []byte) {
+	c, err := ethclient.Dial("http://127.0.0.1:8545")
+	if err != nil {
+		fmt.Println("Eth Client not initialized: ", err)
+	}
+
+	for {
+		signedTransactionBytes := <-sendTransactionChan
+		signedTransaction := string(signedTransactionBytes[:])
+		bytes, err := hexutil.Decode(signedTransaction)
+		if err != nil {
+			fmt.Println("error decoding signed transaction into bytes ", bytes)
+		}
+		var tx types.Transaction
+		rlp.DecodeBytes(bytes, &tx)
+		fmt.Println(tx.String())
+		c.SendTransaction(context.Background(), &tx)
+	}
+}
+
+func sendRingSignedMsg(conn net.Conn) {
 	key, _ := crypto.HexToECDSA(testPrivHex)
 
 	f_msg := "Hello World"
@@ -174,10 +214,12 @@ func sendRingSignedMsg(conn net.Conn){
 		fmt.Println("The crypto.Sign err is ", err)
 	}
 
+	mutex.Lock()
 	conn.Write([]byte("Broadcasting Message"))
 	conn.Write([]byte("\n"))
 	conn.Write([]byte(f_msg))
 	conn.Write([]byte("\n"))
 	conn.Write(new_sig)
 	conn.Write([]byte("\n"))
+	mutex.Unlock()
 }
