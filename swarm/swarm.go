@@ -209,12 +209,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
-	/*
-		self.swap, err = swap.NewSwap(config.Swap.Params)
-		if err != nil {
-			return nil, err
-		}
-	*/
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {

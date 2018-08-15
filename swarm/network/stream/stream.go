@@ -104,11 +104,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	RegisterSwarmSyncerServer(streamer, syncChunkStore)
 	RegisterSwarmSyncerClient(streamer, syncChunkStore)
 
-	var err error
-	streamer.swap, err = swap.NewSwap(swap.NewDefaultSwapParams().Params)
-	if err != nil {
-		log.Error(err.Error())
-	}
+	streamer.swap = swap
 
 	if options.DoSync {
 		// latestIntC function ensures that

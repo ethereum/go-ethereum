@@ -40,9 +40,11 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
-	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
-	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
+	loglevel       = flag.Int("loglevel", 2, "verbosity of logs")
+	longrunning    = flag.Bool("longrunning", false, "do run long-running tests")
+	waitKademlia   = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
+	bucketKeySwap  = simulation.BucketKey("swap")
+	bucketKeySwarm = simulation.BucketKey("swarm")
 )
 
 func init() {
@@ -371,6 +373,113 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		}
 		log.Debug("done: test sync step", "n", i+1, "nodes", step.nodeCount)
 	}
+}
+
+func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
+	nodeCount := 16
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			config := api.NewConfig()
+
+			dir, err := ioutil.TempDir("", "swap-network-test-node")
+			if err != nil {
+				return nil, nil, err
+			}
+			cleanup = func() {
+				err := os.RemoveAll(dir)
+				if err != nil {
+					log.Error("cleaning up swarm temp dir", "err", err)
+				}
+			}
+
+			config.Path = dir
+
+			privkey, err := crypto.GenerateKey()
+			if err != nil {
+				return nil, cleanup, err
+			}
+
+			config.Init(privkey)
+
+			swarm, err := NewSwarm(config, nil)
+			if err != nil {
+				return nil, cleanup, err
+			}
+			bucket.Store(bucketKeySwarm, swarm)
+			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
+			return swarm, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	ctx := context.Background()
+	files := make([]file, 0)
+
+	var checkStatusM sync.Map
+	var nodeStatusM sync.Map
+	var totalFoundCount uint64
+
+	_, err := sim.AddNodesAndConnectChain(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		nodeIDs := sim.UpNodeIDs()
+		shuffle(len(nodeIDs), func(i, j int) {
+			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
+		})
+		for _, id := range nodeIDs {
+			key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
+			if err != nil {
+				return err
+			}
+			log.Trace("file uploaded", "node", id, "key", key.String())
+			files = append(files, file{
+				addr:   key,
+				data:   data,
+				nodeID: id,
+			})
+		}
+
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
+		}
+
+		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
+		// or until the timeout is reached.
+		for {
+			if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+				return nil
+			}
+		}
+	})
+
+	for _, node := range sim.NodeIDs() {
+		item, ok := sim.NodeItem(node, bucketKeySwarm)
+		if !ok {
+			log.Error("No swarm")
+			return
+		}
+		swarm := item.(*Swarm)
+
+		for _, n := range sim.NodeIDs() {
+			if node == n {
+				continue
+			}
+			if swarm.swap.GetPeerBalance(n) != nil {
+				log.Error(fmt.Sprintf("Balance of node %s to node %s: %s", node.TerminalString(), n.TerminalString(), swarm.swap.GetPeerBalance(n).String()))
+			} else {
+				log.Error(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+			}
+		}
+	}
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+	log.Debug("test terminated")
 }
 
 // uploadFile, uploads a short file to the swarm instance

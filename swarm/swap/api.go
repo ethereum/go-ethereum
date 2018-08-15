@@ -18,9 +18,11 @@ package swap
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // Wrapper for receiving pss messages when using the pss API
@@ -32,6 +34,7 @@ type APIMsg struct {
 // Additional public methods accessible through API for pss
 type API struct {
 	*SwapProtocol
+	*Swap
 }
 
 type SwapMetrics struct {
@@ -44,8 +47,8 @@ func NewAPI(swap *SwapProtocol) *API {
 	return &API{SwapProtocol: swap}
 }
 
-func (swapapi *API) Balance(ctx context.Context) (balance int, err error) {
-	balance = 0
+func (swapapi *API) Balance(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
+	balance = big.NewInt(0)
 	err = nil
 	return
 }
