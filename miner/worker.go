@@ -213,9 +213,9 @@ type worker struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 
 	// Test hooks
-	newTaskHook      func(*task)      // Method to call upon receiving a new sealing task
-	skipSealHook     func(*task) bool // Method to decide whether skipping the sealing.
-	fullTaskInterval func()           // Method to call before pushing the full sealing task
+	newTaskHook  func(*task)      // Method to call upon receiving a new sealing task
+	skipSealHook func(*task) bool // Method to decide whether skipping the sealing.
+	fullTaskHook func()           // Method to call before pushing the full sealing task
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *worker {
@@ -338,6 +338,7 @@ func (w *worker) mainLoop() {
 			// If our mining block contains less than 2 uncle blocks,
 			// add the new uncle block if valid and regenerate a mining block.
 			if w.isRunning() && w.current != nil && w.current.uncles.Cardinality() < 2 {
+				start := time.Now()
 				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
 					var uncles []*types.Header
 					w.current.uncles.Each(func(item interface{}) bool {
@@ -352,7 +353,7 @@ func (w *worker) mainLoop() {
 						uncles = append(uncles, uncle.Header())
 						return true
 					})
-					w.finalize(uncles, nil, true)
+					w.commit(uncles, nil, true, start)
 				}
 			}
 
@@ -667,7 +668,7 @@ func (w *worker) commitNewWork() {
 
 	// Create an empty block based on temporary copied state for sealing in advance without waiting block
 	// execution finished.
-	w.finalize(uncles, nil, false)
+	w.commit(uncles, nil, false, tstart)
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
@@ -683,26 +684,21 @@ func (w *worker) commitNewWork() {
 	txs := types.NewTransactionsByPriceAndNonce(w.current.signer, pending)
 	env.commitTransactions(w.mux, txs, w.chain, w.coinbase)
 
-	w.finalize(uncles, w.fullTaskInterval, true)
+	w.commit(uncles, w.fullTaskHook, true, tstart)
 }
 
-// finalize runs any post-transaction state modifications, assembles the final block
+// commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
-func (w *worker) finalize(uncles []*types.Header, interval func(), update bool) error {
-	current := w.current
+func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
-	receipts := make([]*types.Receipt, len(current.receipts))
-	for i, l := range current.receipts {
+	receipts := make([]*types.Receipt, len(w.current.receipts))
+	for i, l := range w.current.receipts {
 		receipts[i] = new(types.Receipt)
 		*receipts[i] = *l
 	}
-
-	var (
-		block *types.Block
-		err   error
-	)
-	state := current.state.Copy()
-	if block, err = w.engine.Finalize(w.chain, current.header, state, current.txs, uncles, current.receipts); err != nil {
+	s := w.current.state.Copy()
+	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
+	if err != nil {
 		return err
 	}
 	if w.isRunning() {
@@ -710,9 +706,10 @@ func (w *worker) finalize(uncles []*types.Header, interval func(), update bool) 
 			interval()
 		}
 		select {
-		case w.taskCh <- &task{receipts: receipts, state: state, block: block, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
-			log.Info("Commit new mining work", "number", block.Number(), "txs", current.tcount, "uncles", len(uncles))
+			log.Info("Commit new mining work", "number", block.Number(), "txs", w.current.tcount, "uncles", len(uncles),
+				"elapsed", common.PrettyDuration(time.Since(start)))
 		case <-w.exitCh:
 			log.Info("Worker has exited")
 		}

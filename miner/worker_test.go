@@ -193,7 +193,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 			taskCh <- struct{}{}
 		}
 	}
-	w.fullTaskInterval = func() {
+	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -241,7 +241,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	w.skipSealHook = func(task *task) bool {
 		return true
 	}
-	w.fullTaskInterval = func() {
+	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -262,7 +262,7 @@ func TestStreamUncleBlock(t *testing.T) {
 			t.Error("new task timeout")
 		}
 	}
-	b.PostChainEvents([]interface{}{core.ChainSideEvent{b.uncleBlock}})
+	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
 
 	select {
 	case <-taskCh:
