@@ -45,20 +45,34 @@ type sshClient struct {
 
 // dial establishes an SSH connection to a remote node using the current user and
 // the user's configured private RSA key. If that fails, password authentication
-// is fallen back to. The caller may override the login user via user@server:port.
+// is fallen back to. server can be a string like user:identity@server:port.
 func dial(server string, pubkey []byte) (*sshClient, error) {
-	// Figure out a label for the server and a logger
-	label := server
-	if strings.Contains(label, ":") {
-		label = label[:strings.Index(label, ":")]
-	}
+	// Figure out username, identity_file, hostname and port
 	login := ""
+	identity_file := "id_rsa" // default
+	hostport := server
+	hostname := ""
+
 	if strings.Contains(server, "@") {
-		login = label[:strings.Index(label, "@")]
-		label = label[strings.Index(label, "@")+1:]
-		server = server[strings.Index(server, "@")+1:]
+		prefix := server[:strings.Index(server, "@")]
+		if strings.Contains(prefix, ":") {
+			login = prefix[:strings.Index(prefix, ":")]
+			identity_file = prefix[strings.Index(prefix, ":")+1:]
+		} else {
+			login = prefix
+		}
+		hostport = server[strings.Index(server, "@")+1:]
 	}
-	logger := log.New("server", label)
+
+	// parse hostname and port
+	if strings.Contains(hostport, ":") {
+		hostname = hostport[:strings.Index(hostport, ":")]
+	} else {
+		hostname = hostport
+		hostport += ":22"
+	}
+
+	logger := log.New("server", server)
 	logger.Debug("Attempting to establish SSH connection")
 
 	user, err := user.Current()
@@ -68,10 +82,11 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	if login == "" {
 		login = user.Username
 	}
+	fmt.Printf("parsed %s:%s@%s\nhn=%s", login, identity_file, hostport, hostname)
 	// Configure the supported authentication methods (private key and password)
 	var auths []ssh.AuthMethod
 
-	path := filepath.Join(user.HomeDir, ".ssh", "id_rsa")
+	path := filepath.Join(user.HomeDir, ".ssh", identity_file)
 	if buf, err := ioutil.ReadFile(path); err != nil {
 		log.Warn("No SSH key, falling back to passwords", "path", path, "err", err)
 	} else {
@@ -101,7 +116,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 		return string(blob), err
 	}))
 	// Resolve the IP address of the remote server
-	addr, err := net.LookupHost(label)
+	addr, err := net.LookupHost(hostname)
 	if err != nil {
 		return nil, err
 	}
@@ -110,9 +125,6 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	}
 	// Try to dial in to the remote server
 	logger.Trace("Dialing remote SSH server", "user", login)
-	if !strings.Contains(server, ":") {
-		server += ":22"
-	}
 	keycheck := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		// If no public key is known for SSH, ask the user to confirm
 		if pubkey == nil {
@@ -139,13 +151,13 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 		// We have a mismatch, forbid connecting
 		return errors.New("ssh key mismatch, readd the machine to update")
 	}
-	client, err := ssh.Dial("tcp", server, &ssh.ClientConfig{User: login, Auth: auths, HostKeyCallback: keycheck})
+	client, err := ssh.Dial("tcp", hostport, &ssh.ClientConfig{User: login, Auth: auths, HostKeyCallback: keycheck})
 	if err != nil {
 		return nil, err
 	}
 	// Connection established, return our utility wrapper
 	c := &sshClient{
-		server:  label,
+		server:  hostport,
 		address: addr[0],
 		pubkey:  pubkey,
 		client:  client,
