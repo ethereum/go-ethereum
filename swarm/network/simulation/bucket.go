@@ -17,7 +17,7 @@
 package simulation
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
 )
 
 // BucketKey is the type that should be used for keys in simulation buckets.
