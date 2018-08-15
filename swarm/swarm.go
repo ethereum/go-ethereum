@@ -85,14 +85,12 @@ type Swarm struct {
 type SwarmAPI struct {
 	Api     *api.API
 	Backend chequebook.Backend
-	PrvKey  *ecdsa.PrivateKey
 }
 
 func (self *Swarm) API() *SwarmAPI {
 	return &SwarmAPI{
 		Api:     self.api,
 		Backend: self.backend,
-		PrvKey:  self.privateKey,
 	}
 }
 
@@ -217,7 +215,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
+	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler, self.privateKey)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 

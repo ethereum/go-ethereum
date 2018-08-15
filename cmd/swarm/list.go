@@ -44,7 +44,7 @@ func list(ctx *cli.Context) {
 
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := swarm.NewClient(bzzapi)
-	list, err := client.List(manifest, prefix)
+	list, err := client.List(manifest, prefix, "")
 	if err != nil {
 		utils.Fatalf("Failed to generate file and directory list: %s", err)
 	}

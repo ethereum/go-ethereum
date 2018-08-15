@@ -79,7 +79,7 @@ func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg s
 }
 
 func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()), "code", code)
 	RespondTemplate(w, r, "error", msg, code)
 }
 
