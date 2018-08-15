@@ -74,7 +74,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, db)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil, &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
 			bucket.Store(bucketKeyRegistry, r)

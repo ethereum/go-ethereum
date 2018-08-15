@@ -75,7 +75,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, swap *swap.Swap, options *RegistryOptions) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -103,11 +103,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)
 
-	var err error
-	streamer.swap, err = swap.NewSwap(swap.NewDefaultSwapParams().Params)
-	if err != nil {
-		log.Error(err.Error())
-	}
+	streamer.swap = swap
 
 	if options.DoSync {
 		// latestIntC function ensures that

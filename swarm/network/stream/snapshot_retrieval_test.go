@@ -133,7 +133,7 @@ func runFileRetrievalTest(nodeCount int) error {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, db)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil, &RegistryOptions{
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
 			})
@@ -276,7 +276,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, db)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil, &RegistryOptions{
 				DoSync:          true,
 				SyncUpdateDelay: 0,
 			})

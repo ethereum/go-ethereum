@@ -17,16 +17,28 @@
 package swap
 
 import (
+	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -88,6 +100,12 @@ func TestSwapProtocol(t *testing.T) {
 	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
 		return &API{
 			SwapProtocol: instance,
+		}, nil
+	}
+
+	streamersvc := func(ctx *node.ServiceContext) (node.Service, erro) {
+		return &stream.API{
+			streamer: NewRegistry,
 		}, nil
 	}
 

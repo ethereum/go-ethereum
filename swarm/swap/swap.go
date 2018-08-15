@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
@@ -64,9 +65,10 @@ const (
 //      Swift Automatic  Payments
 // a peer to peer micropayment system
 type Swap struct {
-	lock  sync.RWMutex
-	peers map[discover.NodeID]*swapPeer
-	local *Params // local peer's swap parameters
+	stateStore state.Store
+	lock       sync.RWMutex
+	peers      map[discover.NodeID]*swapPeer
+	local      *Params // local peer's swap parameters
 }
 
 type EntryDirection bool
@@ -83,17 +85,27 @@ type SwapAccountedMsgType interface {
 func (swap *Swap) AccountForMsg(ctx context.Context, msg interface{}, peer discover.NodeID) error {
 	if accounted, ok := msg.(SwapAccountedMsgType); ok {
 		if _, exists := swap.peers[peer]; !exists {
+			balance := big.NewInt(0)
+			swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
 			swap.lock.Lock()
 			swap.peers[peer] = &swapPeer{
 				peer:        peer,
 				swapAccount: swap,
-				balance:     big.NewInt(0),
+				balance:     balance,
+				storeID:     peer.String()[:24] + "-swap",
 			}
 			swap.lock.Unlock()
 		}
 		price, direction := accounted.GetMsgPrice()
 		//TODO: Calculate total price and account
 		swap.peers[peer].AccountMsgForPeer(price, direction)
+	}
+	return nil
+}
+
+func (swap *Swap) GetPeerBalance(peer discover.NodeID) *big.Int {
+	if p, ok := swap.peers[peer]; ok {
+		return p.balance
 	}
 	return nil
 }
@@ -161,6 +173,7 @@ type swapPeer struct {
 	peer        discover.NodeID
 	swapAccount *Swap
 	balance     *big.Int
+	storeID     string
 }
 
 func (sp *swapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) {
@@ -173,21 +186,24 @@ func (sp *swapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) 
 	} else if direction == DebitEntry {
 		sp.balance = sp.balance.Sub(sp.balance, price)
 	}
+	//TODO: save to store here? init store?
+	sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
 	if sp.balance.Cmp(payAt) > -1 {
 		//TODO: Issue Cheque
 	}
 	if sp.balance.Cmp(dropAt) < 0 {
 		//TODO: Drop peer
 	}
-	log.Error(fmt.Sprintf("balance for peer %s: %s", sp.peer, sp.balance.String()))
+	log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.peer, sp.balance.String()))
 }
 
 // New - swap constructor
-func NewSwap(local *Params) (swap *Swap, err error) {
+func NewSwap(local *Params, stateStore state.Store) (swap *Swap, err error) {
 
 	swap = &Swap{
-		local: local,
-		peers: make(map[discover.NodeID]*swapPeer),
+		local:      local,
+		stateStore: stateStore,
+		peers:      make(map[discover.NodeID]*swapPeer),
 	}
 
 	//swap.SetParams(local)
