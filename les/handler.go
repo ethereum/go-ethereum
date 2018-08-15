@@ -1232,7 +1232,7 @@ func (self *ProtocolManager) NodeInfo() *NodeInfo {
 		cht = light.TrustedCheckpoint{
 			SectionIdx:  sectionIndex,
 			SectionHead: sectionHead,
-			CHTRoot:     light.GetChtV2Root(self.chainDb, sectionIndex, sectionHead),
+			CHTRoot:     light.GetChtRoot(self.chainDb, sectionIndex, sectionHead),
 			BloomRoot:   light.GetBloomTrieRoot(self.chainDb, sectionIndex, sectionHead),
 		}
 	}
