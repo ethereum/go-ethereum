@@ -121,11 +121,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		backend:    backend,
 		privateKey: config.ShiftPrivateKey(),
 	}
-	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
+	log.Debug("Setting up Swarm service components")
 
 	config.HiveParams.Discovery = true
-
-	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	nodeID, err := discover.HexID(config.NodeID)
 	if err != nil {
@@ -201,8 +199,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		resourceHandler,
 	}
 
-	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
+	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
@@ -216,11 +213,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler, self.privateKey)
-	// Manifests for Smart Hosting
-	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
 	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("-> Initializing Fuse file system")
+	log.Debug("Initialized FUSE filesystem")
 
 	return self, nil
 }
@@ -341,7 +336,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
-	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
+	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
 	if self.config.SwapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -354,18 +349,17 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
-	log.Warn(fmt.Sprintf("Starting Swarm service"))
+	log.Info("Starting bzz service")
 
 	err := self.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", self.bzz.Hive.Overlay.BaseAddr()))
 
 	if self.ps != nil {
 		self.ps.Start(srv)
-		log.Info("Pss started")
 	}
 
 	// start swarm http proxy server
@@ -373,13 +367,17 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
 		server := httpapi.NewServer(self.api, self.config.Cors)
 
-		go server.ListenAndServe(addr)
-	}
+		if self.config.Cors != "" {
+			log.Debug("Swarm HTTP proxy CORS headers", "allowedOrigins", self.config.Cors)
+		}
 
-	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
-
-	if self.config.Cors != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.config.Cors))
+		log.Debug("Starting Swarm HTTP proxy", "port", self.config.Port)
+		go func() {
+			err := server.ListenAndServe(addr)
+			if err != nil {
+				log.Error("Could not start Swarm HTTP proxy", "err", err.Error())
+			}
+		}()
 	}
 
 	self.periodicallyUpdateGauges()
