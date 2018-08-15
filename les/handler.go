@@ -1206,11 +1206,12 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 // NodeInfo represents a short summary of the Ethereum sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // SHA3 hash of the host's best owned block
+	Network    uint64                  `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Difficulty *big.Int                `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    common.Hash             `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Config     *params.ChainConfig     `json:"config"`     // Chain configuration for the fork rules
+	Head       common.Hash             `json:"head"`       // SHA3 hash of the host's best owned block
+	CHT        light.TrustedCheckpoint `json:"cht"`        // Trused CHT checkpoint for fast catchup
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
@@ -1218,12 +1219,31 @@ func (self *ProtocolManager) NodeInfo() *NodeInfo {
 	head := self.blockchain.CurrentHeader()
 	hash := head.Hash()
 
+	var cht light.TrustedCheckpoint
+
+	sections, _, sectionHead := self.odr.ChtIndexer().Sections()
+	sections2, _, sectionHead2 := self.odr.BloomTrieIndexer().Sections()
+	if sections2 < sections {
+		sections = sections2
+		sectionHead = sectionHead2
+	}
+	if sections > 0 {
+		sectionIndex := sections - 1
+		cht = light.TrustedCheckpoint{
+			SectionIdx:  sectionIndex,
+			SectionHead: sectionHead,
+			CHTRoot:     light.GetChtRoot(self.chainDb, sectionIndex, sectionHead),
+			BloomRoot:   light.GetBloomTrieRoot(self.chainDb, sectionIndex, sectionHead),
+		}
+	}
+
 	return &NodeInfo{
 		Network:    self.networkId,
 		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
 		Genesis:    self.blockchain.Genesis().Hash(),
 		Config:     self.blockchain.Config(),
 		Head:       hash,
+		CHT:        cht,
 	}
 }
 
@@ -1258,7 +1278,7 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)
 	if !ok {
-		return ErrNoPeers
+		return light.ErrNoPeers
 	}
 	return nil
 }
@@ -1282,7 +1302,7 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)
 	if !ok {
-		return ErrNoPeers
+		return light.ErrNoPeers
 	}
 	return nil
 }
