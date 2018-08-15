@@ -64,7 +64,7 @@ func TestApiDirUpload0(t *testing.T) {
 		checkResponse(t, resp, exp)
 
 		addr := storage.Address(common.Hex2Bytes(bzzhash))
-		_, _, _, _, err = api.Get(context.TODO(), addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), NOOPDecrypt, addr, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -143,7 +143,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, _, err = api.Get(context.TODO(), addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), nil, addr, "")
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}

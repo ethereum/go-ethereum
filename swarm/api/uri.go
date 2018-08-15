@@ -53,6 +53,19 @@ type URI struct {
 	Path string
 }
 
+func (u *URI) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + u.String() + `"`), nil
+}
+
+func (u *URI) UnmarshalJSON(value []byte) error {
+	uri, err := Parse(string(value))
+	if err != nil {
+		return err
+	}
+	*u = *uri
+	return nil
+}
+
 // Parse parses rawuri into a URI struct, where rawuri is expected to have one
 // of the following formats:
 //

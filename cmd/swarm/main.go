@@ -155,6 +155,14 @@ var (
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
 	}
+	SwarmAccessGrantKeyFlag = cli.StringFlag{
+		Name:  "grant-key",
+		Usage: "grants a given public key access to an ACT",
+	}
+	SwarmAccessGrantKeysFlag = cli.StringFlag{
+		Name:  "grant-keys",
+		Usage: "grants a given list of public keys in the following file (separated by line breaks) access to an ACT",
+	}
 	SwarmUpFromStdinFlag = cli.BoolFlag{
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
@@ -166,6 +174,15 @@ var (
 	SwarmEncryptedFlag = cli.BoolFlag{
 		Name:  "encrypt",
 		Usage: "use encrypted upload",
+	}
+	SwarmAccessPasswordFlag = cli.StringFlag{
+		Name:   "password",
+		Usage:  "Password",
+		EnvVar: SWARM_ACCESS_PASSWORD,
+	}
+	SwarmDryRunFlag = cli.BoolFlag{
+		Name:  "dry-run",
+		Usage: "dry-run",
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
@@ -254,6 +271,61 @@ func init() {
 		},
 		{
 			CustomHelpTemplate: helpTemplate,
+			Name:               "access",
+			Usage:              "encrypts a reference and embeds it into a root manifest",
+			ArgsUsage:          "<ref>",
+			Description:        "encrypts a reference and embeds it into a root manifest",
+			Subcommands: []cli.Command{
+				{
+					CustomHelpTemplate: helpTemplate,
+					Name:               "new",
+					Usage:              "encrypts a reference and embeds it into a root manifest",
+					ArgsUsage:          "<ref>",
+					Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+					Subcommands: []cli.Command{
+						{
+							Action:             accessNewPass,
+							CustomHelpTemplate: helpTemplate,
+							Flags: []cli.Flag{
+								utils.PasswordFileFlag,
+								SwarmDryRunFlag,
+							},
+							Name:        "pass",
+							Usage:       "encrypts a reference with a password and embeds it into a root manifest",
+							ArgsUsage:   "<ref>",
+							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
+						{
+							Action:             accessNewPK,
+							CustomHelpTemplate: helpTemplate,
+							Flags: []cli.Flag{
+								utils.PasswordFileFlag,
+								SwarmDryRunFlag,
+								SwarmAccessGrantKeyFlag,
+							},
+							Name:        "pk",
+							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
+							ArgsUsage:   "<ref>",
+							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
+						{
+							Action:             accessNewACT,
+							CustomHelpTemplate: helpTemplate,
+							Flags: []cli.Flag{
+								SwarmAccessGrantKeysFlag,
+								SwarmDryRunFlag,
+							},
+							Name:        "act",
+							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
+							ArgsUsage:   "<ref>",
+							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
+					},
+				},
+			},
+		},
+		{
+			CustomHelpTemplate: helpTemplate,
 			Name:               "resource",
 			Usage:              "(Advanced) Create and update Mutable Resources",
 			ArgsUsage:          "<create|update|info>",
@@ -304,16 +376,13 @@ func init() {
 			Description:        "Prints the swarm hash of file or directory",
 		},
 		{
-			Action:    download,
-			Name:      "down",
-			Flags:     []cli.Flag{SwarmRecursiveFlag},
-			Usage:     "downloads a swarm manifest or a file inside a manifest",
-			ArgsUsage: " <uri> [<dir>]",
-			Description: `
-Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
-`,
+			Action:      download,
+			Name:        "down",
+			Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
+			Usage:       "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage:   " <uri> [<dir>]",
+			Description: `Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.`,
 		},
-
 		{
 			Name:               "manifest",
 			CustomHelpTemplate: helpTemplate,
@@ -413,16 +482,14 @@ pv(1) tool to get a progress bar:
 					Name:               "import",
 					Usage:              "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
 					ArgsUsage:          "<chunkdb> <file>",
-					Description: `
-Import chunks from a tar archive into a local chunk database (use - to read from stdin).
+					Description: `Import chunks from a tar archive into a local chunk database (use - to read from stdin).
 
     swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
 
 The import may be quite large, consider piping the input through the Unix
 pv(1) tool to get a progress bar:
 
-    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -
-`,
+    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
 				},
 				{
 					Action:             dbClean,
@@ -535,6 +602,7 @@ func version(ctx *cli.Context) error {
 func bzzd(ctx *cli.Context) error {
 	//build a valid bzzapi.Config from all available sources:
 	//default config, file config, command line and env vars
+
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
@@ -557,6 +625,7 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+
 	//a few steps need to be done after the config phase is completed,
 	//due to overriding behavior
 	initSwarmNode(bzzconfig, stack, ctx)
