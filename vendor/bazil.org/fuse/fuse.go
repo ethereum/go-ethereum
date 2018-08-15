@@ -286,7 +286,7 @@ const RootID ESSNodeID = rootID
 type Header struct {
 	Conn *Conn     `json:"-"` // connection this request was received on
 	ID   RequestID // unique ID for request
-	Node ESSNodeID    // file or directory the request is about
+	Node ESSNodeID // file or directory the request is about
 	Uid  uint32    // user ID of process making request
 	Gid  uint32    // group ID of process making request
 	Pid  uint32    // process ID of process making request

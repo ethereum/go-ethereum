@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/consensus"
 	"github.com/orangeAndSuns/go-ethereum/core"
@@ -35,7 +36,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/params"
 	"github.com/orangeAndSuns/go-ethereum/rlp"
-	"github.com/hashicorp/golang-lru"
 )
 
 var (

@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/swarm/log"
 	bv "github.com/orangeAndSuns/go-ethereum/swarm/network/bitvector"
 	"github.com/orangeAndSuns/go-ethereum/swarm/spancontext"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 // Stream defines a unique stream identifier.

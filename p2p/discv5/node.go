@@ -37,8 +37,8 @@ import (
 // Node represents a host on the network.
 // The public fields of Node may not be modified.
 type Node struct {
-	IP       net.IP // len 4 for IPv4 or 16 for IPv6
-	UDP, TCP uint16 // port numbers
+	IP       net.IP    // len 4 for IPv4 or 16 for IPv6
+	UDP, TCP uint16    // port numbers
 	ID       ESSNodeID // the node's public key
 
 	// Network-related fields are contained in nodeNetGuts.

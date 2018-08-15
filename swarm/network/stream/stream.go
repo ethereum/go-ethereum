@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/p2p"
 	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
@@ -35,7 +36,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/swarm/spancontext"
 	"github.com/orangeAndSuns/go-ethereum/swarm/state"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (

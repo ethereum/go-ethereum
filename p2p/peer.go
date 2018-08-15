@@ -90,12 +90,12 @@ const (
 // PeerEvent is an event emitted when peers are either added or dropped from
 // a p2p.Server or when a message is sent or received on a peer connection
 type PeerEvent struct {
-	Type     PeerEventType   `json:"type"`
+	Type     PeerEventType      `json:"type"`
 	Peer     discover.ESSNodeID `json:"peer"`
-	Error    string          `json:"error,omitempty"`
-	Protocol string          `json:"protocol,omitempty"`
-	MsgCode  *uint64         `json:"msg_code,omitempty"`
-	MsgSize  *uint32         `json:"msg_size,omitempty"`
+	Error    string             `json:"error,omitempty"`
+	Protocol string             `json:"protocol,omitempty"`
+	MsgCode  *uint64            `json:"msg_code,omitempty"`
+	MsgSize  *uint32            `json:"msg_size,omitempty"`
 }
 
 // Peer represents a connected remote node.

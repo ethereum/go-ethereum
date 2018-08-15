@@ -28,10 +28,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mattn/go-colorable"
 	"github.com/orangeAndSuns/go-ethereum/internal/jsre"
 	"github.com/orangeAndSuns/go-ethereum/internal/web3ext"
 	"github.com/orangeAndSuns/go-ethereum/rpc"
-	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )

@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	nodeDBNilESSNodeID      = ESSNodeID{}       // Special node ID to use as a nil element.
+	nodeDBNilESSNodeID   = ESSNodeID{}    // Special node ID to use as a nil element.
 	nodeDBNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
 	nodeDBCleanupCycle   = time.Hour      // Time period for running the expiration task.
 	nodeDBVersion        = 5
@@ -48,7 +48,7 @@ var (
 // nodeDB stores all nodes we know about.
 type nodeDB struct {
 	lvl    *leveldb.DB   // Interface to the database itself
-	self   ESSNodeID        // Own node id to prevent adding it into the database
+	self   ESSNodeID     // Own node id to prevent adding it into the database
 	runner sync.Once     // Ensures we can start at most one expirer
 	quit   chan struct{} // Channel to signal the expiring thread to stop
 }

@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/contracts/ens"
 	"github.com/orangeAndSuns/go-ethereum/core/types"
@@ -40,7 +41,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/swarm/spancontext"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var (

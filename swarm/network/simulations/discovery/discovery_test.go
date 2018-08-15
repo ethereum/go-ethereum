@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	colorable "github.com/mattn/go-colorable"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/node"
@@ -40,7 +41,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/p2p/simulations/adapters"
 	"github.com/orangeAndSuns/go-ethereum/swarm/network"
 	"github.com/orangeAndSuns/go-ethereum/swarm/state"
-	colorable "github.com/mattn/go-colorable"
 )
 
 // serviceName is used with the exec adapter so the exec'd binary knows which

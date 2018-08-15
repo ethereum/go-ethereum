@@ -35,12 +35,12 @@ import (
 	"io"
 
 	"github.com/elastic/gosigar"
+	"github.com/mohae/deepcopy"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/p2p"
 	"github.com/orangeAndSuns/go-ethereum/params"
 	"github.com/orangeAndSuns/go-ethereum/rpc"
-	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
 )
 

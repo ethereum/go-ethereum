@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
+	colorable "github.com/mattn/go-colorable"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	swarm "github.com/orangeAndSuns/go-ethereum/swarm/api/client"
-	colorable "github.com/mattn/go-colorable"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")

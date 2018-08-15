@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	colorable "github.com/mattn/go-colorable"
 	"github.com/orangeAndSuns/go-ethereum/crypto"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/node"
@@ -37,7 +38,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/swarm/network"
 	"github.com/orangeAndSuns/go-ethereum/swarm/network/simulation"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
-	colorable "github.com/mattn/go-colorable"
 )
 
 var (

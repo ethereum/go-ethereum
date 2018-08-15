@@ -80,7 +80,7 @@ type Peer interface {
 
 // Conn interface represents an live peer connection
 type Conn interface {
-	ID() discover.ESSNodeID                                                                  // the key that uniquely identifies the Node for the peerPool
+	ID() discover.ESSNodeID                                                               // the key that uniquely identifies the Node for the peerPool
 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
 	Send(context.Context, interface{}) error                                              // can send messages
 	Drop(error)                                                                           // disconnect this peer

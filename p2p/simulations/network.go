@@ -598,9 +598,9 @@ func (c *Conn) String() string {
 type Msg struct {
 	One      discover.ESSNodeID `json:"one"`
 	Other    discover.ESSNodeID `json:"other"`
-	Protocol string          `json:"protocol"`
-	Code     uint64          `json:"code"`
-	Received bool            `json:"received"`
+	Protocol string             `json:"protocol"`
+	Code     uint64             `json:"code"`
+	Received bool               `json:"received"`
 }
 
 // String returns a log-friendly string

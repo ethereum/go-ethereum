@@ -58,7 +58,7 @@ type Config struct {
 	Port              string
 	PublicKey         string
 	BzzKey            string
-	ESSNodeID            string
+	ESSNodeID         string
 	NetworkID         uint64
 	SwapEnabled       bool
 	SyncEnabled       bool

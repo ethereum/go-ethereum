@@ -27,13 +27,13 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/orangeAndSuns/go-ethereum/accounts"
 	"github.com/orangeAndSuns/go-ethereum/accounts/usbwallet/internal/trezor"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/common/hexutil"
 	"github.com/orangeAndSuns/go-ethereum/core/types"
 	"github.com/orangeAndSuns/go-ethereum/log"
-	"github.com/golang/protobuf/proto"
 )
 
 // ErrTrezorPINNeeded is returned if opening the trezor requires a PIN code. In

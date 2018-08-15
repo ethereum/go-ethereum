@@ -56,25 +56,25 @@ type Exchange struct {
 // Trigger is part of the exchange, incoming message for the pivot node
 // sent by a peer
 type Trigger struct {
-	Msg     interface{}     // type of message to be sent
-	Code    uint64          // code of message is given
+	Msg     interface{}        // type of message to be sent
+	Code    uint64             // code of message is given
 	Peer    discover.ESSNodeID // the peer to send the message to
-	Timeout time.Duration   // timeout duration for the sending
+	Timeout time.Duration      // timeout duration for the sending
 }
 
 // Expect is part of an exchange, outgoing message from the pivot node
 // received by a peer
 type Expect struct {
-	Msg     interface{}     // type of message to expect
-	Code    uint64          // code of message is now given
+	Msg     interface{}        // type of message to expect
+	Code    uint64             // code of message is now given
 	Peer    discover.ESSNodeID // the peer that expects the message
-	Timeout time.Duration   // timeout duration for receiving
+	Timeout time.Duration      // timeout duration for receiving
 }
 
 // Disconnect represents a disconnect event, used and checked by TestDisconnected
 type Disconnect struct {
 	Peer  discover.ESSNodeID // discconnected peer
-	Error error           // disconnect reason
+	Error error              // disconnect reason
 }
 
 // trigger sends messages from peers

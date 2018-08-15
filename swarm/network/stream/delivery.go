@@ -21,6 +21,7 @@ import (
 	"errors"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
@@ -28,7 +29,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/swarm/network"
 	"github.com/orangeAndSuns/go-ethereum/swarm/spancontext"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (

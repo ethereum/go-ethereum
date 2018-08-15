@@ -37,6 +37,7 @@ import (
 	"strings"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/swarm/api"
@@ -44,7 +45,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/swarm/spancontext"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
 	"github.com/orangeAndSuns/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"

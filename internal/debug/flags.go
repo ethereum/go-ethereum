@@ -24,12 +24,12 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/fjl/memsize/memsizeui"
+	colorable "github.com/mattn/go-colorable"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/log/term"
 	"github.com/orangeAndSuns/go-ethereum/metrics"
 	"github.com/orangeAndSuns/go-ethereum/metrics/exp"
-	"github.com/fjl/memsize/memsizeui"
-	colorable "github.com/mattn/go-colorable"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/common/mclock"
 	"github.com/orangeAndSuns/go-ethereum/consensus"
@@ -42,7 +43,6 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/params"
 	"github.com/orangeAndSuns/go-ethereum/rlp"
 	"github.com/orangeAndSuns/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

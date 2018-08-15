@@ -29,11 +29,11 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
+	"github.com/naoina/toml"
 	"github.com/orangeAndSuns/go-ethereum/cmd/utils"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/log"
 	"github.com/orangeAndSuns/go-ethereum/node"
-	"github.com/naoina/toml"
 
 	bzzapi "github.com/orangeAndSuns/go-ethereum/swarm/api"
 )

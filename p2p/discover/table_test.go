@@ -570,7 +570,7 @@ func (tn *preminedTestnet) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target 
 	return result, nil
 }
 
-func (*preminedTestnet) close()                                      {}
+func (*preminedTestnet) close()                                         {}
 func (*preminedTestnet) waitping(from ESSNodeID) error                  { return nil }
 func (*preminedTestnet) ping(toid ESSNodeID, toaddr *net.UDPAddr) error { return nil }
 

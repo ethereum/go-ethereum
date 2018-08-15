@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/orangeAndSuns/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
+	"github.com/orangeAndSuns/go-ethereum/log"
 )
 
 var (

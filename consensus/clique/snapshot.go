@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"sort"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/orangeAndSuns/go-ethereum/common"
 	"github.com/orangeAndSuns/go-ethereum/core/types"
 	"github.com/orangeAndSuns/go-ethereum/ethdb"
 	"github.com/orangeAndSuns/go-ethereum/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the

@@ -29,12 +29,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/julienschmidt/httprouter"
 	"github.com/orangeAndSuns/go-ethereum/event"
 	"github.com/orangeAndSuns/go-ethereum/p2p"
 	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
 	"github.com/orangeAndSuns/go-ethereum/p2p/simulations/adapters"
 	"github.com/orangeAndSuns/go-ethereum/rpc"
-	"github.com/julienschmidt/httprouter"
 	"golang.org/x/net/websocket"
 )
 

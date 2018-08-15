@@ -43,13 +43,13 @@ type Simulation struct {
 	// of p2p/simulations.Network.
 	Net *simulations.Network
 
-	serviceNames []string
-	cleanupFuncs []func()
-	buckets      map[discover.ESSNodeID]*sync.Map
-	pivotESSNodeID  *discover.ESSNodeID
-	shutdownWG   sync.WaitGroup
-	done         chan struct{}
-	mu           sync.RWMutex
+	serviceNames   []string
+	cleanupFuncs   []func()
+	buckets        map[discover.ESSNodeID]*sync.Map
+	pivotESSNodeID *discover.ESSNodeID
+	shutdownWG     sync.WaitGroup
+	done           chan struct{}
+	mu             sync.RWMutex
 
 	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
 	handler *simulations.Server //HTTP handler for the server
