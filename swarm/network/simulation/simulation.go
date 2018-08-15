@@ -62,6 +62,8 @@ type Simulation struct {
 // where all "global" state related to the service should be kept.
 // All cleanups needed for constructed service and any other constructed
 // objects should ne provided in a single returned cleanup function.
+// Returned cleanup function will be called by Close function
+// after network shutdown.
 type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
 // New creates a new Simulation instance with new
@@ -161,6 +163,18 @@ var maxParallelCleanups = 10
 // simulation.
 func (s *Simulation) Close() {
 	close(s.done)
+
+	// Close all connections before calling the Network Shutdown.
+	// It is possible that p2p.Server.Stop will block if there are
+	// existing connections.
+	for _, c := range s.Net.Conns {
+		if c.Up {
+			s.Net.Disconnect(c.One, c.Other)
+		}
+	}
+	s.shutdownWG.Wait()
+	s.Net.Shutdown()
+
 	sem := make(chan struct{}, maxParallelCleanups)
 	s.mu.RLock()
 	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
@@ -170,16 +184,19 @@ func (s *Simulation) Close() {
 		}
 	}
 	s.mu.RUnlock()
+	var cleanupWG sync.WaitGroup
 	for _, cleanup := range cleanupFuncs {
-		s.shutdownWG.Add(1)
+		cleanupWG.Add(1)
 		sem <- struct{}{}
 		go func(cleanup func()) {
-			defer s.shutdownWG.Done()
+			defer cleanupWG.Done()
 			defer func() { <-sem }()
 
 			cleanup()
 		}(cleanup)
 	}
+	cleanupWG.Wait()
+
 	if s.httpSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -189,8 +206,6 @@ func (s *Simulation) Close() {
 		}
 		close(s.runC)
 	}
-	s.shutdownWG.Wait()
-	s.Net.Shutdown()
 }
 
 // Done returns a channel that is closed when the simulation

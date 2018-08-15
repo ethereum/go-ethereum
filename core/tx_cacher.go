@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// senderCacher is a concurrent tranaction sender recoverer anc cacher.
+// senderCacher is a concurrent transaction sender recoverer anc cacher.
 var senderCacher = newTxSenderCacher(runtime.NumCPU())
 
 // txSenderCacherRequest is a request for recovering transaction senders with a
@@ -45,7 +45,7 @@ type txSenderCacher struct {
 }
 
 // newTxSenderCacher creates a new transaction sender background cacher and starts
-// as many procesing goroutines as allowed by the GOMAXPROCS on construction.
+// as many processing goroutines as allowed by the GOMAXPROCS on construction.
 func newTxSenderCacher(threads int) *txSenderCacher {
 	cacher := &txSenderCacher{
 		tasks:   make(chan *txSenderCacherRequest, threads),

@@ -68,6 +68,7 @@ const (
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
 	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
 	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_LIGHT_NODE_ENABLE    = "SWARM_LIGHT_NODE_ENABLE"
 	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
@@ -131,7 +132,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	log.Debug(printConfig(config))
 }
 
-//override the current config with whatever is in the config file, if a config file has been provided
+//configFileOverride overrides the current config with the config file, if a config file has been provided
 func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config, error) {
 	var err error
 
@@ -141,7 +142,8 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 		if filepath = ctx.GlobalString(SwarmTomlConfigPathFlag.Name); filepath == "" {
 			utils.Fatalf("Config file flag provided with invalid file path")
 		}
-		f, err := os.Open(filepath)
+		var f *os.File
+		f, err = os.Open(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -202,6 +204,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
 		currentConfig.SyncUpdateDelay = d
+	}
+
+	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
+		currentConfig.LightNodeEnabled = true
 	}
 
 	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
@@ -298,6 +304,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
 		if d, err := time.ParseDuration(v); err != nil {
 			currentConfig.SyncUpdateDelay = d
+		}
+	}
+
+	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
+		if lightnode, err := strconv.ParseBool(lne); err != nil {
+			currentConfig.LightNodeEnabled = lightnode
 		}
 	}
 

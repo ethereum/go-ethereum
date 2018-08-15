@@ -138,7 +138,7 @@ func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, er
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file}, toEncrypt)
+	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -175,7 +175,15 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath}, toEncrypt)
+	if defaultPath != "" {
+		if _, err := os.Stat(filepath.Join(dir, defaultPath)); err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("the default path %q was not found in the upload directory %q", defaultPath, dir)
+			}
+			return "", fmt.Errorf("default path: %v", err)
+		}
+	}
+	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
@@ -389,21 +397,11 @@ func (u UploaderFunc) Upload(upload UploadFn) error {
 // DirectoryUploader uploads all files in a directory, optionally uploading
 // a file to the default path
 type DirectoryUploader struct {
-	Dir         string
-	DefaultPath string
+	Dir string
 }
 
 // Upload performs the upload of the directory and default path
 func (d *DirectoryUploader) Upload(upload UploadFn) error {
-	if d.DefaultPath != "" {
-		file, err := Open(d.DefaultPath)
-		if err != nil {
-			return err
-		}
-		if err := upload(file); err != nil {
-			return err
-		}
-	}
 	return filepath.Walk(d.Dir, func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -441,7 +439,7 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
 	addr := hash
@@ -458,6 +456,11 @@ func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (stri
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-tar")
+	if defaultPath != "" {
+		q := req.URL.Query()
+		q.Set("defaultpath", defaultPath)
+		req.URL.RawQuery = q.Encode()
+	}
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request

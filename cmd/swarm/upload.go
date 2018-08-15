@@ -98,6 +98,17 @@ func upload(ctx *cli.Context) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
+			if defaultPath != "" {
+				// construct absolute default path
+				absDefaultPath, _ := filepath.Abs(defaultPath)
+				absFile, _ := filepath.Abs(file)
+				// make sure absolute directory ends with only one "/"
+				// to trim it from absolute default path and get relative default path
+				absFile = strings.TrimRight(absFile, "/") + "/"
+				if absDefaultPath != "" && absFile != "" && strings.HasPrefix(absDefaultPath, absFile) {
+					defaultPath = strings.TrimPrefix(absDefaultPath, absFile)
+				}
+			}
 			return client.UploadDirectory(file, defaultPath, "", toEncrypt)
 		}
 	} else {

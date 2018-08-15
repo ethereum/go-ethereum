@@ -393,6 +393,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			return err
 		}
 
+		log.Debug("Waiting for kademlia")
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
+		}
+
 		//each of the nodes (except pivot node) subscribes to the stream of the next node
 		for j, node := range nodeIDs[0 : nodes-1] {
 			sid := nodeIDs[j+1]
@@ -423,11 +428,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				t.Fatalf("requesting chunks action error: %v", err)
 			}
 		}()
-
-		log.Debug("Waiting for kademlia")
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			return err
-		}
 
 		log.Debug("Watching for disconnections")
 		disconnections := sim.PeerEvents(

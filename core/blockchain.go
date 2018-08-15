@@ -899,9 +899,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
 		return NonStatTy, err
 	}
-	// Write other block data using a batch.
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, block)
+	rawdb.WriteBlock(bc.db, block)
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
@@ -955,6 +953,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 	}
+
+	// Write other block data using a batch.
+	batch := bc.db.NewBatch()
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain

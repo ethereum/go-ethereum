@@ -160,7 +160,7 @@ func (tab *Table) ReadRandomNodes(buf []*Node) (n int) {
 
 	// Find all non-empty buckets and get a fresh slice of their entries.
 	var buckets [][]*Node
-	for _, b := range tab.buckets {
+	for _, b := range &tab.buckets {
 		if len(b.entries) > 0 {
 			buckets = append(buckets, b.entries[:])
 		}
@@ -508,7 +508,7 @@ func (tab *Table) copyLiveNodes() {
 	defer tab.mutex.Unlock()
 
 	now := time.Now()
-	for _, b := range tab.buckets {
+	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			if now.Sub(n.addedAt) >= seedMinTableTime {
 				tab.db.updateNode(n)
@@ -524,7 +524,7 @@ func (tab *Table) closest(target common.Hash, nresults int) *nodesByDistance {
 	// obviously correct. I believe that tree-based buckets would make
 	// this easier to implement efficiently.
 	close := &nodesByDistance{target: target}
-	for _, b := range tab.buckets {
+	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
 			close.push(n, nresults)
 		}
@@ -533,7 +533,7 @@ func (tab *Table) closest(target common.Hash, nresults int) *nodesByDistance {
 }
 
 func (tab *Table) len() (n int) {
-	for _, b := range tab.buckets {
+	for _, b := range &tab.buckets {
 		n += len(b.entries)
 	}
 	return n

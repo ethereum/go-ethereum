@@ -106,13 +106,18 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 }
 
 // AddEntry stores the given data and adds the resulting key to the manifest
-func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (storage.Address, error) {
-	key, _, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
-	if err != nil {
-		return nil, err
-	}
+func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (key storage.Address, err error) {
 	entry := newManifestTrieEntry(e, nil)
-	entry.Hash = key.Hex()
+	if data != nil {
+		key, _, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		if err != nil {
+			return nil, err
+		}
+		entry.Hash = key.Hex()
+	}
+	if entry.Hash == "" {
+		return key, errors.New("missing entry hash")
+	}
 	m.trie.addEntry(entry, m.quitC)
 	return key, nil
 }
@@ -159,7 +164,7 @@ func (m *ManifestWalker) Walk(walkFn WalkFn) error {
 }
 
 func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) error {
-	for _, entry := range trie.entries {
+	for _, entry := range &trie.entries {
 		if entry == nil {
 			continue
 		}
@@ -308,7 +313,7 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 }
 
 func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
-	for _, e := range mt.entries {
+	for _, e := range &mt.entries {
 		if e != nil {
 			cnt++
 			entry = e
@@ -362,7 +367,7 @@ func (mt *manifestTrie) recalcAndStore() error {
 	buffer.WriteString(`{"entries":[`)
 
 	list := &Manifest{}
-	for _, entry := range mt.entries {
+	for _, entry := range &mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
 				err := entry.subtrie.recalcAndStore()
