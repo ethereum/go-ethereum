@@ -156,25 +156,24 @@ func NewChtIndexer(db ethdb.Database, clientMode bool, odr OdrBackend) *core.Cha
 func (c *ChtIndexerBackend) fetchMissingNodes(ctx context.Context, section uint64, root common.Hash) error {
 	batch := c.trieTable.NewBatch()
 	r := &ChtRequest{ChtRoot: root, ChtNum: section - 1, BlockNum: section*c.sectionSize - 1}
-	var err error
 	for {
-		err = c.odr.Retrieve(ctx, r)
-		if err == ErrNoPeers {
+		err := c.odr.Retrieve(ctx, r)
+		switch err {
+		case nil:
+			r.Proof.Store(batch)
+			return batch.Write()
+		case ErrNoPeers:
 			// if there are no peers to serve, retry later
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(time.Second * 10):
+				// stay in the loop and try again
 			}
-		} else {
-			break
+		default:
+			return err
 		}
 	}
-	if err == nil {
-		r.Proof.Store(batch)
-		err = batch.Write()
-	}
-	return err
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -301,22 +300,21 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 					return
 				}
 				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIdxList: []uint64{section - 1}}
-				var err error
 				for {
-					err = b.odr.Retrieve(ctx, r)
-					if err == ErrNoPeers {
+					if err := b.odr.Retrieve(ctx, r); err == ErrNoPeers {
 						// if there are no peers to serve, retry later
 						select {
 						case <-ctx.Done():
 							resCh <- res{nil, ctx.Err()}
 							return
 						case <-time.After(time.Second * 10):
+							// stay in the loop and try again
 						}
 					} else {
+						resCh <- res{r.Proofs, err}
 						break
 					}
 				}
-				resCh <- res{r.Proofs, err}
 			}
 		}()
 	}
