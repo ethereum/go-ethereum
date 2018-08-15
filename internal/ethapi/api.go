@@ -191,14 +191,7 @@ func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
 	p := &PrivateAccountAPI{
 		nonceLock: nonceLock,
 		b:         b,
-	}
-	if b.ExternalSigner() != "" {
-		extapi, err := NewExternalSigner(b.ExternalSigner())
-		if err == nil {
-			p.extapi = extapi
-		} else {
-			log.Error("Error initializing external signer", "url", b.ExternalSigner(), "error", err)
-		}
+		extapi:    b.ExternalSigner(),
 	}
 	return p
 }
@@ -818,18 +811,7 @@ type PublicTransactionPoolAPI struct {
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
-	var (
-		extapi *ExternalSignerAPI
-		err    error
-	)
-	if b.ExternalSigner() != "" {
-		extapi, err = NewExternalSigner(b.ExternalSigner())
-		if err != nil {
-			log.Error("Error initializing external signer", "url", b.ExternalSigner(), "error", err)
-		}
-
-	}
-	return &PublicTransactionPoolAPI{b, nonceLock, extapi}
+	return &PublicTransactionPoolAPI{b, nonceLock, b.ExternalSigner()}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.

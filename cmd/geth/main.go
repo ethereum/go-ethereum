@@ -66,6 +66,7 @@ var (
 		utils.EthashDatasetDirFlag,
 		utils.EthashDatasetsInMemoryFlag,
 		utils.EthashDatasetsOnDiskFlag,
+		utils.ExternalSignerFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -258,12 +259,8 @@ func geth(ctx *cli.Context) error {
 func startNode(ctx *cli.Context, stack *node.Node) {
 	debug.Memsize.Add("node", stack)
 
-	// Start up the node itself
-	utils.StartNode(stack)
-
 	// Start account management
-	if ctx.IsSet(utils.ExternalSignerFlag.Name){
-		extEndpoint := ctx.GlobalString(utils.ExternalSignerFlag.Name)
+	if extEndpoint := ctx.GlobalString(utils.ExternalSignerFlag.Name); extEndpoint != ""{
 		extApi, err := ethapi.NewExternalSigner(extEndpoint)
 		if err != nil{
 			utils.Fatalf("Could not connect to external signer at %v: %v" , extEndpoint, err)
@@ -271,6 +268,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		log.Info("External signer connected", "url", extEndpoint)
 		stack.SetExternalAPI(extApi)
 	}
+
+	// Start up the node itself
+	utils.StartNode(stack)
+
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running

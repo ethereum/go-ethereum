@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type LesApiBackend struct {
@@ -182,7 +183,7 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
 }
 
-func (b *LesApiBackend) ExternalSigner() string {
+func (b *LesApiBackend) ExternalSigner() *ethapi.ExternalSignerAPI{
 	return b.eth.externalSigner
 }
 

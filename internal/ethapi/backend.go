@@ -42,7 +42,7 @@ type Backend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
-	ExternalSigner() string
+	ExternalSigner() *ExternalSignerAPI
 	
 	// BlockChain API
 	SetHead(number uint64)

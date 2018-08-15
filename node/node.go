@@ -558,6 +558,9 @@ func (n *Node) SetExternalAPI(api *ethapi.ExternalSignerAPI){
 	n.extapi = api
 }
 
+func (n *Node) ExternalSignerAPI() *ethapi.ExternalSignerAPI{
+	return n.extapi
+}
 // apis returns the collection of RPC descriptors this node offers.
 func (n *Node) apis() []rpc.API {
 	return []rpc.API{

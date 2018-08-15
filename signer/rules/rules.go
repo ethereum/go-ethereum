@@ -194,7 +194,7 @@ func (r *rulesetUI) ApproveImport(request *core.ImportRequest) (core.ImportRespo
 	return r.next.ApproveImport(request)
 }
 
-func (r *rulesetUI) ApproveListing(request *core.ListRequest) (core.ListAccountsResponse, error) {
+func (r *rulesetUI) ApproveListing(request *core.ListAccountsRequest) (core.ListAccountsResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
 	if err != nil {

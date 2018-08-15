@@ -109,17 +109,17 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 			fmt.Printf("\nWARNING: Invalid checksum on to-address!\n\n")
 		}
 	} else {
-		fmt.Printf("to:    <contact creation>\n")
+		fmt.Printf("To:    <contact creation>\n")
 	}
-	fmt.Printf("from:  %v\n", request.Transaction.From.String())
-	fmt.Printf("value: %v wei\n", weival)
-	fmt.Printf("gas: %v\n", request.Transaction.Gas)
-	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice)
-	fmt.Printf("nonce: %v\n", request.Transaction.Nonce)
+	fmt.Printf("Trom:  %v\n", request.Transaction.From.String())
+	fmt.Printf("Value: %v wei\n", weival)
+	fmt.Printf("Gas: %v\n", request.Transaction.Gas)
+	fmt.Printf("Gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
+	fmt.Printf("Nonce: %v\n", request.Transaction.Nonce)
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
+			fmt.Printf("Data:  %v\n", common.Bytes2Hex(d))
 		}
 	}
 	if request.Callinfo != nil {
