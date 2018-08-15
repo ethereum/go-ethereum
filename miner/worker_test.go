@@ -270,3 +270,68 @@ func TestStreamUncleBlock(t *testing.T) {
 		t.Error("new task timeout")
 	}
 }
+
+func TestRegenerateMiningBlockEthash(t *testing.T) {
+	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
+}
+
+func TestRegenerateMiningBlockClique(t *testing.T) {
+	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+}
+
+func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+	defer engine.Close()
+
+	w, b := newTestWorker(t, chainConfig, engine)
+	defer w.close()
+
+	var taskCh = make(chan struct{})
+
+	taskIndex := 0
+	w.newTaskHook = func(task *task) {
+		if task.block.NumberU64() == 1 {
+			if taskIndex == 2 {
+				receiptLen, balance := 2, big.NewInt(2000)
+				if len(task.receipts) != receiptLen {
+					t.Errorf("receipt number mismatch has %d, want %d", len(task.receipts), receiptLen)
+				}
+				if task.state.GetBalance(acc1Addr).Cmp(balance) != 0 {
+					t.Errorf("account balance mismatch has %d, want %d", task.state.GetBalance(acc1Addr), balance)
+				}
+			}
+			taskCh <- struct{}{}
+			taskIndex += 1
+		}
+	}
+	w.skipSealHook = func(task *task) bool {
+		return true
+	}
+	w.fullTaskHook = func() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+
+	w.start()
+	// Ignore the first two works
+	for i := 0; i < 2; i += 1 {
+		select {
+		case <-taskCh:
+		case <-time.NewTimer(time.Second).C:
+			t.Error("new task timeout")
+		}
+	}
+	b.txPool.AddLocals(newTxs)
+	time.Sleep(3 * time.Second)
+
+	select {
+	case <-taskCh:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("new task timeout")
+	}
+}
