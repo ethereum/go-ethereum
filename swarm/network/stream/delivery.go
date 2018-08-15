@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -141,8 +140,8 @@ type RetrieveRequestMsg struct {
 }
 
 //TODO: what is the correct price
-func (rrm *RetrieveRequestMsg) GetMsgPrice() (*big.Int, swap.EntryDirection) {
-	return big.NewInt(int64(4096)), swap.CreditEntry
+func (rrm *RetrieveRequestMsg) GetMsgPrice() *big.Int {
+	return big.NewInt(int64(4096))
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {

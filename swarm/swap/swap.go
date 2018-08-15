@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
@@ -67,8 +68,17 @@ const (
 type Swap struct {
 	stateStore state.Store
 	lock       sync.RWMutex
-	peers      map[discover.NodeID]*swapPeer
+	peers      map[discover.NodeID]*SwapPeer
 	local      *Params // local peer's swap parameters
+}
+
+type SwapPeer struct {
+	*protocols.Peer
+	lock        sync.RWMutex
+	swapAccount *Swap
+	handlerFunc func(context.Context, interface{}) error
+	balance     *big.Int
+	storeID     string
 }
 
 type EntryDirection bool
@@ -79,26 +89,20 @@ const (
 )
 
 type SwapAccountedMsgType interface {
-	GetMsgPrice() (*big.Int, EntryDirection)
+	GetMsgPrice() *big.Int
 }
 
-func (swap *Swap) AccountForMsg(ctx context.Context, msg interface{}, peer discover.NodeID) error {
+func (sp *SwapPeer) RunAccountedProtocol(protocolHandler func(ctx context.Context, msg interface{}) error) error {
+	sp.handlerFunc = protocolHandler
+
+	return sp.Run(sp.handleAccountedMsg)
+}
+
+func (sp *SwapPeer) doAccountMsg(ctx context.Context, msg interface{}, direction EntryDirection) error {
 	if accounted, ok := msg.(SwapAccountedMsgType); ok {
-		if _, exists := swap.peers[peer]; !exists {
-			balance := big.NewInt(0)
-			swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
-			swap.lock.Lock()
-			swap.peers[peer] = &swapPeer{
-				peer:        peer,
-				swapAccount: swap,
-				balance:     balance,
-				storeID:     peer.String()[:24] + "-swap",
-			}
-			swap.lock.Unlock()
-		}
-		price, direction := accounted.GetMsgPrice()
+		price := accounted.GetMsgPrice()
 		//TODO: Calculate total price and account
-		swap.peers[peer].AccountMsgForPeer(price, direction)
+		sp.AccountMsgForPeer(price, direction)
 	}
 	return nil
 }
@@ -108,6 +112,61 @@ func (swap *Swap) GetPeerBalance(peer discover.NodeID) *big.Int {
 		return p.balance
 	}
 	return nil
+}
+
+func (sp *SwapPeer) handleAccountedMsg(ctx context.Context, msg interface{}) error {
+	err := sp.handlerFunc(ctx, msg)
+	if _, ok := msg.(SwapAccountedMsgType); ok && err == nil {
+		sp.doAccountMsg(ctx, msg, CreditEntry)
+	}
+	return err
+}
+
+func (sp *SwapPeer) Send(ctx context.Context, msg interface{}) error {
+	err := sp.Peer.Send(ctx, msg)
+	if _, ok := msg.(SwapAccountedMsgType); ok && err == nil {
+		sp.doAccountMsg(ctx, msg, DebitEntry)
+	}
+	return err
+}
+
+//The balance is accounted from the point of view of the local node
+//Thus, we credit the balance and increase it when the amount is in favor of the local node
+//We debit the balance and decrease it when the amount is in favor of the remote peer
+func (sp *SwapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) {
+	sp.lock.Lock()
+	defer sp.lock.Unlock()
+	//local node is being credited (in its favor), so its balance increases
+	if direction == CreditEntry {
+		sp.balance = sp.balance.Add(sp.balance, price)
+		//local node is being debited (in favor of remote peer), so its balance decreases
+	} else if direction == DebitEntry {
+		sp.balance = sp.balance.Sub(sp.balance, price)
+	}
+	//TODO: save to store here? init store?
+	sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
+	if sp.balance.Cmp(payAt) > -1 {
+		//TODO: Issue Cheque
+	}
+	if sp.balance.Cmp(dropAt) < 0 {
+		//TODO: Drop peer
+	}
+	log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.ID(), sp.balance.String()))
+}
+
+func NewSwapPeer(peer *protocols.Peer, swap *Swap) *SwapPeer {
+	balance := big.NewInt(0)
+	swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
+	sp := &SwapPeer{
+		Peer:        peer,
+		swapAccount: swap,
+		balance:     balance,
+		storeID:     peer.String()[:24] + "-swap",
+	}
+	swap.lock.Lock()
+	defer swap.lock.Unlock()
+	swap.peers[peer.ID()] = sp
+	return sp
 }
 
 // Profile - public swap profile
@@ -168,42 +227,13 @@ type PayProfile struct {
 	lock        sync.RWMutex
 }
 
-type swapPeer struct {
-	lock        sync.RWMutex
-	peer        discover.NodeID
-	swapAccount *Swap
-	balance     *big.Int
-	storeID     string
-}
-
-func (sp *swapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) {
-	sp.lock.Lock()
-	defer sp.lock.Unlock()
-	//the peer is being credited (in its favor), so its balance increases
-	if direction == CreditEntry {
-		sp.balance = sp.balance.Add(sp.balance, price)
-		//the peer is being debited (in local favor), so its balance decreases
-	} else if direction == DebitEntry {
-		sp.balance = sp.balance.Sub(sp.balance, price)
-	}
-	//TODO: save to store here? init store?
-	sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
-	if sp.balance.Cmp(payAt) > -1 {
-		//TODO: Issue Cheque
-	}
-	if sp.balance.Cmp(dropAt) < 0 {
-		//TODO: Drop peer
-	}
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.peer, sp.balance.String()))
-}
-
 // New - swap constructor
 func NewSwap(local *Params, stateStore state.Store) (swap *Swap, err error) {
 
 	swap = &Swap{
 		local:      local,
 		stateStore: stateStore,
-		peers:      make(map[discover.NodeID]*swapPeer),
+		peers:      make(map[discover.NodeID]*SwapPeer),
 	}
 
 	//swap.SetParams(local)
