@@ -166,7 +166,7 @@ func (s *Service) loop() {
 	HandleLoop:
 		for {
 			select {
-			// Notify of chain head events, but drop if too frequent
+			// Notify of chain head events
 			case head := <-chainHeadCh:
 				select {
 				case headCh <- head.Block:
