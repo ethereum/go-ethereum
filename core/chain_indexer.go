@@ -17,8 +17,8 @@
 package core
 
 import (
+	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -38,23 +38,15 @@ import (
 type ChainIndexerBackend interface {
 	// Reset initiates the processing of a new chain segment, potentially terminating
 	// any partially completed operations (in case of a reorg).
-	Reset(section uint64, prevHead common.Hash) error
+	Reset(ctx context.Context, section uint64, prevHead common.Hash) error
 
 	// Process crunches through the next header in the chain segment. The caller
 	// will ensure a sequential order of headers.
-	Process(header *types.Header) error
+	Process(ctx context.Context, header *types.Header) error
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
-
-	// Close shuts the backend down. After Close returns, all subsequent calls to
-	// the backend should return with ErrIndexerBackendClosed. Any blocking operations
-	// should be cancelled and return with ErrIndexerBackendClosed. Shorter operations
-	// may be finished and return normally while Close is blocking.
-	Close()
 }
-
-var ErrIndexerBackendClosed = errors.New("Indexer already closed")
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
@@ -80,9 +72,11 @@ type ChainIndexer struct {
 	backend  ChainIndexerBackend // Background processor generating the index data content
 	children []*ChainIndexer     // Child indexers to cascade chain updates to
 
-	active uint32          // Flag whether the event loop was started
-	update chan struct{}   // Notification channel that headers should be processed
-	quit   chan chan error // Quit channel to tear down running goroutines
+	active    uint32          // Flag whether the event loop was started
+	update    chan struct{}   // Notification channel that headers should be processed
+	quit      chan chan error // Quit channel to tear down running goroutines
+	ctx       context.Context
+	ctxCancel func()
 
 	sectionSize uint64 // Number of blocks in a single chain segment to process
 	confirmsReq uint64 // Number of confirmations before processing a completed segment
@@ -114,6 +108,8 @@ func NewChainIndexer(chainDb, indexDb ethdb.Database, backend ChainIndexerBacken
 	}
 	// Initialize database dependent fields and start the updater
 	c.loadValidSections()
+	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
+
 	go c.updateLoop()
 
 	return c
@@ -147,7 +143,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 func (c *ChainIndexer) Close() error {
 	var errs []error
 
-	c.backend.Close()
+	c.ctxCancel()
 
 	// Tear down the primary update loop
 	errc := make(chan error)
@@ -308,8 +304,11 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
-					if err == ErrIndexerBackendClosed {
-						continue
+					select {
+					case <-c.ctx.Done():
+						<-c.quit <- nil
+						return
+					default:
 					}
 					c.log.Error("Section processing failed", "error", err)
 				}
@@ -358,7 +357,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 
 	// Reset and partial processing
 
-	if err := c.backend.Reset(section, lastHead); err != nil {
+	if err := c.backend.Reset(c.ctx, section, lastHead); err != nil {
 		c.setValidSections(0)
 		return common.Hash{}, err
 	}
@@ -374,7 +373,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		} else if header.ParentHash != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
-		if err := c.backend.Process(header); err != nil {
+		if err := c.backend.Process(c.ctx, header); err != nil {
 			return common.Hash{}, err
 		}
 		lastHead = header.Hash()
