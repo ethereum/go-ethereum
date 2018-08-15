@@ -20,8 +20,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
+	"github.com/orangeAndSuns/go-ethereum/log"
 
 	cli "gopkg.in/urfave/cli.v1"
 )

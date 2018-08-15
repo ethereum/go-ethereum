@@ -23,11 +23,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/orangeAndSuns/go-ethereum/log"
+	"github.com/orangeAndSuns/go-ethereum/node"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/simulations"
+	"github.com/orangeAndSuns/go-ethereum/p2p/simulations/adapters"
 )
 
 // Common errors that are returned by functions in this package.
@@ -43,13 +43,13 @@ type Simulation struct {
 	// of p2p/simulations.Network.
 	Net *simulations.Network
 
-	serviceNames []string
-	cleanupFuncs []func()
-	buckets      map[discover.ESSNodeID]*sync.Map
-	pivotESSNodeID  *discover.ESSNodeID
-	shutdownWG   sync.WaitGroup
-	done         chan struct{}
-	mu           sync.RWMutex
+	serviceNames   []string
+	cleanupFuncs   []func()
+	buckets        map[discover.ESSNodeID]*sync.Map
+	pivotESSNodeID *discover.ESSNodeID
+	shutdownWG     sync.WaitGroup
+	done           chan struct{}
+	mu             sync.RWMutex
 
 	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
 	handler *simulations.Server //HTTP handler for the server

@@ -26,10 +26,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/orangeAndSuns/go-ethereum/common"
+	"github.com/orangeAndSuns/go-ethereum/core/types"
+	"github.com/orangeAndSuns/go-ethereum/swarm/log"
+	"github.com/orangeAndSuns/go-ethereum/swarm/storage"
 )
 
 func testAPI(t *testing.T, f func(*API, bool)) {

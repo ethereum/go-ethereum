@@ -24,11 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/orangeAndSuns/go-ethereum/event"
+	"github.com/orangeAndSuns/go-ethereum/log"
+	"github.com/orangeAndSuns/go-ethereum/p2p"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/simulations/adapters"
 )
 
 var DialBanTimeout = 200 * time.Millisecond
@@ -598,9 +598,9 @@ func (c *Conn) String() string {
 type Msg struct {
 	One      discover.ESSNodeID `json:"one"`
 	Other    discover.ESSNodeID `json:"other"`
-	Protocol string          `json:"protocol"`
-	Code     uint64          `json:"code"`
-	Received bool            `json:"received"`
+	Protocol string             `json:"protocol"`
+	Code     uint64             `json:"code"`
+	Received bool               `json:"received"`
 }
 
 // String returns a log-friendly string

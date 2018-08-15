@@ -28,8 +28,8 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/orangeAndSuns/go-ethereum/common"
+	"github.com/orangeAndSuns/go-ethereum/crypto"
 )
 
 func TestTable_pingReplace(t *testing.T) {
@@ -570,7 +570,7 @@ func (tn *preminedTestnet) findnode(toid ESSNodeID, toaddr *net.UDPAddr, target 
 	return result, nil
 }
 
-func (*preminedTestnet) close()                                      {}
+func (*preminedTestnet) close()                                         {}
 func (*preminedTestnet) waitping(from ESSNodeID) error                  { return nil }
 func (*preminedTestnet) ping(toid ESSNodeID, toaddr *net.UDPAddr) error { return nil }
 

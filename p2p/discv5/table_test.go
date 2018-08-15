@@ -27,15 +27,15 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/orangeAndSuns/go-ethereum/common"
+	"github.com/orangeAndSuns/go-ethereum/crypto"
 )
 
 type nullTransport struct{}
 
 func (nullTransport) sendPing(remote *Node, remoteAddr *net.UDPAddr) []byte { return []byte{1} }
 func (nullTransport) sendPong(remote *Node, pingHash []byte)                {}
-func (nullTransport) sendFindnode(remote *Node, target ESSNodeID)              {}
+func (nullTransport) sendFindnode(remote *Node, target ESSNodeID)           {}
 func (nullTransport) sendNeighbours(remote *Node, nodes []*Node)            {}
 func (nullTransport) localAddr() *net.UDPAddr                               { return new(net.UDPAddr) }
 func (nullTransport) Close()                                                {}

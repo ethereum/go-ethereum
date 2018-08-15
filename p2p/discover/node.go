@@ -31,9 +31,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/orangeAndSuns/go-ethereum/common"
+	"github.com/orangeAndSuns/go-ethereum/crypto"
+	"github.com/orangeAndSuns/go-ethereum/crypto/secp256k1"
 )
 
 const ESSNodeIDBits = 512
@@ -41,8 +41,8 @@ const ESSNodeIDBits = 512
 // Node represents a host on the network.
 // The fields of Node may not be modified.
 type Node struct {
-	IP       net.IP // len 4 for IPv4 or 16 for IPv6
-	UDP, TCP uint16 // port numbers
+	IP       net.IP    // len 4 for IPv4 or 16 for IPv6
+	UDP, TCP uint16    // port numbers
 	ID       ESSNodeID // the node's public key
 
 	// This is a cached copy of sha3(ID) which is used for node

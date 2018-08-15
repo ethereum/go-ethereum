@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/state"
+	"github.com/orangeAndSuns/go-ethereum/crypto"
+	"github.com/orangeAndSuns/go-ethereum/p2p"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/protocols"
+	"github.com/orangeAndSuns/go-ethereum/rpc"
+	"github.com/orangeAndSuns/go-ethereum/swarm/log"
+	"github.com/orangeAndSuns/go-ethereum/swarm/state"
 )
 
 const (
@@ -80,7 +80,7 @@ type Peer interface {
 
 // Conn interface represents an live peer connection
 type Conn interface {
-	ID() discover.ESSNodeID                                                                  // the key that uniquely identifies the Node for the peerPool
+	ID() discover.ESSNodeID                                                               // the key that uniquely identifies the Node for the peerPool
 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
 	Send(context.Context, interface{}) error                                              // can send messages
 	Drop(error)                                                                           // disconnect this peer

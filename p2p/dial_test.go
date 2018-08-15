@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/netutil"
 )
 
 func init() {
@@ -78,11 +78,11 @@ func runDialTest(t *testing.T, test dialtest) {
 
 type fakeTable []*discover.Node
 
-func (t fakeTable) Self() *discover.Node                     { return new(discover.Node) }
-func (t fakeTable) Close()                                   {}
-func (t fakeTable) Lookup(discover.ESSNodeID) []*discover.Node  { return nil }
-func (t fakeTable) Resolve(discover.ESSNodeID) *discover.Node   { return nil }
-func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int { return copy(buf, t) }
+func (t fakeTable) Self() *discover.Node                       { return new(discover.Node) }
+func (t fakeTable) Close()                                     {}
+func (t fakeTable) Lookup(discover.ESSNodeID) []*discover.Node { return nil }
+func (t fakeTable) Resolve(discover.ESSNodeID) *discover.Node  { return nil }
+func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int   { return copy(buf, t) }
 
 // This test checks that dynamic dials are launched from discovery results.
 func TestDialStateDynDial(t *testing.T) {
@@ -689,8 +689,8 @@ func (t *resolveMock) Resolve(id discover.ESSNodeID) *discover.Node {
 	return t.answer
 }
 
-func (t *resolveMock) Self() *discover.Node                     { return new(discover.Node) }
-func (t *resolveMock) Close()                                   {}
-func (t *resolveMock) Bootstrap([]*discover.Node)               {}
-func (t *resolveMock) Lookup(discover.ESSNodeID) []*discover.Node  { return nil }
-func (t *resolveMock) ReadRandomNodes(buf []*discover.Node) int { return 0 }
+func (t *resolveMock) Self() *discover.Node                       { return new(discover.Node) }
+func (t *resolveMock) Close()                                     {}
+func (t *resolveMock) Bootstrap([]*discover.Node)                 {}
+func (t *resolveMock) Lookup(discover.ESSNodeID) []*discover.Node { return nil }
+func (t *resolveMock) ReadRandomNodes(buf []*discover.Node) int   { return 0 }

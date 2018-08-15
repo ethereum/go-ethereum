@@ -19,7 +19,7 @@ package simulation
 import (
 	"strings"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
 )
 
 // ConnectToPivotNode connects the node with provided ESSNodeID

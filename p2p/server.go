@@ -25,14 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/orangeAndSuns/go-ethereum/common"
+	"github.com/orangeAndSuns/go-ethereum/common/mclock"
+	"github.com/orangeAndSuns/go-ethereum/event"
+	"github.com/orangeAndSuns/go-ethereum/log"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discover"
+	"github.com/orangeAndSuns/go-ethereum/p2p/discv5"
+	"github.com/orangeAndSuns/go-ethereum/p2p/nat"
+	"github.com/orangeAndSuns/go-ethereum/p2p/netutil"
 )
 
 const (
@@ -200,10 +200,10 @@ type conn struct {
 	fd net.Conn
 	transport
 	flags connFlag
-	cont  chan error      // The run loop uses cont to signal errors to SetupConn.
+	cont  chan error         // The run loop uses cont to signal errors to SetupConn.
 	id    discover.ESSNodeID // valid after the encryption handshake
-	caps  []Cap           // valid after the protocol handshake
-	name  string          // valid after the protocol handshake
+	caps  []Cap              // valid after the protocol handshake
+	name  string             // valid after the protocol handshake
 }
 
 type transport interface {
