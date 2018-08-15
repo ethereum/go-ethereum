@@ -35,25 +35,25 @@ const (
 
 type SwapProtocol struct {
 	peersMu sync.RWMutex
-	peers   map[discover.NodeID]*SwapPeer
+	peers   map[discover.NodeID]*SwapProtocolPeer
 }
 
 // Peer is the Peer extension for the streaming protocol
-type SwapPeer struct {
+type SwapProtocolPeer struct {
 	*protocols.Peer
 	swapProtocol *SwapProtocol
 }
 
 func NewSwapProtocol() *SwapProtocol {
 	proto := &SwapProtocol{
-		peers: make(map[discover.NodeID]*SwapPeer),
+		peers: make(map[discover.NodeID]*SwapProtocolPeer),
 	}
 	return proto
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *protocols.Peer, swap *SwapProtocol) *SwapPeer {
-	p := &SwapPeer{
+func NewPeer(peer *protocols.Peer, swap *SwapProtocol) *SwapProtocolPeer {
+	p := &SwapProtocolPeer{
 		Peer:         peer,
 		swapProtocol: swap,
 	}
@@ -100,19 +100,6 @@ func (p *SwapProtocol) Protocols() []p2p.Protocol {
 	}
 }
 
-func (swap *SwapProtocol) DebitByteCount(peer *SwapPeer, numberOfBytes int) error {
-	return nil
-}
-
-func (swap *SwapProtocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	p := protocols.NewPeer(peer, rw, swapSpec)
-	sp := NewPeer(p, swap)
-	swap.setPeer(sp)
-	defer swap.deletePeer(sp)
-	defer swap.Close()
-	return sp.Run(sp.handleSwapMsg)
-}
-
 func (p *SwapProtocol) APIs() []rpc.API {
 	apis := []rpc.API{
 		{
@@ -125,7 +112,17 @@ func (p *SwapProtocol) APIs() []rpc.API {
 	return apis
 }
 
-//--------------------
+/////////////////////////////////////////////////////////////////////
+// SECTION: p2p.protocol interface
+/////////////////////////////////////////////////////////////////////
+func (swap *SwapProtocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	p := protocols.NewPeer(peer, rw, swapSpec)
+	sp := NewPeer(p, swap)
+	swap.setPeer(sp)
+	defer swap.deletePeer(sp)
+	defer swap.Close()
+	return sp.Run(sp.handleSwapMsg)
+}
 
 func (swap *SwapProtocol) NodeInfo() interface{} {
 	return nil
@@ -135,18 +132,23 @@ func (swap *SwapProtocol) PeerInfo(id discover.NodeID) interface{} {
 	return nil
 }
 
-func (swap *SwapProtocol) Close() error {
+//------------------------------------------------------------------------------------------
+
+func (swap *SwapProtocol) DebitByteCount(peer *SwapProtocolPeer, numberOfBytes int) error {
 	return nil
 }
 
-func (swap *SwapProtocol) getPeer(peerId discover.NodeID) *SwapPeer {
+func (swap *SwapProtocol) Close() {
+}
+
+func (swap *SwapProtocol) getPeer(peerId discover.NodeID) *SwapProtocolPeer {
 	swap.peersMu.RLock()
 	defer swap.peersMu.RUnlock()
 
 	return swap.peers[peerId]
 }
 
-func (swap *SwapProtocol) setPeer(peer *SwapPeer) {
+func (swap *SwapProtocol) setPeer(peer *SwapProtocolPeer) {
 	swap.peersMu.Lock()
 	defer swap.peersMu.Unlock()
 
@@ -154,7 +156,7 @@ func (swap *SwapProtocol) setPeer(peer *SwapPeer) {
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(swap.peers)))
 }
 
-func (swap *SwapProtocol) deletePeer(peer *SwapPeer) {
+func (swap *SwapProtocol) deletePeer(peer *SwapProtocolPeer) {
 	swap.peersMu.Lock()
 	defer swap.peersMu.Unlock()
 
@@ -170,7 +172,7 @@ func (swap *SwapProtocol) peersCount() (c int) {
 	return
 }
 
-func (p *SwapPeer) handleSwapMsg(ctx context.Context, msg interface{}) error {
+func (p *SwapProtocolPeer) handleSwapMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
 	case *IssueChequeMsg:
@@ -190,10 +192,10 @@ func (p *SwapPeer) handleSwapMsg(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func (sp *SwapPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
+func (sp *SwapProtocolPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	return err
 }
 
-func (sp *SwapPeer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
+func (sp *SwapProtocolPeer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	return err
 }
