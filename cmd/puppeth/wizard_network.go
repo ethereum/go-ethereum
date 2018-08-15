@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -62,14 +63,22 @@ func (w *wizard) manageServers() {
 	}
 }
 
-// makeServer reads a single line from stdin and interprets it as a hostname to
-// connect to. It tries to establish a new SSH session and also executing some
+// makeServer reads a single line from stdin and interprets it as
+// username:identity@hostname to connect to.
+// It tries to establish a new SSH session and also executing some
 // baseline validations.
 //
 // If connection succeeds, the server is added to the wizards configs!
 func (w *wizard) makeServer() string {
+	login := ""
+	user, err := user.Current()
+	if err == nil {
+		login = user.Username
+	}
+
 	fmt.Println()
-	fmt.Println("Please enter remote server's address:")
+	fmt.Println("Please enter remote server (username:identity@hostname:port)")
+	fmt.Printf("If not given, will use username = %s, identity = id_rsa\n", login)
 
 	// Read and dial the server to ensure docker is present
 	input := w.readString()
