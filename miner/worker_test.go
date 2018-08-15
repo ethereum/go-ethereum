@@ -59,7 +59,7 @@ func init() {
 	ethashChainConfig = params.TestChainConfig
 	cliqueChainConfig = params.TestChainConfig
 	cliqueChainConfig.Clique = &params.CliqueConfig{
-		Period: 1,
+		Period: 10,
 		Epoch:  30000,
 	}
 	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
@@ -74,6 +74,7 @@ type testWorkerBackend struct {
 	txPool     *core.TxPool
 	chain      *core.BlockChain
 	testTxFeed event.Feed
+	uncleBlock *types.Block
 }
 
 func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) *testWorkerBackend {
@@ -93,15 +94,19 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	default:
 		t.Fatal("unexpect consensus engine type")
 	}
-	gspec.MustCommit(db)
+	genesis := gspec.MustCommit(db)
 
 	chain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{})
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
+	blocks, _ := core.GenerateChain(chainConfig, genesis, engine, db, 1, func(i int, gen *core.BlockGen) {
+		gen.SetCoinbase(acc1Addr)
+	})
 
 	return &testWorkerBackend{
-		db:     db,
-		chain:  chain,
-		txPool: txpool,
+		db:         db,
+		chain:      chain,
+		txPool:     txpool,
+		uncleBlock: blocks[0],
 	}
 }
 
@@ -188,7 +193,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 			taskCh <- struct{}{}
 		}
 	}
-	w.fullTaskInterval = func() {
+	w.fullTaskHook = func() {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -202,11 +207,66 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 
 	w.start()
 	for i := 0; i < 2; i += 1 {
-		to := time.NewTimer(time.Second)
 		select {
 		case <-taskCh:
-		case <-to.C:
+		case <-time.NewTimer(time.Second).C:
 			t.Error("new task timeout")
 		}
+	}
+}
+
+func TestStreamUncleBlock(t *testing.T) {
+	ethash := ethash.NewFaker()
+	defer ethash.Close()
+
+	w, b := newTestWorker(t, ethashChainConfig, ethash)
+	defer w.close()
+
+	var taskCh = make(chan struct{})
+
+	taskIndex := 0
+	w.newTaskHook = func(task *task) {
+		if task.block.NumberU64() == 1 {
+			if taskIndex == 2 {
+				has := task.block.Header().UncleHash
+				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
+				if has != want {
+					t.Errorf("uncle hash mismatch, has %s, want %s", has.Hex(), want.Hex())
+				}
+			}
+			taskCh <- struct{}{}
+			taskIndex += 1
+		}
+	}
+	w.skipSealHook = func(task *task) bool {
+		return true
+	}
+	w.fullTaskHook = func() {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+
+	w.start()
+	// Ignore the first two works
+	for i := 0; i < 2; i += 1 {
+		select {
+		case <-taskCh:
+		case <-time.NewTimer(time.Second).C:
+			t.Error("new task timeout")
+		}
+	}
+	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
+
+	select {
+	case <-taskCh:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("new task timeout")
 	}
 }
