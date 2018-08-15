@@ -114,7 +114,7 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 		hash    = header.HashNoNonce().Bytes()
 		target  = new(big.Int).Div(two256, header.Difficulty)
 		number  = header.Number.Uint64()
-		dataset = ethash.dataset(number)
+		dataset = ethash.dataset(number, false)
 	)
 	// Start generating random nonces until we abort or find a good one
 	var (
@@ -233,21 +233,22 @@ func (ethash *Ethash) remote(notify []string) {
 			log.Info("Work submitted but none pending", "hash", hash)
 			return false
 		}
-
 		// Verify the correctness of submitted result.
 		header := block.Header()
 		header.Nonce = nonce
 		header.MixDigest = mixDigest
-		if err := ethash.VerifySeal(nil, header); err != nil {
-			log.Warn("Invalid proof-of-work submitted", "hash", hash, "err", err)
+
+		start := time.Now()
+		if err := ethash.verifySeal(nil, header, true); err != nil {
+			log.Warn("Invalid proof-of-work submitted", "hash", hash, "elapsed", time.Since(start), "err", err)
 			return false
 		}
-
 		// Make sure the result channel is created.
 		if ethash.resultCh == nil {
 			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
 			return false
 		}
+		log.Trace("Verified correct proof-of-work", "hash", hash, "elapsed", time.Since(start))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
 		select {
