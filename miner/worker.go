@@ -40,14 +40,23 @@ import (
 const (
 	// resultQueueSize is the size of channel listening to sealing result.
 	resultQueueSize = 10
+
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
+
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
-	miningLogAtDepth  = 5
+
+	// miningLogAtDepth is the number of confirmations before logging successful mining.
+	miningLogAtDepth = 5
+
+	// blockRecommitInterval is the time interval to recreate the mining block with
+	// any newly arrived transactions.
+	blockRecommitInterval = 3 * time.Second
 )
 
 // Env is the worker's current environment and holds all of the current state information.
@@ -319,15 +328,28 @@ func (w *worker) mainLoop() {
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
 
+	recommit := time.NewTimer(0)
+	<-recommit.C // ignore first recommit
+
 	for {
 		select {
 		case <-w.newWork:
 			// Submit a work when the worker is created or started.
-			w.commitNewWork()
+			w.commitNewWork(false)
+			recommit.Reset(blockRecommitInterval)
 
 		case <-w.chainHeadCh:
 			// Resubmit a work for new cycle once worker receives chain head event.
-			w.commitNewWork()
+			w.commitNewWork(false)
+			recommit.Reset(blockRecommitInterval)
+
+		case <-recommit.C:
+			// If mining is running resubmit a new work cycle periodically to pull in
+			// higher priced transactions. Disable this overhead for pending blocks.
+			if w.isRunning() && (w.config.Clique == nil || w.config.Clique.Period > 0) {
+				w.commitNewWork(true)
+			}
+			recommit.Reset(blockRecommitInterval)
 
 		case ev := <-w.chainSideCh:
 			if _, exist := w.possibleUncles[ev.Block.Hash()]; exist {
@@ -355,6 +377,7 @@ func (w *worker) mainLoop() {
 					})
 					w.commit(uncles, nil, true, start)
 				}
+				recommit.Reset(blockRecommitInterval)
 			}
 
 		case ev := <-w.txsCh:
@@ -379,7 +402,7 @@ func (w *worker) mainLoop() {
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
 				if w.config.Clique != nil && w.config.Clique.Period == 0 {
-					w.commitNewWork()
+					w.commitNewWork(false)
 				}
 			}
 
@@ -580,7 +603,7 @@ func (w *worker) updateSnapshot() {
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
-func (w *worker) commitNewWork() {
+func (w *worker) commitNewWork(noempty bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -666,10 +689,11 @@ func (w *worker) commitNewWork() {
 		delete(w.possibleUncles, hash)
 	}
 
-	// Create an empty block based on temporary copied state for sealing in advance without waiting block
-	// execution finished.
-	w.commit(uncles, nil, false, tstart)
-
+	// If empty blocks are allowed, create one based on temporary copied state for
+	// sealing in advance without waiting for transaction execution to finish.
+	if !noempty {
+		w.commit(uncles, nil, false, tstart)
+	}
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
 	if err != nil {
