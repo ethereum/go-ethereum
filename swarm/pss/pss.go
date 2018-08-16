@@ -232,7 +232,8 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			}
 		}
 	}()
-	log.Info("Started Pss", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())))
+	log.Info("Started Pss")
+	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
 	return nil
 }
 
