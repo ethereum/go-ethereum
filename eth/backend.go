@@ -220,7 +220,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if number > 0 && number-rCheckpoint > 0 {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
-				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Clique.Reward), new(big.Int).SetUint64(params.Ether))
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
