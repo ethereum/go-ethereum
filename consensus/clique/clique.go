@@ -397,9 +397,9 @@ func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Heade
 	n := header.Number.Uint64()
 	e := c.config.Epoch
 	switch {
-	case n % e == 0:
+	case n%e == 0:
 		return c.GetMasternodesFromCheckpointHeader(header, n, e)
-	case n % e != 0:
+	case n%e != 0:
 		h := chain.GetHeaderByNumber(n - (n % e))
 		return c.GetMasternodesFromCheckpointHeader(h, n, e)
 	default:
@@ -450,7 +450,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
 		// checkpoint snapshot = checkpoint - gap
-		if (number + c.config.Gap)%c.config.Epoch == 0 {
+		if (number+c.config.Gap)%c.config.Epoch == 0 {
 			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash); err == nil {
 				log.Trace("Loaded voting snapshot form disk", "number", number, "hash", hash)
 				snap = s
@@ -504,7 +504,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 	c.recents.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
-	if (snap.Number + c.config.Gap)%c.config.Epoch == 0 {
+	if (snap.Number+c.config.Gap)%c.config.Epoch == 0 {
 		if err = snap.store(c.db); err != nil {
 			return nil, err
 		}
@@ -575,7 +575,10 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 		if recent == signer {
 			// Signer is among recents, only fail if the current block doesn't shift it out
 			if limit := uint64(len(masternodes)/2 + 1); seen > number-limit {
-				return errUnauthorized
+				// Only take into account the non-epoch blocks
+				if number%c.config.Epoch != 0 {
+					return errUnauthorized
+				}
 			}
 		}
 	}
@@ -752,10 +755,13 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 		if recent == signer {
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(masternodes)/2 + 1); number < limit || seen > number-limit {
-				log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
-				log.Info("Signed recently, must wait for others")
-				<-stop
-				return nil, nil
+				// Only take into account the non-epoch blocks
+				if number%c.config.Epoch != 0 {
+					log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
+					log.Info("Signed recently, must wait for others")
+					<-stop
+					return nil, nil
+				}
 			}
 		}
 	}
