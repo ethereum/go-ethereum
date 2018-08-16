@@ -54,8 +54,8 @@ var (
 	autoDepositBuffer    = big.NewInt(100000000000000) // buffer that is surplus for fork protection etc (wei)
 	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
 	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
-	payAt                = big.NewInt(4096 * 10000)    // threshold that triggers payment {request} (bytes)
-	dropAt               = big.NewInt(-4096 * 10000)   // threshold that triggers disconnect (bytes)
+	payAt                = big.NewInt(-4096 * 10000)   // threshold that triggers payment {request} (bytes)
+	dropAt               = big.NewInt(-4096 * 12000)   // threshold that triggers disconnect (bytes)
 
 	ErrInsufficientFunds = errors.New("Insufficient funds")
 	ErrNotAccountedMsg   = errors.New("Message does not need accounting")
@@ -190,6 +190,10 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 		price := accounted.GetMsgPrice()
 		//local node is being credited (in its favor), so check upper limit
 		if direction == CreditEntry {
+			//TODO: is there are a check needed here?
+			//It should actually have been done on the client side, the debitor!
+			//creditor could theoretically go over payAt, but if well done,
+			//should have been checked on the client side so this shouldn't happen?
 			checkBalance := sp.balance.Add(sp.balance, price)
 			//(checkBalance *Int) Cmp(payAt)
 			// -1 if checkBalance  <  payAt
@@ -199,6 +203,11 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 				return nil, ErrInsufficientFunds
 			}
 		} else if direction == DebitEntry {
+			//NOTE: ErrInsufficientFunds should only be returned
+			//if the dropAt is exceeded, but should be ignored for payAt,
+			//as there is a "clemency" margin between triggering the check
+			//and actually disconnecting the peer
+
 			//(checkBalance *Int) Cmp(dropAt)
 			// -1 if checkBalance  <  dropAt
 			//  0 if checkBalance  ==	dropAt
@@ -231,14 +240,27 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 		}
 		//TODO: save to store here? init store?
 		sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
-		if sp.balance.Cmp(payAt) > -1 {
-			//TODO: Issue Cheque
+		//(sp.balance *Int) Cmp(payAt)
+		// -1 if sp.balance <  payAt
+		//  0 if sp.balance == payAt
+		// +1 if sp.balance >  payAt
+		if sp.balance.Cmp(payAt) > 1 {
+			err := sp.issueCheque(ctx)
+			if err != nil {
+				//TODO: special error handling, as at this point the accounting has been done
+				//but the cheque could not be sent?
+			}
 		}
 		if sp.balance.Cmp(dropAt) < 0 {
-			//TODO: Drop peer
+			sp.Drop(ErrInsufficientFunds)
 		}
 		log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.ID(), sp.balance.String()))
 	}
+}
+
+func (sp *SwapPeer) issueCheque(ctx context.Context) error {
+	msg := IssueChequeMsg{}
+	return sp.Send(ctx, msg)
 }
 
 //Create a new swap accounted peer

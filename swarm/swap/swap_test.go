@@ -50,6 +50,17 @@ var (
 	loglevel      = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
+type testExceedsPayAtMsg struct{}
+type testExceedsDropAtMsg struct{}
+
+func (tmsg *testExceedsPayAtMsg) GetMsgPrice() *big.Int {
+	return payAt.Sub(big.NewInt(1))
+}
+
+func (tmsg *testExceedsDropAtMsg) GetMsgPrice() *big.Int {
+	return dropAt.Sub(big.NewInt(1))
+}
+
 func init() {
 	flag.Parse()
 
@@ -57,30 +68,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-func newServiceNode(port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
-	cfg := &node.DefaultConfig
-	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", port)
-	cfg.P2P.EnableMsgEvents = true
-	cfg.P2P.NoDiscovery = true
-	cfg.IPCPath = ipcpath
-	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, port)
-	if httpport > 0 {
-		cfg.HTTPHost = node.DefaultHTTPHost
-		cfg.HTTPPort = httpport
+func TestLimits(t *testing.T) {
+	if dropAt >= payAt {
+		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %s, payAt: %s", dropAt.String(), payAt.String()))
 	}
-	if wsport > 0 {
-		cfg.WSHost = node.DefaultWSHost
-		cfg.WSPort = wsport
-		cfg.WSOrigins = []string{"*"}
-		for i := 0; i < len(modules); i++ {
-			cfg.WSModules = append(cfg.WSModules, modules[i])
-		}
-	}
-	stack, err := node.New(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("ServiceNode create fail: %v", err)
-	}
-	return stack, nil
+}
+
+func TestExceedsPayAt(t *testing.T) {
 }
 
 func TestSwapProtocol(t *testing.T) {
@@ -100,12 +94,6 @@ func TestSwapProtocol(t *testing.T) {
 	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
 		return &API{
 			SwapProtocol: instance,
-		}, nil
-	}
-
-	streamersvc := func(ctx *node.ServiceContext) (node.Service, erro) {
-		return &stream.API{
-			streamer: NewRegistry,
 		}, nil
 	}
 
@@ -182,7 +170,7 @@ func TestSwapProtocol(t *testing.T) {
 				// when we get the add event, we know we are connected
 				ev := <-eventOneC
 				if ev.Type != "add" {
-					log.Error("server #1 expected peer add", "eventtype", ev.Type)
+				log.Error("server #1 expected peer add", "eventtype", ev.Type)
 					stackW.Done()
 					return
 				}
@@ -287,4 +275,30 @@ func TestSwapProtocol(t *testing.T) {
 			stack_one.Stop()
 			stack_two.Stop()
 	*/
+}
+
+func newServiceNode(port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
+	cfg := &node.DefaultConfig
+	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", port)
+	cfg.P2P.EnableMsgEvents = true
+	cfg.P2P.NoDiscovery = true
+	cfg.IPCPath = ipcpath
+	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, port)
+	if httpport > 0 {
+		cfg.HTTPHost = node.DefaultHTTPHost
+		cfg.HTTPPort = httpport
+	}
+	if wsport > 0 {
+		cfg.WSHost = node.DefaultWSHost
+		cfg.WSPort = wsport
+		cfg.WSOrigins = []string{"*"}
+		for i := 0; i < len(modules); i++ {
+			cfg.WSModules = append(cfg.WSModules, modules[i])
+		}
+	}
+	stack, err := node.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("ServiceNode create fail: %v", err)
+	}
+	return stack, nil
 }

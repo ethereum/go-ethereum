@@ -133,11 +133,6 @@ func (swap *SwapProtocol) PeerInfo(id discover.NodeID) interface{} {
 }
 
 //------------------------------------------------------------------------------------------
-
-func (swap *SwapProtocol) DebitByteCount(peer *SwapProtocolPeer, numberOfBytes int) error {
-	return nil
-}
-
 func (swap *SwapProtocol) Close() {
 }
 
@@ -193,9 +188,11 @@ func (p *SwapProtocolPeer) handleSwapMsg(ctx context.Context, msg interface{}) e
 }
 
 func (sp *SwapProtocolPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
+	log.Debug("SwapProtocolPeer: handleIssueChequeMsg")
 	return err
 }
 
 func (sp *SwapProtocolPeer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
+	log.Debug("SwapProtocolPeer: handleRedeemChequeMsg")
 	return err
 }
