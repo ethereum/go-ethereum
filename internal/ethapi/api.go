@@ -867,7 +867,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().Clique.Epoch))
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
 			if prevCheckpointBlock != nil {
-				masternodes := engine.(*clique.Clique).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header())
+				masternodes := engine.(*clique.Clique).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().Clique.Epoch)
 				countFinality := 0
 				for _, masternode := range masternodes {
 					for _, signer := range signers {
