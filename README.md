@@ -27,15 +27,6 @@ or, to build the full suite of utilities:
 
     make all
 
-## Ellaism network
-
-This is originally an [Ellaism
-Project](https://github.com/ellaism). However, A [recent hard
-fork](https://github.com/ellaism/specs/blob/master/specs/2018-0003-wasm-hardfork.md)
-makes Ellaism not feasible to support go-ethereum any more. Existing
-Ellaism users are asked to switch to
-[Parity](https://github.com/paritytech/parity).
-
 ## Executables
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd` directory.
@@ -80,20 +71,6 @@ This command will:
    This too is optional and if you leave it out you can always attach to an already running Geth instance
    with `geth attach`.
 
-### Full node on the main Ellaism network
-
-To get on Ellaism network and take advantage of fast-sync:
-
-```
-$ geth --ellaism console
-```
-
-This command will:
-
- * Start geth in fast sync mode and start up geth's built-in interactive JavaScript console,
-   connecting to Ellaism network.
- * Default data directory will be `~/.ethereum/ellaism`.
-
 ### Full node on the main Ethereum Classic network
 
 To get on Ethereum Classic network and take advantage of fast-sync:
@@ -114,9 +91,9 @@ For a full list of networks supported by multi-geth, take a look at the command-
 
 ```
 --testnet                            Ropsten network: pre-configured proof-of-work test network
---ellaism                            Ellaism network: pre-configured Ellaism mainnet
 --classic                            Ethereum Classic network: pre-configured Ethereum Classic mainnet
 --social                             Ethereum Social network: pre-configured Ethereum Social mainnet
+--callisto                           Callisto network: pre-configured Callisto mainnet
 --rinkeby                            Rinkeby network: pre-configured proof-of-authority test network
 ```
 

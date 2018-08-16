@@ -137,10 +137,6 @@ var (
 		Name:  "testnet",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
-	EllaismFlag = cli.BoolFlag{
-		Name:  "ellaism",
-		Usage: "Ellaism network: pre-configured Ellaism mainnet",
-	}
 	ClassicFlag = cli.BoolFlag{
 		Name:  "classic",
 		Usage: "Ethereum Classic network: pre-configured Ethereum Classic mainnet",
@@ -595,9 +591,6 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(TestnetFlag.Name) {
 			return filepath.Join(path, "testnet")
 		}
-		if ctx.GlobalBool(EllaismFlag.Name) {
-			return filepath.Join(path, "ellaism")
-		}
 		if ctx.GlobalBool(ClassicFlag.Name) {
 			return filepath.Join(path, "classic")
 		}
@@ -662,8 +655,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		}
 	case ctx.GlobalBool(TestnetFlag.Name):
 		urls = params.TestnetBootnodes
-	case ctx.GlobalBool(EllaismFlag.Name):
-		urls = params.EllaismBootnodes
 	case ctx.GlobalBool(ClassicFlag.Name):
 		urls = params.ClassicBootnodes
 	case ctx.GlobalBool(SocialFlag.Name):
@@ -955,8 +946,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(TestnetFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
-	case ctx.GlobalBool(EllaismFlag.Name):
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ellaism")
 	case ctx.GlobalBool(ClassicFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "classic")
 	case ctx.GlobalBool(SocialFlag.Name):
@@ -1092,17 +1081,10 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
-	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag, EllaismFlag, ClassicFlag, SocialFlag, CallistoFlag)
+	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag, ClassicFlag, SocialFlag, CallistoFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
 	checkExclusive(ctx, LightServFlag, LightModeFlag)
 	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
-
-	if ctx.GlobalIsSet(EllaismFlag.Name) {
-		log.Warn("-------------------------------------------------------------------")
-		log.Warn("multi-geth Ellaism support is deprecated, please upgrade to Parity")
-		log.Warn("(https://github.com/paritytech/parity) before block 2,000,000.")
-		log.Warn("-------------------------------------------------------------------")
-	}
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
@@ -1165,11 +1147,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
-	case ctx.GlobalBool(EllaismFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 64
-		}
-		cfg.Genesis = core.DefaultEllaismGenesisBlock()
 	case ctx.GlobalBool(ClassicFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1
@@ -1334,8 +1311,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
 		genesis = core.DefaultTestnetGenesisBlock()
-	case ctx.GlobalBool(EllaismFlag.Name):
-		genesis = core.DefaultEllaismGenesisBlock()
 	case ctx.GlobalBool(ClassicFlag.Name):
 		genesis = core.DefaultClassicGenesisBlock()
 	case ctx.GlobalBool(SocialFlag.Name):
