@@ -19,6 +19,7 @@ package swap
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -54,7 +55,10 @@ var (
 	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
 	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
 	payAt                = big.NewInt(4096 * 10000)    // threshold that triggers payment {request} (bytes)
-	dropAt               = big.NewInt(4096 * 10000)    // threshold that triggers disconnect (bytes)
+	dropAt               = big.NewInt(-4096 * 10000)   // threshold that triggers disconnect (bytes)
+
+	ErrInsufficientFunds = errors.New("Insufficient funds")
+	ErrNotAccountedMsg   = errors.New("Message does not need accounting")
 )
 
 const (
@@ -92,21 +96,17 @@ type SwapAccountedMsgType interface {
 	GetMsgPrice() *big.Int
 }
 
+//Handler for received messages
 func (sp *SwapPeer) RunAccountedProtocol(protocolHandler func(ctx context.Context, msg interface{}) error) error {
+	//the `peer.Run` function is a loop, so in order to pre-/post-process a message with accounting,
+	//we need to save the actual handler
 	sp.handlerFunc = protocolHandler
 
+	//then run the handler loop function
 	return sp.Run(sp.handleAccountedMsg)
 }
 
-func (sp *SwapPeer) doAccountMsg(ctx context.Context, msg interface{}, direction EntryDirection) error {
-	if accounted, ok := msg.(SwapAccountedMsgType); ok {
-		price := accounted.GetMsgPrice()
-		//TODO: Calculate total price and account
-		sp.AccountMsgForPeer(price, direction)
-	}
-	return nil
-}
-
+//get a peer's balance
 func (swap *Swap) GetPeerBalance(peer discover.NodeID) *big.Int {
 	if p, ok := swap.peers[peer]; ok {
 		return p.balance
@@ -114,48 +114,137 @@ func (swap *Swap) GetPeerBalance(peer discover.NodeID) *big.Int {
 	return nil
 }
 
+//Handle a received message; this is the handler loop function.
+//Check if it needs accounting, and if yes, apply accounting logic:
+//Check for sufficient funds, perform operation, then account
 func (sp *SwapPeer) handleAccountedMsg(ctx context.Context, msg interface{}) error {
-	err := sp.handlerFunc(ctx, msg)
-	if _, ok := msg.(SwapAccountedMsgType); ok && err == nil {
-		sp.doAccountMsg(ctx, msg, CreditEntry)
+	var err error
+	var price *big.Int
+
+	//the message is one which needs accounting...
+	if _, ok := msg.(SwapAccountedMsgType); ok {
+		//..so first check if there are enough funds for the operation available
+		//(for crediting, this means if we are not essentially "overdrafting", or crossing the threshold)
+		price, err = sp.checkAvailableFunds(ctx, msg, CreditEntry)
+		//if not (or some other error occured), return error
+		if err != nil {
+			//also, if the error is indeed insufficient funds, then disconnect the peer
+			if err == ErrInsufficientFunds {
+				log.Error("Insufficient funds, dropping peer")
+				sp.Drop(err)
+			}
+			return err
+		}
+		//at this point we know there are sufficient funds, so process the message
+		err = sp.handlerFunc(ctx, msg)
+		if err == nil {
+			//and if no errors occurred, finally book the entry
+			sp.AccountMsgForPeer(ctx, msg, price, CreditEntry)
+		}
+	} else {
+		//this message doesn't need accounting, so just process it
+		err = sp.handlerFunc(ctx, msg)
 	}
 	return err
 }
 
+//Send a message
+//Check if it needs accounting, and if yes, apply accounting logic:
+//Check for sufficient funds, perform operation, then account
 func (sp *SwapPeer) Send(ctx context.Context, msg interface{}) error {
-	err := sp.Peer.Send(ctx, msg)
-	if _, ok := msg.(SwapAccountedMsgType); ok && err == nil {
-		sp.doAccountMsg(ctx, msg, DebitEntry)
+	var err error
+	var price *big.Int
+
+	//the message is one which needs accounting...
+	if _, ok := msg.(SwapAccountedMsgType); ok {
+		//..so first check if there are enough funds for the operation available
+		price, err = sp.checkAvailableFunds(ctx, msg, DebitEntry)
+		//if not (or some other error occured), return error
+		if err != nil {
+			//also, if the error is indeed insufficient funds, then disconnect the peer
+			if err == ErrInsufficientFunds {
+				log.Error("Insufficient funds, dropping peer")
+				sp.Drop(err)
+			}
+			return err
+		}
+		//at this point we know there are sufficient funds, so process the message
+		err = sp.Peer.Send(ctx, msg)
+		if err == nil {
+			//and if no errors occurred, finally book the entry
+			sp.AccountMsgForPeer(ctx, msg, price, DebitEntry)
+		}
+	} else {
+		//this message doesn't need accounting, so just process it
+		err = sp.Peer.Send(ctx, msg)
 	}
 	return err
+}
+
+//check that the operation has enough funds available
+func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, direction EntryDirection) (*big.Int, error) {
+	sp.lock.Lock()
+	defer sp.lock.Unlock()
+
+	if accounted, ok := msg.(SwapAccountedMsgType); ok {
+		price := accounted.GetMsgPrice()
+		//local node is being credited (in its favor), so check upper limit
+		if direction == CreditEntry {
+			checkBalance := sp.balance.Add(sp.balance, price)
+			//(checkBalance *Int) Cmp(payAt)
+			// -1 if checkBalance  <  payAt
+			//  0 if checkBalance  == payAt
+			// +1 if checkBalance  >  payAt
+			if checkBalance.Cmp(payAt) == 1 {
+				return nil, ErrInsufficientFunds
+			}
+		} else if direction == DebitEntry {
+			//(checkBalance *Int) Cmp(dropAt)
+			// -1 if checkBalance  <  dropAt
+			//  0 if checkBalance  ==	dropAt
+			// +1 if checkBalance  >  dropAt
+			checkBalance := sp.balance.Sub(sp.balance, price)
+			if checkBalance.Cmp(dropAt) == -1 {
+				return nil, ErrInsufficientFunds
+			}
+		}
+		return price, nil
+	}
+	return nil, ErrNotAccountedMsg
 }
 
 //The balance is accounted from the point of view of the local node
 //Thus, we credit the balance and increase it when the amount is in favor of the local node
 //We debit the balance and decrease it when the amount is in favor of the remote peer
-func (sp *SwapPeer) AccountMsgForPeer(price *big.Int, direction EntryDirection) {
-	sp.lock.Lock()
-	defer sp.lock.Unlock()
-	//local node is being credited (in its favor), so its balance increases
-	if direction == CreditEntry {
-		sp.balance = sp.balance.Add(sp.balance, price)
-		//local node is being debited (in favor of remote peer), so its balance decreases
-	} else if direction == DebitEntry {
-		sp.balance = sp.balance.Sub(sp.balance, price)
+func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, price *big.Int, direction EntryDirection) {
+	if _, ok := msg.(SwapAccountedMsgType); ok {
+		sp.lock.Lock()
+		defer sp.lock.Unlock()
+		//local node is being credited (in its favor), so its balance increases
+		if direction == CreditEntry {
+			//NOTE: do we need to check for sufficient funds again?
+			//operations are not atomic/transactional, so balance may have changed in the meanwhile!
+			sp.balance = sp.balance.Add(sp.balance, price)
+			//local node is being debited (in favor of remote peer), so its balance decreases
+		} else if direction == DebitEntry {
+			sp.balance = sp.balance.Sub(sp.balance, price)
+		}
+		//TODO: save to store here? init store?
+		sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
+		if sp.balance.Cmp(payAt) > -1 {
+			//TODO: Issue Cheque
+		}
+		if sp.balance.Cmp(dropAt) < 0 {
+			//TODO: Drop peer
+		}
+		log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.ID(), sp.balance.String()))
 	}
-	//TODO: save to store here? init store?
-	sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)
-	if sp.balance.Cmp(payAt) > -1 {
-		//TODO: Issue Cheque
-	}
-	if sp.balance.Cmp(dropAt) < 0 {
-		//TODO: Drop peer
-	}
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.ID(), sp.balance.String()))
 }
 
+//Create a new swap accounted peer
 func NewSwapPeer(peer *protocols.Peer, swap *Swap) *SwapPeer {
 	balance := big.NewInt(0)
+	//check if there is one already in the stateStore and load it
 	swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
 	sp := &SwapPeer{
 		Peer:        peer,
