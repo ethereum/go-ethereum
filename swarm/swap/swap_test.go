@@ -18,27 +18,22 @@ package swap
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/network/simulation"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -50,15 +45,27 @@ var (
 	loglevel      = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
+var testSpec = &protocols.Spec{
+	Name:       "swapTestSpec",
+	Version:    1,
+	MaxMsgSize: 10 * 1024 * 1024,
+	Messages: []interface{}{
+		testExceedsPayAtMsg{},
+		testExceedsDropAtMsg{},
+	},
+}
+
 type testExceedsPayAtMsg struct{}
 type testExceedsDropAtMsg struct{}
 
 func (tmsg *testExceedsPayAtMsg) GetMsgPrice() *big.Int {
-	return payAt.Sub(big.NewInt(1))
+	diff := &big.Int{}
+	return diff.Sub(payAt, big.NewInt(1))
 }
 
 func (tmsg *testExceedsDropAtMsg) GetMsgPrice() *big.Int {
-	return dropAt.Sub(big.NewInt(1))
+	diff := &big.Int{}
+	return diff.Sub(dropAt, big.NewInt(1))
 }
 
 func init() {
@@ -69,12 +76,97 @@ func init() {
 }
 
 func TestLimits(t *testing.T) {
-	if dropAt >= payAt {
+	if dropAt.Cmp(payAt) > -1 {
 		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %s, payAt: %s", dropAt.String(), payAt.String()))
 	}
 }
 
 func TestExceedsPayAt(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swap_test_store")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	stateStore, err2 := state.NewDBStore(dir)
+	if err2 != nil {
+		panic(err2)
+	}
+	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
+	if err3 != nil {
+		t.Fatal(err3)
+	}
+	id := adapters.RandomNodeConfig().ID
+	testPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	sp := NewSwapPeer(testPeer, swap)
+	sp.handlerFunc = msgHandler
+	ctx := context.Background()
+	sp.handleAccountedMsg(ctx, &testExceedsPayAtMsg{})
+}
+
+func TestExceedsDropAt(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swap_test_store")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	stateStore, err2 := state.NewDBStore(dir)
+	if err2 != nil {
+		panic(err2)
+	}
+	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
+	if err3 != nil {
+		t.Fatal(err3)
+	}
+	id := adapters.RandomNodeConfig().ID
+	testPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	sp := NewSwapPeer(testPeer, swap)
+	sp.handlerFunc = msgHandler
+	ctx := context.Background()
+	err = sp.Send(ctx, &testExceedsDropAtMsg{})
+	if err != ErrInsufficientFunds {
+		t.Fatal("Expected test to fail with insufficient funds, but it didn't")
+	}
+}
+
+func TestProtocol(t *testing.T) {
+	/*
+		dir, err := ioutil.TempDir("", "swap_test_store")
+		if err != nil {
+			panic(err)
+		}
+		defer os.RemoveAll(dir)
+
+		swap := NewSwap(NewDefaultSwapParams().Params, state.NewDBStore(dir))
+		conf := adapters.RandomNodeConfig()
+
+		protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+			peer := protocols.NewPeer(p, rw, testSpec)
+			runProtocol(peer, swap)
+		}
+		protocolTester := p2ptest.NewProtocolTester(t, conf.ID, 2, protocol)
+		protocolTester.TestExchanges(p2p.TestExchange{
+			Label: "",
+			Expects: []p2ptest.Expect{
+				{
+					Code: 5,
+					Msg: &RetrieveRequestMsg{
+						Addr:      hash0[:],
+						SkipCheck: true,
+					},
+					Peer: peerID,
+				},
+			},
+		})
+	*/
+}
+
+func runProtocol(peer *protocols.Peer, swap *Swap) {
+	sp := NewSwapPeer(peer, swap)
+	sp.Peer.Run(msgHandler)
+}
+
+func msgHandler(ctx context.Context, msg interface{}) error {
+	return nil
 }
 
 func TestSwapProtocol(t *testing.T) {

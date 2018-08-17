@@ -212,7 +212,7 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 			// -1 if checkBalance  <  dropAt
 			//  0 if checkBalance  ==	dropAt
 			// +1 if checkBalance  >  dropAt
-			checkBalance := sp.balance.Sub(sp.balance, price)
+			checkBalance := sp.balance.Sub(sp.balance, price.Abs(price))
 			if checkBalance.Cmp(dropAt) == -1 {
 				return nil, ErrInsufficientFunds
 			}
