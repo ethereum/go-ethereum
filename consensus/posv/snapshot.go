@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the
@@ -48,12 +48,12 @@ type Snapshot struct {
 	config   *params.PosvConfig // Consensus engine parameters to fine tune behavior
 	sigcache *lru.ARCCache      // Cache of recent block signatures to speed up ecrecover
 
-	Number  uint64                      `json:"number"`  // Block number where the snapshot was created
-	Hash    common.Hash                 `json:"hash"`    // Block hash where the snapshot was created
-	Signers map[common.Address]struct{} `json:"signers"` // Set of authorized signers at this moment
-	Recents map[uint64]common.Address   `json:"recents"` // Set of recent signers for spam protections
-	Votes   []*clique.Vote                     `json:"votes"`   // List of votes cast in chronological order
-	Tally   map[common.Address]clique.Tally    `json:"tally"`   // Current vote tally to avoid recalculating
+	Number  uint64                          `json:"number"`  // Block number where the snapshot was created
+	Hash    common.Hash                     `json:"hash"`    // Block hash where the snapshot was created
+	Signers map[common.Address]struct{}     `json:"signers"` // Set of authorized signers at this moment
+	Recents map[uint64]common.Address       `json:"recents"` // Set of recent signers for spam protections
+	Votes   []*clique.Vote                  `json:"votes"`   // List of votes cast in chronological order
+	Tally   map[common.Address]clique.Tally `json:"tally"`   // Current vote tally to avoid recalculating
 }
 
 // newSnapshot creates a new snapshot with the specified startup parameters. This

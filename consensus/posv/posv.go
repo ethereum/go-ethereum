@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 )
 
 const (
@@ -207,9 +207,9 @@ type Posv struct {
 
 	proposals map[common.Address]bool // Current list of proposals we are pushing
 
-	signer common.Address // Ethereum address of the signing key
-	signFn clique.SignerFn       // Signer function to authorize hashes with
-	lock   sync.RWMutex   // Protects the signer fields
+	signer common.Address  // Ethereum address of the signing key
+	signFn clique.SignerFn // Signer function to authorize hashes with
+	lock   sync.RWMutex    // Protects the signer fields
 
 	HookReward func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 }
