@@ -462,6 +462,18 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
+func (s *LDBStore) Delete(addr Address) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	ikey := getIndexKey(addr)
+
+	var indx dpaDBIndex
+	s.tryAccessIdx(ikey, &indx)
+
+	s.delete(indx.Idx, ikey, s.po(addr))
+}
+
 func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
@@ -486,8 +498,8 @@ func (s *LDBStore) CurrentBucketStorageIndex(po uint8) uint64 {
 }
 
 func (s *LDBStore) Size() uint64 {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.entryCnt
 }
 

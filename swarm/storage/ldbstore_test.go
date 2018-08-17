@@ -416,14 +416,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	for i := 0; i < n; i++ {
 		// delete all even index chunks
 		if i%2 == 0 {
-
-			key := chunks[i].Addr
-			ikey := getIndexKey(key)
-
-			var indx dpaDBIndex
-			ldb.tryAccessIdx(ikey, &indx)
-
-			ldb.delete(indx.Idx, ikey, ldb.po(key))
+			ldb.Delete(chunks[i].Addr)
 		}
 	}
 
@@ -477,13 +470,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// delete all chunks
 	for i := 0; i < n; i++ {
-		key := chunks[i].Addr
-		ikey := getIndexKey(key)
-
-		var indx dpaDBIndex
-		ldb.tryAccessIdx(ikey, &indx)
-
-		ldb.delete(indx.Idx, ikey, ldb.po(key))
+		ldb.Delete(chunks[i].Addr)
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
