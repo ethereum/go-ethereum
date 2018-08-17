@@ -29,8 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -217,7 +217,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
-			if number > 0 && number-rCheckpoint > 0 {
+			foudationWalletAddr := chain.Config().Posv.FoudationWalletAddr
+			if foudationWalletAddr == (common.Address{}) {
+				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
+			}
+			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
@@ -240,7 +244,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				// Add reward for coin holders.
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						err := contracts.CalculateRewardForHolders(validator, state, signer, calcReward)
+						err := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
 						if err != nil {
 							log.Error("Fail to calculate reward for holders.", "error", err)
 						}

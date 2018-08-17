@@ -33,10 +33,9 @@ import (
 
 const (
 	HexSignMethod           = "e341eaa4"
-	RewardMasterPercent     = 30
-	RewardVoterPercent      = 60
+	RewardMasterPercent     = 40
+	RewardVoterPercent      = 50
 	RewardFoundationPercent = 10
-	FoudationWalletAddr     = "0x0000000000000000000000000000000000000068"
 )
 
 type rewardLog struct {
@@ -178,8 +177,8 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, sign
 }
 
 // Calculate reward for holders.
-func CalculateRewardForHolders(validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) error {
-	rewards, err := GetRewardBalancesRate(signer, calcReward, validator)
+func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) error {
+	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
 	if err != nil {
 		return err
 	}
@@ -192,7 +191,7 @@ func CalculateRewardForHolders(validator *contractValidator.TomoValidator, state
 }
 
 // Get reward balance rates for master node, founder and holders.
-func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
+func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent))
@@ -240,7 +239,7 @@ func GetRewardBalancesRate(masterAddr common.Address, totalReward *big.Int, vali
 
 	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent))
 	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
-	balances[common.HexToAddress(FoudationWalletAddr)] = foudationReward
+	balances[foudationWalletAddr] = foudationReward
 
 	jsonHolders, err := json.Marshal(balances)
 	if err != nil {
