@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/light"
@@ -47,26 +46,24 @@ import (
 )
 
 type LightEthereum struct {
-	config *eth.Config
+	lesCommons
 
 	odr         *LesOdr
 	relay       *LesTxRelay
 	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan chan bool
-	// Handlers
-	peers           *peerSet
-	txPool          *light.TxPool
-	blockchain      *light.LightChain
-	protocolManager *ProtocolManager
-	serverPool      *serverPool
-	reqDist         *requestDistributor
-	retriever       *retrieveManager
-	// DB interfaces
-	chainDb ethdb.Database // Block chain database
 
-	bloomRequests                              chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer, chtIndexer, bloomTrieIndexer *core.ChainIndexer
+	// Handlers
+	peers      *peerSet
+	txPool     *light.TxPool
+	blockchain *light.LightChain
+	serverPool *serverPool
+	reqDist    *requestDistributor
+	retriever  *retrieveManager
+
+	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer  *core.ChainIndexer
 
 	ApiBackend *LesApiBackend
 
@@ -95,9 +92,11 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	quitSync := make(chan struct{})
 
 	leth := &LightEthereum{
-		config:         config,
+		lesCommons: lesCommons{
+			chainDb: chainDb,
+			config:  config,
+		},
 		chainConfig:    chainConfig,
-		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
 		peers:          peers,
 		reqDist:        newRequestDistributor(peers, quitSync),
@@ -112,10 +111,12 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
 	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
+
 	leth.odr = NewLesOdr(chainDb, leth.retriever)
 	leth.chtIndexer = light.NewChtIndexer(chainDb, true, leth.odr)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, true, leth.odr)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
+
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
 	// indexers already set but not started yet
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
@@ -125,6 +126,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
 	leth.chtIndexer.Start(leth.blockchain)
 	leth.bloomIndexer.Start(leth.blockchain)
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -133,7 +135,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, ClientProtocolVersions, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, leth.serverPool, quitSync, &leth.wg); err != nil {
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, leth.serverPool, quitSync, &leth.wg); err != nil {
 		return nil, err
 	}
 	leth.ApiBackend = &LesApiBackend{leth, nil}
@@ -215,14 +217,14 @@ func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *LightEthereum) Protocols() []p2p.Protocol {
-	return s.protocolManager.SubProtocols
+	return s.makeProtocols(ClientProtocolVersions)
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
@@ -242,12 +244,8 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	s.odr.Stop()
-	if s.bloomIndexer != nil {
-		s.bloomIndexer.Close()
-	}
-	if s.chtIndexer != nil {
-		s.chtIndexer.Close()
-	}
+	s.bloomIndexer.Close()
+	s.chtIndexer.Close()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()

@@ -20,7 +20,6 @@ package les
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -40,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -64,10 +62,6 @@ const (
 
 	disableClientRemovePeer = false
 )
-
-// errIncompatibleConfig is returned if the requested protocols and configs are
-// not compatible (low protocol version restrictions and high requirements).
-var errIncompatibleConfig = errors.New("incompatible configuration")
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -115,8 +109,6 @@ type ProtocolManager struct {
 	peers      *peerSet
 	maxPeers   int
 
-	SubProtocols []p2p.Protocol
-
 	eventMux *event.TypeMux
 
 	// channels for fetcher, syncer, txsyncLoop
@@ -131,7 +123,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protocolVersions []uint, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		lightSync:   lightSync,
@@ -153,54 +145,6 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 	if odr != nil {
 		manager.retriever = odr.retriever
 		manager.reqDist = odr.retriever.dist
-	}
-
-	// Initiate a sub-protocol for every implemented version we can handle
-	manager.SubProtocols = make([]p2p.Protocol, 0, len(protocolVersions))
-	for _, version := range protocolVersions {
-		// Compatible, initialize the sub-protocol
-		version := version // Closure for the run
-		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
-			Name:    "les",
-			Version: version,
-			Length:  ProtocolLengths[version],
-			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				var entry *poolEntry
-				peer := manager.newPeer(int(version), networkId, p, rw)
-				if manager.serverPool != nil {
-					addr := p.RemoteAddr().(*net.TCPAddr)
-					entry = manager.serverPool.connect(peer, addr.IP, uint16(addr.Port))
-				}
-				peer.poolEntry = entry
-				select {
-				case manager.newPeerCh <- peer:
-					manager.wg.Add(1)
-					defer manager.wg.Done()
-					err := manager.handle(peer)
-					if entry != nil {
-						manager.serverPool.disconnect(entry)
-					}
-					return err
-				case <-manager.quitSync:
-					if entry != nil {
-						manager.serverPool.disconnect(entry)
-					}
-					return p2p.DiscQuitting
-				}
-			},
-			NodeInfo: func() interface{} {
-				return manager.NodeInfo()
-			},
-			PeerInfo: func(id discover.NodeID) interface{} {
-				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
-					return p.Info()
-				}
-				return nil
-			},
-		})
-	}
-	if len(manager.SubProtocols) == 0 {
-		return nil, errIncompatibleConfig
 	}
 
 	removePeer := manager.removePeer
@@ -260,6 +204,32 @@ func (pm *ProtocolManager) Stop() {
 	pm.wg.Wait()
 
 	log.Info("Light Ethereum protocol stopped")
+}
+
+// runPeer is the p2p protocol run function for the given version.
+func (pm *ProtocolManager) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	var entry *poolEntry
+	peer := pm.newPeer(int(version), pm.networkId, p, rw)
+	if pm.serverPool != nil {
+		addr := p.RemoteAddr().(*net.TCPAddr)
+		entry = pm.serverPool.connect(peer, addr.IP, uint16(addr.Port))
+	}
+	peer.poolEntry = entry
+	select {
+	case pm.newPeerCh <- peer:
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		err := pm.handle(peer)
+		if entry != nil {
+			pm.serverPool.disconnect(entry)
+		}
+		return err
+	case <-pm.quitSync:
+		if entry != nil {
+			pm.serverPool.disconnect(entry)
+		}
+		return p2p.DiscQuitting
+	}
 }
 
 func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -1201,50 +1171,6 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 		}
 	}
 	return stats
-}
-
-// NodeInfo represents a short summary of the Ethereum sub-protocol metadata
-// known about the host peer.
-type NodeInfo struct {
-	Network    uint64                  `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Difficulty *big.Int                `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash             `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig     `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash             `json:"head"`       // SHA3 hash of the host's best owned block
-	CHT        light.TrustedCheckpoint `json:"cht"`        // Trused CHT checkpoint for fast catchup
-}
-
-// NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
-	head := self.blockchain.CurrentHeader()
-	hash := head.Hash()
-
-	var cht light.TrustedCheckpoint
-
-	sections, _, sectionHead := self.odr.ChtIndexer().Sections()
-	sections2, _, sectionHead2 := self.odr.BloomTrieIndexer().Sections()
-	if sections2 < sections {
-		sections = sections2
-		sectionHead = sectionHead2
-	}
-	if sections > 0 {
-		sectionIndex := sections - 1
-		cht = light.TrustedCheckpoint{
-			SectionIdx:  sectionIndex,
-			SectionHead: sectionHead,
-			CHTRoot:     light.GetChtRoot(self.chainDb, sectionIndex, sectionHead),
-			BloomRoot:   light.GetBloomTrieRoot(self.chainDb, sectionIndex, sectionHead),
-		}
-	}
-
-	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
-		Head:       hash,
-		CHT:        cht,
-	}
 }
 
 // downloaderPeerNotify implements peerSetNotify
