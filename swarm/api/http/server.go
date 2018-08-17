@@ -198,7 +198,9 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 			RespondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
 			return
 		}
-		defer reader.Close()
+		if reader != nil {
+			defer reader.Close()
+		}
 
 		w.Header().Set("Content-Type", "application/x-tar")
 		w.WriteHeader(http.StatusOK)
