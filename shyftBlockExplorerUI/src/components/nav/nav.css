@@ -1,21 +1,51 @@
-.Secondary {
-    display: block;
-    width:100%;
-    height: 100px;
-    background-color: rgb(244, 244, 244);
+.navHeader {
+    height: 25vh;
+    background-color: #4f2e7e;
+    padding-top: 30pt;
+    padding-left: 2.5%;
+    z-index: -10000;
+    width: 100%;
 }
 
-.Transactions {
-    font-size: 20px;
-    padding-top: 25px;
-    padding-left: 15px;
-    float: left;
+.headerText { 
+    color: white;
+    letter-spacing: 1.7px;
+    font-family: 'Open Sans', sans-serif;
+    font-size: 15px;
+    text-transform: uppercase;
+
 }
 
-.bg-light {
-    background-color: #fff !important;
+.buttonContainer {
+    flex: 1;
+    flex-direction: row;
+    padding-top: 20pt;   
 }
 
-.TopBar {
-    font-size: 1.5rem;
+.btn { 
+    color: white;
+    background-color: transparent;
+    font-size: 8px;
+    letter-spacing: 1.6px;
+    font-family: 'Open Sans', sans-serif;
+    width: 120px;
+    height: 32px;
+    margin-right: 1%;
+    font-weight: 300;
 }
+
+.btn:hover { 
+    color: #4f2e7e;
+    background-color: #ffffff;
+    font-size: 8px;
+   
+
+}
+/* 
+button:active{
+    background-color: white;
+}
+
+button:focus {
+    background-color: white;
+} */

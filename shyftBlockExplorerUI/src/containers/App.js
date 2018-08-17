@@ -3,6 +3,9 @@ import axios from 'axios';
 import Nav from "../components/nav/nav";
 import { BrowserRouter, Route } from 'react-router-dom'
 
+import { Link } from 'react-router-dom'
+
+
 ///**LANDING PAGE**///
 import Home from '../components/home/home';
 
@@ -26,6 +29,7 @@ import DetailAccountsTable from "../components/table/accounts/detailAccountsRow"
 import AccountHeader from "../components/nav/accountHeaders/accountHeader";
 import AccountDetailHeader from "../components/nav/accountHeaders/accountDetailHeader";
 
+import classes from './App.css';
 
 class App extends Component {
   constructor(props) {
@@ -93,14 +97,15 @@ class App extends Component {
   render() {
     return (
         <BrowserRouter>
-      <div className="container">
-        <Nav />
+    
+            <div style={{backgroundColor:"#f7f8f9", paddingBottom:"5%" }}>
+                <Nav />
+             
+            <Route path="/" exact render={({ match }) =>
+                <Home/>}
+            />
 
-          <Route path="/" exact render={({ match }) =>
-              <Home/>}
-          />
-
-          <Route path="/transactions" render={({match}) =>
+            <Route path="/transactions" render={({match}) =>
               <div>
                   <TransactionHeader />
                   <TransactionRow
@@ -108,35 +113,37 @@ class App extends Component {
                       detailTransactionHandler={this.detailTransactionHandler}
                       detailAccountHandler={this.detailAccountHandler}/>
               </div>}
-          />
+            />
 
-          <Route path="/blocks" exact render={({match}) =>
+            <Route path="/blocks" exact render={({match}) =>
               <div>
-                  <BlockHeader/>
-                  <BlocksRow
-                      getBlocksMined={this.getBlocksMined}
-                      getBlockTransactions={this.getBlockTransactions}
-                      detailBlockHandler={this.detailBlockHandler}/>
+                  {/* <BlockHeader/> */}
+                 
+                <BlocksRow
+                    getBlocksMined={this.getBlocksMined}
+                    getBlockTransactions={this.getBlockTransactions}
+                    detailBlockHandler={this.detailBlockHandler}/>
+                
               </div>}
-          />
+            />
 
-          <Route path="/accounts" exact render={({match}) =>
+            <Route path="/accounts" exact render={({match}) =>
               <div>
                   <AccountHeader/>
                   <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
               </div>}
-          />
+            />
 
-          <Route path="/transaction/details" exact render={({match}) =>
+            <Route path="/transaction/details" exact render={({match}) =>
               <div>
                   <TransactionDetailHeader
                     txHash={this.state.transactionDetailData.TxHash}/>
                   <DetailTransactionTable
                     data={this.state.transactionDetailData}/>
               </div>}
-          />
+            />
 
-          <Route path="/blocks/detail" exact render={({match}) =>
+            <Route path="/blocks/detail" exact render={({match}) =>
               <div>
                   <BlockDetailHeader
                       blockNumber={this.state.blockDetailData.Number}/>
@@ -144,9 +151,9 @@ class App extends Component {
                       getBlockTransactions={this.getBlockTransactions}
                       data={this.state.blockDetailData}/>
               </div>}
-          />
+            />
 
-          <Route path="/block/transactions" exact render={({match}) =>
+            <Route path="/block/transactions" exact render={({match}) =>
               <div>
                   <BlockDetailHeader
                       blockNumber={this.state.reqBlockNum}/>
@@ -157,9 +164,9 @@ class App extends Component {
                       detailAccountHandler={this.detailAccountHandler}/>
 
               </div>}
-          />
+            />
 
-          <Route path="/mined/blocks" exact render={({match}) =>
+            <Route path="/mined/blocks" exact render={({match}) =>
               <div>
                   <BlockCoinbaseHeader
                       coinbase={this.state.reqCoinbase}/>
@@ -168,9 +175,9 @@ class App extends Component {
                       getBlocksMined={this.getBlocksMined}
                       data={this.state.blocksMined}/>
               </div>}
-          />
+            />
 
-          <Route path="/account/detail" exact render={({match}) =>
+            <Route path="/account/detail" exact render={({match}) =>
               <div>
                   <AccountDetailHeader
                       addr={this.state.reqAccount}
@@ -180,9 +187,9 @@ class App extends Component {
                       addr={this.state.reqAccount}
                       data={this.state.accountDetailData}/>
               </div>}
-          />
-      </div>
-        </BrowserRouter>
+            />
+        </div>
+    </BrowserRouter>
     );
   }
 }

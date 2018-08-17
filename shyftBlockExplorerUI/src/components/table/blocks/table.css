@@ -1,21 +1,34 @@
 .table {
     border-spacing: 100rem;
-    width: 100%;
-    margin-top: 50px;
+    width: 95%;
+    margin: 0 auto;  
+    margin-top: -4%;
+    background-color: white;
 }
 
-.tHead {
-    font-size: 1rem;
+thead {
+    font-size: 7pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
+    color: #593c83;
+    
 }
 
 th {
-    background-color: aliceblue;
+    background-color: white;
     padding-right: 10px;
+    padding: 25pt 30pt ;
+    color: #593c83;
+    font-family: 'Open Sans', sans-serif;
 }
 
 td {
-    padding-left: 5px;
-    font-size: .5rem;
+    font-size: 6pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
+
+    /* padding: 25px;
+    margin-left: 25px; */
 }
 
 .addressTag {
@@ -23,7 +36,7 @@ td {
     vertical-align: bottom;
     text-overflow: ellipsis;
     overflow: hidden;
-    width: 132px;
+    width: 100px;
 }
 
 .ageTag{
