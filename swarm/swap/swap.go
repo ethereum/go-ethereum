@@ -70,10 +70,11 @@ const (
 //      Swift Automatic  Payments
 // a peer to peer micropayment system
 type Swap struct {
-	stateStore state.Store
-	lock       sync.RWMutex
-	peers      map[discover.NodeID]*SwapPeer
-	local      *Params // local peer's swap parameters
+	chequeManager *ChequeManager
+	stateStore    state.Store
+	lock          sync.RWMutex
+	peers         map[discover.NodeID]*SwapPeer
+	local         *Params // local peer's swap parameters
 }
 
 type SwapPeer struct {
@@ -244,14 +245,14 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 		// -1 if sp.balance <  payAt
 		//  0 if sp.balance == payAt
 		// +1 if sp.balance >  payAt
-		if sp.balance.Cmp(payAt) > 1 {
+		if sp.balance.Cmp(payAt) == -1 {
 			err := sp.issueCheque(ctx)
 			if err != nil {
 				//TODO: special error handling, as at this point the accounting has been done
 				//but the cheque could not be sent?
 			}
 		}
-		if sp.balance.Cmp(dropAt) < 0 {
+		if sp.balance.Cmp(dropAt) == -1 {
 			sp.Drop(ErrInsufficientFunds)
 		}
 		log.Debug(fmt.Sprintf("balance for peer %s: %s", sp.ID(), sp.balance.String()))
@@ -259,7 +260,11 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 }
 
 func (sp *SwapPeer) issueCheque(ctx context.Context) error {
-	msg := IssueChequeMsg{}
+	amount := big.NewInt(0)
+	cheque := sp.swapAccount.chequeManager.CreateCheque(sp.ID(), amount.Abs(payAt))
+	msg := IssueChequeMsg{
+		Cheque: cheque,
+	}
 	return sp.Send(ctx, msg)
 }
 
@@ -342,9 +347,10 @@ type PayProfile struct {
 func NewSwap(local *Params, stateStore state.Store) (swap *Swap, err error) {
 
 	swap = &Swap{
-		local:      local,
-		stateStore: stateStore,
-		peers:      make(map[discover.NodeID]*SwapPeer),
+		chequeManager: NewChequeManager(stateStore),
+		local:         local,
+		stateStore:    stateStore,
+		peers:         make(map[discover.NodeID]*SwapPeer),
 	}
 
 	//swap.SetParams(local)

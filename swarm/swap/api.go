@@ -18,11 +18,15 @@ package swap
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+)
+
+var (
+	ErrNoSuchPeerAccounting = errors.New("No accounting with that peer")
 )
 
 // Wrapper for receiving pss messages when using the pss API
@@ -34,32 +38,32 @@ type APIMsg struct {
 // Additional public methods accessible through API for pss
 type API struct {
 	*SwapProtocol
-	*Swap
 }
 
+//TODO: define metrics
 type SwapMetrics struct {
-}
-
-type Cheque struct {
 }
 
 func NewAPI(swap *SwapProtocol) *API {
 	return &API{SwapProtocol: swap}
 }
 
-func (swapapi *API) Balance(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
+func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
+	balance = swapapi.swap.peers[peer].balance
+	if balance == nil {
+		err = ErrNoSuchPeerAccounting
+	}
+	return
+}
+
+func (swapapi *API) Balance(ctx context.Context) (balance *big.Int, err error) {
 	balance = big.NewInt(0)
-	err = nil
+	for _, peer := range swapapi.swap.peers {
+		balance.Add(balance, peer.balance)
+	}
 	return
 }
 
 func (swapapi *API) GetSwapMetrics() (*SwapMetrics, error) {
 	return nil, nil
-}
-
-func (swapapi *API) IssueCheque(recipient *common.Address) (*Cheque, error) {
-	return nil, nil
-}
-
-func (swapapi *API) RedeemCheque(cheque *Cheque) {
 }

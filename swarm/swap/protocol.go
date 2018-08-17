@@ -36,6 +36,7 @@ const (
 type SwapProtocol struct {
 	peersMu sync.RWMutex
 	peers   map[discover.NodeID]*SwapProtocolPeer
+	swap    *Swap
 }
 
 // Peer is the Peer extension for the streaming protocol
@@ -44,9 +45,10 @@ type SwapProtocolPeer struct {
 	swapProtocol *SwapProtocol
 }
 
-func NewSwapProtocol() *SwapProtocol {
+func NewSwapProtocol(swapAccount *Swap) *SwapProtocol {
 	proto := &SwapProtocol{
 		peers: make(map[discover.NodeID]*SwapProtocolPeer),
+		swap:  swapAccount,
 	}
 	return proto
 }
@@ -61,6 +63,7 @@ func NewPeer(peer *protocols.Peer, swap *SwapProtocol) *SwapProtocolPeer {
 }
 
 type IssueChequeMsg struct {
+	Cheque *Cheque
 }
 
 type RedeemChequeMsg struct {

@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -55,6 +56,21 @@ var testSpec = &protocols.Spec{
 	},
 }
 
+type dummyRW struct{}
+
+func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
+	return nil
+}
+
+func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	return p2p.Msg{
+		Code:       0,
+		Size:       0,
+		Payload:    nil,
+		ReceivedAt: time.Now(),
+	}, nil
+}
+
 type testExceedsPayAtMsg struct{}
 type testExceedsDropAtMsg struct{}
 
@@ -81,107 +97,86 @@ func TestLimits(t *testing.T) {
 	}
 }
 
+//unit test for exceeds pay limit
 func TestExceedsPayAt(t *testing.T) {
-	dir, err := ioutil.TempDir("", "swap_test_store")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-	stateStore, err2 := state.NewDBStore(dir)
-	if err2 != nil {
-		panic(err2)
-	}
-	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
-	if err3 != nil {
-		t.Fatal(err3)
-	}
-	id := adapters.RandomNodeConfig().ID
-	testPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	testPeer := newDummyPeer()
 	sp := NewSwapPeer(testPeer, swap)
-	sp.handlerFunc = msgHandler
+	sp.handlerFunc = dummyMsgHandler
+
 	ctx := context.Background()
-	sp.handleAccountedMsg(ctx, &testExceedsPayAtMsg{})
+	sp.Send(ctx, &testExceedsPayAtMsg{})
+
+	cheques := sp.swapAccount.chequeManager.openDebitCheques[sp.ID()]
+	if cheques == nil {
+		t.Fatal("Expected cheques for this peer to be present, but are nil")
+	}
+	if len(cheques) == 0 {
+		t.Fatal("Expected a cheque to have arrived, but len is zero")
+	}
+	if cheques[0].serial != 1 {
+		t.Fatal(fmt.Sprintf("Expected the serial to be one (first message but is: %d", cheques[0].serial))
+	}
+	absPayAt := big.NewInt(0)
+	if cheques[0].amount.Cmp(absPayAt.Abs(payAt)) != 0 {
+		t.Fatal(fmt.Sprintf("Expected the serial to be one (first message but is: %d", cheques[0].serial))
+	}
 }
 
+//unit test for exceeds drop limit
 func TestExceedsDropAt(t *testing.T) {
-	dir, err := ioutil.TempDir("", "swap_test_store")
-	if err != nil {
-		panic(err)
-	}
-	defer os.RemoveAll(dir)
-	stateStore, err2 := state.NewDBStore(dir)
-	if err2 != nil {
-		panic(err2)
-	}
-	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
-	if err3 != nil {
-		t.Fatal(err3)
-	}
-	id := adapters.RandomNodeConfig().ID
-	testPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), nil, nil)
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	testPeer := newDummyPeer()
 	sp := NewSwapPeer(testPeer, swap)
-	sp.handlerFunc = msgHandler
+	sp.handlerFunc = dummyMsgHandler
+
 	ctx := context.Background()
-	err = sp.Send(ctx, &testExceedsDropAtMsg{})
+	err := sp.Send(ctx, &testExceedsDropAtMsg{})
 	if err != ErrInsufficientFunds {
 		t.Fatal("Expected test to fail with insufficient funds, but it didn't")
 	}
 }
 
-func TestProtocol(t *testing.T) {
-	/*
-		dir, err := ioutil.TempDir("", "swap_test_store")
-		if err != nil {
-			panic(err)
-		}
-		defer os.RemoveAll(dir)
-
-		swap := NewSwap(NewDefaultSwapParams().Params, state.NewDBStore(dir))
-		conf := adapters.RandomNodeConfig()
-
-		protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			peer := protocols.NewPeer(p, rw, testSpec)
-			runProtocol(peer, swap)
-		}
-		protocolTester := p2ptest.NewProtocolTester(t, conf.ID, 2, protocol)
-		protocolTester.TestExchanges(p2p.TestExchange{
-			Label: "",
-			Expects: []p2ptest.Expect{
-				{
-					Code: 5,
-					Msg: &RetrieveRequestMsg{
-						Addr:      hash0[:],
-						SkipCheck: true,
-					},
-					Peer: peerID,
-				},
-			},
-		})
-	*/
+func createTestSwap(t *testing.T) (*Swap, string) {
+	dir, err := ioutil.TempDir("", "swap_test_store")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateStore, err2 := state.NewDBStore(dir)
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
+	if err3 != nil {
+		t.Fatal(err3)
+	}
+	return swap, dir
 }
 
 func runProtocol(peer *protocols.Peer, swap *Swap) {
 	sp := NewSwapPeer(peer, swap)
-	sp.Peer.Run(msgHandler)
+	sp.Peer.Run(dummyMsgHandler)
 }
 
-func msgHandler(ctx context.Context, msg interface{}) error {
+func dummyMsgHandler(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func TestSwapProtocol(t *testing.T) {
+func TestSwapRPC(t *testing.T) {
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
 
 	// create the two nodes
 	stack_one, err := newServiceNode(p2pPort, 0, 0)
 	if err != nil {
-		log.Crit("Create servicenode #1 fail", "err", err)
-	}
-	stack_two, err := newServiceNode(p2pPort+1, 0, 0)
-	if err != nil {
-		log.Crit("Create servicenode #2 fail", "err", err)
+		t.Fatal("Create servicenode #1 fail", "err", err)
 	}
 
-	instance := NewSwapProtocol()
+	instance := NewSwapProtocol(swap)
 	// wrapper function for servicenode to start the service
 	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
 		return &API{
@@ -192,181 +187,80 @@ func TestSwapProtocol(t *testing.T) {
 	// register adds the service to the services the servicenode starts when started
 	err = stack_one.Register(swapsvc)
 	if err != nil {
-		log.Crit("Register service in servicenode #1 fail", "err", err)
+		t.Fatal("Register service in servicenode #1 fail", "err", err)
 	}
-	err = stack_two.Register(swapsvc)
-	if err != nil {
-		log.Crit("Register service in servicenode #2 fail", "err", err)
-	}
-
 	// start the nodes
 	err = stack_one.Start()
 	if err != nil {
-		log.Crit("servicenode #1 start failed", "err", err)
-	}
-	err = stack_two.Start()
-	if err != nil {
-		log.Crit("servicenode #2 start failed", "err", err)
+		t.Fatal("servicenode #1 start failed", "err", err)
 	}
 
 	// connect to the servicenode RPCs
 	rpcclient_one, err := rpc.Dial(filepath.Join(stack_one.DataDir(), ipcpath))
 	if err != nil {
-		log.Crit("connect to servicenode #1 IPC fail", "err", err)
+		t.Fatal("connect to servicenode #1 IPC fail", "err", err)
 	}
 	defer os.RemoveAll(stack_one.DataDir())
 
-	rpcclient_two, err := rpc.Dial(filepath.Join(stack_two.DataDir(), ipcpath))
-	if err != nil {
-		log.Crit("connect to servicenode #2 IPC fail", "err", err)
-	}
-	defer os.RemoveAll(stack_two.DataDir())
-
-	// display that the initial pong counts are 0
-	var balance int
+	var balance *big.Int
 	err = rpcclient_one.Call(&balance, "swap_balance")
 	if err != nil {
-		log.Crit("servicenode #1 pongcount RPC failed", "err", err)
+		t.Fatal("servicenode #1 RPC failed", "err", err)
 	}
-	log.Info("servicenode #1 before ping", "balance-1", balance)
+	log.Debug("servicenode #1 balance", "balance-1", balance)
 
-	err = rpcclient_two.Call(&balance, "swap_balance")
+	if balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatal("Expected balance to be 0 but it is not")
+	}
+
+	dummyPeer1 := newDummyPeer()
+	dummyPeer2 := newDummyPeer()
+	id1 := dummyPeer1.ID()
+	id2 := dummyPeer2.ID()
+
+	fake1 := int64(234)
+	fake2 := int64(-100)
+	fakeBalance1 := big.NewInt(fake1)
+	fakeBalance2 := big.NewInt(fake2)
+
+	swap.peers[id1] = NewSwapPeer(dummyPeer1, swap)
+	swap.peers[id2] = NewSwapPeer(dummyPeer2, swap)
+	swap.peers[id1].balance = fakeBalance1
+	swap.peers[id2].balance = fakeBalance2
+
+	err = rpcclient_one.Call(&balance, "swap_balanceWithPeer", id1)
 	if err != nil {
-		log.Crit("servicenode #2 pongcount RPC failed", "err", err)
+		t.Fatal("servicenode #1 RPC failed", "err", err)
 	}
-	log.Info("servicenode #2 before ping", "balance-2", balance)
+	log.Debug("balance1", "balance-1", balance)
+	if balance.Cmp(fakeBalance1) != 0 {
+		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to fake balance %s, but it is not", balance.String(), fakeBalance1.String()))
+	}
 
-	/*
-		// get the server instances
-		srv_one := stack_one.Server()
-		srv_two := stack_two.Server()
+	err = rpcclient_one.Call(&balance, "swap_balanceWithPeer", id2)
+	if err != nil {
+		t.Fatal("servicenode #1 RPC failed", "err", err)
+	}
+	log.Debug("balance2", "balance-2", balance)
+	if balance.Cmp(fakeBalance2) != 0 {
+		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to fake balance %s, but it is not", balance.String(), fakeBalance2.String()))
+	}
 
-			// subscribe to peerevents
-			eventOneC := make(chan *p2p.PeerEvent)
-			sub_one := srv_one.SubscribeEvents(eventOneC)
+	err = rpcclient_one.Call(&balance, "swap_balance")
+	if err != nil {
+		t.Fatal("servicenode #1 RPC failed", "err", err)
+	}
+	log.Debug("balance", "balance", balance)
 
-			eventTwoC := make(chan *p2p.PeerEvent)
-			sub_two := srv_two.SubscribeEvents(eventTwoC)
+	fakeSum := big.NewInt(fake1 + fake2)
+	if balance.Cmp(fakeSum) != 0 {
+		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to sum %s, but it is not", balance.String(), fakeSum.String()))
+	}
+}
 
-			// connect the nodes
-			p2pnode_two := srv_two.Self()
-			srv_one.AddPeer(p2pnode_two)
-
-			// fork and do the pinging
-			stackW.Add(2)
-			pingmax_one := 4
-			pingmax_two := 2
-
-			go func() {
-
-				// when we get the add event, we know we are connected
-				ev := <-eventOneC
-				if ev.Type != "add" {
-				log.Error("server #1 expected peer add", "eventtype", ev.Type)
-					stackW.Done()
-					return
-				}
-				log.Debug("server #1 connected", "peer", ev.Peer)
-
-				// send the pings
-				for i := 0; i < pingmax_one; i++ {
-					err := rpcclient_one.Call(nil, "foo_ping", ev.Peer)
-					if err != nil {
-						log.Error("server #1 RPC ping fail", "err", err)
-						stackW.Done()
-						break
-					}
-				}
-
-				// wait for all msgrecv events
-				// pings we receive, and pongs we expect from pings we sent
-				for i := 0; i < pingmax_two+pingmax_one; {
-					ev := <-eventOneC
-					log.Warn("msg", "type", ev.Type, "i", i)
-					if ev.Type == "msgrecv" {
-						i++
-					}
-				}
-
-				stackW.Done()
-			}()
-
-			// mirrors the previous go func
-			go func() {
-				ev := <-eventTwoC
-				if ev.Type != "add" {
-					log.Error("expected peer add", "eventtype", ev.Type)
-					stackW.Done()
-					return
-				}
-				log.Debug("server #2 connected", "peer", ev.Peer)
-				for i := 0; i < pingmax_two; i++ {
-					err := rpcclient_two.Call(nil, "foo_ping", ev.Peer)
-					if err != nil {
-						log.Error("server #2 RPC ping fail", "err", err)
-						stackW.Done()
-						break
-					}
-				}
-
-				for i := 0; i < pingmax_one+pingmax_two; {
-					ev := <-eventTwoC
-					if ev.Type == "msgrecv" {
-						log.Warn("msg", "type", ev.Type, "i", i)
-						i++
-					}
-				}
-
-				stackW.Done()
-			}()
-
-			// wait for the two ping pong exchanges to finish
-			stackW.Wait()
-
-			// tell the API to shut down
-			// this will disconnect the peers and close the channels connecting API and protocol
-			err = rpcclient_one.Call(nil, "foo_quit", srv_two.Self().ID)
-			if err != nil {
-				log.Error("server #1 RPC quit fail", "err", err)
-			}
-			err = rpcclient_two.Call(nil, "foo_quit", srv_one.Self().ID)
-			if err != nil {
-				log.Error("server #2 RPC quit fail", "err", err)
-			}
-
-			// disconnect will generate drop events
-			for {
-				ev := <-eventOneC
-				if ev.Type == "drop" {
-					break
-				}
-			}
-			for {
-				ev := <-eventTwoC
-				if ev.Type == "drop" {
-					break
-				}
-			}
-
-			// proudly inspect the results
-			err = rpcclient_one.Call(&count, "foo_pongCount")
-			if err != nil {
-				log.Crit("servicenode #1 pongcount RPC failed", "err", err)
-			}
-			log.Info("servicenode #1 after ping", "pongcount", count)
-
-			err = rpcclient_two.Call(&count, "foo_pongCount")
-			if err != nil {
-				log.Crit("servicenode #2 pongcount RPC failed", "err", err)
-			}
-			log.Info("servicenode #2 after ping", "pongcount", count)
-
-			// bring down the servicenodes
-			sub_one.Unsubscribe()
-			sub_two.Unsubscribe()
-			stack_one.Stop()
-			stack_two.Stop()
-	*/
+func newDummyPeer() *protocols.Peer {
+	id := adapters.RandomNodeConfig().ID
+	return protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), &dummyRW{}, testSpec)
 }
 
 func newServiceNode(port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
