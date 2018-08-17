@@ -184,7 +184,7 @@ func (info *nodeInfos) Report() map[string]string {
 			report["Miner account"] = info.etherbase
 		}
 		if info.keyJSON != "" {
-			// Clique proof-of-authority signer
+			// Posv proof-of-stake-voting signer
 			var key struct {
 				Address string `json:"address"`
 			}

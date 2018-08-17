@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 )
 
 const (
@@ -862,12 +863,12 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 			log.Error("Fail to get signers from block signer SC.", "error", err)
 		}
 		// Get block epoc latest.
-		if s.b.ChainConfig().Clique != nil {
+		if s.b.ChainConfig().Posv != nil {
 			engine := s.b.GetEngine()
-			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().Clique.Epoch))
+			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().Posv.Epoch))
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
 			if prevCheckpointBlock != nil {
-				masternodes := engine.(*clique.Clique).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().Clique.Epoch)
+				masternodes := engine.(*posv.Posv).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().Clique.Epoch)
 				countFinality := 0
 				for _, masternode := range masternodes {
 					for _, signer := range signers {

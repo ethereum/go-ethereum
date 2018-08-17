@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
@@ -275,7 +275,7 @@ func (self *worker) update() {
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
-				if self.config.Clique != nil && self.config.Clique.Period == 0 {
+				if self.config.Posv != nil && self.config.Posv.Period == 0 {
 					self.commitNewWork()
 				}
 			}
@@ -342,8 +342,8 @@ func (self *worker) wait() {
 				self.commitNewWork()
 			}
 
-			if self.config.Clique != nil {
-				c := self.engine.(*clique.Clique)
+			if self.config.Posv != nil {
+				c := self.engine.(*posv.Posv)
 				snap, err := c.GetSnapshot(self.chain, block.Header())
 				if err != nil {
 					log.Error("Fail to get snapshot for sign tx signer.")
@@ -449,17 +449,17 @@ func (self *worker) commitNewWork() {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		// only go with Clique
-		if self.config.Clique != nil {
+		// only go with Posv
+		if self.config.Posv != nil {
 			// get masternodes set from latest checkpoint
-			c := self.engine.(*clique.Clique)
+			c := self.engine.(*posv.Posv)
 			masternodes := c.GetMasternodes(self.chain, parent.Header())
 			snap, err := c.GetSnapshot(self.chain, parent.Header())
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
-			preIndex, curIndex, ok, err := clique.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
+			preIndex, curIndex, ok, err := posv.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
@@ -586,13 +586,13 @@ func (self *worker) commitNewWork() {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	if work.config.Clique != nil {
+	if work.config.Posv != nil {
 		// epoch block
-		if (work.Block.NumberU64() % work.config.Clique.Epoch) == 0 {
+		if (work.Block.NumberU64() % work.config.Posv.Epoch) == 0 {
 			core.CheckpointCh <- 1
 		}
 		// prepare set of masternodes for the next epoch
-		if (work.Block.NumberU64() % work.config.Clique.Epoch) == (work.config.Clique.Epoch - work.config.Clique.Gap) {
+		if (work.Block.NumberU64() % work.config.Posv.Epoch) == (work.config.Posv.Epoch - work.config.Posv.Gap) {
 			core.M1Ch <- 1
 		}
 	}
