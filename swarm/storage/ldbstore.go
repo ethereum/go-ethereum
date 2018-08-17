@@ -243,6 +243,8 @@ func decodeOldData(data []byte, chunk *Chunk) {
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
+	log.Trace("collectGarbage", "ratio", ratio)
+
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
 	it := s.db.NewIterator()
@@ -582,11 +584,13 @@ mainLoop:
 			}
 			close(c)
 			for e > s.capacity {
+				log.Trace("for >", "e", e, "s.capacity", s.capacity)
 				// Collect garbage in a separate goroutine
 				// to be able to interrupt this loop by s.quit.
 				done := make(chan struct{})
 				go func() {
 					s.collectGarbage(gcArrayFreeRatio)
+					log.Trace("collectGarbage closing done")
 					close(done)
 				}()
 

@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -362,7 +362,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	// wait for garbage collection to kick in on the responsible actor
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	var missing int
 	for i := 0; i < n; i++ {
@@ -491,6 +491,9 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	for i := 0; i < n; i++ {
 		<-chunks[i].dbStoredC
 	}
+
+	// wait for garbage collection
+	time.Sleep(1 * time.Second)
 
 	// expect for first chunk to be missing, because it has the smallest access value
 	idx := 0
