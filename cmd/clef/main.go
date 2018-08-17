@@ -591,7 +591,7 @@ func testExternalUI(api *core.SignerAPI) {
 	checkErr("SignTransaction", err)
 	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
 	checkErr("Sign", err)
-	_, err = api.List(ctx)
+	_, err = api.ListAccounts(ctx)
 	checkErr("List", err)
 	_, err = api.New(ctx)
 	checkErr("New", err)

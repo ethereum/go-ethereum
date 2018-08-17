@@ -80,17 +80,17 @@ func (ui *HeadlessUI) ApproveImport(request *ImportRequest) (ImportResponse, err
 	}
 	return ImportResponse{false, "", ""}, nil
 }
-func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error) {
+func (ui *HeadlessUI) ApproveListing(request *ListAccountsRequest) (ListAccountsResponse, error) {
 
 	switch <-ui.controller {
 	case "A":
-		return ListResponse{request.Accounts}, nil
+		return ListAccountsResponse{request.Accounts}, nil
 	case "1":
-		l := make([]Account, 1)
+		l := make([]common.Address, 1)
 		l[0] = request.Accounts[1]
-		return ListResponse{l}, nil
+		return ListAccountsResponse{l}, nil
 	default:
-		return ListResponse{nil}, nil
+		return ListAccountsResponse{nil}, nil
 	}
 }
 func (ui *HeadlessUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
@@ -162,9 +162,9 @@ func failCreateAccount(control chan string, api *SignerAPI, t *testing.T) {
 		t.Fatal("Empty address should be returned")
 	}
 }
-func list(control chan string, api *SignerAPI, t *testing.T) []Account {
+func list(control chan string, api *SignerAPI, t *testing.T) []common.Address {
 	control <- "A"
-	list, err := api.List(context.Background())
+	list, err := api.ListAccounts(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestNewAcc(t *testing.T) {
 	// Testing listing:
 	// Listing one Account
 	control <- "1"
-	list, err := api.List(context.Background())
+	list, err := api.ListAccounts(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestNewAcc(t *testing.T) {
 	}
 	// Listing denied
 	control <- "Nope"
-	list, err = api.List(context.Background())
+	list, err = api.ListAccounts(context.Background())
 	if len(list) != 0 {
 		t.Fatalf("List should be empty")
 	}
@@ -218,11 +218,11 @@ func TestSignData(t *testing.T) {
 	createAccount(control, api, t)
 	createAccount(control, api, t)
 	control <- "1"
-	list, err := api.List(context.Background())
+	list, err := api.ListAccounts(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := common.NewMixedcaseAddress(list[0].Address)
+	a := common.NewMixedcaseAddress(list[0])
 
 	control <- "Y"
 	control <- "wrongpassword"
@@ -275,7 +275,7 @@ func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 func TestSignTx(t *testing.T) {
 
 	var (
-		list      Accounts
+		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
 		err       error
 	)
@@ -283,11 +283,11 @@ func TestSignTx(t *testing.T) {
 	api, control := setup(t)
 	createAccount(control, api, t)
 	control <- "A"
-	list, err = api.List(context.Background())
+	list, err = api.ListAccounts(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := common.NewMixedcaseAddress(list[0].Address)
+	a := common.NewMixedcaseAddress(list[0])
 
 	methodSig := "test(uint)"
 	tx := mkTestTx(a)

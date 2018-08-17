@@ -109,20 +109,23 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 			fmt.Printf("\nWARNING: Invalid checksum on to-address!\n\n")
 		}
 	} else {
-		fmt.Printf("to:    <contact creation>\n")
+		fmt.Printf("To:    <contact creation>\n")
 	}
-	fmt.Printf("from:  %v\n", request.Transaction.From.String())
-	fmt.Printf("value: %v wei\n", weival)
+	fmt.Printf("Trom:  %v\n", request.Transaction.From.String())
+	fmt.Printf("Value: %v wei\n", weival)
+	fmt.Printf("Gas: %v\n", request.Transaction.Gas)
+	fmt.Printf("Gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
+	fmt.Printf("Nonce: %v\n", request.Transaction.Nonce)
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
+			fmt.Printf("Data:  %v\n", common.Bytes2Hex(d))
 		}
 	}
 	if request.Callinfo != nil {
 		fmt.Printf("\nTransaction validation:\n")
 		for _, m := range request.Callinfo {
-			fmt.Printf("  * %s : %s", m.Typ, m.Message)
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
 		}
 		fmt.Println()
 
@@ -187,7 +190,7 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, 
 
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
-func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
+func (ui *CommandlineUI) ApproveListing(request *ListAccountsRequest) (ListAccountsResponse, error) {
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
@@ -196,14 +199,14 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	fmt.Printf("A request has been made to list all accounts. \n")
 	fmt.Printf("You can select which accounts the caller can see\n")
 	for _, account := range request.Accounts {
-		fmt.Printf("\t[x] %v\n", account.Address.Hex())
+		fmt.Printf("\t[x] %v\n", account.Hex())
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
-		return ListResponse{nil}, nil
+		return ListAccountsResponse{nil}, nil
 	}
-	return ListResponse{request.Accounts}, nil
+	return ListAccountsResponse{request.Accounts}, nil
 }
 
 // ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller

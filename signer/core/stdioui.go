@@ -73,8 +73,8 @@ func (ui *StdIOUI) ApproveImport(request *ImportRequest) (ImportResponse, error)
 	return result, err
 }
 
-func (ui *StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
-	var result ListResponse
+func (ui *StdIOUI) ApproveListing(request *ListAccountsRequest) (ListAccountsResponse, error) {
+	var result ListAccountsResponse
 	err := ui.dispatch("ApproveListing", request, &result)
 	return result, err
 }
