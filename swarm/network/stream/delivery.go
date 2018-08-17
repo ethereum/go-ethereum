@@ -19,6 +19,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -136,6 +137,11 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
+}
+
+//TODO: what is the correct price
+func (rrm *RetrieveRequestMsg) GetMsgPrice() *big.Int {
+	return big.NewInt(int64(4096))
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {

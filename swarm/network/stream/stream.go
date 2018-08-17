@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -50,6 +51,7 @@ const (
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
+	swap           *swap.Swap
 	api            *API
 	addr           *network.BzzAddr
 	skipCheck      bool
@@ -73,7 +75,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, swap *swap.Swap, options *RegistryOptions) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -100,6 +102,8 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	})
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)
+
+	streamer.swap = swap
 
 	if options.DoSync {
 		// latestIntC function ensures that
@@ -390,7 +394,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 		}
 	}
 
-	return sp.Run(sp.HandleMsg)
+	return sp.RunAccountedProtocol(sp.HandleMsg)
 }
 
 // updateSyncing subscribes to SYNC streams by iterating over the

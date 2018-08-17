@@ -108,7 +108,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			delivery := NewDelivery(kad, db)
 			bucket.Store(bucketKeyDelivery, delivery)
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil, &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
 
