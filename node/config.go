@@ -86,6 +86,10 @@ type Config struct {
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
 
+	// ExternalSigner path/url to external signer. Implicitly disables native account
+	// management
+	ExternalSigner string `toml:",omitempty"`
+
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or

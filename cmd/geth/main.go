@@ -25,21 +25,18 @@ import (
 	godebug "runtime/debug"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/elastic/gosigar"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 const (
@@ -54,13 +51,10 @@ var (
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
-		utils.UnlockedAccountFlag,
-		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
-		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
@@ -73,6 +67,7 @@ var (
 		utils.EthashDatasetsInMemoryFlag,
 		utils.EthashDatasetsOnDiskFlag,
 		utils.TxPoolLocalsFlag,
+		utils.ExternalSignerFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -183,9 +178,6 @@ func init() {
 		dumpCommand,
 		// See monitorcmd.go:
 		monitorCommand,
-		// See accountcmd.go:
-		accountCommand,
-		walletCommand,
 		// See consolecmd.go:
 		consoleCommand,
 		attachCommand,
@@ -276,60 +268,19 @@ func geth(ctx *cli.Context) error {
 func startNode(ctx *cli.Context, stack *node.Node) {
 	debug.Memsize.Add("node", stack)
 
+	// Start account management
+	if extEndpoint := ctx.GlobalString(utils.ExternalSignerFlag.Name); extEndpoint != ""{
+		extApi, err := ethapi.NewExternalSigner(extEndpoint)
+		if err != nil{
+			utils.Fatalf("Could not connect to external signer at %v: %v" , extEndpoint, err)
+		}
+		log.Info("External signer connected", "url", extEndpoint)
+		stack.SetExternalAPI(extApi)
+	}
+
 	// Start up the node itself
 	utils.StartNode(stack)
 
-	// Unlock any account specifically requested
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-
-	passwords := utils.MakePasswordList(ctx)
-	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range unlocks {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, ks, trimmed, i, passwords)
-		}
-	}
-	// Register wallet event handlers to open and auto-derive wallets
-	events := make(chan accounts.WalletEvent, 16)
-	stack.AccountManager().Subscribe(events)
-
-	go func() {
-		// Create a chain state reader for self-derivation
-		rpcClient, err := stack.Attach()
-		if err != nil {
-			utils.Fatalf("Failed to attach to self: %v", err)
-		}
-		stateReader := ethclient.NewClient(rpcClient)
-
-		// Open any wallets already attached
-		for _, wallet := range stack.AccountManager().Wallets() {
-			if err := wallet.Open(""); err != nil {
-				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
-			}
-		}
-		// Listen for wallet event till termination
-		for event := range events {
-			switch event.Kind {
-			case accounts.WalletArrived:
-				if err := event.Wallet.Open(""); err != nil {
-					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
-				}
-			case accounts.WalletOpened:
-				status, _ := event.Wallet.Status()
-				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
-
-				derivationPath := accounts.DefaultBaseDerivationPath
-				if event.Wallet.URL().Scheme == "ledger" {
-					derivationPath = accounts.DefaultLedgerBaseDerivationPath
-				}
-				event.Wallet.SelfDerive(derivationPath, stateReader)
-
-			case accounts.WalletDropped:
-				log.Info("Old wallet dropped", "url", event.Wallet.URL())
-				event.Wallet.Close()
-			}
-		}
-	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running

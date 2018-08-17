@@ -20,7 +20,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
@@ -36,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type LesApiBackend struct {
@@ -183,8 +183,8 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
 }
 
-func (b *LesApiBackend) AccountManager() *accounts.Manager {
-	return b.eth.accountManager
+func (b *LesApiBackend) ExternalSigner() *ethapi.ExternalSignerAPI{
+	return b.eth.externalSigner
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {

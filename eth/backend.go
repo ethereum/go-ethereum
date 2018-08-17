@@ -25,7 +25,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -77,7 +76,7 @@ type Ethereum struct {
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
-	accountManager *accounts.Manager
+	externalSigner *ethapi.ExternalSignerAPI
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -101,7 +100,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config, api *ethapi.ExternalSignerAPI) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -126,10 +125,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		config:         config,
+		externalSigner: api,
 		chainDb:        chainDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
-		accountManager: ctx.AccountManager,
 		engine:         CreateConsensusEngine(ctx, chainConfig, &config.Ethash, config.MinerNotify, config.MinerNoverify, chainDb),
 		shutdownChan:   make(chan bool),
 		networkID:      config.NetworkId,
@@ -319,18 +318,6 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
 	}
-	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
-
-			s.lock.Lock()
-			s.etherbase = etherbase
-			s.lock.Unlock()
-
-			log.Info("Etherbase automatically configured", "address", etherbase)
-			return etherbase, nil
-		}
-	}
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
@@ -426,13 +413,10 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		if clique, ok := s.engine.(*clique.Clique); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			clique.Authorize(eb, wallet.SignHash)
+		if _, ok := s.engine.(*clique.Clique); ok {
+			//TODO @holiman
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return fmt.Errorf("signer not configured: %v", err)
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
@@ -460,16 +444,16 @@ func (s *Ethereum) StopMining() {
 func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
-func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *Ethereum) BlockChain() *core.BlockChain              { return s.blockchain }
+func (s *Ethereum) TxPool() *core.TxPool                      { return s.txPool }
+func (s *Ethereum) EventMux() *event.TypeMux                  { return s.eventMux }
+func (s *Ethereum) Engine() consensus.Engine                  { return s.engine }
+func (s *Ethereum) ChainDb() ethdb.Database                   { return s.chainDb }
+func (s *Ethereum) IsListening() bool                         { return true } // Always listening
+func (s *Ethereum) EthVersion() int                           { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Ethereum) NetVersion() uint64                        { return s.networkID }
+func (s *Ethereum) Downloader() *downloader.Downloader        { return s.protocolManager.downloader }
+func (s *Ethereum) ExternalSigner() *ethapi.ExternalSignerAPI { return s.externalSigner }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

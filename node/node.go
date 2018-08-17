@@ -26,7 +26,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -34,15 +33,15 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/prometheus/prometheus/util/flock"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 // Node is a container on which services can be registered.
 type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 	config   *Config
-	accman   *accounts.Manager
+	extapi   *ethapi.ExternalSignerAPI// If non-empty, the ipc-path or http(s)-url to an external signer
 
-	ephemeralKeystore string         // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
 
 	serverConfig p2p.Config
@@ -97,20 +96,12 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
-	am, ephemeralKeystore, err := makeAccountManager(conf)
-	if err != nil {
-		return nil, err
-	}
 	if conf.Logger == nil {
 		conf.Logger = log.New()
 	}
 	// Note: any interaction with Config that would create/touch files
 	// in the data directory or instance directory is delayed until Start.
 	return &Node{
-		accman:            am,
-		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},
 		ipcEndpoint:       conf.IPCEndpoint(),
@@ -173,7 +164,6 @@ func (n *Node) Start() error {
 			config:         n.config,
 			services:       make(map[reflect.Type]Service),
 			EventMux:       n.eventmux,
-			AccountManager: n.accman,
 		}
 		for kind, s := range services { // copy needed for threaded access
 			ctx.services[kind] = s
@@ -435,17 +425,8 @@ func (n *Node) Stop() error {
 	// unblock n.Wait
 	close(n.stop)
 
-	// Remove the keystore if it was created ephemerally.
-	var keystoreErr error
-	if n.ephemeralKeystore != "" {
-		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
-	}
-
 	if len(failure.Services) > 0 {
 		return failure
-	}
-	if keystoreErr != nil {
-		return keystoreErr
 	}
 	return nil
 }
@@ -537,11 +518,6 @@ func (n *Node) InstanceDir() string {
 	return n.config.instanceDir()
 }
 
-// AccountManager retrieves the account manager used by the protocol stack.
-func (n *Node) AccountManager() *accounts.Manager {
-	return n.accman
-}
-
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
 	return n.ipcEndpoint
@@ -578,6 +554,13 @@ func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
 }
 
+func (n *Node) SetExternalAPI(api *ethapi.ExternalSignerAPI){
+	n.extapi = api
+}
+
+func (n *Node) ExternalSignerAPI() *ethapi.ExternalSignerAPI{
+	return n.extapi
+}
 // apis returns the collection of RPC descriptors this node offers.
 func (n *Node) apis() []rpc.API {
 	return []rpc.API{
