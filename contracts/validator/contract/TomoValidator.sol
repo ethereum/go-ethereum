@@ -29,7 +29,7 @@ contract TomoValidator {
     mapping(address => address[]) voters;
     address[] public candidates;
 
-    uint256 public candidateCount = 3;
+    uint256 public candidateCount = 0;
     uint256 public minCandidateCap;
     uint256 public maxValidatorNumber;
     uint256 public candidateWithdrawDelay;
@@ -90,6 +90,7 @@ contract TomoValidator {
         maxValidatorNumber = _maxValidatorNumber;
         candidateWithdrawDelay = _candidateWithdrawDelay;
         voterWithdrawDelay = _voterWithdrawDelay;
+        candidateCount = candidateCount.add(_candidates.length);
 
         for (uint256 i = 0; i < _candidates.length; i++) {
             candidates.push(_candidates[i]);
@@ -104,14 +105,15 @@ contract TomoValidator {
     }
 
     function propose(address _candidate) external payable onlyValidCandidateCap onlyNotCandidate(_candidate) {
+        uint256 cap = validatorsState[_candidate].cap.add(msg.value);
         candidates.push(_candidate);
         validatorsState[_candidate] = ValidatorState({
             owner: msg.sender,
             isCandidate: true,
-            cap: msg.value
+            cap: cap
         });
         validatorsState[_candidate].voters[msg.sender] = msg.value;
-        candidateCount = candidateCount + 1;
+        candidateCount = candidateCount.add(1);
         voters[_candidate].push(msg.sender);
         emit Propose(msg.sender, _candidate, msg.value);
     }
@@ -171,7 +173,7 @@ contract TomoValidator {
 
     function resign(address _candidate) public onlyOwner(_candidate) onlyCandidate(_candidate) {
         validatorsState[_candidate].isCandidate = false;
-        candidateCount = candidateCount - 1;
+        candidateCount = candidateCount.sub(1);
         for (uint256 i = 0; i < candidates.length; i++) {
             if (candidates[i] == _candidate) {
                 delete candidates[i];
@@ -181,7 +183,7 @@ contract TomoValidator {
         uint256 cap = validatorsState[_candidate].voters[msg.sender];
         validatorsState[_candidate].cap = validatorsState[_candidate].cap.sub(cap);
         validatorsState[_candidate].voters[msg.sender] = 0;
-        // refunding after retiring X blocks
+        // refunding after resigning X blocks
         uint256 withdrawBlockNumber = candidateWithdrawDelay.add(block.number);
         withdrawsState[msg.sender].caps[withdrawBlockNumber] = withdrawsState[msg.sender].caps[withdrawBlockNumber].add(cap);
         withdrawsState[msg.sender].blockNumbers.push(withdrawBlockNumber);
