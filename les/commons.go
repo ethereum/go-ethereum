@@ -51,7 +51,7 @@ type NodeInfo struct {
 
 // makeProtocols creates protocol descriptors for the given LES versions.
 func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
-	protos := make([]p2p.Protocol, len(ClientProtocolVersions))
+	protos := make([]p2p.Protocol, len(versions))
 	for i, version := range versions {
 		version := version
 		protos[i] = p2p.Protocol{
