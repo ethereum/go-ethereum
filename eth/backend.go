@@ -218,6 +218,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
 			foudationWalletAddr := chain.Config().Posv.FoudationWalletAddr
+			if foudationWalletAddr == (common.Address{}) {
+				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
+			}
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
