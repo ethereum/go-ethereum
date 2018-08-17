@@ -72,7 +72,7 @@ type Header struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 	Validator   common.Address  `json:"validator"       gencodec:"required"`
-	DposContext *DposContextProto `json:"dposContext"   gencodec:"required"`
+	LCPContext *LCPContextProto `json:"LCPContext"   gencodec:"required"`
 	Coinbase    common.Address `json:"miner"            gencodec:"required"`
 	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
@@ -163,7 +163,7 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
-	DposContext *DposContext
+	LCPContext *LCPContext
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the

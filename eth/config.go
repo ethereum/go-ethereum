@@ -114,6 +114,7 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+	LCP     bool   `toml:"-"`
 }
 
 type configMarshaling struct {

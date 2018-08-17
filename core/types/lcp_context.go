@@ -5,21 +5,24 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pavelkrolevets/go-ethereum/common"
-	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
-	"github.com/pavelkrolevets/go-ethereum/ethdb"
-	"github.com/pavelkrolevets/go-ethereum/rlp"
-	"github.com/pavelkrolevets/go-ethereum/trie"
+	"github.com/meitu/go-ethereum/common"
+	"github.com/meitu/go-ethereum/crypto/sha3"
+	"github.com/meitu/go-ethereum/ethdb"
+	"github.com/meitu/go-ethereum/rlp"
+	"github.com/meitu/go-ethereum/trie"
 )
 
-type DposContext struct {
+type LCPContext struct {
 	epochTrie     *trie.Trie
 	delegateTrie  *trie.Trie
 	voteTrie      *trie.Trie
 	candidateTrie *trie.Trie
 	mintCntTrie   *trie.Trie
+	period        uint64
+	maxValidators uint64
+	epochInterval uint64
 
-	db trie.Database
+	db ethdb.Database
 }
 
 var (
@@ -30,27 +33,27 @@ var (
 	mintCntPrefix   = []byte("mintCnt-")
 )
 
-func NewEpochTrie(root common.Hash, db trie.Database) (*trie.Trie, error) {
+func NewEpochTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, epochPrefix, db)
 }
 
-func NewDelegateTrie(root common.Hash, db trie.Database) (*trie.Trie, error) {
+func NewDelegateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, delegatePrefix, db)
 }
 
-func NewVoteTrie(root common.Hash, db trie.Database) (*trie.Trie, error) {
+func NewVoteTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, votePrefix, db)
 }
 
-func NewCandidateTrie(root common.Hash, db trie.Database) (*trie.Trie, error) {
+func NewCandidateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
 }
 
-func NewMintCntTrie(root common.Hash, db trie.Database) (*trie.Trie, error) {
+func NewMintCntTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, mintCntPrefix, db)
 }
 
-func NewDposContext(db trie.Database) (*DposContext, error) {
+func NewLCPContext(db ethdb.Database) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -71,7 +74,8 @@ func NewDposContext(db trie.Database) (*DposContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DposContext{
+
+	return &LCPContext{
 		epochTrie:     epochTrie,
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
@@ -81,7 +85,7 @@ func NewDposContext(db trie.Database) (*DposContext, error) {
 	}, nil
 }
 
-func NewDposContextFromProto(db trie.Database, ctxProto *DposContextProto) (*DposContext, error) {
+func NewLCPContextFromProto(db ethdb.Database, ctxProto *LCPContextProto) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(ctxProto.EpochHash, db)
 	if err != nil {
 		return nil, err
@@ -102,7 +106,7 @@ func NewDposContextFromProto(db trie.Database, ctxProto *DposContextProto) (*Dpo
 	if err != nil {
 		return nil, err
 	}
-	return &DposContext{
+	return &LCPContext{
 		epochTrie:     epochTrie,
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
@@ -112,13 +116,13 @@ func NewDposContextFromProto(db trie.Database, ctxProto *DposContextProto) (*Dpo
 	}, nil
 }
 
-func (d *DposContext) Copy() *DposContext {
+func (d *LCPContext) Copy() *LCPContext {
 	epochTrie := *d.epochTrie
 	delegateTrie := *d.delegateTrie
 	voteTrie := *d.voteTrie
 	candidateTrie := *d.candidateTrie
 	mintCntTrie := *d.mintCntTrie
-	return &DposContext{
+	return &LCPContext{
 		epochTrie:     &epochTrie,
 		delegateTrie:  &delegateTrie,
 		voteTrie:      &voteTrie,
@@ -127,22 +131,23 @@ func (d *DposContext) Copy() *DposContext {
 	}
 }
 
-func (d *DposContext) Root() (h common.Hash) {
+func (d *LCPContext) Root() (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, d.epochTrie.Hash())
 	rlp.Encode(hw, d.delegateTrie.Hash())
 	rlp.Encode(hw, d.candidateTrie.Hash())
 	rlp.Encode(hw, d.voteTrie.Hash())
 	rlp.Encode(hw, d.mintCntTrie.Hash())
+
 	hw.Sum(h[:0])
 	return h
 }
 
-func (d *DposContext) Snapshot() *DposContext {
+func (d *LCPContext) Snapshot() *LCPContext {
 	return d.Copy()
 }
 
-func (d *DposContext) RevertToSnapShot(snapshot *DposContext) {
+func (d *LCPContext) RevertToSnapShot(snapshot *LCPContext) {
 	d.epochTrie = snapshot.epochTrie
 	d.delegateTrie = snapshot.delegateTrie
 	d.candidateTrie = snapshot.candidateTrie
@@ -150,7 +155,7 @@ func (d *DposContext) RevertToSnapShot(snapshot *DposContext) {
 	d.mintCntTrie = snapshot.mintCntTrie
 }
 
-func (d *DposContext) FromProto(dcp *DposContextProto) error {
+func (d *LCPContext) FromProto(dcp *LCPContextProto) error {
 	var err error
 	d.epochTrie, err = NewEpochTrie(dcp.EpochHash, d.db)
 	if err != nil {
@@ -169,39 +174,57 @@ func (d *DposContext) FromProto(dcp *DposContextProto) error {
 		return err
 	}
 	d.mintCntTrie, err = NewMintCntTrie(dcp.MintCntHash, d.db)
+
+	d.period = dcp.period
+	d.epochInterval = dcp.epochInterval
+	d.maxValidators = dcp.maxValidators
 	return err
 }
 
-type DposContextProto struct {
+type LCPContextProto struct {
 	EpochHash     common.Hash `json:"epochRoot"        gencodec:"required"`
 	DelegateHash  common.Hash `json:"delegateRoot"     gencodec:"required"`
 	CandidateHash common.Hash `json:"candidateRoot"    gencodec:"required"`
 	VoteHash      common.Hash `json:"voteRoot"         gencodec:"required"`
 	MintCntHash   common.Hash `json:"mintCntRoot"      gencodec:"required"`
+	period        uint64
+	maxValidators uint64
+	epochInterval uint64
+
+
 }
 
-func (d *DposContext) ToProto() *DposContextProto {
-	return &DposContextProto{
+func (d *LCPContext) ToProto() *LCPContextProto {
+	return &LCPContextProto{
 		EpochHash:     d.epochTrie.Hash(),
 		DelegateHash:  d.delegateTrie.Hash(),
 		CandidateHash: d.candidateTrie.Hash(),
 		VoteHash:      d.voteTrie.Hash(),
 		MintCntHash:   d.mintCntTrie.Hash(),
+		period:        d.period,
+		maxValidators: d.maxValidators,
+		epochInterval: d.epochInterval,
 	}
 }
 
-func (p *DposContextProto) Root() (h common.Hash) {
+func (p *LCPContextProto) Root() (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, p.EpochHash)
 	rlp.Encode(hw, p.DelegateHash)
 	rlp.Encode(hw, p.CandidateHash)
 	rlp.Encode(hw, p.VoteHash)
 	rlp.Encode(hw, p.MintCntHash)
+	rlp.Encode(hw, p.period)
+	rlp.Encode(hw, p.epochInterval)
+	rlp.Encode(hw, p.maxValidators)
+	rlp.Encode(hw, p.period)
+	rlp.Encode(hw, p.maxValidators)
+	rlp.Encode(hw, p.epochInterval)
 	hw.Sum(h[:0])
 	return h
 }
 
-func (d *DposContext) KickoutCandidate(candidateAddr common.Address) error {
+func (d *LCPContext) KickoutCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
 	err := d.candidateTrie.TryDelete(candidate)
 	if err != nil {
@@ -237,12 +260,12 @@ func (d *DposContext) KickoutCandidate(candidateAddr common.Address) error {
 	return nil
 }
 
-func (d *DposContext) BecomeCandidate(candidateAddr common.Address) error {
+func (d *LCPContext) BecomeCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
 	return d.candidateTrie.TryUpdate(candidate, candidate)
 }
 
-func (d *DposContext) Delegate(delegatorAddr, candidateAddr common.Address) error {
+func (d *LCPContext) Delegate(delegatorAddr, candidateAddr common.Address) error {
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
@@ -270,7 +293,7 @@ func (d *DposContext) Delegate(delegatorAddr, candidateAddr common.Address) erro
 	return d.voteTrie.TryUpdate(delegator, candidate)
 }
 
-func (d *DposContext) UnDelegate(delegatorAddr, candidateAddr common.Address) error {
+func (d *LCPContext) UnDelegate(delegatorAddr, candidateAddr common.Address) error {
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
@@ -296,7 +319,7 @@ func (d *DposContext) UnDelegate(delegatorAddr, candidateAddr common.Address) er
 	return d.voteTrie.TryDelete(delegator)
 }
 
-func (d *DposContext) CommitTo(dbw trie.DatabaseWriter) (*DposContextProto, error) {
+func (d *LCPContext) CommitTo(dbw trie.DatabaseWriter) (*LCPContextProto, error) {
 	epochRoot, err := d.epochTrie.CommitTo(dbw)
 	if err != nil {
 		return nil, err
@@ -317,7 +340,7 @@ func (d *DposContext) CommitTo(dbw trie.DatabaseWriter) (*DposContextProto, erro
 	if err != nil {
 		return nil, err
 	}
-	return &DposContextProto{
+	return &LCPContextProto{
 		EpochHash:     epochRoot,
 		DelegateHash:  delegateRoot,
 		VoteHash:      voteRoot,
@@ -326,19 +349,19 @@ func (d *DposContext) CommitTo(dbw trie.DatabaseWriter) (*DposContextProto, erro
 	}, nil
 }
 
-func (d *DposContext) CandidateTrie() *trie.Trie          { return d.candidateTrie }
-func (d *DposContext) DelegateTrie() *trie.Trie           { return d.delegateTrie }
-func (d *DposContext) VoteTrie() *trie.Trie               { return d.voteTrie }
-func (d *DposContext) EpochTrie() *trie.Trie              { return d.epochTrie }
-func (d *DposContext) MintCntTrie() *trie.Trie            { return d.mintCntTrie }
-func (d *DposContext) DB() ethdb.Database                 { return d.db }
-func (dc *DposContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
-func (dc *DposContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
-func (dc *DposContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
-func (dc *DposContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMintCnt(mintCnt *trie.Trie)     { dc.mintCntTrie = mintCnt }
+func (d *LCPContext) CandidateTrie() *trie.Trie          { return d.candidateTrie }
+func (d *LCPContext) DelegateTrie() *trie.Trie           { return d.delegateTrie }
+func (d *LCPContext) VoteTrie() *trie.Trie               { return d.voteTrie }
+func (d *LCPContext) EpochTrie() *trie.Trie              { return d.epochTrie }
+func (d *LCPContext) MintCntTrie() *trie.Trie            { return d.mintCntTrie }
+func (d *LCPContext) DB() ethdb.Database                 { return d.db }
+func (dc *LCPContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
+func (dc *LCPContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
+func (dc *LCPContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
+func (dc *LCPContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
+func (dc *LCPContext) SetMintCnt(mintCnt *trie.Trie)     { dc.mintCntTrie = mintCnt }
 
-func (dc *DposContext) GetValidators() ([]common.Address, error) {
+func (dc *LCPContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
 	key := []byte("validator")
 	validatorsRLP := dc.epochTrie.Get(key)
@@ -348,12 +371,24 @@ func (dc *DposContext) GetValidators() ([]common.Address, error) {
 	return validators, nil
 }
 
-func (dc *DposContext) SetValidators(validators []common.Address) error {
+func (dc *LCPContext) SetValidators(validators []common.Address) error {
 	key := []byte("validator")
 	validatorsRLP, err := rlp.EncodeToBytes(validators)
 	if err != nil {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
 	}
 	dc.epochTrie.Update(key, validatorsRLP)
+	return nil
+}
+func (dc *LCPContext) SetPeriod(period uint64) error {
+	dc.period = period
+	return nil
+}
+func (dc *LCPContext) SetMaxValidators(maxVal uint64) error {
+	dc.maxValidators = maxVal
+	return nil
+}
+func (dc *LCPContext) SetEpochInterval(interval uint64) error {
+	dc.epochInterval = interval
 	return nil
 }

@@ -71,7 +71,7 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db           Database
+	db           *Database
 	root         node
 	originalRoot common.Hash
 	prefix       []byte
@@ -99,7 +99,7 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db Database) (*Trie, error) {
+func New(root common.Hash, db *Database) (*Trie, error) {
 
 	trie := &Trie{
 		db:           db,
@@ -119,8 +119,9 @@ func New(root common.Hash, db Database) (*Trie, error) {
 	}
 	return trie, nil
 }
+
 // Creates trie with prefix for dpos content
-func NewTrieWithPrefix(root common.Hash, prefix []byte, db Database) (*Trie, error) {
+func NewTrieWithPrefix(root common.Hash, prefix []byte, db *Database) (*Trie, error) {
 	trie, err := New(root, db)
 	if err != nil {
 		return nil, err
@@ -128,7 +129,6 @@ func NewTrieWithPrefix(root common.Hash, prefix []byte, db Database) (*Trie, err
 	trie.prefix = prefix
 	return trie, nil
 }
-
 
 // PrefixIterator returns an iterator that returns nodes of the trie which has the prefix path specificed
 // Iteration starts at the key after the given start key.
