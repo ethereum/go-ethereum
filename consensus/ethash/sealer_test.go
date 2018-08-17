@@ -70,7 +70,7 @@ func TestRemoteNotify(t *testing.T) {
 // issues in the notifications.
 func TestRemoteMultiNotify(t *testing.T) {
 	// Start a simple webserver to capture notifications
-	sink := make(chan [3]string, 1024)
+	sink := make(chan [3]string, 64)
 
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
