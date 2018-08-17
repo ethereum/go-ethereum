@@ -142,13 +142,10 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	}
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
-	s.entryCnt++
 	data, _ = s.db.Get(keyAccessCnt)
 	s.accessCnt = BytesToU64(data)
-	s.accessCnt++
 	data, _ = s.db.Get(keyDataIdx)
 	s.dataIdx = BytesToU64(data)
-	s.dataIdx++
 
 	return s, nil
 }
@@ -581,13 +578,13 @@ mainLoop:
 					close(done)
 				}()
 
-				e = s.entryCnt
 				select {
 				case <-s.quit:
 					s.lock.Unlock()
 					break mainLoop
 				case <-done:
 				}
+				e = s.entryCnt
 			}
 			s.lock.Unlock()
 		}

@@ -209,7 +209,7 @@ func testIterator(t *testing.T, mock bool) {
 	for poc = 0; poc <= 255; poc++ {
 		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
-			chunkkeys_results[n-1] = k
+			chunkkeys_results[n] = k
 			i++
 			return true
 		})
@@ -324,12 +324,12 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 		log.Info("got back chunk", "chunk", ret)
 	}
 
-	if ldb.entryCnt != uint64(n+1) {
-		t.Fatalf("expected entryCnt to be equal to %v, but got %v", n+1, ldb.entryCnt)
+	if ldb.entryCnt != uint64(n) {
+		t.Fatalf("expected entryCnt to be equal to %v, but got %v", n, ldb.entryCnt)
 	}
 
-	if ldb.accessCnt != uint64(2*n+1) {
-		t.Fatalf("expected accessCnt to be equal to %v, but got %v", n+1, ldb.accessCnt)
+	if ldb.accessCnt != uint64(2*n) {
+		t.Fatalf("expected accessCnt to be equal to %v, but got %v", 2*n, ldb.accessCnt)
 	}
 }
 
@@ -452,12 +452,12 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	capacity := 10
+	capacity := 11
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 
-	n := 7
+	n := 11
 
 	chunks := []*Chunk{}
 	for i := 0; i < capacity; i++ {
@@ -491,9 +491,10 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	cleanup()
 
 	ldb, cleanup = newLDBStore(t)
+	capacity = 10
 	ldb.setCapacity(uint64(capacity))
 
-	n = 10
+	n = 11
 
 	for i := 0; i < n; i++ {
 		ldb.Put(context.TODO(), chunks[i])
