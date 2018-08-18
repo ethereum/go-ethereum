@@ -1,5 +1,5 @@
 .navHeader {
-    height: 25vh;
+    height: 27.5vh;
     background-color: #4f2e7e;
     padding-top: 30pt;
     padding-left: 2.5%;
@@ -13,7 +13,6 @@
     font-family: 'Open Sans', sans-serif;
     font-size: 15px;
     text-transform: uppercase;
-
 }
 
 .buttonContainer {
@@ -38,14 +37,4 @@
     color: #4f2e7e;
     background-color: #ffffff;
     font-size: 8px;
-   
-
 }
-/* 
-button:active{
-    background-color: white;
-}
-
-button:focus {
-    background-color: white;
-} */

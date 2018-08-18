@@ -99,7 +99,10 @@ class App extends Component {
         <BrowserRouter>
     
             <div style={{backgroundColor:"#f7f8f9", paddingBottom:"5%" }}>
+
+            {/* <div className={"row"}> */}
                 <Nav />
+            {/* </div> */}
              
             <Route path="/" exact render={({ match }) =>
                 <Home/>}

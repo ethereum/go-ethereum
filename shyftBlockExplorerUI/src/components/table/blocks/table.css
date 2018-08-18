@@ -2,8 +2,10 @@
     border-spacing: 100rem;
     width: 95%;
     margin: 0 auto;  
-    margin-top: -4%;
     background-color: white;
+    top: 20vh;
+    left: 2.5%;
+    position: fixed;
 }
 
 thead {
@@ -11,13 +13,11 @@ thead {
     background-color: white;
     font-family: 'Open Sans', sans-serif;
     color: #593c83;
-    
 }
 
 th {
     background-color: white;
-    padding-right: 10px;
-    padding: 25pt 30pt ;
+    padding: 15pt 30pt ;
     color: #593c83;
     font-family: 'Open Sans', sans-serif;
 }
@@ -26,9 +26,6 @@ td {
     font-size: 6pt;
     background-color: white;
     font-family: 'Open Sans', sans-serif;
-
-    /* padding: 25px;
-    margin-left: 25px; */
 }
 
 .addressTag {
