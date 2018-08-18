@@ -11,7 +11,6 @@ import Home from '../components/home/home';
 
 ///**TRANSACTIONS**///
 import TransactionRow from '../components/table/transactions/transactionRow';
-import TransactionHeader from "../components/nav/transactionHeader/transactionHeader";
 import TransactionDetailHeader from "../components/nav/transactionHeader/transactionDetailHeader";
 import DetailTransactionTable from "../components/table/transactions/transactionDetailsRow";
 import BlockTxs from "../components/table/transactions/blockTx";
@@ -20,13 +19,12 @@ import BlockTxs from "../components/table/transactions/blockTx";
 import BlocksRow from '../components/table/blocks/blockRows';
 import DetailBlockTable from '../components/table/blocks/blocksDetailsRow';
 import BlockDetailHeader from "../components/nav/blockHeaders/blockDetailHeader";
-import BlockHeader from "../components/nav/blockHeaders/blockHeader";
 import BlocksMinedTable from "../components/table/blocks/blocksMined";
 import BlockCoinbaseHeader from "../components/nav/blockHeaders/blockCoinbaseHeader";
+
 ///**ACCOUNTS**///
 import AccountsRow from '../components/table/accounts/accountRows';
 import DetailAccountsTable from "../components/table/accounts/detailAccountsRow";
-import AccountHeader from "../components/nav/accountHeaders/accountHeader";
 import AccountDetailHeader from "../components/nav/accountHeaders/accountDetailHeader";
 
 import classes from './App.css';
@@ -101,36 +99,35 @@ class App extends Component {
                 <Nav />
     
                 <Route path="/" exact render={({ match }) =>
-                    <Home/>}
+                    <Home/> 
+                    }
                 />
 
                 <Route path="/transactions" render={({match}) =>
-                <div>
-                    {/* <TransactionHeader /> */}
-                    <TransactionRow
-                        getBlockTransactions={this.getBlockTransactions}
-                        detailTransactionHandler={this.detailTransactionHandler}
-                        detailAccountHandler={this.detailAccountHandler}/>
-                </div>}
+                    <div>                  
+                        <TransactionRow
+                            getBlockTransactions={this.getBlockTransactions}
+                            detailTransactionHandler={this.detailTransactionHandler}
+                            detailAccountHandler={this.detailAccountHandler}/>
+                    </div>
+                    }
                 />
 
                 <Route path="/blocks" exact render={({match}) =>
-                <div>
-                    {/* <BlockHeader/> */}
-                    
-                    <BlocksRow
-                        getBlocksMined={this.getBlocksMined}
-                        getBlockTransactions={this.getBlockTransactions}
-                        detailBlockHandler={this.detailBlockHandler}/>
-                    
-                </div>}
+                    <div>                        
+                        <BlocksRow
+                            getBlocksMined={this.getBlocksMined}
+                            getBlockTransactions={this.getBlockTransactions}
+                            detailBlockHandler={this.detailBlockHandler}/>                        
+                    </div>
+                    }
                 />
 
                 <Route path="/accounts" exact render={({match}) =>
-                <div>
-                    <AccountHeader/>
-                    <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
-                </div>}
+                    <div>         
+                        <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
+                    </div>
+                    }
                 />
 
                 <Route path="/transaction/details" exact render={({match}) =>

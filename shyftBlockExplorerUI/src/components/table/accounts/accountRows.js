@@ -45,14 +45,14 @@ class AccountTable extends Component {
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table className={combinedClasses.join(' ')}>
-                <thead className={classes.tHead}>
-                <tr>
-                    <th scope="col">Rank</th>
-                    <th scope="col">Address</th>
-                    <th scope="col">Balance</th>
-                    <th scope="col">Percentage</th>
-                    <th scope="col">TxCount</th>
-                </tr>
+                <thead>
+                    <tr>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Rank</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Address</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Balance</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Percentage</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxCount</th>
+                    </tr>
                 </thead>
                 {table}
             </table>

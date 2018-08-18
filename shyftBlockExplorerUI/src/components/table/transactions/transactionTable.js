@@ -12,7 +12,7 @@ const TransactionTable = (props) => {
     }
 
     return (
-          <tbody>
+        <tbody>
             <tr style={{ borderTop: '1px solid #e0defb' }}>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.addressTag}>
                     <Link to="/transaction/details" style={{ color: '#8f67c9' }} className={flag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
@@ -26,7 +26,7 @@ const TransactionTable = (props) => {
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.value}</td>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.cost}</td>
             </tr>
-            </tbody>
+        </tbody>
     )
 }
 
