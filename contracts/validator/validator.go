@@ -49,7 +49,7 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
 	// Voter Delay Withdraw 2 days = 8640 blocks
-	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, big.NewInt(150), big.NewInt(8640), big.NewInt(1296000))
+	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, big.NewInt(150), big.NewInt(1296000), big.NewInt(8640))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
