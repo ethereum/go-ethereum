@@ -38,6 +38,7 @@ import (
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.
@@ -190,7 +191,11 @@ func (w *wizard) makeGenesis() {
 		code, _ := contractBackend.CodeAt(ctx, validatorAddress, nil)
 		storage := make(map[common.Hash]common.Hash)
 		f := func(key, val common.Hash) bool {
-			storage[key] = val
+			decode := []byte{}
+			trim := bytes.TrimLeft(val.Bytes(), "\x00")
+			rlp.DecodeBytes(trim, &decode)
+			storage[key] = common.BytesToHash(decode)
+			log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
 			return true
 		}
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
