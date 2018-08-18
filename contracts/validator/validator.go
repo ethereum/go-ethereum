@@ -45,11 +45,14 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, validatorAddress []common.Address, caps []*big.Int, ownerAddress common.Address) (common.Address, *Validator, error) {
 	minDeposit := new(big.Int)
 	minDeposit.SetString("50000000000000000000000", 10)
+	minVoterCap := new(big.Int)
+	minVoterCap.SetString("10000000000000000000", 10)
 	// Deposit 50K TOMO
+	// Min Voter Cap 10 TOMO
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
 	// Voter Delay Withdraw 2 days = 8640 blocks
-	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, big.NewInt(150), big.NewInt(1296000), big.NewInt(8640))
+	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(150), big.NewInt(1296000), big.NewInt(8640))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
