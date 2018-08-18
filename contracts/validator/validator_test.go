@@ -101,6 +101,7 @@ func TestRewardBalance(t *testing.T) {
 		[]*big.Int{validatorCap},
 		addr,
 		big.NewInt(50000),
+		big.NewInt(1),
 		big.NewInt(99),
 		big.NewInt(100),
 		big.NewInt(100),

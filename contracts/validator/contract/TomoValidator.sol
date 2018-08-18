@@ -31,6 +31,7 @@ contract TomoValidator {
 
     uint256 public candidateCount = 0;
     uint256 public minCandidateCap;
+    uint256 public minVoterCap;
     uint256 public maxValidatorNumber;
     uint256 public candidateWithdrawDelay;
     uint256 public voterWithdrawDelay;
@@ -38,6 +39,11 @@ contract TomoValidator {
     modifier onlyValidCandidateCap {
         // anyone can deposit X TOMO to become a candidate
         require(msg.value >= minCandidateCap);
+        _;
+    }
+
+    modifier onlyValidVoterCap {
+        require(msg.value >= minVoterCap);
         _;
     }
 
@@ -82,11 +88,13 @@ contract TomoValidator {
         uint256[] _caps,
         address _firstOwner,
         uint256 _minCandidateCap,
+        uint256 _minVoterCap,
         uint256 _maxValidatorNumber,
         uint256 _candidateWithdrawDelay,
         uint256 _voterWithdrawDelay
     ) public {
         minCandidateCap = _minCandidateCap;
+        minVoterCap = _minVoterCap;
         maxValidatorNumber = _maxValidatorNumber;
         candidateWithdrawDelay = _candidateWithdrawDelay;
         voterWithdrawDelay = _voterWithdrawDelay;
@@ -118,7 +126,7 @@ contract TomoValidator {
         emit Propose(msg.sender, _candidate, msg.value);
     }
 
-    function vote(address _candidate) external payable onlyValidCandidate(_candidate) {
+    function vote(address _candidate) external payable onlyValidVoterCap onlyValidCandidate(_candidate) {
         validatorsState[_candidate].cap = validatorsState[_candidate].cap.add(msg.value);
         if (validatorsState[_candidate].voters[msg.sender] == 0) {
             voters[_candidate].push(msg.sender);
