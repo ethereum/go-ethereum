@@ -42,7 +42,7 @@ class BlocksTable extends Component {
 
         let combinedClasses = ['responsive-table', classes.table];
         return (
-            <div className={classes.tableContainer} >
+            <div>
                 <table className={combinedClasses.join(' ')}>
                     <thead>
                     <tr>

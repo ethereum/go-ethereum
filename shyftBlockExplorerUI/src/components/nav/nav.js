@@ -36,7 +36,6 @@ class navBar extends React.Component  {
               <button className={classes.btn}> ACCOUNTS </button>
             </Link>   
 
-
           </div>
         </div>
       </div>

@@ -3,9 +3,9 @@
     width: 95%;
     margin: 0 auto;  
     background-color: white;
-    top: 20vh;
+    top: 107pt;
     left: 2.5%;
-    position: fixed;
+    position: absolute;
 }
 
 thead {
@@ -28,12 +28,24 @@ td {
     font-family: 'Open Sans', sans-serif;
 }
 
+.height {
+    width: 50px;
+}
+
+.hash {
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 220px;
+}
+
 .addressTag {
     display: inline-block;
     vertical-align: bottom;
     text-overflow: ellipsis;
     overflow: hidden;
-    width: 100px;
+    width: 150px;
 }
 
 .ageTag{

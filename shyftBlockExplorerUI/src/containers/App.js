@@ -97,100 +97,96 @@ class App extends Component {
   render() {
     return (
         <BrowserRouter>
-    
             <div style={{backgroundColor:"#f7f8f9", paddingBottom:"5%" }}>
-
-            {/* <div className={"row"}> */}
                 <Nav />
-            {/* </div> */}
-             
-            <Route path="/" exact render={({ match }) =>
-                <Home/>}
-            />
+    
+                <Route path="/" exact render={({ match }) =>
+                    <Home/>}
+                />
 
-            <Route path="/transactions" render={({match}) =>
-              <div>
-                  <TransactionHeader />
-                  <TransactionRow
-                      getBlockTransactions={this.getBlockTransactions}
-                      detailTransactionHandler={this.detailTransactionHandler}
-                      detailAccountHandler={this.detailAccountHandler}/>
-              </div>}
-            />
+                <Route path="/transactions" render={({match}) =>
+                <div>
+                    {/* <TransactionHeader /> */}
+                    <TransactionRow
+                        getBlockTransactions={this.getBlockTransactions}
+                        detailTransactionHandler={this.detailTransactionHandler}
+                        detailAccountHandler={this.detailAccountHandler}/>
+                </div>}
+                />
 
-            <Route path="/blocks" exact render={({match}) =>
-              <div>
-                  {/* <BlockHeader/> */}
-                 
-                <BlocksRow
-                    getBlocksMined={this.getBlocksMined}
-                    getBlockTransactions={this.getBlockTransactions}
-                    detailBlockHandler={this.detailBlockHandler}/>
-                
-              </div>}
-            />
+                <Route path="/blocks" exact render={({match}) =>
+                <div>
+                    {/* <BlockHeader/> */}
+                    
+                    <BlocksRow
+                        getBlocksMined={this.getBlocksMined}
+                        getBlockTransactions={this.getBlockTransactions}
+                        detailBlockHandler={this.detailBlockHandler}/>
+                    
+                </div>}
+                />
 
-            <Route path="/accounts" exact render={({match}) =>
-              <div>
-                  <AccountHeader/>
-                  <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
-              </div>}
-            />
+                <Route path="/accounts" exact render={({match}) =>
+                <div>
+                    <AccountHeader/>
+                    <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
+                </div>}
+                />
 
-            <Route path="/transaction/details" exact render={({match}) =>
-              <div>
-                  <TransactionDetailHeader
-                    txHash={this.state.transactionDetailData.TxHash}/>
-                  <DetailTransactionTable
-                    data={this.state.transactionDetailData}/>
-              </div>}
-            />
+                <Route path="/transaction/details" exact render={({match}) =>
+                <div>
+                    <TransactionDetailHeader
+                        txHash={this.state.transactionDetailData.TxHash}/>
+                    <DetailTransactionTable
+                        data={this.state.transactionDetailData}/>
+                </div>}
+                />
 
-            <Route path="/blocks/detail" exact render={({match}) =>
-              <div>
-                  <BlockDetailHeader
-                      blockNumber={this.state.blockDetailData.Number}/>
-                  <DetailBlockTable
-                      getBlockTransactions={this.getBlockTransactions}
-                      data={this.state.blockDetailData}/>
-              </div>}
-            />
+                <Route path="/blocks/detail" exact render={({match}) =>
+                <div>
+                    <BlockDetailHeader
+                        blockNumber={this.state.blockDetailData.Number}/>
+                    <DetailBlockTable
+                        getBlockTransactions={this.getBlockTransactions}
+                        data={this.state.blockDetailData}/>
+                </div>}
+                />
 
-            <Route path="/block/transactions" exact render={({match}) =>
-              <div>
-                  <BlockDetailHeader
-                      blockNumber={this.state.reqBlockNum}/>
-                  <BlockTxs
-                      data={this.state.blockTransactions}
-                      getBlockTransactions={this.getBlockTransactions}
-                      detailTransactionHandler={this.detailTransactionHandler}
-                      detailAccountHandler={this.detailAccountHandler}/>
+                <Route path="/block/transactions" exact render={({match}) =>
+                <div>
+                    <BlockDetailHeader
+                        blockNumber={this.state.reqBlockNum}/>
+                    <BlockTxs
+                        data={this.state.blockTransactions}
+                        getBlockTransactions={this.getBlockTransactions}
+                        detailTransactionHandler={this.detailTransactionHandler}
+                        detailAccountHandler={this.detailAccountHandler}/>
 
-              </div>}
-            />
+                </div>}
+                />
 
-            <Route path="/mined/blocks" exact render={({match}) =>
-              <div>
-                  <BlockCoinbaseHeader
-                      coinbase={this.state.reqCoinbase}/>
-                  <BlocksMinedTable
-                      getBlockTransactions={this.getBlockTransactions}
-                      getBlocksMined={this.getBlocksMined}
-                      data={this.state.blocksMined}/>
-              </div>}
-            />
+                <Route path="/mined/blocks" exact render={({match}) =>
+                <div>
+                    <BlockCoinbaseHeader
+                        coinbase={this.state.reqCoinbase}/>
+                    <BlocksMinedTable
+                        getBlockTransactions={this.getBlockTransactions}
+                        getBlocksMined={this.getBlocksMined}
+                        data={this.state.blocksMined}/>
+                </div>}
+                />
 
-            <Route path="/account/detail" exact render={({match}) =>
-              <div>
-                  <AccountDetailHeader
-                      addr={this.state.reqAccount}
-                      data={this.state.accountDetailData}/>
-                  <DetailAccountsTable
-                      transactionDetailHandler={this.detailTransactionHandler}
-                      addr={this.state.reqAccount}
-                      data={this.state.accountDetailData}/>
-              </div>}
-            />
+                <Route path="/account/detail" exact render={({match}) =>
+                <div>
+                    <AccountDetailHeader
+                        addr={this.state.reqAccount}
+                        data={this.state.accountDetailData}/>
+                    <DetailAccountsTable
+                        transactionDetailHandler={this.detailTransactionHandler}
+                        addr={this.state.reqAccount}
+                        data={this.state.accountDetailData}/>
+                </div>}
+                />
         </div>
     </BrowserRouter>
     );

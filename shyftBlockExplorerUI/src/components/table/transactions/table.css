@@ -1,16 +1,31 @@
 .table {
     border-spacing: 100rem;
-    width: 100%;
-    margin-top: 50px;
+    width: 95%;
+    margin: 0 auto;  
+    background-color: white;
+    top: 107pt;
+    left: 2.5%;
+    position: absolute;
 }
 
 .tHead {
-    font-size: 1rem;
+    font-size: 7pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
+    color: #593c83;
 }
 
 th {
-    background-color: aliceblue;
-    padding-right: 10px;
+    background-color: white;
+    padding: 15pt 30pt ;
+    color: #593c83;
+    font-family: 'Open Sans', sans-serif;
+}
+
+td {
+    font-size: 6pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
 }
 
 .addressTag {
@@ -18,7 +33,7 @@ th {
     vertical-align: bottom;
     text-overflow: ellipsis;
     overflow: hidden;
-    width: 132px;
+    width: 250px;
 }
 
 .ageTag{
@@ -56,7 +71,6 @@ th {
 .arrow {
     width: 25px;
     height: 25px;
-    margin-left: 15px;
 }
 
 .disabled {
