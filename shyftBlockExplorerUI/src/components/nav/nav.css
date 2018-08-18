@@ -33,6 +33,18 @@
     font-weight: 300;
 }
 
+button.btnActive {
+    color: #4f2e7e;
+    background-color: white;
+    font-size: 8px;
+    letter-spacing: 1.6px;
+    font-family: 'Open Sans', sans-serif;
+    width: 120px;
+    height: 32px;
+    margin-right: 1%;
+    font-weight: 300;
+}
+
 .btn:hover { 
     color: #4f2e7e;
     background-color: #ffffff;
