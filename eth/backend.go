@@ -197,34 +197,35 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Clique.RewardCheckpoint
-			
+
 			// Call to smart contract signer.
 			config := ctx.GetConfig()
 			client, err := ethclient.Dial(config.IPCEndpoint())
 			if err != nil {
-				log.Error("XDC - Fail to connect RPC", "error", err)
+				log.Error("XDC- Fail to connect RPC", "error", err)
+				return err
 			}
 			addr := common.HexToAddress(common.BlockSigners)
 			blockSigner, err := contract.NewBlockSigner(addr, client)
 			if err != nil {
 				log.Error("XDC - Fail get block signer", "error", err)
+				return err
 			}
 			opts := new(bind.CallOpts)
-
-			
 			prevCheckpoint := number - rCheckpoint
 
 			if number > 0 && prevCheckpoint > 0 {
-			           // Not reward for singer of genesis block and only calculate reward at checkpoint block.
+				// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 				startBlockNumber := number - (rCheckpoint * 2) + 1
 				endBlockNumber := startBlockNumber + rCheckpoint - 1
 				signers := make(map[common.Address]*rewardLog)
-				validators := make(map[common.Address]*rewardLog)
 				totalSigner := uint64(0)
 
 				for i := startBlockNumber; i <= endBlockNumber; i++ {
 					blockHeader := chain.GetHeaderByNumber(i)
 					if signer, err := c.RecoverSigner(blockHeader); err != nil {
+						log.Error("XDC - Fail recover block signer", "error", err)
+
 						return err
 					} else {
 						_, exist := signers[signer]
@@ -237,14 +238,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 
 					// Get validator in blockSigner smartcontract.
-					addrs, _ := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(i))
+					if err != nil {
+						log.Error("XDC - Fail to get signers from smartcontract.", "error", err)
+						return err
+					}
 					if len(addrs) > 0 {
 						for j := 0; j < len(addrs); j++ {
-							_, exist := validators[addrs[j]]
+							_, exist := signers[addrs[j]]
 							if exist {
-								validators[addrs[j]].Sign++
+								signers[addrs[j]].Sign++
 							} else {
-								validators[addrs[j]] = &rewardLog{1, 0}
+								signers[addrs[j]] = &rewardLog{1, 0}
 							}
 							totalSigner++
 						}
@@ -254,6 +259,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
 				// Add reward for signer.
 				calcReward := new(big.Int)
+				// Add reward for validators.
 				for signer, rLog := range signers {
 					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
 					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
@@ -261,24 +267,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 					state.AddBalance(signer, calcReward)
 				}
-				// Add reward for validators.
-				for validator, rLog := range validators {
-					calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
-					calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
-					rLog.Reward = float64(calcReward.Int64())
-
-					state.AddBalance(validator, calcReward)
-				}
 				jsonSigners, err := json.Marshal(signers)
 				if err != nil {
-					return err
-				}
-				jsonValidators, err := json.Marshal(validators)
-				if err != nil {
+					log.Error("XDC - Fail to parse json signers", "error", err)
 					return err
 				}
 
-				log.Info("XDC - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward, "validators", string(jsonValidators))
+				log.Info("XDC - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
 			}
 
 			return nil
@@ -441,8 +436,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-// ValidateStaker checks if node's address is in set of validators
-func (s *Ethereum) ValidateStaker() (bool, error) {
+// ValidateMiner checks if node's address is in set of validators
+func (s *Ethereum) ValidateMiner() (bool, error) {
 	eb, err := s.Etherbase()
 	if err != nil {
 		return false, err
@@ -464,7 +459,7 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 	return true, nil
 }
 
-func (s *Ethereum) StartStaking(local bool) error {
+func (s *Ethereum) StartMining(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		log.Error("Cannot start mining without etherbase", "err", err)
