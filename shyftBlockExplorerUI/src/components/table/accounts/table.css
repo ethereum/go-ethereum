@@ -1,11 +1,11 @@
 .table {
     border-spacing: 100rem;
-    width: 100%;
-    margin-top: 50px;
-}
-
-.tHead {
-    font-size: 1rem;
+    width: 95%;
+    margin: 0 auto;  
+    background-color: white;
+    top: 107pt;
+    left: 2.5%;
+    position: absolute;
 }
 
 th {
@@ -13,73 +13,14 @@ th {
     padding-right: 10px;
 }
 
-.addressTag {
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 132px;
-}
-
-.ageTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 80px;
-}
-
-.fromTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 100px;
-}
-
-.toTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 100px;
-}
-
-.valueTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 80px;
-}
-
-.incoming {
-    height: 25px;
-    width: 35px;
-    border: 1px forestgreen;
-    border-radius: 5px;
-    background-color: forestgreen;
-    color: white;
-    font-size: 1rem;
-    text-transform: uppercase;
-    text-align: center;
-    vertical-align: middle;
-}
-
-.out {
-    height: 25px;
-    width: 35px;
-    border: 1px orangered;
-    border-radius: 5px;
-    background-color: orangered;
-    color: white;
-    font-size: .8rem;
-    text-transform: uppercase;
-    text-align: center;
-    vertical-align: middle;
+td {
+    font-size: 6pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
 }
 
 .disabled {
     pointer-events: none;
     color: black;
 }
+

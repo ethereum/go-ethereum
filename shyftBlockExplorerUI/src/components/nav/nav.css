@@ -33,7 +33,7 @@
     font-weight: 300;
 }
 
-button.btnActive {
+.btnActive {
     color: #4f2e7e;
     background-color: white;
     font-size: 8px;

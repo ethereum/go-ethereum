@@ -1,4 +1,4 @@
-.table {
+ .table {
     border-spacing: 100rem;
     width: 95%;
     margin: 0 auto;  
@@ -7,6 +7,7 @@
     left: 2.5%;
     position: absolute;
 }
+
 
 th {
     background-color: white;
@@ -21,52 +22,8 @@ td {
     font-family: 'Open Sans', sans-serif;
 }
 
-.addressTag {
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 250px;
-}
-
-.ageTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 80px;
-}
-
-.fromTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 100px;
-}
-
-.toTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 100px;
-}
-
-.valueTag{
-    display: inline-block;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    width: 80px;
-}
-
-.arrow {
-    width: 25px;
-    height: 25px;
-}
-
 .disabled {
     pointer-events: none;
     color: black;
-}
+} 
+

@@ -20,8 +20,7 @@ const TransactionTable = (props) => {
                 </td>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}><Link  style={{ color: '#8f67c9' }}  to="/block/transactions" onClick={() => props.getBlockTransactions(props.blockNumber)}>{props.blockNumber}</Link></td>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.age}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={flag ? classes.fromTag : classes.disabled }><Link  style={{ color: '#8f67c9' }}  to="/account/detail" onClick={() => props.detailAccountHandler(props.from)}>{props.from}</Link></td>
-                <td style={{ paddingLeft: '0pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}><img className={classes.arrow} src={arrow} alt="arrow"/></td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={flag ? classes.fromTag : classes.disabled }><Link  style={{ color: '#8f67c9' }}  to="/account/detail" onClick={() => props.detailAccountHandler(props.from)}>{props.from}</Link></td>             
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.toTag}><Link style={{ color: '#8f67c9' }} to="/account/detail" onClick={() => props.detailAccountHandler(props.to)}>{props.to}</Link></td>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.value}</td>
                 <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.cost}</td>
