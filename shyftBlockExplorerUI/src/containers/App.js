@@ -5,6 +5,11 @@ import { BrowserRouter, Route } from 'react-router-dom'
 
 import { Link } from 'react-router-dom'
 
+import Modal from 'react-bootstrap/lib/Modal';
+import Button from 'react-bootstrap/lib/Button';
+import Grid from 'react-bootstrap/lib/Grid';
+import Col from 'react-bootstrap/lib/Col';
+import Row from 'react-bootstrap/lib/Row';
 
 ///**LANDING PAGE**///
 import Home from '../components/home/home';
@@ -29,6 +34,7 @@ import AccountDetailHeader from "../components/nav/accountHeaders/accountDetailH
 
 import classes from './App.css';
 
+
 class App extends Component {
   constructor(props) {
     super(props);
@@ -38,14 +44,16 @@ class App extends Component {
         accountDetailData: [],
         blocksMined: [],
         blockTransactions: [],
-        reqAccount: ''
+        reqAccount: '',
+        overlayTriggered: false,
+        overlayContent: "",
     };
   }
 
     detailBlockHandler = async(blockNumber) => {
         try {
             const response = await axios.get(`http://localhost:8080/api/get_block/${blockNumber}`)
-            await this.setState({ blockDetailData: response.data })
+            await this.setState({ blockDetailData: response.data, overlayTriggered: true, overlayContent: "block" })
         }
         catch(error) {
            console.log(error)
@@ -92,98 +100,185 @@ class App extends Component {
         }
     };
 
+    hideOverlay = () => {
+        this.setState({overlayTriggered: false})
+    };
+
+    getBlockData = (data) => {
+        let components = [];    
+        for (let key in data) {
+            let value =data[key]
+            console.log(key, value)            
+            components.push( 
+
+                <Grid>
+                    <Row className="show-grid">
+                        <Col xs={3} md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                            {key}
+                        </Col>
+                        <Col xs={9} md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                            {value}
+                        </Col>
+                    </Row>
+                </Grid>
+
+
+
+                // <li style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}> 
+                //     <font>{key}: </font>  
+                //     <font style={{marginLeft: '30pt'}} > {value}  </font>                     
+                // </li>
+            // <div style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}} >
+            //     <div>{key}: </div>  <div style={{left: '2%'}}>{value} </div> 
+            // </div>
+            );          
+        }
+
+        return components;
+    }
+
+    renderOverlay = () => {
+
+        const page = this.state.overlayContent;
+        let data, title;
+        let keys = [];
+        let values = [];
+
+        switch (page) {
+            case "block" : 
+                title = "BLOCK OVERVIEW";
+                data = this.state.blockDetailData;
+            break; 
+
+            default: console.log("error");
+        }
+
+      
+        return ( 
+            <div className="static-modal">
+                <Modal.Dialog>
+                    <Modal.Header>
+                        <Modal.Title style={{color: '#593c83', fontSize: '8pt', letterSpacing: '2pt',  fontFamily: 'Open Sans, sans-serif' }}> {title} </Modal.Title>
+                    </Modal.Header>
+
+                    <Modal.Body>
+                        <ul>
+                        {this.getBlockData(data)}         
+                        </ul>       
+                    </Modal.Body>
+
+                    <Modal.Footer>
+                    <Button onClick={this.hideOverlay}>Close</Button>                   
+                    </Modal.Footer>
+                </Modal.Dialog>
+            </div>
+        );
+       
+    };
+
+
   render() {
+
     return (
         <BrowserRouter>
-            <div style={{backgroundColor:"#f7f8f9", paddingBottom:"5%" }}>
-                <Nav />
-    
-                <Route path="/" exact render={({ match }) =>
-                    <Home/> 
-                    }
-                />
+            <div>
 
-                <Route path="/transactions" render={({match}) =>
-                    <div>                  
-                        <TransactionRow
+                
+                {
+                    this.state.overlayTriggered ? this.renderOverlay() : null
+                }
+
+        
+                <div style={ this.state.overlayTriggered ? {backgroundColor:"#f7f8f9", paddingBottom:"5%", opacity:0.5, zIndex: -10000}  : {backgroundColor:"#f7f8f9", paddingBottom:"5%" }  }>
+                    <Nav />
+        
+                    <Route path="/" exact render={({ match }) =>
+                        <Home/> 
+                        }
+                    />
+
+                    <Route path="/transactions" render={({match}) =>
+                        <div>                  
+                            <TransactionRow
+                                getBlockTransactions={this.getBlockTransactions}
+                                detailTransactionHandler={this.detailTransactionHandler}
+                                detailAccountHandler={this.detailAccountHandler}/>
+                        </div>
+                        }
+                    />
+
+                    <Route path="/blocks" exact render={({match}) =>
+                        <div>                        
+                            <BlocksRow
+                                getBlocksMined={this.getBlocksMined}
+                                getBlockTransactions={this.getBlockTransactions}
+                                detailBlockHandler={this.detailBlockHandler}/>                        
+                        </div>
+                        }
+                    />
+
+                    <Route path="/accounts" exact render={({match}) =>
+                        <div>         
+                            <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
+                        </div>
+                        }
+                    />
+
+                    <Route path="/transaction/details" exact render={({match}) =>
+                    <div>
+                        <TransactionDetailHeader
+                            txHash={this.state.transactionDetailData.TxHash}/>
+                        <DetailTransactionTable
+                            data={this.state.transactionDetailData}/>
+                    </div>}
+                    />
+
+                    <Route path="/blocks/detail" exact render={({match}) =>
+                    <div>
+                        <BlockDetailHeader
+                            blockNumber={this.state.blockDetailData.Number}/>
+                        <DetailBlockTable
+                            getBlockTransactions={this.getBlockTransactions}
+                            data={this.state.blockDetailData}/>
+                    </div>}
+                    />
+
+                    <Route path="/block/transactions" exact render={({match}) =>
+                    <div>
+                        <BlockDetailHeader
+                            blockNumber={this.state.reqBlockNum}/>
+                        <BlockTxs
+                            data={this.state.blockTransactions}
                             getBlockTransactions={this.getBlockTransactions}
                             detailTransactionHandler={this.detailTransactionHandler}
                             detailAccountHandler={this.detailAccountHandler}/>
-                    </div>
-                    }
-                />
 
-                <Route path="/blocks" exact render={({match}) =>
-                    <div>                        
-                        <BlocksRow
-                            getBlocksMined={this.getBlocksMined}
+                    </div>}
+                    />
+
+                    <Route path="/mined/blocks" exact render={({match}) =>
+                    <div>
+                        <BlockCoinbaseHeader
+                            coinbase={this.state.reqCoinbase}/>
+                        <BlocksMinedTable
                             getBlockTransactions={this.getBlockTransactions}
-                            detailBlockHandler={this.detailBlockHandler}/>                        
-                    </div>
-                    }
-                />
+                            getBlocksMined={this.getBlocksMined}
+                            data={this.state.blocksMined}/>
+                    </div>}
+                    />
 
-                <Route path="/accounts" exact render={({match}) =>
-                    <div>         
-                        <AccountsRow detailAccountHandler={this.detailAccountHandler}/>
-                    </div>
-                    }
-                />
-
-                <Route path="/transaction/details" exact render={({match}) =>
-                <div>
-                    <TransactionDetailHeader
-                        txHash={this.state.transactionDetailData.TxHash}/>
-                    <DetailTransactionTable
-                        data={this.state.transactionDetailData}/>
-                </div>}
-                />
-
-                <Route path="/blocks/detail" exact render={({match}) =>
-                <div>
-                    <BlockDetailHeader
-                        blockNumber={this.state.blockDetailData.Number}/>
-                    <DetailBlockTable
-                        getBlockTransactions={this.getBlockTransactions}
-                        data={this.state.blockDetailData}/>
-                </div>}
-                />
-
-                <Route path="/block/transactions" exact render={({match}) =>
-                <div>
-                    <BlockDetailHeader
-                        blockNumber={this.state.reqBlockNum}/>
-                    <BlockTxs
-                        data={this.state.blockTransactions}
-                        getBlockTransactions={this.getBlockTransactions}
-                        detailTransactionHandler={this.detailTransactionHandler}
-                        detailAccountHandler={this.detailAccountHandler}/>
-
-                </div>}
-                />
-
-                <Route path="/mined/blocks" exact render={({match}) =>
-                <div>
-                    <BlockCoinbaseHeader
-                        coinbase={this.state.reqCoinbase}/>
-                    <BlocksMinedTable
-                        getBlockTransactions={this.getBlockTransactions}
-                        getBlocksMined={this.getBlocksMined}
-                        data={this.state.blocksMined}/>
-                </div>}
-                />
-
-                <Route path="/account/detail" exact render={({match}) =>
-                <div>
-                    <AccountDetailHeader
-                        addr={this.state.reqAccount}
-                        data={this.state.accountDetailData}/>
-                    <DetailAccountsTable
-                        transactionDetailHandler={this.detailTransactionHandler}
-                        addr={this.state.reqAccount}
-                        data={this.state.accountDetailData}/>
-                </div>}
-                />
+                    <Route path="/account/detail" exact render={({match}) =>
+                    <div>
+                        <AccountDetailHeader
+                            addr={this.state.reqAccount}
+                            data={this.state.accountDetailData}/>
+                        <DetailAccountsTable
+                            transactionDetailHandler={this.detailTransactionHandler}
+                            addr={this.state.reqAccount}
+                            data={this.state.accountDetailData}/>
+                    </div>}
+                    />
+            </div>
         </div>
     </BrowserRouter>
     );

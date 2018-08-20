@@ -11,7 +11,7 @@ class DetailBlockTable extends Component {
             <table className={combinedClasses.join(' ')}>
                 <tbody>
                 <tr>
-                    <th scope="col">Height:</th>
+                    <th scope="col">Height 2:</th>
                     <td>{data.Number}</td>
                 </tr>
                 <tr>
