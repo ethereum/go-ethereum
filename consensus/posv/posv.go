@@ -306,9 +306,6 @@ func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	if !checkpoint && signersBytes != 0 {
 		return errExtraSigners
 	}
-	if checkpoint && signersBytes%common.AddressLength != 0 {
-		return errInvalidCheckpointSigners
-	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
@@ -353,22 +350,6 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	if parent.Time.Uint64()+c.config.Period > header.Time.Uint64() {
 		return ErrInvalidTimestamp
-	}
-	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
-	// If the block is a checkpoint block, verify the signer list
-	if number%c.config.Epoch == 0 {
-		signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		for i, signer := range snap.signers() {
-			copy(signers[i*common.AddressLength:], signer[:])
-		}
-		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-			return errInvalidCheckpointSigners
-		}
 	}
 	// All basic checks passed, verify the seal and return
 	return c.verifySeal(chain, header, parents)
