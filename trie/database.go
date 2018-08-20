@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pavelkrolevets/go-ethereum/common"
+	"github.com/pavelkrolevets/go-ethereum/ethdb"
+	"github.com/pavelkrolevets/go-ethereum/log"
+	"github.com/pavelkrolevets/go-ethereum/metrics"
+	"github.com/pavelkrolevets/go-ethereum/rlp"
 )
 
 var (
@@ -57,12 +57,20 @@ type DatabaseReader interface {
 	// Has retrieves whether a key is present in the database.
 	Has(key []byte) (bool, error)
 }
+// DatabaseWriter wraps the Put method of a backing store for the trie.
+type DatabaseWriter interface {
+	// Put stores the mapping key->value in the database.
+	// Implementations must not hold onto the value bytes, the trie
+	// will reuse the slice across calls to Put.
+	Put(key, value []byte) error
+}
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
 	diskdb ethdb.Database // Persistent storage for matured trie nodes
+
 	nodes  map[common.Hash]*cachedNode // Data and references relationships of a node
 	oldest common.Hash                 // Oldest tracked node, flush-list head
 	newest common.Hash                 // Newest tracked node, flush-list tail
@@ -272,6 +280,10 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 
 // DiskDB retrieves the persistent storage backing the trie database.
 func (db *Database) DiskDB() DatabaseReader {
+	return db.diskdb
+}
+// DiskDBwrite writes the persistent storage backing the trie database.
+func (db *Database) DiskDBwrite() DatabaseWriter {
 	return db.diskdb
 }
 

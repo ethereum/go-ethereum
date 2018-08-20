@@ -1,314 +1,226 @@
-
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package lcp
 
 import (
-"bytes"
-"encoding/json"
-"sort"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"math/big"
+	"math/rand"
+	"sort"
 
-"github.com/pavelkrolevets/go-ethereum/common"
-"github.com/pavelkrolevets/go-ethereum/core/types"
-"github.com/pavelkrolevets/go-ethereum/ethdb"
-"github.com/pavelkrolevets/go-ethereum/params"
-lru "github.com/hashicorp/golang-lru"
+	"github.com/pavelkrolevets/go-ethereum/common"
+	"github.com/pavelkrolevets/go-ethereum/core/state"
+	"github.com/pavelkrolevets/go-ethereum/core/types"
+	"github.com/pavelkrolevets/go-ethereum/crypto"
+	"github.com/pavelkrolevets/go-ethereum/log"
+	"github.com/pavelkrolevets/go-ethereum/trie"
 )
 
-// Vote represents a single vote that an authorized signer made to modify the
-// list of authorizations.
-type Vote struct {
-	Signer    common.Address `json:"signer"`    // Authorized signer that cast this vote
-	Block     uint64         `json:"block"`     // Block number the vote was cast in (expire old votes)
-	Address   common.Address `json:"address"`   // Account being voted on to change its authorization
-	Authorize bool           `json:"authorize"` // Whether to authorize or deauthorize the voted account
+type EpochContext struct {
+	TimeStamp   int64
+	Context  *types.LCPContext
+	statedb     *state.StateDB
 }
 
-// Tally is a simple vote tally to keep the current score of votes. Votes that
-// go against the proposal aren't counted since it's equivalent to not voting.
-type Tally struct {
-	Authorize bool `json:"authorize"` // Whether the vote is about authorizing or kicking someone
-	Votes     int  `json:"votes"`     // Number of votes until now wanting to pass the proposal
-}
+// countVotes
+func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err error) {
+	votes = map[common.Address]*big.Int{}
+	delegateTrie := ec.Context.DelegateTrie()
+	candidateTrie := ec.Context.CandidateTrie()
+	statedb := ec.statedb
 
-// Snapshot is the state of the authorization voting at a given point in time.
-type Snapshot struct {
-	config   *params.CliqueConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache        // Cache of recent block signatures to speed up ecrecover
-
-	Number  uint64                      `json:"number"`  // Block number where the snapshot was created
-	Hash    common.Hash                 `json:"hash"`    // Block hash where the snapshot was created
-	Signers map[common.Address]struct{} `json:"signers"` // Set of authorized signers at this moment
-	Recents map[uint64]common.Address   `json:"recents"` // Set of recent signers for spam protections
-	Votes   []*Vote                     `json:"votes"`   // List of votes cast in chronological order
-	Tally   map[common.Address]Tally    `json:"tally"`   // Current vote tally to avoid recalculating
-}
-
-// signers implements the sort interface to allow sorting a list of addresses
-type signers []common.Address
-
-func (s signers) Len() int           { return len(s) }
-func (s signers) Less(i, j int) bool { return bytes.Compare(s[i][:], s[j][:]) < 0 }
-func (s signers) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-// newSnapshot creates a new snapshot with the specified startup parameters. This
-// method does not initialize the set of recent signers, so only ever use if for
-// the genesis block.
-func newSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *Snapshot {
-	snap := &Snapshot{
-		config:   config,
-		sigcache: sigcache,
-		Number:   number,
-		Hash:     hash,
-		Signers:  make(map[common.Address]struct{}),
-		Recents:  make(map[uint64]common.Address),
-		Tally:    make(map[common.Address]Tally),
+	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	existCandidate := iterCandidate.Next()
+	if !existCandidate {
+		return votes, errors.New("no candidates")
 	}
-	for _, signer := range signers {
-		snap.Signers[signer] = struct{}{}
+	for existCandidate {
+		candidate := iterCandidate.Value
+		candidateAddr := common.BytesToAddress(candidate)
+		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
+		existDelegator := delegateIterator.Next()
+		if !existDelegator {
+			votes[candidateAddr] = new(big.Int)
+			existCandidate = iterCandidate.Next()
+			continue
+		}
+		for existDelegator {
+			delegator := delegateIterator.Value
+			score, ok := votes[candidateAddr]
+			if !ok {
+				score = new(big.Int)
+			}
+			delegatorAddr := common.BytesToAddress(delegator)
+			weight := statedb.GetBalance(delegatorAddr)
+			score.Add(score, weight)
+			votes[candidateAddr] = score
+			existDelegator = delegateIterator.Next()
+		}
+		existCandidate = iterCandidate.Next()
 	}
-	return snap
+	return votes, nil
 }
 
-// loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*Snapshot, error) {
-	blob, err := db.Get(append([]byte("clique-"), hash[:]...))
+func (ec *EpochContext) kickoutValidator(epoch int64) error {
+	validators, err := ec.Context.GetValidators()
+	var epochDuration int64
+	var blockInterval int64
+	var maxValidatorSize int64
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to get validator: %s", err)
 	}
-	snap := new(Snapshot)
-	if err := json.Unmarshal(blob, snap); err != nil {
-		return nil, err
+	if len(validators) == 0 {
+		return errors.New("no validator could be kickout")
 	}
-	snap.config = config
-	snap.sigcache = sigcache
 
-	return snap, nil
+	epochDuration = ec.Context.GetEpochInterval()
+	// First epoch duration may lt epoch interval,
+	// while the first block time wouldn't always align with epoch interval,
+	// so caculate the first epoch duartion with first block time instead of epoch interval,
+	// prevent the validators were kickout incorrectly.
+	if ec.TimeStamp-timeOfFirstBlock < epochDuration {
+		epochDuration = ec.TimeStamp - timeOfFirstBlock
+	}
+	blockInterval = ec.Context.GetPeriodBlock()
+	maxValidatorSize = ec.Context.GetMaxValidators()
+	needKickoutValidators := sortableAddresses{}
+	for _, validator := range validators {
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(epoch))
+		key = append(key, validator.Bytes()...)
+		cnt := int64(0)
+		if cntBytes := ec.Context.MintCntTrie().Get(key); cntBytes != nil {
+			cnt = int64(binary.BigEndian.Uint64(cntBytes))
+		}
+		if cnt < epochDuration/blockInterval/ maxValidatorSize /2 {
+			// not active validators need kickout
+			needKickoutValidators = append(needKickoutValidators, &sortableAddress{validator, big.NewInt(cnt)})
+		}
+	}
+	// no validators need kickout
+	needKickoutValidatorCnt := len(needKickoutValidators)
+	if needKickoutValidatorCnt <= 0 {
+		return nil
+	}
+	sort.Sort(sort.Reverse(needKickoutValidators))
+
+	candidateCount := 0
+	iter := trie.NewIterator(ec.Context.CandidateTrie().NodeIterator(nil))
+	for iter.Next() {
+		candidateCount++
+		if candidateCount >= needKickoutValidatorCnt+safeSize {
+			break
+		}
+	}
+
+	for i, validator := range needKickoutValidators {
+		// ensure candidate count greater than or equal to safeSize
+		if candidateCount <= safeSize {
+			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
+			return nil
+		}
+
+		if err := ec.Context.KickoutCandidate(validator.address); err != nil {
+			return err
+		}
+		// if kickout success, candidateCount minus 1
+		candidateCount--
+		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "mintCnt", validator.weight.String())
+	}
+	return nil
 }
 
-// store inserts the snapshot into the database.
-func (s *Snapshot) store(db ethdb.Database) error {
-	blob, err := json.Marshal(s)
+func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, err error) {
+	validator = common.Address{}
+	offset := now % ec.Context.GetEpochInterval()
+	if offset%ec.Context.GetPeriodBlock() != 0 {
+		return common.Address{}, ErrInvalidMintBlockTime
+	}
+	offset /= ec.Context.GetPeriodBlock()
+
+	validators, err := ec.Context.GetValidators()
 	if err != nil {
-		return err
+		return common.Address{}, err
 	}
-	return db.Put(append([]byte("clique-"), s.Hash[:]...), blob)
+	validatorSize := len(validators)
+	if validatorSize == 0 {
+		return common.Address{}, errors.New("failed to lookup validator")
+	}
+	offset %= int64(validatorSize)
+	return validators[offset], nil
 }
+// Changed LCP context constants to vars from the tries
+func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
+	genesisEpoch := genesis.Time.Int64() / ec.Context.GetEpochInterval()
+	prevEpoch := parent.Time.Int64() / ec.Context.GetEpochInterval()
+	currentEpoch := ec.TimeStamp / ec.Context.GetEpochInterval()
+	safeSize:= int(ec.Context.GetMaxValidators()*2/3 + 1)
 
-// copy creates a deep copy of the snapshot, though not the individual votes.
-func (s *Snapshot) copy() *Snapshot {
-	cpy := &Snapshot{
-		config:   s.config,
-		sigcache: s.sigcache,
-		Number:   s.Number,
-		Hash:     s.Hash,
-		Signers:  make(map[common.Address]struct{}),
-		Recents:  make(map[uint64]common.Address),
-		Votes:    make([]*Vote, len(s.Votes)),
-		Tally:    make(map[common.Address]Tally),
+	prevEpochIsGenesis := prevEpoch == genesisEpoch
+	if prevEpochIsGenesis && prevEpoch < currentEpoch {
+		prevEpoch = currentEpoch - 1
 	}
-	for signer := range s.Signers {
-		cpy.Signers[signer] = struct{}{}
-	}
-	for block, signer := range s.Recents {
-		cpy.Recents[block] = signer
-	}
-	for address, tally := range s.Tally {
-		cpy.Tally[address] = tally
-	}
-	copy(cpy.Votes, s.Votes)
 
-	return cpy
-}
-
-// validVote returns whether it makes sense to cast the specified vote in the
-// given snapshot context (e.g. don't try to add an already authorized signer).
-func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
-	_, signer := s.Signers[address]
-	return (signer && !authorize) || (!signer && authorize)
-}
-
-// cast adds a new vote into the tally.
-func (s *Snapshot) cast(address common.Address, authorize bool) bool {
-	// Ensure the vote is meaningful
-	if !s.validVote(address, authorize) {
-		return false
-	}
-	// Cast the vote into an existing or new tally
-	if old, ok := s.Tally[address]; ok {
-		old.Votes++
-		s.Tally[address] = old
-	} else {
-		s.Tally[address] = Tally{Authorize: authorize, Votes: 1}
-	}
-	return true
-}
-
-// uncast removes a previously cast vote from the tally.
-func (s *Snapshot) uncast(address common.Address, authorize bool) bool {
-	// If there's no tally, it's a dangling vote, just drop
-	tally, ok := s.Tally[address]
-	if !ok {
-		return false
-	}
-	// Ensure we only revert counted votes
-	if tally.Authorize != authorize {
-		return false
-	}
-	// Otherwise revert the vote
-	if tally.Votes > 1 {
-		tally.Votes--
-		s.Tally[address] = tally
-	} else {
-		delete(s.Tally, address)
-	}
-	return true
-}
-
-// apply creates a new authorization snapshot by applying the given headers to
-// the original one.
-func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
-	// Allow passing in no headers for cleaner code
-	if len(headers) == 0 {
-		return s, nil
-	}
-	// Sanity check that the headers can be applied
-	for i := 0; i < len(headers)-1; i++ {
-		if headers[i+1].Number.Uint64() != headers[i].Number.Uint64()+1 {
-			return nil, errInvalidVotingChain
+	prevEpochBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
+	iter := trie.NewIterator(ec.Context.MintCntTrie().PrefixIterator(prevEpochBytes))
+	for i := prevEpoch; i < currentEpoch; i++ {
+		// if prevEpoch is not genesis, kickout not active candidate
+		if !prevEpochIsGenesis && iter.Next() {
+			if err := ec.kickoutValidator(prevEpoch); err != nil {
+				return err
+			}
 		}
-	}
-	if headers[0].Number.Uint64() != s.Number+1 {
-		return nil, errInvalidVotingChain
-	}
-	// Iterate through the headers and create a new snapshot
-	snap := s.copy()
-
-	for _, header := range headers {
-		// Remove any votes on checkpoint blocks
-		number := header.Number.Uint64()
-		if number%s.config.Epoch == 0 {
-			snap.Votes = nil
-			snap.Tally = make(map[common.Address]Tally)
-		}
-		// Delete the oldest signer from the recent list to allow it signing again
-		if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
-			delete(snap.Recents, number-limit)
-		}
-		// Resolve the authorization key and check against signers
-		signer, err := ecrecover(header, s.sigcache)
+		votes, err := ec.countVotes()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if _, ok := snap.Signers[signer]; !ok {
-			return nil, errUnauthorized
+		candidates := sortableAddresses{}
+		for candidate, cnt := range votes {
+			candidates = append(candidates, &sortableAddress{candidate, cnt})
 		}
-		for _, recent := range snap.Recents {
-			if recent == signer {
-				return nil, errUnauthorized
-			}
+		if len(candidates) < safeSize {
+			return errors.New("too few candidates")
 		}
-		snap.Recents[number] = signer
+		sort.Sort(candidates)
+		if len(candidates) > int(ec.Context.GetMaxValidators()) {
+			candidates = candidates[:ec.Context.GetMaxValidators()]
+		}
 
-		// Header authorized, discard any previous votes from the signer
-		for i, vote := range snap.Votes {
-			if vote.Signer == signer && vote.Address == header.Coinbase {
-				// Uncast the vote from the cached tally
-				snap.uncast(vote.Address, vote.Authorize)
-
-				// Uncast the vote from the chronological list
-				snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-				break // only one vote allowed
-			}
+		// shuffle candidates
+		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i
+		r := rand.New(rand.NewSource(seed))
+		for i := len(candidates) - 1; i > 0; i-- {
+			j := int(r.Int31n(int32(i + 1)))
+			candidates[i], candidates[j] = candidates[j], candidates[i]
 		}
-		// Tally up the new vote from the signer
-		var authorize bool
-		switch {
-		case bytes.Equal(header.Nonce[:], nonceAuthVote):
-			authorize = true
-		case bytes.Equal(header.Nonce[:], nonceDropVote):
-			authorize = false
-		default:
-			return nil, errInvalidVote
+		sortedValidators := make([]common.Address, 0)
+		for _, candidate := range candidates {
+			sortedValidators = append(sortedValidators, candidate.address)
 		}
-		if snap.cast(header.Coinbase, authorize) {
-			snap.Votes = append(snap.Votes, &Vote{
-				Signer:    signer,
-				Block:     number,
-				Address:   header.Coinbase,
-				Authorize: authorize,
-			})
-		}
-		// If the vote passed, update the list of signers
-		if tally := snap.Tally[header.Coinbase]; tally.Votes > len(snap.Signers)/2 {
-			if tally.Authorize {
-				snap.Signers[header.Coinbase] = struct{}{}
-			} else {
-				delete(snap.Signers, header.Coinbase)
 
-				// Signer list shrunk, delete any leftover recent caches
-				if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
-					delete(snap.Recents, number-limit)
-				}
-				// Discard any previous votes the deauthorized signer cast
-				for i := 0; i < len(snap.Votes); i++ {
-					if snap.Votes[i].Signer == header.Coinbase {
-						// Uncast the vote from the cached tally
-						snap.uncast(snap.Votes[i].Address, snap.Votes[i].Authorize)
-
-						// Uncast the vote from the chronological list
-						snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-
-						i--
-					}
-				}
-			}
-			// Discard any previous votes around the just changed account
-			for i := 0; i < len(snap.Votes); i++ {
-				if snap.Votes[i].Address == header.Coinbase {
-					snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
-					i--
-				}
-			}
-			delete(snap.Tally, header.Coinbase)
-		}
+		epochTrie, _ := types.NewEpochTrie(common.Hash{}, ec.Context.DB())
+		ec.Context.SetEpoch(epochTrie)
+		ec.Context.SetValidators(sortedValidators)
+		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
-	snap.Number += uint64(len(headers))
-	snap.Hash = headers[len(headers)-1].Hash()
-
-	return snap, nil
+	return nil
 }
 
-// signers retrieves the list of authorized signers in ascending order.
-func (s *Snapshot) signers() []common.Address {
-	sigs := make([]common.Address, 0, len(s.Signers))
-	for sig := range s.Signers {
-		sigs = append(sigs, sig)
-	}
-	sort.Sort(signers(sigs))
-	return sigs
+type sortableAddress struct {
+	address common.Address
+	weight  *big.Int
 }
+type sortableAddresses []*sortableAddress
 
-// inturn returns if a signer at a given block height is in-turn or not.
-func (s *Snapshot) inturn(number uint64, signer common.Address) bool {
-	signers, offset := s.signers(), 0
-	for offset < len(signers) && signers[offset] != signer {
-		offset++
+func (p sortableAddresses) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+func (p sortableAddresses) Len() int      { return len(p) }
+func (p sortableAddresses) Less(i, j int) bool {
+	if p[i].weight.Cmp(p[j].weight) < 0 {
+		return false
+	} else if p[i].weight.Cmp(p[j].weight) > 0 {
+		return true
+	} else {
+		return p[i].address.String() < p[j].address.String()
 	}
-	return (number % uint64(len(signers))) == uint64(offset)
 }
-

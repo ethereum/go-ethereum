@@ -120,7 +120,7 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 	return trie, nil
 }
 
-// Creates trie with prefix for dpos content
+// Creates trie with prefix for LCP content
 func NewTrieWithPrefix(root common.Hash, prefix []byte, db *Database) (*Trie, error) {
 	trie, err := New(root, db)
 	if err != nil {

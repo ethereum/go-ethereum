@@ -22,6 +22,7 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/consensus"
 	"github.com/pavelkrolevets/go-ethereum/core/types"
 	"github.com/pavelkrolevets/go-ethereum/rpc"
+	"math/big"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -31,90 +32,40 @@ type API struct {
 	lcp *LCP
 }
 
-// GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
-	// Retrieve the requested block number (or current if none requested)
+// GetValidators retrieves the list of the validators at specified block
+func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error) {
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
 		header = api.chain.CurrentHeader()
 	} else {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
-	// Ensure we have an actually valid block and return its snapshot
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.lcp.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-}
 
-// GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
-	header := api.chain.GetHeaderByHash(hash)
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-}
-
-// GetSigners retrieves the list of authorized signers at the specified block.
-func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
-	// Retrieve the requested block number (or current if none requested)
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
-	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
-	}
-	// Ensure we have an actually valid block and return the signers from its snapshot
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	epochTrie, err := types.NewEpochTrie(header.LCPContext.EpochHash, api.lcp.db)
 	if err != nil {
 		return nil, err
 	}
-	return snap.signers(), nil
-}
-
-// GetSignersAtHash retrieves the list of authorized signers at the specified block.
-func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
-	header := api.chain.GetHeaderByHash(hash)
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	LCPContext := types.LCPContext{}
+	LCPContext.SetEpoch(epochTrie)
+	validators, err := LCPContext.GetValidators()
 	if err != nil {
 		return nil, err
 	}
-	return snap.signers(), nil
+	return validators, nil
 }
 
-// Proposals returns the current proposals the node tries to uphold and vote on.
-func (api *API) Proposals() map[common.Address]bool {
-	api.clique.lock.RLock()
-	defer api.clique.lock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.clique.proposals {
-		proposals[address] = auth
+// GetConfirmedBlockNumber retrieves the latest irreversible block
+func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
+	var err error
+	header := api.lcp.confirmedBlockHeader
+	if header == nil {
+		header, err = api.lcp.loadConfirmedBlockHeader(api.chain)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return proposals
-}
-
-// Propose injects a new authorization proposal that the signer will attempt to
-// push through.
-func (api *API) Propose(address common.Address, auth bool) {
-	api.clique.lock.Lock()
-	defer api.clique.lock.Unlock()
-
-	api.clique.proposals[address] = auth
-}
-
-// Discard drops a currently running proposal, stopping the signer from casting
-// further votes (either for or against).
-func (api *API) Discard(address common.Address) {
-	api.clique.lock.Lock()
-	defer api.clique.lock.Unlock()
-
-	delete(api.clique.proposals, address)
+	return header.Number, nil
 }

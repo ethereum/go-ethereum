@@ -41,9 +41,9 @@ var (
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
 
-		LCP: &LcpConfig{1, 30000, nil,nil},
+		LCP: &LcpConfig{1, 30000, 3,nil},
 	}
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &LcpConfig{1,3000,nil,nil}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &LcpConfig{1,3000,3,nil}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -71,35 +71,14 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
 	LCP *LcpConfig `json:"LCP,omitempty"`
-}
-
-// EthashConfig is the consensus engine configs for proof-of-work based sealing.
-type EthashConfig struct{}
-
-// String implements the stringer interface, returning the consensus engine details.
-func (c *EthashConfig) String() string {
-	return "ethash"
-}
-
-// CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
-type CliqueConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
-}
-
-// String implements the stringer interface, returning the consensus engine details.
-func (c *CliqueConfig) String() string {
-	return "clique"
 }
 
 // LCP is the consensus engine.
 type LcpConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"` // Epoch length to reset votes and checkpoint
-	MaxValidators uint64 `json:"MaxValidators"`
+	Period int64 `json:"period"` // Number of seconds between blocks to enforce
+	EpochInterval  int64 `json:"epoch"` // Epoch length to reset votes and checkpoint
+	MaxValidators int64 `json:"MaxValidators"`
 	Validators []common.Address `json:"validators"`
 }
 
@@ -112,10 +91,6 @@ func (c *LcpConfig) String() string {
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
-	case c.Ethash != nil:
-		engine = c.Ethash
-	case c.Clique != nil:
-		engine = c.Clique
 	case c.LCP !=nil:
 		engine = c.LCP
 	default:

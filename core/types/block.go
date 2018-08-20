@@ -259,9 +259,9 @@ func CopyHeader(h *Header) *Header {
 		copy(cpy.Extra, h.Extra)
 	}
 	// add dposContextProto to header
-	cpy.DposContext = &DposContextProto{}
-	if h.DposContext != nil {
-		cpy.DposContext = h.DposContext
+	cpy.LCPContext = &LCPContextProto{}
+	if h.LCPContext != nil {
+		cpy.LCPContext = h.LCPContext
 	}
 	return &cpy
 }
@@ -372,7 +372,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		// add dposcontext
-		DposContext: b.DposContext,
+		LCPContext: b.LCPContext,
 	}
 
 }
@@ -425,7 +425,7 @@ func (h *Header) String() string {
 	Root:		    %x
 	TxSha		    %x
 	ReceiptSha:	    %x
-    DposContext:    %x
+    LCPContext:    %x
 	Bloom:		    %x
 	Difficulty:	    %v
 	Number:		    %v
@@ -435,7 +435,8 @@ func (h *Header) String() string {
 	Extra:		    %s
 	MixDigest:      %x
 	Nonce:		    %x
-]`, h.Hash(), h.ParentHash, h.UncleHash, h.Validator, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.DposContext, h.Bloom, h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce)
+	
+]`, h.Hash(), h.ParentHash, h.UncleHash, h.Validator, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.LCPContext, h.Bloom, h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce)
 }
 
 type Blocks []*Block
