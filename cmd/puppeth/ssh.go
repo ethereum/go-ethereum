@@ -47,31 +47,28 @@ type sshClient struct {
 // the user's configured private RSA key. If that fails, password authentication
 // is fallen back to. server can be a string like user:identity@server:port.
 func dial(server string, pubkey []byte) (*sshClient, error) {
-	// Figure out username, identity_file, hostname and port
-	login := ""
-	identity_file := "id_rsa" // default
-	hostport := server
+	// Figure out username, identity, hostname and port
 	hostname := ""
+	hostport := server
+	username := ""
+	identity := "id_rsa" // default
 
 	if strings.Contains(server, "@") {
 		prefix := server[:strings.Index(server, "@")]
 		if strings.Contains(prefix, ":") {
-			login = prefix[:strings.Index(prefix, ":")]
-			identity_file = prefix[strings.Index(prefix, ":")+1:]
+			username = prefix[:strings.Index(prefix, ":")]
+			identity = prefix[strings.Index(prefix, ":")+1:]
 		} else {
-			login = prefix
+			username = prefix
 		}
 		hostport = server[strings.Index(server, "@")+1:]
 	}
-
-	// parse hostname and port
 	if strings.Contains(hostport, ":") {
 		hostname = hostport[:strings.Index(hostport, ":")]
 	} else {
 		hostname = hostport
 		hostport += ":22"
 	}
-
 	logger := log.New("server", server)
 	logger.Debug("Attempting to establish SSH connection")
 
@@ -79,14 +76,13 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	if login == "" {
-		login = user.Username
+	if username == "" {
+		username = user.Username
 	}
-	fmt.Printf("parsed %s:%s@%s\nhn=%s", login, identity_file, hostport, hostname)
 	// Configure the supported authentication methods (private key and password)
 	var auths []ssh.AuthMethod
 
-	path := filepath.Join(user.HomeDir, ".ssh", identity_file)
+	path := filepath.Join(user.HomeDir, ".ssh", identity)
 	if buf, err := ioutil.ReadFile(path); err != nil {
 		log.Warn("No SSH key, falling back to passwords", "path", path, "err", err)
 	} else {
@@ -109,7 +105,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 		}
 	}
 	auths = append(auths, ssh.PasswordCallback(func() (string, error) {
-		fmt.Printf("What's the login password for %s at %s? (won't be echoed)\n> ", login, server)
+		fmt.Printf("What's the login password for %s at %s? (won't be echoed)\n> ", username, server)
 		blob, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 
 		fmt.Println()
@@ -124,7 +120,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 		return nil, errors.New("no IPs associated with domain")
 	}
 	// Try to dial in to the remote server
-	logger.Trace("Dialing remote SSH server", "user", login)
+	logger.Trace("Dialing remote SSH server", "user", username)
 	keycheck := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		// If no public key is known for SSH, ask the user to confirm
 		if pubkey == nil {
@@ -151,13 +147,13 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 		// We have a mismatch, forbid connecting
 		return errors.New("ssh key mismatch, readd the machine to update")
 	}
-	client, err := ssh.Dial("tcp", hostport, &ssh.ClientConfig{User: login, Auth: auths, HostKeyCallback: keycheck})
+	client, err := ssh.Dial("tcp", hostport, &ssh.ClientConfig{User: username, Auth: auths, HostKeyCallback: keycheck})
 	if err != nil {
 		return nil, err
 	}
 	// Connection established, return our utility wrapper
 	c := &sshClient{
-		server:  hostport,
+		server:  hostname,
 		address: addr[0],
 		pubkey:  pubkey,
 		client:  client,
