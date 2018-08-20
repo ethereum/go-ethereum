@@ -335,12 +335,12 @@ var (
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimal gas price for mining a transactions",
-		Value: eth.DefaultConfig.GasPrice,
+		Value: eth.DefaultConfig.MinerGasPrice,
 	}
 	MinerLegacyGasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price for mining a transactions (deprecated, use --miner.gasprice)",
-		Value: eth.DefaultConfig.GasPrice,
+		Value: eth.DefaultConfig.MinerGasPrice,
 	}
 	MinerEtherbaseFlag = cli.StringFlag{
 		Name:  "miner.etherbase",
@@ -360,10 +360,10 @@ var (
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version, deprecated, use --miner.extradata)",
 	}
-	MinerRecommitIntervalFlag = cli.IntFlag{
+	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
-		Usage: "Sealing work recommit interval(ms), will be dynamically adjusted by the system if it is too short",
-		Value: 3000,
+		Usage: "Time interval to recreate the block being mined.",
+		Value: time.Duration(3 * time.Second),
 	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
@@ -1129,19 +1129,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.DocRoot = ctx.GlobalString(DocRootFlag.Name)
 	}
 	if ctx.GlobalIsSet(MinerLegacyExtraDataFlag.Name) {
-		cfg.ExtraData = []byte(ctx.GlobalString(MinerLegacyExtraDataFlag.Name))
+		cfg.MinerExtraData = []byte(ctx.GlobalString(MinerLegacyExtraDataFlag.Name))
 	}
 	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
-		cfg.ExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
+		cfg.MinerExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
 	}
 	if ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
-		cfg.GasPrice = GlobalBig(ctx, MinerLegacyGasPriceFlag.Name)
+		cfg.MinerGasPrice = GlobalBig(ctx, MinerLegacyGasPriceFlag.Name)
 	}
 	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
-		cfg.GasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
+		cfg.MinerGasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
 	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
-		cfg.RecommitInterval = time.Duration(ctx.GlobalInt(MinerRecommitIntervalFlag.Name)) * time.Millisecond
+		cfg.MinerRecommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1184,7 +1184,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) && !ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
-			cfg.GasPrice = big.NewInt(1)
+			cfg.MinerGasPrice = big.NewInt(1)
 		}
 	}
 	// TODO(fjl): move trie cache generations into config

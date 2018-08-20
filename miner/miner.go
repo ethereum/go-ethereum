@@ -52,13 +52,13 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, recommitInterval time.Duration) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, recommit time.Duration) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
 		exitCh:   make(chan struct{}),
-		worker:   newWorker(config, engine, eth, mux, recommitInterval),
+		worker:   newWorker(config, engine, eth, mux, recommit),
 		canStart: 1,
 	}
 	go miner.update()
@@ -145,6 +145,7 @@ func (self *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
+// SetRecommitInterval sets the interval for sealing work resubmitting.
 func (self *Miner) SetRecommitInterval(interval time.Duration) {
 	self.worker.setRecommitInterval(interval)
 }
