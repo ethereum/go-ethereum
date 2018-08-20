@@ -95,11 +95,12 @@ type Config struct {
 	TrieTimeout        time.Duration
 
 	// Mining-related options
-	Etherbase    common.Address `toml:",omitempty"`
-	MinerThreads int            `toml:",omitempty"`
-	MinerNotify  []string       `toml:",omitempty"`
-	ExtraData    []byte         `toml:",omitempty"`
-	GasPrice     *big.Int
+	Etherbase        common.Address `toml:",omitempty"`
+	MinerThreads     int            `toml:",omitempty"`
+	MinerNotify      []string       `toml:",omitempty"`
+	ExtraData        []byte         `toml:",omitempty"`
+	GasPrice         *big.Int
+	RecommitInterval time.Duration
 
 	// Ethash options
 	Ethash ethash.Config

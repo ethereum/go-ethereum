@@ -360,6 +360,11 @@ var (
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version, deprecated, use --miner.extradata)",
 	}
+	MinerRecommitIntervalFlag = cli.IntFlag{
+		Name:  "miner.recommit",
+		Usage: "Sealing work recommit interval(ms), will be dynamically adjusted by the system if it is too short",
+		Value: 3000,
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1134,6 +1139,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
 		cfg.GasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
+		cfg.RecommitInterval = time.Duration(ctx.GlobalInt(MinerRecommitIntervalFlag.Name)) * time.Millisecond
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode

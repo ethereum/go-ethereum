@@ -51,12 +51,27 @@ const (
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
 
+	// resubmitAdjustChanSize is the size of resubmitting interval adjustment channel.
+	resubmitAdjustChanSize = 10
+
 	// miningLogAtDepth is the number of confirmations before logging successful mining.
 	miningLogAtDepth = 5
 
-	// blockRecommitInterval is the time interval to recreate the mining block with
+	// minRecommitInterval is the minimal time interval to recreate the mining block with
 	// any newly arrived transactions.
-	blockRecommitInterval = 3 * time.Second
+	minRecommitInterval = 1 * time.Second
+
+	// maxRecommitInterval is the maximum time interval to recreate the mining block with
+	// any newly arrived transactions.
+	maxRecommitInterval = 15 * time.Second
+
+	// intervalAdjustRatio is the impact a single interval adjustment has on sealing work
+	// resubmitting interval.
+	intervalAdjustRatio = 0.1
+
+	// intervalAdjustBias is applied during the new resubmit interval calculation in favor of
+	// increasing upper limit or decreasing lower limit so that the limit can be reachable.
+	intervalAdjustBias = 200 * 1000.0 * 1000.0
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -89,9 +104,16 @@ const (
 	commitInterruptResubmit
 )
 
+// newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
 type newWorkReq struct {
 	interrupt *int32
 	noempty   bool
+}
+
+// intervalAdjust represents a resubmitting interval adjustment.
+type intervalAdjust struct {
+	ratio float64
+	inc   bool
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -112,11 +134,13 @@ type worker struct {
 	chainSideSub event.Subscription
 
 	// Channels
-	newWorkCh chan *newWorkReq
-	taskCh    chan *task
-	resultCh  chan *task
-	startCh   chan struct{}
-	exitCh    chan struct{}
+	newWorkCh          chan *newWorkReq
+	taskCh             chan *task
+	resultCh           chan *task
+	startCh            chan struct{}
+	exitCh             chan struct{}
+	resubmitIntervalCh chan time.Duration
+	resubmitAdjustCh   chan *intervalAdjust
 
 	current        *environment                 // An environment for current running cycle.
 	possibleUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
@@ -134,28 +158,31 @@ type worker struct {
 	running int32 // The indicator whether the consensus engine is running or not.
 
 	// Test hooks
-	newTaskHook  func(*task)      // Method to call upon receiving a new sealing task
-	skipSealHook func(*task) bool // Method to decide whether skipping the sealing.
-	fullTaskHook func()           // Method to call before pushing the full sealing task
+	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
+	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
+	fullTaskHook func()                             // Method to call before pushing the full sealing task.
+	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, recommitInterval time.Duration) *worker {
 	worker := &worker{
-		config:         config,
-		engine:         engine,
-		eth:            eth,
-		mux:            mux,
-		chain:          eth.BlockChain(),
-		possibleUncles: make(map[common.Hash]*types.Block),
-		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		txsCh:          make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:      make(chan *newWorkReq),
-		taskCh:         make(chan *task),
-		resultCh:       make(chan *task, resultQueueSize),
-		exitCh:         make(chan struct{}),
-		startCh:        make(chan struct{}, 1),
+		config:             config,
+		engine:             engine,
+		eth:                eth,
+		mux:                mux,
+		chain:              eth.BlockChain(),
+		possibleUncles:     make(map[common.Hash]*types.Block),
+		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		txsCh:              make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
+		newWorkCh:          make(chan *newWorkReq),
+		taskCh:             make(chan *task),
+		resultCh:           make(chan *task, resultQueueSize),
+		exitCh:             make(chan struct{}),
+		startCh:            make(chan struct{}, 1),
+		resubmitIntervalCh: make(chan time.Duration),
+		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -163,8 +190,14 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
+	// Recap recommit interval if the user-specified one is too short.
+	if recommitInterval < minRecommitInterval {
+		log.Info("Recap miner recommit interval", "from", recommitInterval, "to", minRecommitInterval)
+		recommitInterval = minRecommitInterval
+	}
+
 	go worker.mainLoop()
-	go worker.newWorkLoop()
+	go worker.newWorkLoop(recommitInterval)
 	go worker.resultLoop()
 	go worker.taskLoop()
 
@@ -186,6 +219,11 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
+}
+
+// setRecommitInterval updates the interval for miner sealing work recommitting.
+func (w *worker) setRecommitInterval(interval time.Duration) {
+	w.resubmitIntervalCh <- interval
 }
 
 // pending returns the pending state and corresponding block.
@@ -238,8 +276,11 @@ func (w *worker) close() {
 }
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
-func (w *worker) newWorkLoop() {
-	var interrupt *int32
+func (w *worker) newWorkLoop(recommitInterval time.Duration) {
+	var (
+		interrupt   *int32
+		minInterval = recommitInterval // minimal resubmit interval specified by user.
+	)
 
 	timer := time.NewTimer(0)
 	<-timer.C // discard the initial tick
@@ -251,7 +292,32 @@ func (w *worker) newWorkLoop() {
 		}
 		interrupt = new(int32)
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty}
-		timer.Reset(blockRecommitInterval)
+		timer.Reset(recommitInterval)
+	}
+	// recalcuInterval recalculates the resubmitting interval upon feedback.
+	recalcuInterval := func(target float64, inc bool) {
+		var (
+			old = float64(recommitInterval.Nanoseconds())
+			new float64
+		)
+		if inc {
+			new = old*(1-intervalAdjustRatio) + intervalAdjustRatio*(target+intervalAdjustBias)
+			// Recap if interval is larger than the maximum time interval
+			if new > float64(maxRecommitInterval.Nanoseconds()) {
+				new = float64(maxRecommitInterval.Nanoseconds())
+			}
+		} else {
+			// Short circuit if the interval not larger than the minimal interval specified by user.
+			if recommitInterval <= minInterval {
+				return
+			}
+			new = old*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
+			// Recap if interval is less than the user specified minimum
+			if new < float64(minInterval.Nanoseconds()) {
+				new = float64(minInterval.Nanoseconds())
+			}
+		}
+		recommitInterval = time.Duration(int64(new))
 	}
 
 	for {
@@ -267,6 +333,35 @@ func (w *worker) newWorkLoop() {
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.config.Clique == nil || w.config.Clique.Period > 0) {
 				recommit(true, commitInterruptResubmit)
+			}
+
+		case interval := <-w.resubmitIntervalCh:
+			// Adjust resubmit interval explicitly by user.
+			if interval < minRecommitInterval {
+				log.Info("Recap miner recommit interval", "from", interval, "to", minRecommitInterval)
+				interval = minRecommitInterval
+			}
+			log.Info("Miner recommit interval update", "from", minInterval, "to", interval)
+			minInterval, recommitInterval = interval, interval
+
+			if w.resubmitHook != nil {
+				w.resubmitHook(minInterval, recommitInterval)
+			}
+
+		case adjust := <-w.resubmitAdjustCh:
+			// Adjust resubmit interval by feedback.
+			if adjust.inc {
+				before := recommitInterval
+				recalcuInterval(float64(recommitInterval.Nanoseconds())/adjust.ratio, true)
+				log.Trace("Increase miner recommit interval", "from", before, "to", recommitInterval)
+			} else {
+				before := recommitInterval
+				recalcuInterval(float64(minInterval.Nanoseconds()), false)
+				log.Trace("Decrease miner recommit interval", "from", before, "to", recommitInterval)
+			}
+
+			if w.resubmitHook != nil {
+				w.resubmitHook(minInterval, recommitInterval)
 			}
 
 		case <-w.exitCh:
@@ -568,8 +663,18 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		// (3) worker recreate the mining block with any newly arrived transactions, the interrupt signal is 2.
 		// For the first two cases, the semi-finished work will be discarded.
 		// For the third case, the semi-finished work will be submitted to the consensus engine.
-		// TODO(rjl493456442) give feedback to newWorkLoop to adjust resubmit interval if it is too short.
 		if interrupt != nil && atomic.LoadInt32(interrupt) != commitInterruptNone {
+			// Notify resubmit loop to increase resubmitting interval due to too frequent commits.
+			if atomic.LoadInt32(interrupt) == commitInterruptResubmit {
+				ratio := float64(w.current.header.GasLimit-w.current.gasPool.Gas()) / float64(w.current.header.GasLimit)
+				if ratio < 0.1 {
+					ratio = 0.1
+				}
+				w.resubmitAdjustCh <- &intervalAdjust{
+					ratio: ratio,
+					inc:   true,
+				}
+			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead
 		}
 		// If we don't have enough gas for any further transactions then we're done
@@ -643,6 +748,11 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			*cpy[i] = *l
 		}
 		go w.mux.Post(core.PendingLogsEvent{Logs: cpy})
+	}
+	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
+	// than the user-specified one.
+	if interrupt != nil {
+		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 	}
 	return false
 }

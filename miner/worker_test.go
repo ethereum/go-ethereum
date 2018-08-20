@@ -119,7 +119,7 @@ func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(chainConfig, engine, backend, new(event.TypeMux))
+	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second)
 	w.setEtherbase(testBankAddress)
 	return w, backend
 }
@@ -327,11 +327,113 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 		}
 	}
 	b.txPool.AddLocals(newTxs)
-	time.Sleep(3 * time.Second)
+	time.Sleep(time.Second)
 
 	select {
 	case <-taskCh:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("new task timeout")
+	}
+}
+
+func TestAdjustIntervalEthash(t *testing.T) {
+	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
+}
+
+func TestAdjustIntervalClique(t *testing.T) {
+	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+}
+
+func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+	defer engine.Close()
+
+	w, _ := newTestWorker(t, chainConfig, engine)
+	defer w.close()
+
+	w.skipSealHook = func(task *task) bool {
+		return true
+	}
+	w.fullTaskHook = func() {
+		time.Sleep(100 * time.Millisecond)
+	}
+	var (
+		progress = make(chan struct{}, 10)
+		result   = make([]float64, 0, 10)
+		index    = 0
+		start    = false
+	)
+	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
+		// Short circuit if interval checking hasn't started.
+		if !start {
+			return
+		}
+		var wantMinInterval, wantRecommitInterval time.Duration
+
+		switch index {
+		case 0:
+			wantMinInterval, wantRecommitInterval = 3*time.Second, 3*time.Second
+		case 1:
+			origin := float64(3 * time.Second.Nanoseconds())
+			estimate := origin*(1-intervalAdjustRatio) + intervalAdjustRatio*(origin/0.8+intervalAdjustBias)
+			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(int(estimate))*time.Nanosecond
+		case 2:
+			estimate := result[index-1]
+			min := float64(3 * time.Second.Nanoseconds())
+			estimate = estimate*(1-intervalAdjustRatio) + intervalAdjustRatio*(min-intervalAdjustBias)
+			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(int(estimate))*time.Nanosecond
+		case 3:
+			wantMinInterval, wantRecommitInterval = time.Second, time.Second
+		}
+
+		// Check interval
+		if minInterval != wantMinInterval {
+			t.Errorf("resubmit min interval mismatch want %s has %s", wantMinInterval, minInterval)
+		}
+		if recommitInterval != wantRecommitInterval {
+			t.Errorf("resubmit interval mismatch want %s has %s", wantRecommitInterval, recommitInterval)
+		}
+		result = append(result, float64(recommitInterval.Nanoseconds()))
+		index += 1
+		progress <- struct{}{}
+	}
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+
+	w.start()
+
+	time.Sleep(time.Second)
+
+	start = true
+	w.setRecommitInterval(3 * time.Second)
+	select {
+	case <-progress:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("interval reset timeout")
+	}
+
+	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
+	select {
+	case <-progress:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("interval reset timeout")
+	}
+
+	w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+	select {
+	case <-progress:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("interval reset timeout")
+	}
+
+	w.setRecommitInterval(500 * time.Millisecond)
+	select {
+	case <-progress:
+	case <-time.NewTimer(time.Second).C:
+		t.Error("interval reset timeout")
 	}
 }
