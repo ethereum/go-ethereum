@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/meitu/go-ethereum/common"
-	"github.com/meitu/go-ethereum/crypto/sha3"
-	"github.com/meitu/go-ethereum/ethdb"
-	"github.com/meitu/go-ethereum/rlp"
-	"github.com/meitu/go-ethereum/trie"
+	"github.com/pavelkrolevets/go-ethereum/common"
+	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
+	"github.com/pavelkrolevets/go-ethereum/rlp"
+	"github.com/pavelkrolevets/go-ethereum/trie"
+	"encoding/binary"
 )
 
 type LCPContext struct {
@@ -18,11 +18,11 @@ type LCPContext struct {
 	voteTrie      *trie.Trie
 	candidateTrie *trie.Trie
 	mintCntTrie   *trie.Trie
-	period        uint64
-	maxValidators uint64
-	epochInterval uint64
+	periodBlock   *trie.Trie
+	maxValidators *trie.Trie
+	epochInterval *trie.Trie
 
-	db ethdb.Database
+	db *trie.Database
 }
 
 var (
@@ -31,29 +31,42 @@ var (
 	votePrefix      = []byte("vote-")
 	candidatePrefix = []byte("candidate-")
 	mintCntPrefix   = []byte("mintCnt-")
+	periodBlockPrefix    = []byte("Period-")
+	maxValidatorsPrefix = []byte("MaxValidator-")
+	epochIntervalPrefix = []byte("EpochInterval-")
 )
 
-func NewEpochTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, epochPrefix, db)
 }
 
-func NewDelegateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+func NewDelegateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, delegatePrefix, db)
 }
 
-func NewVoteTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+func NewVoteTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, votePrefix, db)
 }
 
-func NewCandidateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+func NewCandidateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
 }
 
-func NewMintCntTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+func NewMintCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, mintCntPrefix, db)
 }
 
-func NewLCPContext(db ethdb.Database) (*LCPContext, error) {
+func NewPeriodBlockTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
+	return trie.NewTrieWithPrefix(root, periodBlockPrefix, db)
+}
+func NewMaxValidatorsTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
+	return trie.NewTrieWithPrefix(root, maxValidatorsPrefix, db)
+}
+func NewEpochIntervalTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
+	return trie.NewTrieWithPrefix(root, epochIntervalPrefix, db)
+}
+
+func NewLCPContext(db *trie.Database) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -75,17 +88,32 @@ func NewLCPContext(db ethdb.Database) (*LCPContext, error) {
 		return nil, err
 	}
 
+	periodTrie, err := NewPeriodBlockTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
+	maxValidatorTrie, err := NewMaxValidatorsTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
+	epochIntervalTrie, err := NewEpochIntervalTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
 	return &LCPContext{
 		epochTrie:     epochTrie,
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
+		periodBlock: periodTrie,
+		maxValidators: maxValidatorTrie,
+		epochInterval: epochIntervalTrie,
 		db:            db,
 	}, nil
 }
 
-func NewLCPContextFromProto(db ethdb.Database, ctxProto *LCPContextProto) (*LCPContext, error) {
+func NewLCPContextFromProto(db *trie.Database, ctxProto *LCPContextProto) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(ctxProto.EpochHash, db)
 	if err != nil {
 		return nil, err
@@ -106,12 +134,27 @@ func NewLCPContextFromProto(db ethdb.Database, ctxProto *LCPContextProto) (*LCPC
 	if err != nil {
 		return nil, err
 	}
+	periodTrie, err := NewPeriodBlockTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
+	maxValidatorTrie, err := NewMaxValidatorsTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
+	epochIntervalTrie, err := NewEpochIntervalTrie(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
 	return &LCPContext{
 		epochTrie:     epochTrie,
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
+		periodBlock: periodTrie,
+		maxValidators: maxValidatorTrie,
+		epochInterval: epochIntervalTrie,
 		db:            db,
 	}, nil
 }
@@ -122,12 +165,18 @@ func (d *LCPContext) Copy() *LCPContext {
 	voteTrie := *d.voteTrie
 	candidateTrie := *d.candidateTrie
 	mintCntTrie := *d.mintCntTrie
+	periodTrie:= *d.periodBlock
+	maxValidatorTrie:= *d.maxValidators
+	epochIntervalTrie:= *d.epochInterval
 	return &LCPContext{
 		epochTrie:     &epochTrie,
 		delegateTrie:  &delegateTrie,
 		voteTrie:      &voteTrie,
 		candidateTrie: &candidateTrie,
 		mintCntTrie:   &mintCntTrie,
+		periodBlock:   &periodTrie,
+		maxValidators: &maxValidatorTrie,
+		epochInterval: &epochIntervalTrie,
 	}
 }
 
@@ -138,7 +187,9 @@ func (d *LCPContext) Root() (h common.Hash) {
 	rlp.Encode(hw, d.candidateTrie.Hash())
 	rlp.Encode(hw, d.voteTrie.Hash())
 	rlp.Encode(hw, d.mintCntTrie.Hash())
-
+	rlp.Encode(hw, d.periodBlock.Hash())
+	rlp.Encode(hw, d.maxValidators.Hash())
+	rlp.Encode(hw, d.epochInterval.Hash())
 	hw.Sum(h[:0])
 	return h
 }
@@ -153,6 +204,9 @@ func (d *LCPContext) RevertToSnapShot(snapshot *LCPContext) {
 	d.candidateTrie = snapshot.candidateTrie
 	d.voteTrie = snapshot.voteTrie
 	d.mintCntTrie = snapshot.mintCntTrie
+	d.periodBlock = snapshot.periodBlock
+	d.maxValidators = snapshot.maxValidators
+	d.epochInterval = snapshot.epochInterval
 }
 
 func (d *LCPContext) FromProto(dcp *LCPContextProto) error {
@@ -174,10 +228,21 @@ func (d *LCPContext) FromProto(dcp *LCPContextProto) error {
 		return err
 	}
 	d.mintCntTrie, err = NewMintCntTrie(dcp.MintCntHash, d.db)
-
-	d.period = dcp.period
-	d.epochInterval = dcp.epochInterval
-	d.maxValidators = dcp.maxValidators
+	if err != nil {
+		return err
+	}
+	d.periodBlock, err = NewPeriodBlockTrie(dcp.periodBlockHash, d.db)
+	if err != nil {
+		return err
+	}
+	d.maxValidators, err = NewPeriodBlockTrie(dcp.maxValidatorsHash, d.db)
+	if err != nil {
+		return err
+	}
+	d.epochInterval, err = NewPeriodBlockTrie(dcp.epochIntervalHash, d.db)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -187,9 +252,9 @@ type LCPContextProto struct {
 	CandidateHash common.Hash `json:"candidateRoot"    gencodec:"required"`
 	VoteHash      common.Hash `json:"voteRoot"         gencodec:"required"`
 	MintCntHash   common.Hash `json:"mintCntRoot"      gencodec:"required"`
-	period        uint64
-	maxValidators uint64
-	epochInterval uint64
+	periodBlockHash   common.Hash `json:"periodBlockRoot"      gencodec:"required"`
+	maxValidatorsHash common.Hash `json:"maxValidatorRoot"      gencodec:"required"`
+	epochIntervalHash common.Hash `json:"epochIntervalRoot"      gencodec:"required"`
 
 
 }
@@ -201,9 +266,9 @@ func (d *LCPContext) ToProto() *LCPContextProto {
 		CandidateHash: d.candidateTrie.Hash(),
 		VoteHash:      d.voteTrie.Hash(),
 		MintCntHash:   d.mintCntTrie.Hash(),
-		period:        d.period,
-		maxValidators: d.maxValidators,
-		epochInterval: d.epochInterval,
+		periodBlockHash:   d.periodBlock.Hash(),
+		maxValidatorsHash: d.maxValidators.Hash(),
+		epochIntervalHash: d.epochInterval.Hash(),
 	}
 }
 
@@ -214,12 +279,9 @@ func (p *LCPContextProto) Root() (h common.Hash) {
 	rlp.Encode(hw, p.CandidateHash)
 	rlp.Encode(hw, p.VoteHash)
 	rlp.Encode(hw, p.MintCntHash)
-	rlp.Encode(hw, p.period)
-	rlp.Encode(hw, p.epochInterval)
-	rlp.Encode(hw, p.maxValidators)
-	rlp.Encode(hw, p.period)
-	rlp.Encode(hw, p.maxValidators)
-	rlp.Encode(hw, p.epochInterval)
+	rlp.Encode(hw, p.periodBlockHash)
+	rlp.Encode(hw, p.maxValidatorsHash)
+	rlp.Encode(hw, p.epochIntervalHash)
 	hw.Sum(h[:0])
 	return h
 }
@@ -318,25 +380,38 @@ func (d *LCPContext) UnDelegate(delegatorAddr, candidateAddr common.Address) err
 	}
 	return d.voteTrie.TryDelete(delegator)
 }
+//function to write tries to memory and then dump to a hard drive - new in 1.8 version
+func (d *LCPContext) CommitTo(onleaf trie.LeafCallback) (*LCPContextProto, error) {
+	epochRoot, err := d.epochTrie.Commit(onleaf)
+	if err != nil {
+		return nil, err
+	}
+	delegateRoot, err := d.delegateTrie.Commit(onleaf)
+	if err != nil {
+		return nil, err
+	}
+	voteRoot, err := d.voteTrie.Commit(onleaf)
+	if err != nil {
+		return nil, err
+	}
+	candidateRoot, err := d.candidateTrie.Commit(onleaf)
+	if err != nil {
+		return nil, err
+	}
+	mintCntRoot, err := d.mintCntTrie.Commit(onleaf)
+	if err != nil {
+		return nil, err
+	}
 
-func (d *LCPContext) CommitTo(dbw trie.DatabaseWriter) (*LCPContextProto, error) {
-	epochRoot, err := d.epochTrie.CommitTo(dbw)
+	blockPeriod, err := d.periodBlock.Commit(onleaf)
 	if err != nil {
 		return nil, err
 	}
-	delegateRoot, err := d.delegateTrie.CommitTo(dbw)
+	maxVal, err := d.maxValidators.Commit(onleaf)
 	if err != nil {
 		return nil, err
 	}
-	voteRoot, err := d.voteTrie.CommitTo(dbw)
-	if err != nil {
-		return nil, err
-	}
-	candidateRoot, err := d.candidateTrie.CommitTo(dbw)
-	if err != nil {
-		return nil, err
-	}
-	mintCntRoot, err := d.mintCntTrie.CommitTo(dbw)
+	epochInterv, err := d.epochInterval.Commit(onleaf)
 	if err != nil {
 		return nil, err
 	}
@@ -346,6 +421,9 @@ func (d *LCPContext) CommitTo(dbw trie.DatabaseWriter) (*LCPContextProto, error)
 		VoteHash:      voteRoot,
 		CandidateHash: candidateRoot,
 		MintCntHash:   mintCntRoot,
+		periodBlockHash: blockPeriod,
+		maxValidatorsHash: maxVal,
+		epochIntervalHash: epochInterv,
 	}, nil
 }
 
@@ -354,12 +432,16 @@ func (d *LCPContext) DelegateTrie() *trie.Trie           { return d.delegateTrie
 func (d *LCPContext) VoteTrie() *trie.Trie               { return d.voteTrie }
 func (d *LCPContext) EpochTrie() *trie.Trie              { return d.epochTrie }
 func (d *LCPContext) MintCntTrie() *trie.Trie            { return d.mintCntTrie }
-func (d *LCPContext) DB() ethdb.Database                 { return d.db }
+func (d *LCPContext) periodTrie() *trie.Trie            { return d.periodBlock }
+func (d *LCPContext) maxValidatorTrie() *trie.Trie            { return d.maxValidators }
+func (d *LCPContext) epochIntervalTrie() *trie.Trie            { return d.epochInterval }
+func (d *LCPContext) DB() *trie.Database                 { return d.db }
 func (dc *LCPContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
 func (dc *LCPContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
 func (dc *LCPContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
 func (dc *LCPContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
 func (dc *LCPContext) SetMintCnt(mintCnt *trie.Trie)     { dc.mintCntTrie = mintCnt }
+
 
 func (dc *LCPContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
@@ -380,15 +462,50 @@ func (dc *LCPContext) SetValidators(validators []common.Address) error {
 	dc.epochTrie.Update(key, validatorsRLP)
 	return nil
 }
-func (dc *LCPContext) SetPeriod(period uint64) error {
-	dc.period = period
+
+// Set and Get block creation speed
+func (dc *LCPContext) SetPeriodBlock(period int64)  error  {
+	key:= []byte("BlockPeriod")
+	periodByte :=make([]byte, 8)
+	binary.LittleEndian.PutUint64(periodByte,uint64(period))
+	dc.epochTrie.Update(key, periodByte)
+	return nil
+	}
+
+func (dc *LCPContext) GetPeriodBlock()  (int64)  {
+	key:= []byte("BlockPeriod")
+	periodRLP := dc.epochTrie.Get(key)
+	period := int64(binary.LittleEndian.Uint64(periodRLP))
+	return period
+}
+
+//Set and Get maximim validators
+func (dc *LCPContext) SetMaxValidators(maxVal int64)  error  {
+	key:= []byte("MaxValidators")
+	maxValByte :=make([]byte, 8)
+	binary.LittleEndian.PutUint64(maxValByte,uint64(maxVal))
+	dc.epochTrie.Update(key, maxValByte)
 	return nil
 }
-func (dc *LCPContext) SetMaxValidators(maxVal uint64) error {
-	dc.maxValidators = maxVal
+
+func (dc *LCPContext) GetMaxValidators()  (int64)  {
+	key:= []byte("MaxValidators")
+	maxValRLP := dc.epochTrie.Get(key)
+	maxVal := int64(binary.LittleEndian.Uint64(maxValRLP))
+	return maxVal
+}
+
+//Set and Get epoch interval
+func (dc *LCPContext) SetEpochInterval(epochInt int64)  error  {
+	key:= []byte("EpochInterval")
+	epochIntByte :=make([]byte, 8)
+	binary.LittleEndian.PutUint64(epochIntByte,uint64(epochInt))
+	dc.epochTrie.Update(key, epochIntByte)
 	return nil
 }
-func (dc *LCPContext) SetEpochInterval(interval uint64) error {
-	dc.epochInterval = interval
-	return nil
+func (dc *LCPContext) GetEpochInterval()  (int64)  {
+	key:= []byte("EpochInterval")
+	epochIntRLP := dc.epochTrie.Get(key)
+	period := int64(binary.LittleEndian.Uint64(epochIntRLP))
+	return period
 }
