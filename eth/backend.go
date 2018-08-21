@@ -87,6 +87,10 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
+	validator common.Address
+	periodBlock   int64
+	maxValidators int64
+	epochInterval int64
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
