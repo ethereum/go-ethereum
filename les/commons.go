@@ -33,6 +33,7 @@ import (
 // lesCommons contains fields needed by both server and client.
 type lesCommons struct {
 	config                       *eth.Config
+	iConfig                      *light.IndexerConfig
 	chainDb                      ethdb.Database
 	protocolManager              *ProtocolManager
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
@@ -81,7 +82,7 @@ func (c *lesCommons) nodeInfo() interface{} {
 
 	if !c.protocolManager.lightSync {
 		// convert to client section size if running in server mode
-		sections /= light.CHTFrequencyClient / light.CHTFrequencyServer
+		sections /= c.iConfig.PairChtSize / c.iConfig.ChtSize
 	}
 
 	if sections2 < sections {
@@ -94,7 +95,8 @@ func (c *lesCommons) nodeInfo() interface{} {
 		if c.protocolManager.lightSync {
 			chtRoot = light.GetChtRoot(c.chainDb, sectionIndex, sectionHead)
 		} else {
-			chtRoot = light.GetChtV2Root(c.chainDb, sectionIndex, sectionHead)
+			idxV2 := (sectionIndex+1)*c.iConfig.PairChtSize/c.iConfig.ChtSize - 1
+			chtRoot = light.GetChtRoot(c.chainDb, idxV2, sectionHead)
 		}
 		cht = light.TrustedCheckpoint{
 			SectionIdx:  sectionIndex,
