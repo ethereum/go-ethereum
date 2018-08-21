@@ -24,8 +24,6 @@ import BlockTxs from "../components/table/transactions/blockTx";
 ///**INTERNAL TRANSACTIONS**///
 import InternalTransactionRow from '../components/table/internalTransactions/internalRow';
 
-
-
 ///**BLOCKS**///
 import BlocksRow from '../components/table/blocks/blockRows';
 import DetailBlockTable from '../components/table/blocks/blocksDetailsRow';
@@ -68,6 +66,7 @@ class App extends Component {
     };
 
     detailTransactionHandler = async(txHash) => {
+        console.log("detail tx handler")
         try {
             const response = await axios.get(`http://localhost:8080/api/get_transaction/${txHash}`);
             await this.setState({ transactionDetailData: response.data, overlayTriggered: true, overlayContent: "transaction" })
@@ -78,7 +77,6 @@ class App extends Component {
     };
 
     detailAccountHandler = async(addr) => {
-
         try {
             const response = await axios.get(`http://localhost:8080/api/get_account_txs/${addr}`)
             await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: false })
@@ -88,15 +86,22 @@ class App extends Component {
         }
     };
 
-    detailInternalHandler = async() => {
-
-        console.log("in internal request");
+    detailInternalHandler = async(txHash) => {
+        console.log("********* detaik Internal ")
 
         try {
+            const response = await axios.get(`http://localhost:8080/api/get_internal_transactions/${txHash}`)
+            await this.setState({ internalDetailData: response.data, reqAccount: txHash, overlayTriggered: true, overlayContent: "internal" })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    };
+
+    getInternalTransactions = async() => {
+        try {
             const response = await axios.get(`http://localhost:8080/api/get_internal_transactions/`)
-         
-            console.log(response.data);
-            await this.setState({ internalDetailData: response.data,  overlayTriggered: false })
+            await this.setState({ internalTransactions: response.data,  overlayTriggered: false })
         }
         catch(error) {
             console.log(error)
@@ -131,32 +136,45 @@ class App extends Component {
     getBlockData = (data, page) => {
         let components = [];
         let dataEntry;
-        
-        if(page === "account") {
+        if(page === "account" || page === "internal") {
             dataEntry = data[0];
-        } else { 
+        }
+        else { 
             dataEntry = data;
         }
-        
         for (let key in dataEntry) {
             let value = dataEntry[key];
             if (dataEntry["To"] === null) {
                 delete dataEntry["To"]
             }
-            components.push( 
-                <Grid>
-                    <Row className="show-grid">
-                        <Col xs={3}  md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
-                            {key}
-                        </Col>
-                        <Col xs={9}  md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
-                            {value}
-                        </Col>
-                    </Row>
-                </Grid>
-            );          
+            if( key === "Input" || key === "Output") {
+                components.push( 
+                    <Grid>
+                        <Row className="show-grid">
+                            <Col xs={3}  md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                                {key}
+                            </Col>
+                            <Col xs={9}  md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '5pt', marginLeft:'-5pt', fontFamily: 'Open Sans, sans-serif'}}>
+                                <Button style={{color: '#8f67c9'}} bsStyle="link" bsSize="small" onClick={()=> alert( value )}> Show {key} </Button> 
+                            </Col>                          
+                        </Row>
+                    </Grid>
+                );             
+            } else {
+                components.push( 
+                    <Grid>
+                        <Row className="show-grid">
+                            <Col xs={3}  md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                                {key}
+                            </Col>
+                            <Col xs={9}  md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                                {value}
+                            </Col>
+                        </Row>
+                    </Grid>
+                ); 
+            }
         }
-
         return components;
     }
 
@@ -179,6 +197,10 @@ class App extends Component {
             case "account" : 
                 title = "ACCOUNT OVERVIEW";
                 data =  this.state.accountDetailData;
+            break;
+            case "internal" : 
+                title = "Internal Transaction Overview";
+                data = this.state.internalDetailData;
             break;
             default: console.log("error");
         }
@@ -242,7 +264,9 @@ class App extends Component {
                     <Route path="/internalTransactions" exact render={({match}) =>
                         <div>                        
                             <InternalTransactionRow                              
-                                detailBlockHandler={this.detailInternalHandler}/>                        
+                                getInternalTransactionsHandler={this.getInternalTransactions}
+                                detailInternalHandler={this.detailInternalHandler}
+                                />                        
                         </div>
                         }
                     />

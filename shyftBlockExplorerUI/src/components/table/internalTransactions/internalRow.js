@@ -25,11 +25,7 @@ class InternalTransactionsTable extends Component {
     }
 
     render() {
-        const table = this.state.data.map((data, i) => {
-
-            console.log(data);
-
-
+        const table = this.state.data.map((data, i) => {  
             const conversion = data.Rewards / 10000000000000000000;
             return <InternalTable
                 key={`${data.TxHash}${i}`}
@@ -43,7 +39,8 @@ class InternalTransactionsTable extends Component {
                 Input={data.Input}
                 Output={data.Output}
                 Time={data.Time}
-                Value={data.Value}                
+                Value={data.Value}    
+                detailInternalHandler={this.props.detailInternalHandler}            
             />
         });
 
@@ -53,17 +50,17 @@ class InternalTransactionsTable extends Component {
                 <table className={combinedClasses.join(' ')}>
                     <thead>
                     <tr>                    
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Block Hash</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Action</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >To</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >From</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Gas</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Gas Used</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>ID</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Input</th>
-                        <th scope="col"  style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Output</th>
-                        <th scope="col"  style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Time</th>
-                        <th scope="col"   style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Value</th>
+                        <th scope="col" className={classes.blockHash} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Block Hash</th>
+                        <th scope="col" className={classes.action} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Action</th>
+                        <th scope="col" className={classes.to} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >To</th>
+                        <th scope="col" className={classes.from} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >From</th>
+                        <th scope="col" className={classes.gas} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Gas</th>
+                        <th scope="col" className={classes.gasUsed} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Gas Used</th>
+                        <th scope="col" className={classes.id} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>ID</th>
+                        <th scope="col" className={classes.input} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Input</th>
+                        <th scope="col" className={classes.output} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Output</th>
+                        <th scope="col" className={classes.time} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Time</th>
+                        <th scope="col" className={classes.value} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Value</th>
                     </tr>
                     </thead>
                     {table}

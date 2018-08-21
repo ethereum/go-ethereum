@@ -4,6 +4,9 @@ import arrow from '../../assets/arrow_right_black.png';
 import { Link } from 'react-router-dom'
 
 const TransactionTable = (props) => {
+    console.log("in transaction table")
+    console.log(props)
+    window.bar = props
     let flag;
     if(props.txHash.indexOf("GENESIS") !== -1) {
         flag = false
