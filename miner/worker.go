@@ -309,10 +309,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				next = float64(maxRecommitInterval.Nanoseconds())
 			}
 		} else {
-			// Short circuit if the interval not larger than the minimal interval specified by user.
-			if recommit <= minRecommit {
-				return
-			}
 			next = prev*(1-intervalAdjustRatio) + intervalAdjustRatio*(target-intervalAdjustBias)
 			// Recap if interval is less than the user specified minimum
 			if next < float64(minRecommit.Nanoseconds()) {
