@@ -1,6 +1,5 @@
 package lcp
 
-
 import (
 	"bytes"
 	"errors"
@@ -8,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"encoding/binary"
+	"fmt"
+	"github.com/hashicorp/golang-lru"
 	"github.com/pavelkrolevets/go-ethereum/accounts"
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
@@ -16,15 +18,12 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/core/types"
 	"github.com/pavelkrolevets/go-ethereum/crypto"
 	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
+	"github.com/pavelkrolevets/go-ethereum/ethdb"
 	"github.com/pavelkrolevets/go-ethereum/log"
 	"github.com/pavelkrolevets/go-ethereum/params"
 	"github.com/pavelkrolevets/go-ethereum/rlp"
 	"github.com/pavelkrolevets/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
-	"encoding/binary"
-	"fmt"
 	"github.com/pavelkrolevets/go-ethereum/trie"
-	"github.com/pavelkrolevets/go-ethereum/ethdb"
 )
 
 const (
@@ -32,25 +31,21 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-
-	)
-
-var (
-	big0  = big.NewInt(0)
-	big8  = big.NewInt(8)
-	big32 = big.NewInt(32)
-	frontierBlockReward  *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	byzantiumBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	timeOfFirstBlock = int64(0)
-	confirmedBlockHead = []byte("confirmed-block-head")
-	blockInterval = int64(params.LcpChainConfig.LCP.Period*2/3+1)
-	consensusSize = int(params.LcpChainConfig.LCP.MaxValidators*2/3+1)
-	safeSize = int(params.LcpChainConfig.LCP.MaxValidators*2/3+1)
-	epochInterval = int64(params.LcpChainConfig.LCP.EpochInterval)
 )
 
-
-
+var (
+	big0                          = big.NewInt(0)
+	big8                          = big.NewInt(8)
+	big32                         = big.NewInt(32)
+	frontierBlockReward  *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	byzantiumBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	timeOfFirstBlock              = int64(0)
+	confirmedBlockHead            = []byte("confirmed-block-head")
+	blockInterval                 = int64(params.LcpChainConfig.LCP.Period*2/3 + 1)
+	consensusSize                 = int(params.LcpChainConfig.LCP.MaxValidators*2/3 + 1)
+	safeSize                      = int(params.LcpChainConfig.LCP.MaxValidators*2/3 + 1)
+	epochInterval                 = int64(params.LcpChainConfig.LCP.EpochInterval)
+)
 
 var (
 	// errUnknownBlock is returned when the list of signers is requested for a block
@@ -240,7 +235,7 @@ func (d *LCP) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	dposContext, err := types.NewLCPContextFromProto(d.db, parent.LCPContext)
+	dposContext, err := types.NewLCPContextFromProto(trie.NewDatabase(d.db), parent.LCPContext)
 	if err != nil {
 		return err
 	}
@@ -316,7 +311,7 @@ func (d *LCP) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 }
 
 func (s *LCP) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
-	key, err:= s.db.Get(confirmedBlockHead)
+	key, err := s.db.Get(confirmedBlockHead)
 	if err != nil {
 		return nil, err
 	}
@@ -368,9 +363,9 @@ func (d *LCP) Finalize(chain consensus.ChainReader, header *types.Header, state 
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
-		statedb:     state,
-		Context: LCPContext,
-		TimeStamp:   header.Time.Int64(),
+		statedb:   state,
+		Context:   LCPContext,
+		TimeStamp: header.Time.Int64(),
 	}
 	if timeOfFirstBlock == 0 {
 		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
@@ -406,7 +401,7 @@ func (d *LCP) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewLCPContextFromProto(d.db, lastBlock.Header().LCPContext)
+	dposContext, err := types.NewLCPContextFromProto(trie.NewDatabase(d.db), lastBlock.Header().LCPContext)
 	if err != nil {
 		return err
 	}

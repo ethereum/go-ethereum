@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package lcp
 
 import (
@@ -22,14 +21,15 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/consensus"
 	"github.com/pavelkrolevets/go-ethereum/core/types"
 	"github.com/pavelkrolevets/go-ethereum/rpc"
+	"github.com/pavelkrolevets/go-ethereum/trie"
 	"math/big"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
 // mechanisms of the proof-of-authority scheme.
 type API struct {
-	chain  consensus.ChainReader
-	lcp *LCP
+	chain consensus.ChainReader
+	lcp   *LCP
 }
 
 // GetValidators retrieves the list of the validators at specified block
@@ -44,7 +44,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 		return nil, errUnknownBlock
 	}
 
-	epochTrie, err := types.NewEpochTrie(header.LCPContext.EpochHash, api.lcp.db)
+	epochTrie, err := types.NewEpochTrie(header.LCPContext.EpochHash, trie.NewDatabase(api.lcp.db))
 	if err != nil {
 		return nil, err
 	}
