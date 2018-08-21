@@ -121,7 +121,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		stat.services["bootnode"] = infos.Report()
 
 		genesis = string(infos.genesis)
-		bootnodes = append(bootnodes, infos.enode)
+		bootnodes = append(bootnodes, infos.essnode)
 	}
 	logger.Debug("Checking for sealnode availability")
 	if infos, err := checkNode(client, w.network, false); err != nil {

@@ -31,7 +31,7 @@ type NodeInfo struct {
 
 func (ni *NodeInfo) GetID() string              { return ni.info.ID }
 func (ni *NodeInfo) GetName() string            { return ni.info.Name }
-func (ni *NodeInfo) GetEnode() string           { return ni.info.Enode }
+func (ni *NodeInfo) GetEnode() string           { return ni.info.ESSNode }
 func (ni *NodeInfo) GetIP() string              { return ni.info.IP }
 func (ni *NodeInfo) GetDiscoveryPort() int      { return ni.info.Ports.Discovery }
 func (ni *NodeInfo) GetListenerPort() int       { return ni.info.Ports.Listener }

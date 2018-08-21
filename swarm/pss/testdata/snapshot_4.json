@@ -40,7 +40,7 @@
                },
                "name":"node01",
                "id":"7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66",
-               "enode":"enode://7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66@0.0.0.0:0"
+               "essnode":"essnode://7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66@0.0.0.0:0"
             },
             "up":true
          }
@@ -60,7 +60,7 @@
                },
                "id":"0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5",
                "name":"node02",
-               "enode":"enode://0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5@0.0.0.0:0"
+               "essnode":"essnode://0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5@0.0.0.0:0"
             },
             "config":{
                "name":"node02",
@@ -96,7 +96,7 @@
                },
                "name":"node03",
                "id":"6f6ee658538ea66a68c9cb914d09f228f6ee9942c337a8d5a2cb3a0f021e83dd0fab481ca8ebf56ed913f6ddf69caa3249459d43e61e5e5b162ded7e1c918c9c",
-               "enode":"enode://6f6ee658538ea66a68c9cb914d09f228f6ee9942c337a8d5a2cb3a0f021e83dd0fab481ca8ebf56ed913f6ddf69caa3249459d43e61e5e5b162ded7e1c918c9c@0.0.0.0:0"
+               "essnode":"essnode://6f6ee658538ea66a68c9cb914d09f228f6ee9942c337a8d5a2cb3a0f021e83dd0fab481ca8ebf56ed913f6ddf69caa3249459d43e61e5e5b162ded7e1c918c9c@0.0.0.0:0"
             },
             "up":true
          }
@@ -106,7 +106,7 @@
             "info":{
                "name":"node04",
                "id":"83388147883592bab4fdaddb4e56f8cb1c56dc5c2e910fc6a7277ac89b77cc7ce24892ed6984f3414589cb3b8c4b69356ff9aab7ca52fdd58f12dee2a2152523",
-               "enode":"enode://83388147883592bab4fdaddb4e56f8cb1c56dc5c2e910fc6a7277ac89b77cc7ce24892ed6984f3414589cb3b8c4b69356ff9aab7ca52fdd58f12dee2a2152523@0.0.0.0:0",
+               "essnode":"essnode://83388147883592bab4fdaddb4e56f8cb1c56dc5c2e910fc6a7277ac89b77cc7ce24892ed6984f3414589cb3b8c4b69356ff9aab7ca52fdd58f12dee2a2152523@0.0.0.0:0",
                "ip":"0.0.0.0",
                "listenAddr":"",
                "protocols":{

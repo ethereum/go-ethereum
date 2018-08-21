@@ -446,7 +446,7 @@ func (db *Database) Dereference(root common.Hash) {
 	memcacheGCNodesMeter.Mark(int64(nodes - len(db.nodes)))
 
 	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livessnodes", len(db.nodes), "livesize", db.nodesSize)
 }
 
 // dereference is the private locked version of Dereference.
@@ -586,7 +586,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	memcacheFlushNodesMeter.Mark(int64(nodes - len(db.nodes)))
 
 	log.Debug("Persisted nodes from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
-		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
+		"flushnodes", db.flushnodes, "flushsize", db.flushsize, "flushtime", db.flushtime, "livessnodes", len(db.nodes), "livesize", db.nodesSize)
 
 	return nil
 }
@@ -652,7 +652,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		logger = log.Debug
 	}
 	logger("Persisted trie from memory database", "nodes", nodes-len(db.nodes)+int(db.flushnodes), "size", storage-db.nodesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livessnodes", len(db.nodes), "livesize", db.nodesSize)
 
 	// Reset the garbage collection statistics
 	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0

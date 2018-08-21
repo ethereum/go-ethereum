@@ -65,7 +65,7 @@ var (
 	genesisFlag = flag.String("genesis", "", "Genesis json file to seed the chain with")
 	apiPortFlag = flag.Int("apiport", 8080, "Listener port for the HTTP API connection")
 	ethPortFlag = flag.Int("ethport", 30303, "Listener port for the devp2p connection")
-	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode enode URLs to seed with")
+	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode essnode URLs to seed with")
 	netFlag     = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol")
 	statsFlag   = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 
@@ -144,11 +144,11 @@ func main() {
 	if err = json.Unmarshal(blob, genesis); err != nil {
 		log.Crit("Failed to parse genesis block json", "err", err)
 	}
-	// Convert the bootnodes to internal enode representations
-	var enodes []*discv5.Node
+	// Convert the bootnodes to internal essnode representations
+	var essnodes []*discv5.Node
 	for _, boot := range strings.Split(*bootFlag, ",") {
 		if url, err := discv5.ParseNode(boot); err == nil {
-			enodes = append(enodes, url)
+			essnodes = append(essnodes, url)
 		} else {
 			log.Error("Failed to parse bootnode URL", "url", boot, "err", err)
 		}
@@ -170,7 +170,7 @@ func main() {
 	ks.Unlock(acc, pass)
 
 	// Assemble and start the faucet light service
-	faucet, err := newFaucet(genesis, *ethPortFlag, enodes, *netFlag, *statsFlag, ks, website.Bytes())
+	faucet, err := newFaucet(genesis, *ethPortFlag, essnodes, *netFlag, *statsFlag, ks, website.Bytes())
 	if err != nil {
 		log.Crit("Failed to start faucet", "err", err)
 	}
@@ -209,7 +209,7 @@ type faucet struct {
 	lock sync.RWMutex // Lock protecting the faucet's internals
 }
 
-func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
+func newFaucet(genesis *core.Genesis, port int, essnodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
@@ -221,7 +221,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 			DiscoveryV5:      true,
 			ListenAddr:       fmt.Sprintf(":%d", port),
 			MaxPeers:         25,
-			BootstrapNodesV5: enodes,
+			BootstrapNodesV5: essnodes,
 		},
 	})
 	if err != nil {
@@ -251,7 +251,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
-	for _, boot := range enodes {
+	for _, boot := range essnodes {
 		old, _ := discover.ParseNode(boot.String())
 		stack.Server().AddPeer(old)
 	}

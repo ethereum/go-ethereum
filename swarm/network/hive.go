@@ -99,7 +99,7 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 }
 
 // Start stars the hive, receives p2p.Server only at startup
-// server is used to connect to a peer based on its ESSNodeID or enode URL
+// server is used to connect to a peer based on its ESSNodeID or essnode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
 	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))

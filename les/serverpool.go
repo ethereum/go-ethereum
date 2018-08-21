@@ -184,7 +184,7 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 // Note that whenever a connection has been accepted and a pool entry has been returned,
 // disconnect should also always be called.
 func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
-	log.Debug("Connect new entry", "enode", p.id)
+	log.Debug("Connect new entry", "essnode", p.id)
 	req := &connReq{p: p, ip: ip, port: port, result: make(chan *poolEntry, 1)}
 	select {
 	case pool.connCh <- req:
@@ -196,7 +196,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
-	log.Debug("Registered new entry", "enode", entry.id)
+	log.Debug("Registered new entry", "essnode", entry.id)
 	req := &registerReq{entry: entry, done: make(chan struct{})}
 	select {
 	case pool.registerCh <- req:
@@ -216,7 +216,7 @@ func (pool *serverPool) disconnect(entry *poolEntry) {
 		stopped = true
 	default:
 	}
-	log.Debug("Disconnected old entry", "enode", entry.id)
+	log.Debug("Disconnected old entry", "essnode", entry.id)
 	req := &disconnReq{entry: entry, stopped: stopped, done: make(chan struct{})}
 
 	// Block until disconnection request is served.

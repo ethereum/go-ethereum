@@ -371,7 +371,7 @@ func (a *BzzAddr) Under() []byte {
 	return a.UAddr
 }
 
-// ID returns the nodeID from the underlay enode address
+// ID returns the nodeID from the underlay essnode address
 func (a *BzzAddr) ID() discover.ESSNodeID {
 	return discover.MustParseNode(string(a.UAddr)).ID
 }

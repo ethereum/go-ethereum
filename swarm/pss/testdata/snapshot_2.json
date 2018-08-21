@@ -30,7 +30,7 @@
                },
                "name":"node01",
                "id":"7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66",
-               "enode":"enode://7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66@0.0.0.0:0"
+               "essnode":"essnode://7b12f55c7c012104e006775d03b89722b403fb0e1ecb79af8cadfa6947425aedb323fb9416c84b782d35f3216acb5d94a1dd31d60a3eba45f9051bf503de1b66@0.0.0.0:0"
             },
             "up":true
          }
@@ -50,7 +50,7 @@
                },
                "id":"0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5",
                "name":"node02",
-               "enode":"enode://0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5@0.0.0.0:0"
+               "essnode":"essnode://0eec333dd211c2ea81db614fe58bf0300c15e50e1b044e47ef93067a6cdbc3bc666b40bdcc515bbf580355dbef9370294ef1ee92ee0525e78a8beed00c2b99f5@0.0.0.0:0"
             },
             "config":{
                "name":"node02",
