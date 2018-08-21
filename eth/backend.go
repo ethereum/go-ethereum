@@ -201,7 +201,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
-				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block); err != nil {
+				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 					log.Error("Fail to create tx sign for imported block", "error", err)
 					return
 				}
@@ -251,6 +251,42 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 			}
+
+			// Check m2 exists on chaindb.
+			// Get secrets and opening at epoc block checkpoint.
+			if number > 0 && number%contracts.EpocBlockRandomize == 0 {
+				var candidates [][]int64
+				// Get signers from snapshot.
+				snap, err := c.GetSnapshot(eth.blockchain, chain.CurrentHeader())
+				if err != nil {
+					log.Error("Fail to get snapshot for get secret and opening.", "error", err)
+					return err
+				}
+				signers := snap.Signers
+
+				if len(signers) > 0 {
+					for addr := range signers {
+						random, err := contracts.GetRandomizeFromContract(client, addr)
+						if err != nil {
+							log.Error("Fail to get random m2 from contract.", "error", err)
+						}
+						if random != nil {
+							candidates = append(candidates, random)
+						}
+					}
+				}
+
+				// Get randomize m2 list.
+				m2, err := contracts.GenM2FromRandomize(candidates)
+				if err != nil {
+					log.Error("Can not get m2 from randomize SC", "error", err)
+				}
+				if len(m2) > 0 {
+					header.Validators = contracts.BuildValidatorFromM2(m2)
+				}
+				log.Debug("list m2", "M2", m2)
+			}
+
 			return nil
 		}
 	}
