@@ -101,7 +101,7 @@ var (
 	argPub     = flag.String("pub", "", "public key for asymmetric encryption")
 	argDBPath  = flag.String("dbpath", "", "path to the server's DB directory")
 	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")
-	argEnode   = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
+	argEnode   = flag.String("boot", "", "bootstrap node you want to connect to (e.g. essnode://e454......08d50@52.176.211.200:16428)")
 	argTopic   = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
 	argSaveDir = flag.String("savedir", "", "directory where all incoming messages will be saved as files")
 )
@@ -124,10 +124,10 @@ func processArgs() {
 		}
 	}
 
-	const enodePrefix = "enode://"
+	const essnodePrefix = "essnode://"
 	if len(*argEnode) > 0 {
-		if (*argEnode)[:len(enodePrefix)] != enodePrefix {
-			*argEnode = enodePrefix + *argEnode
+		if (*argEnode)[:len(essnodePrefix)] != essnodePrefix {
+			*argEnode = essnodePrefix + *argEnode
 		}
 	}
 
@@ -201,7 +201,7 @@ func initialize() {
 		*bootstrapMode = true
 	} else {
 		if len(*argEnode) == 0 {
-			argEnode = scanLineA("Please enter the peer's enode: ")
+			argEnode = scanLineA("Please enter the peer's essnode: ")
 		}
 		peer := discover.MustParseNode(*argEnode)
 		peers = append(peers, peer)
@@ -299,7 +299,7 @@ func startServer() error {
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
-	fmt.Println(server.NodeInfo().Enode)
+	fmt.Println(server.NodeInfo().ESSNode)
 
 	if *bootstrapMode {
 		configureNode()
@@ -749,7 +749,7 @@ func requestExpiredMessagesLoop() {
 func extractIDFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
-		utils.Fatalf("Failed to parse enode: %s", err)
+		utils.Fatalf("Failed to parse essnode: %s", err)
 	}
 	return n.ID[:]
 }

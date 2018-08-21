@@ -459,17 +459,17 @@ var (
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for P2P discovery bootstrap (set v4+v5 instead for light servers)",
+		Usage: "Comma separated essnode URLs for P2P discovery bootstrap (set v4+v5 instead for light servers)",
 		Value: "",
 	}
 	BootnodesV4Flag = cli.StringFlag{
 		Name:  "bootnodesv4",
-		Usage: "Comma separated enode URLs for P2P v4 discovery bootstrap (light server, full nodes)",
+		Usage: "Comma separated essnode URLs for P2P v4 discovery bootstrap (light server, full nodes)",
 		Value: "",
 	}
 	BootnodesV5Flag = cli.StringFlag{
 		Name:  "bootnodesv5",
-		Usage: "Comma separated enode URLs for P2P v5 discovery bootstrap (light server, light nodes)",
+		Usage: "Comma separated essnode URLs for P2P v5 discovery bootstrap (light server, light nodes)",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
@@ -644,7 +644,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
+			log.Error("Bootstrap URL invalid", "essnode", url, "err", err)
 			continue
 		}
 		cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
@@ -672,7 +672,7 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
-			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
+			log.Error("Bootstrap URL invalid", "essnode", url, "err", err)
 			continue
 		}
 		cfg.BootstrapNodesV5 = append(cfg.BootstrapNodesV5, node)

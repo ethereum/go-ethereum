@@ -140,7 +140,7 @@ var svgTagNameAdjustments = map[string]string{
 	"fegaussianblur":      "feGaussianBlur",
 	"feimage":             "feImage",
 	"femerge":             "feMerge",
-	"femergenode":         "feMergeNode",
+	"femergessnode":       "feMergeNode",
 	"femorphology":        "feMorphology",
 	"feoffset":            "feOffset",
 	"fepointlight":        "fePointLight",

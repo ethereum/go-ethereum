@@ -50,7 +50,7 @@ func RinkebyGenesis() string {
 	return string(enc)
 }
 
-// FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
+// FoundationBootnodes returns the essnode URLs of the P2P bootstrap nodes operated
 // by the foundation running the V5 discovery protocol.
 func FoundationBootnodes() *Enodes {
 	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}

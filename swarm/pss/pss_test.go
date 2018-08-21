@@ -1223,7 +1223,7 @@ func TestDeduplication(t *testing.T) {
 	var rpubkey string
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
-		t.Fatalf("rpc get receivenode pubkey fail: %v", err)
+		t.Fatalf("rpc get receivessnode pubkey fail: %v", err)
 	}
 
 	time.Sleep(time.Millisecond * 500) // replace with hive healthy code

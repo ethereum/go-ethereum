@@ -262,7 +262,7 @@ var dashboardContent = `
 											<pre>import org.ethereum.geth.*;</pre>
 <pre>
 Enodes bootnodes = new Enodes();{{range .Bootnodes}}
-bootnodes.append(new Enode("{{.}}"));{{end}}
+bootnodes.append(new ESSNode("{{.}}"));{{end}}
 
 NodeConfig config = new NodeConfig();
 config.setBootstrapNodes(bootnodes);
@@ -597,7 +597,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	indexfile := new(bytes.Buffer)
 	bootCpp := make([]string, len(conf.bootnodes))
 	for i, boot := range conf.bootnodes {
-		bootCpp[i] = "required:" + strings.TrimPrefix(boot, "enode://")
+		bootCpp[i] = "required:" + strings.TrimPrefix(boot, "essnode://")
 	}
 	bootHarmony := make([]string, len(conf.bootnodes))
 	for i, boot := range conf.bootnodes {

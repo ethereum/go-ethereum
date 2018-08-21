@@ -105,7 +105,7 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 
 	// connect the nodes together
 	for _, node := range cluster.Nodes {
-		if err := node.Client.Call(nil, "admin_addPeer", cluster.Nodes[0].Enode); err != nil {
+		if err := node.Client.Call(nil, "admin_addPeer", cluster.Nodes[0].ESSNode); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -175,7 +175,7 @@ type testNode struct {
 	Name    string
 	Addr    string
 	URL     string
-	Enode   string
+	ESSNode string
 	Dir     string
 	IpcPath string
 	Client  *rpc.Client
@@ -269,7 +269,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 	if err := node.Client.Call(&nodeInfo, "admin_nodeInfo"); err != nil {
 		t.Fatal(err)
 	}
-	node.Enode = fmt.Sprintf("enode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
+	node.ESSNode = fmt.Sprintf("essnode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
 
 	return node
 }
@@ -331,7 +331,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 	if err := node.Client.Call(&nodeInfo, "admin_nodeInfo"); err != nil {
 		t.Fatal(err)
 	}
-	node.Enode = fmt.Sprintf("enode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
+	node.ESSNode = fmt.Sprintf("essnode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
 	node.IpcPath = conf.IPCPath
 
 	return node

@@ -345,8 +345,8 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 	server := sn.Server()
 	if server == nil {
 		return &p2p.NodeInfo{
-			ID:    sn.ID.String(),
-			Enode: sn.Node().String(),
+			ID:      sn.ID.String(),
+			ESSNode: sn.Node().String(),
 		}
 	}
 	return server.NodeInfo()

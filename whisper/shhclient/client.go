@@ -78,9 +78,9 @@ func (sc *Client) SetMinimumPoW(ctx context.Context, pow float64) error {
 
 // MarkTrustedPeer marks specific peer trusted, which will allow it to send historic (expired) messages.
 // Note This function is not adding new nodes, the node needs to exists as a peer.
-func (sc *Client) MarkTrustedPeer(ctx context.Context, enode string) error {
+func (sc *Client) MarkTrustedPeer(ctx context.Context, essnode string) error {
 	var ignored bool
-	return sc.c.CallContext(ctx, &ignored, "shh_markTrustedPeer", enode)
+	return sc.c.CallContext(ctx, &ignored, "shh_markTrustedPeer", essnode)
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.

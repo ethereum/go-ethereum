@@ -345,7 +345,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 
 	self.tracerClose = tracing.Closer
 
-	// update uaddr to correct enode
+	// update uaddr to correct essnode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook

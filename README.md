@@ -236,10 +236,10 @@ $ bootnode --genkey=boot.key
 $ bootnode --nodekey=boot.key
 ```
 
-With the bootnode online, it will display an [`enode` URL](https://github.com/ethereum/wiki/wiki/enode-url-format)
+With the bootnode online, it will display an [`essnode` URL](https://github.com/ethereum/wiki/wiki/essnode-url-format)
 that other nodes can use to connect to it and exchange peer information. Make sure to replace the
 displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
-actual `enode` URL.
+actual `essnode` URL.
 
 *Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way.*
 
@@ -251,7 +251,7 @@ via the `--bootnodes` flag. It will probably also be desirable to keep the data 
 private network separated, so do also specify a custom `--datadir` flag.
 
 ```
-$ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
+$ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-essnode-url-from-above>
 ```
 
 *Note: Since your network will be completely cut off from the main and test networks, you'll also

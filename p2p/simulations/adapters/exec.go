@@ -135,12 +135,12 @@ type ExecNode struct {
 	key     *ecdsa.PrivateKey
 }
 
-// Addr returns the node's enode URL
+// Addr returns the node's essnode URL
 func (n *ExecNode) Addr() []byte {
 	if n.Info == nil {
 		return nil
 	}
-	return []byte(n.Info.Enode)
+	return []byte(n.Info.ESSNode)
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
@@ -333,7 +333,7 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
-// ExternalIP gets an external IP address so that Enode URL is usable
+// ExternalIP gets an external IP address so that ESSNode URL is usable
 func ExternalIP() net.IP {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
