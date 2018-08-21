@@ -5,6 +5,8 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,11 +40,12 @@ func (g GenesisAccount) MarshalJSON() ([]byte, error) {
 
 func (g *GenesisAccount) UnmarshalJSON(input []byte) error {
 	type GenesisAccount struct {
-		Code       *hexutil.Bytes              `json:"code,omitempty"`
-		Storage    map[storageJSON]storageJSON `json:"storage,omitempty"`
-		Balance    *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
-		Nonce      *math.HexOrDecimal64        `json:"nonce,omitempty"`
-		PrivateKey *hexutil.Bytes              `json:"secretKey,omitempty"`
+		Code         *hexutil.Bytes              `json:"code,omitempty"`
+		CodeFilePath *string                     `json:"codeFilePath,omitempty"`
+		Storage      map[storageJSON]storageJSON `json:"storage,omitempty"`
+		Balance      *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce        *math.HexOrDecimal64        `json:"nonce,omitempty"`
+		PrivateKey   *hexutil.Bytes              `json:"secretKey,omitempty"`
 	}
 	var dec GenesisAccount
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -50,6 +53,15 @@ func (g *GenesisAccount) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Code != nil {
 		g.Code = *dec.Code
+	} else if dec.CodeFilePath != nil {
+		// Check that the file exists
+		// create an io.Reader with the content of the file and get it as []byte
+		code, err := ioutil.ReadFile(*dec.CodeFilePath)
+		if err != nil {
+			panic(fmt.Sprintf("Could not open file: %v", err))
+		}
+
+		g.Code = code
 	}
 	if dec.Storage != nil {
 		g.Storage = make(map[common.Hash]common.Hash, len(dec.Storage))
