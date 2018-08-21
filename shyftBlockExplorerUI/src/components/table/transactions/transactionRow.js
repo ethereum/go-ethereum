@@ -45,13 +45,13 @@ class TransactionTable extends Component {
             <table key={this.state.data.TxHash} className={combinedClasses.join(' ')}>
                 <thead>
                     <tr>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxHash</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>From</th>                      
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>To</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >TxFee</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxHash</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>From</th>                      
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>To</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
+                        <th scope="col" style={{paddingLeft: '15pt', fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >TxFee</th>
                     </tr>
                 </thead>
                 {table}

@@ -20,6 +20,12 @@ import TransactionDetailHeader from "../components/nav/transactionHeader/transac
 import DetailTransactionTable from "../components/table/transactions/transactionDetailsRow";
 import BlockTxs from "../components/table/transactions/blockTx";
 
+
+
+import InternalTransactionRow from '../components/table/internalTransactions/internalRow';
+
+
+
 ///**BLOCKS**///
 import BlocksRow from '../components/table/blocks/blockRows';
 import DetailBlockTable from '../components/table/blocks/blocksDetailsRow';
@@ -42,6 +48,7 @@ class App extends Component {
         blockDetailData: [],
         transactionDetailData: [],
         accountDetailData: [],
+        internalDetailData: [],
         blocksMined: [],
         blockTransactions: [],
         reqAccount: '',
@@ -80,6 +87,22 @@ class App extends Component {
             console.log(error)
         }
     };
+
+    detailInternalHandler = async() => {
+
+        console.log("in internal request");
+        
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_internal_transactions/`)
+         
+            console.log(response.data);
+            await this.setState({ internalDetailData: response.data,  overlayTriggered: false })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    };
+    
 
     getBlockTransactions = async(blockNumber) => {
         try {
@@ -211,6 +234,14 @@ class App extends Component {
                                 getBlocksMined={this.getBlocksMined}
                                 getBlockTransactions={this.getBlockTransactions}
                                 detailBlockHandler={this.detailBlockHandler}/>                        
+                        </div>
+                        }
+                    />
+
+                    <Route path="/internalTransactions" exact render={({match}) =>
+                        <div>                        
+                            <InternalTransactionRow                              
+                                detailBlockHandler={this.detailInternalHandler}/>                        
                         </div>
                         }
                     />

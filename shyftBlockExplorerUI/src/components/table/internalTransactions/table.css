@@ -1,0 +1,28 @@
+.table {
+    border-spacing: 100rem;
+    width: 95%;
+    margin: 0 auto;  
+    background-color: white;
+    top: 107pt;
+    left: 2.5%;
+    position: absolute;
+}
+
+th {
+    background-color: white;
+    padding: 15pt 30pt ;
+    color: #593c83;
+    font-family: 'Open Sans', sans-serif;
+}
+
+td {
+    font-size: 6pt;
+    background-color: white;
+    font-family: 'Open Sans', sans-serif;
+}
+
+.disabled {
+    pointer-events: none;
+    color: black;
+} 
+
