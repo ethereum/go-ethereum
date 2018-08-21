@@ -308,7 +308,7 @@ func (w *worker) mainLoop() {
 							return false
 						}
 						uncles = append(uncles, uncle.Header())
-						return true
+						return false
 					})
 					w.commit(uncles, nil, true, start)
 				}
@@ -522,7 +522,7 @@ func (w *worker) updateSnapshot() {
 			return false
 		}
 		uncles = append(uncles, uncle.Header())
-		return true
+		return false
 	})
 
 	w.snapshotBlock = types.NewBlock(
