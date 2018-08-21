@@ -156,6 +156,7 @@ type worker struct {
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
+	newTxs  int32 // New arrival transaction count since last sealing work submitting.
 
 	// Test hooks
 	newTaskHook  func(*task)                        // Method to call upon receiving a new sealing task.
@@ -293,6 +294,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		interrupt = new(int32)
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty}
 		timer.Reset(recommit)
+		atomic.StoreInt32(&w.newTxs, 0)
 	}
 	// recalcRecommit recalculates the resubmitting interval upon feedback.
 	recalcRecommit := func(target float64, inc bool) {
@@ -332,6 +334,11 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.config.Clique == nil || w.config.Clique.Period > 0) {
+				// Short circuit if no new transaction arrives.
+				if atomic.LoadInt32(&w.newTxs) == 0 {
+					timer.Reset(recommit)
+					continue
+				}
 				commit(true, commitInterruptResubmit)
 			}
 
@@ -434,6 +441,7 @@ func (w *worker) mainLoop() {
 					w.commitNewWork(nil, false)
 				}
 			}
+			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
 
 		// System stopped
 		case <-w.exitCh:
@@ -478,7 +486,10 @@ func (w *worker) seal(t *task, stop <-chan struct{}) {
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
 // push them to consensus engine.
 func (w *worker) taskLoop() {
-	var stopCh chan struct{}
+	var (
+		stopCh chan struct{}
+		prev   common.Hash
+	)
 
 	// interrupt aborts the in-flight sealing task.
 	interrupt := func() {
@@ -493,8 +504,13 @@ func (w *worker) taskLoop() {
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
+			// Reject duplicate sealing work due to resubmitting.
+			if task.block.HashNoNonce() == prev {
+				continue
+			}
 			interrupt()
 			stopCh = make(chan struct{})
+			prev = task.block.HashNoNonce()
 			go w.seal(task, stopCh)
 		case <-w.exitCh:
 			interrupt()
@@ -509,11 +525,15 @@ func (w *worker) resultLoop() {
 	for {
 		select {
 		case result := <-w.resultCh:
+			// Short circuit when receiving empty result.
 			if result == nil {
 				continue
 			}
+			// Short circuit when receiving duplicate result caused by resubmitting.
 			block := result.block
-
+			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
+				continue
+			}
 			// Update the block hash in all logs since it is now available and not when the
 			// receipt/log of individual transactions were created.
 			for _, r := range result.receipts {
