@@ -24,3 +24,29 @@ td {
     color: black;
 }
 
+.incoming {
+    height: 25px;
+    width: 35px;
+    border: 1px forestgreen;
+    border-radius: 5px;
+    background-color: #4f2e7e;
+    color: white;
+    font-size: 1rem;
+    text-transform: uppercase;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.out {
+    height: 25px;
+    width: 35px;
+    border: 1px orangered;
+    border-radius: 5px;
+    background-color: orangered;
+    color: white;
+    font-size: .8rem;
+    text-transform: uppercase;
+    text-align: center;
+    vertical-align: middle;
+}
+

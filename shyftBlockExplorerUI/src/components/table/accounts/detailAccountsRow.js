@@ -7,16 +7,12 @@ class AccountTransactionTable extends Component {
 
   
     render() {
-
-        console.log("inr");
-
-
+        console.log(this.props);
         let table;
-        if(this.props.data.length <= 1) {
+        if(this.props.data.length < 1) {
            return <ErrorHandler />
         }else {
             table = this.props.data.map((data, i) => {
-                console.log("DATA FROM MAP [AccountTransactionTable]", data)
                 const costConversion = data.Cost / 10000000000000000000;
                 const amountConversion = data.Amount / 10000000000000000000;
                 return <DetailAccountsTable
@@ -39,14 +35,14 @@ class AccountTransactionTable extends Component {
             <table key={this.props.data.TxHash} className={combinedClasses.join(' ')}>
                 <thead className={classes.tHead}>
                 <tr>
-                    <th scope="col">TxHash</th>
-                    <th scope="col">Block</th>
-                    <th scope="col">Age</th>
-                    <th scope="col">From</th>
-                    <th scope="col"></th>
-                    <th scope="col">To</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">TxFee</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxHash</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>From</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}> </th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>To</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxFee</th>
                 </tr>
                 </thead>
                 {table}

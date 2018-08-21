@@ -107,7 +107,6 @@ class App extends Component {
 
     getBlockData = (data, page) => {
         let components = [];
-        console.log("ACCOUNT DATA", data)   
         let dataEntry;
         
         if(page === "account") {
@@ -117,8 +116,10 @@ class App extends Component {
         }
         
         for (let key in dataEntry) {
-            let value = dataEntry[key]
-            // console.log(key, value)            
+            let value = dataEntry[key];
+            if (dataEntry["To"] === null) {
+                delete dataEntry["To"]
+            }
             components.push( 
                 <Grid>
                     <Row className="show-grid">
@@ -224,8 +225,6 @@ class App extends Component {
 
                     <Route path="/transaction/details" exact render={({match}) =>
                     <div>
-                        <TransactionDetailHeader
-                            txHash={this.state.transactionDetailData.TxHash}/>
                         <DetailTransactionTable
                             data={this.state.transactionDetailData}/>
                     </div>}
@@ -243,8 +242,6 @@ class App extends Component {
 
                     <Route path="/block/transactions" exact render={({match}) =>
                     <div>
-                        <BlockDetailHeader
-                            blockNumber={this.state.reqBlockNum}/>
                         <BlockTxs
                             data={this.state.blockTransactions}
                             getBlockTransactions={this.getBlockTransactions}
