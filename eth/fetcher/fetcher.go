@@ -140,9 +140,9 @@ type Fetcher struct {
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool) // Method to call upon adding or deleting a hash from the announce list
 	queueChangeHook    func(common.Hash, bool) // Method to call upon adding or deleting a block from the import queue
-	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (eth/61) or header (eth/62) fetch
-	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
-	importedHook       func(*types.Block)      // Method to call upon successful block import (both eth/61 and eth/62)
+	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (ess/61) or header (ess/62) fetch
+	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (ess/62)
+	importedHook       func(*types.Block)      // Method to call upon successful block import (both ess/61 and ess/62)
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.

@@ -9,7 +9,7 @@
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
-  <name>Android Ethereum Client</name>
+  <name>Android Essentia Client</name>
   <description>Android port of the go-ethereum libraries and node</description>
   <url>https://github.com/orangeAndSuns/go-ethereum</url>
   <inceptionYear>2015</inceptionYear>
@@ -23,7 +23,7 @@
   </licenses>
 
   <organization>
-    <name>Ethereum</name>
+    <name>Essentia</name>
     <url>https://ethereum.org</url>
   </organization>
 

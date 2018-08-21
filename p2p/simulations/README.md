@@ -118,7 +118,7 @@ with a `Step` which has the following fields:
 * `Trigger` - a channel which receives node IDs which then trigger a check
     of the expectation function to be performed against that node
 
-As a concrete example, consider a simulated network of Ethereum nodes. An
+As a concrete example, consider a simulated network of Essentia nodes. An
 `Action` could be the sending of a transaction, `Expect` it being included in
 a block, and `Trigger` a check for every block that is mined.
 

@@ -318,7 +318,7 @@ message GetAddress {
 }
 
 /**
- * Request: Ask device for Ethereum address corresponding to address_n path
+ * Request: Ask device for Essentia address corresponding to address_n path
  * @next PassphraseRequest
  * @next EthereumAddress
  * @next Failure
@@ -337,11 +337,11 @@ message Address {
 }
 
 /**
- * Response: Contains an Ethereum address derived from device private seed
+ * Response: Contains an Essentia address derived from device private seed
  * @prev EthereumGetAddress
  */
 message EthereumAddress {
-	required bytes address = 1;		// Coin address as an Ethereum 160 bit hash
+	required bytes address = 1;		// Coin address as an Essentia 160 bit hash
 }
 
 /**
@@ -681,7 +681,7 @@ message EthereumTxAck {
 }
 
 ////////////////////////////////////////
-// Ethereum: Message signing messages //
+// Essentia: Message signing messages //
 ////////////////////////////////////////
 
 /**

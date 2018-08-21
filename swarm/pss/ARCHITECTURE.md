@@ -22,7 +22,7 @@ Feel free to ask questions in https://gitter.im/ethersphere/pss
 
 ## STATUS OF THIS DOCUMENT
 
-`pss` is under active development, and the first implementation is yet to be merged to the Ethereum main branch. Expect things to change.
+`pss` is under active development, and the first implementation is yet to be merged to the Essentia main branch. Expect things to change.
 
 ## CORE INTERFACES
 

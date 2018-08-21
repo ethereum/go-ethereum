@@ -17,16 +17,16 @@
 package params
 
 // MainnetBootnodes are the essnode URLs of the P2P bootstrap nodes running on
-// the main Ethereum network.
+// the main Essentia network.
 var MainnetBootnodes = []string{
-	// Ethereum Foundation Go Bootnodes
+	// Essentia Foundation Go Bootnodes
 	//"essnode://529ff813aa5697a6106c75afa2083ff1146bf6328e708bd2db4109a8dea48ca4b3ea66486e5115d72ffe039287f021f4d0ee2dfe504ce01bf600dd80c3caa691@192.168.0.104:30303", // IE
 	//"essnode://3f1d12044546b76342d59d4a05532c14b85aa669704bfe1f864fe079415aa2c02d743e03218e57a33fb94523adb54032871a6c51b2cc5514cb7c7e35b3ed0a99@13.93.211.84:30303",  // US-WEST
 	//"essnode://78de8a0916848093c73790ead81d1928bec737d565119932b98c6b100d944b7a95e94f847f689fc723399d2e31129d182f7ef3863f2b4c820abbf3ab2722344d@191.235.84.50:30303", // BR
 	//"essnode://158f8aab45f6d19c6cbf4a089c2670541a8da11978a2f90dbf6a502a4a3bab80d288afdbeb7ec0ef6d92de563767f3b1ea9e8e334ca711e9f8e2df5a0385e8e6@13.75.154.138:30303", // AU
 	//"essnode://1118980bf48b0a3640bdba04e0fe78b1add18e1cd99bf22d53daac1fd9972ad650df52176e7c7d89d1114cfef2bc23a2959aa54998a46afcf7d91809f0855082@52.74.57.123:30303",  // SG
 
-	// Ethereum Foundation C++ Bootnodes
+	// Essentia Foundation C++ Bootnodes
 	//"essnode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303", // DE
 }
 

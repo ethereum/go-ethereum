@@ -162,7 +162,7 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
-// ValidateOwner checks the ENS to validate that the owner of the given domain is the given eth address
+// ValidateOwner checks the ENS to validate that the owner of the given domain is the given ess address
 func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {

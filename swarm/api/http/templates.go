@@ -77,7 +77,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" ww="chrome=1">
-    <meta name="description" content="Ethereum/Swarm Landing page">
+    <meta name="description" content="Essentia/Swarm Landing page">
 		<style>
       html, body {
         margin: 0;
@@ -178,7 +178,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
     function goToPage() {
         var page = document.getElementById('page').value;
         if (page == "") {
-          var page = "theswarm.eth"
+          var page = "theswarm.ess"
         }
         var address = "/bzz:/" + page;
         location.href = address;
@@ -196,7 +196,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
   </content>
   <footer>
     <p>
-      <a href="/bzz:/theswarm.eth">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution
+      <a href="/bzz:/theswarm.ess">Swarm</a>: Serverless Hosting Incentivised peer-to-peer Storage and Content Distribution
     </p>
   </footer>
   

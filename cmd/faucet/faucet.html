@@ -49,7 +49,7 @@
 				<div class="row">
 					<div class="col-lg-8 col-lg-offset-2">
 						<div class="input-group">
-							<input id="url" name="url" type="text" class="form-control" placeholder="Social network URL containing your Ethereum address...">
+							<input id="url" name="url" type="text" class="form-control" placeholder="Social network URL containing your Essentia address...">
 							<span class="input-group-btn">
 								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me Ether	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
@@ -83,17 +83,17 @@
 						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to common 3rd party social network accounts. Anyone having a Twitter, Google+ or Facebook account may request funds within the permitted limits.</p>
 						<dl class="dl-horizontal">
 							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-twitter" aria-hidden="true" style="font-size: 36px;"></i></dt>
-							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Twitter, make a <a href="https://twitter.com/intent/tweet?text=Requesting%20faucet%20funds%20into%200x0000000000000000000000000000000000000000%20on%20the%20%23{{.Network}}%20%23Ethereum%20test%20network." target="_about:blank">tweet</a> with your Ethereum address pasted into the contents (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://support.twitter.com/articles/80586" target="_about:blank">tweets URL</a> into the above input box and fire away!</dd>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Twitter, make a <a href="https://twitter.com/intent/tweet?text=Requesting%20faucet%20funds%20into%200x0000000000000000000000000000000000000000%20on%20the%20%23{{.Network}}%20%23Ethereum%20test%20network." target="_about:blank">tweet</a> with your Essentia address pasted into the contents (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://support.twitter.com/articles/80586" target="_about:blank">tweets URL</a> into the above input box and fire away!</dd>
 
 							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-google-plus-official" aria-hidden="true" style="font-size: 36px;"></i></dt>
-							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Google Plus, publish a new <strong>public</strong> post with your Ethereum address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the posts URL into the above input box and fire away!</dd>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Google Plus, publish a new <strong>public</strong> post with your Essentia address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the posts URL into the above input box and fire away!</dd>
 
 							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-facebook" aria-hidden="true" style="font-size: 36px;"></i></dt>
-							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Facebook, publish a new <strong>public</strong> post with your Ethereum address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://www.facebook.com/help/community/question/?id=282662498552845" target="_about:blank">posts URL</a> into the above input box and fire away!</dd>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Facebook, publish a new <strong>public</strong> post with your Essentia address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://www.facebook.com/help/community/question/?id=282662498552845" target="_about:blank">posts URL</a> into the above input box and fire away!</dd>
 
 							{{if .NoAuth}}
 								<dt class="text-danger" style="width: auto; margin-left: 40px;"><i class="fa fa-unlock-alt" aria-hidden="true" style="font-size: 36px;"></i></dt>
-								<dd class="text-danger" style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds <strong>without authentication</strong>, simply copy-paste your Ethereum address into the above input box (surrounding text doesn't matter) and fire away.<br/>This mode is susceptible to Byzantine attacks. Only use for debugging or private networks!</dd>
+								<dd class="text-danger" style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds <strong>without authentication</strong>, simply copy-paste your Essentia address into the above input box (surrounding text doesn't matter) and fire away.<br/>This mode is susceptible to Byzantine attacks. Only use for debugging or private networks!</dd>
 							{{end}}
 						</dl>
 						<p>You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>

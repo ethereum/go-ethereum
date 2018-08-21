@@ -283,8 +283,8 @@ func (db *Dashboard) collectData() {
 
 		collectNetworkIngress = meterCollector("p2p/InboundTraffic")
 		collectNetworkEgress  = meterCollector("p2p/OutboundTraffic")
-		collectDiskRead       = meterCollector("eth/db/chaindata/disk/read")
-		collectDiskWrite      = meterCollector("eth/db/chaindata/disk/write")
+		collectDiskRead       = meterCollector("ess/db/chaindata/disk/read")
+		collectDiskWrite      = meterCollector("ess/db/chaindata/disk/write")
 
 		prevNetworkIngress = collectNetworkIngress()
 		prevNetworkEgress  = collectNetworkEgress()

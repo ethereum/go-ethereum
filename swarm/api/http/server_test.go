@@ -137,7 +137,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
 	// our mutable resource "name"
-	keybytes := "foo.eth"
+	keybytes := "foo.ess"
 
 	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
 		Name:      keybytes,
@@ -212,7 +212,7 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// our mutable resource "name"
-	keybytes := "foo.eth"
+	keybytes := "foo.ess"
 
 	// data of update 1
 	databytes := make([]byte, 666)
