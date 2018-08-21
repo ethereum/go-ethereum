@@ -90,6 +90,7 @@ const (
 )
 
 type newWorkReq struct {
+	reason    string
 	interrupt *int32
 	noempty   bool
 }
@@ -245,28 +246,28 @@ func (w *worker) newWorkLoop() {
 	<-timer.C // discard the initial tick
 
 	// recommit aborts in-flight transaction execution with given signal and resubmits a new one.
-	recommit := func(noempty bool, s int32) {
+	recommit := func(reason string, noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
-		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty}
+		w.newWorkCh <- &newWorkReq{reason: reason, interrupt: interrupt, noempty: noempty}
 		timer.Reset(blockRecommitInterval)
 	}
 
 	for {
 		select {
 		case <-w.startCh:
-			recommit(false, commitInterruptNewHead)
+			recommit("start", false, commitInterruptNewHead)
 
 		case <-w.chainHeadCh:
-			recommit(false, commitInterruptNewHead)
+			recommit("head", false, commitInterruptNewHead)
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.config.Clique == nil || w.config.Clique.Period > 0) {
-				recommit(true, commitInterruptResubmit)
+				recommit("recommit", true, commitInterruptResubmit)
 			}
 
 		case <-w.exitCh:
@@ -284,7 +285,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			w.commitNewWork(req.interrupt, req.noempty)
+			w.commitNewWork(req.reason, req.interrupt, req.noempty)
 
 		case ev := <-w.chainSideCh:
 			if _, exist := w.possibleUncles[ev.Block.Hash()]; exist {
@@ -310,7 +311,7 @@ func (w *worker) mainLoop() {
 						uncles = append(uncles, uncle.Header())
 						return false
 					})
-					w.commit(uncles, nil, true, start)
+					w.commit("uncle", uncles, nil, true, start)
 				}
 			}
 
@@ -336,7 +337,7 @@ func (w *worker) mainLoop() {
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
 				if w.config.Clique != nil && w.config.Clique.Period == 0 {
-					w.commitNewWork(nil, false)
+					w.commitNewWork("transaction", nil, false)
 				}
 			}
 
@@ -501,7 +502,7 @@ func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	if env.family.Contains(hash) {
 		return fmt.Errorf("uncle already in family (%x)", hash)
 	}
-	env.uncles.Add(uncle.Hash())
+	env.uncles.Add(hash)
 	return nil
 }
 
@@ -648,7 +649,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 }
 
 // commitNewWork generates several new sealing tasks based on the parent block.
-func (w *worker) commitNewWork(interrupt *int32, noempty bool) {
+func (w *worker) commitNewWork(reason string, interrupt *int32, noempty bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -737,9 +738,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool) {
 	if !noempty {
 		// Create an empty block based on temporary copied state for sealing in advance without waiting block
 		// execution finished.
-		w.commit(uncles, nil, false, tstart)
+		w.commit(reason, uncles, nil, false, tstart)
 	}
-
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
 	if err != nil {
@@ -755,13 +755,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool) {
 	if w.commitTransactions(txs, w.coinbase, interrupt) {
 		return
 	}
-
-	w.commit(uncles, w.fullTaskHook, true, tstart)
+	w.commit(reason, uncles, w.fullTaskHook, true, tstart)
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
-func (w *worker) commit(uncles []*types.Header, interval func(), update bool, start time.Time) error {
+func (w *worker) commit(reason string, uncles []*types.Header, interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := make([]*types.Receipt, len(w.current.receipts))
 	for i, l := range w.current.receipts {
@@ -787,7 +786,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			}
 			feesEth := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 
-			log.Info("Commit new mining work", "number", block.Number(), "uncles", len(uncles), "txs", w.current.tcount,
+			log.Info("Commit new mining work", "reason", reason, "number", block.Number(), "uncles", len(uncles), "txs", w.current.tcount,
 				"gas", block.GasUsed(), "fees", feesEth, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		case <-w.exitCh:
