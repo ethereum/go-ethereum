@@ -235,7 +235,7 @@ func (st *StateTransition) refundGas() {
 	}
 	st.gas += refund
 
-	// Return ETH for remaining gas, exchanged at the original rate.
+	// Return ESS for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
 	st.state.AddBalance(st.msg.From(), remaining)
 

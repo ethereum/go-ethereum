@@ -33,7 +33,7 @@ import (
 // references to the original version, whereas the latter is important to ensure
 // one single canonical form opposed to many allowed ones by the RFC 3986 spec.
 //
-// As such, these URLs should not be used outside of the scope of an Ethereum
+// As such, these URLs should not be used outside of the scope of an Essentia
 // wallet or account.
 type URL struct {
 	Scheme string // Protocol scheme to identify a capable account backend

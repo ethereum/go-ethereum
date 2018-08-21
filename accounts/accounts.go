@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package accounts implements high level Ethereum account management.
+// Package accounts implements high level Essentia account management.
 package accounts
 
 import (
@@ -26,10 +26,10 @@ import (
 	"github.com/orangeAndSuns/go-ethereum/event"
 )
 
-// Account represents an Ethereum account located at a specific location defined
+// Account represents an Essentia account located at a specific location defined
 // by the optional URL field.
 type Account struct {
-	Address common.Address `json:"address"` // Ethereum account address derived from the key
+	Address common.Address `json:"address"` // Essentia account address derived from the key
 	URL     URL            `json:"url"`     // Optional resource locator within a backend
 }
 

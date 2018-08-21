@@ -16,7 +16,7 @@
 
 // Package rpc implements an RPC client that connect to a centralized mock store.
 // Centralazied mock store can be any other mock store implementation that is
-// registered to Ethereum RPC server under mockStore name. Methods that defines
+// registered to Essentia RPC server under mockStore name. Methods that defines
 // mock.GlobalStore are the same that are used by RPC. Example:
 //
 //   server := rpc.NewServer()

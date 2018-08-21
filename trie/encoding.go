@@ -26,7 +26,7 @@ package trie
 // contains a value. Hex key encoding is used for nodes loaded in memory because it's
 // convenient to access.
 //
-// COMPACT encoding is defined by the Ethereum Yellow Paper (it's called "hex prefix
+// COMPACT encoding is defined by the Essentia Yellow Paper (it's called "hex prefix
 // encoding" there) and contains the bytes of the key and a flag. The high nibble of the
 // first byte contains the flag; the lowest bit encoding the oddness of the length and
 // the second-lowest encoding whether the node at the key is a value node. The low nibble

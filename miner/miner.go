@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements Essentia block creation and mining.
 package miner
 
 import (
@@ -50,22 +50,22 @@ type Miner struct {
 
 	coinbase common.Address
 	mining   int32
-	eth      Backend
+	ess      Backend
 	engine   consensus.Engine
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(ess Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
-		eth:      eth,
+		ess:      ess,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
+		worker:   newWorker(config, engine, common.Address{}, ess, mux),
 		canStart: 1,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
+	miner.Register(NewCpuAgent(ess.BlockChain(), engine))
 	go miner.update()
 
 	return miner

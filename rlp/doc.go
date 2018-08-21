@@ -19,9 +19,9 @@ Package rlp implements the RLP serialization format.
 
 The purpose of RLP (Recursive Linear Prefix) is to encode arbitrarily
 nested arrays of binary data, and RLP is the main encoding method used
-to serialize objects in Ethereum. The only purpose of RLP is to encode
+to serialize objects in Essentia. The only purpose of RLP is to encode
 structure; encoding specific atomic data types (eg. strings, ints,
-floats) is left up to higher-order protocols; in Ethereum integers
+floats) is left up to higher-order protocols; in Essentia integers
 must be represented in big endian binary form with no leading zeroes
 (thus making the integer value zero equivalent to the empty byte
 array).

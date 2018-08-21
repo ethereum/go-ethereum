@@ -72,7 +72,7 @@ func (msg *CallMsg) SetTo(address *Address) {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the Ethereum network.
+// the Essentia network.
 type SyncProgress struct {
 	progress ethereum.SyncProgress
 }

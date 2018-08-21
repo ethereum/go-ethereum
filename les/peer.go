@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
+// Package les implements the Light Essentia Subprotocol.
 package les
 
 import (
@@ -102,8 +102,8 @@ func (p *peer) queueSend(f func()) {
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
-func (p *peer) Info() *eth.PeerInfo {
-	return &eth.PeerInfo{
+func (p *peer) Info() *ess.PeerInfo {
+	return &ess.PeerInfo{
 		Version:    p.version,
 		Difficulty: p.Td(),
 		Head:       fmt.Sprintf("%x", p.Head()),
@@ -510,7 +510,7 @@ type peerSetNotify interface {
 }
 
 // peerSet represents the collection of active peers currently participating in
-// the Light Ethereum sub-protocol.
+// the Light Essentia sub-protocol.
 type peerSet struct {
 	peers      map[string]*peer
 	lock       sync.RWMutex

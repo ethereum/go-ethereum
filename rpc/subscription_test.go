@@ -109,7 +109,7 @@ func TestNotifications(t *testing.T) {
 	server := NewServer()
 	service := &NotificationTestService{}
 
-	if err := server.RegisterName("eth", service); err != nil {
+	if err := server.RegisterName("ess", service); err != nil {
 		t.Fatalf("unable to register test service %v", err)
 	}
 
@@ -227,7 +227,7 @@ func waitForMessages(t *testing.T, in *json.Decoder, successes chan<- jsonSucces
 // for multiple different namespaces.
 func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	var (
-		namespaces             = []string{"eth", "shh", "bzz"}
+		namespaces             = []string{"ess", "shh", "bzz"}
 		server                 = NewServer()
 		service                = NotificationTestService{}
 		clientConn, serverConn = net.Pipe()

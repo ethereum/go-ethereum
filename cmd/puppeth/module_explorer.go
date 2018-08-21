@@ -36,7 +36,7 @@ ADD ethstats.json /ethstats.json
 ADD chain.json /chain.json
 
 RUN \
-  echo '(cd ../eth-net-intelligence-api && pm2 start /ethstats.json)' >  explorer.sh && \
+  echo '(cd ../ess-net-intelligence-api && pm2 start /ethstats.json)' >  explorer.sh && \
 	echo '(cd ../etherchain-light && npm start &)'                      >> explorer.sh && \
 	echo '/parity/parity --chain=/chain.json --port={{.NodePort}} --tracing=on --fat-db=on --pruning=archive' >> explorer.sh
 

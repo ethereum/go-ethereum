@@ -16,7 +16,7 @@
 
 // This file contains the implementation for interacting with the Ledger hardware
 // wallets. The wire protocol spec can be found in the Ledger Blue GitHub repo:
-// https://raw.githubusercontent.com/LedgerHQ/blue-app-eth/master/doc/ethapp.asc
+// https://raw.githubusercontent.com/LedgerHQ/blue-app-ess/master/doc/ethapp.asc
 
 package usbwallet
 
@@ -48,8 +48,8 @@ type ledgerParam1 byte
 type ledgerParam2 byte
 
 const (
-	ledgerOpRetrieveAddress  ledgerOpcode = 0x02 // Returns the public key and Ethereum address for a given BIP 32 path
-	ledgerOpSignTransaction  ledgerOpcode = 0x04 // Signs an Ethereum transaction after having the user validate the parameters
+	ledgerOpRetrieveAddress  ledgerOpcode = 0x02 // Returns the public key and Essentia address for a given BIP 32 path
+	ledgerOpSignTransaction  ledgerOpcode = 0x04 // Signs an Essentia transaction after having the user validate the parameters
 	ledgerOpGetConfiguration ledgerOpcode = 0x06 // Returns specific wallet application configuration
 
 	ledgerP1DirectlyFetchAddress    ledgerParam1 = 0x00 // Return address directly from the wallet
@@ -90,15 +90,15 @@ func (w *ledgerDriver) Status() (string, error) {
 		return fmt.Sprintf("Failed: %v", w.failure), w.failure
 	}
 	if w.browser {
-		return "Ethereum app in browser mode", w.failure
+		return "Essentia app in browser mode", w.failure
 	}
 	if w.offline() {
-		return "Ethereum app offline", w.failure
+		return "Essentia app offline", w.failure
 	}
-	return fmt.Sprintf("Ethereum app v%d.%d.%d online", w.version[0], w.version[1], w.version[2]), w.failure
+	return fmt.Sprintf("Essentia app v%d.%d.%d online", w.version[0], w.version[1], w.version[2]), w.failure
 }
 
-// offline returns whether the wallet and the Ethereum app is offline or not.
+// offline returns whether the wallet and the Essentia app is offline or not.
 //
 // The method assumes that the state lock is held!
 func (w *ledgerDriver) offline() bool {
@@ -113,13 +113,13 @@ func (w *ledgerDriver) Open(device io.ReadWriter, passphrase string) error {
 
 	_, err := w.ledgerDerive(accounts.DefaultBaseDerivationPath)
 	if err != nil {
-		// Ethereum app is not running or in browser mode, nothing more to do, return
+		// Essentia app is not running or in browser mode, nothing more to do, return
 		if err == errLedgerReplyInvalidHeader {
 			w.browser = true
 		}
 		return nil
 	}
-	// Try to resolve the Ethereum app's version, will fail prior to v1.0.2
+	// Try to resolve the Essentia app's version, will fail prior to v1.0.2
 	if w.version, err = w.ledgerVersion(); err != nil {
 		w.version = [3]byte{1, 0, 0} // Assume worst case, can't verify if v1.0.0 or v1.0.1
 	}
@@ -144,7 +144,7 @@ func (w *ledgerDriver) Heartbeat() error {
 }
 
 // Derive implements usbwallet.driver, sending a derivation request to the Ledger
-// and returning the Ethereum address located on that derivation path.
+// and returning the Essentia address located on that derivation path.
 func (w *ledgerDriver) Derive(path accounts.DerivationPath) (common.Address, error) {
 	return w.ledgerDerive(path)
 }
@@ -152,11 +152,11 @@ func (w *ledgerDriver) Derive(path accounts.DerivationPath) (common.Address, err
 // SignTx implements usbwallet.driver, sending the transaction to the Ledger and
 // waiting for the user to confirm or deny the transaction.
 //
-// Note, if the version of the Ethereum application running on the Ledger wallet is
+// Note, if the version of the Essentia application running on the Ledger wallet is
 // too old to sign EIP-155 transactions, but such is requested nonetheless, an error
 // will be returned opposed to silently signing in Homestead mode.
 func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transaction, chainID *big.Int) (common.Address, *types.Transaction, error) {
-	// If the Ethereum app doesn't run, abort
+	// If the Essentia app doesn't run, abort
 	if w.offline() {
 		return common.Address{}, nil, accounts.ErrWalletClosed
 	}
@@ -168,7 +168,7 @@ func (w *ledgerDriver) SignTx(path accounts.DerivationPath, tx *types.Transactio
 	return w.ledgerSign(path, tx, chainID)
 }
 
-// ledgerVersion retrieves the current version of the Ethereum wallet app running
+// ledgerVersion retrieves the current version of the Essentia wallet app running
 // on the Ledger wallet.
 //
 // The version retrieval protocol is defined as follows:
@@ -200,7 +200,7 @@ func (w *ledgerDriver) ledgerVersion() ([3]byte, error) {
 	return version, nil
 }
 
-// ledgerDerive retrieves the currently active Ethereum address from a Ledger
+// ledgerDerive retrieves the currently active Essentia address from a Ledger
 // wallet at the specified derivation path.
 //
 // The address derivation protocol is defined as follows:
@@ -228,8 +228,8 @@ func (w *ledgerDriver) ledgerVersion() ([3]byte, error) {
 //   ------------------------+-------------------
 //   Public Key length       | 1 byte
 //   Uncompressed Public Key | arbitrary
-//   Ethereum address length | 1 byte
-//   Ethereum address        | 40 bytes hex ascii
+//   Essentia address length | 1 byte
+//   Essentia address        | 40 bytes hex ascii
 //   Chain code if requested | 32 bytes
 func (w *ledgerDriver) ledgerDerive(derivationPath []uint32) (common.Address, error) {
 	// Flatten the derivation path into the Ledger request
@@ -249,13 +249,13 @@ func (w *ledgerDriver) ledgerDerive(derivationPath []uint32) (common.Address, er
 	}
 	reply = reply[1+int(reply[0]):]
 
-	// Extract the Ethereum hex address string
+	// Extract the Essentia hex address string
 	if len(reply) < 1 || len(reply) < 1+int(reply[0]) {
 		return common.Address{}, errors.New("reply lacks address entry")
 	}
 	hexstr := reply[1 : 1+int(reply[0])]
 
-	// Decode the hex sting into an Ethereum address and return
+	// Decode the hex sting into an Essentia address and return
 	var address common.Address
 	hex.Decode(address[:], hexstr)
 	return address, nil
@@ -338,7 +338,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 		payload = payload[chunk:]
 		op = ledgerP1ContTransactionData
 	}
-	// Extract the Ethereum signature and do a sanity validation
+	// Extract the Essentia signature and do a sanity validation
 	if len(reply) != 65 {
 		return common.Address{}, nil, errors.New("reply lacks signature")
 	}

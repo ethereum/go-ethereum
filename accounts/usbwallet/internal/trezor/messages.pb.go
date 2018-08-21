@@ -954,7 +954,7 @@ func (m *GetAddress) GetScriptType() InputScriptType {
 }
 
 // *
-// Request: Ask device for Ethereum address corresponding to address_n path
+// Request: Ask device for Essentia address corresponding to address_n path
 // @next PassphraseRequest
 // @next EthereumAddress
 // @next Failure
@@ -1004,7 +1004,7 @@ func (m *Address) GetAddress() string {
 }
 
 // *
-// Response: Contains an Ethereum address derived from device private seed
+// Response: Contains an Essentia address derived from device private seed
 // @prev EthereumGetAddress
 type EthereumAddress struct {
 	Address          []byte `protobuf:"bytes,1,req,name=address" json:"address,omitempty"`

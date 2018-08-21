@@ -70,7 +70,7 @@ type peerConnection struct {
 
 	peer Peer
 
-	version int        // Eth protocol version number to switch strategies
+	version int        // Ess protocol version number to switch strategies
 	log     log.Logger // Contextual logger to add extra infos to peer logs
 	lock    sync.RWMutex
 }
@@ -147,7 +147,7 @@ func (p *peerConnection) Reset() {
 func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	// Sanity check the protocol version
 	if p.version < 62 {
-		panic(fmt.Sprintf("header fetch [eth/62+] requested on eth/%d", p.version))
+		panic(fmt.Sprintf("header fetch [ess/62+] requested on ess/%d", p.version))
 	}
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
@@ -165,7 +165,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 	// Sanity check the protocol version
 	if p.version < 62 {
-		panic(fmt.Sprintf("body fetch [eth/62+] requested on eth/%d", p.version))
+		panic(fmt.Sprintf("body fetch [ess/62+] requested on ess/%d", p.version))
 	}
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
@@ -187,7 +187,7 @@ func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 	// Sanity check the protocol version
 	if p.version < 63 {
-		panic(fmt.Sprintf("body fetch [eth/63+] requested on eth/%d", p.version))
+		panic(fmt.Sprintf("body fetch [ess/63+] requested on ess/%d", p.version))
 	}
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.receiptIdle, 0, 1) {
@@ -209,7 +209,7 @@ func (p *peerConnection) FetchReceipts(request *fetchRequest) error {
 func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	// Sanity check the protocol version
 	if p.version < 63 {
-		panic(fmt.Sprintf("node data fetch [eth/63+] requested on eth/%d", p.version))
+		panic(fmt.Sprintf("node data fetch [ess/63+] requested on ess/%d", p.version))
 	}
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.stateIdle, 0, 1) {

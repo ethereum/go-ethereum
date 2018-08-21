@@ -161,7 +161,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 
 		bbtIndexer := light.NewBloomTrieIndexer(db, false)
 
-		bloomIndexer := eth.NewBloomIndexer(db, params.BloomBitsBlocks)
+		bloomIndexer := ess.NewBloomIndexer(db, params.BloomBitsBlocks)
 		bloomIndexer.AddChildIndexer(bbtIndexer)
 		bloomIndexer.Start(blockchain)
 

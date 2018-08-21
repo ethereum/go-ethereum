@@ -5,9 +5,9 @@ This allows DApps not to depend on geth's account management. When a DApp wants 
 the signer, the signer will then provide the user with context and asks the user for permission to sign the data. If
 the users grants the signing request the signer will send the signature back to the DApp.
   
-This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can
-help in situations when a DApp is connected to a remote node because a local Ethereum node is not available, not
-synchronised with the chain or a particular Ethereum node that has no built-in (or limited) account management.
+This setup allows a DApp to connect to a remote Essentia node and send transactions that are locally signed. This can
+help in situations when a DApp is connected to a remote node because a local Essentia node is not available, not
+synchronised with the chain or a particular Essentia node that has no built-in (or limited) account management.
   
 Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
 or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
@@ -68,7 +68,7 @@ The security model of the signer is as follows:
 The general flow for signing a transaction using e.g. geth is as follows:
 ![image](sign_flow.png)
 
-In this case, `geth` would be started with `--externalsigner=http://localhost:8550` and would relay requests to `eth.sendTransaction`.
+In this case, `geth` would be started with `--externalsigner=http://localhost:8550` and would relay requests to `ess.sendTransaction`.
 
 ## TODOs
 

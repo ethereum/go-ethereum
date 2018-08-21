@@ -85,23 +85,23 @@ var (
 	debExecutables = []debExecutable{
 		{
 			Name:        "abigen",
-			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
+			Description: "Source code generator to convert Essentia contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			Name:        "bootnode",
-			Description: "Ethereum bootnode.",
+			Description: "Essentia bootnode.",
 		},
 		{
 			Name:        "evm",
-			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+			Description: "Developer utility version of the EVM (Essentia Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
 			Name:        "geth",
-			Description: "Ethereum CLI client.",
+			Description: "Essentia CLI client.",
 		},
 		{
 			Name:        "puppeth",
-			Description: "Ethereum private network manager.",
+			Description: "Essentia private network manager.",
 		},
 		{
 			Name:        "rlpdump",
@@ -109,11 +109,11 @@ var (
 		},
 		{
 			Name:        "swarm",
-			Description: "Ethereum Swarm daemon and tools",
+			Description: "Essentia Swarm daemon and tools",
 		},
 		{
 			Name:        "wnode",
-			Description: "Ethereum Whisper diagnostic tool",
+			Description: "Essentia Whisper diagnostic tool",
 		},
 	}
 
@@ -544,7 +544,7 @@ type debExecutable struct {
 func newDebMetadata(distro, author string, env build.Environment, t time.Time) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
-		author = "Ethereum Builds <fjl@ethereum.org>"
+		author = "Essentia Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
 		Env:         env,

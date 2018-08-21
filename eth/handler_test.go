@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package ess
 
 import (
 	"math"
@@ -448,7 +448,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 	}
 }
 
-// Tests that post eth protocol handshake, DAO fork-enabled clients also execute
+// Tests that post ess protocol handshake, DAO fork-enabled clients also execute
 // a DAO "challenge" verifying each others' DAO fork headers to ensure they're on
 // compatible chains.
 func TestDAOChallengeNoVsNo(t *testing.T)       { testDAOChallenge(t, false, false, false) }

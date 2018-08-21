@@ -112,7 +112,7 @@ func TestStart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrcName := "foo.eth"
+	rsrcName := "foo.ess"
 	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
 
 	// wait for kademlia table to populate
@@ -131,7 +131,7 @@ func TestStart(t *testing.T) {
 	updateMsg := []byte{}
 	ctrlClient := NewController(psses[rightPub])
 	ctrlNotifier := NewController(psses[leftPub])
-	ctrlNotifier.NewNotifier("foo.eth", 2, updateC)
+	ctrlNotifier.NewNotifier("foo.ess", 2, updateC)
 
 	pubkeybytes, err := hexutil.Decode(leftPub)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctrlClient.Subscribe(rsrcName, pubkey, addrbytes, func(s string, b []byte) error {
-		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
+		if s != "foo.ess" || !bytes.Equal(updateMsg, b) {
 			t.Fatalf("unexpected result in client handler: '%s':'%x'", s, b)
 		}
 		log.Info("client handler receive", "s", s, "b", b)

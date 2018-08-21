@@ -1,7 +1,7 @@
 ethkey
 ======
 
-ethkey is a simple command-line tool for working with Ethereum keyfiles.
+ethkey is a simple command-line tool for working with Essentia keyfiles.
 
 
 # Usage

@@ -59,7 +59,7 @@ func (b *Bloom) GetHex() string {
 	return fmt.Sprintf("0x%x", b.bloom[:])
 }
 
-// Header represents a block header in the Ethereum blockchain.
+// Header represents a block header in the Essentia blockchain.
 type Header struct {
 	header *types.Header
 }
@@ -130,7 +130,7 @@ func (h *Headers) Get(index int) (header *Header, _ error) {
 	return &Header{h.headers[index]}, nil
 }
 
-// Block represents an entire block in the Ethereum blockchain.
+// Block represents an entire block in the Essentia blockchain.
 type Block struct {
 	block *types.Block
 }
@@ -194,7 +194,7 @@ func (b *Block) GetTransaction(hash *Hash) *Transaction {
 	return &Transaction{b.block.Transaction(hash.hash)}
 }
 
-// Transaction represents a single Ethereum transaction.
+// Transaction represents a single Essentia transaction.
 type Transaction struct {
 	tx *types.Transaction
 }

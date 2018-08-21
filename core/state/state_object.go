@@ -54,7 +54,7 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
-// stateObject represents an Ethereum account which is being modified.
+// stateObject represents an Essentia account which is being modified.
 //
 // The usage pattern is as follows:
 // First you need to obtain a state object.
@@ -93,7 +93,7 @@ func (s *stateObject) empty() bool {
 	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
 }
 
-// Account is the Ethereum consensus representation of accounts.
+// Account is the Essentia consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
 	Nonce    uint64

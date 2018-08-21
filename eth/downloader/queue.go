@@ -46,8 +46,8 @@ var (
 // fetchRequest is a currently running data retrieval operation.
 type fetchRequest struct {
 	Peer    *peerConnection // Peer to which the request was sent
-	From    uint64          // [eth/62] Requested chain element index (used for skeleton fills only)
-	Headers []*types.Header // [eth/62] Requested headers, sorted by request order
+	From    uint64          // [ess/62] Requested chain element index (used for skeleton fills only)
+	Headers []*types.Header // [ess/62] Requested headers, sorted by request order
 	Time    time.Time       // Time when the request was made
 }
 
@@ -68,26 +68,26 @@ type queue struct {
 	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
 
 	// Headers are "special", they download in batches, supported by a skeleton chain
-	headerHead      common.Hash                    // [eth/62] Hash of the last queued header to verify order
-	headerTaskPool  map[uint64]*types.Header       // [eth/62] Pending header retrieval tasks, mapping starting indexes to skeleton headers
-	headerTaskQueue *prque.Prque                   // [eth/62] Priority queue of the skeleton indexes to fetch the filling headers for
-	headerPeerMiss  map[string]map[uint64]struct{} // [eth/62] Set of per-peer header batches known to be unavailable
-	headerPendPool  map[string]*fetchRequest       // [eth/62] Currently pending header retrieval operations
-	headerResults   []*types.Header                // [eth/62] Result cache accumulating the completed headers
-	headerProced    int                            // [eth/62] Number of headers already processed from the results
-	headerOffset    uint64                         // [eth/62] Number of the first header in the result cache
-	headerContCh    chan bool                      // [eth/62] Channel to notify when header download finishes
+	headerHead      common.Hash                    // [ess/62] Hash of the last queued header to verify order
+	headerTaskPool  map[uint64]*types.Header       // [ess/62] Pending header retrieval tasks, mapping starting indexes to skeleton headers
+	headerTaskQueue *prque.Prque                   // [ess/62] Priority queue of the skeleton indexes to fetch the filling headers for
+	headerPeerMiss  map[string]map[uint64]struct{} // [ess/62] Set of per-peer header batches known to be unavailable
+	headerPendPool  map[string]*fetchRequest       // [ess/62] Currently pending header retrieval operations
+	headerResults   []*types.Header                // [ess/62] Result cache accumulating the completed headers
+	headerProced    int                            // [ess/62] Number of headers already processed from the results
+	headerOffset    uint64                         // [ess/62] Number of the first header in the result cache
+	headerContCh    chan bool                      // [ess/62] Channel to notify when header download finishes
 
 	// All data retrievals below are based on an already assembles header chain
-	blockTaskPool  map[common.Hash]*types.Header // [eth/62] Pending block (body) retrieval tasks, mapping hashes to headers
-	blockTaskQueue *prque.Prque                  // [eth/62] Priority queue of the headers to fetch the blocks (bodies) for
-	blockPendPool  map[string]*fetchRequest      // [eth/62] Currently pending block (body) retrieval operations
-	blockDonePool  map[common.Hash]struct{}      // [eth/62] Set of the completed block (body) fetches
+	blockTaskPool  map[common.Hash]*types.Header // [ess/62] Pending block (body) retrieval tasks, mapping hashes to headers
+	blockTaskQueue *prque.Prque                  // [ess/62] Priority queue of the headers to fetch the blocks (bodies) for
+	blockPendPool  map[string]*fetchRequest      // [ess/62] Currently pending block (body) retrieval operations
+	blockDonePool  map[common.Hash]struct{}      // [ess/62] Set of the completed block (body) fetches
 
-	receiptTaskPool  map[common.Hash]*types.Header // [eth/63] Pending receipt retrieval tasks, mapping hashes to headers
-	receiptTaskQueue *prque.Prque                  // [eth/63] Priority queue of the headers to fetch the receipts for
-	receiptPendPool  map[string]*fetchRequest      // [eth/63] Currently pending receipt retrieval operations
-	receiptDonePool  map[common.Hash]struct{}      // [eth/63] Set of the completed receipt fetches
+	receiptTaskPool  map[common.Hash]*types.Header // [ess/63] Pending receipt retrieval tasks, mapping hashes to headers
+	receiptTaskQueue *prque.Prque                  // [ess/63] Priority queue of the headers to fetch the receipts for
+	receiptPendPool  map[string]*fetchRequest      // [ess/63] Currently pending receipt retrieval operations
+	receiptDonePool  map[common.Hash]struct{}      // [ess/63] Set of the completed receipt fetches
 
 	resultCache  []*fetchResult     // Downloaded but not yet delivered fetch results
 	resultOffset uint64             // Offset of the first cached fetch result in the block chain

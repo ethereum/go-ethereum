@@ -155,7 +155,7 @@ func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header
 // TestAPIResolve tests resolving URIs which can either contain content hashes
 // or ENS names
 func TestAPIResolve(t *testing.T) {
-	ensAddr := "swarm.eth"
+	ensAddr := "swarm.ess"
 	hashAddr := "1111111111111111111111111111111111111111111111111111111111111111"
 	resolvedAddr := "2222222222222222222222222222222222222222222222222222222222222222"
 	doesResolve := newTestResolveValidator(resolvedAddr)
@@ -181,7 +181,7 @@ func TestAPIResolve(t *testing.T) {
 			desc:      "DNS not configured, ENS address, returns error",
 			dns:       nil,
 			addr:      ensAddr,
-			expectErr: errors.New(`no DNS to resolve name: "swarm.eth"`),
+			expectErr: errors.New(`no DNS to resolve name: "swarm.ess"`),
 		},
 		{
 			desc:   "DNS configured, hash address, hash resolves, returns resolved address",
@@ -213,13 +213,13 @@ func TestAPIResolve(t *testing.T) {
 			dns:       doesResolve,
 			addr:      ensAddr,
 			immutable: true,
-			expectErr: errors.New(`immutable address not a content hash: "swarm.eth"`),
+			expectErr: errors.New(`immutable address not a content hash: "swarm.ess"`),
 		},
 		{
 			desc:      "DNS configured, ENS address, name doesn't resolve, returns error",
 			dns:       doesntResolve,
 			addr:      ensAddr,
-			expectErr: errors.New(`DNS name not found: "swarm.eth"`),
+			expectErr: errors.New(`DNS name not found: "swarm.ess"`),
 		},
 	}
 	for _, x := range tests {
@@ -252,7 +252,7 @@ func TestAPIResolve(t *testing.T) {
 func TestMultiResolver(t *testing.T) {
 	doesntResolve := newTestResolveValidator("")
 
-	ethAddr := "swarm.eth"
+	ethAddr := "swarm.ess"
 	ethHash := "0x2222222222222222222222222222222222222222222222222222222222222222"
 	ethResolve := newTestResolveValidator(ethHash)
 
@@ -300,7 +300,7 @@ func TestMultiResolver(t *testing.T) {
 			desc: "Default resolver doesn't resolve, tld resolver resolve, returns resolved address",
 			r: NewMultiResolver(
 				MultiResolverOptionWithResolver(doesntResolve, ""),
-				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(ethResolve, "ess"),
 			),
 			addr:   ethAddr,
 			result: ethHash,
@@ -308,9 +308,9 @@ func TestMultiResolver(t *testing.T) {
 		{
 			desc: "Three TLD resolvers, third resolves, returns resolved address",
 			r: NewMultiResolver(
-				MultiResolverOptionWithResolver(doesntResolve, "eth"),
-				MultiResolverOptionWithResolver(doesntResolve, "eth"),
-				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(doesntResolve, "ess"),
+				MultiResolverOptionWithResolver(doesntResolve, "ess"),
+				MultiResolverOptionWithResolver(ethResolve, "ess"),
 			),
 			addr:   ethAddr,
 			result: ethHash,
@@ -319,7 +319,7 @@ func TestMultiResolver(t *testing.T) {
 			desc: "One TLD resolver doesn't resolve, returns error",
 			r: NewMultiResolver(
 				MultiResolverOptionWithResolver(doesntResolve, ""),
-				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(ethResolve, "ess"),
 			),
 			addr:   ethAddr,
 			result: ethHash,
@@ -328,16 +328,16 @@ func TestMultiResolver(t *testing.T) {
 			desc: "One defautl and one TLD resolver, all doesn't resolve, returns error",
 			r: NewMultiResolver(
 				MultiResolverOptionWithResolver(doesntResolve, ""),
-				MultiResolverOptionWithResolver(doesntResolve, "eth"),
+				MultiResolverOptionWithResolver(doesntResolve, "ess"),
 			),
 			addr:   ethAddr,
 			result: ethHash,
-			err:    errors.New(`DNS name not found: "swarm.eth"`),
+			err:    errors.New(`DNS name not found: "swarm.ess"`),
 		},
 		{
 			desc: "Two TLD resolvers, both resolve, returns resolved address",
 			r: NewMultiResolver(
-				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(ethResolve, "ess"),
 				MultiResolverOptionWithResolver(testResolve, "test"),
 			),
 			addr:   testAddr,
@@ -346,7 +346,7 @@ func TestMultiResolver(t *testing.T) {
 		{
 			desc: "One TLD resolver, no default resolver, returns error for different TLD",
 			r: NewMultiResolver(
-				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(ethResolve, "ess"),
 			),
 			addr: testAddr,
 			err:  NewNoResolverError("test"),

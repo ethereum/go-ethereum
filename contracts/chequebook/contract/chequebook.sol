@@ -2,7 +2,7 @@ pragma solidity ^0.4.18;
 
 import "./mortal.sol";
 
-/// @title Chequebook for Ethereum micropayments
+/// @title Chequebook for Essentia micropayments
 /// @author Daniel A. Nagy <daniel@ethereum.org>
 contract chequebook is mortal {
     // Cumulative paid amount in wei to each beneficiary
