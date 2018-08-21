@@ -76,18 +76,30 @@ func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
 // nodeInfo retrieves some protocol metadata about the running host node.
 func (c *lesCommons) nodeInfo() interface{} {
 	var cht light.TrustedCheckpoint
-	sections, _, sectionHead := c.chtIndexer.Sections()
-	sections2, _, sectionHead2 := c.bloomTrieIndexer.Sections()
+	sections, _, _ := c.chtIndexer.Sections()
+	sections2, _, _ := c.bloomTrieIndexer.Sections()
+
+	if !c.protocolManager.lightSync {
+		// convert to client section size if running in server mode
+		sections /= light.CHTFrequencyClient / light.CHTFrequencyServer
+	}
+
 	if sections2 < sections {
 		sections = sections2
-		sectionHead = sectionHead2
 	}
 	if sections > 0 {
 		sectionIndex := sections - 1
+		sectionHead := c.bloomTrieIndexer.SectionHead(sectionIndex)
+		var chtRoot common.Hash
+		if c.protocolManager.lightSync {
+			chtRoot = light.GetChtRoot(c.chainDb, sectionIndex, sectionHead)
+		} else {
+			chtRoot = light.GetChtV2Root(c.chainDb, sectionIndex, sectionHead)
+		}
 		cht = light.TrustedCheckpoint{
 			SectionIdx:  sectionIndex,
 			SectionHead: sectionHead,
-			CHTRoot:     light.GetChtRoot(c.chainDb, sectionIndex, sectionHead),
+			CHTRoot:     chtRoot,
 			BloomRoot:   light.GetBloomTrieRoot(c.chainDb, sectionIndex, sectionHead),
 		}
 	}
