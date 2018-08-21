@@ -31,16 +31,16 @@ class BlockTransactionTable extends Component {
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table key={this.props.data.TxHash} className={combinedClasses.join(' ')}>
-                <thead className={classes.tHead}>
+                <thead>
                 <tr>
-                    <th scope="col">TxHash</th>
-                    <th scope="col">Block</th>
-                    <th scope="col">Age</th>
-                    <th scope="col">From</th>
-                    <th scope="col"></th>
-                    <th scope="col">To</th>
-                    <th scope="col">Value</th>
-                    <th scope="col">TxFee</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxHash</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>From</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}></th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>To</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxFee</th>
                 </tr>
                 </thead>
                 {table}

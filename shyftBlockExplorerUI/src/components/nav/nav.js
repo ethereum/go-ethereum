@@ -34,12 +34,14 @@ class navBar extends React.Component  {
                 onClick={ ()=>this.updateActive("transactions") }> 
                 TRANSACTIONS 
               </button>
-            </Link>   
+            </Link> 
+            <Link to="/transactions">   
             <button 
               className={this.state.active === "internal" ? classes.btnActive : classes.btn}
               onClick={ ()=> this.updateActive("internal") }> 
               INTERNAL TX 
-            </button>      
+            </button>     
+            </Link> 
             <Link to="/accounts">  
               <button 
                className={this.state.active === "accounts" ? classes.btnActive : classes.btn}
