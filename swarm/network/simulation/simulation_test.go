@@ -63,7 +63,7 @@ func TestRun(t *testing.T) {
 		}
 	})
 
-	t.Run("cancelation", func(t *testing.T) {
+	t.Run("cancellation", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
@@ -164,7 +164,7 @@ func TestDone(t *testing.T) {
 
 	select {
 	case <-time.After(timeout):
-		t.Error("done channel closing timmed out")
+		t.Error("done channel closing timed out")
 	case <-sim.Done():
 		if d := time.Since(start); d < sleep {
 			t.Errorf("done channel closed sooner then expected: %s", d)
@@ -172,7 +172,7 @@ func TestDone(t *testing.T) {
 	}
 }
 
-// a helper map for usual services that do not do anyting
+// a helper map for usual services that do not do anything
 var noopServiceFuncMap = map[string]ServiceFunc{
 	"noop": noopServiceFunc,
 }
