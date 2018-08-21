@@ -63,7 +63,7 @@ class App extends Component {
     detailTransactionHandler = async(txHash) => {
         try {
             const response = await axios.get(`http://localhost:8080/api/get_transaction/${txHash}`);
-            await this.setState({ transactionDetailData: response.data })
+            await this.setState({ transactionDetailData: response.data, overlayTriggered: true, overlayContent: "transaction" })
         }
         catch(error) {
             console.log(error)
@@ -71,9 +71,12 @@ class App extends Component {
     };
 
     detailAccountHandler = async(addr) => {
+
+        console.log("[DETAIL ACCOUNT Handler]");
+
         try {
             const response = await axios.get(`http://localhost:8080/api/get_account_txs/${addr}`)
-            await this.setState({ accountDetailData: response.data, reqAccount: addr })
+            await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: true, overlayContent: "account" })
         }
         catch(error) {
             console.log(error)
@@ -104,33 +107,31 @@ class App extends Component {
         this.setState({overlayTriggered: false})
     };
 
-    getBlockData = (data) => {
-        let components = [];    
-        for (let key in data) {
-            let value =data[key]
-            console.log(key, value)            
+    getBlockData = (data, page) => {
+        let components = [];
+        console.log("ACCOUNT DATA", data)   
+        let dataEntry;
+        
+        if(page === "account") {
+            dataEntry = data[0];
+        } else { 
+            dataEntry = data;
+        }
+        
+        for (let key in dataEntry) {
+            let value = dataEntry[key]
+            // console.log(key, value)            
             components.push( 
-
                 <Grid>
                     <Row className="show-grid">
-                        <Col xs={3} md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                        <Col xs={3}  md={3}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
                             {key}
                         </Col>
-                        <Col xs={9} md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
+                        <Col xs={9}  md={9}  style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}>
                             {value}
                         </Col>
                     </Row>
                 </Grid>
-
-
-
-                // <li style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}}> 
-                //     <font>{key}: </font>  
-                //     <font style={{marginLeft: '30pt'}} > {value}  </font>                     
-                // </li>
-            // <div style={{fontSize:'6.5pt', color: '#565656', paddingTop: '10pt', fontFamily: 'Open Sans, sans-serif'}} >
-            //     <div>{key}: </div>  <div style={{left: '2%'}}>{value} </div> 
-            // </div>
             );          
         }
 
@@ -149,47 +150,46 @@ class App extends Component {
                 title = "BLOCK OVERVIEW";
                 data = this.state.blockDetailData;
             break; 
-
+            case "transaction" :
+                title = "TRANSACTION OVERVIEW";
+                data =  this.state.transactionDetailData;
+            break;
+            case "account" : 
+                title = "ACCOUNT OVERVIEW";
+                data =  this.state.accountDetailData;
+            break;
             default: console.log("error");
         }
 
-      
         return ( 
             <div className="static-modal">
                 <Modal.Dialog>
                     <Modal.Header>
                         <Modal.Title style={{color: '#593c83', fontSize: '8pt', letterSpacing: '2pt',  fontFamily: 'Open Sans, sans-serif' }}> {title} </Modal.Title>
                     </Modal.Header>
-
                     <Modal.Body>
                         <ul>
-                        {this.getBlockData(data)}         
+                        {this.getBlockData(data, page)}         
                         </ul>       
                     </Modal.Body>
-
                     <Modal.Footer>
                     <Button onClick={this.hideOverlay}>Close</Button>                   
                     </Modal.Footer>
                 </Modal.Dialog>
             </div>
         );
-       
     };
 
-
   render() {
-
     return (
         <BrowserRouter>
             <div>
-
                 
                 {
                     this.state.overlayTriggered ? this.renderOverlay() : null
                 }
-
         
-                <div style={ this.state.overlayTriggered ? {backgroundColor:"#f7f8f9", paddingBottom:"5%", opacity:0.5, zIndex: -10000}  : {backgroundColor:"#f7f8f9", paddingBottom:"5%" }  }>
+                <div style={ this.state.overlayTriggered ? {backgroundColor:"#f7f8f9", paddingBottom:"5%", opacity:0.5, zIndex: -10000, height: '100%'}  : {backgroundColor:"#f7f8f9", paddingBottom:"5%", height: '100%' }  }>
                     <Nav />
         
                     <Route path="/" exact render={({ match }) =>
@@ -269,9 +269,9 @@ class App extends Component {
 
                     <Route path="/account/detail" exact render={({match}) =>
                     <div>
-                        <AccountDetailHeader
+                        {/* <AccountDetailHeader
                             addr={this.state.reqAccount}
-                            data={this.state.accountDetailData}/>
+                            data={this.state.accountDetailData}/> */}
                         <DetailAccountsTable
                             transactionDetailHandler={this.detailTransactionHandler}
                             addr={this.state.reqAccount}

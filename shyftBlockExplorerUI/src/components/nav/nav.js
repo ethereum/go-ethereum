@@ -7,7 +7,7 @@ class navBar extends React.Component  {
   constructor(props) {
     super(props);
     this.state = {
-      active: "blocks"
+      active: ""
     };
   }
 

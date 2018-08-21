@@ -4,12 +4,19 @@ import ErrorHandler from "./errorMessage";
 import classes from './table.css';
 
 class AccountTransactionTable extends Component {
+
+  
     render() {
+
+        console.log("inr");
+
+
         let table;
         if(this.props.data.length <= 1) {
            return <ErrorHandler />
         }else {
             table = this.props.data.map((data, i) => {
+                console.log("DATA FROM MAP [AccountTransactionTable]", data)
                 const costConversion = data.Cost / 10000000000000000000;
                 const amountConversion = data.Amount / 10000000000000000000;
                 return <DetailAccountsTable

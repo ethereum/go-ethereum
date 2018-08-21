@@ -2,7 +2,7 @@ import React from 'react';
 import classes from './table.css';
 import { Link } from 'react-router-dom'
 
-const DetailAccountsTable = (props) => {
+const DetailAccountsTable = (props) => {    
     let flag;
         if(props.addr === props.to) {
             flag = true
