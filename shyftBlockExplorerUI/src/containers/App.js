@@ -72,11 +72,9 @@ class App extends Component {
 
     detailAccountHandler = async(addr) => {
 
-        console.log("[DETAIL ACCOUNT Handler]");
-
         try {
             const response = await axios.get(`http://localhost:8080/api/get_account_txs/${addr}`)
-            await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: true, overlayContent: "account" })
+            await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: false })
         }
         catch(error) {
             console.log(error)
@@ -257,9 +255,7 @@ class App extends Component {
                     />
 
                     <Route path="/mined/blocks" exact render={({match}) =>
-                    <div>
-                        <BlockCoinbaseHeader
-                            coinbase={this.state.reqCoinbase}/>
+                    <div>                    
                         <BlocksMinedTable
                             getBlockTransactions={this.getBlockTransactions}
                             getBlocksMined={this.getBlocksMined}
@@ -268,10 +264,7 @@ class App extends Component {
                     />
 
                     <Route path="/account/detail" exact render={({match}) =>
-                    <div>
-                        {/* <AccountDetailHeader
-                            addr={this.state.reqAccount}
-                            data={this.state.accountDetailData}/> */}
+                    <div>                     
                         <DetailAccountsTable
                             transactionDetailHandler={this.detailTransactionHandler}
                             addr={this.state.reqAccount}

@@ -33,18 +33,18 @@ class BlocksMinedTable extends Component {
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table className={combinedClasses.join(' ')}>
-                <thead className={classes.tHead}>
+                <thead>
                 <tr>
-                    <th scope="col">Height</th>
-                    <th scope="col">Block Hash</th>
-                    <th scope="col">Age</th>
-                    <th scope="col">Txn</th>
-                    <th scope="col">Uncles</th>
-                    <th scope="col">Coinbase</th>
-                    <th scope="col">GasUsed</th>
-                    <th scope="col">GasLimit</th>
-                    <th scope="col">Avg.GasPrice</th>
-                    <th scope="col">Reward</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Height</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block Hash</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Txn</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Uncles</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Coinbase</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>GasUsed</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>GasLimit</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Avg.GasPrice</th>
+                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Reward</th>
                 </tr>
                 </thead>
                 {table}
