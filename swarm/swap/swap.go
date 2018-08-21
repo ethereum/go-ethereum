@@ -191,16 +191,17 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 		price := accounted.GetMsgPrice()
 		//local node is being credited (in its favor), so check upper limit
 		if direction == CreditEntry {
-			//TODO: is there are a check needed here?
+			//TODO: is there a check needed here?
 			//It should actually have been done on the client side, the debitor!
 			//creditor could theoretically go over payAt, but if well done,
 			//should have been checked on the client side so this shouldn't happen?
-			checkBalance := sp.balance.Add(sp.balance, price)
-			//(checkBalance *Int) Cmp(payAt)
-			// -1 if checkBalance  <  payAt
-			//  0 if checkBalance  == payAt
-			// +1 if checkBalance  >  payAt
-			if checkBalance.Cmp(payAt) == 1 {
+			checkBalance := &big.Int{}
+			checkBalance.Add(sp.balance, price)
+			//(checkBalance *Int) CmpAbs(payAt)
+			// -1 if |checkBalance|  <  |payAt|
+			//  0 if |checkBalance|  == |payAt|
+			// +1 if |checkBalance|  >  |payAt|
+			if checkBalance.CmpAbs(payAt) == 1 {
 				return nil, ErrInsufficientFunds
 			}
 		} else if direction == DebitEntry {
@@ -213,7 +214,8 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 			// -1 if checkBalance  <  dropAt
 			//  0 if checkBalance  ==	dropAt
 			// +1 if checkBalance  >  dropAt
-			checkBalance := sp.balance.Sub(sp.balance, price.Abs(price))
+			checkBalance := &big.Int{}
+			checkBalance.Sub(sp.balance, price.Abs(price))
 			if checkBalance.Cmp(dropAt) == -1 {
 				return nil, ErrInsufficientFunds
 			}
@@ -234,10 +236,10 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 		if direction == CreditEntry {
 			//NOTE: do we need to check for sufficient funds again?
 			//operations are not atomic/transactional, so balance may have changed in the meanwhile!
-			sp.balance = sp.balance.Add(sp.balance, price)
+			sp.balance.Add(sp.balance, price)
 			//local node is being debited (in favor of remote peer), so its balance decreases
 		} else if direction == DebitEntry {
-			sp.balance = sp.balance.Sub(sp.balance, price)
+			sp.balance.Sub(sp.balance, price)
 		}
 		//TODO: save to store here? init store?
 		sp.swapAccount.stateStore.Put(sp.storeID, sp.balance)

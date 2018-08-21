@@ -187,7 +187,6 @@ func (p *SwapProtocolPeer) handleSwapMsg(ctx context.Context, msg interface{}) e
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
-	return nil
 }
 
 func (sp *SwapProtocolPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {

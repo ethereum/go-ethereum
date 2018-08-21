@@ -53,6 +53,7 @@ var testSpec = &protocols.Spec{
 	Messages: []interface{}{
 		testExceedsPayAtMsg{},
 		testExceedsDropAtMsg{},
+		testCheapMsg{},
 	},
 }
 
@@ -73,6 +74,7 @@ func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
 
 type testExceedsPayAtMsg struct{}
 type testExceedsDropAtMsg struct{}
+type testCheapMsg struct{}
 
 func (tmsg *testExceedsPayAtMsg) GetMsgPrice() *big.Int {
 	diff := &big.Int{}
@@ -82,6 +84,10 @@ func (tmsg *testExceedsPayAtMsg) GetMsgPrice() *big.Int {
 func (tmsg *testExceedsDropAtMsg) GetMsgPrice() *big.Int {
 	diff := &big.Int{}
 	return diff.Sub(dropAt, big.NewInt(1))
+}
+
+func (tmsg *testCheapMsg) GetMsgPrice() *big.Int {
+	return big.NewInt(100)
 }
 
 func init() {
@@ -138,6 +144,56 @@ func TestExceedsDropAt(t *testing.T) {
 	err := sp.Send(ctx, &testExceedsDropAtMsg{})
 	if err != ErrInsufficientFunds {
 		t.Fatal("Expected test to fail with insufficient funds, but it didn't")
+	}
+}
+
+func TestSendCheapMessage(t *testing.T) {
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	testPeer := newDummyPeer()
+	sp := NewSwapPeer(testPeer, swap)
+	testBalance := big.NewInt(1234567890)
+	sp.balance = testBalance
+
+	msg := &testCheapMsg{}
+	ctx := context.Background()
+	err := sp.Send(ctx, msg)
+	if err != nil {
+		t.Fatal("Unexpected error sending message")
+	}
+
+	if sp.balance.Cmp(testBalance.Sub(testBalance, msg.GetMsgPrice())) != 0 {
+		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
+			testBalance.Sub(testBalance, msg.GetMsgPrice()).String(), sp.balance.String()))
+	}
+}
+
+func TestRestoreBalanceFromStateStore(t *testing.T) {
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	testPeer := newDummyPeer()
+	sp := NewSwapPeer(testPeer, swap)
+	testBalance := big.NewInt(1234567890)
+	sp.balance = big.NewInt(1234567890)
+
+	//send a message, should trigger saving to stateStore
+	msg := &testCheapMsg{}
+	ctx := context.Background()
+	err := sp.Send(ctx, msg)
+	if err != nil {
+		log.Error(err.Error())
+		t.Fatal("Unexpected error sending message")
+	}
+
+	sp2 := NewSwapPeer(testPeer, swap)
+
+	expectedBalance := &big.Int{}
+	expectedBalance.Sub(testBalance, msg.GetMsgPrice())
+	if sp2.balance.Cmp(expectedBalance) != 0 {
+		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
+			expectedBalance.String(), sp2.balance.String()))
 	}
 }
 
