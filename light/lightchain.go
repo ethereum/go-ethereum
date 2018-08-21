@@ -464,22 +464,32 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
 
 func (self *LightChain) SyncCht(ctx context.Context) bool {
+	// If we don't have a CHT indexer, abort
 	if self.odr.ChtIndexer() == nil {
 		return false
 	}
-	headNum := self.CurrentHeader().Number.Uint64()
-	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*CHTFrequencyClient {
-		num := chtCount*CHTFrequencyClient - 1
-		header, err := GetHeaderByNumber(ctx, self.odr, num)
-		if header != nil && err == nil {
-			self.mu.Lock()
-			if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
-				self.hc.SetCurrentHeader(header)
-			}
-			self.mu.Unlock()
-			return true
+	// Ensure the remote CHT head is ahead of us
+	head := self.CurrentHeader().Number.Uint64()
+	sections, _, _ := self.odr.ChtIndexer().Sections()
+
+	latest := sections*CHTFrequencyClient - 1
+	if clique := self.hc.Config().Clique; clique != nil {
+		latest -= latest % clique.Epoch // epoch snapshot for clique
+	}
+	if head >= latest {
+		return false
+	}
+	// Retrieve the latest useful header and update to it
+	if header, err := GetHeaderByNumber(ctx, self.odr, latest); header != nil && err == nil {
+		self.mu.Lock()
+		defer self.mu.Unlock()
+
+		// Ensure the chain didn't move past the latest block while retrieving it
+		if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
+			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash())
+			self.hc.SetCurrentHeader(header)
 		}
+		return true
 	}
 	return false
 }
