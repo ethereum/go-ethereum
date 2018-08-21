@@ -8,8 +8,6 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/core/state"
 	"github.com/pavelkrolevets/go-ethereum/core/types"
 	"github.com/pavelkrolevets/go-ethereum/ethdb"
-	"github.com/pavelkrolevets/go-ethereum/trie"
-
 	"github.com/stretchr/testify/assert"
 	//types2 "github.com/pavelkrolevets/go-ethereum/core/types"
 )
@@ -32,9 +30,9 @@ func TestEpochContextCountVotes(t *testing.T) {
 	}
 	balance := int64(5)
 	db := ethdb.NewMemDatabase()
-	bdb := trie.NewDatabase(db)
+	//bdb := trie.NewDatabase(db)
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
-	LCPContext, err := types.NewLCPContext(bdb)
+	LCPContext, err := types.NewLCPContext(db)
 	assert.Nil(t, err)
 
 	epochContext := &EpochContext{
