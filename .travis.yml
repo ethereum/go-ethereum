@@ -88,11 +88,11 @@ stages:
   - name: Lint
   - name: Build and test
   - name: Github release
-    if: type != pull_request AND branch = master AND tag = true AND repo = tomochain/tomochain
+    if: type != pull_request AND branch = master AND tag IS present AND repo = tomochain/tomochain
   - name: Build and push untagged commit into image tomochain
     if: type != pull_request AND branch = master AND tag IS blank AND repo = tomochain/tomochain
   - name: Build and push tagged commit into image tomochain
-    if: type != pull_request AND branch = master AND tag = true AND repo = tomochain/tomochain
+    if: type != pull_request AND branch = master AND tag IS present AND repo = tomochain/tomochain
 
 notifications:
   slack:
