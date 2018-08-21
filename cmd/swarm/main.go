@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -208,6 +209,10 @@ var (
 		Name:  "data",
 		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
 	}
+	SwarmCompressedFlag = cli.BoolFlag{
+		Name:  "compressed",
+		Usage: "Prints encryption keys in compressed form",
+	}
 )
 
 //declare a few constant error messages, useful for later error check comparisons in test
@@ -250,6 +255,14 @@ func init() {
 			CustomHelpTemplate: helpTemplate,
 			Name:               "version",
 			Usage:              "Print version numbers",
+			Description:        "The output of this command is supposed to be machine-readable",
+		},
+		{
+			Action:             keys,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "print-keys",
+			Flags:              []cli.Flag{SwarmCompressedFlag},
+			Usage:              "Print public key information",
 			Description:        "The output of this command is supposed to be machine-readable",
 		},
 		{
@@ -578,6 +591,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func keys(ctx *cli.Context) error {
+	privateKey := getPrivKey(ctx)
+	pub := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
+	pubCompressed := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
+	if !ctx.Bool(SwarmCompressedFlag.Name) {
+		fmt.Println(fmt.Sprintf("publicKey=%s", pub))
+	}
+	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
+	return nil
 }
 
 func version(ctx *cli.Context) error {
