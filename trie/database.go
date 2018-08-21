@@ -57,13 +57,6 @@ type DatabaseReader interface {
 	// Has retrieves whether a key is present in the database.
 	Has(key []byte) (bool, error)
 }
-// DatabaseWriter wraps the Put method of a backing store for the trie.
-type DatabaseWriter interface {
-	// Put stores the mapping key->value in the database.
-	// Implementations must not hold onto the value bytes, the trie
-	// will reuse the slice across calls to Put.
-	Put(key, value []byte) error
-}
 
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
@@ -282,11 +275,6 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 func (db *Database) DiskDB() DatabaseReader {
 	return db.diskdb
 }
-// DiskDBwrite writes the persistent storage backing the trie database.
-func (db *Database) DiskDBwrite() DatabaseWriter {
-	return db.diskdb
-}
-
 // InsertBlob writes a new reference tracked blob to the memory database if it's
 // yet unknown. This method should only be used for non-trie nodes that require
 // reference counting, since trie nodes are garbage collected directly through

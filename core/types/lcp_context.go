@@ -10,6 +10,7 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/rlp"
 	"github.com/pavelkrolevets/go-ethereum/trie"
 	"encoding/binary"
+	"github.com/pavelkrolevets/go-ethereum/ethdb"
 )
 
 type LCPContext struct {
@@ -22,7 +23,7 @@ type LCPContext struct {
 	maxValidators *trie.Trie
 	epochInterval *trie.Trie
 
-	db *trie.Database
+	db ethdb.Database
 }
 
 var (
@@ -36,37 +37,45 @@ var (
 	epochIntervalPrefix = []byte("EpochInterval-")
 )
 
-func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, epochPrefix, db)
+func NewEpochTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, epochPrefix, dbd)
 }
 
-func NewDelegateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, delegatePrefix, db)
+func NewDelegateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, delegatePrefix, dbd)
 }
 
-func NewVoteTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, votePrefix, db)
+func NewVoteTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, votePrefix, dbd)
 }
 
-func NewCandidateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
+func NewCandidateTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, candidatePrefix, dbd)
 }
 
-func NewMintCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, mintCntPrefix, db)
+func NewMintCntTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, mintCntPrefix, dbd)
 }
 
-func NewPeriodBlockTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, periodBlockPrefix, db)
+func NewPeriodBlockTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, periodBlockPrefix, dbd)
 }
-func NewMaxValidatorsTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, maxValidatorsPrefix, db)
+func NewMaxValidatorsTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, maxValidatorsPrefix, dbd)
 }
-func NewEpochIntervalTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, epochIntervalPrefix, db)
+func NewEpochIntervalTrie(root common.Hash, db ethdb.Database) (*trie.Trie, error) {
+	dbd := trie.NewDatabase(db)
+	return trie.NewTrieWithPrefix(root, epochIntervalPrefix, dbd)
 }
 
-func NewLCPContext(db *trie.Database) (*LCPContext, error) {
+func NewLCPContext(db ethdb.Database) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -113,7 +122,7 @@ func NewLCPContext(db *trie.Database) (*LCPContext, error) {
 	}, nil
 }
 
-func NewLCPContextFromProto(db *trie.Database, ctxProto *LCPContextProto) (*LCPContext, error) {
+func NewLCPContextFromProto(db ethdb.Database, ctxProto *LCPContextProto) (*LCPContext, error) {
 	epochTrie, err := NewEpochTrie(ctxProto.EpochHash, db)
 	if err != nil {
 		return nil, err
@@ -380,38 +389,38 @@ func (d *LCPContext) UnDelegate(delegatorAddr, candidateAddr common.Address) err
 	}
 	return d.voteTrie.TryDelete(delegator)
 }
-//function to write tries to memory and then dump to a hard drive - new in 1.8 version
-func (d *LCPContext) CommitTo(onleaf trie.LeafCallback) (*LCPContextProto, error) {
-	epochRoot, err := d.epochTrie.Commit(onleaf)
+//function to write tries to memory
+func (d *LCPContext) CommitTo(db ethdb.Database) (*LCPContextProto, error) {
+	epochRoot, err := d.epochTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	delegateRoot, err := d.delegateTrie.Commit(onleaf)
+	delegateRoot, err := d.delegateTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	voteRoot, err := d.voteTrie.Commit(onleaf)
+	voteRoot, err := d.voteTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	candidateRoot, err := d.candidateTrie.Commit(onleaf)
+	candidateRoot, err := d.candidateTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	mintCntRoot, err := d.mintCntTrie.Commit(onleaf)
+	mintCntRoot, err := d.mintCntTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	blockPeriod, err := d.periodBlock.Commit(onleaf)
+	blockPeriod, err := d.periodBlock.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	maxVal, err := d.maxValidators.Commit(onleaf)
+	maxVal, err := d.maxValidators.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
-	epochInterv, err := d.epochInterval.Commit(onleaf)
+	epochInterv, err := d.epochInterval.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -432,10 +441,10 @@ func (d *LCPContext) DelegateTrie() *trie.Trie           { return d.delegateTrie
 func (d *LCPContext) VoteTrie() *trie.Trie               { return d.voteTrie }
 func (d *LCPContext) EpochTrie() *trie.Trie              { return d.epochTrie }
 func (d *LCPContext) MintCntTrie() *trie.Trie            { return d.mintCntTrie }
-func (d *LCPContext) periodTrie() *trie.Trie            { return d.periodBlock }
-func (d *LCPContext) maxValidatorTrie() *trie.Trie            { return d.maxValidators }
-func (d *LCPContext) epochIntervalTrie() *trie.Trie            { return d.epochInterval }
-func (d *LCPContext) DB() *trie.Database                 { return d.db }
+func (d *LCPContext) periodTrie() *trie.Trie             { return d.periodBlock }
+func (d *LCPContext) maxValidatorTrie() *trie.Trie       { return d.maxValidators }
+func (d *LCPContext) epochIntervalTrie() *trie.Trie      { return d.epochInterval }
+func (d *LCPContext) DB() ethdb.Database                 { return d.db }
 func (dc *LCPContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
 func (dc *LCPContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
 func (dc *LCPContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }

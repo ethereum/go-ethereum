@@ -346,8 +346,8 @@ func initGenesisLCPContext(g *Genesis, db ethdb.Database) *types.LCPContext {
 	if g.Config != nil && g.Config.LCP != nil && g.Config.LCP.MaxValidators != 0 {
 		dc.SetMaxValidators(g.Config.LCP.MaxValidators)
 	}
-	if g.Config != nil && g.Config.LCP != nil && g.Config.LCP.Epoch != 0 {
-		dc.SetEpochInterval(g.Config.LCP.Epoch)
+	if g.Config != nil && g.Config.LCP != nil && g.Config.LCP.EpochInterval != 0 {
+		dc.SetEpochInterval(g.Config.LCP.EpochInterval)
 	}
 	return dc
 }

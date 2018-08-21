@@ -29,8 +29,8 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/common/hexutil"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
-	"github.com/pavelkrolevets/go-ethereum/consensus/clique"
 	"github.com/pavelkrolevets/go-ethereum/consensus/ethash"
+	"github.com/pavelkrolevets/go-ethereum/consensus/lcp"
 	"github.com/pavelkrolevets/go-ethereum/core"
 	"github.com/pavelkrolevets/go-ethereum/core/bloombits"
 	"github.com/pavelkrolevets/go-ethereum/core/rawdb"
@@ -211,9 +211,9 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If proof-of-authority is requested, set it up
-	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
+	// If LCP is requested, set it up
+	if chainConfig.LCP != nil {
+		return lcp.New(chainConfig.LCP, db)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

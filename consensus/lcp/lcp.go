@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/pavelkrolevets/go-ethereum/trie"
+	"github.com/pavelkrolevets/go-ethereum/ethdb"
 )
 
 const (
@@ -83,7 +84,7 @@ var (
 
 type LCP struct {
 	config *params.LcpConfig // Consensus engine configuration parameters
-	db     *trie.Database    // Database to store and retrieve snapshots
+	db     ethdb.Database    // Database to store and retrieve snapshots
 
 	signer               common.Address
 	signFn               SignerFn
@@ -130,7 +131,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func New(config *params.LcpConfig, db *trie.Database) *LCP {
+func New(config *params.LcpConfig, db ethdb.Database) *LCP {
 	signatures, _ := lru.NewARC(inmemorySignatures)
 	return &LCP{
 		config:     config,
@@ -315,8 +316,7 @@ func (d *LCP) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 }
 
 func (s *LCP) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
-	db := s.db.DiskDB()
-	key, err:=db.Get(confirmedBlockHead)
+	key, err:= s.db.Get(confirmedBlockHead)
 	if err != nil {
 		return nil, err
 	}
@@ -328,9 +328,8 @@ func (s *LCP) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Head
 }
 
 // store inserts the snapshot into the database.
-func (s *LCP) storeConfirmedBlockHeader(db *trie.Database) error {
-	db_wr := s.db.DiskDBwrite()
-	return db_wr.Put(confirmedBlockHead, s.confirmedBlockHeader.Hash().Bytes())
+func (s *LCP) storeConfirmedBlockHeader(db ethdb.Database) error {
+	return db.Put(confirmedBlockHead, s.confirmedBlockHeader.Hash().Bytes())
 }
 
 func (d *LCP) Prepare(chain consensus.ChainReader, header *types.Header) error {
