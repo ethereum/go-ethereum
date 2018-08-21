@@ -21,7 +21,7 @@ import DetailTransactionTable from "../components/table/transactions/transaction
 import BlockTxs from "../components/table/transactions/blockTx";
 
 
-
+///**INTERNAL TRANSACTIONS**///
 import InternalTransactionRow from '../components/table/internalTransactions/internalRow';
 
 
@@ -91,7 +91,7 @@ class App extends Component {
     detailInternalHandler = async() => {
 
         console.log("in internal request");
-        
+
         try {
             const response = await axios.get(`http://localhost:8080/api/get_internal_transactions/`)
          

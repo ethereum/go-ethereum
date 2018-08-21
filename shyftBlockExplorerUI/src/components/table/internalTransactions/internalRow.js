@@ -53,17 +53,17 @@ class InternalTransactionsTable extends Component {
                 <table className={combinedClasses.join(' ')}>
                     <thead>
                     <tr>                    
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Block Hash</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Action</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >To</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >From</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Gas</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Gas Used</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>ID</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Input</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Output</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Time</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Block Hash</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Action</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >To</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >From</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Gas</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}} >Gas Used</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>ID</th>
+                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Input</th>
+                        <th scope="col"  style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Output</th>
+                        <th scope="col"  style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Time</th>
+                        <th scope="col"   style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e", width: '5hw'}}>Value</th>
                     </tr>
                     </thead>
                     {table}
