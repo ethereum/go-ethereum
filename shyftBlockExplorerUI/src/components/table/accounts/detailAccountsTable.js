@@ -17,18 +17,18 @@ const DetailAccountsTable = (props) => {
     }
     return (
           <tbody>
-            <tr>
-                <td className={classes.addressTag}>
-                    <Link to="/transaction/details" className={genFlag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
+            <tr style={{ borderTop: '1px solid #e0defb' }}>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.addressTag}>
+                    <Link to="/block/transactions" className={genFlag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
                         {props.txHash}</Link>
                 </td>
-                <td>{props.blockNumber}</td>
-                <td>{props.age}</td>
-                <td className={classes.fromTag}>{props.from}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.blockNumber}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.age}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.fromTag}>{props.from}</td>
                 <td><div className={ flag ? classes.incoming : classes.out }>{ flag ? "IN" : "OUT" }</div></td>
-                <td>{props.to}</td>
-                <td>{props.value}</td>
-                <td>{props.cost}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.to}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.value}</td>
+                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.cost}</td>
             </tr>
             </tbody>
     )
