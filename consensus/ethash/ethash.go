@@ -47,7 +47,7 @@ var (
 	maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal})
+	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal, big.NewInt(1)})
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -387,6 +387,7 @@ type Config struct {
 	DatasetsInMem  int
 	DatasetsOnDisk int
 	PowMode        Mode
+	Difficulty     *big.Int
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash

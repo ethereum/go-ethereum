@@ -117,6 +117,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Essentia, error) {
 		return nil, genesisErr
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
+	log.Info("Ethash", "difficulty", config.Ethash.Difficulty)
 
 	ess := &Essentia{
 		config:         config,

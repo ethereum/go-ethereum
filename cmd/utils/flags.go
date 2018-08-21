@@ -241,6 +241,11 @@ var (
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: ess.DefaultConfig.Ethash.DatasetsOnDisk,
 	}
+	EthashDifficultyFlag = BigFlag{
+		Name:  "ethash.difficulty",
+		Usage: "Difficulty of ethash",
+		Value: ess.DefaultConfig.Ethash.Difficulty,
+	}
 	// Transaction pool settings
 	TxPoolNoLocalsFlag = cli.BoolFlag{
 		Name:  "txpool.nolocals",

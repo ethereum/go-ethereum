@@ -42,6 +42,7 @@ var DefaultConfig = Config{
 		CachesOnDisk:   3,
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
+		Difficulty:     big.NewInt(1),
 	},
 	NetworkId:     1,
 	LightPeers:    100,

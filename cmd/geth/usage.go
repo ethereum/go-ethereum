@@ -99,6 +99,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.EthashDatasetDirFlag,
 			utils.EthashDatasetsInMemoryFlag,
 			utils.EthashDatasetsOnDiskFlag,
+			utils.EthashDifficultyFlag,
 		},
 	},
 	//{
