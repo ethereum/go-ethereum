@@ -87,7 +87,7 @@ func (c *lesCommons) nodeInfo() interface{} {
 		cht = light.TrustedCheckpoint{
 			SectionIdx:  sectionIndex,
 			SectionHead: sectionHead,
-			CHTRoot:     light.GetChtRoot(c.chainDb, sectionIndex, sectionHead),
+			CHTRoot:     light.GetChtV2Root(c.chainDb, sectionIndex, sectionHead),
 			BloomRoot:   light.GetBloomTrieRoot(c.chainDb, sectionIndex, sectionHead),
 		}
 	}
