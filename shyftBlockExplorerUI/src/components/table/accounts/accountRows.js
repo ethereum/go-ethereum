@@ -47,11 +47,11 @@ class AccountTable extends Component {
             <table className={combinedClasses.join(' ')}>
                 <thead>
                     <tr>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Rank</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Address</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Balance</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Percentage</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxCount</th>
+                        <th scope="col" className={classes.thItem}>Rank</th>
+                        <th scope="col" className={classes.thItem}>Address</th>
+                        <th scope="col" className={classes.thItem}>Balance</th>
+                        <th scope="col" className={classes.thItem}>Percentage</th>
+                        <th scope="col" className={classes.thItem}>TxCount</th>
                     </tr>
                 </thead>
                 {table}

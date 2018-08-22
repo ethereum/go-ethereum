@@ -35,14 +35,14 @@ class AccountTransactionTable extends Component {
             <table key={this.props.data.TxHash} className={combinedClasses.join(' ')}>
                 <thead className={classes.tHead}>
                 <tr>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxHash</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Block</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Age</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>From</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}> </th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>To</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Value</th>
-                    <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>TxFee</th>
+                    <th scope="col" className={classes.thItem}>TxHash</th>
+                    <th scope="col" className={classes.thItem}>Block</th>
+                    <th scope="col" className={classes.thItem}>Age</th>
+                    <th scope="col" className={classes.thItem}>From</th>
+                    <th scope="col" className={classes.thItem}> </th>
+                    <th scope="col" className={classes.thItem}>To</th>
+                    <th scope="col" className={classes.thItem}>Value</th>
+                    <th scope="col" className={classes.thItem}>TxFee</th>
                 </tr>
                 </thead>
                 {table}

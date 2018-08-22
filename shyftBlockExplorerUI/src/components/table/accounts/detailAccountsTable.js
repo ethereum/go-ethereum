@@ -16,21 +16,26 @@ const DetailAccountsTable = (props) => {
         genFlag = true
     }
     return (
-          <tbody>
-            <tr style={{ borderTop: '1px solid #e0defb' }}>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.addressTag}>
-                    <Link to="/block/transactions" className={genFlag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
-                        {props.txHash}</Link>
+        <tbody>
+            <tr className={classes.border}>
+                <td className={classes.tdItem}>
+                    <div className={[genFlag ? "" : classes.disabled, classes.tdLink]} onClick={() => props.detailTransactionHandler(props.txHash)}>
+                        {props.txHash}
+                    </div>
                 </td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.blockNumber}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.age}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.fromTag}>{props.from}</td>
-                <td><div className={ flag ? classes.incoming : classes.out }>{ flag ? "IN" : "OUT" }</div></td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.to}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.value}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.cost}</td>
+                <td className={classes.tdItem}> {props.blockNumber} </td>
+                <td className={classes.tdItem}> {props.age} </td>
+                <td className={classes.tdItem}> {props.from} </td>
+                <td>
+                    <div className={ [flag ? classes.incoming : classes.out, classes.tdItem ]}>
+                        { flag ? "IN" : "OUT" }
+                    </div>
+                </td>
+                <td className={classes.tdItem}> {props.to} </td>
+                <td className={classes.tdItem}> {props.value} </td>
+                <td className={classes.tdItem}> {props.cost} </td>
             </tr>
-            </tbody>
+        </tbody>
     )
 };
 

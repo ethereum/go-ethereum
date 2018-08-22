@@ -49,6 +49,7 @@ class App extends Component {
         internalDetailData: [],
         blocksMined: [],
         blockTransactions: [],
+        accounts: [],
         reqAccount: '',
         overlayTriggered: false,
         overlayContent: "",
@@ -76,10 +77,11 @@ class App extends Component {
         }
     };
 
+
     detailAccountHandler = async(addr) => {
         try {
             const response = await axios.get(`http://localhost:8080/api/get_account_txs/${addr}`)
-            await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: false })
+            await this.setState({ accountDetailData: response.data, reqAccount: addr, overlayTriggered: false, overlayContent: "account"  })
         }
         catch(error) {
             console.log(error)
@@ -107,6 +109,18 @@ class App extends Component {
             console.log(error)
         }
     };
+
+
+    getAccounts = async() => {
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_all_accounts`)
+            await this.setState({ accounts: response.data,  overlayTriggered: false })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    };
+    
     
 
     getBlockTransactions = async(blockNumber) => {
