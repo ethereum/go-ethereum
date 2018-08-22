@@ -85,7 +85,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			copy(normalized.Outputs, original.Outputs)
 			for j, output := range normalized.Outputs {
 				if output.Name != "" {
-					normalized.Outputs[j].Name = capitalise(output.Name)
+					normalized.Outputs[j].Name = abi.Capitalise(output.Name)
 				}
 			}
 			// Append the methods to the call or transact lists
@@ -118,7 +118,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
 		contracts[types[i]] = &tmplContract{
-			Type:        capitalise(types[i]),
+			Type:        abi.Capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
 			InputBin:    strings.TrimSpace(bytecodes[i]),
 			Constructor: evmABI.Constructor,
@@ -138,8 +138,8 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],
-		"capitalise":    capitalise,
-		"decapitalise":  decapitalise,
+		"capitalise":    abi.Capitalise,
+		"decapitalise":  abi.Decapitalise,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
 	if err := tmpl.Execute(buffer, data); err != nil {
@@ -368,9 +368,9 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 		switch parts[2] {
 		case "8", "16", "32", "64":
 			if parts[3] == "" {
-				return capitalise(fmt.Sprintf("%sint%s", parts[1], parts[2]))
+				return abi.Capitalise(fmt.Sprintf("%sint%s", parts[1], parts[2]))
 			}
-			return capitalise(fmt.Sprintf("%sint%ss", parts[1], parts[2]))
+			return abi.Capitalise(fmt.Sprintf("%sint%ss", parts[1], parts[2]))
 
 		default:
 			return javaKind
@@ -381,54 +381,8 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 // methodNormalizer is a name transformer that modifies Solidity method names to
 // conform to target language naming concentions.
 var methodNormalizer = map[Lang]func(string) string{
-	LangGo:   capitalise,
-	LangJava: decapitalise,
-}
-
-// capitalise makes a camel-case string which starts with an upper case character.
-func capitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
-	if len(input) == 0 {
-		return ""
-	}
-	return toCamelCase(strings.ToUpper(input[:1]) + input[1:])
-}
-
-// decapitalise makes a camel-case string which starts with a lower case character.
-func decapitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
-	if len(input) == 0 {
-		return ""
-	}
-	return toCamelCase(strings.ToLower(input[:1]) + input[1:])
-}
-
-// toCamelCase converts an under-score string to a camel-case string
-func toCamelCase(input string) string {
-	toupper := false
-
-	result := ""
-	for k, v := range input {
-		switch {
-		case k == 0:
-			result = strings.ToUpper(string(input[0]))
-
-		case toupper:
-			result += strings.ToUpper(string(v))
-			toupper = false
-
-		case v == '_':
-			toupper = true
-
-		default:
-			result += string(v)
-		}
-	}
-	return result
+	LangGo:   abi.Capitalise,
+	LangJava: abi.Decapitalise,
 }
 
 // structured checks whether a list of ABI data types has enough information to
@@ -445,7 +399,7 @@ func structured(args abi.Arguments) bool {
 		}
 		// If the field name is empty when normalized or collides (var, Var, _var, _Var),
 		// we can't organize into a struct
-		field := capitalise(out.Name)
+		field := abi.Capitalise(out.Name)
 		if field == "" || exists[field] {
 			return false
 		}

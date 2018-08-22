@@ -117,7 +117,7 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 		if !arg.Indexed {
 			return errors.New("non-indexed field in topic reconstruction")
 		}
-		field := reflect.ValueOf(out).Elem().FieldByName(capitalise(arg.Name))
+		field := reflect.ValueOf(out).Elem().FieldByName(abi.Capitalise(arg.Name))
 
 		// Try to parse the topic back into the fields based on primitive types
 		switch field.Kind() {
