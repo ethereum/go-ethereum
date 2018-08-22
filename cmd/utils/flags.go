@@ -367,7 +367,7 @@ var (
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
 		Usage: "Time interval to recreate the block being mined.",
-		Value: 3 * time.Second,
+		Value: eth.DefaultConfig.MinerRecommit,
 	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
