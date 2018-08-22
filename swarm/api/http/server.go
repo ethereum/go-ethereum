@@ -820,7 +820,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	manifestAddr := uri.Address()
 
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.ResolveURI(r.Context(), uri, credentials)
+		manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
 		if err != nil {
 			getFileFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
