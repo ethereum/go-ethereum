@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"encoding/binary"
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/crypto/sha3"
+	"github.com/pavelkrolevets/go-ethereum/ethdb"
 	"github.com/pavelkrolevets/go-ethereum/rlp"
 	"github.com/pavelkrolevets/go-ethereum/trie"
-	"encoding/binary"
-	"github.com/pavelkrolevets/go-ethereum/ethdb"
 )
 
 type LCPContext struct {
@@ -27,12 +27,12 @@ type LCPContext struct {
 }
 
 var (
-	epochPrefix     = []byte("epoch-")
-	delegatePrefix  = []byte("delegate-")
-	votePrefix      = []byte("vote-")
-	candidatePrefix = []byte("candidate-")
-	mintCntPrefix   = []byte("mintCnt-")
-	periodBlockPrefix    = []byte("Period-")
+	epochPrefix         = []byte("epoch-")
+	delegatePrefix      = []byte("delegate-")
+	votePrefix          = []byte("vote-")
+	candidatePrefix     = []byte("candidate-")
+	mintCntPrefix       = []byte("mintCnt-")
+	periodBlockPrefix   = []byte("Period-")
 	maxValidatorsPrefix = []byte("MaxValidator-")
 	epochIntervalPrefix = []byte("EpochInterval-")
 )
@@ -115,7 +115,7 @@ func NewLCPContext(db ethdb.Database) (*LCPContext, error) {
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
-		periodBlock: periodTrie,
+		periodBlock:   periodTrie,
 		maxValidators: maxValidatorTrie,
 		epochInterval: epochIntervalTrie,
 		db:            db,
@@ -161,7 +161,7 @@ func NewLCPContextFromProto(db ethdb.Database, ctxProto *LCPContextProto) (*LCPC
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
-		periodBlock: periodTrie,
+		periodBlock:   periodTrie,
 		maxValidators: maxValidatorTrie,
 		epochInterval: epochIntervalTrie,
 		db:            db,
@@ -174,9 +174,9 @@ func (d *LCPContext) Copy() *LCPContext {
 	voteTrie := *d.voteTrie
 	candidateTrie := *d.candidateTrie
 	mintCntTrie := *d.mintCntTrie
-	periodTrie:= *d.periodBlock
-	maxValidatorTrie:= *d.maxValidators
-	epochIntervalTrie:= *d.epochInterval
+	periodTrie := *d.periodBlock
+	maxValidatorTrie := *d.maxValidators
+	epochIntervalTrie := *d.epochInterval
 	return &LCPContext{
 		epochTrie:     &epochTrie,
 		delegateTrie:  &delegateTrie,
@@ -256,25 +256,23 @@ func (d *LCPContext) FromProto(dcp *LCPContextProto) error {
 }
 
 type LCPContextProto struct {
-	EpochHash     common.Hash `json:"epochRoot"        gencodec:"required"`
-	DelegateHash  common.Hash `json:"delegateRoot"     gencodec:"required"`
-	CandidateHash common.Hash `json:"candidateRoot"    gencodec:"required"`
-	VoteHash      common.Hash `json:"voteRoot"         gencodec:"required"`
-	MintCntHash   common.Hash `json:"mintCntRoot"      gencodec:"required"`
+	EpochHash         common.Hash `json:"epochRoot"        gencodec:"required"`
+	DelegateHash      common.Hash `json:"delegateRoot"     gencodec:"required"`
+	CandidateHash     common.Hash `json:"candidateRoot"    gencodec:"required"`
+	VoteHash          common.Hash `json:"voteRoot"         gencodec:"required"`
+	MintCntHash       common.Hash `json:"mintCntRoot"      gencodec:"required"`
 	periodBlockHash   common.Hash `json:"periodBlockRoot"      gencodec:"required"`
 	maxValidatorsHash common.Hash `json:"maxValidatorRoot"      gencodec:"required"`
 	epochIntervalHash common.Hash `json:"epochIntervalRoot"      gencodec:"required"`
-
-
 }
 
 func (d *LCPContext) ToProto() *LCPContextProto {
 	return &LCPContextProto{
-		EpochHash:     d.epochTrie.Hash(),
-		DelegateHash:  d.delegateTrie.Hash(),
-		CandidateHash: d.candidateTrie.Hash(),
-		VoteHash:      d.voteTrie.Hash(),
-		MintCntHash:   d.mintCntTrie.Hash(),
+		EpochHash:         d.epochTrie.Hash(),
+		DelegateHash:      d.delegateTrie.Hash(),
+		CandidateHash:     d.candidateTrie.Hash(),
+		VoteHash:          d.voteTrie.Hash(),
+		MintCntHash:       d.mintCntTrie.Hash(),
 		periodBlockHash:   d.periodBlock.Hash(),
 		maxValidatorsHash: d.maxValidators.Hash(),
 		epochIntervalHash: d.epochInterval.Hash(),
@@ -389,6 +387,7 @@ func (d *LCPContext) UnDelegate(delegatorAddr, candidateAddr common.Address) err
 	}
 	return d.voteTrie.TryDelete(delegator)
 }
+
 //function to write tries to memory
 func (d *LCPContext) CommitTo(db ethdb.Database) (*LCPContextProto, error) {
 	epochRoot, err := d.epochTrie.Commit(nil)
@@ -425,12 +424,12 @@ func (d *LCPContext) CommitTo(db ethdb.Database) (*LCPContextProto, error) {
 		return nil, err
 	}
 	return &LCPContextProto{
-		EpochHash:     epochRoot,
-		DelegateHash:  delegateRoot,
-		VoteHash:      voteRoot,
-		CandidateHash: candidateRoot,
-		MintCntHash:   mintCntRoot,
-		periodBlockHash: blockPeriod,
+		EpochHash:         epochRoot,
+		DelegateHash:      delegateRoot,
+		VoteHash:          voteRoot,
+		CandidateHash:     candidateRoot,
+		MintCntHash:       mintCntRoot,
+		periodBlockHash:   blockPeriod,
 		maxValidatorsHash: maxVal,
 		epochIntervalHash: epochInterv,
 	}, nil
@@ -450,7 +449,6 @@ func (dc *LCPContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = del
 func (dc *LCPContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
 func (dc *LCPContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
 func (dc *LCPContext) SetMintCnt(mintCnt *trie.Trie)     { dc.mintCntTrie = mintCnt }
-
 
 func (dc *LCPContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
@@ -473,47 +471,47 @@ func (dc *LCPContext) SetValidators(validators []common.Address) error {
 }
 
 // Set and Get block creation speed
-func (dc *LCPContext) SetPeriodBlock(period int64)  error  {
-	key:= []byte("BlockPeriod")
-	periodByte :=make([]byte, 8)
-	binary.LittleEndian.PutUint64(periodByte,uint64(period))
+func (dc *LCPContext) SetPeriodBlock(period int64) error {
+	key := []byte("BlockPeriod")
+	periodByte := make([]byte, 8)
+	binary.LittleEndian.PutUint64(periodByte, uint64(period))
 	dc.epochTrie.Update(key, periodByte)
 	return nil
-	}
+}
 
-func (dc *LCPContext) GetPeriodBlock()  (int64)  {
-	key:= []byte("BlockPeriod")
+func (dc *LCPContext) GetPeriodBlock() int64 {
+	key := []byte("BlockPeriod")
 	periodRLP := dc.epochTrie.Get(key)
 	period := int64(binary.LittleEndian.Uint64(periodRLP))
 	return period
 }
 
 //Set and Get maximim validators
-func (dc *LCPContext) SetMaxValidators(maxVal int64)  error  {
-	key:= []byte("MaxValidators")
-	maxValByte :=make([]byte, 8)
-	binary.LittleEndian.PutUint64(maxValByte,uint64(maxVal))
+func (dc *LCPContext) SetMaxValidators(maxVal int64) error {
+	key := []byte("MaxValidators")
+	maxValByte := make([]byte, 8)
+	binary.LittleEndian.PutUint64(maxValByte, uint64(maxVal))
 	dc.epochTrie.Update(key, maxValByte)
 	return nil
 }
 
-func (dc *LCPContext) GetMaxValidators()  (int64)  {
-	key:= []byte("MaxValidators")
+func (dc *LCPContext) GetMaxValidators() int64 {
+	key := []byte("MaxValidators")
 	maxValRLP := dc.epochTrie.Get(key)
 	maxVal := int64(binary.LittleEndian.Uint64(maxValRLP))
 	return maxVal
 }
 
 //Set and Get epoch interval
-func (dc *LCPContext) SetEpochInterval(epochInt int64)  error  {
-	key:= []byte("EpochInterval")
-	epochIntByte :=make([]byte, 8)
-	binary.LittleEndian.PutUint64(epochIntByte,uint64(epochInt))
+func (dc *LCPContext) SetEpochInterval(epochInt int64) error {
+	key := []byte("EpochInterval")
+	epochIntByte := make([]byte, 8)
+	binary.LittleEndian.PutUint64(epochIntByte, uint64(epochInt))
 	dc.epochTrie.Update(key, epochIntByte)
 	return nil
 }
-func (dc *LCPContext) GetEpochInterval()  (int64)  {
-	key:= []byte("EpochInterval")
+func (dc *LCPContext) GetEpochInterval() int64 {
+	key := []byte("EpochInterval")
 	epochIntRLP := dc.epochTrie.Get(key)
 	period := int64(binary.LittleEndian.Uint64(epochIntRLP))
 	return period
