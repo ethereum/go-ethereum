@@ -1,16 +1,22 @@
-# Build Geth in a stock Go builder container
+# Build XDC in a stock Go builder container
 FROM golang:1.10-alpine as builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers
 
-ADD . /go-ethereum
-RUN cd /go-ethereum && make geth
+ADD . /XDC
+RUN cd /XDC && make XDC
 
-# Pull Geth into a second stage deploy alpine container
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+LABEL maintainer="admin@xinfin.org"
 
-EXPOSE 8545 8546 30303 30303/udp 30304/udp
-ENTRYPOINT ["geth"]
+COPY --from=builder /tomochain/build/bin/XDC /usr/local/bin/XDC
+
+RUN chmod +x /usr/local/bin/XDC
+
+EXPOSE 8545
+EXPOSE 30303
+
+ENTRYPOINT ["/usr/local/bin/XDC", "--help"]
+
+
