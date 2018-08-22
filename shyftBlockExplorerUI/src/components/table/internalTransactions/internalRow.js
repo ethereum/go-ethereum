@@ -13,9 +13,6 @@ class InternalTransactionsTable extends Component {
     }
 
     async componentDidMount() {
-
-        console.log("in table row component");
-
         try {
             const response = await axios.get("http://localhost:8080/api/get_internal_transactions/");
             await this.setState({data: response.data});
@@ -50,17 +47,17 @@ class InternalTransactionsTable extends Component {
                 <table className={combinedClasses.join(' ')}>
                     <thead>
                     <tr>                    
-                        <th scope="col" className={classes.blockHash} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Block Hash</th>
-                        <th scope="col" className={classes.action} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Action</th>
-                        <th scope="col" className={classes.to} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >To</th>
-                        <th scope="col" className={classes.from} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >From</th>
-                        <th scope="col" className={classes.gas} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Gas</th>
-                        <th scope="col" className={classes.gasUsed} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }} >Gas Used</th>
-                        <th scope="col" className={classes.id} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>ID</th>
-                        <th scope="col" className={classes.input} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Input</th>
-                        <th scope="col" className={classes.output} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Output</th>
-                        <th scope="col" className={classes.time} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Time</th>
-                        <th scope="col" className={classes.value} style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e" }}>Value</th>
+                        <th scope="col" className={classes.thItem}> Block Hash </th>
+                        <th scope="col" className={classes.thItem}> Action </th>
+                        <th scope="col" className={classes.thItem}> To </th>
+                        <th scope="col" className={classes.thItem}> From </th>
+                        <th scope="col" className={classes.thItem}> Gas </th>
+                        <th scope="col" className={classes.thItem}> Gas Used</th>
+                        <th scope="col" className={classes.thItem}> ID </th>
+                        <th scope="col" className={classes.thItem}> Input </th>
+                        <th scope="col" className={classes.thItem}> Output </th>
+                        <th scope="col" className={classes.thItem}> Time </th>
+                        <th scope="col" className={classes.thItem}> Value </th>
                     </tr>
                     </thead>
                     {table}

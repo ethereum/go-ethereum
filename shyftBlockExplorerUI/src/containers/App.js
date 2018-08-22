@@ -147,7 +147,7 @@ class App extends Component {
             if (dataEntry["To"] === null) {
                 delete dataEntry["To"]
             }
-            if( key === "Input" || key === "Output") {
+            if( key === "Input" || key === "Output" || key === "Data") {
                 components.push( 
                     <Grid>
                         <Row className="show-grid">
@@ -179,12 +179,10 @@ class App extends Component {
     }
 
     renderOverlay = () => {
-
         const page = this.state.overlayContent;
         let data, title;
         let keys = [];
         let values = [];
-
         switch (page) {
             case "block" : 
                 title = "BLOCK OVERVIEW";
@@ -204,7 +202,6 @@ class App extends Component {
             break;
             default: console.log("error");
         }
-
         return ( 
             <div className="static-modal">
                 <Modal.Dialog>
@@ -233,11 +230,11 @@ class App extends Component {
                     this.state.overlayTriggered ? this.renderOverlay() : null
                 }
         
-                <div style={ this.state.overlayTriggered ? {backgroundColor:"#f7f8f9", paddingBottom:"5%", opacity:0.5, zIndex: -10000, height: '100%'}  : {backgroundColor:"#f7f8f9", paddingBottom:"5%", height: '100%' }  }>
+                <div style={ this.state.overlayTriggered ? {backgroundColor:"#f7f8f9", paddingBottom:"5%", opacity:0.5, zIndex: -10000, height: '100%', width: '100%'}  : {backgroundColor:"#f7f8f9", paddingBottom:"5%", height: '100%', width: '100%' }  }>
                     <Nav />
         
                     <Route path="/" exact render={({ match }) =>
-                        <Home/> 
+                        <Home style={{width: '100%'}}/> 
                         }
                     />
 
@@ -323,9 +320,9 @@ class App extends Component {
                             data={this.state.accountDetailData}/>
                     </div>}
                     />
+                </div>
             </div>
-        </div>
-    </BrowserRouter>
+        </BrowserRouter>
     );
   }
 }

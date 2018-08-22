@@ -1,18 +1,20 @@
 import React from 'react';
-import classes from './accounts.css';
+import classes from './table.css';
 import { Link } from 'react-router-dom'
 
 const AccountsTable = (props) => {
     return (
         <tbody>
-            <tr style={{ borderTop: '1px solid #e0defb' }}>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} >{props.Rank}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}  className={classes.addressTag}><Link style={{ color: '#8f67c9' }} to="/account/detail" onClick={() => props.detailAccountHandler(props.Addr)}>
+            <tr className={classes.border}>
+                <td className={classes.tdItem}>{props.Rank}</td>
+                <td className={classes.tdItem}>
+                    <Link className={classes.tdLink} to="/account/detail" onClick={() => props.detailAccountHandler(props.Addr)}>
                     {props.Addr}
-                </Link></td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} >{props.Balance}</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} >{props.Percentage}%</td>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} >{props.AccountNonce}</td>
+                    </Link>
+                </td>
+                <td className={classes.tdItem}> {props.Balance} </td>
+                <td className={classes.tdItem}> {props.Percentage}% </td>
+                <td className={classes.tdItem}> {props.AccountNonce} </td>
             </tr>
         </tbody>
     )

@@ -5,17 +5,23 @@ import { Link } from 'react-router-dom'
 const BlockTable = (props) => {
     return (
         <tbody>
-            <tr style={{ borderTop: '1px solid #e0defb' }}>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.height} ><Link to="/blocks" style={{ color: '#8f67c9' }} onClick={() => props.detailBlockHandler(props.Number)}>
-                    {props.Number}
-                </Link></td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }} className={classes.hash}>{props.Hash}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}>{props.AgeGet}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.TxCount}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}>{props.UncleCount}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.addressTag}><Link to="/mined/blocks" style={{ color: '#8f67c9' }} onClick={() => props.getBlocksMined(props.Coinbase)}>{props.Coinbase}</Link></td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.GasUsed}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.GasLimit}</td>
+            <tr className={classes.border}>
+                <td className={classes.tdItem}>
+                    <Link to="/blocks" style={{ color: '#8f67c9' }} onClick={() => props.detailBlockHandler(props.Number)}>
+                        {props.Number}
+                    </Link>
+                </td>
+                <td className={classes.tdItem}> {props.Hash} </td>
+                <td className={classes.tdItem}> {props.AgeGet} </td>
+                <td className={classes.tdItem}> {props.TxCount} </td>
+                <td className={classes.tdItem}> {props.UncleCount} </td>
+                <td className={classes.tdItem}>
+                    <Link to="/mined/blocks" style={{ color: '#8f67c9' }} onClick={() => props.getBlocksMined(props.Coinbase)}>
+                        {props.Coinbase}
+                    </Link>
+                </td>
+                <td className={classes.tdItem}> {props.GasUsed} </td>
+                <td className={classes.tdItem}> {props.GasLimit} </td>
                 <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}>TBD</td>
                 <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.Reward}</td>
             </tr>

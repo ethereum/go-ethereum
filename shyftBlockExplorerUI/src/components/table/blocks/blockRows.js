@@ -45,18 +45,18 @@ class BlocksTable extends Component {
             <div>
                 <table className={combinedClasses.join(' ')}>
                     <thead>
-                    <tr>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Height</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Block Hash</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Age</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Txn</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Uncles</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}} >Coinbase</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>GasUsed</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>GasLimit</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Avg.GasPrice</th>
-                        <th scope="col" style={{fontSize: "8pt", backgroundColor: "white", color: "#4f2e7e"}}>Reward</th>
-                    </tr>
+                        <tr>
+                            <th scope="col" className={classes.thItem}> Height </th>
+                            <th scope="col" className={classes.thItem}> Block Hash </th>
+                            <th scope="col" className={classes.thItem}> Age </th>
+                            <th scope="col" className={classes.thItem}> Txn </th>
+                            <th scope="col" className={classes.thItem}> Uncles </th>
+                            <th scope="col" className={classes.thItem}> Coinbase </th>
+                            <th scope="col" className={classes.thItem}> GasUsed </th>
+                            <th scope="col" className={classes.thItem}> GasLimit </th>
+                            <th scope="col" className={classes.thItem}> Avg.GasPrice </th>
+                            <th scope="col" className={classes.thItem}> Reward </th>
+                        </tr>
                     </thead>
                     {table}
                 </table>

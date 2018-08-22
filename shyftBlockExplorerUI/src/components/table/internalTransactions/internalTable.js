@@ -6,28 +6,28 @@ import Button from 'react-bootstrap/lib/Button';
 const InternalTable = (props) => {
     return (
         <tbody>
-            <tr style={{ borderTop: '1px solid #e0defb' }}>
-                <td style={{ paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} >
-                    <div style={{ color: '#8f67c9' }} onClick={() => props.detailInternalHandler(props.Hash)}>
+            <tr className={classes.border}>
+                <td className={classes.tdItem}>
+                    <div className={classes.tdLink} onClick={() => props.detailInternalHandler(props.Hash)}>
                         {props.Hash}
                     </div>
                 </td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }} >{props.Action}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}>{props.To}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.From}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}>{props.Gas}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }} className={classes.GasUsed}></td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.ID}</td>
-                <td style={{paddingLeft: '18pt', paddingBottom: '7.5pt', paddingTop: '7.5pt' }}> 
-                    <Button style={{color: '#8f67c9'}} bsStyle="link" bsSize="small" onClick={()=>alert( props.Input )}> Show Input </Button> 
+                <td className={classes.tdItem}>{props.Action}</td>
+                <td className={classes.tdItem}>{props.To}</td>
+                <td className={classes.tdItem}>{props.From}</td>
+                <td className={classes.tdItem}>{props.Gas}</td>
+                <td className={classes.tdItem}> {props.GasUsed} </td>
+                <td className={classes.tdItem}>{props.ID}</td>
+                <td className={classes.tdItem}> 
+                    <div className={classes.tdLink} onClick={()=>alert( props.Input )}> Show Input   
+                    <input type="hidden" id={"input" + props.Hash} value={props.Input} /> </div> 
                 </td>
-                <td style={{paddingLeft: '18pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'   }}> 
-                    <Button style={{color: '#8f67c9'}} bsStyle="link" bsSize="small" onClick={()=>alert(props.Output)}> Show Output </Button> 
+                <td className={classes.tdItem}> 
+                    <div className={classes.tdLink} onClick={()=>alert(props.Output)}> Show Output 
+                    <input type="hidden" id={"output" + props.Hash} value={props.Output} /> </div> 
                 </td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.Time}</td>
-                <td style={{paddingLeft: '30pt', paddingBottom: '7.5pt', paddingTop: '7.5pt'  }}>{props.Value}</td>
-                <input type="hidden" id={"input" + props.Hash} value={props.Input} />
-                <input type="hidden" id={"output" + props.Hash} value={props.Output} /> 
+                <td className={classes.tdItem}>{props.Time}</td>
+                <td className={classes.tdItem}>{props.Value}</td>  
             </tr>
         </tbody>
     )

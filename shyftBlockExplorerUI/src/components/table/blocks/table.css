@@ -1,11 +1,11 @@
 .table {
-    border-spacing: 100rem;
     width: 95%;
     margin: 0 auto;  
     background-color: white;
     top: 107pt;
     left: 2.5%;
     position: absolute;
+    table-layout:fixed;
 }
 
 th {
@@ -15,8 +15,35 @@ th {
     font-family: 'Open Sans', sans-serif;
 }
 
+.thItem { 
+    font-size: 8pt;
+    background-color: white; 
+    color: #4f2e7e;
+}
+
 td {
     font-size: 6pt;
     background-color: white;
     font-family: 'Open Sans', sans-serif;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
+
+.tdItem { 
+    padding-left: 30pt;
+    padding-bottom: 7.5pt; 
+    padding-top: 7.5pt;  
+}
+
+.tdLink { 
+    color: #8f67c9;
+}
+
+.border { 
+    border-top: 1px solid #e0defb;
+}
+
+.disabled {
+    pointer-events: none;
+    color: black;
+} 
