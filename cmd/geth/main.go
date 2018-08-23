@@ -336,26 +336,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
-		// Use a reduced number of threads if requested
-		threads := ctx.GlobalInt(utils.MinerLegacyThreadsFlag.Name)
-		if ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
-			threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
-		}
-		if threads > 0 {
-			type threaded interface {
-				SetThreads(threads int)
-			}
-			if th, ok := ethereum.Engine().(threaded); ok {
-				th.SetThreads(threads)
-			}
-		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerLegacyGasPriceFlag.Name)
 		if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
 			gasprice = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		}
 		ethereum.TxPool().SetGasPrice(gasprice)
-		if err := ethereum.StartMining(true); err != nil {
+
+		threads := ctx.GlobalInt(utils.MinerLegacyThreadsFlag.Name)
+		if ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
+			threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		}
+		if err := ethereum.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

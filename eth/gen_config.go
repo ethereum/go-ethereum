@@ -31,7 +31,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieCache               int
 		TrieTimeout             time.Duration
 		Etherbase               common.Address `toml:",omitempty"`
-		MinerThreads            int            `toml:",omitempty"`
 		MinerNotify             []string       `toml:",omitempty"`
 		MinerExtraData          hexutil.Bytes  `toml:",omitempty"`
 		MinerGasPrice           *big.Int
@@ -55,7 +54,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieCache = c.TrieCache
 	enc.TrieTimeout = c.TrieTimeout
 	enc.Etherbase = c.Etherbase
-	enc.MinerThreads = c.MinerThreads
 	enc.MinerNotify = c.MinerNotify
 	enc.MinerExtraData = c.MinerExtraData
 	enc.MinerGasPrice = c.MinerGasPrice
@@ -133,9 +131,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.Etherbase != nil {
 		c.Etherbase = *dec.Etherbase
-	}
-	if dec.MinerThreads != nil {
-		c.MinerThreads = *dec.MinerThreads
 	}
 	if dec.MinerNotify != nil {
 		c.MinerNotify = dec.MinerNotify
