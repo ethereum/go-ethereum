@@ -25,11 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// headerRetriever is used by the unconfirmed block set to verify whether a previously
+// chainRetriever is used by the unconfirmed block set to verify whether a previously
 // mined block is part of the canonical chain or not.
-type headerRetriever interface {
+type chainRetriever interface {
 	// GetHeaderByNumber retrieves the canonical header associated with a block number.
 	GetHeaderByNumber(number uint64) *types.Header
+
+	// GetBlockByNumber retrieves the canonical block associated with a block number.
+	GetBlockByNumber(number uint64) *types.Block
 }
 
 // unconfirmedBlock is a small collection of metadata about a locally mined block
@@ -44,14 +47,14 @@ type unconfirmedBlock struct {
 // used by the miner to provide logs to the user when a previously mined block
 // has a high enough guarantee to not be reorged out of the canonical chain.
 type unconfirmedBlocks struct {
-	chain  headerRetriever // Blockchain to verify canonical status through
-	depth  uint            // Depth after which to discard previous blocks
-	blocks *ring.Ring      // Block infos to allow canonical chain cross checks
-	lock   sync.RWMutex    // Protects the fields from concurrent access
+	chain  chainRetriever // Blockchain to verify canonical status through
+	depth  uint           // Depth after which to discard previous blocks
+	blocks *ring.Ring     // Block infos to allow canonical chain cross checks
+	lock   sync.RWMutex   // Protects the fields from concurrent access
 }
 
 // newUnconfirmedBlocks returns new data structure to track currently unconfirmed blocks.
-func newUnconfirmedBlocks(chain headerRetriever, depth uint) *unconfirmedBlocks {
+func newUnconfirmedBlocks(chain chainRetriever, depth uint) *unconfirmedBlocks {
 	return &unconfirmedBlocks{
 		chain: chain,
 		depth: depth,
@@ -103,7 +106,23 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		case header.Hash() == next.hash:
 			log.Info("🔗 block reached canonical chain", "number", next.index, "hash", next.hash)
 		default:
-			log.Info("⑂ block  became a side fork", "number", next.index, "hash", next.hash)
+			// Block is not canonical, check whether we have an uncle or a lost block
+			included := false
+			for number := next.index; !included && number < next.index+uint64(set.depth) && number <= height; number++ {
+				if block := set.chain.GetBlockByNumber(number); block != nil {
+					for _, uncle := range block.Uncles() {
+						if uncle.Hash() == next.hash {
+							included = true
+							break
+						}
+					}
+				}
+			}
+			if included {
+				log.Info("⑂ block became an uncle", "number", next.index, "hash", next.hash)
+			} else {
+				log.Info("😱 block lost", "number", next.index, "hash", next.hash)
+			}
 		}
 		// Drop the block out of the ring
 		if set.blocks.Value == set.blocks.Next().Value {
