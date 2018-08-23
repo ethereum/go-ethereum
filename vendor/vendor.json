@@ -370,10 +370,10 @@
 			"revisionTime": "2017-08-14T17:01:13Z"
 		},
 		{
-			"checksumSHA1": "28UVHMmHx0iqO0XiJsjx+fwILyI=",
+			"checksumSHA1": "D8AVDI39CJ+jvw0HOotYU2gz54c=",
 			"path": "github.com/rjeczalik/notify",
-			"revision": "c31e5f2cb22b3e4ef3f882f413847669bf2652b9",
-			"revisionTime": "2018-02-03T14:01:15Z"
+			"revision": "4e54e7fd043e865c50bda93359fb78813a8d165b",
+			"revisionTime": "2018-08-08T20:39:25Z"
 		},
 		{
 			"checksumSHA1": "5uqO4ITTDMklKi3uNaE/D9LQ5nM=",
@@ -746,6 +746,12 @@
 			"path": "golang.org/x/sync/syncmap",
 			"revision": "f52d1811a62927559de87708c8913c1650ce4f26",
 			"revisionTime": "2017-05-17T20:25:26Z"
+		},
+		{
+			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
+			"path": "golang.org/x/sys/cpu",
+			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
+			"revisionTime": "2018-08-08T08:17:46Z"
 		},
 		{
 			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",

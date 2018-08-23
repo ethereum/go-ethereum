@@ -644,17 +644,6 @@ func (meta debMetadata) ExeName(exe debExecutable) string {
 	return exe.Package()
 }
 
-// EthereumSwarmPackageName returns the name of the swarm package based on
-// environment, e.g. "ethereum-swarm-unstable", or "ethereum-swarm".
-// This is needed so that we make sure that "ethereum" package,
-// depends on and installs "ethereum-swarm"
-func (meta debMetadata) EthereumSwarmPackageName() string {
-	if isUnstableBuild(meta.Env) {
-		return debSwarm.Name + "-unstable"
-	}
-	return debSwarm.Name
-}
-
 // ExeConflicts returns the content of the Conflicts field
 // for executable packages.
 func (meta debMetadata) ExeConflicts(exe debExecutable) string {

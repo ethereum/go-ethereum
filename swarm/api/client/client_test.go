@@ -228,7 +228,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	if err := client.DownloadDirectory(hash, "", tmp); err != nil {
+	if err := client.DownloadDirectory(hash, "", tmp, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range testDirFiles {
@@ -265,7 +265,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 	}
 
 	ls := func(prefix string) []string {
-		list, err := client.List(hash, prefix)
+		list, err := client.List(hash, prefix, "")
 		if err != nil {
 			t.Fatal(err)
 		}

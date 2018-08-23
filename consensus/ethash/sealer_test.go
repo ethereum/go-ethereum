@@ -51,7 +51,7 @@ func TestRemoteNotify(t *testing.T) {
 	ethash.Seal(nil, block, nil)
 	select {
 	case work := <-sink:
-		if want := header.HashNoNonce().Hex(); work[0] != want {
+		if want := ethash.SealHash(header).Hex(); work[0] != want {
 			t.Errorf("work packet hash mismatch: have %s, want %s", work[0], want)
 		}
 		if want := common.BytesToHash(SeedHash(header.Number.Uint64())).Hex(); work[1] != want {
@@ -70,7 +70,7 @@ func TestRemoteNotify(t *testing.T) {
 // issues in the notifications.
 func TestRemoteMultiNotify(t *testing.T) {
 	// Start a simple webserver to capture notifications
-	sink := make(chan [3]string, 1024)
+	sink := make(chan [3]string, 64)
 
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

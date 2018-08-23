@@ -18,10 +18,12 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -175,14 +177,15 @@ func (c *testCluster) Cleanup() {
 }
 
 type testNode struct {
-	Name    string
-	Addr    string
-	URL     string
-	Enode   string
-	Dir     string
-	IpcPath string
-	Client  *rpc.Client
-	Cmd     *cmdtest.TestCmd
+	Name       string
+	Addr       string
+	URL        string
+	Enode      string
+	Dir        string
+	IpcPath    string
+	PrivateKey *ecdsa.PrivateKey
+	Client     *rpc.Client
+	Cmd        *cmdtest.TestCmd
 }
 
 const testPassphrase = "swarm-test-passphrase"
@@ -289,7 +292,11 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 func newTestNode(t *testing.T, dir string) *testNode {
 
 	conf, account := getTestAccount(t, dir)
-	node := &testNode{Dir: dir}
+	ks := keystore.NewKeyStore(path.Join(dir, "keystore"), 1<<18, 1)
+
+	pk := decryptStoreAccount(ks, account.Address.Hex(), []string{testPassphrase})
+
+	node := &testNode{Dir: dir, PrivateKey: pk}
 
 	// assign ports
 	ports, err := getAvailableTCPPorts(2)

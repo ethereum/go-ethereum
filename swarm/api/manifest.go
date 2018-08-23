@@ -46,13 +46,14 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash        string    `json:"hash,omitempty"`
-	Path        string    `json:"path,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
-	Mode        int64     `json:"mode,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ModTime     time.Time `json:"mod_time,omitempty"`
-	Status      int       `json:"status,omitempty"`
+	Hash        string       `json:"hash,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	ContentType string       `json:"contentType,omitempty"`
+	Mode        int64        `json:"mode,omitempty"`
+	Size        int64        `json:"size,omitempty"`
+	ModTime     time.Time    `json:"mod_time,omitempty"`
+	Status      int          `json:"status,omitempty"`
+	Access      *AccessEntry `json:"access,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -98,7 +99,7 @@ type ManifestWriter struct {
 }
 
 func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -141,8 +142,8 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, decrypt DecryptFunc, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -194,6 +195,7 @@ type manifestTrie struct {
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
+	decrypt   DecryptFunc
 }
 
 func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
@@ -209,15 +211,15 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via FileStore
 	manifestReader, isEncrypted := fileStore.Retrieve(ctx, hash)
 	log.Trace("reader retrieved", "key", hash)
-	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
+	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC, decrypt)
 }
 
-func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)
@@ -258,26 +260,41 @@ func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore 
 	trie = &manifestTrie{
 		fileStore: fileStore,
 		encrypted: isEncrypted,
+		decrypt:   decrypt,
 	}
 	for _, entry := range man.Entries {
-		trie.addEntry(entry, quitC)
+		err = trie.addEntry(entry, quitC)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
 
-func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
+func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) error {
 	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
+
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(entry.Path) == 0 {
 		mt.entries[256] = entry
-		return
+		return nil
 	}
 
 	b := entry.Path[0]
 	oldentry := mt.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		mt.entries[b] = entry
-		return
+		return nil
 	}
 
 	cpl := 0
@@ -287,12 +304,12 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 
 	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
 		if mt.loadSubTrie(oldentry, quitC) != nil {
-			return
+			return nil
 		}
 		entry.Path = entry.Path[cpl:]
 		oldentry.subtrie.addEntry(entry, quitC)
 		oldentry.Hash = ""
-		return
+		return nil
 	}
 
 	commonPrefix := entry.Path[:cpl]
@@ -310,6 +327,7 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		Path:        commonPrefix,
 		ContentType: ManifestType,
 	}, subtrie)
+	return nil
 }
 
 func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
@@ -398,9 +416,20 @@ func (mt *manifestTrie) recalcAndStore() error {
 }
 
 func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
+
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC)
+		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC, mt.decrypt)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return

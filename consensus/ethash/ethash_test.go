@@ -94,6 +94,7 @@ func TestRemoteSealer(t *testing.T) {
 	}
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
 	block := types.NewBlockWithHeader(header)
+	sealhash := ethash.SealHash(header)
 
 	// Push new work.
 	ethash.Seal(nil, block, nil)
@@ -102,27 +103,29 @@ func TestRemoteSealer(t *testing.T) {
 		work [3]string
 		err  error
 	)
-	if work, err = api.GetWork(); err != nil || work[0] != block.HashNoNonce().Hex() {
+	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return a mining work has same hash")
 	}
 
-	if res := api.SubmitWork(types.BlockNonce{}, block.HashNoNonce(), common.Hash{}); res {
+	if res := api.SubmitWork(types.BlockNonce{}, sealhash, common.Hash{}); res {
 		t.Error("expect to return false when submit a fake solution")
 	}
 	// Push new block with same block number to replace the original one.
 	header = &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1000)}
 	block = types.NewBlockWithHeader(header)
+	sealhash = ethash.SealHash(header)
 	ethash.Seal(nil, block, nil)
 
-	if work, err = api.GetWork(); err != nil || work[0] != block.HashNoNonce().Hex() {
+	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return the latest pushed work")
 	}
 	// Push block with higher block number.
 	newHead := &types.Header{Number: big.NewInt(2), Difficulty: big.NewInt(100)}
 	newBlock := types.NewBlockWithHeader(newHead)
+	newSealhash := ethash.SealHash(newHead)
 	ethash.Seal(nil, newBlock, nil)
 
-	if res := api.SubmitWork(types.BlockNonce{}, block.HashNoNonce(), common.Hash{}); res {
+	if res := api.SubmitWork(types.BlockNonce{}, newSealhash, common.Hash{}); res {
 		t.Error("expect to return false when submit a stale solution")
 	}
 }
