@@ -111,7 +111,7 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 	// Extract some data from the header
 	var (
 		header  = block.Header()
-		hash    = header.HashNoNonce().Bytes()
+		hash    = ethash.SealHash(header).Bytes()
 		target  = new(big.Int).Div(two256, header.Difficulty)
 		number  = header.Number.Uint64()
 		dataset = ethash.dataset(number, false)
@@ -213,7 +213,7 @@ func (ethash *Ethash) remote(notify []string) {
 	//   result[1], 32 bytes hex encoded seed hash used for DAG
 	//   result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 	makeWork := func(block *types.Block) {
-		hash := block.HashNoNonce()
+		hash := ethash.SealHash(block.Header())
 
 		currentWork[0] = hash.Hex()
 		currentWork[1] = common.BytesToHash(SeedHash(block.NumberU64())).Hex()
