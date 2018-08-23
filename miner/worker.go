@@ -72,6 +72,9 @@ const (
 	// intervalAdjustBias is applied during the new resubmit interval calculation in favor of
 	// increasing upper limit or decreasing lower limit so that the limit can be reachable.
 	intervalAdjustBias = 200 * 1000.0 * 1000.0
+
+	// staleThreshold is the maximum distance of the acceptable stale block.
+	staleThreshold = 7
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -325,7 +328,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	clearPending := func(number uint64) {
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
-			if t.block.NumberU64() <= number {
+			if t.block.NumberU64() + staleThreshold <= number {
 				delete(w.pendingTasks, h)
 			}
 		}
