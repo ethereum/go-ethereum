@@ -27,7 +27,6 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -474,34 +473,27 @@ func (w *worker) seal(t *task, stop <-chan struct{}) {
 	if w.skipSealHook != nil && w.skipSealHook(t) {
 		return
 	}
-	// makeId creates an id for pending task based on consensus engine type.
-	makeId := func(block *types.Block) common.Hash {
-		hash := t.block.HashNoNonce()
-		if _, ok := w.engine.(*clique.Clique); ok {
-			hash = clique.SigHash(t.block.Header())
-		}
-		return hash
-	}
 	// The reason for caching task first is:
 	// A previous sealing action will be canceled by subsequent actions,
 	// however, remote miner may submit a result based on the cancelled task.
 	// So we should only submit the pending state corresponding to the seal result.
 	// TODO(rjl493456442) Replace the seal-wait logic structure
 	w.pendingMu.Lock()
-	w.pendingTasks[makeId(t.block)] = t
+	w.pendingTasks[w.engine.SealHash(t.block.Header())] = t
 	w.pendingMu.Unlock()
 
 	if block, err := w.engine.Seal(w.chain, t.block, stop); block != nil {
+		sealhash := w.engine.SealHash(block.Header())
 		w.pendingMu.RLock()
-		task, exist := w.pendingTasks[makeId(block)]
+		task, exist := w.pendingTasks[sealhash]
 		w.pendingMu.RUnlock()
 		if !exist {
-			log.Error("Block found but no relative pending task", "number", block.Number(), "hash", block.Hash())
+			log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash())
 			return
 		}
 		// Assemble sealing result
 		task.block = block
-		log.Info("Successfully sealed new block", "number", block.Number(), "hash", block.Hash(),
+		log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash(),
 			"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 		select {
 		case w.resultCh <- task:
@@ -534,12 +526,13 @@ func (w *worker) taskLoop() {
 				w.newTaskHook(task)
 			}
 			// Reject duplicate sealing work due to resubmitting.
-			if task.block.HashNoNonce() == prev {
+			sealHash := w.engine.SealHash(task.block.Header())
+			if sealHash == prev {
 				continue
 			}
 			interrupt()
 			stopCh = make(chan struct{})
-			prev = task.block.HashNoNonce()
+			prev = sealHash
 			go w.seal(task, stopCh)
 		case <-w.exitCh:
 			interrupt()
@@ -961,8 +954,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			}
 			feesEth := new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
 
-			log.Info("Commit new mining work", "number", block.Number(), "uncles", len(uncles), "txs", w.current.tcount,
-				"gas", block.GasUsed(), "fees", feesEth, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+				"uncles", len(uncles), "txs", w.current.tcount, "gas", block.GasUsed(), "fees", feesEth, "elapsed", common.PrettyDuration(time.Since(start)))
 
 		case <-w.exitCh:
 			log.Info("Worker has exited")
