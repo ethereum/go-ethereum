@@ -27,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -150,6 +151,9 @@ type worker struct {
 	coinbase common.Address
 	extra    []byte
 
+	pendingMu    sync.RWMutex
+	pendingTasks map[common.Hash]*task
+
 	snapshotMu    sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock *types.Block
 	snapshotState *state.StateDB
@@ -174,6 +178,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		chain:              eth.BlockChain(),
 		possibleUncles:     make(map[common.Hash]*types.Block),
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
@@ -317,13 +322,25 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		}
 		recommit = time.Duration(int64(next))
 	}
+	// clearPending cleans the stale pending tasks.
+	clearPending := func(number uint64) {
+		w.pendingMu.Lock()
+		for h, t := range w.pendingTasks {
+			if t.block.NumberU64() <= number {
+				delete(w.pendingTasks, h)
+			}
+		}
+		w.pendingMu.Unlock()
+	}
 
 	for {
 		select {
 		case <-w.startCh:
+			clearPending(w.chain.CurrentBlock().NumberU64())
 			commit(false, commitInterruptNewHead)
 
-		case <-w.chainHeadCh:
+		case head := <-w.chainHeadCh:
+			clearPending(head.Block.NumberU64())
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
@@ -454,28 +471,44 @@ func (w *worker) mainLoop() {
 
 // seal pushes a sealing task to consensus engine and submits the result.
 func (w *worker) seal(t *task, stop <-chan struct{}) {
-	var (
-		err error
-		res *task
-	)
-
 	if w.skipSealHook != nil && w.skipSealHook(t) {
 		return
 	}
-
-	if t.block, err = w.engine.Seal(w.chain, t.block, stop); t.block != nil {
-		log.Info("Successfully sealed new block", "number", t.block.Number(), "hash", t.block.Hash(),
-			"elapsed", common.PrettyDuration(time.Since(t.createdAt)))
-		res = t
-	} else {
-		if err != nil {
-			log.Warn("Block sealing failed", "err", err)
+	// makeId creates an id for pending task based on consensus engine type.
+	makeId := func(block *types.Block) common.Hash {
+		hash := t.block.HashNoNonce()
+		if _, ok := w.engine.(*clique.Clique); ok {
+			hash = clique.SigHash(t.block.Header())
 		}
-		res = nil
+		return hash
 	}
-	select {
-	case w.resultCh <- res:
-	case <-w.exitCh:
+	// The reason for caching task first is:
+	// A previous sealing action will be canceled by subsequent actions,
+	// however, remote miner may submit a result based on the cancelled task.
+	// So we should only submit the pending state corresponding to the seal result.
+	// TODO(rjl493456442) Replace the seal-wait logic structure
+	w.pendingMu.Lock()
+	w.pendingTasks[makeId(t.block)] = t
+	w.pendingMu.Unlock()
+
+	if block, err := w.engine.Seal(w.chain, t.block, stop); block != nil {
+		w.pendingMu.RLock()
+		task, exist := w.pendingTasks[makeId(block)]
+		w.pendingMu.RUnlock()
+		if !exist {
+			log.Error("Block found but no relative pending task", "number", block.Number(), "hash", block.Hash())
+			return
+		}
+		// Assemble sealing result
+		task.block = block
+		log.Info("Successfully sealed new block", "number", block.Number(), "hash", block.Hash(),
+			"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+		select {
+		case w.resultCh <- task:
+		case <-w.exitCh:
+		}
+	} else if err != nil {
+		log.Warn("Block sealing failed", "err", err)
 	}
 }
 
