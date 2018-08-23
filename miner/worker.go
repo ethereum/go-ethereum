@@ -328,7 +328,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	clearPending := func(number uint64) {
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
-			if t.block.NumberU64() + staleThreshold <= number {
+			if t.block.NumberU64()+staleThreshold <= number {
 				delete(w.pendingTasks, h)
 			}
 		}
