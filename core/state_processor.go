@@ -17,8 +17,6 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
 	"github.com/pavelkrolevets/go-ethereum/consensus/misc"
@@ -120,16 +118,14 @@ func ApplyTransaction(config *params.ChainConfig, lcpContext *types.LCPContext, 
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
-	// *usedGas += gas
-	usedGas.Add(usedGas, gas)
+	*usedGas += gas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	// receipt := types.NewReceipt(root, failed, *usedGas)
-	receipt := types.NewReceipt(root, failed, usedGas)
+	receipt := types.NewReceipt(root, failed, *usedGas)
+
 	receipt.TxHash = tx.Hash()
-	// receipt.GasUsed = gas
-	receipt.GasUsed = new(big.Int).Set(gas)
+	receipt.GasUsed = gas
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
