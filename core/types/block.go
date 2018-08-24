@@ -338,7 +338,7 @@ func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles} }
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
 }
-
+func (b *Block) LcpCtx() *LCPContext { return b.LCPContext }
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previsouly cached value.
 func (b *Block) Size() common.StorageSize {

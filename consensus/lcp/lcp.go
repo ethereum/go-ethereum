@@ -235,7 +235,7 @@ func (d *LCP) verifySeal(chain consensus.ChainReader, header *types.Header, pare
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	dposContext, err := types.NewLCPContextFromProto(trie.NewDatabase(d.db), parent.LCPContext)
+	dposContext, err := types.NewLCPContextFromProto(d.db, parent.LCPContext)
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (d *LCP) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewLCPContextFromProto(trie.NewDatabase(d.db), lastBlock.Header().LCPContext)
+	dposContext, err := types.NewLCPContextFromProto(d.db, lastBlock.Header().LCPContext)
 	if err != nil {
 		return err
 	}

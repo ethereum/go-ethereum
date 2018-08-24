@@ -21,7 +21,6 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/consensus"
 	"github.com/pavelkrolevets/go-ethereum/core/types"
 	"github.com/pavelkrolevets/go-ethereum/rpc"
-	"github.com/pavelkrolevets/go-ethereum/trie"
 	"math/big"
 )
 
@@ -44,7 +43,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 		return nil, errUnknownBlock
 	}
 
-	epochTrie, err := types.NewEpochTrie(header.LCPContext.EpochHash, trie.NewDatabase(api.lcp.db))
+	epochTrie, err := types.NewEpochTrie(header.LCPContext.EpochHash, api.lcp.db)
 	if err != nil {
 		return nil, err
 	}

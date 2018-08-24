@@ -167,6 +167,8 @@ func BytesToAddress(b []byte) Address {
 	return a
 }
 
+func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
+
 // BigToAddress returns Address with byte values of b.
 // If b is larger than len(h), b will be cropped from the left.
 func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
@@ -219,7 +221,7 @@ func (a Address) Hex() string {
 func (a Address) String() string {
 	return a.Hex()
 }
-
+func (a Address) Str() string   { return string(a[:]) }
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {
