@@ -356,7 +356,7 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 func (d *LCP) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, LCPContext *types.LCPContext) (*types.Block, error) {
+	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	AccumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))

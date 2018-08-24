@@ -17,6 +17,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
 	"github.com/pavelkrolevets/go-ethereum/consensus/misc"
@@ -65,10 +67,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	// Set out block dpos context
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		receipt, _, err := ApplyTransaction(p.config, block.LCPCtx(), p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -85,11 +88,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
+func ApplyTransaction(config *params.ChainConfig, lcpContext *types.LCPContext, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
 		return nil, 0, err
 	}
+	if msg.To() == nil && msg.Type() != types.Binary {
+		return nil, 0, types.ErrInvalidType
+	}
+
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information
@@ -100,6 +107,12 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, 0, err
 	}
+	if msg.Type() != types.Binary {
+		if err = applyLcpMessage(lcpContext, msg); err != nil {
+			return nil, 0, err
+		}
+	}
+
 	// Update the state with pending changes
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -107,20 +120,40 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
-	*usedGas += gas
+	// *usedGas += gas
+	usedGas.Add(usedGas, gas)
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, failed, *usedGas)
+	// receipt := types.NewReceipt(root, failed, *usedGas)
+	receipt := types.NewReceipt(root, failed, usedGas)
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = gas
+	// receipt.GasUsed = gas
+	receipt.GasUsed = new(big.Int).Set(gas)
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 	}
+
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	return receipt, gas, err
+}
+
+func applyLcpMessage(lcpContext *types.LCPContext, msg types.Message) error {
+	switch msg.Type() {
+	case types.LoginCandidate:
+		lcpContext.BecomeCandidate(msg.From())
+	case types.LogoutCandidate:
+		lcpContext.KickoutCandidate(msg.From())
+	case types.Delegate:
+		lcpContext.Delegate(msg.From(), *(msg.To()))
+	case types.UnDelegate:
+		lcpContext.UnDelegate(msg.From(), *(msg.To()))
+	default:
+		return types.ErrInvalidType
+	}
+	return nil
 }

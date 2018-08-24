@@ -1,6 +1,8 @@
 package lcp
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -13,6 +15,44 @@ import (
 	"github.com/stretchr/testify/assert"
 	//types2 "github.com/pavelkrolevets/go-ethereum/core/types"
 )
+
+func (ec *EpochContext) cVotes() (votes map[common.Address]*big.Int, err error) {
+	votes = map[common.Address]*big.Int{}
+	delegateTrie := ec.Context.DelegateTrie()
+	candidateTrie := ec.Context.CandidateTrie()
+	statedb := ec.statedb
+
+	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	existCandidate := iterCandidate.Next()
+	if !existCandidate {
+		return votes, errors.New("no candidates")
+	}
+	for existCandidate {
+		candidate := iterCandidate.Value
+		candidateAddr := common.BytesToAddress(candidate)
+		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
+		existDelegator := delegateIterator.Next()
+		if !existDelegator {
+			votes[candidateAddr] = new(big.Int)
+			existCandidate = iterCandidate.Next()
+			continue
+		}
+		for existDelegator {
+			delegator := delegateIterator.Value
+			score, ok := votes[candidateAddr]
+			if !ok {
+				score = new(big.Int)
+			}
+			delegatorAddr := common.BytesToAddress(delegator)
+			weight := statedb.GetBalance(delegatorAddr)
+			score.Add(score, weight)
+			votes[candidateAddr] = score
+			existDelegator = delegateIterator.Next()
+		}
+		existCandidate = iterCandidate.Next()
+	}
+	return votes, nil
+}
 
 func TestEpochContextCountVotes(t *testing.T) {
 	voteMap := map[common.Address][]common.Address{
@@ -38,10 +78,12 @@ func TestEpochContextCountVotes(t *testing.T) {
 	assert.Nil(t, err)
 
 	epochContext := &EpochContext{
-		Context:     LCPContext,
-		statedb:     stateDB,
+		Context: LCPContext,
+		statedb: stateDB,
 	}
-	_, err = epochContext.countVotes()
+
+	// _, err = epochContext.countVotes()
+	_, err = epochContext.cVotes()
 	assert.NotNil(t, err)
 
 	for candidate, electors := range voteMap {
@@ -49,17 +91,30 @@ func TestEpochContextCountVotes(t *testing.T) {
 		for _, elector := range electors {
 			stateDB.SetBalance(elector, big.NewInt(balance))
 			assert.Nil(t, LCPContext.Delegate(elector, candidate))
+
+			// print candidates list
+			_, e := epochContext.Context.VoteTrie().TryGet([]byte(elector.Bytes()))
+			if _, ok := e.(*trie.MissingNodeError); !ok {
+				fmt.Println(err)
+			}
 		}
 	}
+
 	result, err := epochContext.countVotes()
 	assert.Nil(t, err)
 	assert.Equal(t, len(voteMap), len(result))
+
 	for candidate, electors := range voteMap {
 		voteCount, ok := result[candidate]
 		assert.True(t, ok)
+
+		fmt.Println("voteCount =", voteCount)
+		fmt.Println("ele =", balance*int64(len(electors)))
+
 		assert.Equal(t, balance*int64(len(electors)), voteCount.Int64())
 	}
 }
+
 //
 //func TestLookupValidator(t *testing.T) {
 //	db, _ := ethdb.NewMemDatabase()
