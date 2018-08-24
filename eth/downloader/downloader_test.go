@@ -456,6 +456,10 @@ func (dl *downloadTester) dropPeer(id string) {
 	dl.downloader.UnregisterPeer(id)
 }
 
+// Config retrieves the blockchain's chain configuration.
+func (dl *downloadTester) Config() *params.ChainConfig { return dl.downloader.blockchain.Config() }
+func (dl *downloadTester) UpdateM1()                   { dl.downloader.blockchain.UpdateM1() }
+
 type downloadTesterPeer struct {
 	dl    *downloadTester
 	id    string

@@ -1010,41 +1010,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
-	if bc.chainConfig != nil && bc.chainConfig.Posv != nil {
-		epoch := bc.chainConfig.Posv.Epoch
-		gap := bc.chainConfig.Posv.Gap
-		length := len(chain)
-		start := int(chain[0].NumberU64() % epoch)
-		end := int(epoch - gap - uint64(start))
-		if (end < 0) {
-			end = end + int(epoch)
-		}
-		start = 0
-		for {
-			if end >= length {
-				end = length - 1
-			}
-			inserts := make([]*types.Block, end-start+1)
-			copy(inserts, chain[start:end+1])
-			if len(inserts) > 0 {
-				n, events, logs, err := bc.insertChain(inserts)
-				bc.PostChainEvents(events, logs)
-				if err != nil {
-					return n, err
-				}
-			}
-			start = end + 1
-			end = end + int(epoch)
-			if (start >= length) {
-				break
-			}
-		}
-		return 0, nil
-	} else {
-		n, events, logs, err := bc.insertChain(chain)
-		bc.PostChainEvents(events, logs)
-		return n, err
-	}
+	n, events, logs, err := bc.insertChain(chain)
+	bc.PostChainEvents(events, logs)
+	return n, err
 }
 
 // insertChain will execute the actual chain insertion and event aggregation. The
@@ -1224,14 +1192,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if bc.chainConfig.Posv != nil {
+		if i == len(chain)-1 && bc.chainConfig.Posv != nil {
 			// epoch block
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == (bc.chainConfig.Posv.Epoch - bc.chainConfig.Posv.Gap) {
-				bc.UpdateM1()
+				M1Ch <- 1
 			}
 		}
 	}

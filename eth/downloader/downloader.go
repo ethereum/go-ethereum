@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -172,6 +172,8 @@ type LightChain interface {
 
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
 type BlockChain interface {
+	Config() *params.ChainConfig
+	UpdateM1()
 	LightChain
 
 	// HasBlock verifies a block's presence in the local chain.
@@ -1322,11 +1324,38 @@ func (d *Downloader) processFullSyncContent() error {
 		if len(results) == 0 {
 			return nil
 		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
+		epoch := d.blockchain.Config().Posv.Epoch
+		gap := d.blockchain.Config().Posv.Gap
+		length := len(results)
+		start := int(results[0].Header.Number.Uint64() % epoch)
+		end := int(epoch - gap - uint64(start))
+		if (end < 0) {
+			end = end + int(epoch)
 		}
-		if err := d.importBlockResults(results); err != nil {
-			return err
+		start = 0
+		for {
+			if end >= length {
+				end = length - 1
+			}
+			inserts := make([]*fetchResult, end-start+1)
+			copy(inserts, results[start:end+1])
+			if len(inserts) > 0 {
+				if d.chainInsertHook != nil {
+					d.chainInsertHook(inserts)
+				}
+				if err := d.importBlockResults(inserts); err != nil {
+					return err
+				}
+				// prepare set of masternodes for the next epoch
+				if (inserts[len(inserts)-1].Header.Number.Uint64() % epoch) == (epoch - gap) {
+					d.blockchain.UpdateM1()
+				}
+			}
+			start = end + 1
+			end = end + int(epoch)
+			if (start >= length) {
+				break
+			}
 		}
 	}
 }
@@ -1355,6 +1384,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return errInvalidChain
 	}
+
 	return nil
 }
 
