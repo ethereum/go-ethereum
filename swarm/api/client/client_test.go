@@ -47,7 +47,7 @@ func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -88,7 +88,7 @@ func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -186,7 +186,7 @@ func newTestDirectory(t *testing.T) string {
 // TestClientUploadDownloadDirectory tests uploading and downloading a
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -252,7 +252,7 @@ func TestClientFileListEncrypted(t *testing.T) {
 }
 
 func testClientFileList(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -310,7 +310,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
@@ -376,7 +376,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	client := NewClient(srv.URL)
 	defer srv.Close()
 
@@ -439,7 +439,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	client := NewClient(srv.URL)
 	defer srv.Close()
 

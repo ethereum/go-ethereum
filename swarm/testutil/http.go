@@ -45,7 +45,7 @@ func (f *fakeTimeProvider) Now() mru.Timestamp {
 	return mru.Timestamp{Time: f.currentTime}
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewAPI(fileStore, nil, rh.Handler, nil)
+	a := api.NewAPI(fileStore, resolver, rh.Handler, nil)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
 		Server:            srv,

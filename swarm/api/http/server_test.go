@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -114,7 +116,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// add the data our multihash aliased manifest will point to
@@ -208,7 +210,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 // Test resource updates using the raw update methods
 func TestBzzResource(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	signer, _ := newTestSigner()
 
 	defer srv.Close()
@@ -467,7 +469,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	addr := [3]storage.Address{}
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	for i, mf := range testmanifest {
@@ -702,7 +704,7 @@ func TestBzzTar(t *testing.T) {
 }
 
 func testBzzTar(encrypted bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 	fileNames := []string{"tmp1.txt", "tmp2.lock", "tmp3.rtf"}
 	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
@@ -827,7 +829,7 @@ func TestBzzRootRedirectEncrypted(t *testing.T) {
 }
 
 func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
@@ -882,7 +884,7 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 }
 
 func TestMethodsNotAllowed(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 	databytes := "bar"
 	for _, c := range []struct {
@@ -941,7 +943,7 @@ func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string
 }
 
 func TestGet(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	for _, testCase := range []struct {
@@ -1025,7 +1027,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestModify(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	swarmClient := swarm.NewClient(srv.URL)
@@ -1126,7 +1128,7 @@ func TestMultiPartUpload(t *testing.T) {
 	// POST /bzz:/ Content-Type: multipart/form-data
 	verbose := false
 	// Setup Swarm
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	url := fmt.Sprintf("%s/bzz:/", srv.URL)
@@ -1152,4 +1154,127 @@ func TestMultiPartUpload(t *testing.T) {
 	if len(body) != 64 {
 		t.Fatalf("expected POST multipart/form-data to return a 64 char manifest but the answer was %d chars long", len(body))
 	}
+}
+
+// TestBzzGetFileWithResolver tests fetching a file using a mocked ENS resolver
+func TestBzzGetFileWithResolver(t *testing.T) {
+	resolver := newTestResolveValidator("")
+	srv := testutil.NewTestSwarmServer(t, serverFunc, resolver)
+	defer srv.Close()
+	fileNames := []string{"dir1/tmp1.txt", "dir2/tmp2.lock", "dir3/tmp3.rtf"}
+	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
+
+	buf := &bytes.Buffer{}
+	tw := tar.NewWriter(buf)
+
+	for i, v := range fileNames {
+		size := len(fileContents[i])
+		hdr := &tar.Header{
+			Name:    v,
+			Mode:    0644,
+			Size:    int64(size),
+			ModTime: time.Now(),
+			Xattrs: map[string]string{
+				"user.swarm.content-type": "text/plain",
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		// copy the file into the tar stream
+		n, err := io.WriteString(tw, fileContents[i])
+		if err != nil {
+			t.Fatal(err)
+		} else if n != size {
+			t.Fatal("size mismatch")
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	//post tar stream
+	url := srv.URL + "/bzz:/"
+
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-tar")
+	client := &http.Client{}
+	serverResponse, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serverResponse.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", serverResponse.Status)
+	}
+	swarmHash, err := ioutil.ReadAll(serverResponse.Body)
+	serverResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// set the resolved hash to be the swarm hash of what we've just uploaded
+	hash := common.HexToHash(string(swarmHash))
+	resolver.hash = &hash
+	for _, v := range []struct {
+		addr               string
+		path               string
+		expectedStatusCode int
+	}{
+		{
+			addr:               string(swarmHash),
+			path:               fileNames[0],
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			addr:               "somebogusensname",
+			path:               fileNames[0],
+			expectedStatusCode: http.StatusOK,
+		},
+	} {
+		req, err := http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s/%s", v.addr, v.path), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverResponse, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer serverResponse.Body.Close()
+		if serverResponse.StatusCode != v.expectedStatusCode {
+			t.Fatalf("expected %d, got %d", v.expectedStatusCode, serverResponse.StatusCode)
+		}
+	}
+}
+
+// testResolver implements the Resolver interface and either returns the given
+// hash if it is set, or returns a "name not found" error
+type testResolveValidator struct {
+	hash *common.Hash
+}
+
+func newTestResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
+	if addr != "" {
+		hash := common.HexToHash(addr)
+		r.hash = &hash
+	}
+	return r
+}
+
+func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
+	if t.hash == nil {
+		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
+	}
+	return *t.hash, nil
+}
+
+func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
+	return
+}
+func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
+	return
 }
