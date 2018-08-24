@@ -24,26 +24,51 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/consensus/ethash"
-	"github.com/pavelkrolevets/go-ethereum/core/rawdb"
 	"github.com/pavelkrolevets/go-ethereum/core/vm"
 	"github.com/pavelkrolevets/go-ethereum/ethdb"
 	"github.com/pavelkrolevets/go-ethereum/params"
+	"github.com/pavelkrolevets/go-ethereum/core/types"
+	"github.com/pavelkrolevets/go-ethereum/core/state"
 )
 
-//func TestDefaultGenesisBlock(t *testing.T) {
-//	block := DefaultGenesisBlock().ToBlock(nil)
-//	if block.Hash() != params.MainnetGenesisHash {
-//		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
-//	}
-//	block = DefaultTestnetGenesisBlock().ToBlock(nil)
-//	if block.Hash() != params.TestnetGenesisHash {
-//		t.Errorf("wrong testnet genesis hash, got %v, want %v", block.Hash(), params.TestnetGenesisHash)
-//	}
-//}
+type bproc struct{}
+
+func (bproc) ValidateBody(*types.Block) error { return nil }
+func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
+	return nil
+}
+func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, *big.Int, error) {
+	return nil, nil, new(big.Int), nil
+}
+
+func (bproc) ValidateDposState(block *types.Block) error { return nil }
+
+func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Block {
+	var chain []*types.Block
+	for i, difficulty := range d {
+		header := &types.Header{
+			Coinbase:    common.Address{seed},
+			Number:      big.NewInt(int64(i + 1)),
+			Difficulty:  big.NewInt(int64(difficulty)),
+			UncleHash:   types.EmptyUncleHash,
+			TxHash:      types.EmptyRootHash,
+			ReceiptHash: types.EmptyRootHash,
+			Time:        big.NewInt(int64(i) + 1),
+		}
+		if i == 0 {
+			header.ParentHash = genesis.Hash()
+		} else {
+			header.ParentHash = chain[i-1].Hash()
+		}
+		block := types.NewBlockWithHeader(header)
+		chain = append(chain, block)
+	}
+	return chain
+}
 
 func TestSetupGenesis(t *testing.T) {
 	var (
-		customghash = common.HexToHash("0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50")
+		customghash = common.HexToHash("0xa4813c30e66d854572733941743e6736f20c0487d32c6b2fe1233946b036f6f5")
 		customg     = Genesis{
 			Config: &params.ChainConfig{HomesteadBlock: big.NewInt(3)},
 			Alloc: GenesisAlloc{
@@ -61,31 +86,6 @@ func TestSetupGenesis(t *testing.T) {
 		wantErr    error
 	}{
 		{
-			name: "genesis without ChainConfig",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, new(Genesis))
-			},
-			wantErr:    errGenesisNoConfig,
-			wantConfig: params.LcpChainConfig,
-		},
-		{
-			name: "no block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return SetupGenesisBlock(db, nil)
-			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.LcpChainConfig,
-		},
-		{
-			name: "mainnet block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				DefaultGenesisBlock().MustCommit(db)
-				return SetupGenesisBlock(db, nil)
-			},
-			wantHash:   params.MainnetGenesisHash,
-			wantConfig: params.LcpChainConfig,
-		},
-		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				customg.MustCommit(db)
@@ -93,16 +93,6 @@ func TestSetupGenesis(t *testing.T) {
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
-		},
-		{
-			name: "custom block in DB, genesis == testnet",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				customg.MustCommit(db)
-				return SetupGenesisBlock(db, DefaultTestnetGenesisBlock())
-			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.TestnetGenesisHash},
-			wantHash:   params.TestnetGenesisHash,
-			wantConfig: params.TestnetChainConfig,
 		},
 		{
 			name: "compatible config in DB",
@@ -119,12 +109,10 @@ func TestSetupGenesis(t *testing.T) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
 				genesis := oldcustomg.MustCommit(db)
-
-				bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{})
+				bc, _ := NewBlockChain(db,nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{})
 				defer bc.Stop()
-
-				blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), db, 4, nil)
-				bc.InsertChain(blocks)
+				bc.SetValidator(bproc{})
+				bc.InsertChain(makeBlockChainWithDiff(genesis, []int{2, 3, 4, 5}, 0))
 				bc.CurrentBlock()
 				// This should return a compatibility error.
 				return SetupGenesisBlock(db, &customg)
@@ -141,7 +129,7 @@ func TestSetupGenesis(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		db := ethdb.NewMemDatabase()
+		db:= ethdb.NewMemDatabase()
 		config, hash, err := test.fn(db)
 		// Check the return values.
 		if !reflect.DeepEqual(err, test.wantErr) {
@@ -155,7 +143,7 @@ func TestSetupGenesis(t *testing.T) {
 			t.Errorf("%s: returned hash %s, want %s", test.name, hash.Hex(), test.wantHash.Hex())
 		} else if err == nil {
 			// Check database content.
-			stored := rawdb.ReadBlock(db, test.wantHash, 0)
+			stored := GetBlock(db, test.wantHash, 0)
 			if stored.Hash() != test.wantHash {
 				t.Errorf("%s: block in DB has hash %s, want %s", test.name, stored.Hash(), test.wantHash)
 			}

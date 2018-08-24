@@ -52,6 +52,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			}
 			delegatorAddr := common.BytesToAddress(delegator)
 			weight := statedb.GetBalance(delegatorAddr)
+			//fmt.Println(weight)
 			score.Add(score, weight)
 			votes[candidateAddr] = score
 			existDelegator = delegateIterator.Next()
@@ -132,11 +133,13 @@ func (ec *EpochContext) kickoutValidator(epoch int64) error {
 
 func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, err error) {
 	validator = common.Address{}
-	offset := now % ec.Context.GetEpochInterval()
+	epoch_interval:=ec.Context.GetEpochInterval()
+	offset := now % epoch_interval
+	block_period:=ec.Context.GetPeriodBlock()
 	if offset%ec.Context.GetPeriodBlock() != 0 {
 		return common.Address{}, ErrInvalidMintBlockTime
 	}
-	offset /= ec.Context.GetPeriodBlock()
+	offset /= block_period
 
 	validators, err := ec.Context.GetValidators()
 	if err != nil {

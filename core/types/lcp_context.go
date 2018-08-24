@@ -333,7 +333,10 @@ func (d *LCPContext) BecomeCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
 	return d.candidateTrie.TryUpdate(candidate, candidate)
 }
-
+func (d *LCPContext) BecomeDelegate(delegateAdr common.Address) error {
+	delegate := delegateAdr.Bytes()
+	return d.delegateTrie.TryUpdate(delegate, delegate)
+}
 func (d *LCPContext) Delegate(delegatorAddr, candidateAddr common.Address) error {
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 

@@ -68,7 +68,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		receipt, _, err := ApplyTransaction(p.config, nil, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -85,7 +85,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
+func ApplyTransaction(config *params.ChainConfig, lcpContext *types.LCPContext, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
 		return nil, 0, err
@@ -99,6 +99,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	_, gas, failed, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
 		return nil, 0, err
+	}
+	if msg.Type() != types.Binary {
+		if err = applyLcpMessage(lcpContext, msg); err != nil {
+			return nil, 0, err
+		}
 	}
 	// Update the state with pending changes
 	var root []byte
@@ -123,4 +128,20 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	return receipt, gas, err
+}
+
+func applyLcpMessage(lcpContext *types.LCPContext, msg types.Message) error {
+	switch msg.Type() {
+	case types.LoginCandidate:
+		lcpContext.BecomeCandidate(msg.From())
+	case types.LogoutCandidate:
+		lcpContext.KickoutCandidate(msg.From())
+	case types.Delegate:
+		lcpContext.Delegate(msg.From(), *(msg.To()))
+	case types.UnDelegate:
+		lcpContext.UnDelegate(msg.From(), *(msg.To()))
+	default:
+		return types.ErrInvalidType
+	}
+	return nil
 }
