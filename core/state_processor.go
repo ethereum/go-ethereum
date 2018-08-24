@@ -71,7 +71,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, block.LCPCtx(), p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		receipt, _, err := ApplyTransaction(p.config, block.LcpCtx(), p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
 			return nil, nil, 0, err
 		}
