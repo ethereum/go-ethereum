@@ -106,8 +106,8 @@ func NewTransaction(txType TxType, nonce uint64, to common.Address, amount *big.
 	return newTransaction(txType, nonce, &to, amount, gasLimit, gasPrice, data)
 }
 
-func NewContractCreation(txType TxType, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(txType, nonce, nil, amount, gasLimit, gasPrice, data)
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+	return newTransaction(Binary, nonce, nil, amount, gasLimit, gasPrice, data)
 }
 
 func newTransaction(txType TxType, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
