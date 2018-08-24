@@ -44,6 +44,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"github.com/ethereum/go-ethereum/consensus/posv"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 )
 
 var (
@@ -695,7 +698,7 @@ func (bc *BlockChain) procFutureBlocks() {
 type WriteStatus byte
 
 const (
-	NonStatTy WriteStatus = iota
+	NonStatTy   WriteStatus = iota
 	CanonStatTy
 	SideStatTy
 )
@@ -1007,9 +1010,41 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
-	n, events, logs, err := bc.insertChain(chain)
-	bc.PostChainEvents(events, logs)
-	return n, err
+	if bc.chainConfig != nil && bc.chainConfig.Posv != nil {
+		epoch := bc.chainConfig.Posv.Epoch
+		gap := bc.chainConfig.Posv.Gap
+		length := len(chain)
+		start := int(chain[0].NumberU64() % epoch)
+		end := int(epoch - gap - uint64(start))
+		if (end < 0) {
+			end = end + int(epoch)
+		}
+		start = 0
+		for {
+			if end >= length {
+				end = length - 1
+			}
+			inserts := make([]*types.Block, end-start+1)
+			copy(inserts, chain[start:end+1])
+			if len(inserts) > 0 {
+				n, events, logs, err := bc.insertChain(inserts)
+				bc.PostChainEvents(events, logs)
+				if err != nil {
+					return n, err
+				}
+			}
+			start = end + 1
+			end = end + int(epoch)
+			if (start >= length) {
+				break
+			}
+		}
+		return 0, nil
+	} else {
+		n, events, logs, err := bc.insertChain(chain)
+		bc.PostChainEvents(events, logs)
+		return n, err
+	}
 }
 
 // insertChain will execute the actual chain insertion and event aggregation. The
@@ -1189,14 +1224,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if i == len(chain)-1 && bc.chainConfig.Posv != nil {
+		if bc.chainConfig.Posv != nil {
 			// epoch block
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == (bc.chainConfig.Posv.Epoch - bc.chainConfig.Posv.Gap) {
-				M1Ch <- 1
+				bc.UpdateM1()
 			}
 		}
 	}
@@ -1589,4 +1624,58 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 	}
 
 	return bc.Client, nil
+}
+
+func (bc *BlockChain) UpdateM1() {
+	if bc.Config().Posv == nil {
+		return
+	}
+	engine := bc.Engine().(*posv.Posv)
+	log.Info("It's time to update new set of masternodes for the next epoch...")
+	// get masternodes information from smart contract
+	client, err := ethclient.Dial(bc.IPCEndpoint)
+	if err != nil {
+		log.Crit("Fail to connect IPC: %v", err)
+	}
+	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	validator, err := contractValidator.NewTomoValidator(addr, client)
+	if err != nil {
+		log.Crit("Fail to get validator smc: %v", err)
+	}
+	opts := new(bind.CallOpts)
+	candidates, err := validator.GetCandidates(opts)
+	if err != nil {
+		log.Crit("Can't get list of masternode candidates: %v", err)
+	}
+
+	var ms []posv.Masternode
+	for _, candidate := range candidates {
+		v, err := validator.GetCandidateCap(opts, candidate)
+		if err != nil {
+			log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
+		}
+		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
+		if candidate.String() != "0x0000000000000000000000000000000000000000" {
+			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.String()})
+		}
+	}
+	//// order by cap
+	//sort.Slice(ms, func(i, j int) bool {
+	//	return ms[i].Stake > ms[j].Stake
+	//})
+	log.Info("Ordered list of masternode candidates")
+	for _, m := range ms {
+		fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
+	}
+	if len(ms) == 0 {
+		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+	} else {
+		// update masternodes
+		log.Info("Updating new set of masternodes")
+		err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
+		if err != nil {
+			log.Crit("Can't update masternodes: %v", err)
+		}
+		log.Info("Masternodes are ready for the next epoch")
+	}
 }

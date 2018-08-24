@@ -434,16 +434,6 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 	return true, nil
 }
 
-// Store new set of masternodes into local db
-func (s *Ethereum) UpdateMasternodes(ms []posv.Masternode) error {
-	// get snapshot from local db
-	if s.chainConfig.Posv == nil {
-		return errors.New("not posv")
-	}
-	c := s.engine.(*posv.Posv)
-	return c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
-}
-
 func (s *Ethereum) StartStaking(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {
