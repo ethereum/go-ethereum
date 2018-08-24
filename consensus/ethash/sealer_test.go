@@ -66,7 +66,7 @@ func TestRemoteNotify(t *testing.T) {
 	}
 }
 
-// Tests that pushing work packages fast to the miner doesn't cause any daa race
+// Tests that pushing work packages fast to the miner doesn't cause any data race
 // issues in the notifications.
 func TestRemoteMultiNotify(t *testing.T) {
 	// Start a simple webserver to capture notifications
@@ -111,5 +111,91 @@ func TestRemoteMultiNotify(t *testing.T) {
 		case <-time.After(250 * time.Millisecond):
 			t.Fatalf("notification %d timed out", i)
 		}
+	}
+}
+
+// Tests whether stale solutions are correctly processed.
+func TestStaleSubmission(t *testing.T) {
+	ethash := NewTester(nil)
+	defer ethash.Close()
+	ethash.disableRemoteVerify = true
+	api := &API{ethash}
+
+	fakeNonce, fakeDigest := types.BlockNonce{0x01, 0x02, 0x03}, common.HexToHash("deadbeef")
+
+	testcases := []struct {
+		headers     []*types.Header
+		resCh       chan *types.Block
+		submitIndex int
+		submitRes   bool
+	}{
+		// Case1: submit solution for the latest mining package
+		{
+			[]*types.Header{
+				{ParentHash: common.BytesToHash([]byte{0xa}), Number: big.NewInt(1), Difficulty: big.NewInt(100)},
+			},
+			ethash.resultCh,
+			0,
+			true,
+		},
+		// Case2: submit solution for the previous package but have same parent.
+		{
+			[]*types.Header{
+				{ParentHash: common.BytesToHash([]byte{0xb}), Number: big.NewInt(2), Difficulty: big.NewInt(100)},
+				{ParentHash: common.BytesToHash([]byte{0xb}), Number: big.NewInt(2), Difficulty: big.NewInt(101)},
+			},
+			ethash.resultCh,
+			0,
+			true,
+		},
+		// Case3: submit stale but acceptable solution
+		{
+			[]*types.Header{
+				{ParentHash: common.BytesToHash([]byte{0xc}), Number: big.NewInt(3), Difficulty: big.NewInt(100)},
+				{ParentHash: common.BytesToHash([]byte{0xd}), Number: big.NewInt(9), Difficulty: big.NewInt(100)},
+			},
+			ethash.staleResultCh,
+			0,
+			true,
+		},
+		// Case4: submit very old solution
+		{
+			[]*types.Header{
+				{ParentHash: common.BytesToHash([]byte{0xe}), Number: big.NewInt(10), Difficulty: big.NewInt(100)},
+				{ParentHash: common.BytesToHash([]byte{0xf}), Number: big.NewInt(17), Difficulty: big.NewInt(100)},
+			},
+			nil,
+			0,
+			false,
+		},
+	}
+
+	for id, c := range testcases {
+		for _, h := range c.headers {
+			ethash.Seal(nil, types.NewBlockWithHeader(h), nil)
+		}
+		stop := make(chan struct{})
+		go func(stop chan struct{}) {
+			select {
+			case res := <-c.resCh:
+				if res.Header().Nonce != fakeNonce {
+					t.Errorf("case %d block nonce mismatch, want %s, get %s", id+1, fakeNonce, res.Header().Nonce)
+				}
+				if res.Header().MixDigest != fakeDigest {
+					t.Errorf("case %d block digest mismatch, want %s, get %s", id+1, fakeDigest, res.Header().MixDigest)
+				}
+				if res.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
+					t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
+				}
+			case <-time.NewTimer(time.Second).C:
+				t.Errorf("case %d fetch ethash result timeout", id+1)
+			case <-stop:
+				return
+			}
+		}(stop)
+		if res := api.SubmitWork(fakeNonce, ethash.SealHash(c.headers[c.submitIndex]), fakeDigest); res != c.submitRes {
+			t.Errorf("case %d submit result mismatch, want %t, get %t", id+1, c.submitRes, res)
+		}
+		close(stop)
 	}
 }

@@ -35,6 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+const (
+	// staleThreshold is the maximum distance of the acceptable stale but valid ethash solution.
+	staleThreshold = 7
+)
+
 var (
 	errNoMiningWork      = errors.New("no mining work available yet")
 	errInvalidSealResult = errors.New("invalid or stale proof-of-work solution")
@@ -226,11 +231,15 @@ func (ethash *Ethash) remote(notify []string) {
 	// submitWork verifies the submitted pow solution, returning
 	// whether the solution was accepted or not (not can be both a bad pow as well as
 	// any other error, like no pending work or stale mining result).
-	submitWork := func(nonce types.BlockNonce, mixDigest common.Hash, hash common.Hash) bool {
+	submitWork := func(nonce types.BlockNonce, mixDigest common.Hash, sealhash common.Hash) bool {
 		// Make sure the work submitted is present
-		block := works[hash]
+		block := works[sealhash]
 		if block == nil {
-			log.Info("Work submitted but none pending", "hash", hash)
+			log.Info("Work submitted but none pending", "sealhash", sealhash, "current block number", currentBlock.NumberU64())
+			return false
+		}
+		if currentBlock == nil {
+			log.Error("have pending packages but no pending block, please file an issue", "sealhash", sealhash)
 			return false
 		}
 		// Verify the correctness of submitted result.
@@ -239,26 +248,46 @@ func (ethash *Ethash) remote(notify []string) {
 		header.MixDigest = mixDigest
 
 		start := time.Now()
-		if err := ethash.verifySeal(nil, header, true); err != nil {
-			log.Warn("Invalid proof-of-work submitted", "hash", hash, "elapsed", time.Since(start), "err", err)
-			return false
+		if !ethash.disableRemoteVerify {
+			if err := ethash.verifySeal(nil, header, true); err != nil {
+				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", time.Since(start), "err", err)
+				return false
+			}
 		}
 		// Make sure the result channel is created.
 		if ethash.resultCh == nil {
 			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
 			return false
 		}
-		log.Trace("Verified correct proof-of-work", "hash", hash, "elapsed", time.Since(start))
+		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", time.Since(start))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
-		select {
-		case ethash.resultCh <- block.WithSeal(header):
-			delete(works, hash)
+		submitBlock := block.WithSeal(header)
+
+		// If submitted block is the mining block of latest round, try to push back through result channel.
+		if submitBlock.ParentHash() == currentBlock.ParentHash() {
+			select {
+			case ethash.resultCh <- submitBlock:
+				log.Info("Work submitted is fresh", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
+				return true
+			default:
+				// Worker has already received a result for latest mining round, submit it as
+				// a stale block.
+				ethash.staleResultCh <- submitBlock
+				log.Info("Work submitted is stale but acceptable", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
+				return true
+			}
+		} else if submitBlock.NumberU64()+staleThreshold > currentBlock.NumberU64() {
+			// The submitted block is stale but acceptable, it can be converted to a uncle finally.
+			ethash.staleResultCh <- submitBlock
+			log.Info("Work submitted is stale but acceptable", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
 			return true
-		default:
-			log.Info("Work submitted is stale", "hash", hash)
+		} else {
+			// The submitted block is too old to accept, drop it.
+			log.Info("The submitted block is too old", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock)
 			return false
 		}
+		return false
 	}
 
 	ticker := time.NewTicker(5 * time.Second)
@@ -267,10 +296,6 @@ func (ethash *Ethash) remote(notify []string) {
 	for {
 		select {
 		case block := <-ethash.workCh:
-			if currentBlock != nil && block.ParentHash() != currentBlock.ParentHash() {
-				// Start new round mining, throw out all previous work.
-				works = make(map[common.Hash]*types.Block)
-			}
 			// Update current work with new received block.
 			// Note same work can be past twice, happens when changing CPU threads.
 			makeWork(block)
@@ -315,6 +340,14 @@ func (ethash *Ethash) remote(notify []string) {
 					delete(rates, id)
 				}
 			}
+			// Clear stale pending blocks
+			if currentBlock != nil {
+				for hash, block := range works {
+					if block.NumberU64()+staleThreshold <= currentBlock.NumberU64() {
+						delete(works, hash)
+					}
+				}
+			}
 
 		case errc := <-ethash.exitCh:
 			// Exit remote loop if ethash is closed and return relevant error.
@@ -323,4 +356,9 @@ func (ethash *Ethash) remote(notify []string) {
 			return
 		}
 	}
+}
+
+// StaleBlocks returns a channel that returns all stale but acceptable blocks.
+func (ethash *Ethash) StaleBlocks() <-chan *types.Block {
+	return ethash.staleResultCh
 }

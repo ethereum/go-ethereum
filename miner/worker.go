@@ -98,6 +98,7 @@ type task struct {
 	receipts  []*types.Receipt
 	state     *state.StateDB
 	block     *types.Block
+	logs      []*types.Log
 	createdAt time.Time
 }
 
@@ -209,6 +210,10 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 	go worker.resultLoop()
 	go worker.taskLoop()
 
+	// Start the stale result loop if we are running the ethash engine.
+	if pow, ok := worker.engine.(consensus.PoW); ok {
+		go worker.staleResultLoop(pow)
+	}
 	// Submit first work to initialize pending state.
 	worker.startCh <- struct{}{}
 
@@ -480,7 +485,6 @@ func (w *worker) seal(t *task, stop <-chan struct{}) {
 	// A previous sealing action will be canceled by subsequent actions,
 	// however, remote miner may submit a result based on the cancelled task.
 	// So we should only submit the pending state corresponding to the seal result.
-	// TODO(rjl493456442) Replace the seal-wait logic structure
 	w.pendingMu.Lock()
 	w.pendingTasks[w.engine.SealHash(t.block.Header())] = t
 	w.pendingMu.Unlock()
@@ -488,18 +492,34 @@ func (w *worker) seal(t *task, stop <-chan struct{}) {
 	if block, err := w.engine.Seal(w.chain, t.block, stop); block != nil {
 		sealhash := w.engine.SealHash(block.Header())
 		w.pendingMu.RLock()
-		task, exist := w.pendingTasks[sealhash]
+		t, exist := w.pendingTasks[sealhash]
 		w.pendingMu.RUnlock()
 		if !exist {
 			log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash())
 			return
 		}
-		// Assemble sealing result
-		task.block = block
+		// Different block could share same sealhash, deep copy here to prevent write-write conflict.
+		var (
+			receipts = make([]*types.Receipt, len(t.receipts))
+			logs     []*types.Log
+		)
+		for i, receipt := range t.receipts {
+			receipts[i] = new(types.Receipt)
+			*receipts[i] = *receipt
+			// Update the block hash in all logs since it is now available and not when the
+			// receipt/log of individual transactions were created.
+			for _, log := range receipt.Logs {
+				log.BlockHash = block.Hash()
+				logs = append(logs, log)
+			}
+		}
+		// The reason we don't deep copy state here is: state commit is single-threaded and
+		// the same state can avoid repeated data writes and trie operations.
+		cpy := &task{receipts: receipts, state: t.state, block: block, logs: logs, createdAt: t.createdAt}
 		log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash(),
-			"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+			"elapsed", common.PrettyDuration(time.Since(cpy.createdAt)))
 		select {
-		case w.resultCh <- task:
+		case w.resultCh <- cpy:
 		case <-w.exitCh:
 		}
 	} else if err != nil {
@@ -544,6 +564,53 @@ func (w *worker) taskLoop() {
 	}
 }
 
+// staleResultLoop is the loop to fetch all stale but acceptable PoW solutions
+// and submit them to the blockchain.
+// Stale block is a unique product of the pow algorithm. Since the mining pool
+// wll accept solutions for the past 7 block heights as the uncle block or canonical
+// block, so that ethash engine will forward the stale solutions to the worker.
+func (w *worker) staleResultLoop(poW consensus.PoW) {
+	for {
+		select {
+		case block := <-poW.StaleBlocks():
+			sealhash := w.engine.SealHash(block.Header())
+			w.pendingMu.Lock()
+			t, exist := w.pendingTasks[sealhash]
+			w.pendingMu.Unlock()
+			if !exist {
+				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash())
+				continue
+			}
+			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
+			var (
+				receipts = make([]*types.Receipt, len(t.receipts))
+				logs     []*types.Log
+			)
+			for i, receipt := range t.receipts {
+				receipts[i] = new(types.Receipt)
+				*receipts[i] = *receipt
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				for _, log := range receipt.Logs {
+					log.BlockHash = block.Hash()
+					logs = append(logs, log)
+				}
+			}
+			// The reason we don't deep copy state here is: state commit is single-threaded and
+			// the same state can avoid repeated data writes and trie operations.
+			cpy := &task{receipts: receipts, state: t.state, block: block, logs: logs, createdAt: t.createdAt}
+			log.Info("Successfully sealed stale block", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash(),
+				"elapsed", common.PrettyDuration(time.Since(cpy.createdAt)))
+			select {
+			case w.resultCh <- cpy:
+			case <-w.exitCh:
+			}
+		case <-w.exitCh:
+			return
+		}
+	}
+}
+
 // resultLoop is a standalone goroutine to handle sealing result submitting
 // and flush relative data to the database.
 func (w *worker) resultLoop() {
@@ -559,17 +626,10 @@ func (w *worker) resultLoop() {
 			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
 			}
-			// Update the block hash in all logs since it is now available and not when the
-			// receipt/log of individual transactions were created.
-			for _, r := range result.receipts {
-				for _, l := range r.Logs {
-					l.BlockHash = block.Hash()
-				}
-			}
-			for _, log := range result.state.Logs() {
-				log.BlockHash = block.Hash()
-			}
 			// Commit block and state to database.
+			// Note same state changes could be committed many times because two different valid blocks
+			// sharing same state.
+			// Except for the first commit, the remaining commits will not write more state data to the database.
 			stat, err := w.chain.WriteBlockWithState(block, result.receipts, result.state)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
@@ -577,18 +637,15 @@ func (w *worker) resultLoop() {
 			}
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
-			var (
-				events []interface{}
-				logs   = result.state.Logs()
-			)
+			var events []interface{}
 			switch stat {
 			case core.CanonStatTy:
-				events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+				events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: result.logs})
 				events = append(events, core.ChainHeadEvent{Block: block})
 			case core.SideStatTy:
 				events = append(events, core.ChainSideEvent{Block: block})
 			}
-			w.chain.PostChainEvents(events, logs)
+			w.chain.PostChainEvents(events, result.logs)
 
 			// Insert the block into the set of pending ones to resultLoop for confirmations
 			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
