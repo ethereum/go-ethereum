@@ -1329,7 +1329,7 @@ func (d *Downloader) processFullSyncContent() error {
 		length := len(results)
 		start := int(results[0].Header.Number.Uint64() % epoch)
 		end := int(epoch - gap - uint64(start))
-		if (end < 0) {
+		if end < 0 {
 			end = end + int(epoch)
 		}
 		start = 0
@@ -1353,7 +1353,7 @@ func (d *Downloader) processFullSyncContent() error {
 			}
 			start = end + 1
 			end = end + int(epoch)
-			if (start >= length) {
+			if start >= length {
 				break
 			}
 		}
