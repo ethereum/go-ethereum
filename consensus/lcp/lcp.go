@@ -356,7 +356,7 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 func (d *LCP) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	uncles []*types.Header, receipts []*types.Receipt, lcpContext *types.LCPContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	AccumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -364,7 +364,7 @@ func (d *LCP) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
 		statedb:   state,
-		Context:   LCPContext,
+		Context:   lcpContext,
 		TimeStamp: header.Time.Int64(),
 	}
 	if timeOfFirstBlock == 0 {
@@ -379,8 +379,8 @@ func (d *LCP) Finalize(chain consensus.ChainReader, header *types.Header, state 
 	}
 
 	//update mint count trie
-	updateMintCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, LCPContext)
-	header.LCPContext = LCPContext.ToProto()
+	updateMintCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, lcpContext)
+	header.LCPContext = lcpContext.ToProto()
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
 
@@ -497,8 +497,8 @@ func NextSlot(now int64) int64 {
 }
 
 // update counts in MintCntTrie for the miner of newBlock
-func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.LCPContext) {
-	currentMintCntTrie := dposContext.MintCntTrie()
+func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, lcpContext *types.LCPContext) {
+	currentMintCntTrie := lcpContext.MintCntTrie()
 	currentEpoch := parentBlockTime / epochInterval
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
@@ -524,5 +524,5 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	newEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
-	dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+	lcpContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }
