@@ -191,7 +191,7 @@ func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	addr, err := fs.api.Resolve(context.TODO(), uri)
+	addr, err := fs.api.Resolve(context.TODO(), uri.Addr)
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	quitC := make(chan bool)
-	trie, err := loadManifest(context.TODO(), fs.api.fileStore, addr, quitC)
+	trie, err := loadManifest(context.TODO(), fs.api.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err

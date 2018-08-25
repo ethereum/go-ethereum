@@ -20,7 +20,6 @@ package les
 import (
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -63,10 +62,6 @@ const (
 
 	disableClientRemovePeer = false
 )
-
-// errIncompatibleConfig is returned if the requested protocols and configs are
-// not compatible (low protocol version restrictions and high requirements).
-var errIncompatibleConfig = errors.New("incompatible configuration")
 
 func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
@@ -104,6 +99,7 @@ type ProtocolManager struct {
 	odr         *LesOdr
 	server      *LesServer
 	serverPool  *serverPool
+	clientPool  *freeClientPool
 	lesTopic    discv5.Topic
 	reqDist     *requestDistributor
 	retriever   *retrieveManager
@@ -112,8 +108,6 @@ type ProtocolManager struct {
 	fetcher    *lightFetcher
 	peers      *peerSet
 	maxPeers   int
-
-	SubProtocols []p2p.Protocol
 
 	eventMux *event.TypeMux
 
@@ -129,7 +123,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protocolVersions []uint, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, serverPool *serverPool, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		lightSync:   lightSync,
@@ -151,54 +145,6 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 	if odr != nil {
 		manager.retriever = odr.retriever
 		manager.reqDist = odr.retriever.dist
-	}
-
-	// Initiate a sub-protocol for every implemented version we can handle
-	manager.SubProtocols = make([]p2p.Protocol, 0, len(protocolVersions))
-	for _, version := range protocolVersions {
-		// Compatible, initialize the sub-protocol
-		version := version // Closure for the run
-		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
-			Name:    "les",
-			Version: version,
-			Length:  ProtocolLengths[version],
-			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				var entry *poolEntry
-				peer := manager.newPeer(int(version), networkId, p, rw)
-				if manager.serverPool != nil {
-					addr := p.RemoteAddr().(*net.TCPAddr)
-					entry = manager.serverPool.connect(peer, addr.IP, uint16(addr.Port))
-				}
-				peer.poolEntry = entry
-				select {
-				case manager.newPeerCh <- peer:
-					manager.wg.Add(1)
-					defer manager.wg.Done()
-					err := manager.handle(peer)
-					if entry != nil {
-						manager.serverPool.disconnect(entry)
-					}
-					return err
-				case <-manager.quitSync:
-					if entry != nil {
-						manager.serverPool.disconnect(entry)
-					}
-					return p2p.DiscQuitting
-				}
-			},
-			NodeInfo: func() interface{} {
-				return manager.NodeInfo()
-			},
-			PeerInfo: func(id discover.NodeID) interface{} {
-				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
-					return p.Info()
-				}
-				return nil
-			},
-		})
-	}
-	if len(manager.SubProtocols) == 0 {
-		return nil, errIncompatibleConfig
 	}
 
 	removePeer := manager.removePeer
@@ -226,6 +172,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
+		pm.clientPool = newFreeClientPool(pm.chainDb, maxPeers, 10000, mclock.System{})
 		go func() {
 			for range pm.newPeerCh {
 			}
@@ -243,6 +190,9 @@ func (pm *ProtocolManager) Stop() {
 	pm.noMorePeers <- struct{}{}
 
 	close(pm.quitSync) // quits syncer, fetcher
+	if pm.clientPool != nil {
+		pm.clientPool.stop()
+	}
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
@@ -256,6 +206,32 @@ func (pm *ProtocolManager) Stop() {
 	log.Info("Light Ethereum protocol stopped")
 }
 
+// runPeer is the p2p protocol run function for the given version.
+func (pm *ProtocolManager) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	var entry *poolEntry
+	peer := pm.newPeer(int(version), pm.networkId, p, rw)
+	if pm.serverPool != nil {
+		addr := p.RemoteAddr().(*net.TCPAddr)
+		entry = pm.serverPool.connect(peer, addr.IP, uint16(addr.Port))
+	}
+	peer.poolEntry = entry
+	select {
+	case pm.newPeerCh <- peer:
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		err := pm.handle(peer)
+		if entry != nil {
+			pm.serverPool.disconnect(entry)
+		}
+		return err
+	case <-pm.quitSync:
+		if entry != nil {
+			pm.serverPool.disconnect(entry)
+		}
+		return p2p.DiscQuitting
+	}
+}
+
 func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return newPeer(pv, nv, p, newMeteredMsgWriter(rw))
 }
@@ -264,7 +240,8 @@ func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgRea
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
 	// Ignore maxPeers if this is a trusted peer
-	if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
+	// In server mode we try to check into the client pool after handshake
+	if pm.lightSync && pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
 		return p2p.DiscTooManyPeers
 	}
 
@@ -282,6 +259,19 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
+
+	if !pm.lightSync && !p.Peer.Info().Network.Trusted {
+		addr, ok := p.RemoteAddr().(*net.TCPAddr)
+		// test peer address is not a tcp address, don't use client pool if can not typecast
+		if ok {
+			id := addr.IP.String()
+			if !pm.clientPool.connect(id, func() { go pm.removePeer(p.id) }) {
+				return p2p.DiscTooManyPeers
+			}
+			defer pm.clientPool.disconnect(id)
+		}
+	}
+
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
@@ -1183,30 +1173,6 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 	return stats
 }
 
-// NodeInfo represents a short summary of the Ethereum sub-protocol metadata
-// known about the host peer.
-type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // SHA3 hash of the host's best owned block
-}
-
-// NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
-	head := self.blockchain.CurrentHeader()
-	hash := head.Hash()
-
-	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
-		Head:       hash,
-	}
-}
-
 // downloaderPeerNotify implements peerSetNotify
 type downloaderPeerNotify ProtocolManager
 
@@ -1238,7 +1204,7 @@ func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, s
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)
 	if !ok {
-		return ErrNoPeers
+		return light.ErrNoPeers
 	}
 	return nil
 }
@@ -1262,7 +1228,7 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)
 	if !ok {
-		return ErrNoPeers
+		return light.ErrNoPeers
 	}
 	return nil
 }

@@ -62,14 +62,14 @@ func (w *wizard) manageServers() {
 	}
 }
 
-// makeServer reads a single line from stdin and interprets it as a hostname to
-// connect to. It tries to establish a new SSH session and also executing some
-// baseline validations.
+// makeServer reads a single line from stdin and interprets it as
+// username:identity@hostname to connect to. It tries to establish a
+// new SSH session and also executing some baseline validations.
 //
 // If connection succeeds, the server is added to the wizards configs!
 func (w *wizard) makeServer() string {
 	fmt.Println()
-	fmt.Println("Please enter remote server's address:")
+	fmt.Println("What is the remote server's address ([username[:identity]@]hostname[:port])?")
 
 	// Read and dial the server to ensure docker is present
 	input := w.readString()

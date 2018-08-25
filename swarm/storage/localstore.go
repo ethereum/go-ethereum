@@ -98,20 +98,16 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk *Chunk) {
-	if l := len(chunk.SData); l < 9 {
-		log.Debug("incomplete chunk data", "addr", chunk.Addr, "length", l)
-		chunk.SetErrored(ErrChunkInvalid)
-		chunk.markAsStored()
-		return
-	}
 	valid := true
+	// ls.Validators contains a list of one validator per chunk type.
+	// if one validator succeeds, then the chunk is valid
 	for _, v := range ls.Validators {
 		if valid = v.Validate(chunk.Addr, chunk.SData); valid {
 			break
 		}
 	}
 	if !valid {
-		log.Trace("invalid content address", "addr", chunk.Addr)
+		log.Trace("invalid chunk", "addr", chunk.Addr, "len", len(chunk.SData))
 		chunk.SetErrored(ErrChunkInvalid)
 		chunk.markAsStored()
 		return

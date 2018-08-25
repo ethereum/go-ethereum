@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -57,7 +58,7 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 	refSize := int64(hashSize)
 	if toEncrypt {
 		refSize += encryption.KeyLength
-		chunkEncryption = newChunkEncryption(DefaultChunkSize, refSize)
+		chunkEncryption = newChunkEncryption(chunk.DefaultSize, refSize)
 	}
 
 	return &hasherStore{
@@ -190,9 +191,9 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 
 	// removing extra bytes which were just added for padding
 	length := ChunkData(decryptedSpan).Size()
-	for length > DefaultChunkSize {
-		length = length + (DefaultChunkSize - 1)
-		length = length / DefaultChunkSize
+	for length > chunk.DefaultSize {
+		length = length + (chunk.DefaultSize - 1)
+		length = length / chunk.DefaultSize
 		length *= h.refSize
 	}
 

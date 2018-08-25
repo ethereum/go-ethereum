@@ -29,6 +29,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -45,11 +46,11 @@ import (
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
 
 var (
-	// maxUint256 is a big integer representing 2^256-1
-	maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	// two256 is a big integer representing 2^256
+	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal})
+	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal}, nil)
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -281,6 +282,7 @@ type dataset struct {
 	mmap    mmap.MMap // Memory map itself to unmap before releasing
 	dataset []uint32  // The actual cache data content
 	once    sync.Once // Ensures the cache is generated only once
+	done    uint32    // Atomic flag to determine generation status
 }
 
 // newDataset creates a new ethash mining dataset and returns it as a plain Go
@@ -292,6 +294,9 @@ func newDataset(epoch uint64) interface{} {
 // generate ensures that the dataset content is generated before use.
 func (d *dataset) generate(dir string, limit int, test bool) {
 	d.once.Do(func() {
+		// Mark the dataset generated after we're done. This is needed for remote
+		defer atomic.StoreUint32(&d.done, 1)
+
 		csize := cacheSize(d.epoch*epochLength + 1)
 		dsize := datasetSize(d.epoch*epochLength + 1)
 		seed := seedHash(d.epoch*epochLength + 1)
@@ -306,6 +311,8 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 
 			d.dataset = make([]uint32, dsize/4)
 			generateDataset(d.dataset, d.epoch, cache)
+
+			return
 		}
 		// Disk storage is needed, this will get fancy
 		var endian string
@@ -346,6 +353,13 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 			os.Remove(path)
 		}
 	})
+}
+
+// generated returns whether this particular dataset finished generating already
+// or not (it may not have been started at all). This is useful for remote miners
+// to default to verification caches instead of blocking on DAG generations.
+func (d *dataset) generated() bool {
+	return atomic.LoadUint32(&d.done) == 1
 }
 
 // finalizer closes any file handlers and memory maps open.
@@ -447,8 +461,10 @@ type Ethash struct {
 	exitCh    chan chan error // Notification channel to exiting backend threads
 }
 
-// New creates a full sized ethash PoW scheme and starts a background thread for remote mining.
-func New(config Config) *Ethash {
+// New creates a full sized ethash PoW scheme and starts a background thread for
+// remote mining, also optionally notifying a batch of remote services of new work
+// packages.
+func New(config Config, notify []string) *Ethash {
 	if config.CachesInMem <= 0 {
 		log.Warn("One ethash cache must always be in memory", "requested", config.CachesInMem)
 		config.CachesInMem = 1
@@ -473,13 +489,13 @@ func New(config Config) *Ethash {
 		submitRateCh: make(chan *hashrate),
 		exitCh:       make(chan chan error),
 	}
-	go ethash.remote()
+	go ethash.remote(notify)
 	return ethash
 }
 
 // NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
-func NewTester() *Ethash {
+func NewTester(notify []string) *Ethash {
 	ethash := &Ethash{
 		config:       Config{PowMode: ModeTest},
 		caches:       newlru("cache", 1, newCache),
@@ -494,7 +510,7 @@ func NewTester() *Ethash {
 		submitRateCh: make(chan *hashrate),
 		exitCh:       make(chan chan error),
 	}
-	go ethash.remote()
+	go ethash.remote(notify)
 	return ethash
 }
 
@@ -587,20 +603,34 @@ func (ethash *Ethash) cache(block uint64) *cache {
 // dataset tries to retrieve a mining dataset for the specified block number
 // by first checking against a list of in-memory datasets, then against DAGs
 // stored on disk, and finally generating one if none can be found.
-func (ethash *Ethash) dataset(block uint64) *dataset {
+//
+// If async is specified, not only the future but the current DAG is also
+// generates on a background thread.
+func (ethash *Ethash) dataset(block uint64, async bool) *dataset {
+	// Retrieve the requested ethash dataset
 	epoch := block / epochLength
 	currentI, futureI := ethash.datasets.get(epoch)
 	current := currentI.(*dataset)
 
-	// Wait for generation finish.
-	current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+	// If async is specified, generate everything in a background thread
+	if async && !current.generated() {
+		go func() {
+			current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
 
-	// If we need a new future dataset, now's a good time to regenerate it.
-	if futureI != nil {
-		future := futureI.(*dataset)
-		go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+			if futureI != nil {
+				future := futureI.(*dataset)
+				future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+			}
+		}()
+	} else {
+		// Either blocking generation was requested, or already done
+		current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+
+		if futureI != nil {
+			future := futureI.(*dataset)
+			go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
+		}
 	}
-
 	return current
 }
 

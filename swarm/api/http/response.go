@@ -79,20 +79,21 @@ func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg s
 }
 
 func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()), "code", code)
 	RespondTemplate(w, r, "error", msg, code)
 }
 
 func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
+
 	w.WriteHeader(params.Code)
 
 	if params.Code >= 400 {
-		w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
+		w.Header().Del("Cache-Control")
 		w.Header().Del("ETag")
 	}
 
 	acceptHeader := r.Header.Get("Accept")
-	// this cannot be in a switch form since an Accept header can be in the form of "Accept: */*, text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
+	// this cannot be in a switch since an Accept header can have multiple values: "Accept: */*, text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
 	if strings.Contains(acceptHeader, "application/json") {
 		if err := respondJSON(w, r, params); err != nil {
 			RespondError(w, r, "Internal server error", http.StatusInternalServerError)

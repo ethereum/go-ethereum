@@ -102,10 +102,10 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
-	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
+	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
-		log.Info("detected an existing store. trying to load peers")
+		log.Info("Detected an existing store. trying to load peers")
 		if err := h.loadPeers(); err != nil {
 			log.Error(fmt.Sprintf("%08x hive encoutered an error trying to load peers", h.BaseAddr()[:4]))
 			return err

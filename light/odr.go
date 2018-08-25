@@ -20,6 +20,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +33,9 @@ import (
 // NoOdr is the default context passed to an ODR capable function when the ODR
 // service is not required.
 var NoOdr = context.Background()
+
+// ErrNoPeers is returned if no peers capable of serving a queued request are available
+var ErrNoPeers = errors.New("no suitable peers available")
 
 // OdrBackend is an interface to a backend service that handles ODR retrievals type
 type OdrBackend interface {

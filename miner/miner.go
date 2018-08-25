@@ -20,15 +20,14 @@ package miner
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -36,10 +35,8 @@ import (
 
 // Backend wraps all methods required for mining.
 type Backend interface {
-	AccountManager() *accounts.Manager
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
-	ChainDb() ethdb.Database
 }
 
 // Miner creates blocks and searches for proof-of-work values.
@@ -49,20 +46,21 @@ type Miner struct {
 	coinbase common.Address
 	eth      Backend
 	engine   consensus.Engine
+	exitCh   chan struct{}
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, recommit time.Duration) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, eth, mux),
+		exitCh:   make(chan struct{}),
+		worker:   newWorker(config, engine, eth, mux, recommit),
 		canStart: 1,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
 	go miner.update()
 
 	return miner
@@ -74,28 +72,35 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
-out:
-	for ev := range events.Chan() {
-		switch ev.Data.(type) {
-		case downloader.StartEvent:
-			atomic.StoreInt32(&self.canStart, 0)
-			if self.Mining() {
-				self.Stop()
-				atomic.StoreInt32(&self.shouldStart, 1)
-				log.Info("Mining aborted due to sync")
-			}
-		case downloader.DoneEvent, downloader.FailedEvent:
-			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
+	defer events.Unsubscribe()
 
-			atomic.StoreInt32(&self.canStart, 1)
-			atomic.StoreInt32(&self.shouldStart, 0)
-			if shouldStart {
-				self.Start(self.coinbase)
+	for {
+		select {
+		case ev := <-events.Chan():
+			if ev == nil {
+				return
 			}
-			// unsubscribe. we're only interested in this event once
-			events.Unsubscribe()
-			// stop immediately and ignore all further pending events
-			break out
+			switch ev.Data.(type) {
+			case downloader.StartEvent:
+				atomic.StoreInt32(&self.canStart, 0)
+				if self.Mining() {
+					self.Stop()
+					atomic.StoreInt32(&self.shouldStart, 1)
+					log.Info("Mining aborted due to sync")
+				}
+			case downloader.DoneEvent, downloader.FailedEvent:
+				shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
+
+				atomic.StoreInt32(&self.canStart, 1)
+				atomic.StoreInt32(&self.shouldStart, 0)
+				if shouldStart {
+					self.Start(self.coinbase)
+				}
+				// stop immediately and ignore all further pending events
+				return
+			}
+		case <-self.exitCh:
+			return
 		}
 	}
 }
@@ -109,7 +114,6 @@ func (self *Miner) Start(coinbase common.Address) {
 		return
 	}
 	self.worker.start()
-	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
@@ -117,12 +121,9 @@ func (self *Miner) Stop() {
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
-func (self *Miner) Register(agent Agent) {
-	self.worker.register(agent)
-}
-
-func (self *Miner) Unregister(agent Agent) {
-	self.worker.unregister(agent)
+func (self *Miner) Close() {
+	self.worker.close()
+	close(self.exitCh)
 }
 
 func (self *Miner) Mining() bool {
@@ -142,6 +143,11 @@ func (self *Miner) SetExtra(extra []byte) error {
 	}
 	self.worker.setExtra(extra)
 	return nil
+}
+
+// SetRecommitInterval sets the interval for sealing work resubmitting.
+func (self *Miner) SetRecommitInterval(interval time.Duration) {
+	self.worker.setRecommitInterval(interval)
 }
 
 // Pending returns the currently pending block and associated state.
