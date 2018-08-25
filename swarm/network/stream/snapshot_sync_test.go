@@ -182,7 +182,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//get the the node at that index
+		//get the node at that index
 		//this is the node selected for upload
 		node := sim.RandomUpNode()
 		item, ok := sim.NodeItem(node.ID, bucketKeyStore)

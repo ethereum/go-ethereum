@@ -204,7 +204,7 @@ func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time
 	}
 }
 
-// Enqueue tries to fill gaps the the fetcher's future import queue.
+// Enqueue tries to fill gaps the fetcher's future import queue.
 func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 	op := &inject{
 		origin: peer,
