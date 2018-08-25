@@ -23,6 +23,7 @@
 package notify
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,9 +57,22 @@ type trigger interface {
 	IsStop(n interface{}, err error) bool
 }
 
+// trgWatched is a the base data structure representing watched file/directory.
+// The platform specific full data structure (watched) must embed this type.
+type trgWatched struct {
+	// p is a path to watched file/directory.
+	p string
+	// fi provides information about watched file/dir.
+	fi os.FileInfo
+	// eDir represents events watched directly.
+	eDir Event
+	// eNonDir represents events watched indirectly.
+	eNonDir Event
+}
+
 // encode Event to native representation. Implementation is to be provided by
 // platform specific implementation.
-var encode func(Event) int64
+var encode func(Event, bool) int64
 
 var (
 	// nat2not matches native events to notify's ones. To be initialized by
@@ -92,7 +106,8 @@ func newWatcher(c chan<- EventInfo) watcher {
 	}
 	t.t = newTrigger(t.pthLkp)
 	if err := t.t.Init(); err != nil {
-		panic(err)
+		t.Close()
+		return watcherStub{fmt.Errorf("failed setting up watcher: %v", err)}
 	}
 	go t.monitor()
 	return t
@@ -116,6 +131,9 @@ func (t *trg) Close() (err error) {
 	if e = t.t.Close(); e != nil {
 		dbgprintf("trg: closing native watch failed: %q\n", e)
 		err = nonil(err, e)
+	}
+	if remaining := len(t.pthLkp); remaining != 0 {
+		err = nonil(err, fmt.Errorf("Not all watches were removed: len(t.pthLkp) == %v", len(t.pthLkp)))
 	}
 	t.Unlock()
 	return
@@ -145,13 +163,7 @@ func (t *trg) singlewatch(p string, e Event, direct mode, fi os.FileInfo) (err e
 		w.eDir |= e
 		w.eNonDir |= e
 	}
-	var ee int64
-	// Native Write event is added to wait for Create events (Write event on
-	// directory triggers it's rescan).
-	if e&Create != 0 && fi.IsDir() {
-		ee = int64(not2nat[Write])
-	}
-	if err = t.t.Watch(fi, w, encode(w.eDir|w.eNonDir)|ee); err != nil {
+	if err = t.t.Watch(fi, w, encode(w.eDir|w.eNonDir, fi.IsDir())); err != nil {
 		return
 	}
 	if !ok {
@@ -181,7 +193,7 @@ func decode(o int64, w Event) (e Event) {
 func (t *trg) watch(p string, e Event, fi os.FileInfo) error {
 	if err := t.singlewatch(p, e, dir, fi); err != nil {
 		if err != errAlreadyWatched {
-			return nil
+			return err
 		}
 	}
 	if fi.IsDir() {
@@ -290,7 +302,7 @@ func (t *trg) dir(w *watched, n interface{}, e, ge Event) (evn []event) {
 	// However events for rename must be generated for all monitored files
 	// inside of moved directory, because native impl does not report it independently
 	// for each file descriptor being moved in result of move action on
-	// parent dirLiczba dostępnych dni urlopowych: 0ectory.
+	// parent directory.
 	if (ge & (not2nat[Rename] | not2nat[Remove])) != 0 {
 		// Write is reported also for Remove on directory. Because of that
 		// we have to filter it out explicitly.
@@ -367,7 +379,7 @@ func (t *trg) singleunwatch(p string, direct mode) error {
 	}
 	if w.eNonDir|w.eDir != 0 {
 		mod := dir
-		if w.eNonDir == 0 {
+		if w.eNonDir != 0 {
 			mod = ndir
 		}
 		if err := t.singlewatch(p, w.eNonDir|w.eDir, mod,
@@ -399,7 +411,7 @@ func (t *trg) monitor() {
 	}
 }
 
-// process event returned by port_get call.
+// process event returned by native call.
 func (t *trg) process(n interface{}) (evn []event) {
 	t.Lock()
 	w, ge, err := t.t.Watched(n)
@@ -414,13 +426,13 @@ func (t *trg) process(n interface{}) (evn []event) {
 		switch fi, err := os.Stat(w.p); {
 		case err != nil:
 		default:
-			if err = t.t.Watch(fi, w, (encode(w.eDir | w.eNonDir))); err != nil {
+			if err = t.t.Watch(fi, w, encode(w.eDir|w.eNonDir, fi.IsDir())); err != nil {
 				dbgprintf("trg: %q is no longer watched: %q", w.p, err)
 				t.t.Del(w)
 			}
 		}
 	}
-	if e == Event(0) {
+	if e == Event(0) && (!w.fi.IsDir() || (ge&int64(not2nat[Write])) == 0) {
 		t.Unlock()
 		return
 	}
