@@ -24,12 +24,11 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -48,8 +47,10 @@ var DefaultConfig = Config{
 	DatabaseCache: 768,
 	TrieCache:     256,
 	TrieTimeout:   60 * time.Minute,
-	MinerGasPrice: big.NewInt(18 * params.Shannon),
-	MinerRecommit: 3 * time.Second,
+	Miner: miner.Config{
+		GasPrice: big.NewInt(18 * params.Shannon),
+		Recommit: 3 * time.Second,
+	},
 
 	TxPool: core.DefaultTxPoolConfig,
 	GPO: gasprice.Config{
@@ -72,7 +73,7 @@ func init() {
 	}
 }
 
-//go:generate gencodec -type Config -field-override configMarshaling -formats toml -out gen_config.go
+//go:generate gencodec -type Config -formats toml -out gen_config.go
 
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
@@ -96,11 +97,7 @@ type Config struct {
 	TrieTimeout        time.Duration
 
 	// Mining-related options
-	Etherbase      common.Address `toml:",omitempty"`
-	MinerNotify    []string       `toml:",omitempty"`
-	MinerExtraData []byte         `toml:",omitempty"`
-	MinerGasPrice  *big.Int
-	MinerRecommit  time.Duration
+	Miner miner.Config
 
 	// Ethash options
 	Ethash ethash.Config
@@ -116,8 +113,4 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
-}
-
-type configMarshaling struct {
-	MinerExtraData hexutil.Bytes
 }

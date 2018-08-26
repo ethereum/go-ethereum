@@ -3,18 +3,14 @@
 package eth
 
 import (
-	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/miner"
 )
-
-var _ = (*configMarshaling)(nil)
 
 // MarshalTOML marshals as TOML.
 func (c Config) MarshalTOML() (interface{}, error) {
@@ -30,11 +26,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DatabaseCache           int
 		TrieCache               int
 		TrieTimeout             time.Duration
-		Etherbase               common.Address `toml:",omitempty"`
-		MinerNotify             []string       `toml:",omitempty"`
-		MinerExtraData          hexutil.Bytes  `toml:",omitempty"`
-		MinerGasPrice           *big.Int
-		MinerRecommit           time.Duration
+		Miner                   miner.Config
 		Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
@@ -53,11 +45,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DatabaseCache = c.DatabaseCache
 	enc.TrieCache = c.TrieCache
 	enc.TrieTimeout = c.TrieTimeout
-	enc.Etherbase = c.Etherbase
-	enc.MinerNotify = c.MinerNotify
-	enc.MinerExtraData = c.MinerExtraData
-	enc.MinerGasPrice = c.MinerGasPrice
-	enc.MinerRecommit = c.MinerRecommit
+	enc.Miner = c.Miner
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
@@ -80,12 +68,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DatabaseCache           *int
 		TrieCache               *int
 		TrieTimeout             *time.Duration
-		Etherbase               *common.Address `toml:",omitempty"`
-		MinerThreads            *int            `toml:",omitempty"`
-		MinerNotify             []string        `toml:",omitempty"`
-		MinerExtraData          *hexutil.Bytes  `toml:",omitempty"`
-		MinerGasPrice           *big.Int
-		MinerRecommit           *time.Duration
+		Miner                   *miner.Config
 		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
@@ -129,20 +112,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.TrieTimeout != nil {
 		c.TrieTimeout = *dec.TrieTimeout
 	}
-	if dec.Etherbase != nil {
-		c.Etherbase = *dec.Etherbase
-	}
-	if dec.MinerNotify != nil {
-		c.MinerNotify = dec.MinerNotify
-	}
-	if dec.MinerExtraData != nil {
-		c.MinerExtraData = *dec.MinerExtraData
-	}
-	if dec.MinerGasPrice != nil {
-		c.MinerGasPrice = dec.MinerGasPrice
-	}
-	if dec.MinerRecommit != nil {
-		c.MinerRecommit = *dec.MinerRecommit
+	if dec.Miner != nil {
+		c.Miner = *dec.Miner
 	}
 	if dec.Ethash != nil {
 		c.Ethash = *dec.Ethash

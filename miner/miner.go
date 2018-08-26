@@ -19,10 +19,12 @@ package miner
 
 import (
 	"fmt"
+	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -37,6 +39,21 @@ import (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
+}
+
+//go:generate gencodec -type Config -field-override configMarshaling -formats toml -out gen_miner.go
+
+// Config is the configuration parameters of mining.
+type Config struct {
+	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards (default = first account)
+	Notify    []string       `toml:",omitempty"` // HTTP URL list to be notified of new work packages
+	ExtraData []byte         `toml:",omitempty"` // Block extra data set by the miner
+	GasPrice  *big.Int       // Minimal gas price for mining a transactions
+	Recommit  time.Duration  // Time interval to recreate the block being mined
+}
+
+type configMarshaling struct {
+	ExtraData hexutil.Bytes
 }
 
 // Miner creates blocks and searches for proof-of-work values.
