@@ -133,7 +133,12 @@ $ tomo $params \
 --targetgaslimit: Target gas limit sets the artificial target gas floor for the blocks to mine (default: 4712388)
 ```
 
-If you're too lazy to go through all the above commands and annoying flags, we provide some magic scripts to boost you up to run a masternode and join our network at this repository: https://github.com/tomochain/masternode. Please feel free to give it a try and let us know what you get from there.
+### Becoming a masternode
+Stay tuned for the guideline how to register a candidate on tomomaster once you get your full-node ready.
+
+### Becoming a masternode in two secs
+
+If you're too lazy to go through all the above commands and annoying flags, we provide some magic scripts to boost you up to run a full-node, register as a candidate for masternode selection and join our network at this repository: https://github.com/tomochain/masternode. Please feel free to give it a try and let us know what you get from there.
 
 ## Road map
 
