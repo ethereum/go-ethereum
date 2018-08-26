@@ -40,6 +40,101 @@ Alternatively, you could quickly download pre-complied binary on our [github rel
 
 ## Running tomo
 
+### Attach to the Tomochain test network
+
+Currently we are publishing our test network 2.0 with full implementation of PoSV consensus at https://stats.testnet.tomochain.com. If you'd like to play ground with creating smart contracts, dapps, you might be interested in give it a try on our test network.
+
+In order to connect to one of the masternodes on the test network, just run this below command:
+
+```bash
+$ tomo attach https://testnet.tomochain.com
+```
+
+### Run your full node on the Tomochain test network
+
+If you would like to run your own full node and join the Tomochain test network, run these below commands:
+
+```bash
+// 1. create a folder to store tomochain data on your machine
+$ export DATA_DIR=/path/to/your/data/folder
+$ mkdir -p $DATA_DIR/tomo
+
+// 2. download our genesis file
+$ export GENESIS_PATH=$DATA_DIR/genesis.json
+$ curl -L https://raw.githubusercontent.com/tomochain/tomochain/master/genesis/testnet.json -o $GENESIS_PATH
+
+// 3. init the chain from genesis
+$ tomo init $GENESIS_PATH --datadir $DATA_DIR
+
+// 4. get a test account. Create a new one if you don't have any:
+$ export KEYSTORE_DIR=keystore
+$ touch $DATA_DIR/password && echo 'your-password' > $DATA_DIR/password
+$ tomo account new \
+      --datadir $DATA_DIR \
+      --keystore $KEYSTORE_DIR \
+      --password $DATA_DIR/password
+
+// if you already have a test account, import it now
+$ tomo  account import ./private_key \
+      --datadir $DATA_DIR \
+      --keystore $KEYSTORE_DIR \
+      --password $DATA_DIR/password
+
+// get the account
+$ account=$(
+  tomo account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
+  2> /dev/null \
+  | head -n 1 \
+  | cut -d"{" -f 2 | cut -d"}" -f 1
+)
+
+// 5. prepare the bootnode and stats information
+$ export BOOTNODES="enode://4d3c2cc0ce7135c1778c6f1cfda623ab44b4b6db55289543d48ecfde7d7111fd420c42174a9f2fea511a04cf6eac4ec69b4456bfaaae0e5bd236107d3172b013@52.221.28.223:30301,enode://298780104303fcdb37a84c5702ebd9ec660971629f68a933fd91f7350c54eea0e294b0857f1fd2e8dba2869fcc36b83e6de553c386cf4ff26f19672955d9f312@13.251.101.216:30301,enode://46dba3a8721c589bede3c134d755eb1a38ae7c5a4c69249b8317c55adc8d46a369f98b06514ecec4b4ff150712085176818d18f59a9e6311a52dbe68cff5b2ae@13.250.94.232:30301"
+$ export param="--unlock $account --bootnodes $BOOTNODES --ethstats sun:anna-coal-flee-carrie-zip-hhhh-tarry-laue-felon-rhine@stats.testnet.tomochain.com:443"
+
+// 6. Start up your full node now
+$ export NAME=YOUR_FULLNODE_NAME
+$ tomo $params \
+  --verbosity 4 \
+  --datadir $DATA_DIR \
+  --keystore $KEYSTORE_DIR \
+  --identity $NAME \
+  --password $DATA_DIR \
+  --networkid 89 \
+  --port 30303 \
+  --rpc \
+  --rpccorsdomain "*" \
+  --rpcaddr 0.0.0.0 \
+  --rpcport 8545 \
+  --rpcvhosts "*" \
+  --ws \
+  --wsaddr 0.0.0.0 \
+  --wsport 8546 \
+  --wsorigins "*" \
+  --mine \
+  --gasprice "1" \
+  --targetgaslimit "420000000"
+```
+
+*A bit explain on the flags*
+
+```
+--verbosity: log level from 1 to 5. Here we're using 4 for debug messages
+--datadir: path to your data directory created above.
+--keystore: path to your account's keystore created above.
+--identity: your full-node's name.
+--password: your account's password.
+--networkid: our testnet network ID.
+--port: your full-node's listening port (default to 30303)
+--rpc, --rpccorsdomain, --rpcaddr, --rpcport, --rpcvhosts: your full-node will accept RPC requests at 8545 TCP.
+--ws, --wsaddr, --wsport, --wsorigins: your full-node will accept Websocket requests at 8546 TCP.
+--mine: your full-node wants to register to be a candidate for masternode selection.
+--gasprice: Minimal gas price to accept for mining a transaction.
+--targetgaslimit: Target gas limit sets the artificial target gas floor for the blocks to mine (default: 4712388)
+```
+
+If you're too lazy to go through all the above commands and annoying flags, we provide some magic scripts to boost you up to run a masternode and join our network at this repository: https://github.com/tomochain/masternode. Please feel free to give it a try and let us know what you get from there.
+
 ## Road map
 
 These following implementation items are eventually dropped into the source code:
