@@ -153,7 +153,7 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 
 // Resolve resolves address by choosing a Resolver by TLD.
 // If there are more default Resolvers, or for a specific TLD,
-// the Hash from the the first one which does not return error
+// the Hash from the first one which does not return error
 // will be returned.
 func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	rs, err := m.getResolveValidator(addr)

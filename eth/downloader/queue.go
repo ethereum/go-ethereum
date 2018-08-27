@@ -662,7 +662,7 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 			for _, header := range request.Headers {
 				taskQueue.Push(header, -float32(header.Number.Uint64()))
 			}
-			// Add the peer to the expiry report along the the number of failed requests
+			// Add the peer to the expiry report along the number of failed requests
 			expiries[id] = len(request.Headers)
 		}
 	}
