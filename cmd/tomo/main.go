@@ -25,13 +25,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/console"
-	validatorContract "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -353,52 +349,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						log.Info("Enabled staking node!!!")
 					}
 				case <-core.M1Ch:
-					log.Info("It's time to update new set of masternodes for the next epoch...")
-					// get masternodes information from smart contract
-					client, err := ethclient.Dial(stack.IPCEndpoint())
-					if err != nil {
-						utils.Fatalf("Fail to connect IPC: %v", err)
-					}
-					addr := common.HexToAddress(common.MasternodeVotingSMC)
-					validator, err := validatorContract.NewTomoValidator(addr, client)
-					if err != nil {
-						utils.Fatalf("Fail to get validator smc: %v", err)
-					}
-					opts := new(bind.CallOpts)
-					candidates, err := validator.GetCandidates(opts)
-					if err != nil {
-						utils.Fatalf("Can't get list of masternode candidates: %v", err)
-					}
-
-					var ms []posv.Masternode
-					for _, candidate := range candidates {
-						v, err := validator.GetCandidateCap(opts, candidate)
-						if err != nil {
-							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
-						}
-						//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
-						if candidate.String() != "0x0000000000000000000000000000000000000000" {
-							ms = append(ms, posv.Masternode{Address: candidate, Stake: v.String()})
-						}
-					}
-					//// order by cap
-					//sort.Slice(ms, func(i, j int) bool {
-					//	return ms[i].Stake > ms[j].Stake
-					//})
-					log.Info("Ordered list of masternode candidates")
-					for _, m := range ms {
-						fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
-					}
-					if len(ms) == 0 {
-						log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
-					} else {
-						// update masternodes
-						log.Info("Updating new set of masternodes")
-						err = ethereum.UpdateMasternodes(ms)
-						if err != nil {
-							utils.Fatalf("Can't update masternodes: %v", err)
-						}
-						log.Info("Masternodes are ready for the next epoch")
+					err := ethereum.BlockChain().UpdateM1()
+					if(err !=nil){
+						log.Error("Error when update M1",err)
 					}
 				}
 			}

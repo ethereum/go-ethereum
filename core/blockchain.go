@@ -27,9 +27,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/posv"
+	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -695,7 +698,7 @@ func (bc *BlockChain) procFutureBlocks() {
 type WriteStatus byte
 
 const (
-	NonStatTy WriteStatus = iota
+	NonStatTy   WriteStatus = iota
 	CanonStatTy
 	SideStatTy
 )
@@ -1589,4 +1592,55 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 	}
 
 	return bc.Client, nil
+}
+
+func (bc *BlockChain) UpdateM1() error {
+	if bc.Config().Posv == nil {
+		return errors.New("Posv not found in config")
+	}
+	engine := bc.Engine().(*posv.Posv)
+	log.Info("It's time to update new set of masternodes for the next epoch...")
+	// get masternodes information from smart contract
+	client, err := ethclient.Dial(bc.IPCEndpoint)
+	if err != nil {
+		log.Crit("Fail to connect IPC: %v", err)
+	}
+	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	validator, err := contractValidator.NewTomoValidator(addr, client)
+	if err != nil {
+		return err
+	}
+	opts := new(bind.CallOpts)
+	candidates, err := validator.GetCandidates(opts)
+	if err != nil {
+		return err
+	}
+
+	var ms []posv.Masternode
+	for _, candidate := range candidates {
+		v, err := validator.GetCandidateCap(opts, candidate)
+		if err != nil {
+			return err
+		}
+		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
+		if candidate.String() != "0x0000000000000000000000000000000000000000" {
+			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.String()})
+		}
+	}
+	log.Info("Ordered list of masternode candidates")
+	for _, m := range ms {
+		fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
+	}
+	if len(ms) == 0 {
+		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+	} else {
+		// update masternodes
+		log.Info("Updating new set of masternodes")
+		err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
+		if err != nil {
+			return err
+		}
+		log.Info("Masternodes are ready for the next epoch")
+	}
+	return nil
 }
