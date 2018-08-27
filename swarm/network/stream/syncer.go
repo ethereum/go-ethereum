@@ -159,8 +159,8 @@ type SwarmSyncerClient struct {
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
 func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, ignoreExistingRequest bool, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		db:   db,
-		peer: p,
+		db:                    db,
+		peer:                  p,
 		ignoreExistingRequest: ignoreExistingRequest,
 		stream:                stream,
 	}, nil
