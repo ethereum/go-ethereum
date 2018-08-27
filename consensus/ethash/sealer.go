@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	// staleThreshold is the maximum distance of the acceptable stale but valid ethash solution.
+	// staleThreshold is the maximum depth of the acceptable stale but valid ethash solution.
 	staleThreshold = 7
 )
 
@@ -47,16 +47,21 @@ var (
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
-func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
-		return block.WithSeal(header), nil
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", ethash.SealHash(block.Header()))
+		}
+		return nil
 	}
 	// If we're running a shared PoW, delegate sealing to it
 	if ethash.shared != nil {
-		return ethash.shared.Seal(chain, block, stop)
+		return ethash.shared.Seal(chain, block, results, stop)
 	}
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
@@ -67,7 +72,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 		seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 		if err != nil {
 			ethash.lock.Unlock()
-			return nil, err
+			return err
 		}
 		ethash.rand = rand.New(rand.NewSource(seed.Int64()))
 	}
@@ -80,34 +85,44 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	}
 	// Push new work to remote sealer
 	if ethash.workCh != nil {
-		ethash.workCh <- block
+		ethash.workCh <- &sealTask{block: block, results: results}
 	}
-	var pend sync.WaitGroup
+	var (
+		pend         sync.WaitGroup
+		localResults = make(chan *types.Block)
+	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, nonce, abort, ethash.resultCh)
+			ethash.mine(block, id, nonce, abort, localResults)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
-	var result *types.Block
-	select {
-	case <-stop:
-		// Outside abort, stop all miner threads
-		close(abort)
-	case result = <-ethash.resultCh:
-		// One of the threads found a block, abort all others
-		close(abort)
-	case <-ethash.update:
-		// Thread count was changed on user request, restart
-		close(abort)
+	go func() {
+		var result *types.Block
+		select {
+		case <-stop:
+			// Outside abort, stop all miner threads
+			close(abort)
+		case result = <-localResults:
+			// One of the threads found a block, abort all others
+			select {
+			case results <- result:
+			default:
+				log.Warn("Sealing result is not read by miner", "sealhash", ethash.SealHash(block.Header()))
+			}
+			close(abort)
+		case <-ethash.update:
+			// Thread count was changed on user request, restart
+			close(abort)
+			pend.Wait()
+			ethash.Seal(chain, block, results, stop)
+		}
+		// Wait for all miners to terminate and return the block
 		pend.Wait()
-		return ethash.Seal(chain, block, stop)
-	}
-	// Wait for all miners to terminate and return the block
-	pend.Wait()
-	return result, nil
+	}()
+	return nil
 }
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
@@ -175,6 +190,7 @@ func (ethash *Ethash) remote(notify []string) {
 		works = make(map[common.Hash]*types.Block)
 		rates = make(map[common.Hash]hashrate)
 
+		results      chan<- *types.Block
 		currentBlock *types.Block
 		currentWork  [3]string
 
@@ -232,14 +248,14 @@ func (ethash *Ethash) remote(notify []string) {
 	// whether the solution was accepted or not (not can be both a bad pow as well as
 	// any other error, like no pending work or stale mining result).
 	submitWork := func(nonce types.BlockNonce, mixDigest common.Hash, sealhash common.Hash) bool {
+		if currentBlock == nil {
+			log.Error("Pending work without block", "sealhash", sealhash)
+			return false
+		}
 		// Make sure the work submitted is present
 		block := works[sealhash]
 		if block == nil {
-			log.Info("Work submitted but none pending", "sealhash", sealhash, "current block number", currentBlock.NumberU64())
-			return false
-		}
-		if currentBlock == nil {
-			log.Error("have pending packages but no pending block, please file an issue", "sealhash", sealhash)
+			log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", currentBlock.NumberU64())
 			return false
 		}
 		// Verify the correctness of submitted result.
@@ -254,39 +270,29 @@ func (ethash *Ethash) remote(notify []string) {
 				return false
 			}
 		}
-		// Make sure the result channel is created.
-		if ethash.resultCh == nil {
+		// Make sure the result channel is assigned.
+		if results == nil {
 			log.Warn("Ethash result channel is empty, submitted mining result is rejected")
 			return false
 		}
 		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", time.Since(start))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
-		submitBlock := block.WithSeal(header)
+		solution := block.WithSeal(header)
 
-		// If submitted block is the mining block of latest round, try to push back through result channel.
-		if submitBlock.ParentHash() == currentBlock.ParentHash() {
+		// The submitted solution is within the scope of acceptance.
+		if solution.NumberU64()+staleThreshold > currentBlock.NumberU64() {
 			select {
-			case ethash.resultCh <- submitBlock:
-				log.Info("Work submitted is fresh", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
+			case results <- solution:
+				log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 				return true
 			default:
-				// Worker has already received a result for latest mining round, submit it as
-				// a stale block.
-				ethash.staleResultCh <- submitBlock
-				log.Info("Work submitted is stale but acceptable", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
-				return true
+				log.Warn("Sealing result is not read by miner", "sealhash", sealhash)
+				return false
 			}
-		} else if submitBlock.NumberU64()+staleThreshold > currentBlock.NumberU64() {
-			// The submitted block is stale but acceptable, it can be converted to a uncle finally.
-			ethash.staleResultCh <- submitBlock
-			log.Info("Work submitted is stale but acceptable", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock.Hash())
-			return true
-		} else {
-			// The submitted block is too old to accept, drop it.
-			log.Info("The submitted block is too old", "number", submitBlock.NumberU64(), "sealhash", sealhash, "hash", submitBlock)
-			return false
 		}
+		// The submitted block is too old to accept, drop it.
+		log.Debug("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 		return false
 	}
 
@@ -295,10 +301,12 @@ func (ethash *Ethash) remote(notify []string) {
 
 	for {
 		select {
-		case block := <-ethash.workCh:
+		case work := <-ethash.workCh:
 			// Update current work with new received block.
 			// Note same work can be past twice, happens when changing CPU threads.
-			makeWork(block)
+			results = work.results
+
+			makeWork(work.block)
 
 			// Notify and requested URLs of the new work availability
 			notifyWork()
@@ -356,9 +364,4 @@ func (ethash *Ethash) remote(notify []string) {
 			return
 		}
 	}
-}
-
-// StaleBlocks returns a channel that returns all stale but acceptable blocks.
-func (ethash *Ethash) StaleBlocks() <-chan *types.Block {
-	return ethash.staleResultCh
 }

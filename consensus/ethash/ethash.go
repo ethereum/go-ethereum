@@ -394,8 +394,6 @@ const (
 	ModeFullFake
 )
 
-const staleChannelSize = 10 // The size of stale block channel.
-
 // Config are the configuration parameters of the ethash.
 type Config struct {
 	CacheDir       string
@@ -405,6 +403,12 @@ type Config struct {
 	DatasetsInMem  int
 	DatasetsOnDisk int
 	PowMode        Mode
+}
+
+// sealTask wraps a seal block with relative result channel for remote sealer thread.
+type sealTask struct {
+	block   *types.Block
+	results chan<- *types.Block
 }
 
 // mineResult wraps the pow solution parameters for the specified block.
@@ -446,13 +450,11 @@ type Ethash struct {
 	hashrate metrics.Meter // Meter tracking the average hashrate
 
 	// Remote sealer related fields
-	workCh        chan *types.Block // Notification channel to push new work to remote sealer
-	resultCh      chan *types.Block // Channel used by mining threads to return result
-	fetchWorkCh   chan *sealWork    // Channel used for remote sealer to fetch mining work
-	submitWorkCh  chan *mineResult  // Channel used for remote sealer to submit their mining result
-	fetchRateCh   chan chan uint64  // Channel used to gather submitted hash rate for local or remote sealer.
-	submitRateCh  chan *hashrate    // Channel used for remote sealer to submit their mining hashrate
-	staleResultCh chan *types.Block // Channel used for passing back stale but acceptable solutions.
+	workCh       chan *sealTask   // Notification channel to push new work and relative result channel to remote sealer
+	fetchWorkCh  chan *sealWork   // Channel used for remote sealer to fetch mining work
+	submitWorkCh chan *mineResult // Channel used for remote sealer to submit their mining result
+	fetchRateCh  chan chan uint64 // Channel used to gather submitted hash rate for local or remote sealer.
+	submitRateCh chan *hashrate   // Channel used for remote sealer to submit their mining hashrate
 
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
@@ -482,19 +484,17 @@ func New(config Config, notify []string) *Ethash {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir, "count", config.DatasetsOnDisk)
 	}
 	ethash := &Ethash{
-		config:        config,
-		caches:        newlru("cache", config.CachesInMem, newCache),
-		datasets:      newlru("dataset", config.DatasetsInMem, newDataset),
-		update:        make(chan struct{}),
-		hashrate:      metrics.NewMeter(),
-		workCh:        make(chan *types.Block),
-		resultCh:      make(chan *types.Block),
-		fetchWorkCh:   make(chan *sealWork),
-		submitWorkCh:  make(chan *mineResult),
-		fetchRateCh:   make(chan chan uint64),
-		submitRateCh:  make(chan *hashrate),
-		staleResultCh: make(chan *types.Block, staleChannelSize),
-		exitCh:        make(chan chan error),
+		config:       config,
+		caches:       newlru("cache", config.CachesInMem, newCache),
+		datasets:     newlru("dataset", config.DatasetsInMem, newDataset),
+		update:       make(chan struct{}),
+		hashrate:     metrics.NewMeter(),
+		workCh:       make(chan *sealTask),
+		fetchWorkCh:  make(chan *sealWork),
+		submitWorkCh: make(chan *mineResult),
+		fetchRateCh:  make(chan chan uint64),
+		submitRateCh: make(chan *hashrate),
+		exitCh:       make(chan chan error),
 	}
 	go ethash.remote(notify)
 	return ethash
@@ -504,19 +504,17 @@ func New(config Config, notify []string) *Ethash {
 // purposes.
 func NewTester(notify []string) *Ethash {
 	ethash := &Ethash{
-		config:        Config{PowMode: ModeTest},
-		caches:        newlru("cache", 1, newCache),
-		datasets:      newlru("dataset", 1, newDataset),
-		update:        make(chan struct{}),
-		hashrate:      metrics.NewMeter(),
-		workCh:        make(chan *types.Block),
-		resultCh:      make(chan *types.Block),
-		fetchWorkCh:   make(chan *sealWork),
-		submitWorkCh:  make(chan *mineResult),
-		fetchRateCh:   make(chan chan uint64),
-		submitRateCh:  make(chan *hashrate),
-		staleResultCh: make(chan *types.Block, staleChannelSize),
-		exitCh:        make(chan chan error),
+		config:       Config{PowMode: ModeTest},
+		caches:       newlru("cache", 1, newCache),
+		datasets:     newlru("dataset", 1, newDataset),
+		update:       make(chan struct{}),
+		hashrate:     metrics.NewMeter(),
+		workCh:       make(chan *sealTask),
+		fetchWorkCh:  make(chan *sealWork),
+		submitWorkCh: make(chan *mineResult),
+		fetchRateCh:  make(chan chan uint64),
+		submitRateCh: make(chan *hashrate),
+		exitCh:       make(chan chan error),
 	}
 	go ethash.remote(notify)
 	return ethash
