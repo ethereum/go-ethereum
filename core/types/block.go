@@ -73,7 +73,7 @@ type Header struct {
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 	Validator   common.Address  `json:"validator"       gencodec:"required"`
 	LCPContext *LCPContextProto `json:"LCPContext"   gencodec:"required"`
-	Coinbase    common.Address `json:"miner"            gencodec:"required"`
+	Coinbase    common.Address `json:"coinbase"         gencodec:"required"`
 	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
 	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`

@@ -28,6 +28,7 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/core/vm"
 	"github.com/pavelkrolevets/go-ethereum/ethdb"
 	"github.com/pavelkrolevets/go-ethereum/params"
+	"github.com/pavelkrolevets/go-ethereum/consensus/lcp"
 )
 
 // BlockGen creates blocks for testing.
@@ -167,7 +168,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	// Force LCP configuration if everything is empty
 	if config == nil {
-		config = params.TestChainConfig
+		config = params.LcpChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
@@ -195,9 +196,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if gen != nil {
 			gen(i, b)
 		}
-
+		lcp.AccumulateRewards(config, statedb, b.header, b.uncles)
 		if b.engine != nil {
-			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts, b.header.LCPContext)
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
 			if err != nil {
@@ -206,10 +207,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
+			b.header.Root = root
+			b.header.LCPContext = parent.Header().LCPContext
 			return block, b.receipts
 		}
 		return nil, nil
 	}
+
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db))
 		if err != nil {

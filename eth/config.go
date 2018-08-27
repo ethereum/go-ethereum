@@ -96,6 +96,8 @@ type Config struct {
 
 	// Mining-related options
 	Etherbase    common.Address `toml:",omitempty"`
+	Validator    common.Address `toml:",omitempty"`
+	Coinbase     common.Address `toml:",omitempty"`
 	MinerThreads int            `toml:",omitempty"`
 	ExtraData    []byte         `toml:",omitempty"`
 	GasPrice     *big.Int

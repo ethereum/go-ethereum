@@ -29,8 +29,6 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/common/hexutil"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
-	"github.com/pavelkrolevets/go-ethereum/consensus/ethash"
-	"github.com/pavelkrolevets/go-ethereum/consensus/lcp"
 	"github.com/pavelkrolevets/go-ethereum/core"
 	"github.com/pavelkrolevets/go-ethereum/core/bloombits"
 	"github.com/pavelkrolevets/go-ethereum/core/rawdb"
@@ -49,6 +47,7 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/params"
 	"github.com/pavelkrolevets/go-ethereum/rlp"
 	"github.com/pavelkrolevets/go-ethereum/rpc"
+	"github.com/pavelkrolevets/go-ethereum/consensus/lcp"
 )
 
 type LesServer interface {
@@ -65,6 +64,7 @@ type Ethereum struct {
 
 	// Channel for shutting down the service
 	shutdownChan chan bool // Channel for shutting down the Ethereum
+	stopDbUpgrade func() error // stop chain db sequential key upgrade
 
 	// Handlers
 	txPool          *core.TxPool
@@ -87,6 +87,7 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
+	coinbase  common.Address
 	validator common.Address
 	periodBlock   int64
 	maxValidators int64
@@ -97,6 +98,23 @@ type Ethereum struct {
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
+
+func (s *Ethereum) Validator() (validator common.Address, err error) {
+	s.lock.RLock()
+	validator = s.validator
+	s.lock.RUnlock()
+
+	if validator != (common.Address{}) {
+		return validator, nil
+	}
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			return accounts[0].Address, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("validator address must be explicitly specified")
+}
+
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
@@ -116,6 +134,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
@@ -128,11 +147,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		engine:         lcp.New(chainConfig.LCP, chainDb),
 		shutdownChan:   make(chan bool),
+		stopDbUpgrade:  stopDbUpgrade,
 		networkID:      config.NetworkId,
 		gasPrice:       config.GasPrice,
 		etherbase:      config.Etherbase,
+		validator:      config.Validator,
+		coinbase:       config.Coinbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
@@ -211,37 +233,6 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 		db.Meter("eth/db/chaindata/")
 	}
 	return db, nil
-}
-
-// CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If LCP is requested, set it up
-	if chainConfig.LCP != nil {
-		return lcp.New(chainConfig.LCP, db)
-	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-		return ethash.NewFaker()
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-		return ethash.NewTester()
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-		return ethash.NewShared()
-	default:
-		engine := ethash.New(ethash.Config{
-			CacheDir:       ctx.ResolvePath(config.CacheDir),
-			CachesInMem:    config.CachesInMem,
-			CachesOnDisk:   config.CachesOnDisk,
-			DatasetDir:     config.DatasetDir,
-			DatasetsInMem:  config.DatasetsInMem,
-			DatasetsOnDisk: config.DatasetsOnDisk,
-		})
-		engine.SetThreads(-1) // Disable CPU mining
-		return engine
-	}
 }
 
 // APIs return the collection of RPC services the ethereum package offers.
@@ -337,19 +328,49 @@ func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.miner.SetEtherbase(etherbase)
 }
 
-func (s *Ethereum) StartMining(local bool) error {
-	eb, err := s.Etherbase()
-	if err != nil {
-		log.Error("Cannot start mining without etherbase", "err", err)
-		return fmt.Errorf("etherbase missing: %v", err)
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetValidator(validator common.Address) {
+	self.lock.Lock()
+	self.validator = validator
+	self.lock.Unlock()
+}
+
+func (s *Ethereum) Coinbase() (eb common.Address, err error) {
+	s.lock.RLock()
+	coinbase := s.coinbase
+	s.lock.RUnlock()
+
+	if coinbase != (common.Address{}) {
+		return coinbase, nil
 	}
-	if clique, ok := s.engine.(*clique.Clique); ok {
-		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			return accounts[0].Address, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("coinbase address must be explicitly specified")
+}
+
+
+func (s *Ethereum) StartMining(local bool) error {
+	validator, err := s.Validator()
+	if err != nil {
+		log.Error("Cannot start mining without validator", "err", err)
+		return fmt.Errorf("validator missing: %v", err)
+	}
+	eb, err := s.Coinbase()
+	if err != nil {
+		log.Error("Cannot start mining without coinbase", "err", err)
+		return fmt.Errorf("coinbase missing: %v", err)
+	}
+
+	if lcp, ok := s.engine.(*lcp.LCP); ok {
+		wallet, err := s.accountManager.Find(accounts.Account{Address: validator})
 		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
+			log.Error("Coinbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-		clique.Authorize(eb, wallet.SignHash)
+		lcp.Authorize(validator, wallet.SignHash)
 	}
 	if local {
 		// If local (CPU) mining is started, we can disable the transaction rejection

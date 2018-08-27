@@ -64,7 +64,7 @@ type Agent interface {
 type Work struct {
 	config *params.ChainConfig
 	signer types.Signer
-
+	LCPContext *types.LCPContext
 	state     *state.StateDB // apply state changes here
 	ancestors mapset.Set     // ancestor set (used for checking uncle parent validity)
 	family    mapset.Set     // family set (used for checking uncle invalidity)
@@ -79,6 +79,7 @@ type Work struct {
 	receipts []*types.Receipt
 
 	createdAt time.Time
+
 }
 
 type Result struct {
@@ -620,10 +621,11 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []*types.Log) {
 	snap := env.state.Snapshot()
-
-	receipt, _, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
+	LcpSnap := env.LCPContext.Snapshot()
+	receipt, _, err := core.ApplyTransaction(env.config, env.LCPContext, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
+		env.LCPContext.RevertToSnapShot(LcpSnap)
 		return err, nil
 	}
 	env.txs = append(env.txs, tx)
