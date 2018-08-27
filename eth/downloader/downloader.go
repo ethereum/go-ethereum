@@ -38,8 +38,8 @@ import (
 
 var (
 	MaxHashFetch    = 512 // Amount of hashes to be fetched per retrieval request
-	MaxBlockFetch   = 900 // Amount of blocks to be fetched per retrieval request
-	MaxHeaderFetch  = 900 // Amount of block headers to be fetched per retrieval request
+	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
+	MaxHeaderFetch  = 192 // Amount of block headers to be fetched per retrieval request
 	MaxSkeletonSize = 128 // Number of header fetches to need for a skeleton assembly
 	MaxBodyFetch    = 128 // Amount of block bodies to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
@@ -56,9 +56,9 @@ var (
 	qosConfidenceCap = 10   // Number of peers above which not to modify RTT confidence
 	qosTuningImpact  = 0.25 // Impact that a new tuning target has on the previous value
 
-	maxQueuedHeaders  = 900  // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxHeadersProcess = 900  // Number of header download results to import at once into the chain
-	maxResultsProcess = 2048 // Number of content download results to import at once into the chain
+	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain
+	maxResultsProcess = 2048      // Number of content download results to import at once into the chain
 
 	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during fast sync
 	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
@@ -1324,37 +1324,46 @@ func (d *Downloader) processFullSyncContent() error {
 		if len(results) == 0 {
 			return nil
 		}
-		epoch := d.blockchain.Config().Posv.Epoch
-		gap := d.blockchain.Config().Posv.Gap
-		length := len(results)
-		start := int(results[0].Header.Number.Uint64() % epoch)
-		end := int(epoch - gap - uint64(start))
-		if end < 0 {
-			end = end + int(epoch)
-		}
-		start = 0
-		for {
-			if end >= length {
-				end = length - 1
+		if d.blockchain.Config() != nil && d.blockchain.Config().Posv != nil {
+			epoch := d.blockchain.Config().Posv.Epoch
+			gap := d.blockchain.Config().Posv.Gap
+			length := len(results)
+			start := int(results[0].Header.Number.Uint64() % epoch)
+			end := int(epoch - gap - uint64(start))
+			if end < 0 {
+				end = end + int(epoch)
 			}
-			inserts := make([]*fetchResult, end-start+1)
-			copy(inserts, results[start:end+1])
-			if len(inserts) > 0 {
-				if d.chainInsertHook != nil {
-					d.chainInsertHook(inserts)
+			start = 0
+			for {
+				if end >= length {
+					end = length - 1
 				}
-				if err := d.importBlockResults(inserts); err != nil {
-					return err
+				inserts := make([]*fetchResult, end-start+1)
+				copy(inserts, results[start:end+1])
+				if len(inserts) > 0 {
+					if d.chainInsertHook != nil {
+						d.chainInsertHook(inserts)
+					}
+					if err := d.importBlockResults(inserts); err != nil {
+						return err
+					}
+					// prepare set of masternodes for the next epoch
+					if (inserts[len(inserts)-1].Header.Number.Uint64() % epoch) == (epoch - gap) {
+						d.blockchain.UpdateM1()
+					}
 				}
-				// prepare set of masternodes for the next epoch
-				if (inserts[len(inserts)-1].Header.Number.Uint64() % epoch) == (epoch - gap) {
-					d.blockchain.UpdateM1()
+				start = end + 1
+				end = end + int(epoch)
+				if start >= length {
+					break
 				}
 			}
-			start = end + 1
-			end = end + int(epoch)
-			if start >= length {
-				break
+		} else {
+			if d.chainInsertHook != nil {
+				d.chainInsertHook(results)
+			}
+			if err := d.importBlockResults(results); err != nil {
+				return err
 			}
 		}
 	}

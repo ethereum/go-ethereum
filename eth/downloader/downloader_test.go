@@ -457,8 +457,8 @@ func (dl *downloadTester) dropPeer(id string) {
 }
 
 // Config retrieves the blockchain's chain configuration.
-func (dl *downloadTester) Config() *params.ChainConfig { return dl.downloader.blockchain.Config() }
-func (dl *downloadTester) UpdateM1()                   { dl.downloader.blockchain.UpdateM1() }
+func (dl *downloadTester) Config() *params.ChainConfig { return params.TestChainConfig }
+func (dl *downloadTester) UpdateM1()                   {}
 
 type downloadTesterPeer struct {
 	dl    *downloadTester
@@ -1190,92 +1190,92 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 // Tests that upon detecting an invalid header, the recent ones are rolled back
 // for various failure scenarios. Afterwards a full sync is attempted to make
 // sure no state was corrupted.
-//func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
-//func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
-//func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
-//
-//func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
-//	t.Parallel()
-//
-//	tester := newTester()
-//	defer tester.terminate()
-//
-//	// Create a small enough block chain to download
-//	targetBlocks := 3*fsHeaderSafetyNet + 256 + fsMinFullBlocks
-//	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
-//
-//	// Attempt to sync with an attacker that feeds junk during the fast sync phase.
-//	// This should result in the last fsHeaderSafetyNet headers being rolled back.
-//	tester.newPeer("fast-attack", protocol, hashes, headers, blocks, receipts)
-//	missing := fsHeaderSafetyNet + MaxHeaderFetch + 1
-//	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing])
-//
-//	if err := tester.sync("fast-attack", nil, mode); err == nil {
-//		t.Fatalf("succeeded fast attacker synchronisation")
-//	}
-//	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
-//		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
-//	}
-//	// Attempt to sync with an attacker that feeds junk during the block import phase.
-//	// This should result in both the last fsHeaderSafetyNet number of headers being
-//	// rolled back, and also the pivot point being reverted to a non-block status.
-//	tester.newPeer("block-attack", protocol, hashes, headers, blocks, receipts)
-//	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
-//	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing]) // Make sure the fast-attacker doesn't fill in
-//	delete(tester.peerHeaders["block-attack"], hashes[len(hashes)-missing])
-//
-//	if err := tester.sync("block-attack", nil, mode); err == nil {
-//		t.Fatalf("succeeded block attacker synchronisation")
-//	}
-//	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
-//		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
-//	}
-//	if mode == FastSync {
-//		if head := tester.CurrentBlock().NumberU64(); head != 0 {
-//			t.Errorf("fast sync pivot block #%d not rolled back", head)
-//		}
-//	}
-//	// Attempt to sync with an attacker that withholds promised blocks after the
-//	// fast sync pivot point. This could be a trial to leave the node with a bad
-//	// but already imported pivot block.
-//	tester.newPeer("withhold-attack", protocol, hashes, headers, blocks, receipts)
-//	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
-//
-//	tester.downloader.syncInitHook = func(uint64, uint64) {
-//		for i := missing; i <= len(hashes); i++ {
-//			delete(tester.peerHeaders["withhold-attack"], hashes[len(hashes)-i])
-//		}
-//		tester.downloader.syncInitHook = nil
-//	}
-//
-//	if err := tester.sync("withhold-attack", nil, mode); err == nil {
-//		t.Fatalf("succeeded withholding attacker synchronisation")
-//	}
-//	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
-//		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
-//	}
-//	if mode == FastSync {
-//		if head := tester.CurrentBlock().NumberU64(); head != 0 {
-//			t.Errorf("fast sync pivot block #%d not rolled back", head)
-//		}
-//	}
-//	// Synchronise with the valid peer and make sure sync succeeds. Since the last
-//	// rollback should also disable fast syncing for this process, verify that we
-//	// did a fresh full sync. Note, we can't assert anything about the receipts
-//	// since we won't purge the database of them, hence we can't use assertOwnChain.
-//	tester.newPeer("valid", protocol, hashes, headers, blocks, receipts)
-//	if err := tester.sync("valid", nil, mode); err != nil {
-//		t.Fatalf("failed to synchronise blocks: %v", err)
-//	}
-//	if hs := len(tester.ownHeaders); hs != len(headers) {
-//		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, len(headers))
-//	}
-//	if mode != LightSync {
-//		if bs := len(tester.ownBlocks); bs != len(blocks) {
-//			t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(blocks))
-//		}
-//	}
-//}
+func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
+func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
+func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
+
+func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
+	tester := newTester()
+	defer tester.terminate()
+
+	// Create a small enough block chain to download
+	targetBlocks := 3*fsHeaderSafetyNet + 256 + fsMinFullBlocks
+	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
+
+	// Attempt to sync with an attacker that feeds junk during the fast sync phase.
+	// This should result in the last fsHeaderSafetyNet headers being rolled back.
+	tester.newPeer("fast-attack", protocol, hashes, headers, blocks, receipts)
+	missing := fsHeaderSafetyNet + MaxHeaderFetch + 1
+	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing])
+
+	if err := tester.sync("fast-attack", nil, mode); err == nil {
+		t.Fatalf("succeeded fast attacker synchronisation")
+	}
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
+	}
+	// Attempt to sync with an attacker that feeds junk during the block import phase.
+	// This should result in both the last fsHeaderSafetyNet number of headers being
+	// rolled back, and also the pivot point being reverted to a non-block status.
+	tester.newPeer("block-attack", protocol, hashes, headers, blocks, receipts)
+	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
+	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing]) // Make sure the fast-attacker doesn't fill in
+	delete(tester.peerHeaders["block-attack"], hashes[len(hashes)-missing])
+
+	if err := tester.sync("block-attack", nil, mode); err == nil {
+		t.Fatalf("succeeded block attacker synchronisation")
+	}
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
+	}
+	if mode == FastSync {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
+			t.Errorf("fast sync pivot block #%d not rolled back", head)
+		}
+	}
+	// Attempt to sync with an attacker that withholds promised blocks after the
+	// fast sync pivot point. This could be a trial to leave the node with a bad
+	// but already imported pivot block.
+	tester.newPeer("withhold-attack", protocol, hashes, headers, blocks, receipts)
+	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
+
+	tester.downloader.syncInitHook = func(uint64, uint64) {
+		for i := missing; i <= len(hashes); i++ {
+			delete(tester.peerHeaders["withhold-attack"], hashes[len(hashes)-i])
+		}
+		tester.downloader.syncInitHook = nil
+	}
+
+	if err := tester.sync("withhold-attack", nil, mode); err == nil {
+		t.Fatalf("succeeded withholding attacker synchronisation")
+	}
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
+	}
+	if mode == FastSync {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
+			t.Errorf("fast sync pivot block #%d not rolled back", head)
+		}
+	}
+	// Synchronise with the valid peer and make sure sync succeeds. Since the last
+	// rollback should also disable fast syncing for this process, verify that we
+	// did a fresh full sync. Note, we can't assert anything about the receipts
+	// since we won't purge the database of them, hence we can't use assertOwnChain.
+	tester.newPeer("valid", protocol, hashes, headers, blocks, receipts)
+	if err := tester.sync("valid", nil, mode); err != nil {
+		t.Fatalf("failed to synchronise blocks: %v", err)
+	}
+	if hs := len(tester.ownHeaders); hs != len(headers) {
+		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, len(headers))
+	}
+	if mode != LightSync {
+		if bs := len(tester.ownBlocks); bs != len(blocks) {
+			t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(blocks))
+		}
+	}
+}
 
 // Tests that a peer advertising an high TD doesn't get to stall the downloader
 // afterwards by not sending any useful hashes.
@@ -1357,77 +1357,77 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	}
 }
 
-// Tests that synchronisation progress (origin block number, current block number
-// and highest block number) is tracked and updated correctly.
-//func TestSyncProgress62(t *testing.T)      { testSyncProgress(t, 62, FullSync) }
-//func TestSyncProgress63Full(t *testing.T)  { testSyncProgress(t, 63, FullSync) }
-//func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }
-//func TestSyncProgress64Full(t *testing.T)  { testSyncProgress(t, 64, FullSync) }
-//func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
-//func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
-//
-//func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
-//	t.Parallel()
-//
-//	tester := newTester()
-//	defer tester.terminate()
-//
-//	// Create a small enough block chain to download
-//	targetBlocks := blockCacheItems - 15
-//	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
-//
-//	// Set a sync init hook to catch progress changes
-//	starting := make(chan struct{})
-//	progress := make(chan struct{})
-//
-//	tester.downloader.syncInitHook = func(origin, latest uint64) {
-//		starting <- struct{}{}
-//		<-progress
-//	}
-//	// Retrieve the sync progress and ensure they are zero (pristine sync)
-//	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
-//		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
-//	}
-//	// Synchronise half the blocks and check initial progress
-//	tester.newPeer("peer-half", protocol, hashes[targetBlocks/2:], headers, blocks, receipts)
-//	pending := new(sync.WaitGroup)
-//	pending.Add(1)
-//
-//	go func() {
-//		defer pending.Done()
-//		if err := tester.sync("peer-half", nil, mode); err != nil {
-//			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
-//		}
-//	}()
-//	<-starting
-//	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(targetBlocks/2+1) {
-//		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, targetBlocks/2+1)
-//	}
-//	progress <- struct{}{}
-//	pending.Wait()
-//
-//	// Synchronise all the blocks and check continuation progress
-//	tester.newPeer("peer-full", protocol, hashes, headers, blocks, receipts)
-//	pending.Add(1)
-//
-//	go func() {
-//		defer pending.Done()
-//		if err := tester.sync("peer-full", nil, mode); err != nil {
-//			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
-//		}
-//	}()
-//	<-starting
-//	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks/2+1) || progress.HighestBlock != uint64(targetBlocks) {
-//		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks/2+1, targetBlocks)
-//	}
-//	progress <- struct{}{}
-//	pending.Wait()
-//
-//	// Check final progress after successful sync
-//	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
-//		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks, targetBlocks)
-//	}
-//}
+//Tests that synchronisation progress (origin block number, current block number
+//and highest block number) is tracked and updated correctly.
+func TestSyncProgress62(t *testing.T)      { testSyncProgress(t, 62, FullSync) }
+func TestSyncProgress63Full(t *testing.T)  { testSyncProgress(t, 63, FullSync) }
+func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }
+func TestSyncProgress64Full(t *testing.T)  { testSyncProgress(t, 64, FullSync) }
+func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
+func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
+
+func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
+	tester := newTester()
+	defer tester.terminate()
+
+	// Create a small enough block chain to download
+	targetBlocks := blockCacheItems - 15
+	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
+
+	// Set a sync init hook to catch progress changes
+	starting := make(chan struct{})
+	progress := make(chan struct{})
+
+	tester.downloader.syncInitHook = func(origin, latest uint64) {
+		starting <- struct{}{}
+		<-progress
+	}
+	// Retrieve the sync progress and ensure they are zero (pristine sync)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
+		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
+	}
+	// Synchronise half the blocks and check initial progress
+	tester.newPeer("peer-half", protocol, hashes[targetBlocks/2:], headers, blocks, receipts)
+	pending := new(sync.WaitGroup)
+	pending.Add(1)
+
+	go func() {
+		defer pending.Done()
+		if err := tester.sync("peer-half", nil, mode); err != nil {
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
+		}
+	}()
+	<-starting
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(targetBlocks/2+1) {
+		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, targetBlocks/2+1)
+	}
+	progress <- struct{}{}
+	pending.Wait()
+
+	// Synchronise all the blocks and check continuation progress
+	tester.newPeer("peer-full", protocol, hashes, headers, blocks, receipts)
+	pending.Add(1)
+
+	go func() {
+		defer pending.Done()
+		if err := tester.sync("peer-full", nil, mode); err != nil {
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
+		}
+	}()
+	<-starting
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks/2+1) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks/2+1, targetBlocks)
+	}
+	progress <- struct{}{}
+	pending.Wait()
+
+	// Check final progress after successful sync
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks, targetBlocks)
+	}
+}
 
 // Tests that synchronisation progress (origin block number and highest block
 // number) is tracked and updated correctly in case of a fork (or manual head
