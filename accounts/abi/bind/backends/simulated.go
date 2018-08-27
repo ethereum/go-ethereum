@@ -164,6 +164,21 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 	return receipt, nil
 }
 
+// TransactionByHash returns the transaction with the given hash.
+func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	transaction, _, blockNumber, _ := rawdb.ReadTransaction(b.database, txHash)
+	return transaction, blockNumber != 0, nil
+}
+
+// HeaderByNumber returns a block header from the current canonical chain. If number is
+// nil, the latest known header is returned.
+func (b *SimulatedBackend) HeaderByNumber(ctx context.Context, block *big.Int) (*types.Header, error) {
+	if block == nil {
+		return b.blockchain.CurrentHeader(), nil
+	}
+	return b.blockchain.GetHeaderByNumber(uint64(block.Int64())), nil
+}
+
 // PendingCodeAt returns the code associated with an account in the pending state.
 func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
 	b.mu.Lock()
