@@ -61,7 +61,7 @@ func TestRemoteNotify(t *testing.T) {
 		if want := common.BytesToHash(target.Bytes()).Hex(); work[2] != want {
 			t.Errorf("work packet target mismatch: have %s, want %s", work[2], want)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatalf("notification timed out")
 	}
 }
@@ -108,7 +108,7 @@ func TestRemoteMultiNotify(t *testing.T) {
 	for i := 0; i < cap(sink); i++ {
 		select {
 		case <-sink:
-		case <-time.After(250 * time.Millisecond):
+		case <-time.After(3 * time.Second):
 			t.Fatalf("notification %d timed out", i)
 		}
 	}
