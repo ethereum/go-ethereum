@@ -18,26 +18,16 @@ package swap
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/chequebook"
-	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
@@ -47,15 +37,8 @@ const (
 )
 
 var (
-	autoCashInterval     = 300 * time.Second           // default interval for autocash
-	autoCashThreshold    = big.NewInt(50000000000000)  // threshold that triggers autocash (wei)
-	autoDepositInterval  = 300 * time.Second           // default interval for autocash
-	autoDepositThreshold = big.NewInt(50000000000000)  // threshold that triggers autodeposit (wei)
-	autoDepositBuffer    = big.NewInt(100000000000000) // buffer that is surplus for fork protection etc (wei)
-	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
-	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
-	payAt                = big.NewInt(-4096 * 10000)   // threshold that triggers payment {request} (bytes)
-	dropAt               = big.NewInt(-4096 * 12000)   // threshold that triggers disconnect (bytes)
+	payAt  = big.NewInt(-4096 * 10000) // threshold that triggers payment {request} (bytes)
+	dropAt = big.NewInt(-4096 * 12000) // threshold that triggers disconnect (bytes)
 
 	ErrInsufficientFunds = errors.New("Insufficient funds")
 	ErrNotAccountedMsg   = errors.New("Message does not need accounting")
@@ -66,17 +49,19 @@ const (
 	chequebookDeployDelay   = 1 * time.Second // delay between retries
 )
 
-// SwAP Swarm Accounting Protocol with
-//      Swift Automatic  Payments
+// SwAP Swarm Accounting Protocol
 // a peer to peer micropayment system
+// A node maintains an individual balance with every peer
+// Only messages which have a price will be accounted for
 type Swap struct {
 	chequeManager *ChequeManager
 	stateStore    state.Store
 	lock          sync.RWMutex
 	peers         map[discover.NodeID]*SwapPeer
-	local         *Params // local peer's swap parameters
 }
 
+//Protocols which want to send and handle priced messages will need to use
+//this peer instead of protocols.Peer, which is embedded
 type SwapPeer struct {
 	*protocols.Peer
 	lock        sync.RWMutex
@@ -86,6 +71,7 @@ type SwapPeer struct {
 	storeID     string
 }
 
+//This defines if a price will be debited or credited to an account
 type EntryDirection bool
 
 const (
@@ -93,8 +79,9 @@ const (
 	CreditEntry EntryDirection = false
 )
 
-type SwapAccountedMsgType interface {
-	GetMsgPrice() *big.Int
+//A message which needs accounting needs to implement this interface
+type PricedMsg interface {
+	Price() *big.Int
 }
 
 //Handler for received messages
@@ -104,7 +91,7 @@ func (sp *SwapPeer) RunAccountedProtocol(protocolHandler func(ctx context.Contex
 	sp.handlerFunc = protocolHandler
 
 	//then run the handler loop function
-	return sp.Run(sp.handleAccountedMsg)
+	return sp.Run(sp.handle)
 }
 
 //get a peer's balance
@@ -118,12 +105,12 @@ func (swap *Swap) GetPeerBalance(peer discover.NodeID) *big.Int {
 //Handle a received message; this is the handler loop function.
 //Check if it needs accounting, and if yes, apply accounting logic:
 //Check for sufficient funds, perform operation, then account
-func (sp *SwapPeer) handleAccountedMsg(ctx context.Context, msg interface{}) error {
+func (sp *SwapPeer) handle(ctx context.Context, msg interface{}) error {
 	var err error
 	var price *big.Int
 
 	//the message is one which needs accounting...
-	if _, ok := msg.(SwapAccountedMsgType); ok {
+	if _, ok := msg.(PricedMsg); ok {
 		//..so first check if there are enough funds for the operation available
 		//(for crediting, this means if we are not essentially "overdrafting", or crossing the threshold)
 		price, err = sp.checkAvailableFunds(ctx, msg, CreditEntry)
@@ -157,7 +144,7 @@ func (sp *SwapPeer) Send(ctx context.Context, msg interface{}) error {
 	var price *big.Int
 
 	//the message is one which needs accounting...
-	if _, ok := msg.(SwapAccountedMsgType); ok {
+	if _, ok := msg.(PricedMsg); ok {
 		//..so first check if there are enough funds for the operation available
 		price, err = sp.checkAvailableFunds(ctx, msg, DebitEntry)
 		//if not (or some other error occured), return error
@@ -187,8 +174,8 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 	sp.lock.Lock()
 	defer sp.lock.Unlock()
 
-	if accounted, ok := msg.(SwapAccountedMsgType); ok {
-		price := accounted.GetMsgPrice()
+	if accounted, ok := msg.(PricedMsg); ok {
+		price := accounted.Price()
 		//local node is being credited (in its favor), so check upper limit
 		if direction == CreditEntry {
 			//TODO: is there a check needed here?
@@ -229,7 +216,7 @@ func (sp *SwapPeer) checkAvailableFunds(ctx context.Context, msg interface{}, di
 //Thus, we credit the balance and increase it when the amount is in favor of the local node
 //We debit the balance and decrease it when the amount is in favor of the remote peer
 func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, price *big.Int, direction EntryDirection) {
-	if _, ok := msg.(SwapAccountedMsgType); ok {
+	if _, ok := msg.(PricedMsg); ok {
 		sp.lock.Lock()
 		defer sp.lock.Unlock()
 		//local node is being credited (in its favor), so its balance increases
@@ -252,6 +239,7 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 			if err != nil {
 				//TODO: special error handling, as at this point the accounting has been done
 				//but the cheque could not be sent?
+				log.Warn("Payment threshold exceeded, but error sending cheque!", "err", err)
 			}
 		}
 		if sp.balance.Cmp(dropAt) == -1 {
@@ -261,12 +249,15 @@ func (sp *SwapPeer) AccountMsgForPeer(ctx context.Context, msg interface{}, pric
 	}
 }
 
+//Issue a cheque for the remote peer. Happens if we are indebted with the peer
+//and crossed the payment threshold
 func (sp *SwapPeer) issueCheque(ctx context.Context) error {
-	amount := big.NewInt(0)
+	amount := &big.Int{}
 	cheque := sp.swapAccount.chequeManager.CreateCheque(sp.ID(), amount.Abs(payAt))
 	msg := IssueChequeMsg{
 		Cheque: cheque,
 	}
+	//TODO: This should now be via the actual SwapProtocol
 	return sp.Send(ctx, msg)
 }
 
@@ -287,303 +278,14 @@ func NewSwapPeer(peer *protocols.Peer, swap *Swap) *SwapPeer {
 	return sp
 }
 
-// Profile - public swap profile
-// public parameters for SWAP, serializable config struct passed in handshake
-type Profile struct {
-	BuyAt  *big.Int // accepted max price for chunk
-	SellAt *big.Int // offered sale price for chunk
-	PayAt  *big.Int // threshold that triggers payment request
-	DropAt *big.Int // threshold that triggers disconnect
-}
-
-// Strategy encapsulates parameters relating to
-// automatic deposit and automatic cashing
-type Strategy struct {
-	AutoCashInterval     time.Duration // default interval for autocash
-	AutoCashThreshold    *big.Int      // threshold that triggers autocash (wei)
-	AutoDepositInterval  time.Duration // default interval for autocash
-	AutoDepositThreshold *big.Int      // threshold that triggers autodeposit (wei)
-	AutoDepositBuffer    *big.Int      // buffer that is surplus for fork protection etc (wei)
-}
-
-// SwapMsg encapsulates messages transported over pss.
-type SwapMsg struct {
-	To      []byte
-	Control []byte
-	Expire  uint32
-	Payload *whisper.Envelope
-}
-
-// Params extends the public profile with private parameters relating to
-// automatic deposit and automatic cashing
-type Params struct {
-	*Profile
-	*Strategy
-}
-
-// LocalProfile combines a PayProfile with *swap.Params
-type LocalProfile struct {
-	*Params
-	*PayProfile
-}
-
-// RemoteProfile combines a PayProfile with *swap.Profile
-type RemoteProfile struct {
-	*Profile
-	*PayProfile
-}
-
-// PayProfile is a container for relevant chequebook and beneficiary options
-type PayProfile struct {
-	PublicKey   string         // check against signature of promise
-	Contract    common.Address // address of chequebook contract
-	Beneficiary common.Address // recipient address for swarm sales revenue
-	privateKey  *ecdsa.PrivateKey
-	publicKey   *ecdsa.PublicKey
-	owner       common.Address
-	chbook      *chequebook.Chequebook
-	lock        sync.RWMutex
-}
-
 // New - swap constructor
-func NewSwap(local *Params, stateStore state.Store) (swap *Swap, err error) {
+func New(stateStore state.Store) (swap *Swap, err error) {
 
 	swap = &Swap{
 		chequeManager: NewChequeManager(stateStore),
-		local:         local,
 		stateStore:    stateStore,
 		peers:         make(map[discover.NodeID]*SwapPeer),
 	}
 
-	//swap.SetParams(local)
 	return
 }
-
-// NewDefaultSwapParams create params with default values
-func NewDefaultSwapParams() *LocalProfile {
-	return &LocalProfile{
-		PayProfile: &PayProfile{},
-		Params: &Params{
-			Profile: &Profile{
-				BuyAt:  buyAt,
-				SellAt: sellAt,
-				PayAt:  payAt,
-				DropAt: dropAt,
-			},
-			Strategy: &Strategy{
-				AutoCashInterval:     autoCashInterval,
-				AutoCashThreshold:    autoCashThreshold,
-				AutoDepositInterval:  autoDepositInterval,
-				AutoDepositThreshold: autoDepositThreshold,
-				AutoDepositBuffer:    autoDepositBuffer,
-			},
-		},
-	}
-}
-
-// Init this can only finally be set after all config options (file, cmd line, env vars)
-// have been evaluated
-func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
-	pubkey := &prvkey.PublicKey
-
-	lp.PayProfile = &PayProfile{
-		PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
-		Contract:    contract,
-		Beneficiary: crypto.PubkeyToAddress(*pubkey),
-		privateKey:  prvkey,
-		publicKey:   pubkey,
-		owner:       crypto.PubkeyToAddress(*pubkey),
-	}
-}
-
-// Chequebook get's chequebook from the localProfile
-func (lp *LocalProfile) Chequebook() *chequebook.Chequebook {
-	defer lp.lock.Unlock()
-	lp.lock.Lock()
-	return lp.chbook
-}
-
-// PrivateKey accessor
-func (lp *LocalProfile) PrivateKey() *ecdsa.PrivateKey {
-	return lp.privateKey
-}
-
-// func (self *LocalProfile) PublicKey() *ecdsa.PublicKey {
-// 	return self.publicKey
-// }
-
-// SetKey set's private and public key on localProfile
-func (lp *LocalProfile) SetKey(prvkey *ecdsa.PrivateKey) {
-	lp.privateKey = prvkey
-	lp.publicKey = &prvkey.PublicKey
-}
-
-// SetChequebook wraps the chequebook initialiser and sets up autoDeposit to cover spending.
-func (lp *LocalProfile) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	lp.lock.Lock()
-	swapContract := lp.Contract
-	lp.lock.Unlock()
-
-	valid, err := chequebook.ValidateCode(ctx, backend, swapContract)
-	if err != nil {
-		return err
-	} else if valid {
-		return lp.newChequebookFromContract(path, backend)
-	}
-	return lp.deployChequebook(ctx, backend, path)
-}
-
-// deployChequebook deploys the localProfile Chequebook
-func (lp *LocalProfile) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	opts := bind.NewKeyedTransactor(lp.privateKey)
-	opts.Value = lp.AutoDepositBuffer
-	opts.Context = ctx
-
-	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
-	address, err := deployChequebookLoop(opts, backend)
-	if err != nil {
-		log.Error(fmt.Sprintf("unable to deploy new chequebook: %v", err))
-		return err
-	}
-	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
-
-	// need to save config at this point
-	lp.lock.Lock()
-	lp.Contract = address
-	err = lp.newChequebookFromContract(path, backend)
-	lp.lock.Unlock()
-	if err != nil {
-		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
-	}
-	return err
-}
-
-// deployChequebookLoop repeatedly tries to deploy a chequebook.
-func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (addr common.Address, err error) {
-	var tx *types.Transaction
-	for try := 0; try < chequebookDeployRetries; try++ {
-		if try > 0 {
-			time.Sleep(chequebookDeployDelay)
-		}
-		if _, tx, _, err = contract.DeployChequebook(opts, backend); err != nil {
-			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
-			continue
-		}
-		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
-			log.Warn(fmt.Sprintf("chequebook deploy error (try %d): %v", try, err))
-			continue
-		}
-		return addr, nil
-	}
-	return addr, err
-}
-
-// newChequebookFromContract - initialise the chequebook from a persisted json file or create a new one
-// caller holds the lock
-func (lp *LocalProfile) newChequebookFromContract(path string, backend chequebook.Backend) error {
-	hexkey := common.Bytes2Hex(lp.Contract.Bytes())
-	err := os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
-	}
-
-	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
-	lp.chbook, err = chequebook.LoadChequebook(chbookpath, lp.privateKey, backend, true)
-
-	if err != nil {
-		lp.chbook, err = chequebook.NewChequebook(chbookpath, lp.Contract, lp.privateKey, backend)
-		if err != nil {
-			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err))
-			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err)
-		}
-	}
-
-	lp.chbook.AutoDeposit(lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer)
-	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(lp.publicKey)).Hex()[:8], lp.Contract.Hex()[:8], lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer))
-
-	return nil
-}
-
-/*
-// Add (n)
-// n > 0 called when promised/provided n units of service
-// n < 0 called when used/requested n units of service
-func (swap *Swap) Add(n int) error {
-	//defer swap.lock.Unlock()
-	//swap.lock.Lock()
-	swap.balance += n
-	if !swap.Sells && swap.balance > 0 {
-		log.Trace(fmt.Sprintf("<%v> remote peer cannot have debt (balance: %v)", swap.proto, swap.balance))
-		swap.proto.Drop()
-		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (balance: %v)", swap.proto, swap.balance)
-	}
-	if !swap.Buys && swap.balance < 0 {
-		log.Trace(fmt.Sprintf("<%v> we cannot have debt (balance: %v)", swap.proto, swap.balance))
-		return fmt.Errorf("[SWAP] <%v> we cannot have debt (balance: %v)", swap.proto, swap.balance)
-	}
-	if swap.balance >= int(swap.local.DropAt) {
-		log.Trace(fmt.Sprintf("<%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", swap.proto, swap.balance, swap.local.DropAt))
-		swap.proto.Drop()
-		return fmt.Errorf("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", swap.proto, swap.balance, swap.local.DropAt)
-	} else if swap.balance <= -int(swap.remote.PayAt) {
-		swap.send()
-	}
-	return nil
-}
-
-// Balance accessor
-func (swap *Swap) Balance() int {
-	//defer swap.lock.Unlock()
-	//swap.lock.Lock()
-	return swap.balance
-}
-
-/*
-// send (units) is called when payment is due
-// In case of insolvency no promise is issued and sent, safe against fraud
-// No return value: no error = payment is opportunistic = hang in till dropped
-func (swap *Swap) send() {
-	if swap.local.BuyAt != nil && swap.balance < 0 {
-		amount := big.NewInt(int64(-swap.balance))
-		amount.Mul(amount, swap.remote.SellAt)
-		promise, err := swap.Out.Issue(amount)
-		if err != nil {
-			log.Warn(fmt.Sprintf("<%v> cannot issue cheque (amount: %v, channel: %v): %v", swap.proto, amount, swap.Out, err))
-		} else {
-			log.Warn(fmt.Sprintf("<%v> cheque issued (amount: %v, channel: %v)", swap.proto, amount, swap.Out))
-			swap.proto.Pay(-swap.balance, promise)
-			swap.balance = 0
-		}
-	}
-}
-
-// Receive (units, promise) is called by the protocol when a payment msg is received
-// returns error if promise is invalid.
-func (swap *Swap) Receive(units int, promise Promise) error {
-	if units <= 0 {
-		return fmt.Errorf("invalid units: %v <= 0", units)
-	}
-
-	price := new(big.Int).SetInt64(int64(units))
-	price.Mul(price, swap.local.SellAt)
-
-	amount, err := swap.In.Receive(promise)
-
-	if err != nil {
-		err = fmt.Errorf("invalid promise: %v", err)
-	} else if price.Cmp(amount) != 0 {
-		// verify amount = units * unit sale price
-		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, swap.local.SellAt, amount)
-	}
-	if err != nil {
-		log.Trace(fmt.Sprintf("<%v> invalid promise (amount: %v, channel: %v): %v", swap.proto, amount, swap.In, err))
-		return err
-	}
-
-	// credit remote peer with units
-	swap.Add(-units)
-	log.Trace(fmt.Sprintf("<%v> received promise (amount: %v, channel: %v): %v", swap.proto, amount, swap.In, promise))
-
-	return nil
-}
-*/

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -29,25 +28,22 @@ var (
 	ErrNoSuchPeerAccounting = errors.New("No accounting with that peer")
 )
 
-// Wrapper for receiving pss messages when using the pss API
-// providing access to sender of message
-type APIMsg struct {
-	Msg hexutil.Bytes
-}
-
-// Additional public methods accessible through API for pss
+//This is the API definition to access swarm swap accounting data via RPC
 type API struct {
-	*SwapProtocol
+	*Protocol
 }
 
 //TODO: define metrics
+//Get metrics about swap for this node
 type SwapMetrics struct {
 }
 
-func NewAPI(swap *SwapProtocol) *API {
-	return &API{SwapProtocol: swap}
+//Create a new API instance
+func NewAPI(swap *Protocol) *API {
+	return &API{Protocol: swap}
 }
 
+//Get the balance for this node with a specific peer
 func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
 	balance = swapapi.swap.peers[peer].balance
 	if balance == nil {
@@ -56,6 +52,10 @@ func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (
 	return
 }
 
+//Get the overall balance of the node
+//Iterates over all peers this node is having accounted interaction
+//and just adds up balances.
+//It assumes that if a disfavorable balance is represented as a negative value
 func (swapapi *API) Balance(ctx context.Context) (balance *big.Int, err error) {
 	balance = big.NewInt(0)
 	for _, peer := range swapapi.swap.peers {
@@ -64,6 +64,7 @@ func (swapapi *API) Balance(ctx context.Context) (balance *big.Int, err error) {
 	return
 }
 
+//Just return the Swap metrics
 func (swapapi *API) GetSwapMetrics() (*SwapMetrics, error) {
 	return nil, nil
 }

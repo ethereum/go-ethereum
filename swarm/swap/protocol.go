@@ -33,52 +33,63 @@ const (
 	IsActiveProtocol = true
 )
 
-type SwapProtocol struct {
+//Here we define the Swap p2p.protocol
+//We use it to standardize the interaction between nodes who need clear their accounts.
+//Accounting itself is separate (see swarm/swap/swap.go)
+//This protocol focuses on sending and receiving cheques and
+//cheque management/clearing
+//For a better understanding, please read the Swap network paper "Generalized Swap swear and swindle games"
+type Protocol struct {
 	peersMu sync.RWMutex
-	peers   map[discover.NodeID]*SwapProtocolPeer
+	peers   map[discover.NodeID]*Peer
 	swap    *Swap
 }
 
-// Peer is the Peer extension for the streaming protocol
-type SwapProtocolPeer struct {
+//This is the peer representing a participant in this protocol
+type Peer struct {
 	*protocols.Peer
-	swapProtocol *SwapProtocol
+	swapProtocol *Protocol
 }
 
-func NewSwapProtocol(swapAccount *Swap) *SwapProtocol {
-	proto := &SwapProtocol{
-		peers: make(map[discover.NodeID]*SwapProtocolPeer),
+//Create a new protocol instance
+func NewSwapProtocol(swapAccount *Swap) *Protocol {
+	proto := &Protocol{
+		peers: make(map[discover.NodeID]*Peer),
 		swap:  swapAccount,
 	}
 	return proto
 }
 
-// NewPeer is the constructor for Peer
-func NewPeer(peer *protocols.Peer, swap *SwapProtocol) *SwapProtocolPeer {
-	p := &SwapProtocolPeer{
+// NewPeer is the constructor for the protocol Peer
+func NewPeer(peer *protocols.Peer, swap *Protocol) *Peer {
+	p := &Peer{
 		Peer:         peer,
 		swapProtocol: swap,
 	}
 	return p
 }
 
+//In a peer exchange, if node A gets too indebted with node B,
+//node A issues a cheque and sends it to B
 type IssueChequeMsg struct {
 	Cheque *Cheque
 }
 
+//In a scenario where B received a cheque from A, node B can
+//redeem a cheque, which means it kicks off the process to cash it in.
+//In this case, this message is sent to peer A
 type RedeemChequeMsg struct {
 }
 
 /////////////////////////////////////////////////////////////////////
 // SECTION: node.Service interface
 /////////////////////////////////////////////////////////////////////
-
-func (p *SwapProtocol) Start(srv *p2p.Server) error {
+func (p *Protocol) Start(srv *p2p.Server) error {
 	log.Debug("Started swap")
 	return nil
 }
 
-func (p *SwapProtocol) Stop() error {
+func (p *Protocol) Stop() error {
 	log.Info("swap shutting down")
 	return nil
 }
@@ -88,11 +99,12 @@ var swapSpec = &protocols.Spec{
 	Version:    swapVersion,
 	MaxMsgSize: defaultMaxMsgSize,
 	Messages: []interface{}{
-		SwapMsg{},
+		IssueChequeMsg{},
+		RedeemChequeMsg{},
 	},
 }
 
-func (p *SwapProtocol) Protocols() []p2p.Protocol {
+func (p *Protocol) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
 			Name:    swapSpec.Name,
@@ -103,7 +115,7 @@ func (p *SwapProtocol) Protocols() []p2p.Protocol {
 	}
 }
 
-func (p *SwapProtocol) APIs() []rpc.API {
+func (p *Protocol) APIs() []rpc.API {
 	apis := []rpc.API{
 		{
 			Namespace: "swap",
@@ -118,7 +130,7 @@ func (p *SwapProtocol) APIs() []rpc.API {
 /////////////////////////////////////////////////////////////////////
 // SECTION: p2p.protocol interface
 /////////////////////////////////////////////////////////////////////
-func (swap *SwapProtocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (swap *Protocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	p := protocols.NewPeer(peer, rw, swapSpec)
 	sp := NewPeer(p, swap)
 	swap.setPeer(sp)
@@ -127,50 +139,51 @@ func (swap *SwapProtocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return sp.Run(sp.handleSwapMsg)
 }
 
-func (swap *SwapProtocol) NodeInfo() interface{} {
+func (swap *Protocol) NodeInfo() interface{} {
 	return nil
 }
 
-func (swap *SwapProtocol) PeerInfo(id discover.NodeID) interface{} {
+func (swap *Protocol) PeerInfo(id discover.NodeID) interface{} {
 	return nil
 }
 
 //------------------------------------------------------------------------------------------
-func (swap *SwapProtocol) Close() {
+func (swap *Protocol) Close() {
 }
 
-func (swap *SwapProtocol) getPeer(peerId discover.NodeID) *SwapProtocolPeer {
+func (swap *Protocol) getPeer(peerId discover.NodeID) *Peer {
 	swap.peersMu.RLock()
 	defer swap.peersMu.RUnlock()
 
 	return swap.peers[peerId]
 }
 
-func (swap *SwapProtocol) setPeer(peer *SwapProtocolPeer) {
+func (swap *Protocol) setPeer(peer *Peer) {
 	swap.peersMu.Lock()
 	defer swap.peersMu.Unlock()
 
 	swap.peers[peer.ID()] = peer
-	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(swap.peers)))
+	metrics.GetOrRegisterGauge("swap.peers", nil).Update(int64(len(swap.peers)))
 }
 
-func (swap *SwapProtocol) deletePeer(peer *SwapProtocolPeer) {
+func (swap *Protocol) deletePeer(peer *Peer) {
 	swap.peersMu.Lock()
 	defer swap.peersMu.Unlock()
 
 	delete(swap.peers, peer.ID())
-	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(swap.peers)))
+	metrics.GetOrRegisterGauge("swap.peers", nil).Update(int64(len(swap.peers)))
 	swap.peersMu.Unlock()
 }
 
-func (swap *SwapProtocol) peersCount() (c int) {
+func (swap *Protocol) peersCount() (c int) {
 	swap.peersMu.Lock()
 	c = len(swap.peers)
 	swap.peersMu.Unlock()
 	return
 }
 
-func (p *SwapProtocolPeer) handleSwapMsg(ctx context.Context, msg interface{}) error {
+//Protocol message handler for handling cheque messages
+func (p *Peer) handleSwapMsg(ctx context.Context, msg interface{}) error {
 	switch msg := msg.(type) {
 
 	case *IssueChequeMsg:
@@ -179,22 +192,19 @@ func (p *SwapProtocolPeer) handleSwapMsg(ctx context.Context, msg interface{}) e
 	case *RedeemChequeMsg:
 		return p.handleRedeemChequeMsg(ctx, msg)
 
-	/*
-		case *QuitMsg:
-			return p.handleQuitMsg(msg)
-	*/
-
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
 }
 
-func (sp *SwapProtocolPeer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
+//A IssueChequeMsg has been received
+func (sp *Peer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	log.Debug("SwapProtocolPeer: handleIssueChequeMsg")
 	return err
 }
 
-func (sp *SwapProtocolPeer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
+//A RedeemChequeMsg has been received
+func (sp *Peer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	log.Debug("SwapProtocolPeer: handleRedeemChequeMsg")
 	return err
 }

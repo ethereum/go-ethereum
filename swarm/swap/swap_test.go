@@ -57,6 +57,9 @@ var testSpec = &protocols.Spec{
 	},
 }
 
+//dummy implementation of a MsgReadWriter
+//this allows for quick and easy unit tests without
+//having to build up the complete protocol
 type dummyRW struct{}
 
 func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
@@ -72,21 +75,27 @@ func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
 	}, nil
 }
 
+//define a couple of messages for tests
 type testExceedsPayAtMsg struct{}
 type testExceedsDropAtMsg struct{}
 type testCheapMsg struct{}
 
-func (tmsg *testExceedsPayAtMsg) GetMsgPrice() *big.Int {
+//this message is just one unit more expensive than the payment threshold
+func (tmsg *testExceedsPayAtMsg) Price() *big.Int {
 	diff := &big.Int{}
-	return diff.Sub(payAt, big.NewInt(1))
+	diff = diff.Abs(payAt)
+	return diff.Add(diff, big.NewInt(1))
 }
 
-func (tmsg *testExceedsDropAtMsg) GetMsgPrice() *big.Int {
+//this message is just one unit more expensive than the disconnect threshold
+func (tmsg *testExceedsDropAtMsg) Price() *big.Int {
 	diff := &big.Int{}
-	return diff.Sub(dropAt, big.NewInt(1))
+	diff = diff.Abs(dropAt)
+	return diff.Add(diff, big.NewInt(1))
 }
 
-func (tmsg *testCheapMsg) GetMsgPrice() *big.Int {
+//a message with an arbitrary cost
+func (tmsg *testCheapMsg) Price() *big.Int {
 	return big.NewInt(100)
 }
 
@@ -97,6 +106,7 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
+//check that the disconnect threshold is below the payment threshold
 func TestLimits(t *testing.T) {
 	if dropAt.Cmp(payAt) > -1 {
 		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %s, payAt: %s", dropAt.String(), payAt.String()))
@@ -104,17 +114,29 @@ func TestLimits(t *testing.T) {
 }
 
 //unit test for exceeds pay limit
+//when the payment threshold is reached, a cheque will be issued
+//this test checks that a cheque is present if a message is sent
+//which exceeds the payment threshold
+//(note: the details of cheque handling will need to be fleshed out
+//in future iterations, current implementation is very primitive)
 func TestExceedsPayAt(t *testing.T) {
+	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	//create a dummy peer
 	testPeer := newDummyPeer()
 	sp := NewSwapPeer(testPeer, swap)
 	sp.handlerFunc = dummyMsgHandler
 
+	//send the message
 	ctx := context.Background()
-	sp.Send(ctx, &testExceedsPayAtMsg{})
+	err := sp.Send(ctx, &testExceedsPayAtMsg{})
+	if err != nil {
+		t.Fatal("Unecpected error on sending message", "err", err)
+	}
 
+	//check that a cheque is present
 	cheques := sp.swapAccount.chequeManager.openDebitCheques[sp.ID()]
 	if cheques == nil {
 		t.Fatal("Expected cheques for this peer to be present, but are nil")
@@ -132,6 +154,8 @@ func TestExceedsPayAt(t *testing.T) {
 }
 
 //unit test for exceeds drop limit
+//tests that a message is being sent which crosses the drop limit
+//in that case, we should receive a InsufficientFunds error
 func TestExceedsDropAt(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
@@ -147,15 +171,19 @@ func TestExceedsDropAt(t *testing.T) {
 	}
 }
 
+//send a message with cost,
+//then check that the balance has the expected amount
 func TestSendCheapMessage(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
 	sp := NewSwapPeer(testPeer, swap)
+	//set an arbitrary test balance value
 	testBalance := big.NewInt(1234567890)
 	sp.balance = testBalance
 
+	//send the message
 	msg := &testCheapMsg{}
 	ctx := context.Background()
 	err := sp.Send(ctx, msg)
@@ -163,19 +191,30 @@ func TestSendCheapMessage(t *testing.T) {
 		t.Fatal("Unexpected error sending message")
 	}
 
-	if sp.balance.Cmp(testBalance.Sub(testBalance, msg.GetMsgPrice())) != 0 {
+	//check the new balance
+	if sp.balance.Cmp(testBalance.Sub(testBalance, msg.Price())) != 0 {
 		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
-			testBalance.Sub(testBalance, msg.GetMsgPrice()).String(), sp.balance.String()))
+			testBalance.Sub(testBalance, msg.Price()).String(), sp.balance.String()))
 	}
 }
 
+//try restoring a balance from state store
+//this is simulated by creating a node,
+//assigning it an arbitrary balance,
+//send a message (triggers to save to store),
+//then create a different SwapPeer instance with same peerID,
+//which will try to load a balance from the stateStore
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
+	//create the dummy p2p protocol Peer
 	testPeer := newDummyPeer()
+	//create the "source" swap peer
 	sp := NewSwapPeer(testPeer, swap)
+	//create a reference an arbitrary balance
 	testBalance := big.NewInt(1234567890)
+	//assign the same value to the peer
 	sp.balance = big.NewInt(1234567890)
 
 	//send a message, should trigger saving to stateStore
@@ -187,16 +226,22 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 		t.Fatal("Unexpected error sending message")
 	}
 
+	//create a new peer with same underlying protocols.Peer
+	//this will try to load the balance from the stateStore,
+	//as it is the same discover.NodeID
 	sp2 := NewSwapPeer(testPeer, swap)
 
+	//compare the balances
 	expectedBalance := &big.Int{}
-	expectedBalance.Sub(testBalance, msg.GetMsgPrice())
+	expectedBalance.Sub(testBalance, msg.Price())
 	if sp2.balance.Cmp(expectedBalance) != 0 {
 		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
 			expectedBalance.String(), sp2.balance.String()))
 	}
 }
 
+//create a test swap account
+//creates a stateStore for persistence and a Swap account
 func createTestSwap(t *testing.T) (*Swap, string) {
 	dir, err := ioutil.TempDir("", "swap_test_store")
 	if err != nil {
@@ -206,22 +251,19 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 	if err2 != nil {
 		t.Fatal(err2)
 	}
-	swap, err3 := NewSwap(NewDefaultSwapParams().Params, stateStore)
+	swap, err3 := New(stateStore)
 	if err3 != nil {
 		t.Fatal(err3)
 	}
 	return swap, dir
 }
 
-func runProtocol(peer *protocols.Peer, swap *Swap) {
-	sp := NewSwapPeer(peer, swap)
-	sp.Peer.Run(dummyMsgHandler)
-}
-
+//dummy message handler (needed or we will have a panic in the accounting)
 func dummyMsgHandler(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
+//tests some basic things over RPC
 func TestSwapRPC(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
@@ -236,7 +278,7 @@ func TestSwapRPC(t *testing.T) {
 	// wrapper function for servicenode to start the service
 	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
 		return &API{
-			SwapProtocol: instance,
+			Protocol: instance,
 		}, nil
 	}
 
@@ -314,11 +356,13 @@ func TestSwapRPC(t *testing.T) {
 	}
 }
 
+//creates a dummy protocols.Peer with dummy MsgReadWriter
 func newDummyPeer() *protocols.Peer {
 	id := adapters.RandomNodeConfig().ID
 	return protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), &dummyRW{}, testSpec)
 }
 
+//creates a p2p.Service node stub
 func newServiceNode(port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
 	cfg := &node.DefaultConfig
 	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", port)
