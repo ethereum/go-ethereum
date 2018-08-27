@@ -79,8 +79,8 @@ type Config struct {
 	Genesis *core.Genesis `toml:",omitempty"`
 
 	// Protocol options
-	NetworkId uint64              `toml:"NetworkId,default=1"` // Network ID to use for selecting peers to connect to ,default=1
-	SyncMode  downloader.SyncMode `toml:"SyncMode,default=FastSync"`
+	NetworkId uint64 // Network ID to use for selecting peers to connect to
+	SyncMode  downloader.SyncMode
 	NoPruning bool
 
 	// Light client options
@@ -98,7 +98,7 @@ type Config struct {
 	Etherbase    common.Address `toml:",omitempty"`
 	MinerThreads int            `toml:",omitempty"`
 	ExtraData    []byte         `toml:",omitempty"`
-	GasPrice     *big.Int       `toml:"GasPrice"`
+	GasPrice     *big.Int
 
 	// Ethash options
 	Ethash ethash.Config

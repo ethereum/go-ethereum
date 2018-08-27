@@ -72,28 +72,28 @@ var tomlSettings = toml.Config{
 }
 
 type ethstatsConfig struct {
-	URL string `toml:"url"`
+	URL string `toml:",omitempty"`
 }
 
 type account struct {
-	Unlocks   []string `toml:"unlocks"`
-	Passwords []string `toml:"passwords"`
+	Unlocks   []string
+	Passwords []string
 }
 
 type Bootnodes struct {
-	Mainnet []string `toml:"main"`
-	Testnet []string `toml:"test"`
+	Mainnet []string
+	Testnet []string
 }
 
 type tomoConfig struct {
-	Eth         eth.Config       `toml:"eth"`
-	Shh         whisper.Config   `toml:"ssh"`
-	Node        node.Config      `toml:"node"`
-	Ethstats    ethstatsConfig   `toml:"ethstats"`
-	Dashboard   dashboard.Config `toml:"dashboard"`
-	Account     account          `toml:"account"`
-	StakeEnable bool             `toml:"stake"`
-	Bootnodes   Bootnodes        `toml:"bootnodes"`
+	Eth         eth.Config
+	Shh         whisper.Config
+	Node        node.Config
+	Ethstats    ethstatsConfig
+	Dashboard   dashboard.Config
+	Account     account
+	StakeEnable bool
+	Bootnodes   Bootnodes
 }
 
 func loadConfig(file string, cfg *tomoConfig) error {

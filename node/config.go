@@ -53,7 +53,7 @@ type Config struct {
 	Name string `toml:"-"`
 
 	// UserIdent, if set, is used as an additional component in the devp2p node identifier.
-	UserIdent string `toml:"identity"`
+	UserIdent string `toml:",omitempty"`
 
 	// Version should be set to the version number of the program. It is used
 	// in the devp2p node identifier.
@@ -64,10 +64,10 @@ type Config struct {
 	// registered services, instead those can use utility methods to create/access
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
-	DataDir string `toml:"datadir"`
+	DataDir string
 
 	// Configuration of peer-to-peer networking.
-	P2P p2p.Config `toml:"p2p"`
+	P2P p2p.Config
 
 	// KeyStoreDir is the file system folder that contains private keys. The directory can
 	// be specified as a relative path, in which case it is resolved relative to the
@@ -76,11 +76,11 @@ type Config struct {
 	// If KeyStoreDir is empty, the default location is the "keystore" subdirectory of
 	// DataDir. If DataDir is unspecified and KeyStoreDir is empty, an ephemeral directory
 	// is created by New and destroyed when the node is stopped.
-	KeyStoreDir string `toml:"keystore"`
+	KeyStoreDir string `toml:",omitempty"`
 
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
 	// scrypt KDF at the expense of security.
-	UseLightweightKDF bool `toml:"lightkdf"`
+	UseLightweightKDF bool `toml:",omitempty"`
 
 	// NoUSB disables hardware wallet monitoring and connectivity.
 	NoUSB bool `toml:",omitempty"`
@@ -93,12 +93,12 @@ type Config struct {
 
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
-	HTTPHost string `toml:"http_host"`
+	HTTPHost string `toml:",omitempty"`
 
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
-	HTTPPort int `toml:"http_port"`
+	HTTPPort int `toml:",omitempty"`
 
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
@@ -117,7 +117,7 @@ type Config struct {
 	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	HTTPModules []string `toml:"http_modules"`
+	HTTPModules []string `toml:",omitempty"`
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
