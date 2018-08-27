@@ -369,7 +369,6 @@ func doLint(cmdline []string) {
 		"--enable=goimports",
 		"--enable=varcheck",
 		"--enable=vet",
-		"--enable=gofmt",
 		"--enable=misspell",
 		"--enable=goconst",
 		"--min-occurrences=6", // for goconst
