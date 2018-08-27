@@ -698,7 +698,7 @@ func (bc *BlockChain) procFutureBlocks() {
 type WriteStatus byte
 
 const (
-	NonStatTy WriteStatus = iota
+	NonStatTy   WriteStatus = iota
 	CanonStatTy
 	SideStatTy
 )
@@ -1594,9 +1594,9 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 	return bc.Client, nil
 }
 
-func (bc *BlockChain) UpdateM1() {
+func (bc *BlockChain) UpdateM1() error {
 	if bc.Config().Posv == nil {
-		return
+		return errors.New("Posv not found in config")
 	}
 	engine := bc.Engine().(*posv.Posv)
 	log.Info("It's time to update new set of masternodes for the next epoch...")
@@ -1608,29 +1608,25 @@ func (bc *BlockChain) UpdateM1() {
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
 	validator, err := contractValidator.NewTomoValidator(addr, client)
 	if err != nil {
-		log.Crit("Fail to get validator smc: %v", err)
+		return err
 	}
 	opts := new(bind.CallOpts)
 	candidates, err := validator.GetCandidates(opts)
 	if err != nil {
-		log.Crit("Can't get list of masternode candidates: %v", err)
+		return err
 	}
 
 	var ms []posv.Masternode
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
 		if err != nil {
-			log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
+			return err
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
 		if candidate.String() != "0x0000000000000000000000000000000000000000" {
 			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.String()})
 		}
 	}
-	//// order by cap
-	//sort.Slice(ms, func(i, j int) bool {
-	//	return ms[i].Stake > ms[j].Stake
-	//})
 	log.Info("Ordered list of masternode candidates")
 	for _, m := range ms {
 		fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
@@ -1642,8 +1638,9 @@ func (bc *BlockChain) UpdateM1() {
 		log.Info("Updating new set of masternodes")
 		err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
 		if err != nil {
-			log.Crit("Can't update masternodes: %v", err)
+			return err
 		}
 		log.Info("Masternodes are ready for the next epoch")
 	}
+	return nil
 }

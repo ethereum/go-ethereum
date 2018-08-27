@@ -349,7 +349,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						log.Info("Enabled staking node!!!")
 					}
 				case <-core.M1Ch:
-					ethereum.BlockChain().UpdateM1()
+					err := ethereum.BlockChain().UpdateM1()
+					if(err !=nil){
+						log.Error("Error when update M1",err)
+					}
 				}
 			}
 		}()
