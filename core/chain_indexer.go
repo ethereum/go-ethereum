@@ -322,7 +322,6 @@ func (c *ChainIndexer) updateLoop() {
 						updating = false
 						c.log.Info("Finished upgrading chain index")
 					}
-
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
 						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)

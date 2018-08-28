@@ -28,16 +28,18 @@ import (
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
 	db                                         ethdb.Database
+	indexerConfig                              *light.IndexerConfig
 	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
 	retriever                                  *retrieveManager
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:        db,
-		retriever: retriever,
-		stop:      make(chan struct{}),
+		db:            db,
+		indexerConfig: config,
+		retriever:     retriever,
+		stop:          make(chan struct{}),
 	}
 }
 
@@ -71,6 +73,11 @@ func (odr *LesOdr) BloomTrieIndexer() *core.ChainIndexer {
 // BloomIndexer returns the bloombits chain indexer
 func (odr *LesOdr) BloomIndexer() *core.ChainIndexer {
 	return odr.bloomIndexer
+}
+
+// IndexerConfig returns the indexer config.
+func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
+	return odr.indexerConfig
 }
 
 const (
