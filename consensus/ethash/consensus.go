@@ -869,7 +869,14 @@ func callistoAccumulateRewards(config *params.ChainConfig, state *state.StateDB,
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
-	state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
-	state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clostake)
+	// Activate Callisto hardfork
+	if config.IsCLOHF1(header.Number) {
+		state.AddBalance(header.Coinbase, reward)
+		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
+		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clostake)
+	} else {
+		state.AddBalance(header.Coinbase, reward)
+		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
+		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clostake)
+	}
 }
