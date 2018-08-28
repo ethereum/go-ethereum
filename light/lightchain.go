@@ -121,14 +121,14 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 func (self *LightChain) addTrustedCheckpoint(cp TrustedCheckpoint) {
 	if self.odr.ChtIndexer() != nil {
 		StoreChtRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.CHTRoot)
-		self.odr.ChtIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
+		self.odr.ChtIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomTrieIndexer() != nil {
 		StoreBloomTrieRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.BloomRoot)
-		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
+		self.odr.BloomTrieIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomIndexer() != nil {
-		self.odr.BloomIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
+		self.odr.BloomIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
 	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.SectionIdx+1)*self.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
