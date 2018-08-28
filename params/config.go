@@ -71,7 +71,7 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
-	LCP *LcpConfig `json:"LCP,omitempty"`
+	LCP *LcpConfig `json:"lcp,omitempty"`
 }
 
 // LCP is the consensus engine.
