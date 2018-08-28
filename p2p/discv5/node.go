@@ -187,6 +187,10 @@ func parseComplete(rawurl string) (*Node, error) {
 	if ip = net.ParseIP(host); ip == nil {
 		return nil, errors.New("invalid IP address")
 	}
+	// Reject the enode whose IP address is unspecified.
+	if ip.IsUnspecified() {
+		return nil, errors.New("unspecified IP address")
+	}
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
