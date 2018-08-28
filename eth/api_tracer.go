@@ -294,7 +294,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
-			// Reference the trie twice, once for us, once for the trancer
+			// Reference the trie twice, once for us, once for the tracer
 			database.TrieDB().Reference(root, common.Hash{})
 			if number >= origin {
 				database.TrieDB().Reference(root, common.Hash{})

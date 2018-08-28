@@ -366,8 +366,12 @@ var (
 	}
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
-		Usage: "Time interval to recreate the block being mined.",
+		Usage: "Time interval to recreate the block being mined",
 		Value: eth.DefaultConfig.MinerRecommit,
+	}
+	MinerNoVerfiyFlag = cli.BoolFlag{
+		Name:  "miner.noverify",
+		Usage: "Disable remote sealing verification",
 	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
@@ -1151,6 +1155,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.MinerRecommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
 	}
+	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
+		cfg.MinerNoverify = ctx.Bool(MinerNoVerfiyFlag.Name)
+	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
@@ -1345,7 +1352,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
 				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
 				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
-			}, nil)
+			}, nil, false)
 		}
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
