@@ -524,12 +524,15 @@ func (w *worker) resultLoop() {
 			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
 				continue
 			}
-			sealhash := w.engine.SealHash(block.Header())
+			var (
+				sealhash = w.engine.SealHash(block.Header())
+				hash     = block.Hash()
+			)
 			w.pendingMu.RLock()
 			task, exist := w.pendingTasks[sealhash]
 			w.pendingMu.RUnlock()
 			if !exist {
-				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", block.Hash())
+				log.Error("Block found but no relative pending task", "number", block.Number(), "sealhash", sealhash, "hash", hash)
 				continue
 			}
 			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
@@ -543,9 +546,9 @@ func (w *worker) resultLoop() {
 				// Update the block hash in all logs since it is now available and not when the
 				// receipt/log of individual transactions were created.
 				for _, log := range receipt.Logs {
-					log.BlockHash = block.Hash()
-					logs = append(logs, log)
+					log.BlockHash = hash
 				}
+				logs = append(logs, receipt.Logs...)
 			}
 			// Commit block and state to database.
 			stat, err := w.chain.WriteBlockWithState(block, receipts, task.state)
@@ -553,8 +556,12 @@ func (w *worker) resultLoop() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
+				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
+
 			var events []interface{}
 			switch stat {
 			case core.CanonStatTy:

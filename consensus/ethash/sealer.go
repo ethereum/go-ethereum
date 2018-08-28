@@ -55,7 +55,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, resu
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", ethash.SealHash(block.Header()))
+			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(block.Header()))
 		}
 		return nil
 	}
@@ -88,14 +88,14 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, resu
 		ethash.workCh <- &sealTask{block: block, results: results}
 	}
 	var (
-		pend         sync.WaitGroup
-		localResults = make(chan *types.Block)
+		pend   sync.WaitGroup
+		locals = make(chan *types.Block)
 	)
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, nonce, abort, localResults)
+			ethash.mine(block, id, nonce, abort, locals)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -105,19 +105,20 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, resu
 		case <-stop:
 			// Outside abort, stop all miner threads
 			close(abort)
-		case result = <-localResults:
+		case result = <-locals:
 			// One of the threads found a block, abort all others
 			select {
 			case results <- result:
 			default:
-				log.Warn("Sealing result is not read by miner", "sealhash", ethash.SealHash(block.Header()))
+				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", ethash.SealHash(block.Header()))
 			}
 			close(abort)
 		case <-ethash.update:
 			// Thread count was changed on user request, restart
 			close(abort)
-			pend.Wait()
-			ethash.Seal(chain, block, results, stop)
+			if err := ethash.Seal(chain, block, results, stop); err != nil {
+				log.Error("Failed to restart sealing after update", "err", err)
+			}
 		}
 		// Wait for all miners to terminate and return the block
 		pend.Wait()
@@ -287,12 +288,12 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 				log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 				return true
 			default:
-				log.Warn("Sealing result is not read by miner", "sealhash", sealhash)
+				log.Warn("Sealing result is not read by miner", "mode", "remote", "sealhash", sealhash)
 				return false
 			}
 		}
 		// The submitted block is too old to accept, drop it.
-		log.Debug("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
+		log.Warn("Work submitted is too old", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 		return false
 	}
 

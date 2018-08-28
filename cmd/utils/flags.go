@@ -366,12 +366,12 @@ var (
 	}
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
-		Usage: "Time interval to recreate the block being mined.",
+		Usage: "Time interval to recreate the block being mined",
 		Value: eth.DefaultConfig.MinerRecommit,
 	}
 	MinerNoVerfiyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
-		Usage: "Disable remote sealing verification.",
+		Usage: "Disable remote sealing verification",
 	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{

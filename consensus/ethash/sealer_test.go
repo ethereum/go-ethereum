@@ -190,7 +190,7 @@ func TestStaleSubmission(t *testing.T) {
 				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Header().Number.Uint64())
 			}
 			if res.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
-				t.Errorf("case %d block parent hash mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
+				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
 			}
 		case <-time.NewTimer(time.Second).C:
 			t.Errorf("case %d fetch ethash result timeout", id+1)
