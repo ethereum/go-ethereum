@@ -24,10 +24,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/contracts"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -78,7 +78,7 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
 	transactOpts.GasLimit = 4200000
-	epocNumber := uint64(99)
+	epocNumber := uint64(900)
 	randomizeAddr, randomizeContract, err := DeployRandomize(transactOpts, backend, new(big.Int).SetInt64(0))
 	if err != nil {
 		t.Fatalf("Can't deploy randomize SC: %v", err)
@@ -142,7 +142,7 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	if err != nil {
 		t.Error("Can't decrypt secret and opening", err)
 	}
-	if len(randomizes) != 991 {
-		t.Error("Randomize length not match")
+	if len(randomizes) != 901 {
+		t.Error("Randomize length not match", "length", len(randomizes))
 	}
 }

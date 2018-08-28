@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
@@ -43,7 +44,6 @@ import (
 	"math/rand"
 	"strconv"
 	"time"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 const (
@@ -312,7 +312,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 				if err != nil {
 					log.Error("Can not convert string to integer", "error", err)
 				}
-				random[i] = int64(int64(intNumber))
+				random[i] = int64(intNumber)
 			}
 		}
 	}
@@ -620,7 +620,7 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 }
 
 // Get m2 list from checkpoint block.
-func GetM2FromCheckpointBlock(checkpointBlock types.Block, ) ([]common.Address, error) {
+func GetM2FromCheckpointBlock(checkpointBlock types.Block) ([]common.Address, error) {
 	if checkpointBlock.Number().Int64()%EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
