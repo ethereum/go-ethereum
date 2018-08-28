@@ -18,7 +18,7 @@ package miner
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -615,13 +615,16 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
 	hash := uncle.Hash()
 	if env.uncles.Contains(hash) {
-		return fmt.Errorf("uncle not unique")
+		return errors.New("uncle not unique")
+	}
+	if env.header.ParentHash == uncle.ParentHash {
+		return errors.New("uncle is sibling")
 	}
 	if !env.ancestors.Contains(uncle.ParentHash) {
-		return fmt.Errorf("uncle's parent unknown (%x)", uncle.ParentHash[0:4])
+		return errors.New("uncle's parent unknown")
 	}
 	if env.family.Contains(hash) {
-		return fmt.Errorf("uncle already in family (%x)", hash)
+		return errors.New("uncle already included")
 	}
 	env.uncles.Add(uncle.Hash())
 	return nil
@@ -847,28 +850,23 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool) {
 	if w.config.DAOForkSupport && w.config.DAOForkBlock != nil && w.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(env.state)
 	}
-
-	// compute uncles for the new block.
-	var (
-		uncles    []*types.Header
-		badUncles []common.Hash
-	)
+	// Accumulate the uncles for the current block
+	for hash, uncle := range w.possibleUncles {
+		if uncle.NumberU64()+staleThreshold <= header.Number.Uint64() {
+			delete(w.possibleUncles, hash)
+		}
+	}
+	uncles := make([]*types.Header, 0, 2)
 	for hash, uncle := range w.possibleUncles {
 		if len(uncles) == 2 {
 			break
 		}
 		if err := w.commitUncle(env, uncle.Header()); err != nil {
-			log.Trace("Bad uncle found and will be removed", "hash", hash)
-			log.Trace(fmt.Sprint(uncle))
-
-			badUncles = append(badUncles, hash)
+			log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
 		} else {
 			log.Debug("Committing new uncle to block", "hash", hash)
 			uncles = append(uncles, uncle.Header())
 		}
-	}
-	for _, hash := range badUncles {
-		delete(w.possibleUncles, hash)
 	}
 
 	if !noempty {
