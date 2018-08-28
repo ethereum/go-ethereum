@@ -1,0 +1,35 @@
+StakeEnable		= true	# flag --miner ( true : enable staker , false : disable )
+[Eth]
+NetworkId	= 89  # flag --networkid
+SyncMode	= "full" # flag --syncmode
+GasPrice	= 1	# flag --gasprice
+
+[Shh]
+
+[Node]
+DataDir	  = "node1/"	# flag --datadir
+HTTPHost = "localhost"	# flag --rpcaddr
+HTTPPort = 8501 	# flag --rpcport
+HTTPModules  = ["personal","db","eth","net","web3","txpool","miner"] # flag --rpcapi
+[Node.P2P]
+ListenAddr = ":30311"  # flag --port
+BootstrapNodes = ["enode://a890c5762c406fe046fb93fd307577a8454d571b6bf789f7dbfbf3c559be751f5fa400bc10639691245a9b22be1cfce0bbf82b322a24d06c6dcf29bf7eeb930c@127.0.0.1:30310"]
+# flag --bootnodes
+
+[Ethstats]
+[Dashboard]
+[Account]
+Unlocks  = ["0x12f90a417f41bedd4bbcc99d52971803fb4c3f8b"]   # list account slipt in flag --unlock
+Passwords = ["PWD_DEVNET"]    				   # list password in environment variable (split by ',') : ex : export PWD_DEVNET=123456,123456789
+
+
+[Bootnodes]
+Mainnet        =[]
+Testnet        =[]
+
+
+
+
+
+
+
