@@ -40,6 +40,18 @@ func TestRemoteNotify(t *testing.T) {
 
 	go server.Serve(listener)
 
+	// Wait for server to start listening
+	var tries int
+	for tries = 0; tries < 10; tries++ {
+		conn, _ := net.DialTimeout("tcp", listener.Addr().String(), 1*time.Second)
+		if conn != nil {
+			break
+		}
+	}
+	if tries == 10 {
+		t.Fatal("tcp listener not ready for more than 10 seconds")
+	}
+
 	// Create the custom ethash engine
 	ethash := NewTester([]string{"http://" + listener.Addr().String()})
 	defer ethash.Close()
