@@ -128,11 +128,12 @@ func sigHash(header *types.Header) (hash common.Hash) {
 
 func New(config *params.LcpConfig, db ethdb.Database) *LCP {
 	signatures, _ := lru.NewARC(inmemorySignatures)
-	return &LCP{
+	Lcp := &LCP{
 		config:     config,
 		db:         db,
 		signatures: signatures,
 	}
+	return Lcp
 }
 
 func (d *LCP) Author(header *types.Header) (common.Address, error) {
@@ -525,4 +526,9 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
 	dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+}
+
+// Close implements consensus.Engine. It's a noop for clique as there is are no background threads.
+func (c *LCP) Close() error {
+	return nil
 }

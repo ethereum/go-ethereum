@@ -21,7 +21,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,7 +33,6 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/common"
 	"github.com/pavelkrolevets/go-ethereum/common/fdlimit"
 	"github.com/pavelkrolevets/go-ethereum/consensus"
-	"github.com/pavelkrolevets/go-ethereum/consensus/ethash"
 	"github.com/pavelkrolevets/go-ethereum/core"
 	"github.com/pavelkrolevets/go-ethereum/core/state"
 	"github.com/pavelkrolevets/go-ethereum/core/vm"
@@ -1261,19 +1259,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	var engine consensus.Engine
 	if config.LCP != nil {
 		engine = lcp.New(config.LCP, chainDb)
-	} else {
-		engine = ethash.NewFaker()
-		if !ctx.GlobalBool(FakePoWFlag.Name) {
-			engine = ethash.New(ethash.Config{
-				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
-				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
-				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
-				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
-				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
-				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
-			})
+	} else {fmt.Println("No engine defined!!!")
 		}
-	}
+
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}

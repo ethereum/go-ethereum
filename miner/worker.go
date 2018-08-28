@@ -462,7 +462,7 @@ func (self *worker) commitNewWork() {
 
 	// Create an empty block based on temporary copied state for sealing in advance without waiting block
 	// execution finished.
-	if work.Block, err = self.engine.Finalize(self.chain, header, work.state.Copy(), nil, uncles, nil); err != nil {
+	if work.Block, err = self.engine.Finalize(self.chain, header, work.state.Copy(), nil, uncles, nil, work.LCPContext); err != nil {
 		log.Error("Failed to finalize block for temporary sealing", "err", err)
 	} else {
 		// Push empty work in advance without applying pending transaction.
@@ -484,7 +484,7 @@ func (self *worker) commitNewWork() {
 	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 
 	// Create the full block to seal with the consensus engine
-	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts, work.LCPContext); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}

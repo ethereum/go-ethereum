@@ -198,7 +198,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		lcp.AccumulateRewards(config, statedb, b.header, b.uncles)
 		if b.engine != nil {
-			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts, b.header.LCPContext)
+			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts, parent.LCPContext)
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
 			if err != nil {

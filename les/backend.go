@@ -43,7 +43,8 @@ import (
 	"github.com/pavelkrolevets/go-ethereum/p2p"
 	"github.com/pavelkrolevets/go-ethereum/p2p/discv5"
 	"github.com/pavelkrolevets/go-ethereum/params"
-	rpc "github.com/pavelkrolevets/go-ethereum/rpc"
+	"github.com/pavelkrolevets/go-ethereum/rpc"
+	"github.com/pavelkrolevets/go-ethereum/consensus/lcp"
 )
 
 type LightEthereum struct {
@@ -102,7 +103,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		engine:           lcp.New(chainConfig.LCP, chainDb),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),
