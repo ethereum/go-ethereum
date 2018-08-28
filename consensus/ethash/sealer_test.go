@@ -41,7 +41,7 @@ func TestRemoteNotify(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create the custom ethash engine
-	ethash := NewTester([]string{"http://" + listener.Addr().String()})
+	ethash := NewTester([]string{"http://" + listener.Addr().String()}, false)
 	defer ethash.Close()
 
 	// Stream a work task and ensure the notification bubbles out
@@ -95,7 +95,7 @@ func TestRemoteMultiNotify(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create the custom ethash engine
-	ethash := NewTester([]string{"http://" + listener.Addr().String()})
+	ethash := NewTester([]string{"http://" + listener.Addr().String()}, false)
 	defer ethash.Close()
 
 	// Stream a lot of work task and ensure all the notifications bubble out
@@ -116,9 +116,8 @@ func TestRemoteMultiNotify(t *testing.T) {
 
 // Tests whether stale solutions are correctly processed.
 func TestStaleSubmission(t *testing.T) {
-	ethash := NewTester(nil)
+	ethash := NewTester(nil, true)
 	defer ethash.Close()
-	ethash.disableRemoteVerify = true
 	api := &API{ethash}
 
 	fakeNonce, fakeDigest := types.BlockNonce{0x01, 0x02, 0x03}, common.HexToHash("deadbeef")

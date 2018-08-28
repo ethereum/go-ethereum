@@ -185,7 +185,7 @@ search:
 }
 
 // remote is a standalone goroutine to handle remote mining related stuff.
-func (ethash *Ethash) remote(notify []string) {
+func (ethash *Ethash) remote(notify []string, noverify bool) {
 	var (
 		works = make(map[common.Hash]*types.Block)
 		rates = make(map[common.Hash]hashrate)
@@ -264,7 +264,7 @@ func (ethash *Ethash) remote(notify []string) {
 		header.MixDigest = mixDigest
 
 		start := time.Now()
-		if !ethash.disableRemoteVerify {
+		if !noverify {
 			if err := ethash.verifySeal(nil, header, true); err != nil {
 				log.Warn("Invalid proof-of-work submitted", "sealhash", sealhash, "elapsed", time.Since(start), "err", err)
 				return false
