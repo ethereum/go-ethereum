@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -337,6 +338,12 @@ func (self *worker) wait() {
 
 			if mustCommitNewWork {
 				self.commitNewWork()
+			}
+
+			if self.config.Clique != nil {
+				// Send tx sign to smart contract blockSigners.
+				contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block)
+	
 			}
 		}
 	}
