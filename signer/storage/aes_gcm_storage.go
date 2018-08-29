@@ -36,7 +36,7 @@ type storedCredential struct {
 	CipherText []byte `json:"c"`
 }
 
-// AESEncryptedStorage is a storage type which is backed by a json-faile. The json-file contains
+// AESEncryptedStorage is a storage type which is backed by a json-file. The json-file contains
 // key-value mappings, where the keys are _not_ encrypted, only the values are.
 type AESEncryptedStorage struct {
 	// File to read/write credentials

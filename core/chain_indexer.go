@@ -85,6 +85,9 @@ type ChainIndexer struct {
 	knownSections  uint64 // Number of sections known to be complete (block wise)
 	cascadedHead   uint64 // Block number of the last completed section cascaded to subindexers
 
+	checkpointSections uint64      // Number of sections covered by the checkpoint
+	checkpointHead     common.Hash // Section head belonging to the checkpoint
+
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
 	log  log.Logger
@@ -115,11 +118,18 @@ func NewChainIndexer(chainDb, indexDb ethdb.Database, backend ChainIndexerBacken
 	return c
 }
 
-// AddKnownSectionHead marks a new section head as known/processed if it is newer
-// than the already known best section head
-func (c *ChainIndexer) AddKnownSectionHead(section uint64, shead common.Hash) {
+// AddCheckpoint adds a checkpoint. Sections are never processed and the chain
+// is not expected to be available before this point. The indexer assumes that
+// the backend has sufficient information available to process subsequent sections.
+//
+// Note: knownSections == 0 and storedSections == checkpointSections until
+// syncing reaches the checkpoint
+func (c *ChainIndexer) AddCheckpoint(section uint64, shead common.Hash) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
+	c.checkpointSections = section + 1
+	c.checkpointHead = shead
 
 	if section < c.storedSections {
 		return
@@ -233,16 +243,23 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	// If a reorg happened, invalidate all sections until that point
 	if reorg {
 		// Revert the known section number to the reorg point
-		changed := head / c.sectionSize
-		if changed < c.knownSections {
-			c.knownSections = changed
+		known := head / c.sectionSize
+		stored := known
+		if known < c.checkpointSections {
+			known = 0
+		}
+		if stored < c.checkpointSections {
+			stored = c.checkpointSections
+		}
+		if known < c.knownSections {
+			c.knownSections = known
 		}
 		// Revert the stored sections from the database to the reorg point
-		if changed < c.storedSections {
-			c.setValidSections(changed)
+		if stored < c.storedSections {
+			c.setValidSections(stored)
 		}
 		// Update the new head number to the finalized section end and notify children
-		head = changed * c.sectionSize
+		head = known * c.sectionSize
 
 		if head < c.cascadedHead {
 			c.cascadedHead = head
@@ -256,7 +273,18 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 	var sections uint64
 	if head >= c.confirmsReq {
 		sections = (head + 1 - c.confirmsReq) / c.sectionSize
+		if sections < c.checkpointSections {
+			sections = 0
+		}
 		if sections > c.knownSections {
+			if c.knownSections < c.checkpointSections {
+				// syncing reached the checkpoint, verify section head
+				syncedHead := rawdb.ReadCanonicalHash(c.chainDb, c.checkpointSections*c.sectionSize-1)
+				if syncedHead != c.checkpointHead {
+					c.log.Error("Synced chain does not match checkpoint", "number", c.checkpointSections*c.sectionSize-1, "expected", c.checkpointHead, "synced", syncedHead)
+					return
+				}
+			}
 			c.knownSections = sections
 
 			select {
@@ -322,7 +350,6 @@ func (c *ChainIndexer) updateLoop() {
 						updating = false
 						c.log.Info("Finished upgrading chain index")
 					}
-
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
 						c.log.Trace("Cascading chain index update", "head", c.cascadedHead)
@@ -402,8 +429,14 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 	c.children = append(c.children, indexer)
 
 	// Cascade any pending updates to new children too
-	if c.storedSections > 0 {
-		indexer.newHead(c.storedSections*c.sectionSize-1, false)
+	sections := c.storedSections
+	if c.knownSections < sections {
+		// if a section is "stored" but not "known" then it is a checkpoint without
+		// available chain data so we should not cascade it yet
+		sections = c.knownSections
+	}
+	if sections > 0 {
+		indexer.newHead(sections*c.sectionSize-1, false)
 	}
 }
 

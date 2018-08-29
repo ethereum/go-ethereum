@@ -111,7 +111,7 @@ func (e *NoResolverError) Error() string {
 }
 
 // MultiResolver is used to resolve URL addresses based on their TLDs.
-// Each TLD can have multiple resolvers, and the resoluton from the
+// Each TLD can have multiple resolvers, and the resolution from the
 // first one in the sequence will be returned.
 type MultiResolver struct {
 	resolvers map[string][]ResolveValidator
@@ -153,7 +153,7 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 
 // Resolve resolves address by choosing a Resolver by TLD.
 // If there are more default Resolvers, or for a specific TLD,
-// the Hash from the the first one which does not return error
+// the Hash from the first one which does not return error
 // will be returned.
 func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	rs, err := m.getResolveValidator(addr)

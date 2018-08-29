@@ -45,7 +45,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 	return validator
 }
 
-// ValidateBody validates the given block's uncles and verifies the the block
+// ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
