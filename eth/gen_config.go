@@ -33,6 +33,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Etherbase               common.Address `toml:",omitempty"`
 		MinerNotify             []string       `toml:",omitempty"`
 		MinerExtraData          hexutil.Bytes  `toml:",omitempty"`
+		MinerGasFloor           uint64
+		MinerGasCeil            uint64
 		MinerGasPrice           *big.Int
 		MinerRecommit           time.Duration
 		MinerNoverify           bool
@@ -57,6 +59,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Etherbase = c.Etherbase
 	enc.MinerNotify = c.MinerNotify
 	enc.MinerExtraData = c.MinerExtraData
+	enc.MinerGasFloor = c.MinerGasFloor
+	enc.MinerGasCeil = c.MinerGasCeil
 	enc.MinerGasPrice = c.MinerGasPrice
 	enc.MinerRecommit = c.MinerRecommit
 	enc.MinerNoverify = c.MinerNoverify
@@ -85,6 +89,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Etherbase               *common.Address `toml:",omitempty"`
 		MinerNotify             []string        `toml:",omitempty"`
 		MinerExtraData          *hexutil.Bytes  `toml:",omitempty"`
+		MinerGasFloor           *uint64
+		MinerGasCeil            *uint64
 		MinerGasPrice           *big.Int
 		MinerRecommit           *time.Duration
 		MinerNoverify           *bool
@@ -139,6 +145,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.MinerExtraData != nil {
 		c.MinerExtraData = *dec.MinerExtraData
+	}
+	if dec.MinerGasFloor != nil {
+		c.MinerGasFloor = *dec.MinerGasFloor
+	}
+	if dec.MinerGasCeil != nil {
+		c.MinerGasCeil = *dec.MinerGasCeil
 	}
 	if dec.MinerGasPrice != nil {
 		c.MinerGasPrice = dec.MinerGasPrice

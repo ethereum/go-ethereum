@@ -206,6 +206,8 @@ func makeSealer(genesis *core.Genesis, nodes []string) (*node.Node, error) {
 			DatabaseHandles: 256,
 			TxPool:          core.DefaultTxPoolConfig,
 			GPO:             eth.DefaultConfig.GPO,
+			MinerGasFloor:   genesis.GasLimit * 9 / 10,
+			MinerGasCeil:    genesis.GasLimit * 11 / 10,
 			MinerGasPrice:   big.NewInt(1),
 			MinerRecommit:   time.Second,
 		})
