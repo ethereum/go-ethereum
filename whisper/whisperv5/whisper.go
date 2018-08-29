@@ -717,7 +717,7 @@ func (w *Whisper) expire() {
 				w.stats.messagesCleared++
 				w.stats.memoryCleared += sz
 				w.stats.memoryUsed -= sz
-				return true
+				return false
 			})
 			w.expirations[expiry].Clear()
 			delete(w.expirations, expiry)
