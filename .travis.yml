@@ -7,7 +7,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.10.x
+      go: 1.10.3
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -19,12 +19,12 @@ matrix:
       deploy:
         provider: releases
         api_key:
-          secure: KARrS20Qud7MMa4NCxmKIbDeMeeA83Wb+a+O22vIGXOk8IJeG6EcUF+gRsnbT+ARqrKdRZIS84OUB/aebgNLT+j2bk8L+UoBQuz6J6JHDqz1duoVa5CK5bIopVEBfu44ZBXHdE01XWLgGS1ce027iCCk0VRAAjpKDVG2X83YONxClg+cCOc6EpVXviHsxnoMSyOpgxTXQRgdgmv1XyzbBTyYKKFWbtNg7AUbxQ0ngQf800+0OmHLZ7ooILlRH115DQ0KJQeKyegCdjJ0Uc4uoSlqVF1VXKvwCColWT3MHU/U9Ig6Edqloh8ulM3BVhnORrwYwJ+oScfzPUPkg9kwzDdA4QgAhdKHKjOa9V62vPlz/oq4fD4LRs81BHiHQVo/WFK+UTkvrqYpDi+hiFfuob8N4sUGckXP8eEVyY2XP5fCMzkhwe2Xnz2CvWqoLt6v6LeZzYFQs68ZwGuwfKn22PqkuyvO+H3X4qqe7F60ofIl9OjJCeLuIpGovG13t/ivNlRiVk8OYaYQQK6OGDVhVqeWI81GXNrttPQygLStr6nnaQo6Gawtsrwk5/OL2ztKrzypXMy+8o2AaQyxrtaGJxnDv8MMkiv0AN2r3uAAfpS2N8xaImeD0R6/EB9W/P/S54KzxyCvsgcVQ0OHJq1LmICHipzFL7lSj7wBmlXmaiA=
-        file: multi-geth-$TRAVIS_OS_NAME.*
+          secure: bk1TJFBdVr0wPsSiTK1RaIwU96FMPBoLHnY7cuVzn4Zj0/67Kj7tUWXnjyoa7Q/ode+HbCWSOlv+f3zVVdCI6f5Rd44cfzJR78TV1LoEdWYS0eQDw55sjVRRtJiUlJSAThDlC/GlNpMdfhgwES/Z8lUvtFql4uLcmwsmcNlBSOQkfWCn0TBFhZ8r8jylI3Gp83VAOF6sFACcmNSB98iI9t5i87kNfAgEr499kiyNSisFiyxySdC+OMzg6ocVFTXuJ1Bq3kbjrVlbRV1Q9evuzlbZPAbl7ENDBd4SuBdwaGoGtY61U4fd7MuLIf5Ds1BkMzrwb4lF6SonNA05xgA5SF/xPykGF7I0FSOSgb9rQzrpbYyfNV2DLXESOd4uAkhH0sulfKt0xUPfjoc4RV3FDt3dPgUpLrnP7alzuQ/ZzsWVsQHuLMkFqjmGfNz4do3j2MdnRdlxtHvm5Vh3c/zWzKbzIHEXfCqmmrcbbRG18qDRpu3HVWlpSFEAGJUN7ofwcoxwqOa6kmsinJ/iGvd7pPyn7nliVXXs68LJOhXZ5F0xTZ83uGy5hU8WUQrsCCF0d0MDWbZyPCBSNj83c7MNVOru1VXHQ8f1G8sX99+PqM1djCN+LOFlDTUwb1XuHx44QcdFBv5DfZV2tu6sedfcRHcR2wXj28++4ZQTEU+mGyA=
+        file: clo-geth-$TRAVIS_OS_NAME.*
         file_glob: true
         draft: true
         on:
-          repo: ethoxy/multi-geth
+          repo: EthereumCommonwealth/go-callisto
           tags: true
         skip_cleanup: true
         tag_name: "$TRAVIS_TAG"
@@ -41,12 +41,12 @@ matrix:
       deploy:
         provider: releases
         api_key:
-          secure: KARrS20Qud7MMa4NCxmKIbDeMeeA83Wb+a+O22vIGXOk8IJeG6EcUF+gRsnbT+ARqrKdRZIS84OUB/aebgNLT+j2bk8L+UoBQuz6J6JHDqz1duoVa5CK5bIopVEBfu44ZBXHdE01XWLgGS1ce027iCCk0VRAAjpKDVG2X83YONxClg+cCOc6EpVXviHsxnoMSyOpgxTXQRgdgmv1XyzbBTyYKKFWbtNg7AUbxQ0ngQf800+0OmHLZ7ooILlRH115DQ0KJQeKyegCdjJ0Uc4uoSlqVF1VXKvwCColWT3MHU/U9Ig6Edqloh8ulM3BVhnORrwYwJ+oScfzPUPkg9kwzDdA4QgAhdKHKjOa9V62vPlz/oq4fD4LRs81BHiHQVo/WFK+UTkvrqYpDi+hiFfuob8N4sUGckXP8eEVyY2XP5fCMzkhwe2Xnz2CvWqoLt6v6LeZzYFQs68ZwGuwfKn22PqkuyvO+H3X4qqe7F60ofIl9OjJCeLuIpGovG13t/ivNlRiVk8OYaYQQK6OGDVhVqeWI81GXNrttPQygLStr6nnaQo6Gawtsrwk5/OL2ztKrzypXMy+8o2AaQyxrtaGJxnDv8MMkiv0AN2r3uAAfpS2N8xaImeD0R6/EB9W/P/S54KzxyCvsgcVQ0OHJq1LmICHipzFL7lSj7wBmlXmaiA=
-        file: multi-geth-$TRAVIS_OS_NAME.*
+          secure: bk1TJFBdVr0wPsSiTK1RaIwU96FMPBoLHnY7cuVzn4Zj0/67Kj7tUWXnjyoa7Q/ode+HbCWSOlv+f3zVVdCI6f5Rd44cfzJR78TV1LoEdWYS0eQDw55sjVRRtJiUlJSAThDlC/GlNpMdfhgwES/Z8lUvtFql4uLcmwsmcNlBSOQkfWCn0TBFhZ8r8jylI3Gp83VAOF6sFACcmNSB98iI9t5i87kNfAgEr499kiyNSisFiyxySdC+OMzg6ocVFTXuJ1Bq3kbjrVlbRV1Q9evuzlbZPAbl7ENDBd4SuBdwaGoGtY61U4fd7MuLIf5Ds1BkMzrwb4lF6SonNA05xgA5SF/xPykGF7I0FSOSgb9rQzrpbYyfNV2DLXESOd4uAkhH0sulfKt0xUPfjoc4RV3FDt3dPgUpLrnP7alzuQ/ZzsWVsQHuLMkFqjmGfNz4do3j2MdnRdlxtHvm5Vh3c/zWzKbzIHEXfCqmmrcbbRG18qDRpu3HVWlpSFEAGJUN7ofwcoxwqOa6kmsinJ/iGvd7pPyn7nliVXXs68LJOhXZ5F0xTZ83uGy5hU8WUQrsCCF0d0MDWbZyPCBSNj83c7MNVOru1VXHQ8f1G8sX99+PqM1djCN+LOFlDTUwb1XuHx44QcdFBv5DfZV2tu6sedfcRHcR2wXj28++4ZQTEU+mGyA=
+        file: clo-geth-$TRAVIS_OS_NAME.*
         file_glob: true
         draft: true
         on:
-          repo: ethoxy/multi-geth
+          repo: EthereumCommonwealth/go-callisto
           tags: true
         skip_cleanup: true
         tag_name: "$TRAVIS_TAG"
@@ -54,7 +54,7 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: 1.10.x
+      go: 1.10.3
       env:
         - lint
       git:
