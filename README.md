@@ -1,15 +1,12 @@
-## Go Ethereum
+## Go Callisto
 
-A distribution of go-ethereum with support of multiple Ethereum-like networks.
+Official golang implementation of the Callisto protocol. Based on Ethereum official golang implementation. The main goal of Callisto is to research and implement a reference protocol of self-governed self-sustaining blockchain development infrastructure. The goal should be achieved through the built-in capabilities of Ethereum-compatible smart contract systems.
 
-[![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
-)](https://godoc.org/github.com/ethereum/go-ethereum)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethoxy/multi-geth)](https://goreportcard.com/report/github.com/ethoxy/multi-geth)
-[![Travis](https://travis-ci.org/ethoxy/multi-geth.svg?branch=master)](https://travis-ci.org/ethoxy/multi-geth)
-[![Join the chat at https://gitter.im/ethoxy/multi-geth](https://badges.gitter.im/ethoxy/multi-geth.svg)](https://gitter.im/ethoxy/multi-geth)
+[![Go Report Card](https://goreportcard.com/badge/github.com/EthereumCommonwealth/go-callisto)](https://goreportcard.com/report/github.com/EthereumCommonwealth/go-callisto)
+[![Travis](https://travis-ci.org/EthereumCommonwealth/go-callisto.svg?branch=CLO%2F1.1)](https://travis-ci.org/EthereumCommonwealth/go-callisto)
+[![Telegram](https://img.shields.io/badge/telegram-join%20chat-blue.svg)](https://t.me/CallistoNetwork)
 
-Binary archives are published at https://github.com/ethoxy/multi-geth/releases.
+Binary archives are published at https://github.com/EthereumCommonwealth/go-callisto/releases.
 
 ## Building the source
 
