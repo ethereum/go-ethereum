@@ -30,10 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"mime"
 )
 
 // numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
@@ -48,7 +51,9 @@ type ExternalAPI interface {
 	// SignTransaction request to sign the specified transaction
 	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// Sign - request to sign the given data (plus prefix)
-	Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	// EcRecover - request to perform ecrecover
+	//EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
@@ -170,11 +175,12 @@ type (
 		NewPassword string `json:"new_password"`
 	}
 	SignDataRequest struct {
-		Address common.MixedcaseAddress `json:"address"`
-		Rawdata hexutil.Bytes           `json:"raw_data"`
-		Message string                  `json:"message"`
-		Hash    hexutil.Bytes           `json:"hash"`
-		Meta    Metadata                `json:"meta"`
+		Address     common.MixedcaseAddress `json:"address"`
+		Rawdata     hexutil.Bytes           `json:"raw_data"`
+		Message     string                  `json:"message"`
+		Hash        hexutil.Bytes           `json:"hash"`
+		Meta        Metadata                `json:"meta"`
+		ContentType string                  `json:"content_type"`
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
@@ -510,22 +516,96 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 
 }
 
-// Sign calculates an Ethereum ECDSA signature for:
-// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+// cliqueSigHash returns the hash which is used as input for the proof-of-authority
+// signing. It is the hash of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// The method requires the extra data to be at least 65 bytes -- the original implementation
+// in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
+// and simply return an error instead
+func cliqueSigHash(header *types.Header) (hexutil.Bytes, error) {
+	hash := common.Hash{}
+	if len(header.Extra) < 65 {
+		return hash.Bytes(), fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+	}
+	hasher := sha3.NewKeccak256()
+	rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-65],
+		header.MixDigest,
+		header.Nonce,
+	})
+	hasher.Sum(hash[:0])
+	return hash.Bytes(), nil
+}
+
+func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
+	var req *SignDataRequest
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return nil, err
+	}
+	switch mediaType {
+	case "application/clique":
+		header := &types.Header{}
+		if err := rlp.DecodeBytes(data, header); err != nil {
+			return nil, err
+		}
+		sighash, err := cliqueSigHash(header)
+		if err != nil {
+			return nil, err
+		}
+		msg := fmt.Sprintf("Clique block %d [0x%x]", header.Number, header.Hash())
+		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
+	case "text/plain":
+		// Sign calculates an Ethereum ECDSA signature for:
+		// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+
+		// In the cases where it matter ensure that the charset is handled. The charset
+		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
+		// charset, ok := params["charset"]
+		// As it is now, we accept any charset and just treat it as 'raw'.
+
+		sighash, msg := SignHash(data)
+		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
+	default:
+		//TODO! Add a content-type for EIP712 typed data.
+		return nil, fmt.Errorf("content type '%s' not implemented for signing")
+	}
+	return req, nil
+
+}
+
+// SignData signs the hash of the provided data, but does so differently
+// depending on the content-type specified.
+//
+// Depending on the content-type, different types of validations will occur.
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
-//
-// The key used to calculate the signature is decrypted with the given password.
-//
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
-	sighash, msg := SignHash(data)
+func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
+
+	var req, err = api.determineSignatureFormat(contentType, data)
+	if err != nil {
+		return nil, err
+	}
+	req.Address = addr
+	req.Meta = MetadataFromContext(ctx)
+
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
-	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: MetadataFromContext(ctx)}
 	res, err := api.UI.ApproveSignData(req)
-
 	if err != nil {
 		return nil, err
 	}
@@ -538,8 +618,8 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 	if err != nil {
 		return nil, err
 	}
-	// Assemble sign the data with the wallet
-	signature, err := wallet.SignHashWithPassphrase(account, res.Password, sighash)
+	// Sign the data with the wallet
+	signature, err := wallet.SignHashWithPassphrase(account, res.Password, req.Hash)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err

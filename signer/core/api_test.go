@@ -259,7 +259,7 @@ func TestSignData(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	h, err := api.Sign(context.Background(), a, []byte("EHLO world"))
+	h, err := api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
 	if h != nil {
 		t.Errorf("Expected nil-data, got %x", h)
 	}
@@ -267,7 +267,7 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected ErrLocked! %v", err)
 	}
 	control <- "No way"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
+	h, err = api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
 	if h != nil {
 		t.Errorf("Expected nil-data, got %x", h)
 	}
@@ -276,7 +276,7 @@ func TestSignData(t *testing.T) {
 	}
 	control <- "Y"
 	control <- "a_long_password"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
+	h, err = api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,12 @@
 ### Changelog for external API
 
+### 5.0.0
+
+* The external method `accounts_Sign(address, data)` was replaced with `accounts_signData(contentType, address, data)`.
+The addition of `contentType` makes it possible to use the method for different types of objects, such as
+  * signing clique headers,
+  * signing [ERC-712](https://eips.ethereum.org/EIPS/eip-712) typed data structures (not yet implemented)
+
 #### 4.0.0
 
 * The external `account_Ecrecover`-method was removed. 
