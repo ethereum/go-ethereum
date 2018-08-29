@@ -48,7 +48,9 @@ var DefaultConfig = Config{
 	DatabaseCache: 768,
 	TrieCache:     256,
 	TrieTimeout:   60 * time.Minute,
-	MinerGasPrice: big.NewInt(18 * params.Shannon),
+	MinerGasFloor: 8000000,
+	MinerGasCeil:  8000000,
+	MinerGasPrice: big.NewInt(params.GWei),
 	MinerRecommit: 3 * time.Second,
 
 	TxPool: core.DefaultTxPoolConfig,
@@ -99,6 +101,8 @@ type Config struct {
 	Etherbase      common.Address `toml:",omitempty"`
 	MinerNotify    []string       `toml:",omitempty"`
 	MinerExtraData []byte         `toml:",omitempty"`
+	MinerGasFloor  uint64
+	MinerGasCeil   uint64
 	MinerGasPrice  *big.Int
 	MinerRecommit  time.Duration
 	MinerNoverify  bool

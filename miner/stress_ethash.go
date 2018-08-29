@@ -186,6 +186,8 @@ func makeMiner(genesis *core.Genesis, nodes []string) (*node.Node, error) {
 			TxPool:          core.DefaultTxPoolConfig,
 			GPO:             eth.DefaultConfig.GPO,
 			Ethash:          eth.DefaultConfig.Ethash,
+			MinerGasFloor:   genesis.GasLimit * 9 / 10,
+			MinerGasCeil:    genesis.GasLimit * 11 / 10,
 			MinerGasPrice:   big.NewInt(1),
 			MinerRecommit:   time.Second,
 		})

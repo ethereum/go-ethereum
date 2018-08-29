@@ -329,12 +329,17 @@ var (
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
-		Value: params.GenesisGasLimit,
+		Value: eth.DefaultConfig.MinerGasFloor,
 	}
 	MinerLegacyGasTargetFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
-		Value: params.GenesisGasLimit,
+		Value: eth.DefaultConfig.MinerGasFloor,
+	}
+	MinerGasLimitFlag = cli.Uint64Flag{
+		Name:  "miner.gaslimit",
+		Usage: "Target gas ceiling for mined blocks",
+		Value: eth.DefaultConfig.MinerGasCeil,
 	}
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
@@ -1146,6 +1151,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
 		cfg.MinerExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
 	}
+	if ctx.GlobalIsSet(MinerLegacyGasTargetFlag.Name) {
+		cfg.MinerGasFloor = ctx.GlobalUint64(MinerLegacyGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
+		cfg.MinerGasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
+		cfg.MinerGasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
+	}
 	if ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
 		cfg.MinerGasPrice = GlobalBig(ctx, MinerLegacyGasPriceFlag.Name)
 	}
@@ -1267,15 +1281,6 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 		return ethstats.New(url, ethServ, lesServ)
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
-	}
-}
-
-// SetupNetwork configures the system for either the main net or some test network.
-func SetupNetwork(ctx *cli.Context) {
-	// TODO(fjl): move target gas limit into config
-	params.TargetGasLimit = ctx.GlobalUint64(MinerLegacyGasTargetFlag.Name)
-	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
-		params.TargetGasLimit = ctx.GlobalUint64(MinerGasTargetFlag.Name)
 	}
 }
 

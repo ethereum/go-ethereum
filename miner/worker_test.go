@@ -119,7 +119,7 @@ func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second)
+	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second, params.GenesisGasLimit, params.GenesisGasLimit)
 	w.setEtherbase(testBankAddress)
 	return w, backend
 }
