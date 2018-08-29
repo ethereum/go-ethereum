@@ -30,7 +30,7 @@ matrix:
         tag_name: "$TRAVIS_TAG"
 
     - os: osx
-      go: 1.10.x
+      go: 1.10.3
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
