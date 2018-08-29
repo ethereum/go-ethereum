@@ -45,8 +45,8 @@ var (
 	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
 	testBankFunds   = big.NewInt(1000000000000000000)
 
-	acc1Key, _ = crypto.GenerateKey()
-	acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+	testUserKey, _  = crypto.GenerateKey()
+	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
 
 	// Test transactions
 	pendingTxs []*types.Transaction
@@ -62,9 +62,9 @@ func init() {
 		Period: 10,
 		Epoch:  30000,
 	}
-	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
+	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
-	tx2, _ := types.SignTx(types.NewTransaction(1, acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
+	tx2, _ := types.SignTx(types.NewTransaction(1, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	newTxs = append(newTxs, tx2)
 }
 
@@ -77,7 +77,7 @@ type testWorkerBackend struct {
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) *testWorkerBackend {
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, n int) *testWorkerBackend {
 	var (
 		db    = ethdb.NewMemDatabase()
 		gspec = core.Genesis{
@@ -92,14 +92,28 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		copy(gspec.ExtraData[32:], testBankAddress[:])
 	case *ethash.Ethash:
 	default:
-		t.Fatal("unexpect consensus engine type")
+		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
 	genesis := gspec.MustCommit(db)
 
 	chain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{})
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
-	blocks, _ := core.GenerateChain(chainConfig, genesis, engine, db, 1, func(i int, gen *core.BlockGen) {
-		gen.SetCoinbase(acc1Addr)
+
+	// Generate a small n-block chain and an uncle block for it
+	if n > 0 {
+		blocks, _ := core.GenerateChain(chainConfig, genesis, engine, db, n, func(i int, gen *core.BlockGen) {
+			gen.SetCoinbase(testBankAddress)
+		})
+		if _, err := chain.InsertChain(blocks); err != nil {
+			t.Fatalf("failed to insert origin chain: %v", err)
+		}
+	}
+	parent := genesis
+	if n > 0 {
+		parent = chain.GetBlockByHash(chain.CurrentBlock().ParentHash())
+	}
+	blocks, _ := core.GenerateChain(chainConfig, parent, engine, db, 1, func(i int, gen *core.BlockGen) {
+		gen.SetCoinbase(testUserAddress)
 	})
 
 	return &testWorkerBackend{
@@ -116,8 +130,8 @@ func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
 	b.chain.PostChainEvents(events, nil)
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine)
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, blocks int) (*worker, *testWorkerBackend) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second, params.GenesisGasLimit, params.GenesisGasLimit)
 	w.setEtherbase(testBankAddress)
@@ -134,24 +148,24 @@ func TestPendingStateAndBlockClique(t *testing.T) {
 func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine)
+	w, b := newTestWorker(t, chainConfig, engine, 0)
 	defer w.close()
 
 	// Ensure snapshot has been updated.
 	time.Sleep(100 * time.Millisecond)
 	block, state := w.pending()
 	if block.NumberU64() != 1 {
-		t.Errorf("block number mismatch, has %d, want %d", block.NumberU64(), 1)
+		t.Errorf("block number mismatch: have %d, want %d", block.NumberU64(), 1)
 	}
-	if balance := state.GetBalance(acc1Addr); balance.Cmp(big.NewInt(1000)) != 0 {
-		t.Errorf("account balance mismatch, has %d, want %d", balance, 1000)
+	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(1000)) != 0 {
+		t.Errorf("account balance mismatch: have %d, want %d", balance, 1000)
 	}
 	b.txPool.AddLocals(newTxs)
 	// Ensure the new tx events has been processed
 	time.Sleep(100 * time.Millisecond)
 	block, state = w.pending()
-	if balance := state.GetBalance(acc1Addr); balance.Cmp(big.NewInt(2000)) != 0 {
-		t.Errorf("account balance mismatch, has %d, want %d", balance, 2000)
+	if balance := state.GetBalance(testUserAddress); balance.Cmp(big.NewInt(2000)) != 0 {
+		t.Errorf("account balance mismatch: have %d, want %d", balance, 2000)
 	}
 }
 
@@ -165,7 +179,7 @@ func TestEmptyWorkClique(t *testing.T) {
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine)
+	w, _ := newTestWorker(t, chainConfig, engine, 0)
 	defer w.close()
 
 	var (
@@ -179,10 +193,10 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 			receiptLen, balance = 1, big.NewInt(1000)
 		}
 		if len(task.receipts) != receiptLen {
-			t.Errorf("receipt number mismatch has %d, want %d", len(task.receipts), receiptLen)
+			t.Errorf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 		}
-		if task.state.GetBalance(acc1Addr).Cmp(balance) != 0 {
-			t.Errorf("account balance mismatch has %d, want %d", task.state.GetBalance(acc1Addr), balance)
+		if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
+			t.Errorf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
 		}
 	}
 
@@ -219,19 +233,19 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash)
+	w, b := newTestWorker(t, ethashChainConfig, ethash, 1)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
 
 	taskIndex := 0
 	w.newTaskHook = func(task *task) {
-		if task.block.NumberU64() == 1 {
+		if task.block.NumberU64() == 2 {
 			if taskIndex == 2 {
-				has := task.block.Header().UncleHash
+				have := task.block.Header().UncleHash
 				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
-				if has != want {
-					t.Errorf("uncle hash mismatch, has %s, want %s", has.Hex(), want.Hex())
+				if have != want {
+					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
 				}
 			}
 			taskCh <- struct{}{}
@@ -248,12 +262,12 @@ func TestStreamUncleBlock(t *testing.T) {
 	// Ensure worker has finished initialization
 	for {
 		b := w.pendingBlock()
-		if b != nil && b.NumberU64() == 1 {
+		if b != nil && b.NumberU64() == 2 {
 			break
 		}
 	}
-
 	w.start()
+
 	// Ignore the first two works
 	for i := 0; i < 2; i += 1 {
 		select {
@@ -282,7 +296,7 @@ func TestRegenerateMiningBlockClique(t *testing.T) {
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine)
+	w, b := newTestWorker(t, chainConfig, engine, 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -293,10 +307,10 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 			if taskIndex == 2 {
 				receiptLen, balance := 2, big.NewInt(2000)
 				if len(task.receipts) != receiptLen {
-					t.Errorf("receipt number mismatch has %d, want %d", len(task.receipts), receiptLen)
+					t.Errorf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 				}
-				if task.state.GetBalance(acc1Addr).Cmp(balance) != 0 {
-					t.Errorf("account balance mismatch has %d, want %d", task.state.GetBalance(acc1Addr), balance)
+				if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
+					t.Errorf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
 				}
 			}
 			taskCh <- struct{}{}
@@ -347,7 +361,7 @@ func TestAdjustIntervalClique(t *testing.T) {
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine)
+	w, _ := newTestWorker(t, chainConfig, engine, 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {
@@ -387,10 +401,10 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 
 		// Check interval
 		if minInterval != wantMinInterval {
-			t.Errorf("resubmit min interval mismatch want %s has %s", wantMinInterval, minInterval)
+			t.Errorf("resubmit min interval mismatch: have %v, want %v ", minInterval, wantMinInterval)
 		}
 		if recommitInterval != wantRecommitInterval {
-			t.Errorf("resubmit interval mismatch want %s has %s", wantRecommitInterval, recommitInterval)
+			t.Errorf("resubmit interval mismatch: have %v, want %v", recommitInterval, wantRecommitInterval)
 		}
 		result = append(result, float64(recommitInterval.Nanoseconds()))
 		index += 1
