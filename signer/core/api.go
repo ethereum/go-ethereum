@@ -39,7 +39,7 @@ import (
 // ExternalAPI defines the external API through which signing requests are made.
 type ExternalAPI interface {
 	// List available accounts
-	List(ctx context.Context) (Accounts, error)
+	List(ctx context.Context) ([]common.Address, error)
 	// New request to create a new account
 	New(ctx context.Context) (accounts.Account, error)
 	// SignTransaction request to sign the specified transaction
@@ -227,7 +227,7 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 
 // List returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
-func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
+func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 	var accs []Account
 	for _, wallet := range api.am.Wallets() {
 		for _, acc := range wallet.Accounts() {
@@ -243,7 +243,13 @@ func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
 		return nil, ErrRequestDenied
 
 	}
-	return result.Accounts, nil
+
+	addresses := make([]common.Address,0)
+	for _, acc := range result.Accounts{
+		addresses = append(addresses, acc.Address)
+	}
+
+	return addresses, nil
 }
 
 // New creates a new password protected Account. The private key is protected with

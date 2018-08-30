@@ -1,6 +1,9 @@
 ### Changelog for external API
 
 
+#### 3.0.0
+
+* The external `account_List`-method was changed to not expose `url`, which contained info about the local filesystem. It now returns only a list of addresses. 
 
 #### 2.0.0
 

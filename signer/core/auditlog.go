@@ -33,11 +33,10 @@ type AuditLogger struct {
 	api ExternalAPI
 }
 
-func (l *AuditLogger) List(ctx context.Context) (Accounts, error) {
+func (l *AuditLogger) List(ctx context.Context) ([]common.Address, error) {
 	l.log.Info("List", "type", "request", "metadata", MetadataFromContext(ctx).String())
 	res, e := l.api.List(ctx)
-
-	l.log.Info("List", "type", "response", "data", res.String())
+	l.log.Info("List", "type", "response", "data", res)
 
 	return res, e
 }

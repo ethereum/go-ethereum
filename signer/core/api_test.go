@@ -162,7 +162,7 @@ func failCreateAccount(control chan string, api *SignerAPI, t *testing.T) {
 		t.Fatal("Empty address should be returned")
 	}
 }
-func list(control chan string, api *SignerAPI, t *testing.T) []Account {
+func list(control chan string, api *SignerAPI, t *testing.T) []common.Address {
 	control <- "A"
 	list, err := api.List(context.Background())
 	if err != nil {
@@ -222,7 +222,7 @@ func TestSignData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := common.NewMixedcaseAddress(list[0].Address)
+	a := common.NewMixedcaseAddress(list[0])
 
 	control <- "Y"
 	control <- "wrongpassword"
@@ -275,7 +275,7 @@ func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 func TestSignTx(t *testing.T) {
 
 	var (
-		list      Accounts
+		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
 		err       error
 	)
@@ -287,7 +287,7 @@ func TestSignTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := common.NewMixedcaseAddress(list[0].Address)
+	a := common.NewMixedcaseAddress(list[0])
 
 	methodSig := "test(uint)"
 	tx := mkTestTx(a)
