@@ -18,7 +18,6 @@ package core
 
 import (
 	"container/heap"
-	"math"
 	"math/big"
 	"sort"
 
@@ -97,28 +96,44 @@ func (m *txSortedMap) Forward(threshold uint64) types.Transactions {
 	return removed
 }
 
+// sort tries to sort all transactions from the map and writes them to cache
+func (m *txSortedMap) sort() {
+	// If the sorting was not cached yet, create and cache it
+	if m.cache == nil {
+		m.cache = make(types.Transactions, 0, len(m.items))
+		for _, tx := range m.items {
+			m.cache = append(m.cache, tx)
+		}
+
+		sort.Sort(types.TxByNonce(m.cache))
+	}
+}
+
 // Filter iterates over the list of transactions and removes all of them for which
 // the specified function evaluates to true.
 func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
 	var removed types.Transactions
 
+	m.sort()
+
+	// slices that share the same memory backing
+	*m.index = (*m.index)[:0]
+	newCache := m.cache[:0]
+
 	// Collect all the transactions to filter out
-	for nonce, tx := range m.items {
+	for _, tx := range m.cache {
 		if filter(tx) {
 			removed = append(removed, tx)
-			delete(m.items, nonce)
+			delete(m.items, tx.Nonce())
+		} else {
+			*m.index = append(*m.index, tx.Nonce())
+			newCache = append(newCache, tx)
 		}
 	}
-	// If transactions were removed, the heap and cache are ruined
-	if len(removed) > 0 {
-		*m.index = make([]uint64, 0, len(m.items))
-		for nonce := range m.items {
-			*m.index = append(*m.index, nonce)
-		}
-		heap.Init(m.index)
 
-		m.cache = nil
-	}
+	heap.Init(m.index)
+	m.cache = newCache
+
 	return removed
 }
 
@@ -201,14 +216,8 @@ func (m *txSortedMap) Len() int {
 // sorted internal representation. The result of the sorting is cached in case
 // it's requested again before any modifications are made to the contents.
 func (m *txSortedMap) Flatten() types.Transactions {
-	// If the sorting was not cached yet, create and cache it
-	if m.cache == nil {
-		m.cache = make(types.Transactions, 0, len(m.items))
-		for _, tx := range m.items {
-			m.cache = append(m.cache, tx)
-		}
-		sort.Sort(types.TxByNonce(m.cache))
-	}
+	m.sort()
+
 	// Copy the cache to prevent accidental modifications
 	txs := make(types.Transactions, len(m.cache))
 	copy(txs, m.cache)
@@ -302,12 +311,8 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions
 	var invalids types.Transactions
 
 	if l.strict && len(removed) > 0 {
-		lowest := uint64(math.MaxUint64)
-		for _, tx := range removed {
-			if nonce := tx.Nonce(); lowest > nonce {
-				lowest = nonce
-			}
-		}
+		lowest := removed[0].Nonce()
+
 		invalids = l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
 	}
 	return removed, invalids
