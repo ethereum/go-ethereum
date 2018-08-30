@@ -110,7 +110,8 @@ func (sp *SwapPeer) handle(ctx context.Context, msg interface{}) error {
 	var price *big.Int
 
 	//the message is one which needs accounting...
-	if _, ok := msg.(PricedMsg); ok {
+	//only account if swapAccount != nil (== swap is disabled)
+	if _, ok := msg.(PricedMsg); ok && sp.swapAccount != nil {
 		//..so first check if there are enough funds for the operation available
 		//(for crediting, this means if we are not essentially "overdrafting", or crossing the threshold)
 		price, err = sp.checkAvailableFunds(ctx, msg, CreditEntry)
@@ -144,7 +145,8 @@ func (sp *SwapPeer) Send(ctx context.Context, msg interface{}) error {
 	var price *big.Int
 
 	//the message is one which needs accounting...
-	if _, ok := msg.(PricedMsg); ok {
+	//only account if swapAccount != nil (== swap is disabled)
+	if _, ok := msg.(PricedMsg); ok && sp.swapAccount != nil {
 		//..so first check if there are enough funds for the operation available
 		price, err = sp.checkAvailableFunds(ctx, msg, DebitEntry)
 		//if not (or some other error occured), return error
@@ -263,18 +265,21 @@ func (sp *SwapPeer) issueCheque(ctx context.Context) error {
 
 //Create a new swap accounted peer
 func NewSwapPeer(peer *protocols.Peer, swap *Swap) *SwapPeer {
-	balance := big.NewInt(0)
-	//check if there is one already in the stateStore and load it
-	swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
 	sp := &SwapPeer{
 		Peer:        peer,
 		swapAccount: swap,
-		balance:     balance,
 		storeID:     peer.String()[:24] + "-swap",
 	}
-	swap.lock.Lock()
-	defer swap.lock.Unlock()
-	swap.peers[peer.ID()] = sp
+	//swap is not enabled
+	if swap != nil {
+		//check if there is one already in the stateStore and load it
+		balance := &big.Int{}
+		swap.stateStore.Get(peer.String()[:24]+"-swap", &balance)
+		sp.balance = balance
+		swap.lock.Lock()
+		defer swap.lock.Unlock()
+		swap.peers[peer.ID()] = sp
+	}
 	return sp
 }
 
