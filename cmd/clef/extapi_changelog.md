@@ -1,6 +1,11 @@
 ### Changelog for external API
 
 
+### 3.0.0
+
+* The external `accounts_List`-method was changed to not expose `url`, which contained information about the local machine. It now returns a set of addresses: `[]common.Address`.
+* The method was also renamed into `accounts_listAccounts`. 
+
 
 #### 2.0.0
 

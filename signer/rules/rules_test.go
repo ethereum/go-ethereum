@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -93,8 +92,8 @@ func (alwaysDenyUI) ApproveImport(request *core.ImportRequest) (core.ImportRespo
 	return core.ImportResponse{Approved: false, OldPassword: "", NewPassword: ""}, nil
 }
 
-func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
-	return core.ListResponse{Accounts: nil}, nil
+func (alwaysDenyUI) ApproveListing(request *core.ListAccountsRequest) (core.ListAccountsResponse, error) {
+	return core.ListAccountsResponse{Accounts: nil}, nil
 }
 
 func (alwaysDenyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
@@ -125,15 +124,11 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 }
 
 func TestListRequest(t *testing.T) {
-	accs := make([]core.Account, 5)
+	accs := make([]common.Address, 5)
 
 	for i := range accs {
 		addr := fmt.Sprintf("000000000000000000000000000000000000000%x", i)
-		acc := core.Account{
-			Address: common.BytesToAddress(common.Hex2Bytes(addr)),
-			URL:     accounts.URL{Scheme: "test", Path: fmt.Sprintf("acc-%d", i)},
-		}
-		accs[i] = acc
+		accs[i] = common.BytesToAddress(common.Hex2Bytes(addr))
 	}
 
 	js := `function ApproveListing(){ return "Approve" }`
@@ -143,7 +138,7 @@ func TestListRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	resp, err := r.ApproveListing(&core.ListRequest{
+	resp, err := r.ApproveListing(&core.ListAccountsRequest{
 		Accounts: accs,
 		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	})
@@ -220,9 +215,9 @@ func (d *dummyUI) ApproveImport(request *core.ImportRequest) (core.ImportRespons
 	return core.ImportResponse{}, core.ErrRequestDenied
 }
 
-func (d *dummyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+func (d *dummyUI) ApproveListing(request *core.ListAccountsRequest) (core.ListAccountsResponse, error) {
 	d.calls = append(d.calls, "ApproveListing")
-	return core.ListResponse{}, core.ErrRequestDenied
+	return core.ListAccountsResponse{}, core.ErrRequestDenied
 }
 
 func (d *dummyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
@@ -532,9 +527,9 @@ func (d *dontCallMe) ApproveImport(request *core.ImportRequest) (core.ImportResp
 	return core.ImportResponse{}, core.ErrRequestDenied
 }
 
-func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+func (d *dontCallMe) ApproveListing(request *core.ListAccountsRequest) (core.ListAccountsResponse, error) {
 	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ListResponse{}, core.ErrRequestDenied
+	return core.ListAccountsResponse{}, core.ErrRequestDenied
 }
 
 func (d *dontCallMe) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
