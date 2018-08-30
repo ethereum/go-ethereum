@@ -244,8 +244,8 @@ func (api *SignerAPI) List(ctx context.Context) ([]common.Address, error) {
 
 	}
 
-	addresses := make([]common.Address,0)
-	for _, acc := range result.Accounts{
+	addresses := make([]common.Address, 0)
+	for _, acc := range result.Accounts {
 		addresses = append(addresses, acc.Address)
 	}
 

@@ -113,6 +113,9 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	}
 	fmt.Printf("from:  %v\n", request.Transaction.From.String())
 	fmt.Printf("value: %v wei\n", weival)
+	fmt.Printf("gas: %v\n", request.Transaction.Gas)
+	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
+	fmt.Printf("nonce: %v\n", request.Transaction.Nonce)
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
