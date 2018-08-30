@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
@@ -322,7 +323,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
 		go func() {
 						//TODO addd in light mode support
+						log.Info("🔗 block Synced 🔗 ")
+
 						if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+							 var lightEthereum *les.LightEthereum
+							if err := stack.Service(&lightEthereum); err != nil {
+								utils.Fatalf("LightEthereum service not running: %v", err)
+							}
+							<-lightEthereum.Downloader().SyncedCh
+							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+							time.Sleep(exitWhenSynced)
+							stack.Stop()
+
 
 						} else {
 							var ethereum *eth.Ethereum
