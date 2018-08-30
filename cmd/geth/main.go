@@ -322,9 +322,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
 		go func() {
-						//TODO addd in light mode support
-						log.Info("🔗 block Synced 🔗 ")
-
 						if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 							 var lightEthereum *les.LightEthereum
 							if err := stack.Service(&lightEthereum); err != nil {
