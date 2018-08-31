@@ -42,6 +42,8 @@ var (
 	CLOMinerReward           *big.Int = new(big.Int).Mul(big.NewInt(420), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
 	CLOTreasuryReward        *big.Int = new(big.Int).Mul(big.NewInt(120), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
 	CLOStakeReward           *big.Int = new(big.Int).Mul(big.NewInt(60), big.NewInt(1e+18))  // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOHF1TreasuryReward     *big.Int = new(big.Int).Mul(big.NewInt(60), big.NewInt(1e+18))  // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOHF1StakeReward        *big.Int = new(big.Int).Mul(big.NewInt(120), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
 	maxUncles                         = 2                                                    // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime            = 15 * time.Second                                     // Max time from current time allowed for blocks, before they're considered future blocks
 	DisinflationRateQuotient          = big.NewInt(4)                                        // Disinflation rate quotient for ECIP1017
@@ -855,6 +857,8 @@ func callistoAccumulateRewards(config *params.ChainConfig, state *state.StateDB,
 	blockReward := CLOMinerReward
 	clotreasury := CLOTreasuryReward
 	clostake := CLOStakeReward
+	clohf1treasury := CLOHF1TreasuryReward
+	clohf1stake := CLOHF1StakeReward
 
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
@@ -872,8 +876,8 @@ func callistoAccumulateRewards(config *params.ChainConfig, state *state.StateDB,
 	// Activate Callisto hardfork
 	if config.IsCLOHF1(header.Number) {
 		state.AddBalance(header.Coinbase, reward)
-		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
-		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clostake)
+		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clohf1treasury)
+		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clohf1stake)
 	} else {
 		state.AddBalance(header.Coinbase, reward)
 		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
