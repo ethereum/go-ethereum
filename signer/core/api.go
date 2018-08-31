@@ -91,14 +91,16 @@ type SignerAPI struct {
 
 // Metadata about a request
 type Metadata struct {
-	Remote string `json:"remote"`
-	Local  string `json:"local"`
-	Scheme string `json:"scheme"`
+	Remote    string `json:"remote"`
+	Local     string `json:"local"`
+	Scheme    string `json:"scheme"`
+	UserAgent string `json:"User-Agent"`
+	Origin    string `json:"Origin"`
 }
 
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
-	m := Metadata{"NA", "NA", "NA"} // batman
+	m := Metadata{"NA", "NA", "NA", "", ""} // batman
 
 	if v := ctx.Value("remote"); v != nil {
 		m.Remote = v.(string)
@@ -108,6 +110,12 @@ func MetadataFromContext(ctx context.Context) Metadata {
 	}
 	if v := ctx.Value("local"); v != nil {
 		m.Local = v.(string)
+	}
+	if v := ctx.Value("Origin"); v != nil {
+		m.Origin = v.(string)
+	}
+	if v := ctx.Value("User-Agent"); v != nil {
+		m.UserAgent = v.(string)
 	}
 	return m
 }

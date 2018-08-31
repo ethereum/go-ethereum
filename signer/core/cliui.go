@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
@@ -95,6 +95,7 @@ func (ui *CommandlineUI) confirm() bool {
 
 func showMetadata(metadata Metadata) {
 	fmt.Printf("Request context:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
+	fmt.Printf("\n\tUser-Agent: %v\n\tOrigin: %v\n", metadata.UserAgent, metadata.Origin)
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
@@ -111,21 +112,22 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	} else {
 		fmt.Printf("to:    <contact creation>\n")
 	}
-	fmt.Printf("from:  %v\n", request.Transaction.From.String())
-	fmt.Printf("value: %v wei\n", weival)
-	fmt.Printf("gas: %v\n", request.Transaction.Gas)
+	fmt.Printf("from:     %v\n", request.Transaction.From.String())
+	fmt.Printf("value:    %v wei\n", weival)
+	fmt.Printf("gas:      %v (%v)\n", request.Transaction.Gas, uint64(request.Transaction.Gas))
 	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
-	fmt.Printf("nonce: %v\n", request.Transaction.Nonce)
+	fmt.Printf("nonce:    %v (%v)\n", request.Transaction.Nonce, uint64(request.Transaction.Nonce))
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
-			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
+
+			fmt.Printf("data:     %v\n", hexutil.Encode(d))
 		}
 	}
 	if request.Callinfo != nil {
 		fmt.Printf("\nTransaction validation:\n")
 		for _, m := range request.Callinfo {
-			fmt.Printf("  * %s : %s", m.Typ, m.Message)
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
 		}
 		fmt.Println()
 
@@ -199,7 +201,9 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	fmt.Printf("A request has been made to list all accounts. \n")
 	fmt.Printf("You can select which accounts the caller can see\n")
 	for _, account := range request.Accounts {
-		fmt.Printf("\t[x] %v\n", account.Address.Hex())
+		fmt.Printf("  [x] %v\n", account.Address.Hex())
+		fmt.Printf("    URL: %v\n", account.URL)
+		fmt.Printf("    Type: %v\n", account.Typ)
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
