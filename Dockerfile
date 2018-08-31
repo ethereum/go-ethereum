@@ -10,7 +10,7 @@ FROM alpine:latest
 
 LABEL maintainer="admin@xinfin.org"
 
-COPY --from=builder /tomochain/build/bin/XDC /usr/local/bin/XDC
+COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
 
 RUN chmod +x /usr/local/bin/XDC
 
