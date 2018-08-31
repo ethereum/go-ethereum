@@ -55,6 +55,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -203,6 +204,36 @@ func main() {
 	}
 }
 
+//To make sure more and more Go version is suitable for ETH,
+//so I change the way of Checking Go version.
+//If the value is 'true' then current Go version is available to Go-ethereum.
+func checkGoVersion(minVersion string) bool {
+	if minVersion == "" || !strings.Contains(minVersion, "go") {
+		return false
+	}
+	var isEqual bool = true
+	minVerArr := strings.Split(strings.TrimLeft(minVersion, "go"), ".")
+	currVerArr := strings.Split(strings.TrimLeft(runtime.Version(), "go"), ".")
+	shorterArrLen := len(minVerArr)
+	if shorterArrLen > len(currVerArr) {
+		shorterArrLen = len(currVerArr)
+	}
+	for i := 0; i < shorterArrLen; i++ {
+		minVerInt, _ := strconv.Atoi(strings.TrimLeft(minVerArr[i], "0"))
+		currVerInt, _ := strconv.Atoi(strings.TrimLeft(currVerArr[i], "0"))
+		if minVerInt > currVerInt {
+			return false
+		}
+		if isEqual && minVerInt != currVerInt {
+			isEqual = false
+		}
+	}
+	if isEqual && shorterArrLen == len(currVerArr) {
+		return false
+	}
+	return true
+}
+
 // Compiling
 
 func doInstall(cmdline []string) {
@@ -217,10 +248,7 @@ func doInstall(cmdline []string) {
 	// failure with outdated Go. This should save them the trouble.
 	if !strings.Contains(runtime.Version(), "devel") {
 		// Figure out the minor version number since we can't textually compare (1.10 < 1.9)
-		var minor int
-		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
-
-		if minor < 9 {
+		if !checkGoVersion("go1.9") {
 			log.Println("You have Go version", runtime.Version())
 			log.Println("go-ethereum requires at least Go version 1.9 and cannot")
 			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
