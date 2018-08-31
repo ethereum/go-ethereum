@@ -36,14 +36,19 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward      *big.Int = big.NewInt(5e+18)                                   // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward     *big.Int = big.NewInt(3e+18)                                   // Block reward in wei for successfully mining a block upward from Byzantium
-	SocialBlockReward        *big.Int = new(big.Int).Mul(big.NewInt(50), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Ethereum Social
-	maxUncles                         = 2                                                   // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime            = 15 * time.Second                                    // Max time from current time allowed for blocks, before they're considered future blocks
-	DisinflationRateQuotient          = big.NewInt(4)                                       // Disinflation rate quotient for ECIP1017
-	DisinflationRateDivisor           = big.NewInt(5)                                       // Disinflation rate divisor for ECIP1017
-	ExpDiffPeriod                     = big.NewInt(100000)                                  // Exponential diff period for ECIP1010
+	FrontierBlockReward      *big.Int = big.NewInt(5e+18)                                    // Block reward in wei for successfully mining a block
+	ByzantiumBlockReward     *big.Int = big.NewInt(3e+18)                                    // Block reward in wei for successfully mining a block upward from Byzantium
+	SocialBlockReward        *big.Int = new(big.Int).Mul(big.NewInt(50), big.NewInt(1e+18))  // Block reward in wei for successfully mining a block upward for Ethereum Social
+	CLOMinerReward           *big.Int = new(big.Int).Mul(big.NewInt(420), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOTreasuryReward        *big.Int = new(big.Int).Mul(big.NewInt(120), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOStakeReward           *big.Int = new(big.Int).Mul(big.NewInt(60), big.NewInt(1e+18))  // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOHF1TreasuryReward     *big.Int = new(big.Int).Mul(big.NewInt(60), big.NewInt(1e+18))  // Block reward in wei for successfully mining a block upward for Callisto Network
+	CLOHF1StakeReward        *big.Int = new(big.Int).Mul(big.NewInt(120), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Callisto Network
+	maxUncles                         = 2                                                    // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime            = 15 * time.Second                                     // Max time from current time allowed for blocks, before they're considered future blocks
+	DisinflationRateQuotient          = big.NewInt(4)                                        // Disinflation rate quotient for ECIP1017
+	DisinflationRateDivisor           = big.NewInt(5)                                        // Disinflation rate divisor for ECIP1017
+	ExpDiffPeriod                     = big.NewInt(100000)                                   // Exponential diff period for ECIP1010
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -657,9 +662,20 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	return nil
 }
 
+// default accumulateRewards()
+var accumulateRewards func(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) = defaultAccumulateRewards
+
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header) error {
+	if chain.GetHeaderByNumber(0).Hash() == params.SocialGenesisHash {
+		// setup accumulateRewards for Ethereum Social
+		accumulateRewards = socialAccumulateRewards
+	}
+	if chain.GetHeaderByNumber(0).Hash() == params.CallistoGenesisHash {
+		// setup accumulateRewards for Callisto Network
+		accumulateRewards = callistoAccumulateRewards
+	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
@@ -688,15 +704,50 @@ var (
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func defaultAccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
-	if config.IsSocial(header.Number) {
-		blockReward = SocialBlockReward
+	if config.HasECIP1017() {
+		// Ensure value 'era' is configured.
+		eraLen := config.ECIP1017EraRounds
+		era := GetBlockEra(header.Number, eraLen)
+		wr := GetBlockWinnerRewardByEra(era, blockReward)                    // wr "winner reward". 5, 4, 3.2, 2.56, ...
+		wurs := GetBlockWinnerRewardForUnclesByEra(era, uncles, blockReward) // wurs "winner uncle rewards"
+		wr.Add(wr, wurs)
+		state.AddBalance(header.Coinbase, wr) // $$
+
+		// Reward uncle miners.
+		for _, uncle := range uncles {
+			ur := GetBlockUncleRewardByEra(era, header, uncle, blockReward)
+			state.AddBalance(uncle.Coinbase, ur) // $$
+		}
+	} else {
+		// Accumulate the rewards for the miner and any included uncles
+		reward := new(big.Int).Set(blockReward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+			r.Add(uncle.Number, big8)
+			r.Sub(r, header.Number)
+			r.Mul(r, blockReward)
+			r.Div(r, big8)
+			state.AddBalance(uncle.Coinbase, r)
+
+			r.Div(blockReward, big32)
+			reward.Add(reward, r)
+		}
+		state.AddBalance(header.Coinbase, reward)
 	}
+}
+
+// socialAccumulateRewards credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func socialAccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	// Select the correct block reward based on chain progression
+	blockReward := SocialBlockReward
 	if config.HasECIP1017() {
 		// Ensure value 'era' is configured.
 		eraLen := config.ECIP1017EraRounds
@@ -798,4 +849,38 @@ func GetBlockEra(blockNum, eraLength *big.Int) *big.Int {
 	dremainder := big.NewInt(0).Mod(d, big.NewInt(1))
 
 	return new(big.Int).Sub(d, dremainder)
+}
+
+// callistoAccumulateRewards()
+func callistoAccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	// Select the correct block reward based on chain progression
+	blockReward := CLOMinerReward
+	clotreasury := CLOTreasuryReward
+	clostake := CLOStakeReward
+	clohf1treasury := CLOHF1TreasuryReward
+	clohf1stake := CLOHF1StakeReward
+
+	// Accumulate the rewards for the miner and any included uncles
+	reward := new(big.Int).Set(blockReward)
+	r := new(big.Int)
+	for _, uncle := range uncles {
+		r.Add(uncle.Number, big8)
+		r.Sub(r, header.Number)
+		r.Mul(r, blockReward)
+		r.Div(r, big8)
+		state.AddBalance(uncle.Coinbase, r)
+
+		r.Div(blockReward, big32)
+		reward.Add(reward, r)
+	}
+	// Activate Callisto hardfork
+	if config.IsCLOHF1(header.Number) {
+		state.AddBalance(header.Coinbase, reward)
+		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clohf1treasury)
+		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clohf1stake)
+	} else {
+		state.AddBalance(header.Coinbase, reward)
+		state.AddBalance(common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"), clotreasury)
+		state.AddBalance(common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"), clostake)
+	}
 }

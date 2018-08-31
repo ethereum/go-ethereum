@@ -159,8 +159,8 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
-			log.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			log.Info("Writing default Callisto main-net genesis block")
+			genesis = DefaultCallistoGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
 		}
@@ -213,10 +213,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.MainnetChainConfig
 	case ghash == params.TestnetGenesisHash:
 		return params.TestnetChainConfig
-	case ghash == params.EllaismGenesisHash:
-		return params.EllaismChainConfig
 	case ghash == params.SocialGenesisHash:
 		return params.SocialChainConfig
+	case ghash == params.CallistoGenesisHash:
+		return params.CallistoChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -313,18 +313,6 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// EllaismGenesisBlock returns the Ellaism genesis block.
-func DefaultEllaismGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.EllaismChainConfig,
-		Nonce:      64,
-		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(1073741824),
-		Alloc:      decodePrealloc(ellaismAllocData),
-	}
-}
-
 // ClassicGenesisBlock returns the Ethereum Classic genesis block.
 func DefaultClassicGenesisBlock() *Genesis {
 	return &Genesis{
@@ -346,6 +334,21 @@ func DefaultSocialGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(socialAllocData),
+	}
+}
+
+// DefaultCallistoGenesisBlock
+func DefaultCallistoGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.CallistoChainConfig,
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   10400000,
+		Difficulty: big.NewInt(524288),
+		Timestamp:  1519622213,
+		Nonce:      0,
+		Coinbase:   common.HexToAddress("0xc3F70b10CE5EC4aA47ce44Eb0B7900A883cd45Dd"),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Alloc:      decodePrealloc(callistoAllocData),
 	}
 }
 

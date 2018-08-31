@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GETH_ARCHIVE_NAME="multi-geth-$TRAVIS_OS_NAME"
+GETH_ARCHIVE_NAME="clo-geth-$TRAVIS_OS_NAME"
 zip -j "$GETH_ARCHIVE_NAME.zip" build/bin/geth
 
 shasum -a 256 $GETH_ARCHIVE_NAME.zip

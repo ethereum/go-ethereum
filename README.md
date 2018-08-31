@@ -1,15 +1,12 @@
-## Go Ethereum
+## Go Callisto
 
-A distribution of go-ethereum with support of multiple Ethereum-like networks.
+Official golang implementation of the Callisto protocol. Based on Ethereum official golang implementation. The main goal of Callisto is to research and implement a reference protocol of self-governed self-sustaining blockchain development infrastructure. The goal should be achieved through the built-in capabilities of Ethereum-compatible smart contract systems.
 
-[![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
-)](https://godoc.org/github.com/ethereum/go-ethereum)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethoxy/multi-geth)](https://goreportcard.com/report/github.com/ethoxy/multi-geth)
-[![Travis](https://travis-ci.org/ethoxy/multi-geth.svg?branch=master)](https://travis-ci.org/ethoxy/multi-geth)
-[![Join the chat at https://gitter.im/ethoxy/multi-geth](https://badges.gitter.im/ethoxy/multi-geth.svg)](https://gitter.im/ethoxy/multi-geth)
+[![Go Report Card](https://goreportcard.com/badge/github.com/EthereumCommonwealth/go-callisto)](https://goreportcard.com/report/github.com/EthereumCommonwealth/go-callisto)
+[![Travis](https://travis-ci.org/EthereumCommonwealth/go-callisto.svg?branch=CLO%2F1.1)](https://travis-ci.org/EthereumCommonwealth/go-callisto)
+[![Telegram](https://img.shields.io/badge/telegram-join%20chat-blue.svg)](https://t.me/CallistoNetwork)
 
-Binary archives are published at https://github.com/ethoxy/multi-geth/releases.
+Binary archives are published at https://github.com/EthereumCommonwealth/go-callisto/releases.
 
 ## Building the source
 
@@ -26,15 +23,6 @@ Once the dependencies are installed, run
 or, to build the full suite of utilities:
 
     make all
-
-## Ellaism network
-
-This is originally an [Ellaism
-Project](https://github.com/ellaism). However, A [recent hard
-fork](https://github.com/ellaism/specs/blob/master/specs/2018-0003-wasm-hardfork.md)
-makes Ellaism not feasible to support go-ethereum any more. Existing
-Ellaism users are asked to switch to
-[Parity](https://github.com/paritytech/parity).
 
 ## Executables
 
@@ -80,20 +68,6 @@ This command will:
    This too is optional and if you leave it out you can always attach to an already running Geth instance
    with `geth attach`.
 
-### Full node on the main Ellaism network
-
-To get on Ellaism network and take advantage of fast-sync:
-
-```
-$ geth --ellaism console
-```
-
-This command will:
-
- * Start geth in fast sync mode and start up geth's built-in interactive JavaScript console,
-   connecting to Ellaism network.
- * Default data directory will be `~/.ethereum/ellaism`.
-
 ### Full node on the main Ethereum Classic network
 
 To get on Ethereum Classic network and take advantage of fast-sync:
@@ -114,9 +88,9 @@ For a full list of networks supported by multi-geth, take a look at the command-
 
 ```
 --testnet                            Ropsten network: pre-configured proof-of-work test network
---ellaism                            Ellaism network: pre-configured Ellaism mainnet
 --classic                            Ethereum Classic network: pre-configured Ethereum Classic mainnet
 --social                             Ethereum Social network: pre-configured Ethereum Social mainnet
+--callisto                           Callisto network: pre-configured Callisto mainnet
 --rinkeby                            Rinkeby network: pre-configured proof-of-authority test network
 ```
 

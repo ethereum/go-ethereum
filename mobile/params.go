@@ -32,18 +32,18 @@ func MainnetGenesis() string {
 	return ""
 }
 
-// EllaismGenesis returns the JSON spec to use for the Ellaism network.
-func EllaismGenesis() string {
-	enc, err := json.Marshal(core.DefaultEllaismGenesisBlock())
+// SocialGenesis returns the JSON spec to use for the Ethereum Social network.
+func SocialGenesis() string {
+	enc, err := json.Marshal(core.DefaultSocialGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
 	return string(enc)
 }
 
-// SocialGenesis returns the JSON spec to use for the Ethereum Social network.
-func SocialGenesis() string {
-	enc, err := json.Marshal(core.DefaultSocialGenesisBlock())
+// CallistoGenesis returns the JSON spec to use for the Callisto network.
+func CallistoGenesis() string {
+	enc, err := json.Marshal(core.DefaultCallistoGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
