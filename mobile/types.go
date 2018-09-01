@@ -168,25 +168,22 @@ func (b *Block) EncodeJSON() (string, error) {
 	return string(data), err
 }
 
-func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
-func (b *Block) GetUncleHash() *Hash    { return &Hash{b.block.UncleHash()} }
-func (b *Block) GetCoinbase() *Address  { return &Address{b.block.Coinbase()} }
-func (b *Block) GetRoot() *Hash         { return &Hash{b.block.Root()} }
-func (b *Block) GetTxHash() *Hash       { return &Hash{b.block.TxHash()} }
-func (b *Block) GetReceiptHash() *Hash  { return &Hash{b.block.ReceiptHash()} }
-func (b *Block) GetBloom() *Bloom       { return &Bloom{b.block.Bloom()} }
-func (b *Block) GetDifficulty() *BigInt { return &BigInt{b.block.Difficulty()} }
-func (b *Block) GetNumber() int64       { return b.block.Number().Int64() }
-func (b *Block) GetGasLimit() int64     { return int64(b.block.GasLimit()) }
-func (b *Block) GetGasUsed() int64      { return int64(b.block.GasUsed()) }
-func (b *Block) GetTime() int64         { return b.block.Time().Int64() }
-func (b *Block) GetExtra() []byte       { return b.block.Extra() }
-func (b *Block) GetMixDigest() *Hash    { return &Hash{b.block.MixDigest()} }
-func (b *Block) GetNonce() int64        { return int64(b.block.Nonce()) }
-
-func (b *Block) GetHash() *Hash        { return &Hash{b.block.Hash()} }
-func (b *Block) GetHashNoNonce() *Hash { return &Hash{b.block.HashNoNonce()} }
-
+func (b *Block) GetParentHash() *Hash           { return &Hash{b.block.ParentHash()} }
+func (b *Block) GetUncleHash() *Hash            { return &Hash{b.block.UncleHash()} }
+func (b *Block) GetCoinbase() *Address          { return &Address{b.block.Coinbase()} }
+func (b *Block) GetRoot() *Hash                 { return &Hash{b.block.Root()} }
+func (b *Block) GetTxHash() *Hash               { return &Hash{b.block.TxHash()} }
+func (b *Block) GetReceiptHash() *Hash          { return &Hash{b.block.ReceiptHash()} }
+func (b *Block) GetBloom() *Bloom               { return &Bloom{b.block.Bloom()} }
+func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficulty()} }
+func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
+func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
+func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }
+func (b *Block) GetTime() int64                 { return b.block.Time().Int64() }
+func (b *Block) GetExtra() []byte               { return b.block.Extra() }
+func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
+func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
+func (b *Block) GetHash() *Hash                 { return &Hash{b.block.Hash()} }
 func (b *Block) GetHeader() *Header             { return &Header{b.block.Header()} }
 func (b *Block) GetUncles() *Headers            { return &Headers{b.block.Uncles()} }
 func (b *Block) GetTransactions() *Transactions { return &Transactions{b.block.Transactions()} }

@@ -232,12 +232,13 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			}
 		}
 	}()
-	log.Debug("Started pss", "public key", common.ToHex(crypto.FromECDSAPub(p.PublicKey())))
+	log.Info("Started Pss")
+	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
 	return nil
 }
 
 func (p *Pss) Stop() error {
-	log.Info("pss shutting down")
+	log.Info("Pss shutting down")
 	close(p.quitC)
 	return nil
 }

@@ -273,3 +273,84 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		}
 	}
 }
+
+// TestCLISwarmUpDefaultPath tests swarm recursive upload with relative and absolute
+// default paths and with encryption.
+func TestCLISwarmUpDefaultPath(t *testing.T) {
+	testCLISwarmUpDefaultPath(false, false, t)
+	testCLISwarmUpDefaultPath(false, true, t)
+	testCLISwarmUpDefaultPath(true, false, t)
+	testCLISwarmUpDefaultPath(true, true, t)
+}
+
+func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+
+	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	err = ioutil.WriteFile(filepath.Join(tmp, "index.html"), []byte("<h1>Test</h1>"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ioutil.WriteFile(filepath.Join(tmp, "robots.txt"), []byte("Disallow: /"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defaultPath := "index.html"
+	if absDefaultPath {
+		defaultPath = filepath.Join(tmp, defaultPath)
+	}
+
+	args := []string{
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"--recursive",
+		"--defaultpath",
+		defaultPath,
+		"up",
+		tmp,
+	}
+	if toEncrypt {
+		args = append(args, "--encrypt")
+	}
+
+	up := runSwarm(t, args...)
+	hashRegexp := `[a-f\d]{64,128}`
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+
+	client := swarm.NewClient(cluster.Nodes[0].URL)
+
+	m, isEncrypted, err := client.DownloadManifest(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if toEncrypt != isEncrypted {
+		t.Error("downloaded manifest is not encrypted")
+	}
+
+	var found bool
+	var entriesCount int
+	for _, e := range m.Entries {
+		entriesCount++
+		if e.Path == "" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Error("manifest default entry was not found")
+	}
+
+	if entriesCount != 3 {
+		t.Errorf("manifest contains %v entries, expected %v", entriesCount, 3)
+	}
+}

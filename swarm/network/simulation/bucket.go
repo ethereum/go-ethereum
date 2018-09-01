@@ -43,7 +43,7 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value inte
 	s.buckets[id].Store(key, value)
 }
 
-// NodeItems returns a map of items from all nodes that are all set under the
+// NodesItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
 func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
 	s.mu.RLock()

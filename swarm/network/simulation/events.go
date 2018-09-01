@@ -18,6 +18,7 @@ package simulation
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
 
@@ -71,23 +72,31 @@ func (f *PeerEventsFilter) MsgCode(c uint64) *PeerEventsFilter {
 func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
 	eventC := make(chan PeerEvent)
 
+	// wait group to make sure all subscriptions to admin peerEvents are established
+	// before this function returns.
+	var subsWG sync.WaitGroup
 	for _, id := range ids {
 		s.shutdownWG.Add(1)
+		subsWG.Add(1)
 		go func(id discover.NodeID) {
 			defer s.shutdownWG.Done()
 
 			client, err := s.Net.GetNode(id).Client()
 			if err != nil {
+				subsWG.Done()
 				eventC <- PeerEvent{NodeID: id, Error: err}
 				return
 			}
 			events := make(chan *p2p.PeerEvent)
 			sub, err := client.Subscribe(ctx, "admin", events, "peerEvents")
 			if err != nil {
+				subsWG.Done()
 				eventC <- PeerEvent{NodeID: id, Error: err}
 				return
 			}
 			defer sub.Unsubscribe()
+
+			subsWG.Done()
 
 			for {
 				select {
@@ -153,5 +162,7 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 		}(id)
 	}
 
+	// wait all subscriptions
+	subsWG.Wait()
 	return eventC
 }

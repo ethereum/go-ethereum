@@ -68,18 +68,36 @@ func download(ctx *cli.Context) {
 		utils.Fatalf("could not parse uri argument: %v", err)
 	}
 
-	// assume behaviour according to --recursive switch
-	if isRecursive {
-		if err := client.DownloadDirectory(uri.Addr, uri.Path, dest); err != nil {
-			utils.Fatalf("encoutered an error while downloading directory: %v", err)
-		}
-	} else {
-		// we are downloading a file
-		log.Debug(fmt.Sprintf("downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
+	dl := func(credentials string) error {
+		// assume behaviour according to --recursive switch
+		if isRecursive {
+			if err := client.DownloadDirectory(uri.Addr, uri.Path, dest, credentials); err != nil {
+				if err == swarm.ErrUnauthorized {
+					return err
+				}
+				return fmt.Errorf("directory %s: %v", uri.Path, err)
+			}
+		} else {
+			// we are downloading a file
+			log.Debug("downloading file/path from a manifest", "uri.Addr", uri.Addr, "uri.Path", uri.Path)
 
-		err := client.DownloadFile(uri.Addr, uri.Path, dest)
-		if err != nil {
-			utils.Fatalf("could not download %s from given address: %s. error: %v", uri.Path, uri.Addr, err)
+			err := client.DownloadFile(uri.Addr, uri.Path, dest, credentials)
+			if err != nil {
+				if err == swarm.ErrUnauthorized {
+					return err
+				}
+				return fmt.Errorf("file %s from address: %s: %v", uri.Path, uri.Addr, err)
+			}
 		}
+		return nil
+	}
+	if passwords := makePasswordList(ctx); passwords != nil {
+		password := getPassPhrase(fmt.Sprintf("Downloading %s is restricted", uri), 0, passwords)
+		err = dl(password)
+	} else {
+		err = dl("")
+	}
+	if err != nil {
+		utils.Fatalf("download: %v", err)
 	}
 }

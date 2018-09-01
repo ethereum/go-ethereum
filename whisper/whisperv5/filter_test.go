@@ -829,16 +829,16 @@ func TestMatchSingleTopic_WithTail_ReturnTrue(t *testing.T) {
 	}
 }
 
-func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
+func TestMatchSingleTopic_PartialTopic_ReturnTrue(t *testing.T) {
 	bt := []byte("tes")
-	topic := BytesToTopic(bt)
+	topic := BytesToTopic([]byte("test"))
 
-	if matchSingleTopic(topic, bt) {
+	if !matchSingleTopic(topic, bt) {
 		t.FailNow()
 	}
 }
 
-func TestMatchSingleTopic_InsufficientLength_ReturnFalse(t *testing.T) {
+func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
 	bt := []byte("test")
 	topic := BytesToTopic([]byte("not_equal"))
 
