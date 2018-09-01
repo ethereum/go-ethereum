@@ -89,6 +89,9 @@
 				var from = log.contract.getAddress();
 				this.lookupAccount(toContract(from, db.getNonce(from)), db);
 				break;
+			case "CREATE2":
+				var from = log.contract.getAddress();
+				this.lookupAccount(toContract2(from, log.stack.peek(3).toString(16), db.getCode(from)), db);
 			case "CALL": case "CALLCODE": case "DELEGATECALL": case "STATICCALL":
 				this.lookupAccount(toAddress(log.stack.peek(1).toString(16)), db);
 				break;
