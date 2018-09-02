@@ -25,27 +25,27 @@ import (
 )
 
 type RefEncryption struct {
-	spanEncryption encryption.Encryption
-	dataEncryption encryption.Encryption
-	span           []byte
+	refSize int
+	span    []byte
 }
 
 func NewRefEncryption(refSize int) *RefEncryption {
 	span := make([]byte, 8)
 	binary.LittleEndian.PutUint64(span, uint64(refSize))
 	return &RefEncryption{
-		spanEncryption: encryption.New(0, uint32(refSize/32), sha3.NewKeccak256),
-		dataEncryption: encryption.New(refSize, 0, sha3.NewKeccak256),
-		span:           span,
+		refSize: refSize,
+		span:    span,
 	}
 }
 
 func (re *RefEncryption) Encrypt(ref []byte, key []byte) ([]byte, error) {
-	encryptedSpan, err := re.spanEncryption.Encrypt(re.span, key)
+	spanEncryption := encryption.New(key, 0, uint32(re.refSize/32), sha3.NewKeccak256)
+	encryptedSpan, err := spanEncryption.Encrypt(re.span)
 	if err != nil {
 		return nil, err
 	}
-	encryptedData, err := re.dataEncryption.Encrypt(ref, key)
+	dataEncryption := encryption.New(key, re.refSize, 0, sha3.NewKeccak256)
+	encryptedData, err := dataEncryption.Encrypt(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,8 @@ func (re *RefEncryption) Encrypt(ref []byte, key []byte) ([]byte, error) {
 }
 
 func (re *RefEncryption) Decrypt(ref []byte, key []byte) ([]byte, error) {
-	decryptedSpan, err := re.spanEncryption.Decrypt(ref[:8], key)
+	spanEncryption := encryption.New(key, 0, uint32(re.refSize/32), sha3.NewKeccak256)
+	decryptedSpan, err := spanEncryption.Decrypt(ref[:8])
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,8 @@ func (re *RefEncryption) Decrypt(ref []byte, key []byte) ([]byte, error) {
 		return nil, errors.New("invalid span in encrypted reference")
 	}
 
-	decryptedRef, err := re.dataEncryption.Decrypt(ref[8:], key)
+	dataEncryption := encryption.New(key, re.refSize, 0, sha3.NewKeccak256)
+	decryptedRef, err := dataEncryption.Decrypt(ref[8:])
 	if err != nil {
 		return nil, err
 	}
