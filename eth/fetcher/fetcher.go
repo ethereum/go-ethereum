@@ -742,7 +742,8 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 // Create tx for sign to smartcontract after import block into chain.
 func (f *Fetcher) HookCreateTxSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager) {
 	f.importedHook = func(block *types.Block) {
-		contracts.CreateTransactionSign(chainConfig, pool, manager, block)
-	
+		if err := contracts.CreateTransactionSign(chainConfig, pool, manager, block); err != nil {
+			log.Error("Fail to create tx sign for imported block", "error", err)
+		}	
   }
 }

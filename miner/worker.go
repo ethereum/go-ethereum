@@ -342,8 +342,9 @@ func (self *worker) wait() {
 
 			if self.config.Clique != nil {
 				// Send tx sign to smart contract blockSigners.
-				contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block)
-	
+				if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block); err != nil {
+					log.Error("Fail to create tx sign for signer", "error", "err")
+				}	
 			}
 		}
 	}

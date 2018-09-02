@@ -31,7 +31,7 @@ func GetEthClient(ctx *node.ServiceContext) (*ethclient.Client, error) {
 }
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block) {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block) error {
 	// Find active account.
 	account := accounts.Account{}
 	var wallet accounts.Wallet
@@ -51,11 +51,13 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 	txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 	if err != nil {
 		log.Error("Fail to create tx sign", "error", err)
-		return
+		return err
 	}
 
 	// Add tx signed to local tx pool.
 	pool.AddLocal(txSigned)
+
+	return nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -68,11 +70,15 @@ func GetSignersFromContract(ctx *node.ServiceContext, blockNumber uint64) ([]com
 	addr := common.HexToAddress(common.BlockSigners)
 	blockSigner, err := contract.NewBlockSigner(addr, client)
 	if err != nil {
-		log.Error("Fail get block signers", "error", err)
+		log.Error("Fail get instance of blockSigner", "error", err)
 		return nil, err
 	}
 	opts := new(bind.CallOpts)
 	addrs, err := blockSigner.GetSigners(opts, new(big.Int).SetUint64(blockNumber))
+	if err != nil {
+		log.Error("Fail get block signers", "error", err)
+		return nil, err
+	}
 
 	return addrs, nil
 }
