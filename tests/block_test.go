@@ -31,7 +31,7 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`^bcMultiChainTest/(ChainAtoChainB_blockorder|CallContractFromNotBestBlock)`)
 	bt.skipLoad(`^bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
 	// This test is broken
-	bt.skipLoad(`blockhashNonConstArg_Constantinople`)
+	bt.fails(`blockhashNonConstArg_Constantinople`, "Broken test")
 
 	// Still failing tests
 	//	bt.skipLoad(`^bcWalletTest.*_Byzantium$`)
