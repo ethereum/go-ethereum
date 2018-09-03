@@ -340,7 +340,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 							if err := stack.Service(&lightEthereum); err != nil {
 								utils.Fatalf("LightEthereum service not running: %v", err)
 							}
-							<-lightEthereum.Downloader().SyncedCh
+							<-lightEthereum.Downloader().syncedCh
 							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 							time.Sleep(exitWhenSynced)
 							stack.Stop()
@@ -351,7 +351,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 							if err := stack.Service(&ethereum); err != nil {
 								utils.Fatalf("Ethereum service not running: %v", err)
 							}
-							<-ethereum.Downloader().SyncedCh
+							<-ethereum.Downloader().syncedCh
 							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 							time.Sleep(exitWhenSynced)
 							stack.Stop()
