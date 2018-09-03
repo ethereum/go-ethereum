@@ -73,7 +73,7 @@ func newSyncMemBatch() *syncMemBatch {
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
 	database DatabaseReader           // Persistent database to check for existing entries
-	membatch *syncMemBatch            // Memory buffer to avoid frequest database writes
+	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 }

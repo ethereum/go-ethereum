@@ -29,7 +29,7 @@ var (
 	DefaultHTTPSimAddr = ":8888"
 )
 
-//`With`(builder) pattern constructor for Simulation to
+//WithServer implements the builder pattern constructor for Simulation to
 //start with a HTTP server
 func (s *Simulation) WithServer(addr string) *Simulation {
 	//assign default addr if nothing provided
@@ -46,7 +46,12 @@ func (s *Simulation) WithServer(addr string) *Simulation {
 		Addr:    addr,
 		Handler: s.handler,
 	}
-	go s.httpSrv.ListenAndServe()
+	go func() {
+		err := s.httpSrv.ListenAndServe()
+		if err != nil {
+			log.Error("Error starting the HTTP server", "error", err)
+		}
+	}()
 	return s
 }
 
@@ -55,7 +60,7 @@ func (s *Simulation) addSimulationRoutes() {
 	s.handler.POST("/runsim", s.RunSimulation)
 }
 
-// StartNetwork starts all nodes in the network
+// RunSimulation is the actual POST endpoint runner
 func (s *Simulation) RunSimulation(w http.ResponseWriter, req *http.Request) {
 	log.Debug("RunSimulation endpoint running")
 	s.runC <- struct{}{}

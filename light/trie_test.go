@@ -47,7 +47,7 @@ func TestNodeIterator(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	odr := &testOdr{sdb: fulldb, ldb: lightdb}
+	odr := &testOdr{sdb: fulldb, ldb: lightdb, indexerConfig: TestClientIndexerConfig}
 	head := blockchain.CurrentHeader()
 	lightTrie, _ := NewStateDatabase(ctx, head, odr).OpenTrie(head.Root)
 	fullTrie, _ := state.NewDatabase(fulldb).OpenTrie(head.Root)

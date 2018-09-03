@@ -119,6 +119,9 @@ func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.Block
 	if to == nil {
 		return nil, fmt.Errorf("end block #%d not found", end)
 	}
+	if from.Number().Cmp(to.Number()) >= 0 {
+		return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", end, start)
+	}
 	return api.traceChain(ctx, from, to, config)
 }
 
@@ -291,13 +294,15 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
-			// Reference the trie twice, once for us, once for the trancer
+			// Reference the trie twice, once for us, once for the tracer
 			database.TrieDB().Reference(root, common.Hash{})
 			if number >= origin {
 				database.TrieDB().Reference(root, common.Hash{})
 			}
 			// Dereference all past tries we ourselves are done working with
-			database.TrieDB().Dereference(proot)
+			if proot != (common.Hash{}) {
+				database.TrieDB().Dereference(proot)
+			}
 			proot = root
 
 			// TODO(karalabe): Do we need the preimages? Won't they accumulate too much?
@@ -526,7 +531,9 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 		database.TrieDB().Reference(root, common.Hash{})
-		database.TrieDB().Dereference(proot)
+		if proot != (common.Hash{}) {
+			database.TrieDB().Dereference(proot)
+		}
 		proot = root
 	}
 	nodes, imgs := database.TrieDB().Size()

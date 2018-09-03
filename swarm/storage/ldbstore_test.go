@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 
@@ -184,7 +185,7 @@ func testIterator(t *testing.T, mock bool) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
+	chunks := GenerateRandomChunks(chunk.DefaultSize, chunkcount)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(chunks))
@@ -294,7 +295,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -344,7 +345,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -398,7 +399,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -460,7 +461,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < capacity; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
+		c := GenerateRandomChunk(chunk.DefaultSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}

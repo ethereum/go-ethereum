@@ -1650,7 +1650,7 @@ func TestFUSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil)}
+	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil, nil)}
 
 	//run a short suite of tests
 	//approx time: 28s

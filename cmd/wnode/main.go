@@ -754,7 +754,7 @@ func extractIDFromEnode(s string) []byte {
 	return n.ID[:]
 }
 
-// obfuscateBloom adds 16 random bits to the the bloom
+// obfuscateBloom adds 16 random bits to the bloom
 // filter, in order to obfuscate the containing topics.
 // it does so deterministically within every session.
 // despite additional bits, it will match on average
