@@ -892,12 +892,6 @@
 			"revisionTime": "2016-12-08T18:13:25Z"
 		},
 		{
-			"checksumSHA1": "DQXNV0EivoHm4q+bkdahYXrjjfE=",
-			"path": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
-			"revision": "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57",
-			"revisionTime": "2015-07-24T13:16:13Z"
-		},
-		{
 			"checksumSHA1": "0xgs8lwcWLUffemlj+SsgKlxvDU=",
 			"path": "gopkg.in/natefinch/npipe.v2",
 			"revision": "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6",
