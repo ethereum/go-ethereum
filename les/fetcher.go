@@ -51,7 +51,7 @@ type lightFetcher struct {
 	syncing         bool
 	syncDone        chan *peer
 	syncedCh        chan bool
-	
+
 	reqMu      sync.RWMutex // reqMu protects access to sent header fetch requests
 	requested  map[uint64]fetchRequest
 	deliverChn chan fetchResponse

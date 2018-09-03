@@ -158,7 +158,7 @@ var (
 		Value: DirectoryString{homeDir()},
 	}
 	ExitWhenSyncedFlag = cli.DurationFlag{
-		Name: "exitwhensynced",
+		Name:  "exitwhensynced",
 		Usage: "Exists syncing by given time (default 0) after block synchronisation",
 		Value: -1,
 	}

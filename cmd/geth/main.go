@@ -85,7 +85,7 @@ var (
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
 
-    utils.FastSyncFlag,
+		utils.FastSyncFlag,
 		utils.ExitWhenSyncedFlag,
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
@@ -335,27 +335,26 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
 		go func() {
-						if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-							 var lightEthereum *les.LightEthereum
-							if err := stack.Service(&lightEthereum); err != nil {
-								utils.Fatalf("LightEthereum service not running: %v", err)
-							}
-							<-lightEthereum.Downloader().syncedCh
-							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
-							time.Sleep(exitWhenSynced)
-							stack.Stop()
+			if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+				var lightEthereum *les.LightEthereum
+				if err := stack.Service(&lightEthereum); err != nil {
+					utils.Fatalf("LightEthereum service not running: %v", err)
+				}
+				<-lightEthereum.Downloader().syncedCh
+				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+				time.Sleep(exitWhenSynced)
+				stack.Stop()
 
-
-						} else {
-							var ethereum *eth.Ethereum
-							if err := stack.Service(&ethereum); err != nil {
-								utils.Fatalf("Ethereum service not running: %v", err)
-							}
-							<-ethereum.Downloader().syncedCh
-							log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
-							time.Sleep(exitWhenSynced)
-							stack.Stop()
-						}
+			} else {
+				var ethereum *eth.Ethereum
+				if err := stack.Service(&ethereum); err != nil {
+					utils.Fatalf("Ethereum service not running: %v", err)
+				}
+				<-ethereum.Downloader().syncedCh
+				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+				time.Sleep(exitWhenSynced)
+				stack.Stop()
+			}
 		}()
 	}
 

@@ -227,7 +227,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
 		},
-		syncedCh:       make(chan bool, 1),
+		syncedCh:      make(chan bool, 1),
 		trackStateReq: make(chan *stateReq),
 	}
 	go dl.qosTuner()
@@ -321,7 +321,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	case nil:
 		select {
 		case d.syncedCh <- true:
-					default:
+		default:
 		}
 	case errBusy:
 
