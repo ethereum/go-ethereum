@@ -25,16 +25,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// reads the integer based on its kind
-func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
-	var maxUint256 = big.NewInt(0).Add(
+var (
+	maxUint256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(256), nil),
 		big.NewInt(-1))
-
-	var maxInt256 = big.NewInt(0).Add(
+	maxInt256 = big.NewInt(0).Add(
 		big.NewInt(0).Exp(big.NewInt(2), big.NewInt(255), nil),
 		big.NewInt(-1))
+)
 
+// reads the integer based on its kind
+func readInteger(typ byte, kind reflect.Kind, b []byte) interface{} {
 	switch kind {
 	case reflect.Uint8:
 		return b[len(b)-1]
