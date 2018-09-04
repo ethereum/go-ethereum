@@ -37,6 +37,10 @@ profile.cov
 # VS Code
 .vscode
 
+# vim swap files
+.*.sw?
+.sw?
+
 # dashboard
 /dashboard/assets/flow-typed
 /dashboard/assets/node_modules
