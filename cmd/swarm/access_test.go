@@ -34,11 +34,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
+
+var DefaultCurve = crypto.S256()
 
 // TestAccessPassword tests for the correct creation of an ACT manifest protected by a password.
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
@@ -359,11 +362,22 @@ func TestAccessPK(t *testing.T) {
 	}
 }
 
+// TestAccessACT tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
+func TestAccessACT(t *testing.T) {
+	testAccessACT(t, 0)
+}
+
+// TestAccessACTScale tests the creation of the ACT manifest end-to-end, with 1000 bogus entries (i.e. 1000 EC keys + default scenario = 3 nodes 1 unauthorized = 1003 keys in the ACT manifest)
+func TestAccessACTScale(t *testing.T) {
+	testAccessACT(t, 1000)
+}
+
 // TestAccessACT tests the e2e creation, uploading and downloading of an ACT type access control
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
 // set. the third node should fail decoding the reference as it will not be granted access. the publisher uploads through
-// one of the nodes then disappears.
-func TestAccessACT(t *testing.T) {
+// one of the nodes then disappears. If `bogusEntries` is bigger than 0, the test will generate the number of bogus act entries
+// to test what happens at scale
+func testAccessACT(t *testing.T, bogusEntries int) {
 	// Setup Swarm and upload a test file to it
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
@@ -415,18 +429,35 @@ func TestAccessACT(t *testing.T) {
 		grantees = append(grantees, hex.EncodeToString(granteePubKey))
 	}
 
-	granteesPubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list.csv")
+	if bogusEntries > 0 {
+		bogusGrantees := []string{}
+
+		for i := 0; i < bogusEntries; i++ {
+			prv, err := ecies.GenerateKey(rand.Reader, DefaultCurve, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bogusGrantees = append(bogusGrantees, hex.EncodeToString(crypto.CompressPubkey(&prv.ExportECDSA().PublicKey)))
+		}
+		r2 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
+		for i := 0; i < len(grantees); i++ {
+			insertAtIdx := r2.Intn(len(bogusGrantees))
+			bogusGrantees = append(bogusGrantees[:insertAtIdx], append([]string{grantees[i]}, bogusGrantees[insertAtIdx:]...)...)
+		}
+		grantees = bogusGrantees
+	}
+
+	granteesPubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer granteesPubkeyListFile.Close()
+	defer os.Remove(granteesPubkeyListFile.Name())
 
 	_, err = granteesPubkeyListFile.WriteString(strings.Join(grantees, "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer granteesPubkeyListFile.Close()
-	defer os.Remove(granteesPubkeyListFile.Name())
 
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
