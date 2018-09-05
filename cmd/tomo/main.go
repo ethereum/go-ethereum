@@ -321,7 +321,6 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 				log.Info("Enabled staking node!!!")
 			}
 			defer close(core.CheckpointCh)
-			defer close(core.M1Ch)
 			for {
 				select {
 				case <-core.CheckpointCh:
@@ -355,11 +354,6 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 						}
 						started = true
 						log.Info("Enabled staking node!!!")
-					}
-				case <-core.M1Ch:
-					err := ethereum.BlockChain().UpdateM1()
-					if err != nil {
-						log.Error("Error when update M1", err)
 					}
 				}
 			}

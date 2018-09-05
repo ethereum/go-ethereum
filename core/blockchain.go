@@ -52,7 +52,6 @@ import (
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 	CheckpointCh     = make(chan int)
-	M1Ch             = make(chan int)
 	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
@@ -1199,7 +1198,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			}
 			// prepare set of masternodes for the next epoch
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == (bc.chainConfig.Posv.Epoch - bc.chainConfig.Posv.Gap) {
-				M1Ch <- 1
+				err := bc.UpdateM1()
+				if err != nil {
+					if err == ErrNotPoSV {
+						log.Crit("Error when update M1 ", "err", err)
+					} else {
+						log.Error("Error when update M1 ", "err", err)
+					}
+				}
 			}
 		}
 	}
@@ -1596,14 +1602,14 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 
 func (bc *BlockChain) UpdateM1() error {
 	if bc.Config().Posv == nil {
-		return errors.New("Posv not found in config")
+		return ErrNotPoSV
 	}
 	engine := bc.Engine().(*posv.Posv)
 	log.Info("It's time to update new set of masternodes for the next epoch...")
 	// get masternodes information from smart contract
-	client, err := ethclient.Dial(bc.IPCEndpoint)
+	client, err := bc.GetClient()
 	if err != nil {
-		log.Crit("Fail to connect IPC: %v", err)
+		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
 	validator, err := contractValidator.NewTomoValidator(addr, client)
@@ -1615,7 +1621,6 @@ func (bc *BlockChain) UpdateM1() error {
 	if err != nil {
 		return err
 	}
-
 	var ms []posv.Masternode
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
@@ -1629,7 +1634,7 @@ func (bc *BlockChain) UpdateM1() error {
 	}
 	log.Info("Ordered list of masternode candidates")
 	for _, m := range ms {
-		fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
+		log.Info("", "address", m.Address.String(), "stake", m.Stake)
 	}
 	if len(ms) == 0 {
 		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
