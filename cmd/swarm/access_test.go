@@ -145,7 +145,9 @@ func TestAccessPassword(t *testing.T) {
 	if a.KdfParams == nil {
 		t.Fatal("manifest access kdf params is nil")
 	}
-
+	if a.Publisher != "" {
+		t.Fatal("should be empty")
+	}
 	client := swarm.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
@@ -222,7 +224,7 @@ func TestAccessPassword(t *testing.T) {
 // the test will fail if the proxy's given private key is not granted on the ACT.
 func TestAccessPK(t *testing.T) {
 	// Setup Swarm and upload a test file to it
-	cluster := newTestCluster(t, 1)
+	cluster := newTestCluster(t, 2)
 	defer cluster.Shutdown()
 
 	// create a tmp file
@@ -302,6 +304,20 @@ func TestAccessPK(t *testing.T) {
 		t.Fatalf("stdout not matched")
 	}
 
+	//get the public key from the publisher directory
+	publicKeyFromDataDir := runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passFile.Name(),
+		"--datadir",
+		publisherDir,
+		"print-keys",
+		"--compressed",
+	)
+	_, publicKeyString := publicKeyFromDataDir.ExpectRegexp(".+")
+	publicKeyFromDataDir.ExpectExit()
+	pkComp := strings.Split(publicKeyString[0], "=")[1]
 	var m api.Manifest
 
 	err = json.Unmarshal([]byte(matches[0]), &m)
@@ -335,7 +351,9 @@ func TestAccessPK(t *testing.T) {
 	if a.KdfParams != nil {
 		t.Fatal("manifest access kdf params should be nil")
 	}
-
+	if a.Publisher != pkComp {
+		t.Fatal("publisher key did not match")
+	}
 	client := swarm.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
@@ -499,6 +517,22 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	if len(matches) == 0 {
 		t.Fatalf("stdout not matched")
 	}
+
+	//get the public key from the publisher directory
+	publicKeyFromDataDir := runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passFile.Name(),
+		"--datadir",
+		publisherDir,
+		"print-keys",
+		"--compressed",
+	)
+	_, publicKeyString := publicKeyFromDataDir.ExpectRegexp(".+")
+	publicKeyFromDataDir.ExpectExit()
+	pkComp := strings.Split(publicKeyString[0], "=")[1]
+
 	hash := matches[0]
 	m, _, err := client.DownloadManifest(hash)
 	if err != nil {
@@ -531,7 +565,9 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	if a.KdfParams != nil {
 		t.Fatal("manifest access kdf params should be nil")
 	}
-
+	if a.Publisher != pkComp {
+		t.Fatal("publisher key did not match")
+	}
 	httpClient := &http.Client{}
 
 	// all nodes except the skipped node should be able to decrypt the content
