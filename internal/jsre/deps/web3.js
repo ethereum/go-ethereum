@@ -2132,7 +2132,7 @@ var getValueOfUnit = function (unit) {
     unit = unit ? unit.toLowerCase() : 'ether';
     var unitValue = unitMap[unit];
     if (unitValue === undefined) {
-        throw new Error('This unit doesn\'t exists, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
+        throw new Error('This unit doesn\'t exist, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
     }
     return new BigNumber(unitValue, 10);
 };
