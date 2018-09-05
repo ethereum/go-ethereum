@@ -123,10 +123,11 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	// Load defaults.
 	cfg := tomoConfig{
-		Eth:       eth.DefaultConfig,
-		Shh:       whisper.DefaultConfig,
-		Node:      defaultNodeConfig(),
-		Dashboard: dashboard.DefaultConfig,
+		Eth:         eth.DefaultConfig,
+		Shh:         whisper.DefaultConfig,
+		Node:        defaultNodeConfig(),
+		Dashboard:   dashboard.DefaultConfig,
+		StakeEnable: true,
 	}
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
@@ -134,7 +135,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 			utils.Fatalf("%v", err)
 		}
 	}
-
+	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
+		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
+	}
 	// read passwords from enviroment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
