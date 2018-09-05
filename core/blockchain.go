@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1201,9 +1202,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				err := bc.UpdateM1()
 				if err != nil {
 					if err == ErrNotPoSV {
-						log.Crit("Error when update M1 ", "err", err)
+						log.Error("Stopping node", "err", err)
+						os.Exit(1)
 					} else {
-						log.Error("Error when update M1 ", "err", err)
+						log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
 					}
 				}
 			}
