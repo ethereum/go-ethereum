@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -44,6 +45,8 @@ const (
 	hashRegexp = `[a-f\d]{128}`
 	data       = "notsorandomdata"
 )
+
+var DefaultCurve = crypto.S256()
 
 // TestAccessPassword tests for the correct creation of an ACT manifest protected by a password.
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
@@ -132,7 +135,9 @@ func TestAccessPassword(t *testing.T) {
 	if a.KdfParams == nil {
 		t.Fatal("manifest access kdf params is nil")
 	}
-
+	if a.Publisher != "" {
+		t.Fatal("should be empty")
+	}
 	client := swarm.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
@@ -205,7 +210,7 @@ func TestAccessPassword(t *testing.T) {
 // the test will fail if the proxy's given private key is not granted on the ACT.
 func TestAccessPK(t *testing.T) {
 	// Setup Swarm and upload a test file to it
-	cluster := newTestCluster(t, 1)
+	cluster := newTestCluster(t, 2)
 	defer cluster.Shutdown()
 
 	dataFilename := testutil.TempFileWithContent(t, data)
@@ -263,6 +268,20 @@ func TestAccessPK(t *testing.T) {
 		t.Fatalf("stdout not matched")
 	}
 
+	//get the public key from the publisher directory
+	publicKeyFromDataDir := runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passwordFilename,
+		"--datadir",
+		publisherDir,
+		"print-keys",
+		"--compressed",
+	)
+	_, publicKeyString := publicKeyFromDataDir.ExpectRegexp(".+")
+	publicKeyFromDataDir.ExpectExit()
+	pkComp := strings.Split(publicKeyString[0], "=")[1]
 	var m api.Manifest
 
 	err = json.Unmarshal([]byte(matches[0]), &m)
@@ -296,7 +315,9 @@ func TestAccessPK(t *testing.T) {
 	if a.KdfParams != nil {
 		t.Fatal("manifest access kdf params should be nil")
 	}
-
+	if a.Publisher != pkComp {
+		t.Fatal("publisher key did not match")
+	}
 	client := swarm.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
@@ -323,12 +344,22 @@ func TestAccessPK(t *testing.T) {
 	}
 }
 
+// TestAccessACT tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
+func TestAccessACT(t *testing.T) {
+	testAccessACT(t, 0)
+}
+
+// TestAccessACTScale tests the creation of the ACT manifest end-to-end, with 1000 bogus entries (i.e. 1000 EC keys + default scenario = 3 nodes 1 unauthorized = 1003 keys in the ACT manifest)
+func TestAccessACTScale(t *testing.T) {
+	testAccessACT(t, 1000)
+}
+
 // TestAccessACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
 // set and also protects the ACT with a password. the third node should fail decoding the reference as it will not be granted access.
 // the third node then then tries to download using a correct password (and succeeds) then uses a wrong password and fails.
 // the publisher uploads through one of the nodes then disappears.
-func TestAccessACT(t *testing.T) {
+func testAccessACT(t *testing.T, bogusEntries int) {
 	// Setup Swarm and upload a test file to it
 	const clusterSize = 3
 	cluster := newTestCluster(t, clusterSize)
@@ -367,6 +398,23 @@ func TestAccessACT(t *testing.T) {
 		grantees = append(grantees, hex.EncodeToString(granteePubKey))
 	}
 
+	if bogusEntries > 0 {
+		bogusGrantees := []string{}
+
+		for i := 0; i < bogusEntries; i++ {
+			prv, err := ecies.GenerateKey(rand.Reader, DefaultCurve, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bogusGrantees = append(bogusGrantees, hex.EncodeToString(crypto.CompressPubkey(&prv.ExportECDSA().PublicKey)))
+		}
+		r2 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
+		for i := 0; i < len(grantees); i++ {
+			insertAtIdx := r2.Intn(len(bogusGrantees))
+			bogusGrantees = append(bogusGrantees[:insertAtIdx], append([]string{grantees[i]}, bogusGrantees[insertAtIdx:]...)...)
+		}
+		grantees = bogusGrantees
+	}
 	granteesPubkeyListFile := testutil.TempFileWithContent(t, strings.Join(grantees, "\n"))
 	defer os.RemoveAll(granteesPubkeyListFile)
 
@@ -406,6 +454,22 @@ func TestAccessACT(t *testing.T) {
 	if len(matches) == 0 {
 		t.Fatalf("stdout not matched")
 	}
+
+	//get the public key from the publisher directory
+	publicKeyFromDataDir := runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passwordFilename,
+		"--datadir",
+		publisherDir,
+		"print-keys",
+		"--compressed",
+	)
+	_, publicKeyString := publicKeyFromDataDir.ExpectRegexp(".+")
+	publicKeyFromDataDir.ExpectExit()
+	pkComp := strings.Split(publicKeyString[0], "=")[1]
+
 	hash := matches[0]
 	m, _, err := client.DownloadManifest(hash)
 	if err != nil {
@@ -436,6 +500,9 @@ func TestAccessACT(t *testing.T) {
 		t.Fatalf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
 	}
 
+	if a.Publisher != pkComp {
+		t.Fatal("publisher key did not match")
+	}
 	httpClient := &http.Client{}
 
 	// all nodes except the skipped node should be able to decrypt the content
