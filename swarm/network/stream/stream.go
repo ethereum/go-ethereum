@@ -130,7 +130,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 			// wait for kademlia table to be healthy
 			time.Sleep(options.SyncUpdateDelay)
 
-			kad := streamer.delivery.overlay.(*network.Kademlia)
+			kad := streamer.delivery.kad
 			depthC := latestIntC(kad.NeighbourhoodDepthC())
 			addressBookSizeC := latestIntC(kad.AddrCountC())
 
@@ -398,9 +398,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 // and they are no longer required after iteration, request to Quit
 // them will be send to appropriate peers.
 func (r *Registry) updateSyncing() {
-	// if overlay in not Kademlia, panic
-	kad := r.delivery.overlay.(*network.Kademlia)
-
+	kad := r.delivery.kad
 	// map of all SYNC streams for all peers
 	// used at the and of the function to remove servers
 	// that are not needed anymore
@@ -421,8 +419,7 @@ func (r *Registry) updateSyncing() {
 	r.peersMu.RUnlock()
 
 	// request subscriptions for all nodes and bins
-	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
-		p := conn.(network.Peer)
+	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(p *network.Peer, bin int) bool {
 		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
 
 		// bin is always less then 256 and it is safe to convert it to type uint8
@@ -461,10 +458,11 @@ func (r *Registry) updateSyncing() {
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, Spec)
-	bzzPeer := network.NewBzzTestPeer(peer, r.addr)
-	r.delivery.overlay.On(bzzPeer)
-	defer r.delivery.overlay.Off(bzzPeer)
-	return r.Run(bzzPeer)
+	bp := network.NewBzzTestPeer(peer, r.addr)
+	np := network.NewPeer(bp, r.delivery.kad)
+	r.delivery.kad.On(np)
+	defer r.delivery.kad.Off(np)
+	return r.Run(bp)
 }
 
 // HandleMsg is the message handler that delegates incoming messages

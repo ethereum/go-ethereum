@@ -457,15 +457,10 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 //returns the number of subscriptions requested
 func startSyncing(r *Registry, conf *synctestConfig) (int, error) {
 	var err error
-
-	kad, ok := r.delivery.overlay.(*network.Kademlia)
-	if !ok {
-		return 0, fmt.Errorf("Not a Kademlia!")
-	}
-
+	kad := r.delivery.kad
 	subCnt := 0
 	//iterate over each bin and solicit needed subscription to bins
-	kad.EachBin(r.addr.Over(), pof, 0, func(conn network.OverlayConn, po int) bool {
+	kad.EachBin(r.addr.Over(), pof, 0, func(conn *network.Peer, po int) bool {
 		//identify begin and start index of the bin(s) we want to subscribe to
 		histRange := &Range{}
 

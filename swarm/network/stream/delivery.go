@@ -47,15 +47,15 @@ var (
 
 type Delivery struct {
 	db       *storage.DBAPI
-	overlay  network.Overlay
+	kad      *network.Kademlia
 	receiveC chan *ChunkDeliveryMsg
 	getPeer  func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
+func NewDelivery(kad *network.Kademlia, db *storage.DBAPI) *Delivery {
 	d := &Delivery{
 		db:       db,
-		overlay:  overlay,
+		kad:      kad,
 		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
 
@@ -172,7 +172,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			t := time.NewTimer(10 * time.Minute)
 			defer t.Stop()
 
-			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Addr, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
+			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Addr, "node", common.Bytes2Hex(d.kad.BaseAddr()), "created", created)
 			start := time.Now()
 			select {
 			case <-chunk.ReqC:
@@ -269,8 +269,8 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, hash []byte, skipCheck 
 	var err error
 	requestFromPeersCount.Inc(1)
 
-	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
-		spId := p.(network.Peer).ID()
+	d.kad.EachConn(hash, 255, func(p *network.Peer, po int, nn bool) bool {
+		spId := p.ID()
 		for _, p := range peersToSkip {
 			if p == spId {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
