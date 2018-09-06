@@ -893,14 +893,14 @@ func TestMethodsNotAllowed(t *testing.T) {
 	}{
 		{
 			url:  fmt.Sprintf("%s/bzz-list:/", srv.URL),
-			code: 405,
+			code: http.StatusMethodNotAllowed,
 		}, {
 			url:  fmt.Sprintf("%s/bzz-hash:/", srv.URL),
-			code: 405,
+			code: http.StatusMethodNotAllowed,
 		},
 		{
 			url:  fmt.Sprintf("%s/bzz-immutable:/", srv.URL),
-			code: 405,
+			code: http.StatusMethodNotAllowed,
 		},
 	} {
 		res, _ := http.Post(c.url, "text/plain", bytes.NewReader([]byte(databytes)))
@@ -958,7 +958,7 @@ func TestGet(t *testing.T) {
 			uri:                fmt.Sprintf("%s/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
-			expectedStatusCode: 200,
+			expectedStatusCode: http.StatusOK,
 			assertResponseBody: "Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution",
 			verbose:            false,
 		},
@@ -966,7 +966,7 @@ func TestGet(t *testing.T) {
 			uri:                fmt.Sprintf("%s/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "application/json"},
-			expectedStatusCode: 200,
+			expectedStatusCode: http.StatusOK,
 			assertResponseBody: "Swarm: Please request a valid ENS or swarm hash with the appropriate bzz scheme",
 			verbose:            false,
 		},
@@ -974,7 +974,7 @@ func TestGet(t *testing.T) {
 			uri:                fmt.Sprintf("%s/robots.txt", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{"Accept": "text/html"},
-			expectedStatusCode: 200,
+			expectedStatusCode: http.StatusOK,
 			assertResponseBody: "User-agent: *\nDisallow: /",
 			verbose:            false,
 		},
@@ -982,38 +982,37 @@ func TestGet(t *testing.T) {
 			uri:                fmt.Sprintf("%s/nonexistent_path", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 404,
+			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/bzz:asdf/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 404,
+			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/tbz2/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 404,
+			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/bzz-rack:/", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 404,
+			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/bzz-ls", srv.URL),
 			method:             "GET",
 			headers:            map[string]string{},
-			expectedStatusCode: 404,
+			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
-		},
-	} {
+		}} {
 		t.Run("GET "+testCase.uri, func(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
 			if res.StatusCode != testCase.expectedStatusCode {
@@ -1060,7 +1059,7 @@ func TestModify(t *testing.T) {
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "DELETE",
 			headers:            map[string]string{},
-			expectedStatusCode: 200,
+			expectedStatusCode: http.StatusOK,
 			assertResponseBody: "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731",
 			verbose:            false,
 		},
@@ -1068,21 +1067,21 @@ func TestModify(t *testing.T) {
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "PUT",
 			headers:            map[string]string{},
-			expectedStatusCode: 405,
+			expectedStatusCode: http.StatusMethodNotAllowed,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash),
 			method:             "PUT",
 			headers:            map[string]string{},
-			expectedStatusCode: 405,
+			expectedStatusCode: http.StatusMethodNotAllowed,
 			verbose:            false,
 		},
 		{
 			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
 			method:             "PATCH",
 			headers:            map[string]string{},
-			expectedStatusCode: 405,
+			expectedStatusCode: http.StatusMethodNotAllowed,
 			verbose:            false,
 		},
 		{
@@ -1090,7 +1089,7 @@ func TestModify(t *testing.T) {
 			method:                "POST",
 			headers:               map[string]string{},
 			requestBody:           []byte("POSTdata"),
-			expectedStatusCode:    200,
+			expectedStatusCode:    http.StatusOK,
 			assertResponseHeaders: map[string]string{"Content-Length": "64"},
 			verbose:               false,
 		},
@@ -1099,7 +1098,7 @@ func TestModify(t *testing.T) {
 			method:                "POST",
 			headers:               map[string]string{},
 			requestBody:           []byte("POSTdata"),
-			expectedStatusCode:    200,
+			expectedStatusCode:    http.StatusOK,
 			assertResponseHeaders: map[string]string{"Content-Length": "128"},
 			verbose:               false,
 		},
@@ -1148,7 +1147,7 @@ func TestMultiPartUpload(t *testing.T) {
 	}
 	res, body := httpDo("POST", url, buf, headers, verbose, t)
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected POST multipart/form-data to return 200, but it returned %d", res.StatusCode)
 	}
 	if len(body) != 64 {
