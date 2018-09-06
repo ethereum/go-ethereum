@@ -36,6 +36,7 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
 	"strings"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -131,7 +132,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		Node:        defaultNodeConfig(),
 		Dashboard:   dashboard.DefaultConfig,
 		StakeEnable: true,
-		Verbosity:   0,
+		Verbosity:   3,
 		NAT:         "",
 	}
 	// Load config file.
@@ -144,7 +145,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
 	}
 	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
-		ctx.Set(debug.VerbosityFlag.Name, string(cfg.Verbosity))
+		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
 	}
 
 	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
