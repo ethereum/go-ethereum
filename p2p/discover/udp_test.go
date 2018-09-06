@@ -124,7 +124,7 @@ func TestUDP_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
 	defer test.table.Close()
 
-	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version})
+	test.packetIn(errExpired, pingTomo, &ping{From: testRemote, To: testLocalAnnounced, Version: Version})
 	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: []byte{}, Expiration: futureExp})
 	test.packetIn(errUnknownNode, findnodePacket, &findnode{Expiration: futureExp})
 	test.packetIn(errUnsolicitedReply, neighborsPacket, &neighbors{Expiration: futureExp})
@@ -328,7 +328,7 @@ func TestUDP_successfulPing(t *testing.T) {
 	defer test.table.Close()
 
 	// The remote side sends a ping packet to initiate the exchange.
-	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
+	go test.packetIn(nil, pingTomo, &ping{From: testRemote, To: testLocalAnnounced, Version: Version, Expiration: futureExp})
 
 	// the ping is replied to.
 	test.waitPacketOut(func(p *pong) {
@@ -391,7 +391,7 @@ var testPackets = []struct {
 	wantPacket interface{}
 }{
 	{
-		input: "71dbda3a79554728d4f94411e42ee1f8b0d561c10e1e5f5893367948c6a7d70bb87b235fa28a77070271b6c164a2dce8c7e13a5739b53b5e96f2e5acb0e458a02902f5965d55ecbeb2ebb6cabb8b2b232896a36b737666c55265ad0a68412f250001ea04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a355",
+		input: "95a4d7d1909e6a58f115e9a451d47a8f016776a8874140366e702e33e85c7b4cd58a82ebece6acd0973342b66b9e716fece46b5c67a3560fc8624063dd15a310469de42ca599474b9d8cb6eb8dc41b0d5236539ea7ae10ef3c630cd94faefd800005ea04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a355",
 		wantPacket: &ping{
 			Version:    4,
 			From:       rpcEndpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
@@ -401,7 +401,7 @@ var testPackets = []struct {
 		},
 	},
 	{
-		input: "e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663aaa3d67d641936511c8f8d6ad8698b820a7cf9e1be7155e9a241f556658c55428ec0563514365799a4be2be5a685a80971ddcfa80cb422cdd0101ec04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a3550102",
+		input: "57b1c182cc24e21e9297baa70d57a67ade498439123c968ffc048541addf9d463d1d25d10cf473a7f90a3efd6a070818097ebeaef58cd53843cb3af28acaee354272cfe7801b7fa7dbd8aa13309b6059fce877ad376c8dad7524dc34de626bd80105ec04cb847f000001820cfa8215a8d790000000000000000000000000000000018208ae820d058443b9a3550102",
 		wantPacket: &ping{
 			Version:    4,
 			From:       rpcEndpoint{net.ParseIP("127.0.0.1").To4(), 3322, 5544},
@@ -411,7 +411,7 @@ var testPackets = []struct {
 		},
 	},
 	{
-		input: "577be4349c4dd26768081f58de4c6f375a7a22f3f7adda654d1428637412c3d7fe917cadc56d4e5e7ffae1dbe3efffb9849feb71b262de37977e7c7a44e677295680e9e38ab26bee2fcbae207fba3ff3d74069a50b902a82c9903ed37cc993c50001f83e82022bd79020010db83c4d001500000000abcdef12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c5010203040531b9019afde696e582a78fa8d95ea13ce3297d4afb8ba6433e4154caa5ac6431af1b80ba76023fa4090c408f6b4bc3701562c031041d4702971d102c9ab7fa5eed4cd6bab8f7af956f7d565ee1917084a95398b6a21eac920fe3dd1345ec0a7ef39367ee69ddf092cbfe5b93e5e568ebc491983c09c76d922dc3",
+		input: "e3e987421accd2c75967d4a7229c436c18760def054738d8d9669697ee4726cdc9949c51df3e90d795d33d3f57d508c4687913338f6eb9caa89873aaae9dd49a5473ade5ea452c4df9d1f842eadf03439dbc373c0de8b20b412b6760d7b479140105f83e82022bd79020010db83c4d001500000000abcdef12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c50102030405",
 		wantPacket: &ping{
 			Version:    555,
 			From:       rpcEndpoint{net.ParseIP("2001:db8:3c4d:15::abcd:ef12"), 3322, 5544},
@@ -475,7 +475,6 @@ var testPackets = []struct {
 func TestForwardCompatibility(t *testing.T) {
 	testkey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	wantNodeID := PubkeyID(&testkey.PublicKey)
-
 	for _, test := range testPackets {
 		input, err := hex.DecodeString(test.input)
 		if err != nil {
