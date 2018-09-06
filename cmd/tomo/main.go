@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
@@ -284,15 +285,16 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 		}
 	}()
 	// Start auxiliary services if enabled
-	if cfg.StakeEnable || ctx.GlobalBool(utils.DeveloperFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support staking")
-		}
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			utils.Fatalf("Ethereum service not running: %v", err)
-		}
+
+	// Mining only makes sense if a full Ethereum node is running
+	if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		utils.Fatalf("Light clients do not support staking")
+	}
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		utils.Fatalf("Ethereum service not running: %v", err)
+	}
+	if _, ok := ethereum.Engine().(*posv.Posv); ok {
 		go func() {
 			started := false
 			ok, err := ethereum.ValidateStaker()
@@ -356,8 +358,8 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 					}
 				case <-core.M1Ch:
 					err := ethereum.BlockChain().UpdateM1()
-					if(err !=nil){
-						log.Error("Error when update M1",err)
+					if err != nil {
+						log.Error("Error when update M1", err)
 					}
 				}
 			}
