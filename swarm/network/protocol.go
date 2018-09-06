@@ -62,31 +62,32 @@ var DiscoverySpec = &protocols.Spec{
 	},
 }
 
-// Addr interface that peerPool needs
-type Addr interface {
-	OverlayPeer
-	Over() []byte
-	Under() []byte
-	String() string
-	Update(OverlayAddr) OverlayAddr
-}
-
-// Peer interface represents an live peer connection
-type Peer interface {
-	Addr                   // the address of a peer
-	Conn                   // the live connection (protocols.Peer)
-	LastActive() time.Time // last time active
-}
-
-// Conn interface represents an live peer connection
-type Conn interface {
-	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
-	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
-	Send(context.Context, interface{}) error                                              // can send messages
-	Drop(error)                                                                           // disconnect this peer
-	Run(func(context.Context, interface{}) error) error                                   // the run function to run a protocol
-	Off() OverlayAddr
-}
+//
+// // Addr interface that peerPool needs
+// type Addr interface {
+// 	OverlayPeer
+// 	Over() []byte
+// 	Under() []byte
+// 	String() string
+// 	Update(OverlayAddr) OverlayAddr
+// }
+//
+// // Peer interface represents an live peer connection
+// type Peer interface {
+// 	Addr                   // the address of a peer
+// 	Conn                   // the live connection (protocols.Peer)
+// 	LastActive() time.Time // last time active
+// }
+//
+// // Conn interface represents an live peer connection
+// type Conn interface {
+// 	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
+// 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
+// 	Send(context.Context, interface{}) error                                              // can send messages
+// 	Drop(error)                                                                           // disconnect this peer
+// 	Run(func(context.Context, interface{}) error) error                                   // the run function to run a protocol
+// 	Off() OverlayAddr
+// }
 
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
@@ -114,7 +115,7 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
+func NewBzz(config *BzzConfig, kad *Kademlia, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 	return &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
 		NetworkID:    config.NetworkID,
@@ -131,7 +132,7 @@ func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *BzzAddr {
 	b.localAddr = b.localAddr.Update(&BzzAddr{
 		UAddr: byteaddr,
 		OAddr: b.localAddr.OAddr,
-	}).(*BzzAddr)
+	})
 	return b.localAddr
 }
 
@@ -282,10 +283,10 @@ func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	}
 }
 
-// Off returns the overlay peer record for offline persistence
-func (p *BzzPeer) Off() OverlayAddr {
-	return p.BzzAddr
-}
+// // Off returns the overlay peer record for offline persistence
+// func (p *BzzPeer) Off() OverlayAddr {
+// 	return p.BzzAddr
+// }
 
 // LastActive returns the time the peer was last active
 func (p *BzzPeer) LastActive() time.Time {
@@ -388,8 +389,8 @@ func (a *BzzAddr) ID() discover.NodeID {
 }
 
 // Update updates the underlay address of a peer record
-func (a *BzzAddr) Update(na OverlayAddr) OverlayAddr {
-	return &BzzAddr{a.OAddr, na.(Addr).Under()}
+func (a *BzzAddr) Update(na *BzzAddr) *BzzAddr {
+	return &BzzAddr{a.OAddr, na.UAddr}
 }
 
 // String pretty prints the address
@@ -410,9 +411,9 @@ func RandomAddr() *BzzAddr {
 }
 
 // NewNodeIDFromAddr transforms the underlay address to an adapters.NodeID
-func NewNodeIDFromAddr(addr Addr) discover.NodeID {
-	log.Info(fmt.Sprintf("uaddr=%s", string(addr.Under())))
-	node := discover.MustParseNode(string(addr.Under()))
+func NewNodeIDFromAddr(addr *BzzAddr) discover.NodeID {
+	log.Info(fmt.Sprintf("uaddr=%s", string(addr.UAddr)))
+	node := discover.MustParseNode(string(addr.UAddr))
 	return node.ID
 }
 

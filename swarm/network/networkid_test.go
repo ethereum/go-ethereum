@@ -92,7 +92,7 @@ func TestNetworkID(t *testing.T) {
 			if kademlias[node].addrs.Size() != len(netIDGroup)-1 {
 				t.Fatalf("Kademlia size has not expected peer size. Kademlia size: %d, expected size: %d", kademlias[node].addrs.Size(), len(netIDGroup)-1)
 			}
-			kademlias[node].EachAddr(nil, 0, func(addr OverlayAddr, _ int, _ bool) bool {
+			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int, _ bool) bool {
 				found := false
 				for _, nd := range netIDGroup {
 					p := ToOverlayAddr(nd.Bytes())

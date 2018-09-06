@@ -41,7 +41,7 @@ func TestRegisterAndConnect(t *testing.T) {
 
 	id := s.IDs[0]
 	raddr := NewAddrFromNodeID(id)
-	pp.Register([]OverlayAddr{OverlayAddr(raddr)})
+	pp.Register(raddr)
 
 	// start the hive and wait for the connection
 	err := pp.Start(s.Server)
@@ -77,7 +77,7 @@ func TestHiveStatePersistance(t *testing.T) {
 	peers := make(map[string]bool)
 	for _, id := range s.IDs {
 		raddr := NewAddrFromNodeID(id)
-		pp.Register([]OverlayAddr{OverlayAddr(raddr)})
+		pp.Register(raddr)
 		peers[raddr.String()] = true
 	}
 
@@ -97,8 +97,8 @@ func TestHiveStatePersistance(t *testing.T) {
 
 	pp.Start(s1.Server)
 	i := 0
-	pp.Overlay.EachAddr(nil, 256, func(addr OverlayAddr, po int, nn bool) bool {
-		delete(peers, addr.(*BzzAddr).String())
+	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int, nn bool) bool {
+		delete(peers, addr.String())
 		i++
 		return true
 	})
