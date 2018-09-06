@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -593,7 +594,15 @@ func (self *worker) commitNewWork() {
 		}
 		// prepare set of masternodes for the next epoch
 		if (work.Block.NumberU64() % work.config.Posv.Epoch) == (work.config.Posv.Epoch - work.config.Posv.Gap) {
-			core.M1Ch <- 1
+			err := self.chain.UpdateM1()
+			if err != nil {
+				if err == core.ErrNotPoSV {
+					log.Error("Stopping node", "err", err)
+					os.Exit(1)
+				} else {
+					log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
+				}
+			}
 		}
 	}
 	self.push(work)
