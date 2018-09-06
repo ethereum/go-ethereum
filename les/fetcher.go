@@ -50,7 +50,7 @@ type lightFetcher struct {
 	lastUpdateStats *updateStatsEntry
 	syncing         bool
 	syncDone        chan *peer
-	syncedCh        chan bool
+	SyncedCh        chan bool
 
 	reqMu      sync.RWMutex // reqMu protects access to sent header fetch requests
 	requested  map[uint64]fetchRequest
@@ -117,7 +117,7 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 		timeoutChn:     make(chan uint64),
 		requestChn:     make(chan bool, 100),
 		syncDone:       make(chan *peer),
-		syncedCh:       make(chan bool, 1),
+		SyncedCh:       make(chan bool, 1),
 		maxConfirmedTd: big.NewInt(0),
 	}
 	pm.peers.notify(f)
@@ -448,7 +448,7 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 					p.Log().Debug("Synchronisation started")
 					f.pm.synchronise(p)
 					f.syncDone <- p
-					f.syncedCh <- true
+					f.SyncedCh <- true
 				}()
 				return nil
 			},

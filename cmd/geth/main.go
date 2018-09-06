@@ -84,10 +84,7 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-
-		utils.FastSyncFlag,
 		utils.ExitWhenSyncedFlag,
-		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
@@ -335,12 +332,12 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
 		go func() {
-			if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+			if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 				var lightEthereum *les.LightEthereum
 				if err := stack.Service(&lightEthereum); err != nil {
 					utils.Fatalf("LightEthereum service not running: %v", err)
 				}
-				<-lightEthereum.Downloader().syncedCh
+				<-lightEthereum.Downloader().SyncedCh
 				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 				time.Sleep(exitWhenSynced)
 				stack.Stop()
@@ -350,7 +347,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				if err := stack.Service(&ethereum); err != nil {
 					utils.Fatalf("Ethereum service not running: %v", err)
 				}
-				<-ethereum.Downloader().syncedCh
+				<-ethereum.Downloader().SyncedCh
 				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 				time.Sleep(exitWhenSynced)
 				stack.Stop()

@@ -128,7 +128,7 @@ type Downloader struct {
 	bodyWakeCh    chan bool            // [eth/62] Channel to signal the block body fetcher of new tasks
 	receiptWakeCh chan bool            // [eth/63] Channel to signal the receipt fetcher of new tasks
 	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
-	syncedCh      chan bool
+	SyncedCh      chan bool
 
 	// for stateFetcher
 	stateSyncStart chan *stateSync
@@ -227,7 +227,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
 		},
-		syncedCh:      make(chan bool, 1),
+		SyncedCh:      make(chan bool, 1),
 		trackStateReq: make(chan *stateReq),
 	}
 	go dl.qosTuner()
@@ -320,7 +320,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	switch err {
 	case nil:
 		select {
-		case d.syncedCh <- true:
+		case d.SyncedCh <- true:
 		default:
 		}
 	case errBusy:
