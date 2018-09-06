@@ -43,11 +43,8 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 	}
 
 	// Create and send tx to smart contract for sign validate block.
-	blockHex := common.LeftPadBytes(block.Number().Bytes(), 32)
-	data := common.Hex2Bytes(HexSignMethod)
-	inputData := append(data, blockHex...)
 	nonce := pool.State().GetNonce(account.Address)
-	tx := types.NewTransaction(nonce, common.HexToAddress(common.BlockSigners), big.NewInt(0), 100000, big.NewInt(0), inputData)
+	tx := CreateTxSign(block.Number(), nonce, common.HexToAddress(common.BlockSigners))
 	txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 	if err != nil {
 		log.Error("Fail to create tx sign", "error", err)
@@ -60,13 +57,18 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 	return nil
 }
 
+// Create tx sign.
+func CreateTxSign(blockNumber *big.Int, nonce uint64, blockSigner common.Address) *types.Transaction {
+	blockHex := common.LeftPadBytes(blockNumber.Bytes(), 32)
+	data := common.Hex2Bytes(HexSignMethod)
+	inputData := append(data, blockHex...)
+	tx := types.NewTransaction(nonce, blockSigner, big.NewInt(0), 100000, big.NewInt(0), inputData)
+
+	return tx
+}
+
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(ctx *node.ServiceContext, blockNumber uint64) ([]common.Address, error) {
-	client, err := GetEthClient(ctx)
-	if err != nil {
-		log.Error("Fail to connect IPC from blockSigner", "error", err)
-		return nil, err
-	}
+func GetSignersFromContract(client bind.ContractBackend, blockNumber uint64) ([]common.Address, error) {
 	addr := common.HexToAddress(common.BlockSigners)
 	blockSigner, err := contract.NewBlockSigner(addr, client)
 	if err != nil {
