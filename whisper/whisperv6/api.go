@@ -195,14 +195,14 @@ func (api *PublicWhisperAPI) DeleteSymKey(ctx context.Context, id string) bool {
 // MakeLightClient turns the node into light client, which does not forward
 // any incoming messages, and sends only messages originated in this node.
 func (api *PublicWhisperAPI) MakeLightClient(ctx context.Context) bool {
-	api.w.lightClient = true
-	return api.w.lightClient
+	api.w.SetLightClientMode(true)
+	return api.w.LightClientMode()
 }
 
 // CancelLightClient cancels light client mode.
 func (api *PublicWhisperAPI) CancelLightClient(ctx context.Context) bool {
-	api.w.lightClient = false
-	return !api.w.lightClient
+	api.w.SetLightClientMode(false)
+	return !api.w.LightClientMode()
 }
 
 //go:generate gencodec -type NewMessage -field-override newMessageOverride -out gen_newmessage_json.go

@@ -148,7 +148,8 @@ func TestServerDial(t *testing.T) {
 
 	// tell the server to connect
 	tcpAddr := listener.Addr().(*net.TCPAddr)
-	srv.AddPeer(&discover.Node{ID: remid, IP: tcpAddr.IP, TCP: uint16(tcpAddr.Port)})
+	node := &discover.Node{ID: remid, IP: tcpAddr.IP, TCP: uint16(tcpAddr.Port)}
+	srv.AddPeer(node)
 
 	select {
 	case conn := <-accepted:
@@ -170,6 +171,29 @@ func TestServerDial(t *testing.T) {
 			if !reflect.DeepEqual(peers, []*Peer{peer}) {
 				t.Errorf("Peers mismatch: got %v, want %v", peers, []*Peer{peer})
 			}
+
+			// Test AddTrustedPeer/RemoveTrustedPeer and changing Trusted flags
+			// Particularly for race conditions on changing the flag state.
+			if peer := srv.Peers()[0]; peer.Info().Network.Trusted {
+				t.Errorf("peer is trusted prematurely: %v", peer)
+			}
+			done := make(chan bool)
+			go func() {
+				srv.AddTrustedPeer(node)
+				if peer := srv.Peers()[0]; !peer.Info().Network.Trusted {
+					t.Errorf("peer is not trusted after AddTrustedPeer: %v", peer)
+				}
+				srv.RemoveTrustedPeer(node)
+				if peer := srv.Peers()[0]; peer.Info().Network.Trusted {
+					t.Errorf("peer is trusted after RemoveTrustedPeer: %v", peer)
+				}
+				done <- true
+			}()
+			// Trigger potential race conditions
+			peer = srv.Peers()[0]
+			_ = peer.Inbound()
+			_ = peer.Info()
+			<-done
 		case <-time.After(1 * time.Second):
 			t.Error("server did not launch peer within one second")
 		}
@@ -351,7 +375,8 @@ func TestServerAtCap(t *testing.T) {
 		}
 	}
 	// Try inserting a non-trusted connection.
-	c := newconn(randomID())
+	anotherID := randomID()
+	c := newconn(anotherID)
 	if err := srv.checkpoint(c, srv.posthandshake); err != DiscTooManyPeers {
 		t.Error("wrong error for insert:", err)
 	}
@@ -364,6 +389,87 @@ func TestServerAtCap(t *testing.T) {
 		t.Error("Server did not set trusted flag")
 	}
 
+	// Remove from trusted set and try again
+	srv.RemoveTrustedPeer(&discover.Node{ID: trustedID})
+	c = newconn(trustedID)
+	if err := srv.checkpoint(c, srv.posthandshake); err != DiscTooManyPeers {
+		t.Error("wrong error for insert:", err)
+	}
+
+	// Add anotherID to trusted set and try again
+	srv.AddTrustedPeer(&discover.Node{ID: anotherID})
+	c = newconn(anotherID)
+	if err := srv.checkpoint(c, srv.posthandshake); err != nil {
+		t.Error("unexpected error for trusted conn @posthandshake:", err)
+	}
+	if !c.is(trustedConn) {
+		t.Error("Server did not set trusted flag")
+	}
+}
+
+func TestServerPeerLimits(t *testing.T) {
+	srvkey := newkey()
+
+	clientid := randomID()
+	clientnode := &discover.Node{ID: clientid}
+
+	var tp *setupTransport = &setupTransport{
+		id: clientid,
+		phs: &protoHandshake{
+			ID: clientid,
+			// Force "DiscUselessPeer" due to unmatching caps
+			// Caps: []Cap{discard.cap()},
+		},
+	}
+	var flags connFlag = dynDialedConn
+	var dialDest *discover.Node = &discover.Node{ID: clientid}
+
+	srv := &Server{
+		Config: Config{
+			PrivateKey: srvkey,
+			MaxPeers:   0,
+			NoDial:     true,
+			Protocols:  []Protocol{discard},
+		},
+		newTransport: func(fd net.Conn) transport { return tp },
+		log:          log.New(),
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("couldn't start server: %v", err)
+	}
+	defer srv.Stop()
+
+	// Check that server is full (MaxPeers=0)
+	conn, _ := net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr != DiscTooManyPeers {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	srv.AddTrustedPeer(clientnode)
+
+	// Check that server allows a trusted peer despite being full.
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr == DiscTooManyPeers {
+		t.Errorf("failed to bypass MaxPeers with trusted node: %q", tp.closeErr)
+	}
+
+	if tp.closeErr != DiscUselessPeer {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	srv.RemoveTrustedPeer(clientnode)
+
+	// Check that server is full again.
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr != DiscTooManyPeers {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
 }
 
 func TestServerSetupConn(t *testing.T) {

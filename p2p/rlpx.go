@@ -181,9 +181,9 @@ func (t *rlpx) doEncHandshake(prv *ecdsa.PrivateKey, dial *discover.Node) (disco
 		err error
 	)
 	if dial == nil {
-		sec, err = receiverEncHandshake(t.fd, prv, nil)
+		sec, err = receiverEncHandshake(t.fd, prv)
 	} else {
-		sec, err = initiatorEncHandshake(t.fd, prv, dial.ID, nil)
+		sec, err = initiatorEncHandshake(t.fd, prv, dial.ID)
 	}
 	if err != nil {
 		return discover.NodeID{}, err
@@ -280,9 +280,9 @@ func (h *encHandshake) staticSharedSecret(prv *ecdsa.PrivateKey) ([]byte, error)
 // it should be called on the dialing side of the connection.
 //
 // prv is the local client's private key.
-func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID discover.NodeID, token []byte) (s secrets, err error) {
+func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID discover.NodeID) (s secrets, err error) {
 	h := &encHandshake{initiator: true, remoteID: remoteID}
-	authMsg, err := h.makeAuthMsg(prv, token)
+	authMsg, err := h.makeAuthMsg(prv)
 	if err != nil {
 		return s, err
 	}
@@ -306,7 +306,7 @@ func initiatorEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, remoteID d
 }
 
 // makeAuthMsg creates the initiator handshake message.
-func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey, token []byte) (*authMsgV4, error) {
+func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey) (*authMsgV4, error) {
 	rpub, err := h.remoteID.Pubkey()
 	if err != nil {
 		return nil, fmt.Errorf("bad remoteID: %v", err)
@@ -324,7 +324,7 @@ func (h *encHandshake) makeAuthMsg(prv *ecdsa.PrivateKey, token []byte) (*authMs
 	}
 
 	// Sign known message: static-shared-secret ^ nonce
-	token, err = h.staticSharedSecret(prv)
+	token, err := h.staticSharedSecret(prv)
 	if err != nil {
 		return nil, err
 	}
@@ -352,8 +352,7 @@ func (h *encHandshake) handleAuthResp(msg *authRespV4) (err error) {
 // it should be called on the listening side of the connection.
 //
 // prv is the local client's private key.
-// token is the token from a previous session with this node.
-func receiverEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey, token []byte) (s secrets, err error) {
+func receiverEncHandshake(conn io.ReadWriter, prv *ecdsa.PrivateKey) (s secrets, err error) {
 	authMsg := new(authMsgV4)
 	authPacket, err := readHandshakeMsg(authMsg, encAuthMsgLen, prv, conn)
 	if err != nil {

@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"io/ioutil"
@@ -46,7 +47,7 @@ func newDummyChunk(addr Address) *Chunk {
 	return chunk
 }
 
-func (m *mockRetrieve) retrieve(chunk *Chunk) error {
+func (m *mockRetrieve) retrieve(ctx context.Context, chunk *Chunk) error {
 	hkey := hex.EncodeToString(chunk.Addr)
 	m.requests[hkey] += 1
 
@@ -100,7 +101,7 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	// }
 
 	// second call
-	_, err = netStore.Get(key)
+	_, err = netStore.Get(context.TODO(), key)
 	if got := r.requests[hex.EncodeToString(key)]; got != 2 {
 		t.Fatalf("expected to have called retrieve two times, but got: %v", got)
 	}
@@ -109,7 +110,7 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	}
 
 	// third call
-	chunk, err := netStore.Get(key)
+	chunk, err := netStore.Get(context.TODO(), key)
 	if got := r.requests[hex.EncodeToString(key)]; got != 3 {
 		t.Fatalf("expected to have called retrieve three times, but got: %v", got)
 	}

@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"io/ioutil"
@@ -72,7 +73,7 @@ func TestMemStoreNotFound(t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 
-	_, err := m.Get(ZeroAddr)
+	_, err := m.Get(context.TODO(), ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -187,8 +188,8 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		}
 
 		for i := 0; i < tt.n; i++ {
-			go ldb.Put(chunks[i])
-			memStore.Put(chunks[i])
+			go ldb.Put(context.TODO(), chunks[i])
+			memStore.Put(context.TODO(), chunks[i])
 
 			if got := memStore.cache.Len(); got > cacheCap {
 				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
@@ -200,10 +201,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		}
 
 		for i := 0; i < tt.n; i++ {
-			_, err := memStore.Get(chunks[i].Addr)
+			_, err := memStore.Get(context.TODO(), chunks[i].Addr)
 			if err != nil {
 				if err == ErrChunkNotFound {
-					_, err := ldb.Get(chunks[i].Addr)
+					_, err := ldb.Get(context.TODO(), chunks[i].Addr)
 					if err != nil {
 						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
 					}

@@ -63,16 +63,16 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.Resolve(ctx, uri.Addr)
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, _, err := s.api.Get(ctx, addr, uri.Path)
+	reader, mimeType, status, _, err := s.api.Get(ctx, nil, addr, uri.Path)
 	if err != nil {
 		return nil, err
 	}
 	quitC := make(chan bool)
-	expsize, err := reader.Size(quitC)
+	expsize, err := reader.Size(ctx, quitC)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (s *Storage) Modify(ctx context.Context, rootHash, path, contentHash, conte
 	if err != nil {
 		return "", err
 	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.Resolve(ctx, uri.Addr)
 	if err != nil {
 		return "", err
 	}

@@ -63,11 +63,11 @@ type Config struct {
 	SwapEnabled       bool
 	SyncEnabled       bool
 	DeliverySkipCheck bool
+	LightNodeEnabled  bool
 	SyncUpdateDelay   time.Duration
 	SwapAPI           string
 	Cors              string
 	BzzAccount        string
-	BootNodes         string
 	privateKey        *ecdsa.PrivateKey
 }
 
@@ -92,7 +92,6 @@ func NewConfig() (c *Config) {
 		DeliverySkipCheck: false,
 		SyncUpdateDelay:   15 * time.Second,
 		SwapAPI:           "",
-		BootNodes:         "",
 	}
 
 	return

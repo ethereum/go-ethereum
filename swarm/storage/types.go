@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 const MaxPO = 16
@@ -114,7 +115,9 @@ func MakeHashFunc(hash string) SwarmHasher {
 	case "BMT":
 		return func() SwarmHash {
 			hasher := sha3.NewKeccak256
-			pool := bmt.NewTreePool(hasher, bmt.SegmentCount, bmt.PoolSize)
+			hasherSize := hasher().Size()
+			segmentCount := chunk.DefaultSize / hasherSize
+			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
 	}
@@ -230,8 +233,8 @@ func GenerateRandomChunk(dataSize int64) *Chunk {
 func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 	var i int
 	hasher := MakeHashFunc(DefaultHash)()
-	if dataSize > DefaultChunkSize {
-		dataSize = DefaultChunkSize
+	if dataSize > chunk.DefaultSize {
+		dataSize = chunk.DefaultSize
 	}
 
 	for i = 0; i < count; i++ {
@@ -250,7 +253,8 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
-	Size(chan bool) (int64, error)
+	Context() context.Context
+	Size(context.Context, chan bool) (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
@@ -260,8 +264,12 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (r *LazyTestSectionReader) Size(chan bool) (int64, error) {
+func (r *LazyTestSectionReader) Size(context.Context, chan bool) (int64, error) {
 	return r.SectionReader.Size(), nil
+}
+
+func (r *LazyTestSectionReader) Context() context.Context {
+	return context.TODO()
 }
 
 type StoreParams struct {
@@ -298,7 +306,7 @@ type Reference []byte
 
 // Putter is responsible to store data and create a reference for it
 type Putter interface {
-	Put(ChunkData) (Reference, error)
+	Put(context.Context, ChunkData) (Reference, error)
 	// RefSize returns the length of the Reference created by this Putter
 	RefSize() int64
 	// Close is to indicate that no more chunk data will be Put on this Putter
@@ -309,7 +317,7 @@ type Putter interface {
 
 // Getter is an interface to retrieve a chunk's data by its reference
 type Getter interface {
-	Get(Reference) (ChunkData, error)
+	Get(context.Context, Reference) (ChunkData, error)
 }
 
 // NOTE: this returns invalid data if chunk is encrypted
@@ -340,6 +348,10 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
+		return false
+	}
+
 	hasher := v.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])

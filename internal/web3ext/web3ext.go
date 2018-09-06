@@ -21,6 +21,7 @@ var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
+	"ethash":     Ethash_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -109,6 +110,34 @@ web3._extend({
 });
 `
 
+const Ethash_JS = `
+web3._extend({
+	property: 'ethash',
+	methods: [
+		new web3._extend.Method({
+			name: 'getWork',
+			call: 'ethash_getWork',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getHashrate',
+			call: 'ethash_getHashrate',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'submitWork',
+			call: 'ethash_submitWork',
+			params: 3,
+		}),
+		new web3._extend.Method({
+			name: 'submitHashRate',
+			call: 'ethash_submitHashRate',
+			params: 2,
+		}),
+	]
+});
+`
+
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
@@ -121,6 +150,16 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'removePeer',
 			call: 'admin_removePeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addTrustedPeer',
+			call: 'admin_addTrustedPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removeTrustedPeer',
+			call: 'admin_removeTrustedPeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -479,6 +518,11 @@ web3._extend({
 			call: 'miner_setGasPrice',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
+		}),
+		new web3._extend.Method({
+			name: 'setRecommitInterval',
+			call: 'miner_setRecommitInterval',
+			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',

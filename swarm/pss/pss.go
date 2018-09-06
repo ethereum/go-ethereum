@@ -18,6 +18,7 @@ package pss
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"errors"
@@ -71,7 +72,7 @@ type senderPeer interface {
 	Info() *p2p.PeerInfo
 	ID() discover.NodeID
 	Address() []byte
-	Send(interface{}) error
+	Send(context.Context, interface{}) error
 }
 
 // per-key peer related information
@@ -231,12 +232,13 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			}
 		}
 	}()
-	log.Debug("Started pss", "public key", common.ToHex(crypto.FromECDSAPub(p.PublicKey())))
+	log.Info("Started Pss")
+	log.Info("Loaded EC keys", "pubkey", common.ToHex(crypto.FromECDSAPub(p.PublicKey())), "secp256", common.ToHex(crypto.CompressPubkey(p.PublicKey())))
 	return nil
 }
 
 func (p *Pss) Stop() error {
-	log.Info("pss shutting down")
+	log.Info("Pss shutting down")
 	close(p.quitC)
 	return nil
 }
@@ -344,7 +346,7 @@ func (p *Pss) getHandlers(topic Topic) map[*Handler]bool {
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
-func (p *Pss) handlePssMsg(msg interface{}) error {
+func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
 
 	pssmsg, ok := msg.(*PssMsg)
@@ -844,7 +846,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		p.fwdPoolMu.RUnlock()
 
 		// attempt to send the message
-		err := pp.Send(msg)
+		err := pp.Send(context.TODO(), msg)
 		if err != nil {
 			metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
 			log.Error(err.Error())

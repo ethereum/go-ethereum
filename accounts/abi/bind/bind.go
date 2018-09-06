@@ -207,7 +207,7 @@ func bindTypeGo(kind abi.Type) string {
 
 // The inner function of bindTypeGo, this finds the inner type of stringKind.
 // (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the the translated type.
+// The length of the matched part is returned, with the translated type.
 func bindUnnestedTypeGo(stringKind string) (int, string) {
 
 	switch {
@@ -255,7 +255,7 @@ func bindTypeJava(kind abi.Type) string {
 
 // The inner function of bindTypeJava, this finds the inner type of stringKind.
 // (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the the translated type.
+// The length of the matched part is returned, with the translated type.
 func bindUnnestedTypeJava(stringKind string) (int, string) {
 
 	switch {
