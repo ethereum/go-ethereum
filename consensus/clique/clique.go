@@ -380,30 +380,35 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 			break
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
-		if number%checkpointInterval == 0 {
+		if number%checkpointInterval == 0 || number%c.config.Epoch == 0 {
 			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash); err == nil {
 				log.Trace("Loaded voting snapshot from disk", "number", number, "hash", hash)
 				snap = s
+				// Special case: In the rinkeby test net, the snapshot corresponding
+				// to block 2940000 does not store the recent signer information(bug).
+				// In order to make rinkeby backward compatible, clear the recent signer here.
+				if hash == common.HexToHash("0x9835192cc6b2126ac01cd636108f4e1a9a7a90877c107fbd9ef7386dd44ccb90") {
+					snap.Recents = make(map[uint64]common.Address)
+				}
 				break
 			}
 		}
-		// If we're at an checkpoint block, make a snapshot if it's known
-		if number%c.config.Epoch == 0 {
-			checkpoint := chain.GetHeaderByNumber(number)
-			if checkpoint != nil {
-				hash := checkpoint.Hash()
-
-				signers := make([]common.Address, (len(checkpoint.Extra)-extraVanity-extraSeal)/common.AddressLength)
-				for i := 0; i < len(signers); i++ {
-					copy(signers[i][:], checkpoint.Extra[extraVanity+i*common.AddressLength:])
-				}
-				snap = newSnapshot(c.config, c.signatures, number, hash, signers)
-				if err := snap.store(c.db); err != nil {
-					return nil, err
-				}
-				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
-				break
+		// If we're at block zero, make a snapshot
+		if number == 0 {
+			genesis := chain.GetHeaderByNumber(0)
+			if err := c.VerifyHeader(chain, genesis, false); err != nil {
+				return nil, err
 			}
+			signers := make([]common.Address, (len(genesis.Extra)-extraVanity-extraSeal)/common.AddressLength)
+			for i := 0; i < len(signers); i++ {
+				copy(signers[i][:], genesis.Extra[extraVanity+i*common.AddressLength:])
+			}
+			snap = newSnapshot(c.config, c.signatures, 0, genesis.Hash(), signers)
+			if err := snap.store(c.db); err != nil {
+				return nil, err
+			}
+			log.Trace("Stored genesis voting snapshot to disk")
+			break
 		}
 		// No snapshot for this header, gather the header and move backward
 		var header *types.Header
@@ -435,7 +440,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 	c.recents.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
-	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
+	if (snap.Number%checkpointInterval == 0 || snap.Number%c.config.Epoch == 0) && len(headers) > 0 {
 		if err = snap.store(c.db); err != nil {
 			return nil, err
 		}
