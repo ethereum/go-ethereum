@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/urfave/cli"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -143,6 +144,10 @@ var (
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+	}
+	GoerliFLag = cli.BoolFlag{
+		Name: "goerli",
+		Usage: "Goerli network: pre-configured proof-of-authority test network",
 	}
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",
