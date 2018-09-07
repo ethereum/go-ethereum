@@ -380,17 +380,25 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
-		if p.requestAnnounceType == announceTypeSigned {
-			if err := req.checkSignature(p.ID()); err != nil {
-				p.Log().Trace("Invalid announcement signature", "err", err)
-				return err
-			}
-			p.Log().Trace("Valid announcement signature")
+		update, size := req.Update.decode()
+		if p.rejectUpdate(size) {
+			return errResp(ErrRequestRejected, "")
 		}
+		p.updateFlowControl(update)
 
-		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
-		if pm.fetcher != nil {
-			pm.fetcher.announce(p, &req)
+		if req.Hash != (common.Hash{}) {
+			if p.requestAnnounceType == announceTypeSigned {
+				if err := req.checkSignature(p.ID(), update); err != nil {
+					p.Log().Trace("Invalid announcement signature", "err", err)
+					return err
+				}
+				p.Log().Trace("Valid announcement signature")
+			}
+
+			p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
+			if pm.fetcher != nil {
+				pm.fetcher.announce(p, &req)
+			}
 		}
 
 	case GetBlockHeadersMsg:

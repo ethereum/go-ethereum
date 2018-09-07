@@ -43,7 +43,7 @@ type LesServer struct {
 
 	fcManager   *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats *requestCostStats
-	defParams   *flowcontrol.ServerParams
+	defParams   flowcontrol.ServerParams
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
 	quitSync    chan struct{}
@@ -98,7 +98,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	srv.chtIndexer.Start(eth.BlockChain())
 	pm.server = srv
 
-	srv.defParams = &flowcontrol.ServerParams{
+	srv.defParams = flowcontrol.ServerParams{
 		BufLimit:    300000000,
 		MinRecharge: 50000,
 	}

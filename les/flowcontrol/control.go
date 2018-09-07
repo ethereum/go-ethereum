@@ -31,7 +31,7 @@ type ServerParams struct {
 }
 
 type ClientNode struct {
-	params   *ServerParams
+	params   ServerParams
 	bufValue uint64
 	lastTime mclock.AbsTime
 	lock     sync.Mutex
@@ -39,7 +39,7 @@ type ClientNode struct {
 	cmNode   *cmNode
 }
 
-func NewClientNode(cm *ClientManager, params *ServerParams) *ClientNode {
+func NewClientNode(cm *ClientManager, params ServerParams) *ClientNode {
 	node := &ClientNode{
 		cm:       cm,
 		params:   params,
@@ -96,19 +96,35 @@ func (peer *ClientNode) RequestProcessed(cost uint64) (bv, realCost uint64) {
 type ServerNode struct {
 	bufEstimate uint64
 	lastTime    mclock.AbsTime
-	params      *ServerParams
+	params      ServerParams
 	sumCost     uint64            // sum of req costs sent to this server
 	pending     map[uint64]uint64 // value = sumCost after sending the given req
 	lock        sync.RWMutex
 }
 
-func NewServerNode(params *ServerParams) *ServerNode {
+func NewServerNode(params ServerParams) *ServerNode {
 	return &ServerNode{
 		bufEstimate: params.BufLimit,
 		lastTime:    mclock.Now(),
 		params:      params,
 		pending:     make(map[uint64]uint64),
 	}
+}
+
+// UpdateParams updates flow control parameters
+func (peer *ServerNode) UpdateParams(params ServerParams) {
+	peer.lock.Lock()
+	defer peer.lock.Unlock()
+
+	peer.recalcBLE(mclock.Now())
+	if params.BufLimit > peer.params.BufLimit {
+		peer.bufEstimate += params.BufLimit - peer.params.BufLimit
+	} else {
+		if peer.bufEstimate > params.BufLimit {
+			peer.bufEstimate = params.BufLimit
+		}
+	}
+	peer.params = params
 }
 
 func (peer *ServerNode) recalcBLE(time mclock.AbsTime) {
