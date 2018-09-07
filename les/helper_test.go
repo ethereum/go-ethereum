@@ -184,7 +184,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
 		pm.server = srv
 
-		srv.defParams = &flowcontrol.ServerParams{
+		srv.defParams = flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
 			MinRecharge: 1,
 		}
@@ -313,7 +313,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 		t.Fatalf("status send: %v", err)
 	}
 
-	p.fcServerParams = &flowcontrol.ServerParams{
+	p.fcServerParams = flowcontrol.ServerParams{
 		BufLimit:    testBufLimit,
 		MinRecharge: 1,
 	}

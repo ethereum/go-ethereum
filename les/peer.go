@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -41,6 +42,12 @@ var (
 )
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+
+// bandwidth limitation for parameter updates
+const (
+	allowedUpdateBytes = 100000                // initial/maximum allowed update size
+	allowedUpdateRate  = time.Millisecond * 10 // time constant for recharging one byte of allowance
+)
 
 const (
 	announceTypeNone = iota
@@ -69,10 +76,12 @@ type peer struct {
 	poolEntry      *poolEntry
 	hasBlock       func(common.Hash, uint64, bool) bool
 	responseErrors int
+	updateCounter  uint64
+	updateTime     mclock.AbsTime
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
-	fcServerParams *flowcontrol.ServerParams
+	fcServerParams flowcontrol.ServerParams
 	fcCosts        requestCostTable
 
 	isTrusted      bool
@@ -91,6 +100,27 @@ func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.Ms
 		announceChn: make(chan announceData, 20),
 		isTrusted:   isTrusted,
 	}
+}
+
+// rejectUpdate returns true if a parameter update has to be rejected because
+// the size and/or rate of updates exceed the bandwidth limitation
+func (p *peer) rejectUpdate(size uint64) bool {
+	now := mclock.Now()
+	if p.updateCounter == 0 {
+		p.updateTime = now
+	} else {
+		dt := now - p.updateTime
+		r := uint64(dt / mclock.AbsTime(allowedUpdateRate))
+		if p.updateCounter > r {
+			p.updateCounter -= r
+			p.updateTime += mclock.AbsTime(allowedUpdateRate * time.Duration(r))
+		} else {
+			p.updateCounter = 0
+			p.updateTime = now
+		}
+	}
+	p.updateCounter += size
+	return p.updateCounter > allowedUpdateBytes
 }
 
 func (p *peer) canQueue() bool {
@@ -344,12 +374,14 @@ func (l keyValueList) add(key string, val interface{}) keyValueList {
 	return append(l, entry)
 }
 
-func (l keyValueList) decode() keyValueMap {
+func (l keyValueList) decode() (keyValueMap, uint64) {
 	m := make(keyValueMap)
+	var size uint64
 	for _, entry := range l {
 		m[entry.Key] = entry.Value
+		size += uint64(len(entry.Key)) + uint64(len(entry.Value)) + 8
 	}
-	return m
+	return m, size
 }
 
 func (m keyValueMap) get(key string, val interface{}) error {
@@ -430,8 +462,10 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	if err != nil {
 		return err
 	}
-
-	recv := recvList.decode()
+	recv, size := recvList.decode()
+	if p.rejectUpdate(size) {
+		return errResp(ErrRequestRejected, "")
+	}
 
 	var rGenesis, rHash common.Hash
 	var rVersion, rNetwork, rNum uint64
@@ -492,7 +526,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
 
-		params := &flowcontrol.ServerParams{}
+		var params flowcontrol.ServerParams
 		if err := recv.get("flowControl/BL", &params.BufLimit); err != nil {
 			return err
 		}
@@ -509,6 +543,30 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	}
 	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
+}
+
+// updateFlowControl updates the flow control parameters belonging to the server
+// node if the announced key/value set contains relevant fields
+func (p *peer) updateFlowControl(update keyValueMap) {
+	if p.fcServer == nil {
+		return
+	}
+	params := p.fcServerParams
+	updateParams := false
+	if update.get("flowControl/BL", &params.BufLimit) == nil {
+		updateParams = true
+	}
+	if update.get("flowControl/MRR", &params.MinRecharge) == nil {
+		updateParams = true
+	}
+	if updateParams {
+		p.fcServerParams = params
+		p.fcServer.UpdateParams(params)
+	}
+	var MRC RequestCostList
+	if update.get("flowControl/MRC", &MRC) == nil {
+		p.fcCosts = MRC.decode()
+	}
 }
 
 // String implements fmt.Stringer.
