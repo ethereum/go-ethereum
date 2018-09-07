@@ -30,11 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
 	"strings"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -72,7 +74,7 @@ var tomlSettings = toml.Config{
 }
 
 type ethstatsConfig struct {
-	URL string `toml:",omitempty"`
+	URL string
 }
 
 type account struct {
@@ -94,6 +96,8 @@ type tomoConfig struct {
 	Account     account
 	StakeEnable bool
 	Bootnodes   Bootnodes
+	Verbosity   int
+	NAT         string
 }
 
 func loadConfig(file string, cfg *tomoConfig) error {
@@ -128,6 +132,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		Node:        defaultNodeConfig(),
 		Dashboard:   dashboard.DefaultConfig,
 		StakeEnable: true,
+		Verbosity:   3,
+		NAT:         "",
 	}
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
@@ -138,6 +144,14 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
 		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
 	}
+	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
+		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
+	}
+
+	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
+		ctx.Set(utils.NATFlag.Name, cfg.NAT)
+	}
+
 	// read passwords from enviroment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
