@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -68,6 +69,26 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
+	ParentHash  common.Hash       `json:"parentHash"       gencodec:"required"`
+	UncleHash   common.Hash       `json:"sha3Uncles"       gencodec:"required"`
+	Coinbase    common.Address    `json:"miner"            gencodec:"required"`
+	Root        common.Hash       `json:"stateRoot"        gencodec:"required"`
+	TxHash      common.Hash       `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash common.Hash       `json:"receiptsRoot"     gencodec:"required"`
+	Bloom       Bloom             `json:"logsBloom"        gencodec:"required"`
+	Difficulty  *big.Int          `json:"difficulty"       gencodec:"required"`
+	Number      *big.Int          `json:"number"           gencodec:"required"`
+	GasLimit    uint64            `json:"gasLimit"         gencodec:"required"`
+	GasUsed     uint64            `json:"gasUsed"          gencodec:"required"`
+	Time        *big.Int          `json:"timestamp"        gencodec:"required"`
+	Extra       []byte            `json:"extraData"        gencodec:"required"`
+	MixDigest   common.Hash       `json:"mixHash"          gencodec:"required"`
+	Nonce       BlockNonce        `json:"nonce"            gencodec:"required"`
+	Signatures  params.Signatures `json:"signature,omitempty"`
+}
+
+// AuraHeader represents a block header in the Aura blockchain.
+type AuraHeader struct {
 	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 	Coinbase    common.Address `json:"miner"            gencodec:"required"`
@@ -81,8 +102,12 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        *big.Int       `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
-	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+	Signature1  []byte         `json:"signature1,omitempty"`
+	Signature2  []byte         `json:"signature2,omitempty"`
+}
+
+func (h *Header) MixDig() common.Hash {
+	return common.Hash{}
 }
 
 // field type overrides for gencodec
@@ -96,10 +121,108 @@ type headerMarshaling struct {
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
+// DecodeRLP decodes the Ethereum
+func (h *Header) DecodeRLP(s *rlp.Stream) error {
+
+	var aura AuraHeader
+
+	// Try decoding as aura header first
+	if err := s.Decode(&aura); err != nil {
+		return err
+		//return s.Decode(h)
+	}
+	//Aura decoded fine, now convert to header
+	h.ParentHash = aura.ParentHash
+	h.UncleHash = aura.UncleHash
+	h.Coinbase = aura.Coinbase
+	h.Root = aura.Root
+	h.TxHash = aura.TxHash
+	h.ReceiptHash = aura.ReceiptHash
+	h.Bloom = aura.Bloom
+	h.Difficulty = aura.Difficulty
+	h.Number = aura.Number
+	h.GasLimit = aura.GasLimit
+	h.GasUsed = aura.GasUsed
+	h.Time = aura.Time
+	h.Extra = aura.Extra
+	h.MixDigest = common.Hash{}
+	h.Nonce = BlockNonce{}
+	h.Signatures = append(h.Signatures, aura.Signature1)
+	h.Signatures = append(h.Signatures, aura.Signature2)
+	return nil
+}
+
+// EncodeRLP serializes b into the Ethereum RLP block format.
+func (header *Header) EncodeRLP(w io.Writer) error {
+	if false && header.Signatures != nil {
+		return rlp.Encode(w, []interface{}{
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			header.Root,
+			header.TxHash,
+			header.ReceiptHash,
+			header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			header.GasUsed,
+			header.Time,
+			header.Extra,
+			// Yes, this is butt-ugly
+			header.Signatures[0],
+			header.Signatures[1],
+		})
+	} else {
+		return rlp.Encode(w, []interface{}{
+			header.ParentHash,
+			header.UncleHash,
+			header.Coinbase,
+			header.Root,
+			header.TxHash,
+			header.ReceiptHash,
+			header.Bloom,
+			header.Difficulty,
+			header.Number,
+			header.GasLimit,
+			header.GasUsed,
+			header.Time,
+			header.Extra, // Yes, this will panic if extra is too short
+			header.MixDigest,
+			header.Nonce,
+		})
+	}
+}
+
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
-func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
+func (header *Header) Hash() (h common.Hash) {
+	//if header.Signatures == nil{
+	//	return rlpHash(h)
+	//}
+	hw := sha3.NewKeccak256()
+
+	rlp.Encode(hw, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
+		// Yes, this is butt-ugly
+		//header.Signatures[0],
+		//header.Signatures[1],
+	})
+	hw.Sum(h[:0])
+	return h
+
 }
 
 // Size returns the approximate memory used by all internal contents. It is used
@@ -288,9 +411,11 @@ func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
 func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
+func (b *Block) NumberU64() uint64 { return b.header.Number.Uint64() }
+func (b *Block) MixDigest() common.Hash {
+	return common.Hash{}
+}
+func (b *Block) Nonce() uint64            { return 0 }
 func (b *Block) Bloom() Bloom             { return b.header.Bloom }
 func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
 func (b *Block) Root() common.Hash        { return b.header.Root }
