@@ -19,6 +19,9 @@ package clique
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"fmt"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"io"
 	"math/big"
 	"testing"
 
@@ -42,6 +45,8 @@ type testerVote struct {
 // keys capable of signing transactions.
 type testerAccountPool struct {
 	accounts map[string]*ecdsa.PrivateKey
+	// can be used to always yield the same accounts
+	fakePRNG io.Reader
 }
 
 func newTesterAccountPool() *testerAccountPool {
@@ -49,21 +54,52 @@ func newTesterAccountPool() *testerAccountPool {
 		accounts: make(map[string]*ecdsa.PrivateKey),
 	}
 }
+func newDeterministicTesterAccountPool() *testerAccountPool {
+	return &testerAccountPool{
+		accounts: make(map[string]*ecdsa.PrivateKey),
+		fakePRNG: &fakeRand{},
+	}
+}
 
-func (ap *testerAccountPool) sign(header *types.Header, signer string) {
+type fakeRand struct {
+	counter uint64
+}
+
+func (f *fakeRand) Read(p []byte) (n int, err error) {
+	for i := 0; i < len(p); i++ {
+		p[i] = byte(f.counter)
+	}
+	f.counter++
+	return len(p), nil
+}
+
+func (ap *testerAccountPool) getSignature(header *types.Header, signer string) ([]byte, error) {
 	// Ensure we have a persistent key for the signer
 	if ap.accounts[signer] == nil {
-		ap.accounts[signer], _ = crypto.GenerateKey()
+		if ap.fakePRNG != nil {
+			ap.accounts[signer], _ = ecdsa.GenerateKey(crypto.S256(), ap.fakePRNG)
+		} else {
+			ap.accounts[signer], _ = crypto.GenerateKey()
+		}
 	}
 	// Sign the header and embed the signature in extra data
-	sig, _ := crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
+	return crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
+}
+
+func (ap *testerAccountPool) sign(header *types.Header, signer string) {
+	// Sign the header and embed the signature in extra data
+	sig, _ := ap.getSignature(header, signer)
 	copy(header.Extra[len(header.Extra)-65:], sig)
 }
 
 func (ap *testerAccountPool) address(account string) common.Address {
 	// Ensure we have a persistent key for the account
 	if ap.accounts[account] == nil {
-		ap.accounts[account], _ = crypto.GenerateKey()
+		if ap.fakePRNG != nil {
+			ap.accounts[account], _ = ecdsa.GenerateKey(crypto.S256(), ap.fakePRNG)
+		} else {
+			ap.accounts[account], _ = crypto.GenerateKey()
+		}
 	}
 	// Resolve and return the Ethereum address
 	return crypto.PubkeyToAddress(ap.accounts[account].PublicKey)
@@ -75,16 +111,129 @@ type testerChainReader struct {
 	db ethdb.Database
 }
 
-func (r *testerChainReader) Config() *params.ChainConfig                 { return params.AllCliqueProtocolChanges }
-func (r *testerChainReader) CurrentHeader() *types.Header                { panic("not supported") }
-func (r *testerChainReader) GetHeader(common.Hash, uint64) *types.Header { panic("not supported") }
-func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block   { panic("not supported") }
-func (r *testerChainReader) GetHeaderByHash(common.Hash) *types.Header   { panic("not supported") }
+func (r *testerChainReader) Config() *params.ChainConfig  { return params.AllCliqueProtocolChanges }
+func (r *testerChainReader) CurrentHeader() *types.Header { panic("not supported") }
+func (r *testerChainReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return rawdb.ReadHeader(r.db, hash, number)
+}
+func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block { panic("not supported") }
+func (r *testerChainReader) GetHeaderByHash(common.Hash) *types.Header { panic("not supported") }
 func (r *testerChainReader) GetHeaderByNumber(number uint64) *types.Header {
 	if number == 0 {
 		return rawdb.ReadHeader(r.db, rawdb.ReadCanonicalHash(r.db, 0), 0)
 	}
-	return nil
+	return rawdb.ReadHeader(r.db, rawdb.ReadCanonicalHash(r.db, number), number)
+}
+
+func TestCliqueReorgAtEpoch(t *testing.T) {
+
+	// Create the account pool and generate the initial set of signers
+	accounts := newDeterministicTesterAccountPool()
+
+	// 7 signers
+	signerlist := []string{"A", "B", "C", "D", "E", "F", "G"}
+
+	signers := make([]common.Address, len(signerlist))
+	for j, signer := range signerlist {
+		signers[j] = accounts.address(signer)
+	}
+	// Sort the signers
+	for j := 0; j < len(signers); j++ {
+		for k := j + 1; k < len(signers); k++ {
+			if bytes.Compare(signers[j][:], signers[k][:]) > 0 {
+				signers[j], signers[k] = signers[k], signers[j]
+				signerlist[j], signerlist[k] = signerlist[k], signerlist[j]
+			}
+		}
+	}
+	// Create the genesis block with the initial set of signers
+	genesis := &core.Genesis{
+		ExtraData: make([]byte, extraVanity+common.AddressLength*len(signers)+extraSeal),
+	}
+	for j, signer := range signers {
+		copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
+		fmt.Printf("adding signer 0x%x\n", signer)
+	}
+	sealerListBytes := genesis.ExtraData
+	// Create a pristine blockchain with the genesis injected
+	db := ethdb.NewMemDatabase()
+	genesis.Commit(db)
+
+	engine := New(&params.CliqueConfig{Epoch: 5}, db)
+
+	// Initialize a fresh chain with only a genesis block
+	blockchain, _ := core.NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{})
+	snap, err := engine.snapshot(&testerChainReader{db: db}, blockchain.CurrentBlock().NumberU64(), blockchain.CurrentBlock().Hash(), nil)
+	for addy, _ := range snap.Signers {
+		fmt.Printf("signer: 0x%x\n", addy)
+	}
+
+	// Generate blocks, up to the checkpoint block
+	// This segment should with the last block being of higher difficulty: in-turn
+	blocks2, _ := core.GenerateChainSeal(params.TestChainConfig, blockchain.CurrentBlock(), engine, db, 6,
+		func(i int, b *core.BlockGen) {
+			b.SetDifficulty(diffNoTurn)
+			extraData := make([]byte, extraVanity+extraSeal)
+			b.SetExtra(extraData)
+			if i+1 == 5 {
+				// Checkpoint block
+				b.SetExtra(sealerListBytes)
+				b.SetDifficulty(diffInTurn)
+			}
+		},
+		func(b *types.Block) *types.Header {
+			// Seal it
+			hdr := b.Header()
+			if hdr.Number.Uint64() >= 5 {
+				k := 5 % len(signerlist)
+				sig, _ := accounts.getSignature(hdr, signerlist[k])
+				extradata := b.Extra()
+				copy(extradata[len(extradata)-65:], sig)
+				hdr.Extra = extradata
+			} else {
+				k := int(b.NumberU64()+5) % len(signerlist)
+				sig, _ := accounts.getSignature(hdr, signerlist[k])
+				extradata := b.Extra()
+				copy(extradata[len(extradata)-65:], sig)
+				hdr.Extra = extradata
+
+			}
+			return hdr
+		})
+
+	addBlocks := func(blocks []*types.Block) {
+		fmt.Printf("Importing %d blocks\n", len(blocks))
+		for _, block := range blocks {
+			author, _ := engine.Author(block.Header())
+			fmt.Printf(" Adding block %d: 0x%x, sealer: 0x%x, len(extra): %v, difficulty %d\n", block.Number(), block.Header().Hash(), author, len(block.Extra()), block.Difficulty())
+		}
+		if _, err := blockchain.InsertChain(blocks); err != nil {
+			t.Fatalf("failed to import blocks: %v", err)
+		}
+	}
+	showRecents := func() {
+		snap, err = engine.snapshot(&testerChainReader{db: db}, blockchain.CurrentBlock().NumberU64(), blockchain.CurrentBlock().Hash(), nil)
+		if err != nil {
+			t.Fatalf("failed to generate snapshot: %v", err)
+		}
+		fmt.Printf("Recents:\n")
+		for block, addy := range snap.Recents {
+			fmt.Printf("%v 0x%x\n", block, addy)
+		}
+	}
+	addBlocks(blocks2[0:4])
+	showRecents()
+	addBlocks(blocks2[4:5])
+	showRecents()
+	addBlocks(blocks2[5:6])
+	showRecents()
+	fmt.Printf("Current head: 0x%x\n", blockchain.CurrentBlock().Header().Hash())
+	for block, addy := range snap.Recents {
+		fmt.Printf("%v 0x%x\n", block, addy)
+	}
+	if blockchain.CurrentBlock().Number().Uint64() == 6 {
+		t.Error("Block should have been rejected")
+	}
 }
 
 // Tests that voting is evaluated correctly for various simple and complex scenarios.
