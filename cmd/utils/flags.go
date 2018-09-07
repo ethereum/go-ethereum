@@ -976,6 +976,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
+	// setting Goerli default datadir
+	case ctx.GlobalBool(GoerliFlag.Name):
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	}
 
 	if ctx.GlobalIsSet(KeyStoreDirFlag.Name) {
