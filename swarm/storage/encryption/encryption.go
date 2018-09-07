@@ -89,7 +89,7 @@ func (e *encryption) transform(in, out []byte) {
 		// call transformations per segment (asyncronously)
 		go func(i int, x, y []byte) {
 			defer wg.Done()
-			e.transcrypt(i, x, y)
+			e.Transcrypt(i, x, y)
 		}(i/e.keyLen, in[i:i+l], out[i:i+l])
 	}
 	// pad the rest if out is longer
@@ -99,7 +99,7 @@ func (e *encryption) transform(in, out []byte) {
 
 // used for segmentwise transformation
 // if in is shorter than out, padding is used
-func (e *encryption) transcrypt(i int, in []byte, out []byte) {
+func (e *encryption) Transcrypt(i int, in []byte, out []byte) {
 	// first hash key with counter (initial counter + i)
 	hasher := e.hashFunc()
 	hasher.Write(e.key)

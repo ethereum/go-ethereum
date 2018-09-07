@@ -31,7 +31,6 @@ type hasherStore struct {
 	toEncrypt bool
 	hashFunc  SwarmHasher
 	hashSize  int   // content hash size
-	chunkSize int64 // max size of chunk
 	refSize   int64 // reference size (content hash + possibly encryption key)
 	wg        *sync.WaitGroup
 	closed    chan struct{}
