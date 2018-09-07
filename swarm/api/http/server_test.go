@@ -672,7 +672,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	nonhashresponses := []string{
 		`cannot resolve name: no DNS to resolve name: "name"`,
-		`cannot resolve nonhash: immutable address not a content hash: "nonhash"`,
+		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
 		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
 		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
 		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
