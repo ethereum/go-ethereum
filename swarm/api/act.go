@@ -102,6 +102,7 @@ const AccessTypePass = AccessType("pass")
 const AccessTypePK = AccessType("pk")
 const AccessTypeACT = AccessType("act")
 
+// NewAccessEntryPassword creates a manifest AccessEntry in order to create an ACT protected by a password
 func NewAccessEntryPassword(salt []byte, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 bytes long")
@@ -113,6 +114,7 @@ func NewAccessEntryPassword(salt []byte, kdfParams *KdfParams) (*AccessEntry, er
 	}, nil
 }
 
+// NewAccessEntryPK creates a manifest AccessEntry in order to create an ACT protected by a pair of Elliptic Curve keys
 func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	if len(publisher) != 66 {
 		return nil, fmt.Errorf("publisher should be 66 characters long, got %d", len(publisher))
@@ -127,6 +129,7 @@ func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	}, nil
 }
 
+// NewAccessEntryACT creates a manifest AccessEntry in order to create an ACT protected by a combination of EC keys and passwords
 func NewAccessEntryACT(publisher string, salt []byte, act string) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 bytes long")
@@ -140,15 +143,19 @@ func NewAccessEntryACT(publisher string, salt []byte, act string) (*AccessEntry,
 		Publisher: publisher,
 		Salt:      salt,
 		Act:       act,
+		KdfParams: DefaultKdfParams,
 	}, nil
 }
 
+// NOOPDecrypt is a generic decrypt function that is passed into the API in places where real ACT decryption capabilities are
+// either unwanted, or alternatively, cannot be implemented in the immediate scope
 func NOOPDecrypt(*ManifestEntry) error {
 	return nil
 }
 
 var DefaultKdfParams = NewKdfParams(262144, 1, 8)
 
+// NewKdfParams returns a KdfParams struct with the given scrypt params
 func NewKdfParams(n, p, r int) *KdfParams {
 
 	return &KdfParams{
@@ -161,15 +168,20 @@ func NewKdfParams(n, p, r int) *KdfParams {
 // NewSessionKeyPassword creates a session key based on a shared secret (password) and the given salt
 // and kdf parameters in the access entry
 func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, error) {
-	if accessEntry.Type != AccessTypePass {
+	if accessEntry.Type != AccessTypePass && accessEntry.Type != AccessTypeACT {
 		return nil, errors.New("incorrect access entry type")
+
 	}
+	return sessionKeyPassword(password, accessEntry.Salt, accessEntry.KdfParams)
+}
+
+func sessionKeyPassword(password string, salt []byte, kdfParams *KdfParams) ([]byte, error) {
 	return scrypt.Key(
 		[]byte(password),
-		accessEntry.Salt,
-		accessEntry.KdfParams.N,
-		accessEntry.KdfParams.R,
-		accessEntry.KdfParams.P,
+		salt,
+		kdfParams.N,
+		kdfParams.R,
+		kdfParams.P,
 		32,
 	)
 }
@@ -188,9 +200,6 @@ func NewSessionKeyPK(private *ecdsa.PrivateKey, public *ecdsa.PublicKey, salt []
 	return sessionKey, nil
 }
 
-func (a *API) NodeSessionKey(privateKey *ecdsa.PrivateKey, publicKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
-	return NewSessionKeyPK(privateKey, publicKey, salt)
-}
 func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.PrivateKey) DecryptFunc {
 	return func(m *ManifestEntry) error {
 		if m.Access == nil {
@@ -242,7 +251,7 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			if err != nil {
 				return ErrDecrypt
 			}
-			key, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
+			key, err := NewSessionKeyPK(pk, publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}
@@ -261,6 +270,11 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			m.Access = nil
 			return nil
 		case "act":
+			var (
+				sessionKey []byte
+				err        error
+			)
+
 			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
 			if err != nil {
 				return ErrDecrypt
@@ -270,40 +284,35 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 				return ErrDecrypt
 			}
 
-			sessionKey, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
+			sessionKey, err = NewSessionKeyPK(pk, publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}
 
-			hasher := sha3.NewKeccak256()
-			hasher.Write(append(sessionKey, 0))
-			lookupKey := hasher.Sum(nil)
-
-			hasher.Reset()
-
-			hasher.Write(append(sessionKey, 1))
-			accessKeyDecryptionKey := hasher.Sum(nil)
-
-			lk := hex.EncodeToString(lookupKey)
-			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), lk)
-
-			found := ""
-			for _, v := range list.Entries {
-				if v.Path == lk {
-					found = v.Hash
-				}
-			}
-
-			if found == "" {
-				return ErrDecrypt
-			}
-
-			v, err := hex.DecodeString(found)
+			found, ciphertext, decryptionKey, err := a.getACTDecryptionKey(ctx, storage.Address(common.Hex2Bytes(m.Access.Act)), sessionKey)
 			if err != nil {
 				return err
 			}
-			enc := NewRefEncryption(len(v) - 8)
-			decodedRef, err := enc.Decrypt(v, accessKeyDecryptionKey)
+			if !found {
+				// try to fall back to password
+				if credentials != "" {
+					sessionKey, err = NewSessionKeyPassword(credentials, m.Access)
+					if err != nil {
+						return err
+					}
+					found, ciphertext, decryptionKey, err = a.getACTDecryptionKey(ctx, storage.Address(common.Hex2Bytes(m.Access.Act)), sessionKey)
+					if err != nil {
+						return err
+					}
+					if !found {
+						return ErrDecrypt
+					}
+				} else {
+					return ErrDecrypt
+				}
+			}
+			enc := NewRefEncryption(len(ciphertext) - 8)
+			decodedRef, err := enc.Decrypt(ciphertext, decryptionKey)
 			if err != nil {
 				return ErrDecrypt
 			}
@@ -324,6 +333,33 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 		}
 		return ErrUnknownAccessType
 	}
+}
+
+func (a *API) getACTDecryptionKey(ctx context.Context, actManifestAddress storage.Address, sessionKey []byte) (found bool, ciphertext, decryptionKey []byte, err error) {
+	hasher := sha3.NewKeccak256()
+	hasher.Write(append(sessionKey, 0))
+	lookupKey := hasher.Sum(nil)
+	hasher.Reset()
+
+	hasher.Write(append(sessionKey, 1))
+	accessKeyDecryptionKey := hasher.Sum(nil)
+	hasher.Reset()
+
+	lk := hex.EncodeToString(lookupKey)
+	list, err := a.GetManifestList(ctx, NOOPDecrypt, actManifestAddress, lk)
+	if err != nil {
+		return false, nil, nil, err
+	}
+	for _, v := range list.Entries {
+		if v.Path == lk {
+			cipherTextBytes, err := hex.DecodeString(v.Hash)
+			if err != nil {
+				return false, nil, nil, err
+			}
+			return true, cipherTextBytes, accessKeyDecryptionKey, nil
+		}
+	}
+	return false, nil, nil, nil
 }
 
 func GenerateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byte, ae *AccessEntry) (*Manifest, error) {
@@ -352,7 +388,9 @@ func GenerateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 	return m, nil
 }
 
-func DoPKNew(ctx *cli.Context, privateKey *ecdsa.PrivateKey, granteePublicKey string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
+// DoPK is a helper function to the CLI API that handles the entire business logic for
+// creating a session key and access entry given the cli context, ec keys and salt
+func DoPK(ctx *cli.Context, privateKey *ecdsa.PrivateKey, granteePublicKey string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
 	if granteePublicKey == "" {
 		return nil, nil, errors.New("need a grantee Public Key")
 	}
@@ -383,9 +421,11 @@ func DoPKNew(ctx *cli.Context, privateKey *ecdsa.PrivateKey, granteePublicKey st
 	return sessionKey, ae, nil
 }
 
-func DoACTNew(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees []string) (accessKey []byte, ae *AccessEntry, actManifest *Manifest, err error) {
-	if len(grantees) == 0 {
-		return nil, nil, nil, errors.New("did not get any grantee public keys")
+// DoACT is a helper function to the CLI API that handles the entire business logic for
+// creating a access key, access entry and ACT manifest (including uploading it) given the cli context, ec keys, password grantees and salt
+func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees []string, encryptPasswords []string) (accessKey []byte, ae *AccessEntry, actManifest *Manifest, err error) {
+	if len(grantees) == 0 && len(encryptPasswords) == 0 {
+		return nil, nil, nil, errors.New("did not get any grantee public keys or any encryption passwords")
 	}
 
 	publisherPub := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
@@ -430,7 +470,31 @@ func DoACTNew(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grant
 
 		enc := NewRefEncryption(len(accessKey))
 		encryptedAccessKey, err := enc.Encrypt(accessKey, accessKeyEncryptionKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		lookupPathEncryptedAccessKeyMap[hex.EncodeToString(lookupKey)] = hex.EncodeToString(encryptedAccessKey)
+	}
 
+	for _, pass := range encryptPasswords {
+		sessionKey, err := sessionKeyPassword(pass, salt, DefaultKdfParams)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		hasher := sha3.NewKeccak256()
+		hasher.Write(append(sessionKey, 0))
+		lookupKey := hasher.Sum(nil)
+
+		hasher.Reset()
+		hasher.Write(append(sessionKey, 1))
+
+		accessKeyEncryptionKey := hasher.Sum(nil)
+
+		enc := NewRefEncryption(len(accessKey))
+		encryptedAccessKey, err := enc.Encrypt(accessKey, accessKeyEncryptionKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		lookupPathEncryptedAccessKeyMap[hex.EncodeToString(lookupKey)] = hex.EncodeToString(encryptedAccessKey)
 	}
 
@@ -454,7 +518,10 @@ func DoACTNew(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grant
 	return accessKey, ae, m, nil
 }
 
-func DoPasswordNew(ctx *cli.Context, password string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
+// DoPassword is a helper function to the CLI API that handles the entire business logic for
+// creating a session key and an access entry given the cli context, password and salt.
+// By default - DefaultKdfParams are used as the scrypt params
+func DoPassword(ctx *cli.Context, password string, salt []byte) (sessionKey []byte, ae *AccessEntry, err error) {
 	ae, err = NewAccessEntryPassword(salt, DefaultKdfParams)
 	if err != nil {
 		return nil, nil, err

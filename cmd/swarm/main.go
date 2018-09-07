@@ -319,6 +319,7 @@ func init() {
 							Flags: []cli.Flag{
 								SwarmAccessGrantKeysFlag,
 								SwarmDryRunFlag,
+								utils.PasswordFileFlag,
 							},
 							Name:        "act",
 							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",

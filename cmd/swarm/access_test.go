@@ -28,7 +28,6 @@ import (
 	gorand "math/rand"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +38,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+)
+
+const (
+	hashRegexp = `[a-f\d]{128}`
+	data       = "notsorandomdata"
 )
 
 var DefaultCurve = crypto.S256()
@@ -53,23 +58,8 @@ func TestAccessPassword(t *testing.T) {
 	defer cluster.Shutdown()
 	proxyNode := cluster.Nodes[0]
 
-	// create a tmp file
-	tmp, err := ioutil.TempDir("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmp)
-
-	// write data to file
-	data := "notsorandomdata"
-	dataFilename := filepath.Join(tmp, "data.txt")
-
-	err = ioutil.WriteFile(dataFilename, []byte(data), 0666)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hashRegexp := `[a-f\d]{128}`
+	dataFilename := testutil.TempFileWithContent(t, data)
+	defer os.RemoveAll(dataFilename)
 
 	// upload the file with 'swarm up' and expect a hash
 	up := runSwarm(t,
@@ -86,14 +76,14 @@ func TestAccessPassword(t *testing.T) {
 	}
 
 	ref := matches[0]
-
-	password := "smth"
-	passwordFilename := filepath.Join(tmp, "password.txt")
-
-	err = ioutil.WriteFile(passwordFilename, []byte(password), 0666)
+	tmp, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(tmp)
+	password := "smth"
+	passwordFilename := testutil.TempFileWithContent(t, "smth")
+	defer os.RemoveAll(passwordFilename)
 
 	up = runSwarm(t,
 		"access",
@@ -193,12 +183,8 @@ func TestAccessPassword(t *testing.T) {
 		t.Errorf("expected decrypted data %q, got %q", data, string(d))
 	}
 
-	wrongPasswordFilename := filepath.Join(tmp, "password-wrong.txt")
-
-	err = ioutil.WriteFile(wrongPasswordFilename, []byte("just wr0ng"), 0666)
-	if err != nil {
-		t.Fatal(err)
-	}
+	wrongPasswordFilename := testutil.TempFileWithContent(t, "just wr0ng")
+	defer os.RemoveAll(wrongPasswordFilename)
 
 	//download file with 'swarm down' with wrong password
 	up = runSwarm(t,
@@ -227,22 +213,8 @@ func TestAccessPK(t *testing.T) {
 	cluster := newTestCluster(t, 2)
 	defer cluster.Shutdown()
 
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
-
-	// write data to file
-	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hashRegexp := `[a-f\d]{128}`
+	dataFilename := testutil.TempFileWithContent(t, data)
+	defer os.RemoveAll(dataFilename)
 
 	// upload the file with 'swarm up' and expect a hash
 	up := runSwarm(t,
@@ -250,7 +222,7 @@ func TestAccessPK(t *testing.T) {
 		cluster.Nodes[0].URL,
 		"up",
 		"--encrypt",
-		tmp.Name())
+		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 
@@ -259,7 +231,6 @@ func TestAccessPK(t *testing.T) {
 	}
 
 	ref := matches[0]
-
 	pk := cluster.Nodes[0].PrivateKey
 	granteePubKey := crypto.CompressPubkey(&pk.PublicKey)
 
@@ -268,22 +239,15 @@ func TestAccessPK(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	passFile, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer passFile.Close()
-	defer os.Remove(passFile.Name())
-	_, err = io.WriteString(passFile, testPassphrase)
-	if err != nil {
-		t.Fatal(err)
-	}
+	passwordFilename := testutil.TempFileWithContent(t, testPassphrase)
+	defer os.RemoveAll(passwordFilename)
+
 	_, publisherAccount := getTestAccount(t, publisherDir)
 	up = runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),
 		"--password",
-		passFile.Name(),
+		passwordFilename,
 		"--datadir",
 		publisherDir,
 		"--bzzapi",
@@ -309,7 +273,7 @@ func TestAccessPK(t *testing.T) {
 		"--bzzaccount",
 		publisherAccount.Address.String(),
 		"--password",
-		passFile.Name(),
+		passwordFilename,
 		"--datadir",
 		publisherDir,
 		"print-keys",
@@ -390,37 +354,24 @@ func TestAccessACTScale(t *testing.T) {
 	testAccessACT(t, 1000)
 }
 
-// TestAccessACT tests the e2e creation, uploading and downloading of an ACT type access control
+// TestAccessACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
-// set. the third node should fail decoding the reference as it will not be granted access. the publisher uploads through
-// one of the nodes then disappears. If `bogusEntries` is bigger than 0, the test will generate the number of bogus act entries
-// to test what happens at scale
+// set and also protects the ACT with a password. the third node should fail decoding the reference as it will not be granted access.
+// the third node then then tries to download using a correct password (and succeeds) then uses a wrong password and fails.
+// the publisher uploads through one of the nodes then disappears.
 func testAccessACT(t *testing.T, bogusEntries int) {
 	// Setup Swarm and upload a test file to it
-	cluster := newTestCluster(t, 3)
+	const clusterSize = 3
+	cluster := newTestCluster(t, clusterSize)
 	defer cluster.Shutdown()
 
 	var uploadThroughNode = cluster.Nodes[0]
 	client := swarm.NewClient(uploadThroughNode.URL)
 
 	r1 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
-	nodeToSkip := r1.Intn(3) // a number between 0 and 2 (node indices in `cluster`)
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
-
-	// write data to file
-	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	hashRegexp := `[a-f\d]{128}`
+	nodeToSkip := r1.Intn(clusterSize) // a number between 0 and 2 (node indices in `cluster`)
+	dataFilename := testutil.TempFileWithContent(t, data)
+	defer os.RemoveAll(dataFilename)
 
 	// upload the file with 'swarm up' and expect a hash
 	up := runSwarm(t,
@@ -428,7 +379,7 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 		cluster.Nodes[0].URL,
 		"up",
 		"--encrypt",
-		tmp.Name())
+		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 
@@ -464,41 +415,25 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 		}
 		grantees = bogusGrantees
 	}
-
-	granteesPubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer granteesPubkeyListFile.Close()
-	defer os.Remove(granteesPubkeyListFile.Name())
-
-	_, err = granteesPubkeyListFile.WriteString(strings.Join(grantees, "\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	granteesPubkeyListFile := testutil.TempFileWithContent(t, strings.Join(grantees, "\n"))
+	defer os.RemoveAll(granteesPubkeyListFile)
 
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(publisherDir)
 
-	passFile, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer passFile.Close()
-	defer os.Remove(passFile.Name())
-	_, err = io.WriteString(passFile, testPassphrase)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	passwordFilename := testutil.TempFileWithContent(t, testPassphrase)
+	defer os.RemoveAll(passwordFilename)
+	actPasswordFilename := testutil.TempFileWithContent(t, "smth")
+	defer os.RemoveAll(actPasswordFilename)
 	_, publisherAccount := getTestAccount(t, publisherDir)
 	up = runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),
 		"--password",
-		passFile.Name(),
+		passwordFilename,
 		"--datadir",
 		publisherDir,
 		"--bzzapi",
@@ -507,7 +442,9 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 		"new",
 		"act",
 		"--grant-keys",
-		granteesPubkeyListFile.Name(),
+		granteesPubkeyListFile,
+		"--password",
+		actPasswordFilename,
 		ref,
 	)
 
@@ -523,7 +460,7 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 		"--bzzaccount",
 		publisherAccount.Address.String(),
 		"--password",
-		passFile.Name(),
+		passwordFilename,
 		"--datadir",
 		publisherDir,
 		"print-keys",
@@ -562,9 +499,7 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	if len(a.Salt) < 32 {
 		t.Fatalf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
 	}
-	if a.KdfParams != nil {
-		t.Fatal("manifest access kdf params should be nil")
-	}
+
 	if a.Publisher != pkComp {
 		t.Fatal("publisher key did not match")
 	}
@@ -588,6 +523,25 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 				t.Fatalf("should be a 401")
 			}
 
+			// try downloading using a password instead, using the unauthorized node
+			passwordUrl := strings.Replace(url, "http://", "http://:smth@", -1)
+			response, err = httpClient.Get(passwordUrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusOK {
+				t.Fatal("should be a 200")
+			}
+
+			// now try with the wrong password, expect 401
+			passwordUrl = strings.Replace(url, "http://", "http://:smthWrong@", -1)
+			response, err = httpClient.Get(passwordUrl)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if response.StatusCode != http.StatusUnauthorized {
+				t.Fatal("should be a 401")
+			}
 			continue
 		}
 

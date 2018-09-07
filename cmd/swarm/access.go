@@ -51,7 +51,7 @@ func accessNewPass(ctx *cli.Context) {
 		password  = getPassPhrase("", 0, makePasswordList(ctx))
 		dryRun    = ctx.Bool(SwarmDryRunFlag.Name)
 	)
-	accessKey, ae, err = api.DoPasswordNew(ctx, password, salt)
+	accessKey, ae, err = api.DoPassword(ctx, password, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
@@ -85,7 +85,7 @@ func accessNewPK(ctx *cli.Context) {
 		granteePublicKey = ctx.String(SwarmAccessGrantKeyFlag.Name)
 		dryRun           = ctx.Bool(SwarmDryRunFlag.Name)
 	)
-	sessionKey, ae, err = api.DoPKNew(ctx, privateKey, granteePublicKey, salt)
+	sessionKey, ae, err = api.DoPK(ctx, privateKey, granteePublicKey, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
@@ -110,23 +110,38 @@ func accessNewACT(ctx *cli.Context) {
 	}
 
 	var (
-		ae          *api.AccessEntry
-		actManifest *api.Manifest
-		accessKey   []byte
-		err         error
-		ref         = args[0]
-		grantees    = []string{}
-		actFilename = ctx.String(SwarmAccessGrantKeysFlag.Name)
-		privateKey  = getPrivKey(ctx)
-		dryRun      = ctx.Bool(SwarmDryRunFlag.Name)
+		ae                   *api.AccessEntry
+		actManifest          *api.Manifest
+		accessKey            []byte
+		err                  error
+		ref                  = args[0]
+		pkGrantees           = []string{}
+		passGrantees         = []string{}
+		pkGranteesFilename   = ctx.String(SwarmAccessGrantKeysFlag.Name)
+		passGranteesFilename = ctx.String(utils.PasswordFileFlag.Name)
+		privateKey           = getPrivKey(ctx)
+		dryRun               = ctx.Bool(SwarmDryRunFlag.Name)
 	)
-
-	bytes, err := ioutil.ReadFile(actFilename)
-	if err != nil {
-		utils.Fatalf("had an error reading the grantee public key list")
+	if pkGranteesFilename == "" && passGranteesFilename == "" {
+		utils.Fatalf("you have to provide either a grantee public-keys file or an encryption passwords file (or both)")
 	}
-	grantees = strings.Split(string(bytes), "\n")
-	accessKey, ae, actManifest, err = api.DoACTNew(ctx, privateKey, salt, grantees)
+
+	if pkGranteesFilename != "" {
+		bytes, err := ioutil.ReadFile(pkGranteesFilename)
+		if err != nil {
+			utils.Fatalf("had an error reading the grantee public key list")
+		}
+		pkGrantees = strings.Split(string(bytes), "\n")
+	}
+
+	if passGranteesFilename != "" {
+		bytes, err := ioutil.ReadFile(passGranteesFilename)
+		if err != nil {
+			utils.Fatalf("could not read password filename: %v", err)
+		}
+		passGrantees = strings.Split(string(bytes), "\n")
+	}
+	accessKey, ae, actManifest, err = api.DoACT(ctx, privateKey, salt, pkGrantees, passGrantees)
 	if err != nil {
 		utils.Fatalf("error generating ACT manifest: %v", err)
 	}
