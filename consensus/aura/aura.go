@@ -693,9 +693,9 @@ func (c *Aura) Close() error {
 // controlling the signer voting.
 func (c *Aura) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "aura",
+		Namespace: "clique",
 		Version:   "1.0",
-		Service:   &API{chain: chain, aura: c},
+		Service:   &API{chain: chain, clique: c},
 		Public:    false,
 	}}
 }
