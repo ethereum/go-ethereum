@@ -218,7 +218,7 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
-	return &Clique{
+	return &Aura{
 		config:     &conf,
 		db:         db,
 		recents:    recents,
@@ -693,9 +693,9 @@ func (c *Aura) Close() error {
 // controlling the signer voting.
 func (c *Aura) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "clique",
+		Namespace: "aura",
 		Version:   "1.0",
-		Service:   &API{chain: chain, clique: c},
+		Service:   &API{chain: chain, aura: c},
 		Public:    false,
 	}}
 }
