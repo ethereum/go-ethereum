@@ -145,7 +145,7 @@ var (
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
 	}
-	GoerliFLag = cli.BoolFlag{
+	GoerliFlag = cli.BoolFlag{
 		Name: "goerli",
 		Usage: "Goerli network: pre-configured proof-of-authority test network",
 	}
@@ -685,7 +685,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.TestnetBootnodes
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		urls = params.RinkebyBootnodes
-	case ctx.GlobalBool(GoerliFLag.Name):
+	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
