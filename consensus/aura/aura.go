@@ -206,7 +206,7 @@ type Aura struct {
 	lock   sync.RWMutex   // Protects the signer fields
 }
 
-// New creates a Clique proof-of-authority consensus engine with the initial
+// New creates a Aura proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.AuraConfig, db ethdb.Database) *Aura {
 	// Set any missing consensus parameters to their defaults
