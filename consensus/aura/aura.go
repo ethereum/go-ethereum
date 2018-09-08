@@ -20,13 +20,11 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -297,7 +295,7 @@ func (a *Aura) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	}
 	// Ensure that the block's difficulty is correct (it should be constant)
 	if number > 0 {
-		if header.Difficulty != chain.Config().Difficulty {
+		if header.Difficulty != chain.Config().Aura.Difficulty {
 			return errInvalidDifficulty
 		}
 	}
@@ -478,13 +476,13 @@ func (a *Aura) verifySeal(chain consensus.ChainReader, header *types.Header, par
 		}
 	}
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
-	inturn := snap.inturn(header.Number.Uint64(), signer)
-	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-		return errInvalidDifficulty
-	}
-	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
-		return errInvalidDifficulty
-	}
+	//inturn := snap.inturn(header.Number.Uint64(), signer)
+	//if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
+	//	return errInvalidDifficulty
+	//}
+	//if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
+	//	return errInvalidDifficulty
+	//}
 	return nil
 }
 
@@ -512,18 +510,18 @@ func (a *Aura) Prepare(chain consensus.ChainReader, header *types.Header) error 
 			}
 		}
 		// If there's pending proposals, cast a vote on them
-		if len(addresses) > 0 {
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
-			if a.proposals[header.Coinbase] {
-				copy(header.Nonce[:], nonceAuthVote)
-			} else {
-				copy(header.Nonce[:], nonceDropVote)
-			}
-		}
+		//if len(addresses) > 0 {
+		//	header.Coinbase = addresses[rand.Intn(len(addresses))]
+		//	if a.proposals[header.Coinbase] {
+		//		copy(header.Nonce[:], nonceAuthVote)
+		//	} else {
+		//		copy(header.Nonce[:], nonceDropVote)
+		//	}
+		//}
 		a.lock.RUnlock()
 	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, a.signer)
+	header.Difficulty = chain.Config().Aura.Difficulty
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -613,13 +611,13 @@ func (a *Aura) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now()) // nolint: gosimple
-	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
-
-		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	}
+	//if header.Difficulty.Cmp(diffNoTurn) == 0 {
+	//	// It's not our turn explicitly to sign, delay it a bit
+	//	wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
+	//	delay += time.Duration(rand.Int63n(int64(wiggle)))
+	//
+	//	log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
+	//}
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, sigHash(header).Bytes())
 	if err != nil {
@@ -647,7 +645,7 @@ func (a *Aura) Seal(chain consensus.ChainReader, block *types.Block, results cha
 
 // Returns difficulty constant from config
 func (a *Aura) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	return new(big.Int).SetUint64(chain.Config().Aura.Difficulty)
+	return chain.Config().Aura.Difficulty
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

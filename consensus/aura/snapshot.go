@@ -235,23 +235,23 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			}
 		}
 		// Tally up the new vote from the signer
-		var authorize bool
-		switch {
-		case bytes.Equal(header.Nonce[:], nonceAuthVote):
-			authorize = true
-		case bytes.Equal(header.Nonce[:], nonceDropVote):
-			authorize = false
-		default:
-			return nil, errInvalidVote
-		}
-		if snap.cast(header.Coinbase, authorize) {
-			snap.Votes = append(snap.Votes, &Vote{
-				Signer:    signer,
-				Block:     number,
-				Address:   header.Coinbase,
-				Authorize: authorize,
-			})
-		}
+		//var authorize bool
+		//switch {
+		//case bytes.Equal(header.Nonce[:], nonceAuthVote):
+		//	authorize = true
+		//case bytes.Equal(header.Nonce[:], nonceDropVote):
+		//	authorize = false
+		//default:
+		//	return nil, errInvalidVote
+		//}
+		//if snap.cast(header.Coinbase, authorize) {
+		//	snap.Votes = append(snap.Votes, &Vote{
+		//		Signer:    signer,
+		//		Block:     number,
+		//		Address:   header.Coinbase,
+		//		Authorize: authorize,
+		//	})
+		//}
 		// If the vote passed, update the list of signers
 		if tally := snap.Tally[header.Coinbase]; tally.Votes > len(snap.Signers)/2 {
 			if tally.Authorize {
