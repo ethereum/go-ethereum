@@ -28,6 +28,7 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
+	GoerliGenesisHash = common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000")
 )
 
 var (
@@ -81,21 +82,21 @@ var (
 
 	// GoerliChainConfig contains the chain parameters to run a node on the Goerli test network.
 	GoerliChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(6283),
-		HomesteadBlock:      big.NewInt(0),
+		ChainID:             big.NewInt(5),
+		HomesteadBlock:      big.NewInt(2),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
+		EIP150Block:         big.NewInt(2),
 		EIP150Hash:          common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000"),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
+		EIP155Block:         big.NewInt(3),
+		EIP158Block:         big.NewInt(3),
+		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: nil,
 		Aura: &AuraConfig{
-			Period: 15,
+			Period: 4,
 			Epoch:  30000,
-			Authorities: []string{
-				"0x540a9fe3d2381016dec8ffba7235c6fb00b0f942",
+			Authorities: []common.Address{
+				common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942"),
 			},
 			Difficulty:  big.NewInt(131072),
 		},
@@ -114,6 +115,8 @@ var (
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+
+	AuraProtocolChanges = &ChainConfig{big.NewInt(5), big.NewInt(2), nil, false, big.NewInt(2), common.Hash{}, big.NewInt(3), big.NewInt(3), big.NewInt(1035301), nil, nil, nil, &AuraConfig{Period: 15, Epoch: 30000, Authorities: []string{"0x540a9fe3d2381016dec8ffba7235c6fb00b0f942"}, Difficulty: big.NewInt(131072)}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -166,7 +169,7 @@ type CliqueConfig struct {
 type AuraConfig struct {
 	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
-	Authorities []string `json:"authorities"` // list of addresses of authorities
+	Authorities []common.Address `json:"authorities"` // list of addresses of authorities
 	Difficulty *big.Int `json:"difficulty"` // Constant block difficulty
 }
 
