@@ -79,7 +79,7 @@ var (
 		},
 	}
 
-	//GoerliChainConfig contains the chain parameters to run a node on the Rinkeby test network.
+	// GoerliChainConfig contains the chain parameters to run a node on the Goerli test network.
 	GoerliChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(6283),
 		HomesteadBlock:      big.NewInt(0),
