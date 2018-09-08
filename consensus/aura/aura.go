@@ -454,27 +454,35 @@ func (a *Aura) verifySeal(chain consensus.ChainReader, header *types.Header, par
 		return errUnknownBlock
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := a.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
+	// snap, err := a.snapshot(chain, number-1, header.ParentHash, parents)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// Resolve the authorization key and check against signers
 	signer, err := ecrecover(header, a.signatures)
 	if err != nil {
 		return err
 	}
-	if _, ok := snap.Signers[signer]; !ok {
+
+	ts := header.Time.Uint64()
+	step := ts % a.config.Period
+	turn := step % uint64(len(a.config.Authorities))
+	if signer != a.config.Authorities[turn] {
+		// not authorized to sign
 		return errUnauthorized
 	}
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
-				return errUnauthorized
-			}
-		}
-	}
+	// if _, ok := snap.Signers[signer]; !ok {
+	// 	return errUnauthorized
+	// }
+	// for seen, recent := range snap.Recents {
+	// 	if recent == signer {
+	// 		// Signer is among recents, only fail if the current block doesn't shift it out
+	// 		if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
+	// 			return errUnauthorized
+	// 		}
+	// 	}
+	// }
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	//inturn := snap.inturn(header.Number.Uint64(), signer)
 	//if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
@@ -591,24 +599,34 @@ func (a *Aura) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	signer, signFn := a.signer, a.signFn
 	a.lock.RUnlock()
 
-	// Bail out if we're unauthorized to sign a block
-	snap, err := a.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return err
-	}
-	if _, authorized := snap.Signers[signer]; !authorized {
+
+	// check if authorized to sign
+	step := uint64(time.Now().Unix()) % a.config.Period
+	turn := step % uint64(len(a.config.Authorities))
+	if a.signer != a.config.Authorities[turn] {
+		// not authorized to sign
 		return errUnauthorized
 	}
-	// If we're amongst the recent signers, wait for the next block
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
-				log.Info("Signed recently, must wait for others")
-				return nil
-			}
-		}
-	}
+
+	// Bail out if we're unauthorized to sign a block
+	// snap, err := a.snapshot(chain, number-1, header.ParentHash, nil)
+	// if err != nil {
+	// 	return err
+	// }
+	// if _, authorized := snap.Signers[signer]; !authorized {
+	// 	return errUnauthorized
+	// }
+	// // If we're amongst the recent signers, wait for the next block
+	// for seen, recent := range snap.Recents {
+	// 	if recent == signer {
+	// 		// Signer is among recents, only wait if the current block doesn't shift it out
+	// 		if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
+	// 			log.Info("Signed recently, must wait for others")
+	// 			return nil
+	// 		}
+	// 	}
+	// }
+
 	// Sweet, the protocol permits us to sign the block, wait for our time
 	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now()) // nolint: gosimple
 	//if header.Difficulty.Cmp(diffNoTurn) == 0 {
