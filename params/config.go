@@ -82,7 +82,7 @@ var (
 
 	// GoerliChainConfig contains the chain parameters to run a node on the Goerli test network.
 	GoerliChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(5),
+		ChainID:             big.NewInt(6382),
 		HomesteadBlock:      big.NewInt(2),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
