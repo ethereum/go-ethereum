@@ -94,6 +94,9 @@ var (
 		Aura: &AuraConfig{
 			Period: 15,
 			Epoch:  30000,
+			Authorities: []string{
+				"0x540a9fe3d2381016dec8ffba7235c6fb00b0f942",
+			},
 		},
 	}
 
@@ -162,6 +165,7 @@ type CliqueConfig struct {
 type AuraConfig struct {
 	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Authorities []string `json:"authorities"` // list of addresses of authorities
 }
 
 // String implements the stringer interface, returning the consensus engine details.
