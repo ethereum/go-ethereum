@@ -141,11 +141,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-<<<<<<< HEAD
-	Aura *AuraConfig
-=======
 	Aura *AuraConfig `json:"aura,omitempty"`
->>>>>>> aura-dev
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
