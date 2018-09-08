@@ -19,7 +19,6 @@ package params
 import (
 	"fmt"
 	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -28,7 +27,7 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-	GoerliGenesisHash = common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000")
+	GoerliGenesisHash  = common.HexToHash("0x4a982649dec9992d0c83d195a81670bfcbe769436a900bab113371a25d7ad4ab")
 )
 
 var (
@@ -83,20 +82,19 @@ var (
 	// GoerliChainConfig contains the chain parameters to run a node on the Goerli test network.
 	GoerliChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(6382),
-		HomesteadBlock:      big.NewInt(2),
+		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2),
-		EIP150Hash:          common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000"),
-		EIP155Block:         big.NewInt(3),
-		EIP158Block:         big.NewInt(3),
-		ByzantiumBlock:      big.NewInt(1035301),
+		DAOForkSupport:      false,
+	//	EIP150Block:         big.NewInt(0),
+	//	EIP150Hash:          common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: nil,
 		Aura: &AuraConfig{
-			Period: 4,
-			Epoch:  30000,
 			Authorities: []common.Address{
-				common.HexToAddress("0x540a9fe3d2381016dec8ffba7235c6fb00b0f942"),
+				common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07"),
+				common.HexToAddress("0x00faa37564140c1a5e96095f05466b9f73441e44"),
 			},
 			Difficulty:  big.NewInt(131072),
 		},
