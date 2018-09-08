@@ -48,8 +48,11 @@ var RinkebyBootnodes = []string{
 }
 
 // Goerli testnet BootNodes
-var GoerliBootnodes = []string {
-	"",
+var GoerliBootnodes = []string{
+	"enode://ffc0d1bcc54dee616617be06edf2b3abdd200beb3765d4475ae9fb1750d98fb0d753b30e691912bb6775b7d442b71072c91becab2141191ce73de5b6d57ac723@40.114.122.81:30303",
+	"enode://5b360e4baabf9e89e42e9241d4d00e7ff7a804759049be7dde30980ccce445f1fb0f91a4b9a4a28ee371b18d679fcced3cac3d73654059dd69c4a7b772bd4abf@40.87.8.76:30303",
+	"enode://b95468b5fa80293c4f2fce2df7a02a52f0b259063d99a78a571afcb69f736ead79ca73412b37cb2336da75066f02439d2e50e22dedc1b78380a6ab36ebdda3fc@40.87.4.17:30303",
+	"enode://3969e0879235c0b2bcc8957fc6d62d53763fcff0e750788eae029d40f1b4fa69f4d5a952ea3d02f85eb558faaae6bd5fbd1f394867edc6728c9fe7b9959329b0@40.87.1.35:30303",
 }
 
 // DiscoveryV5Bootnodes are the enode URLs of the P2P bootstrap nodes for the

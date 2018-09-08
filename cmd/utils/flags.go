@@ -145,7 +145,7 @@ var (
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
 	}
-	GoerliFlag = cli.BoolFlag{
+	GoerliFLag = cli.BoolFlag{
 		Name: "goerli",
 		Usage: "Goerli network: pre-configured proof-of-authority test network",
 	}
