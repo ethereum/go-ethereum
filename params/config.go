@@ -94,6 +94,7 @@ var (
 		Aura: &AuraConfig{
 			Period: 15,
 			Epoch:  30000,
+			Difficulty: 131072,
 		},
 	}
 
@@ -162,6 +163,7 @@ type CliqueConfig struct {
 type AuraConfig struct {
 	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Difficulty uint64 `json:"difficulty"` // Constant block difficulty
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -377,4 +379,9 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{ChainID: new(big.Int).Set(chainID), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+}
+
+// Return diffulty rate for Aura concensus
+func (c *AuraConfig) GetDifficulty() (num *big.Int) {
+	return new(big.Int).SetUint64(c.Difficulty)
 }
