@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/urfave/cli"
 	"os"
 	"os/signal"
 	"path/filepath"

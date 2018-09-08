@@ -20,7 +20,6 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/urfave/cli"
 	"io/ioutil"
 	"math/big"
 	"os"
