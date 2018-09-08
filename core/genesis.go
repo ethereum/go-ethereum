@@ -333,6 +333,19 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
+// TODO: @priom: Define the correct values of each field
+// DefaultGoerliGenesisBlock returns the Goerli network genesis block
+func DefaultGoerliGenesisBlock() *Genesis {
+	return &Genesis {
+		Config: params.GoerliChainConfig,
+		Timestamp: ,
+		ExtraData: hexutil.MustDecode(""),
+		GasLimit: ,
+		Difficulty: big.NewInt(),
+		Alloc: decodePrealloc(goerliAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {

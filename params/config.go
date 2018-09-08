@@ -79,6 +79,22 @@ var (
 		},
 	}
 
+	// GoerliChainConfig contains chain parameters for Goerli Testnet node
+	GoerliChainConfig = &ChainConfig{
+		ChainID: big.NewInt(4),
+		HomesteadBlock: big.NewInt(1),
+		DAOForkBlock: nil,
+		DAOForkSupport: true,
+		EIP150Block: big.NewInt(2),
+		EIP150Hash: common.HexToHash(""),
+		EIP155Block: big.NewInt(3),
+		EIP158Block: big.NewInt(3),
+		ByzantiumBlock: big.NewInt(),
+		ConstantinopleBlock: nil,
+
+
+	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
@@ -123,6 +139,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+	Aura *AuraConfig
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
