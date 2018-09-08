@@ -331,21 +331,21 @@ func (a *Aura) verifyCascadingFields(chain consensus.ChainReader, header *types.
 		return ErrInvalidTimestamp
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
-	snap, err := a.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
-	// If the block is a checkpoint block, verify the signer list
-	if number%a.config.Epoch == 0 {
-		signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		for i, signer := range snap.signers() {
-			copy(signers[i*common.AddressLength:], signer[:])
-		}
-		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-			return errInvalidCheckpointSigners
-		}
-	}
+	// snap, err := a.snapshot(chain, number-1, header.ParentHash, parents)
+	// if err != nil {
+	// 	return err
+	// }
+	// // If the block is a checkpoint block, verify the signer list
+	// if number%a.config.Epoch == 0 {
+	// 	signers := make([]byte, len(snap.Signers)*common.AddressLength)
+	// 	for i, signer := range snap.signers() {
+	// 		copy(signers[i*common.AddressLength:], signer[:])
+	// 	}
+	// 	extraSuffix := len(header.Extra) - extraSeal
+	// 	if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
+	// 		return errInvalidCheckpointSigners
+	// 	}
+	// }
 	// All basic checks passed, verify the seal and return
 	return a.verifySeal(chain, header, parents)
 }
@@ -501,33 +501,6 @@ func (a *Aura) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
 
-	number := header.Number.Uint64()
-	// Assemble the voting snapshot to check which votes make sense
-	snap, err := a.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return err
-	}
-	if number%a.config.Epoch != 0 {
-		a.lock.RLock()
-
-		// Gather all the proposals that make sense voting on
-		addresses := make([]common.Address, 0, len(a.proposals))
-		for address, authorize := range a.proposals {
-			if snap.validVote(address, authorize) {
-				addresses = append(addresses, address)
-			}
-		}
-		// If there's pending proposals, cast a vote on them
-		//if len(addresses) > 0 {
-		//	header.Coinbase = addresses[rand.Intn(len(addresses))]
-		//	if a.proposals[header.Coinbase] {
-		//		copy(header.Nonce[:], nonceAuthVote)
-		//	} else {
-		//		copy(header.Nonce[:], nonceDropVote)
-		//	}
-		//}
-		a.lock.RUnlock()
-	}
 	// Set the correct difficulty
 	header.Difficulty = chain.Config().Aura.Difficulty
 
@@ -535,12 +508,14 @@ func (a *Aura) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if len(header.Extra) < extraVanity {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
 	}
-	header.Extra = header.Extra[:extraVanity]
+	//header.Extra = header.Extra[:extraVanity]
+
+	number := header.Number.Uint64()
 
 	if number%a.config.Epoch == 0 {
-		for _, signer := range snap.signers() {
-			header.Extra = append(header.Extra, signer[:]...)
-		}
+		//for _, signer := range snap.signers() {
+		//	header.Extra = append(header.Extra, signer[:]...)
+		//}
 	}
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
@@ -562,6 +537,7 @@ func (a *Aura) Prepare(chain consensus.ChainReader, header *types.Header) error 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, and returns the final block.
 func (a *Aura) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	state.AddBalance(a.signer, big.NewInt(5 * (10 ^ 18)))
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
