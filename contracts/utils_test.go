@@ -28,26 +28,39 @@ func TestSendTxSign(t *testing.T) {
 	signer := types.HomesteadSigner{}
 	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000)}}
 	backend := backends.NewSimulatedBackend(genesis)
+	backend.Commit()
 	ctx := context.Background()
 
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
-	addrBlockSigner, blockSigner, err := blocksigner.DeployBlockSigner(transactOpts, backend)
+	blockSignerAddr, blockSigner, err := blocksigner.DeployBlockSigner(transactOpts, backend)
 	if err != nil {
-		t.Fatalf("Can't deploy block signer: %v", err)
+		t.Fatalf("Can't get block signer: %v", err)
 	}
 	backend.Commit()
 
 	nonces := make(map[*ecdsa.PrivateKey]int)
 	oldBlock := make([]common.Address, 100)
 
-	for i := uint64(0); i < 100; i++ {
-		rand := rand.Intn(len(keys))
-		accKey := keys[rand]
-		tx, _ := types.SignTx(CreateTxSign(new(big.Int).SetUint64(i), uint64(nonces[accKey]), addrBlockSigner), signer, accKey)
+	signTx := func(ctx context.Context, backend *backends.SimulatedBackend, signer types.HomesteadSigner, nonces map[*ecdsa.PrivateKey]int, accKey *ecdsa.PrivateKey, i uint64) {
+		tx, _ := types.SignTx(CreateTxSign(new(big.Int).SetUint64(i), uint64(nonces[accKey]), blockSignerAddr), signer, accKey)
 		backend.SendTransaction(ctx, tx)
 		backend.Commit()
 		nonces[accKey]++
-		oldBlock[i] = accounts[rand]
+	}
+
+	// Tx sign for signer.
+	for i := uint64(0); i < 100; i++ {
+		randIndex := rand.Intn(len(keys))
+		accKey := keys[randIndex]
+		signTx(ctx, backend, signer, nonces, accKey, i)
+		oldBlock[i] = accounts[randIndex]
+
+		// Tx sign for validators.
+		for _, key := range keys {
+			if key != accKey {
+				signTx(ctx, backend, signer, nonces, key, i)
+			}
+		}
 	}
 
 	for i := uint64(0); i < 100; i++ {
@@ -58,6 +71,10 @@ func TestSendTxSign(t *testing.T) {
 
 		if signers[0].String() != oldBlock[i].String() {
 			t.Errorf("Tx sign for block signer not match %v - %v", signers[0].String(), oldBlock[i].String())
+		}
+
+		if len(signers) != len(keys) {
+			t.Error("Tx sign for block validators not match")
 		}
 	}
 }
