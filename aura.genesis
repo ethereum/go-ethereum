@@ -12,7 +12,8 @@
        "authorities":[
         "0x0082a7bf6aaadab094061747872243059c3c6a07",
         "0x00faa37564140c1a5e96095f05466b9f73441e44"],
-       "difficulty" : 131072
+       "difficulty" : 131072,
+       "signatures": ["gA==","uEEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACsHcD/7g=="]
      }
   },
   "nonce": "0x0",

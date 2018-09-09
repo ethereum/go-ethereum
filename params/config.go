@@ -18,8 +18,8 @@ package params
 
 import (
 	"fmt"
-	"math/big"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -81,12 +81,12 @@ var (
 
 	// GoerliChainConfig contains the chain parameters to run a node on the Goerli test network.
 	GoerliChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(6382),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      false,
-	//	EIP150Block:         big.NewInt(0),
-	//	EIP150Hash:          common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000"),
+		ChainID:        big.NewInt(6382),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   nil,
+		DAOForkSupport: false,
+		//	EIP150Block:         big.NewInt(0),
+		//	EIP150Hash:          common.HexToHash("0X0000000000000000000000000000000000000000000000000000000000000000"),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
@@ -96,7 +96,7 @@ var (
 				common.HexToAddress("0x0082a7bf6aaadab094061747872243059c3c6a07"),
 				common.HexToAddress("0x00faa37564140c1a5e96095f05466b9f73441e44"),
 			},
-			Difficulty:  big.NewInt(131072),
+			Difficulty: big.NewInt(131072),
 		},
 	}
 
@@ -146,7 +146,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	Aura *AuraConfig `json:"aura,omitempty"`
+	Aura   *AuraConfig   `json:"aura,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -163,12 +163,16 @@ type CliqueConfig struct {
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 }
 
+type Signature []byte
+type Signatures []Signature
+
 // AuraConfig is the consensus engine configs for proof-of-authority based sealing.
 type AuraConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Period      uint64           `json:"period"`      // Number of seconds between blocks to enforce
+	Epoch       uint64           `json:"epoch"`       // Epoch length to reset votes and checkpoint
 	Authorities []common.Address `json:"authorities"` // list of addresses of authorities
-	Difficulty *big.Int `json:"difficulty"` // Constant block difficulty
+	Difficulty  *big.Int         `json:"difficulty"`  // Constant block difficulty
+	Signatures   Signatures           `json:"signatures"`
 }
 
 // String implements the stringer interface, returning the consensus engine details.

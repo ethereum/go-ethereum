@@ -234,6 +234,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		}
 	}
 	root := statedb.IntermediateRoot(false)
+
+
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -247,12 +249,21 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Coinbase:   g.Coinbase,
 		Root:       root,
 	}
+
+	if g.Config.Aura != nil {
+		for _, signature := range g.Config.Aura.Signatures {
+			head.Signatures = append(head.Signatures, signature)
+		}
+	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
+	data,_ := rlp.EncodeToBytes(head)
+	fmt.Printf("Genesis header rlp %v\n", common.Bytes2Hex(data))
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true)
 
@@ -332,6 +343,7 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
+
 //Need alloc data
 // DefaultGoerliGenesisBlock returns the Goerli network genesis block.
 func DefaultGoerliGenesisBlock() *Genesis {

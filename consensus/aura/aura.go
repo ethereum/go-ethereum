@@ -286,7 +286,7 @@ func (a *Aura) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 		return errInvalidExtraData
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (common.Hash{}) {
+	if header.MixDig() != (common.Hash{}) {
 		return errInvalidMixDigest
 	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
