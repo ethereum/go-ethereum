@@ -27,6 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -63,6 +64,7 @@ const (
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
 	triesInMemory       = 128
+	masterNodeLimit     = 150
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	BlockChainVersion = 3
@@ -1631,7 +1633,7 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
 		if candidate.String() != "0x0000000000000000000000000000000000000000" {
-			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.String()})
+			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.Uint64()})
 		}
 	}
 	log.Info("Ordered list of masternode candidates")
@@ -1641,9 +1643,16 @@ func (bc *BlockChain) UpdateM1() error {
 	if len(ms) == 0 {
 		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
 	} else {
+		sort.Slice(ms, func(i, j int) bool {
+			return ms[i].Stake >= ms[j].Stake
+		})
 		// update masternodes
 		log.Info("Updating new set of masternodes")
-		err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
+		if len(ms) > masterNodeLimit {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:masterNodeLimit])
+		} else {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
+		}
 		if err != nil {
 			return err
 		}
