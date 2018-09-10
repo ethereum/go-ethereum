@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -308,5 +309,11 @@ func (s *Snapshot) inturn(number uint64, signer common.Address) bool {
 	for offset < len(signers) && signers[offset] != signer {
 		offset++
 	}
+
+	if len(signers) == 0 {
+		log.Warn("no signer. len(signers)==0")
+		return false
+	}
+
 	return (number % uint64(len(signers))) == uint64(offset)
 }
