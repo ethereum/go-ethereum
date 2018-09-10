@@ -17,6 +17,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
+import {hot} from 'react-hot-loader';
 
 import withStyles from '@material-ui/core/styles/withStyles';
 
@@ -190,8 +191,8 @@ class Dashboard extends Component<Props, State> {
 	// reconnect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
 	reconnect = () => {
-		// PROD is defined by webpack.
-		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${PROD ? window.location.host : 'localhost:8080'}/api`);
+		const host = process.env.NODE_ENV === 'production' ? window.location.host : 'localhost:8080';
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${host}/api`);
 		server.onopen = () => {
 			this.setState({content: defaultContent(), shouldUpdate: {}, server});
 		};
@@ -253,4 +254,4 @@ class Dashboard extends Component<Props, State> {
 	}
 }
 
-export default withStyles(themeStyles)(Dashboard);
+export default hot(module)(withStyles(themeStyles)(Dashboard));

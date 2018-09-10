@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,58 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-const webpack = require('webpack');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const path = require('path');
 
 module.exports = {
-	mode:   'development',
 	target: 'web',
 	entry:  {
 		bundle: './index',
 	},
 	output: {
-		filename: '[name].js',
-		path:     path.resolve(__dirname, ''),
-		// sourceMapFilename: '[file].map',
+		filename:          '[name].js',
+		path:              path.resolve(__dirname, ''),
+		sourceMapFilename: '[file].map',
 	},
 	resolve: {
 		modules: [
 			'node_modules',
 			path.resolve(__dirname, 'components'), // import './components/Component' -> import 'Component'
 		],
-		// alias: {
-		// 	root: path.resolve(__dirname, ''),
-		// },
 		extensions: ['.js', '.jsx'],
 	},
-	devtool: 'eval',
-	// devtool: 'inline-source-map',
-	optimization: {
-		minimize:     true,
-		namedModules: true, // Module names instead of numbers - resolves the large diff problem.
-		minimizer:    [
-			new UglifyJsPlugin({
-				uglifyOptions: {
-					compress: true,
-					mangle: true,
-					output:   {
-						comments: false,
-						beautify: true,
-						bracketize: true,
-					},
-					warnings: true,
-				},
-				// sourceMap: true,
-			}),
-		],
-	},
-	plugins: [
-		new webpack.DefinePlugin({
-			PROD: process.env.NODE_ENV === 'production',
-		}),
-		new webpack.HotModuleReplacementPlugin(),
-	],
 	module: {
 		rules: [
 			{
@@ -75,15 +42,15 @@ module.exports = {
 					{
 						loader:  'babel-loader',
 						options: {
+							presets: [ // order: from bottom to top
+								'@babel/env',
+								'@babel/react',
+							],
 							plugins: [ // order: from top to bottom
 								'@babel/proposal-function-bind', // instead of stage 0
 								'@babel/proposal-class-properties', // static defaultProps
 								'@babel/transform-flow-strip-types',
 								'react-hot-loader/babel',
-							],
-							presets: [ // order: from bottom to top
-								'@babel/env',
-								'@babel/react',
 							],
 						},
 					},
@@ -114,10 +81,5 @@ module.exports = {
 				use:  'url-loader',
 			},
 		],
-	},
-	devServer: {
-		port:     8081,
-		hot:      true,
-		compress: true,
 	},
 };

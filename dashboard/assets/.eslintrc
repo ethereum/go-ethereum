@@ -33,15 +33,11 @@
         "eslint:recommended",
         "airbnb",
         "plugin:flowtype/recommended",
-        "plugin:react/recommended",
-        "prettier",
-        "prettier/flowtype",
-        "prettier/react"
+        "plugin:react/recommended"
     ],
     "plugins": [
         "flowtype",
-        "react",
-        "prettier"
+        "react"
     ],
     "rules": {
         "no-tabs":                "off",
@@ -49,7 +45,7 @@
         "react/jsx-indent":       ["error", "tab"],
         "react/jsx-indent-props": ["error", "tab"],
         "react/prefer-stateless-function": "off",
-        //"react/jsx-one-expression-per-line": ["error", {"allow": "single-child"}], // buggy
+        "react/destructuring-assignment": ["error", "always", {"ignoreClassFields": true}],
         "jsx-quotes":  ["error", "prefer-single"],
         "no-plusplus": "off",
         "no-console":  ["error", { "allow": ["error"] }],
@@ -70,11 +66,7 @@
         // Prohibits padding inside curly braces.
         "object-curly-spacing": ["error", "never"],
         "no-use-before-define": "off", // message types
-        "default-case": "off",
-        "prettier/prettier": ["error", {
-            "singleQuote": true,
-            "useTabs": true,
-        }]
+        "default-case": "off"
     },
     "settings": {
         "import/resolver": {
