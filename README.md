@@ -50,7 +50,7 @@ Alternatively, you could quickly download pre-complied binary on our [github rel
 
 This section explains how to run the tomo binary.
 We also offer an official Docker image and a quick startup cli if your goal is to run a masternode.
-Please refer the [official documentation](https://docs.tomochain.com/get-started/masternode) on how to become a masternode for more information.
+Please refer the [official documentation](https://docs.tomochain.com/get-started/run-node/) on how to run a node.
 
 ### Attaching to the Tomochain test network
 
