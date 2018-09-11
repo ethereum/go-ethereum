@@ -458,7 +458,7 @@ func (r *Registry) updateSyncing() {
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, Spec)
-	bp := network.NewBzzTestPeer(peer, r.addr)
+	bp := network.NewBzzPeer(peer, r.addr)
 	np := network.NewPeer(bp, r.delivery.kad)
 	r.delivery.kad.On(np)
 	defer r.delivery.kad.Off(np)

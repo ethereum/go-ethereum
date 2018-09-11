@@ -62,33 +62,6 @@ var DiscoverySpec = &protocols.Spec{
 	},
 }
 
-//
-// // Addr interface that peerPool needs
-// type Addr interface {
-// 	OverlayPeer
-// 	Over() []byte
-// 	Under() []byte
-// 	String() string
-// 	Update(OverlayAddr) OverlayAddr
-// }
-//
-// // Peer interface represents an live peer connection
-// type Peer interface {
-// 	Addr                   // the address of a peer
-// 	Conn                   // the live connection (protocols.Peer)
-// 	LastActive() time.Time // last time active
-// }
-//
-// // Conn interface represents an live peer connection
-// type Conn interface {
-// 	ID() discover.NodeID                                                                  // the key that uniquely identifies the Node for the peerPool
-// 	Handshake(context.Context, interface{}, func(interface{}) error) (interface{}, error) // can send messages
-// 	Send(context.Context, interface{}) error                                              // can send messages
-// 	Drop(error)                                                                           // disconnect this peer
-// 	Run(func(context.Context, interface{}) error) error                                   // the run function to run a protocol
-// 	Off() OverlayAddr
-// }
-
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
 	OverlayAddr  []byte // base address of the overlay network
@@ -275,18 +248,13 @@ type BzzPeer struct {
 	LightNode       bool
 }
 
-func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
+func NewBzzPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	return &BzzPeer{
 		Peer:      p,
 		localAddr: addr,
 		BzzAddr:   NewAddrFromNodeID(p.ID()),
 	}
 }
-
-// // Off returns the overlay peer record for offline persistence
-// func (p *BzzPeer) Off() OverlayAddr {
-// 	return p.BzzAddr
-// }
 
 // LastActive returns the time the peer was last active
 func (p *BzzPeer) LastActive() time.Time {

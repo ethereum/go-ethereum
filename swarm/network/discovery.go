@@ -26,7 +26,7 @@ import (
 
 // discovery bzz extension for requesting and relaying node address records
 
-// Peer wraps BzzPeer and embeds an Overlay connectivity driver
+// Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
 	kad       *Kademlia
@@ -146,7 +146,7 @@ func (d *Peer) handlePeersMsg(msg *peersMsg) error {
 	return d.kad.Register(msg.Peers...)
 }
 
-// subPeers msg is communicating the depth/sharpness/focus of the overlay table of a peer
+// subPeers msg is communicating the depth of the overlay table of a peer
 type subPeersMsg struct {
 	Depth uint8
 }
@@ -177,7 +177,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 	return nil
 }
 
-// seen takes an Overlay peer and checks if it was sent to a peer already
+// seen takes an peer address and checks if it was sent to a peer already
 // if not, marks the peer as sent
 func (d *Peer) seen(p *BzzAddr) bool {
 	d.mtx.Lock()

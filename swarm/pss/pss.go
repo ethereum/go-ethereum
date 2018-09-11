@@ -110,7 +110,7 @@ func (params *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams
 //
 // Implements node.Service
 type Pss struct {
-	*network.Kademlia                   // we can get the Kademliaaddress from this
+	*network.Kademlia                   // we can get the Kademlia address from this
 	privateKey        *ecdsa.PrivateKey // pss can have it's own independent key
 	w                 *whisper.Whisper  // key and encryption backend
 	auxAPIs           []rpc.API         // builtins (handshake, test) can add APIs

@@ -132,7 +132,7 @@ func (e *entry) Hex() string {
 	return fmt.Sprintf("%x", e.Address())
 }
 
-// Register enters each OverlayAddr as kademlia peer record into the
+// Register enters each address as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers ...*BzzAddr) error {
 	k.lock.Lock()
@@ -290,6 +290,8 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 // Not receiving from the returned channel will block On function
 // when the neighbourhood depth is changed.
 func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
+	k.lock.Lock()
+	defer k.lock.Unlock()
 	if k.nDepthC == nil {
 		k.nDepthC = make(chan int)
 	}
