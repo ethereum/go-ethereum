@@ -26,49 +26,34 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
-type chunkEncryption struct {
-	spanEncryption encryption.Encryption
-	dataEncryption encryption.Encryption
-}
-
 type hasherStore struct {
-	store           ChunkStore
-	hashFunc        SwarmHasher
-	chunkEncryption *chunkEncryption
-	hashSize        int   // content hash size
-	refSize         int64 // reference size (content hash + possibly encryption key)
-	wg              *sync.WaitGroup
-	closed          chan struct{}
-}
-
-func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
-	return &chunkEncryption{
-		spanEncryption: encryption.New(0, uint32(chunkSize/refSize), sha3.NewKeccak256),
-		dataEncryption: encryption.New(int(chunkSize), 0, sha3.NewKeccak256),
-	}
+	store     ChunkStore
+	toEncrypt bool
+	hashFunc  SwarmHasher
+	hashSize  int   // content hash size
+	refSize   int64 // reference size (content hash + possibly encryption key)
+	wg        *sync.WaitGroup
+	closed    chan struct{}
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
 func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
-	var chunkEncryption *chunkEncryption
-
 	hashSize := hashFunc().Size()
 	refSize := int64(hashSize)
 	if toEncrypt {
 		refSize += encryption.KeyLength
-		chunkEncryption = newChunkEncryption(chunk.DefaultSize, refSize)
 	}
 
 	return &hasherStore{
-		store:           chunkStore,
-		hashFunc:        hashFunc,
-		chunkEncryption: chunkEncryption,
-		hashSize:        hashSize,
-		refSize:         refSize,
-		wg:              &sync.WaitGroup{},
-		closed:          make(chan struct{}),
+		store:     chunkStore,
+		toEncrypt: toEncrypt,
+		hashFunc:  hashFunc,
+		hashSize:  hashSize,
+		refSize:   refSize,
+		wg:        &sync.WaitGroup{},
+		closed:    make(chan struct{}),
 	}
 }
 
@@ -79,7 +64,7 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 	c := chunkData
 	size := chunkData.Size()
 	var encryptionKey encryption.Key
-	if h.chunkEncryption != nil {
+	if h.toEncrypt {
 		var err error
 		c, encryptionKey, err = h.encryptChunkData(chunkData)
 		if err != nil {
@@ -155,23 +140,14 @@ func (h *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 		return nil, nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
 
-	encryptionKey, err := encryption.GenerateRandomKey()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	encryptedSpan, err := h.chunkEncryption.spanEncryption.Encrypt(chunkData[:8], encryptionKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	encryptedData, err := h.chunkEncryption.dataEncryption.Encrypt(chunkData[8:], encryptionKey)
+	key, encryptedSpan, encryptedData, err := h.encrypt(chunkData)
 	if err != nil {
 		return nil, nil, err
 	}
 	c := make(ChunkData, len(encryptedSpan)+len(encryptedData))
 	copy(c[:8], encryptedSpan)
 	copy(c[8:], encryptedData)
-	return c, encryptionKey, nil
+	return c, key, nil
 }
 
 func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryption.Key) (ChunkData, error) {
@@ -179,12 +155,7 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 		return nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
 
-	decryptedSpan, err := h.chunkEncryption.spanEncryption.Decrypt(chunkData[:8], encryptionKey)
-	if err != nil {
-		return nil, err
-	}
-
-	decryptedData, err := h.chunkEncryption.dataEncryption.Decrypt(chunkData[8:], encryptionKey)
+	decryptedSpan, decryptedData, err := h.decrypt(chunkData, encryptionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +172,44 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 	copy(c[:8], decryptedSpan)
 	copy(c[8:], decryptedData[:length])
 
-	return c[:length+8], nil
+	return c, nil
 }
 
 func (h *hasherStore) RefSize() int64 {
 	return h.refSize
+}
+
+func (h *hasherStore) encrypt(chunkData ChunkData) (encryption.Key, []byte, []byte, error) {
+	key := encryption.GenerateRandomKey(encryption.KeyLength)
+	encryptedSpan, err := h.newSpanEncryption(key).Encrypt(chunkData[:8])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	encryptedData, err := h.newDataEncryption(key).Encrypt(chunkData[8:])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return key, encryptedSpan, encryptedData, nil
+}
+
+func (h *hasherStore) decrypt(chunkData ChunkData, key encryption.Key) ([]byte, []byte, error) {
+	encryptedSpan, err := h.newSpanEncryption(key).Encrypt(chunkData[:8])
+	if err != nil {
+		return nil, nil, err
+	}
+	encryptedData, err := h.newDataEncryption(key).Encrypt(chunkData[8:])
+	if err != nil {
+		return nil, nil, err
+	}
+	return encryptedSpan, encryptedData, nil
+}
+
+func (h *hasherStore) newSpanEncryption(key encryption.Key) encryption.Encryption {
+	return encryption.New(key, 0, uint32(chunk.DefaultSize/h.refSize), sha3.NewKeccak256)
+}
+
+func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryption {
+	return encryption.New(key, int(chunk.DefaultSize), 0, sha3.NewKeccak256)
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, chunk *Chunk) {
