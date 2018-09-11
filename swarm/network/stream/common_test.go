@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
@@ -114,12 +114,12 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	delivery := NewDelivery(to, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
-	streamer := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), nil)
+	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), nil)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()
 	}
-	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
+	protocolTester := p2ptest.NewProtocolTester(t, addr.ID(), 1, streamer.runProtocol)
 
 	err = waitForPeers(streamer, 1*time.Second, 1)
 	if err != nil {
@@ -240,7 +240,7 @@ func generateRandomFile() (string, error) {
 }
 
 //create a local store for the given node
-func createTestLocalStorageForID(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
+func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.ChunkStore, string, error) {
 	var datadir string
 	var err error
 	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
