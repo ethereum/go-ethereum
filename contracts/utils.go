@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"io"
-	"math"
 	"math/big"
 	"math/rand"
 	"strconv"
@@ -53,9 +52,10 @@ const (
 	RewardFoundationPercent = 10
 	HexSetSecret            = "34d38600"
 	HexSetOpening           = "e11f5ba2"
-	EpocBlockSecret         = 950
-	EpocBlockOpening        = 980
-	EpocBlockRandomize      = 900
+	EpocBlockSecret         = 20
+	EpocBlockOpening        = 30
+	EpocBlockRandomize      = 50
+	MaxMasternodes          = 150
 	M2ByteLength            = 4
 	extraVanity             = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal               = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -168,16 +168,13 @@ func CreateTxSign(blockNumber *big.Int, blockHash common.Hash, nonce uint64, blo
 // Send secret key into randomize smartcontract.
 func BuildTxSecretRandomize(nonce uint64, randomizeAddr common.Address, epocNumber uint64, randomizeKey []byte) (*types.Transaction, error) {
 	data := common.Hex2Bytes(HexSetSecret)
-	secretMax := math.Round(float64(epocNumber / 10))
-	secrets := Shuffle(NewSlice(0, int64(secretMax), 1))
+	rand.Seed(time.Now().UnixNano())
+	secretNumb := rand.Intn(int(epocNumber))
 
 	// Append randomize suffix in -1, 0, 1.
-	arrSuffix := []int64{-1, 1}
-	rand.Seed(time.Now().UnixNano())
-	randIndex := rand.Intn(len(arrSuffix))
-	secrets = append(secrets, arrSuffix[randIndex])
-
+	secrets := []int64{int64(secretNumb)}
 	sizeOfArray := int64(32)
+
 	// Build extra data for tx with first position is size of array byte and second position are length of array byte.
 	arrSizeOfSecrets := common.LeftPadBytes(new(big.Int).SetInt64(sizeOfArray).Bytes(), 32)
 	arrLengthOfSecrets := common.LeftPadBytes(new(big.Int).SetInt64(int64(len(secrets))).Bytes(), 32)
@@ -219,7 +216,7 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 }
 
 // Get random from randomize contract.
-func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) ([]int64, error) {
+func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) (int64, error) {
 	randomize, err := randomizeContract.NewTomoRandomize(common.HexToAddress(common.RandomizeSMC), client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
@@ -238,26 +235,29 @@ func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common
 }
 
 // Generate m2 listing from randomize array.
-func GenM2FromRandomize(randomizes [][]int64) ([]int64, error) {
-	// Separate array.
-	arrRandomizes := TransposeMatrix(randomizes)
-	lenRandomize := len(arrRandomizes)
-	arrayA := arrRandomizes[:lenRandomize-2]
-	arrayB := arrRandomizes[lenRandomize-1:]
-
-	matrixResult, err := DotMatrix(arrayA, arrayB)
-	if err != nil {
-		log.Error("Fail to dot matrix", "error", err)
-
-		return nil, err
+func GenM2FromRandomize(randomizes []int64) ([]int64, error) {
+	blockValidator := NewSlice(int64(0), MaxMasternodes, 1)
+	randIndexs := make([]int64, MaxMasternodes)
+	total := int64(0)
+	var temp int64 = 0
+	for _, j := range randomizes {
+		total += j
 	}
-	lenMasternode := len(arrayB[0])
-	result := make([]int64, lenRandomize)
-	for i, v := range matrixResult {
-		result[i] = int64(math.Abs(float64(v))) % int64(lenMasternode)
+	rand.Seed(total)
+	for i := len(blockValidator) - 1; i >= 0; i-- {
+		blockLength := len(blockValidator) - 1
+		if blockLength <= 1 {
+			blockLength = 1
+		}
+		randomIndex := int64(rand.Intn(blockLength))
+		temp = blockValidator[randomIndex]
+		blockValidator[randomIndex] = blockValidator[i]
+		blockValidator[i] = temp
+		blockValidator = append(blockValidator[:i], blockValidator[i+1:]...)
+		randIndexs[i] = temp
 	}
 
-	return result, nil
+	return randIndexs, nil
 }
 
 // Get validators from m2 array integer.
@@ -299,12 +299,10 @@ func DecodeValidatorsHexData(validatorsStr string) ([]int64, error) {
 }
 
 // Decrypt randomize from secrets and opening.
-func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte) ([]int64, error) {
-	var random []int64
-	var completedRandomize []int64
-	random = make([]int64, len(secrets))
+func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte) (int64, error) {
+	var random int64
 	if len(secrets) > 0 {
-		for i, secret := range secrets {
+		for _, secret := range secrets {
 			trimSecret := bytes.TrimLeft(secret[:], "\x00")
 			decryptSecret := Decrypt(opening[:], string(trimSecret))
 			if isInt(decryptSecret) {
@@ -312,26 +310,12 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 				if err != nil {
 					log.Error("Can not convert string to integer", "error", err)
 				}
-				random[i] = int64(intNumber)
+				random = int64(intNumber)
 			}
 		}
 	}
 
-	// Generate full randomize.
-	randomMax := len(random) - 1
-	if randomMax > 0 {
-		for i, randNumber := range random {
-			if i < randomMax {
-				for j := 0; j < 10; j++ {
-					completedRandomize = append(completedRandomize, randNumber*10+int64(j))
-				}
-			}
-		}
-		completedRandomize = append(completedRandomize, random[randomMax])
-	}
-	log.Error("random", "completedRandomize", completedRandomize, "randomMax", randomMax)
-
-	return completedRandomize, nil
+	return random, nil
 }
 
 // Calculate reward for reward checkpoint.
@@ -581,33 +565,6 @@ func isInt(strNumber string) bool {
 	} else {
 		return false
 	}
-}
-
-// Helper function for transpose matrix.
-func TransposeMatrix(x [][]int64) [][]int64 {
-	out := make([][]int64, len(x[0]))
-	for i := 0; i < len(x); i += 1 {
-		for j := 0; j < len(x[0]); j += 1 {
-			out[j] = append(out[j], x[i][j])
-		}
-	}
-	return out
-}
-
-// Helper function for multiplication matrix.
-func DotMatrix(x, y [][]int64) ([]int64, error) {
-	if len(x[0]) != len(y[0]) {
-		return nil, errors.New("Can't do matrix multiplication.")
-	}
-
-	out := make([]int64, len(x))
-	for i := 0; i < len(x); i += 1 {
-		for j := 0; j < len(y[0]); j += 1 {
-			out[i] += x[i][j] * y[0][j]
-		}
-	}
-
-	return out, nil
 }
 
 // Get masternodes address from checkpoint Header.

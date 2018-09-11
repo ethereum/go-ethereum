@@ -150,40 +150,6 @@ func TestEncryptDecrypt(t *testing.T) {
 	t.Log("Encrypt", encrypt, "Test", string(randomByte), "Decrypt", decrypt, "trim", string(bytes.TrimLeft([]byte(decrypt), "\x00")))
 }
 
-func TestTransposeMatrix(t *testing.T) {
-	a := [][]int64{
-		{0, 1, 2, 3, 4},
-		{4, 5, 6, 7, 8},
-	}
-	b := [][]int64{
-		{0, 4},
-		{1, 5},
-		{2, 6},
-		{3, 7},
-		{4, 8},
-	}
-	if !isArrayEqual(b, TransposeMatrix(a)) {
-		t.Errorf("Fail to transpose matrix %v - %v", a, TransposeMatrix(a))
-	}
-}
-
-func TestMultiMatrix(t *testing.T) {
-	a := make([][]int64, 6)
-	b := [][]int64{
-		{1, -1, -1, 1, 1, -1},
-	}
-	for i := 0; i < len(b[0]); i++ {
-		a[i] = Shuffle(NewSlice(0, 6, 1))
-	}
-	c, err := DotMatrix(a, b)
-	if err != nil {
-		t.Error("Fail to test dot matrix", err)
-	}
-	if len(a[0]) != len(c) {
-		t.Errorf("Fail to test dot matrix result %v - %v - %v", a, b, c)
-	}
-}
-
 func isArrayEqual(a [][]int64, b [][]int64) bool {
 	if len(a) != len(b) {
 		return false
@@ -200,25 +166,28 @@ func isArrayEqual(a [][]int64, b [][]int64) bool {
 
 // Unit test for
 func TestGenM2FromRandomize(t *testing.T) {
-	a := [][]int64{
-		{37, 23, 17, 45, 38, 8, 21, 28, 15, 41, 1, 25, 4, 30, 31, 0, 9, 16, 46, 13, 36, 7, 19, 27, 47, 32, 22, 3, 20, 33, 2, 35, 49, 6, 42, 34, 44, 10, 29, 26, 12, 43, 48, 24, 40, 14, 18, 39, 5, 11, 1},
-		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		{28, 16, 13, 31, 32, 36, 44, 14, 37, 33, 3, 23, 17, 46, 35, 30, 45, 27, 9, 41, 7, 19, 10, 24, 5, 34, 29, 18, 21, 15, 0, 2, 25, 39, 11, 4, 22, 6, 48, 42, 12, 26, 1, 47, 43, 20, 40, 38, 8, 49, -1},
+	var a []int64
+	for i := 0; i <= 10; i++ {
+		rand.Seed(time.Now().UTC().UnixNano())
+		a = append(a, int64(rand.Intn(9999)))
 	}
 	b, err := GenM2FromRandomize(a)
-	t.Log("randomize", b)
+	t.Log("randomize", b, "len", len(b))
 	if err != nil {
 		t.Error("Fail to test gen m2 for randomize.", err)
 	}
-	c := []int64{0, 1, 1, 2, 0, 1, 2, 2, 1, 2, 2, 2, 1, 1, 1, 0, 0, 2, 1, 1, 2, 0, 0, 0, 0, 2, 1, 0, 1, 0, 2, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 2, 2, 2, 0, 0, 1, 1, 0, 0, 0}
-	if !isArrayEqual([][]int64{b}, [][]int64{c}) {
-		t.Errorf("Fail to get m2 result %v", b)
+	// Test Permutation Without Fixed-point.
+	M1List := NewSlice(int64(0), MaxMasternodes, 1)
+	for i, m1 := range M1List {
+		if m1 == b[i] {
+			t.Errorf("Error check Permutation Without Fixed-point %v - %v - %v", i, b[i], a)
+		}
 	}
 }
 
 // Unit test for validator m2.
 func TestBuildValidatorFromM2(t *testing.T) {
-	a := []int64{0, 1, 1, 2, 0, 1, 2, 128, 150, 2, 2, 2, 1, 1, 1, 0, 0, 2, 1, 1, 2, 0, 0, 0, 0, 2, 1, 0, 1, 0, 2, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 2, 2, 2, 0, 0, 1, 1, 0, 0, 0}
+	a := []int64{84, 58, 27, 96, 127, 60, 136, 20, 121, 31, 87, 85, 40, 120, 149, 109, 141, 145, 11, 110, 147, 35, 76, 46, 34, 108, 72, 103, 102, 12, 23, 47, 70, 86, 125, 112, 128, 13, 130, 98, 126, 62, 132, 111, 134, 6, 106, 67, 24, 91, 101, 50, 94, 43, 77, 73, 129, 71, 51, 10, 92, 29, 80, 95, 33, 100, 124, 75, 38, 133, 79, 83, 61, 36, 122, 99, 16, 28, 18, 116, 140, 97, 119, 82, 148, 48, 56, 32, 93, 107, 69, 68, 123, 81, 22, 137, 25, 115, 44, 8, 42, 131, 143, 17, 55, 89, 9, 15, 19, 59, 146, 54, 5, 30, 41, 144, 117, 1, 104, 49, 105, 45, 88, 78, 74, 135, 0, 21, 57, 3, 66, 52, 63, 138, 4, 114, 37, 118, 14, 2, 26, 7, 65, 139, 39, 64, 90, 142, 53, 113}
 	b := BuildValidatorFromM2(a)
 	c := ExtractValidatorsFromBytes(b)
 	if !isArrayEqual([][]int64{a}, [][]int64{c}) {

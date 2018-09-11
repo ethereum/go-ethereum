@@ -120,29 +120,21 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	backend.Commit()
 
 	// Get randomize secret from SC.
-	secretsArr, err := randomizeContract.GetSecret(acc1Addr)
-	if err != nil {
-		t.Fatalf("Can't get secret from SC: %v", err)
-	}
-	if len(secretsArr) <= 0 {
-		t.Error("Empty get secrets from SC", err)
-	}
-
-	// Decrypt randomize from SC.
 	secrets, err := randomizeContract.GetSecret(acc1Addr)
 	if err != nil {
 		t.Error("Fail get secrets from randomize", err)
 	}
+	if len(secrets) <= 0 {
+		t.Error("Empty get secrets from SC", err)
+	}
+	// Decrypt randomize from SC.
 	opening, err := randomizeContract.GetOpening(acc1Addr)
 	if err != nil {
 		t.Fatalf("Can't get secret from SC: %v", err)
 	}
-	randomizes, err := contracts.DecryptRandomizeFromSecretsAndOpening(secrets, opening)
-	t.Log("randomizes", randomizes)
+	randomize, err := contracts.DecryptRandomizeFromSecretsAndOpening(secrets, opening)
+	t.Log("randomize", randomize)
 	if err != nil {
 		t.Error("Can't decrypt secret and opening", err)
-	}
-	if len(randomizes) != 901 {
-		t.Error("Randomize length not match", "length", len(randomizes))
 	}
 }
