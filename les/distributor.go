@@ -114,7 +114,9 @@ func (d *requestDistributor) loop() {
 			d.lock.Lock()
 			elem := d.reqQueue.Front()
 			for elem != nil {
-				close(elem.Value.(*distReq).sentChn)
+				req := elem.Value.(*distReq)
+				close(req.sentChn)
+				req.sentChn = nil
 				elem = elem.Next()
 			}
 			d.lock.Unlock()
