@@ -140,24 +140,21 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	}
 
 	if chainConfig.IsEWASM(ctx.BlockNumber) {
-		// to be implemented by EVM-C and Wagon PRs.
-		// if vmConfig.EWASMInterpreter != "" {
-		//  extIntOpts := strings.Split(vmConfig.EWASMInterpreter, ":")
-		//  path := extIntOpts[0]
-		//  options := []string{}
-		//  if len(extIntOpts) > 1 {
-		//    options = extIntOpts[1..]
-		//  }
-		//  evm.interpreters = append(evm.interpreters, NewEVMVCInterpreter(evm, vmConfig, options))
-		// } else {
-		// 	evm.interpreters = append(evm.interpreters, NewEWASMInterpreter(evm, vmConfig))
-		// }
-		panic("No supported ewasm interpreter yet.")
+		if vmConfig.EWASMInterpreter != "" {
+			evm.interpreters = append(evm.interpreters, NewEVMC(vmConfig.EWASMInterpreter, evm))
+		} else {
+			panic("The default ewasm interpreter not supported yet.")
+		}
 	}
 
-	// vmConfig.EVMInterpreter will be used by EVM-C, it won't be checked here
-	// as we always want to have the built-in EVM as the failover option.
+	if vmConfig.EVMInterpreter != "" {
+		// Create custom EVM.
+		evm.interpreters = append(evm.interpreters, NewEVMC(vmConfig.EVMInterpreter, evm))
+	}
+
+	// Keep the built-in EVM as the failover option.
 	evm.interpreters = append(evm.interpreters, NewEVMInterpreter(evm, vmConfig))
+
 	evm.interpreter = evm.interpreters[0]
 
 	return evm
