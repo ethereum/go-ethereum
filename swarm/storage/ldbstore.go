@@ -147,13 +147,10 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	}
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
-	s.entryCnt++
 	data, _ = s.db.Get(keyAccessCnt)
 	s.accessCnt = BytesToU64(data)
-	s.accessCnt++
 	data, _ = s.db.Get(keyDataIdx)
 	s.dataIdx = BytesToU64(data)
-	s.dataIdx++
 
 	return s, nil
 }
@@ -251,6 +248,8 @@ func decodeOldData(data []byte, chunk *Chunk) {
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
+	log.Trace("collectGarbage", "ratio", ratio)
+
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
 	it := s.db.NewIterator()
@@ -492,6 +491,18 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
+func (s *LDBStore) Delete(addr Address) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	ikey := getIndexKey(addr)
+
+	var indx dpaDBIndex
+	s.tryAccessIdx(ikey, &indx)
+
+	s.delete(indx.Idx, ikey, s.po(addr))
+}
+
 func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
@@ -517,8 +528,8 @@ func (s *LDBStore) CurrentBucketStorageIndex(po uint8) uint64 {
 }
 
 func (s *LDBStore) Size() uint64 {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.entryCnt
 }
 
@@ -602,21 +613,23 @@ mainLoop:
 			}
 			close(c)
 			for e > s.capacity {
+				log.Trace("for >", "e", e, "s.capacity", s.capacity)
 				// Collect garbage in a separate goroutine
 				// to be able to interrupt this loop by s.quit.
 				done := make(chan struct{})
 				go func() {
 					s.collectGarbage(gcArrayFreeRatio)
+					log.Trace("collectGarbage closing done")
 					close(done)
 				}()
 
-				e = s.entryCnt
 				select {
 				case <-s.quit:
 					s.lock.Unlock()
 					break mainLoop
 				case <-done:
 				}
+				e = s.entryCnt
 			}
 			s.lock.Unlock()
 		}
