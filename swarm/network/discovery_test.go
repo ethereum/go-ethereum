@@ -33,7 +33,7 @@ func TestDiscovery(t *testing.T) {
 
 	id := s.IDs[0]
 	raddr := NewAddrFromNodeID(id)
-	pp.Register([]OverlayAddr{OverlayAddr(raddr)})
+	pp.Register(raddr)
 
 	// start the hive and wait for the connection
 	pp.Start(s.Server)

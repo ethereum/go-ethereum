@@ -356,7 +356,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", self.bzz.Hive.BaseAddr()))
 
 	if self.ps != nil {
 		self.ps.Start(srv)
