@@ -51,6 +51,7 @@ const themeStyles = theme => ({
 	},
 	icon: {
 		fontSize: theme.spacing.unit * 3,
+		overflow: 'unset',
 	},
 });
 

@@ -65,12 +65,9 @@ type Dashboard struct {
 	conns      map[uint32]*client // Currently live websocket connections
 	nextConnID uint32             // Next connection id
 
-	history        *Message        // Stored general data
-	sysHistory     *SystemMessage  // Stored system data
-	networkHistory *NetworkMessage // Stored peer data
-	logHistory     *LogsMessage    // Stored log data
+	history *Message // Stored historical data
 
-	lock     sync.RWMutex // Lock protecting the dashboard's internals
+	lock     sync.Mutex   // Lock protecting the dashboard's internals
 	sysLock  sync.RWMutex // Lock protecting the stored system data
 	peerLock sync.RWMutex // Lock protecting the stored peer data
 	logLock  sync.RWMutex // Lock protecting the stored log data
@@ -105,19 +102,19 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				Commit:  commit,
 				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
 			},
-		},
-		sysHistory: &SystemMessage{
-			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
-			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
-			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
-			NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
-			ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
-			SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
-			DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
-			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
-		},
-		networkHistory: &NetworkMessage{
-			PeerBundles: make(map[string]*PeerBundle),
+			System: &SystemMessage{
+				ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
+				VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
+				NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
+				NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
+				ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
+				SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
+				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
+				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
+			},
+			Network: &NetworkMessage{
+				PeerBundles: make(map[string]*PeerBundle),
+			},
 		},
 		logdir: logdir,
 	}
@@ -248,18 +245,16 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	}()
 
 	// Send the past data.
-	db.lock.RLock()
-	h := deepcopy.Copy(db.history).(*Message)
-	db.lock.RUnlock()
 	db.sysLock.RLock()
-	h.System = deepcopy.Copy(db.sysHistory).(*SystemMessage)
-	db.sysLock.RUnlock()
 	db.peerLock.RLock()
-	h.Network = deepcopy.Copy(db.networkHistory).(*NetworkMessage)
-	db.peerLock.RUnlock()
 	db.logLock.RLock()
-	h.Logs = deepcopy.Copy(db.logHistory).(*LogsMessage)
+
+	h := deepcopy.Copy(db.history).(*Message)
+
+	db.sysLock.RUnlock()
+	db.peerLock.RUnlock()
 	db.logLock.RUnlock()
+
 	client.msg <- h
 
 	// Start tracking the connection and drop at connection loss.

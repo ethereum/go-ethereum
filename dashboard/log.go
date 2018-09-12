@@ -95,9 +95,9 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 		// so in order to avoid log record duplication on the client side, it is
 		// handled differently. Its actual content is always saved in the history.
 		db.logLock.RLock()
-		if db.logHistory != nil {
+		if db.history.Logs != nil {
 			c.msg <- &Message{
-				Logs: deepcopy.Copy(db.logHistory).(*LogsMessage),
+				Logs: deepcopy.Copy(db.history.Logs).(*LogsMessage),
 			}
 		}
 		db.logLock.RUnlock()
@@ -175,7 +175,7 @@ func (db *Dashboard) streamLogs() {
 		return
 	}
 	db.logLock.Lock()
-	db.logHistory = &LogsMessage{
+	db.history.Logs = &LogsMessage{
 		Source: &LogFile{
 			Name: fi.Name(),
 			Last: true,
@@ -241,8 +241,8 @@ loop:
 				break loop
 			}
 			db.logLock.Lock()
-			db.logHistory.Source.Name = fi.Name()
-			db.logHistory.Chunk = emptyChunk
+			db.history.Logs.Source.Name = fi.Name()
+			db.history.Logs.Chunk = emptyChunk
 			db.logLock.Unlock()
 		case <-ticker.C: // Send log updates to the client.
 			if opened == nil {
@@ -267,15 +267,15 @@ loop:
 			var l *LogsMessage
 			// Update the history.
 			db.logLock.Lock()
-			if bytes.Equal(db.logHistory.Chunk, emptyChunk) {
-				db.logHistory.Chunk = chunk
-				l = deepcopy.Copy(db.logHistory).(*LogsMessage)
+			if bytes.Equal(db.history.Logs.Chunk, emptyChunk) {
+				db.history.Logs.Chunk = chunk
+				l = deepcopy.Copy(db.history.Logs).(*LogsMessage)
 			} else {
-				b = make([]byte, len(db.logHistory.Chunk)+len(chunk)-1)
-				copy(b, db.logHistory.Chunk)
-				b[len(db.logHistory.Chunk)-1] = ','
-				copy(b[len(db.logHistory.Chunk):], chunk[1:])
-				db.logHistory.Chunk = b
+				b = make([]byte, len(db.history.Logs.Chunk)+len(chunk)-1)
+				copy(b, db.history.Logs.Chunk)
+				b[len(db.history.Logs.Chunk)-1] = ','
+				copy(b[len(db.history.Logs.Chunk):], chunk[1:])
+				db.history.Logs.Chunk = b
 				l = &LogsMessage{Chunk: chunk}
 			}
 			db.logLock.Unlock()

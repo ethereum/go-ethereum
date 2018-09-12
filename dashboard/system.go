@@ -128,14 +128,15 @@ func (db *Dashboard) collectSystemData() {
 				Value: float64(deltaDiskWrite) / frequency,
 			}
 			db.sysLock.Lock()
-			db.sysHistory.ActiveMemory = append(db.sysHistory.ActiveMemory[1:], activeMemory)
-			db.sysHistory.VirtualMemory = append(db.sysHistory.VirtualMemory[1:], virtualMemory)
-			db.sysHistory.NetworkIngress = append(db.sysHistory.NetworkIngress[1:], networkIngress)
-			db.sysHistory.NetworkEgress = append(db.sysHistory.NetworkEgress[1:], networkEgress)
-			db.sysHistory.ProcessCPU = append(db.sysHistory.ProcessCPU[1:], processCPU)
-			db.sysHistory.SystemCPU = append(db.sysHistory.SystemCPU[1:], systemCPU)
-			db.sysHistory.DiskRead = append(db.sysHistory.DiskRead[1:], diskRead)
-			db.sysHistory.DiskWrite = append(db.sysHistory.DiskWrite[1:], diskWrite)
+			sys := db.history.System
+			sys.ActiveMemory = append(sys.ActiveMemory[1:], activeMemory)
+			sys.VirtualMemory = append(sys.VirtualMemory[1:], virtualMemory)
+			sys.NetworkIngress = append(sys.NetworkIngress[1:], networkIngress)
+			sys.NetworkEgress = append(sys.NetworkEgress[1:], networkEgress)
+			sys.ProcessCPU = append(sys.ProcessCPU[1:], processCPU)
+			sys.SystemCPU = append(sys.SystemCPU[1:], systemCPU)
+			sys.DiskRead = append(sys.DiskRead[1:], diskRead)
+			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
 			db.sysLock.Unlock()
 
 			db.sendToAll(&Message{

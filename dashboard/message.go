@@ -60,6 +60,27 @@ type NetworkMessage struct {
 	PeerBundles map[string]*PeerBundle `json:"peerBundles,omitempty"`
 }
 
+// getOrInitBundle returns the peer bundle belonging to the given IP, or
+// initializes the bundle if it doesn't exist.
+func (m *NetworkMessage) getOrInitBundle(ip string) *PeerBundle {
+	if _, ok := m.PeerBundles[ip]; !ok {
+		m.PeerBundles[ip] = &PeerBundle{
+			Peers: make(map[string]*Peer),
+		}
+	}
+	return m.PeerBundles[ip]
+}
+
+// getOrInitPeer returns the peer belonging to the given IP and node id, or
+// initializes the peer if it doesn't exist.
+func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
+	b := m.getOrInitBundle(ip)
+	if _, ok := b.Peers[id]; !ok {
+		b.Peers[id] = new(Peer)
+	}
+	return b.Peers[id]
+}
+
 // PeerBundle contains information about the peers pertaining to an IP address.
 type PeerBundle struct {
 	Location *GeoLocation     `json:"location,omitempty"` // geographical information based on IP

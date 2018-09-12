@@ -387,8 +387,8 @@ func (srv *Server) Stop() {
 	}
 	close(srv.quit)
 	srv.lock.Unlock()
-	srv.loopWG.Wait()
 	closeMetricsFeed()
+	srv.loopWG.Wait()
 }
 
 // sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
@@ -542,6 +542,7 @@ func (srv *Server) Start() (err error) {
 
 	srv.loopWG.Add(1)
 	go srv.run(dialer)
+	go startTrafficNotifier(2 * time.Second)
 	srv.running = true
 	return nil
 }
