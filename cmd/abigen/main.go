@@ -75,7 +75,7 @@ func main() {
 		bins  []string
 		types []string
 	)
-	if *solFlag != "" || *abiFlag == "-" {
+	if *solFlag != "" || (*abiFlag == "-" && *pkgFlag == "") {
 		// Generate the list of types to exclude from binding
 		exclude := make(map[string]bool)
 		for _, kind := range strings.Split(*excFlag, ",") {
@@ -111,10 +111,20 @@ func main() {
 		}
 	} else {
 		// Otherwise load up the ABI, optional bytecode and type name from the parameters
-		abi, err := ioutil.ReadFile(*abiFlag)
-		if err != nil {
-			fmt.Printf("Failed to read input ABI: %v\n", err)
-			os.Exit(-1)
+		var abi []byte
+		var err error
+		if *abiFlag == "-" {
+			abi, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Printf("Failed to read input ABI from stdin: %v\n", err)
+				os.Exit(-1)
+			}
+		} else {
+			abi, err = ioutil.ReadFile(*abiFlag)
+			if err != nil {
+				fmt.Printf("Failed to read input ABI: %v\n", err)
+				os.Exit(-1)
+			}
 		}
 		abis = append(abis, string(abi))
 
@@ -156,5 +166,10 @@ func contractsFromStdin() (map[string]*compiler.Contract, error) {
 		return nil, err
 	}
 
-	return compiler.ParseCombinedJSON(bytes, "", "", "", "")
+	code, err := compiler.ParseCombinedJSON(bytes, "", "", "", "")
+	if err != nil {
+		fmt.Printf("Error from parse: %s\n", err)
+		return nil, err
+	}
+	return code, nil
 }
