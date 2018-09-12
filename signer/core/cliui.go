@@ -95,7 +95,8 @@ func (ui *CommandlineUI) confirm() bool {
 
 func showMetadata(metadata Metadata) {
 	fmt.Printf("Request context:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
-	fmt.Printf("\n\tUser-Agent: %v\n\tOrigin: %v\n", metadata.UserAgent, metadata.Origin)
+	fmt.Printf("\nAdditional HTTP header data, provided by the external caller:\n")
+	fmt.Printf("\tUser-Agent: %v\n\tOrigin: %v\n", metadata.UserAgent, metadata.Origin)
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
