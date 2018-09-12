@@ -81,6 +81,25 @@ const (
 	TxStatusMsg            = 0x15
 )
 
+type requestInfo struct {
+	name     string
+	maxCount uint64
+}
+
+var requests = map[uint64]requestInfo{
+	GetBlockHeadersMsg:     {"GetBlockHeaders", MaxHeaderFetch},
+	GetBlockBodiesMsg:      {"GetBlockBodies", MaxBodyFetch},
+	GetReceiptsMsg:         {"GetReceipts", MaxReceiptFetch},
+	GetProofsV1Msg:         {"GetProofsV1", MaxProofsFetch},
+	GetCodeMsg:             {"GetCode", MaxCodeFetch},
+	SendTxMsg:              {"SendTx", MaxTxSend},
+	GetHeaderProofsMsg:     {"GetHeaderProofs", MaxHelperTrieProofsFetch},
+	GetProofsV2Msg:         {"GetProofsV2", MaxProofsFetch},
+	GetHelperTrieProofsMsg: {"GetHelperTrieProofs", MaxHelperTrieProofsFetch},
+	SendTxV2Msg:            {"SendTxV2", MaxTxSend},
+	GetTxStatusMsg:         {"GetTxStatus", MaxTxStatus},
+}
+
 type errCode int
 
 const (

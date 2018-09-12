@@ -54,6 +54,7 @@ import (
 type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
+	APIs() []rpc.API
 	Protocols() []p2p.Protocol
 	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
 }
@@ -267,6 +268,10 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
+	// Append any APIs exposed explicitly by the les server
+	if s.lesServer != nil {
+		apis = append(apis, s.lesServer.APIs()...)
+	}
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 

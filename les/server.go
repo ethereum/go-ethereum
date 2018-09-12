@@ -19,35 +19,44 @@ package les
 
 import (
 	"crypto/ecdsa"
-	"encoding/binary"
-	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
+)
+
+const (
+	bufLimitRatio = 6000  // fixed bufLimit/MRR ratio
+	makeCostStats = false // make request cost statistics during operation
 )
 
 type LesServer struct {
 	lesCommons
 
 	fcManager    *flowcontrol.ClientManager // nil if our node is client only
+	fcCostList   RequestCostList
+	fcCostTable  requestCostTable
 	fcCostStats  *requestCostStats
 	defParams    flowcontrol.ServerParams
 	lesTopics    []discv5.Topic
 	privateKey   *ecdsa.PrivateKey
 	quitSync     chan struct{}
 	onlyAnnounce bool
+
+	totalBandwidth, minBandwidth, minBufLimit, bufLimitRatio uint64
+	bwcNormal, bwcBlockProcessing                            flowcontrol.PieceWiseLinear // bandwidth curve for normal operation and block processing mode
+	thcNormal, thcBlockProcessing                            int                         // serving thread count for normal operation and block processing mode
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -93,6 +102,41 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 
 	logger := log.New()
+	pm.server = srv
+
+	bwNormal := uint64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
+	srv.bwcNormal = flowcontrol.PieceWiseLinear{{0, 0} /*{bwNormal / 10, bwNormal}, */, {bwNormal, bwNormal}}
+	// limit the serving thread count to at least 4 times the targeted average
+	// bandwidth, allowing more paralellization in short-term load spikes but
+	// still limiting the total thread count at a reasonable level
+	srv.thcNormal = int(bwNormal * 4 / flowcontrol.FixedPointMultiplier)
+	if srv.thcNormal < 4 {
+		srv.thcNormal = 4
+	}
+	// while processing blocks use half of the normal target bandwidth
+	bwBlockProcessing := bwNormal / 2
+	srv.bwcBlockProcessing = flowcontrol.PieceWiseLinear{{0, 0} /*{bwBlockProcessing / 10, bwBlockProcessing}, */, {bwBlockProcessing, bwBlockProcessing}}
+	// limit the serving thread count just above the targeted average bandwidth,
+	// ensuring that block processing is minimally hindered
+	srv.thcBlockProcessing = int(bwBlockProcessing/flowcontrol.FixedPointMultiplier) + 1
+
+	pm.servingQueue.setThreads(srv.thcNormal)
+	srv.fcManager = flowcontrol.NewClientManager(srv.bwcNormal, &mclock.System{})
+
+	srv.totalBandwidth = bwNormal
+	if config.LightBandwidthIn > 0 {
+		pm.inSizeCostFactor = float64(srv.totalBandwidth) / float64(config.LightBandwidthIn)
+	}
+	if config.LightBandwidthOut > 0 {
+		pm.outSizeCostFactor = float64(srv.totalBandwidth) / float64(config.LightBandwidthOut)
+	}
+	srv.fcCostList, srv.minBufLimit = pm.benchmarkCosts(srv.thcNormal, pm.inSizeCostFactor, pm.outSizeCostFactor)
+	srv.fcCostTable = srv.fcCostList.decode()
+	if makeCostStats {
+		srv.fcCostStats = newCostStats(srv.fcCostTable)
+	}
+
+	srv.minBandwidth = (srv.minBufLimit-1)/bufLimitRatio + 1
 
 	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
 	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)
@@ -114,15 +158,42 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 
 	srv.chtIndexer.Start(eth.BlockChain())
-	pm.server = srv
-
-	srv.defParams = flowcontrol.ServerParams{
-		BufLimit:    300000000,
-		MinRecharge: 50000,
-	}
-	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
-	srv.fcCostStats = newCostStats(eth.ChainDb())
+	srv.blockProcLoop(pm)
 	return srv, nil
+}
+
+func (s *LesServer) APIs() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "les",
+			Version:   "1.0",
+			Service:   NewPrivateLesServerAPI(s),
+			Public:    false,
+		},
+	}
+}
+
+func (s *LesServer) blockProcLoop(pm *ProtocolManager) {
+	pm.wg.Add(1)
+	procFeedback := make(chan bool, 10)
+	pm.blockchain.(*core.BlockChain).SetProcFeedback(procFeedback)
+	go func() {
+		for {
+			select {
+			case processing := <-procFeedback:
+				if processing {
+					pm.servingQueue.setThreads(s.thcBlockProcessing)
+					s.fcManager.SetRechargeCurve(s.bwcBlockProcessing)
+				} else {
+					pm.servingQueue.setThreads(s.thcNormal)
+					s.fcManager.SetRechargeCurve(s.bwcNormal)
+				}
+			case <-pm.quitSync:
+				pm.wg.Done()
+				return
+			}
+		}
+	}()
 }
 
 func (s *LesServer) Protocols() []p2p.Protocol {
@@ -156,8 +227,9 @@ func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 func (s *LesServer) Stop() {
 	s.chtIndexer.Close()
 	// bloom trie indexer is closed by parent bloombits indexer
-	s.fcCostStats.store()
-	s.fcManager.Stop()
+	if s.fcCostStats != nil {
+		s.fcCostStats.printStats()
+	}
 	go func() {
 		<-s.protocolManager.noMorePeers
 	}()
@@ -183,156 +255,6 @@ func (list RequestCostList) decode() requestCostTable {
 		}
 	}
 	return table
-}
-
-type linReg struct {
-	sumX, sumY, sumXX, sumXY float64
-	cnt                      uint64
-}
-
-const linRegMaxCnt = 100000
-
-func (l *linReg) add(x, y float64) {
-	if l.cnt >= linRegMaxCnt {
-		sub := float64(l.cnt+1-linRegMaxCnt) / linRegMaxCnt
-		l.sumX -= l.sumX * sub
-		l.sumY -= l.sumY * sub
-		l.sumXX -= l.sumXX * sub
-		l.sumXY -= l.sumXY * sub
-		l.cnt = linRegMaxCnt - 1
-	}
-	l.cnt++
-	l.sumX += x
-	l.sumY += y
-	l.sumXX += x * x
-	l.sumXY += x * y
-}
-
-func (l *linReg) calc() (b, m float64) {
-	if l.cnt == 0 {
-		return 0, 0
-	}
-	cnt := float64(l.cnt)
-	d := cnt*l.sumXX - l.sumX*l.sumX
-	if d < 0.001 {
-		return l.sumY / cnt, 0
-	}
-	m = (cnt*l.sumXY - l.sumX*l.sumY) / d
-	b = (l.sumY / cnt) - (m * l.sumX / cnt)
-	return b, m
-}
-
-func (l *linReg) toBytes() []byte {
-	var arr [40]byte
-	binary.BigEndian.PutUint64(arr[0:8], math.Float64bits(l.sumX))
-	binary.BigEndian.PutUint64(arr[8:16], math.Float64bits(l.sumY))
-	binary.BigEndian.PutUint64(arr[16:24], math.Float64bits(l.sumXX))
-	binary.BigEndian.PutUint64(arr[24:32], math.Float64bits(l.sumXY))
-	binary.BigEndian.PutUint64(arr[32:40], l.cnt)
-	return arr[:]
-}
-
-func linRegFromBytes(data []byte) *linReg {
-	if len(data) != 40 {
-		return nil
-	}
-	l := &linReg{}
-	l.sumX = math.Float64frombits(binary.BigEndian.Uint64(data[0:8]))
-	l.sumY = math.Float64frombits(binary.BigEndian.Uint64(data[8:16]))
-	l.sumXX = math.Float64frombits(binary.BigEndian.Uint64(data[16:24]))
-	l.sumXY = math.Float64frombits(binary.BigEndian.Uint64(data[24:32]))
-	l.cnt = binary.BigEndian.Uint64(data[32:40])
-	return l
-}
-
-type requestCostStats struct {
-	lock  sync.RWMutex
-	db    ethdb.Database
-	stats map[uint64]*linReg
-}
-
-type requestCostStatsRlp []struct {
-	MsgCode uint64
-	Data    []byte
-}
-
-var rcStatsKey = []byte("_requestCostStats")
-
-func newCostStats(db ethdb.Database) *requestCostStats {
-	stats := make(map[uint64]*linReg)
-	for _, code := range reqList {
-		stats[code] = &linReg{cnt: 100}
-	}
-
-	if db != nil {
-		data, err := db.Get(rcStatsKey)
-		var statsRlp requestCostStatsRlp
-		if err == nil {
-			err = rlp.DecodeBytes(data, &statsRlp)
-		}
-		if err == nil {
-			for _, r := range statsRlp {
-				if stats[r.MsgCode] != nil {
-					if l := linRegFromBytes(r.Data); l != nil {
-						stats[r.MsgCode] = l
-					}
-				}
-			}
-		}
-	}
-
-	return &requestCostStats{
-		db:    db,
-		stats: stats,
-	}
-}
-
-func (s *requestCostStats) store() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	statsRlp := make(requestCostStatsRlp, len(reqList))
-	for i, code := range reqList {
-		statsRlp[i].MsgCode = code
-		statsRlp[i].Data = s.stats[code].toBytes()
-	}
-
-	if data, err := rlp.EncodeToBytes(statsRlp); err == nil {
-		s.db.Put(rcStatsKey, data)
-	}
-}
-
-func (s *requestCostStats) getCurrentList() RequestCostList {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	list := make(RequestCostList, len(reqList))
-	for idx, code := range reqList {
-		b, m := s.stats[code].calc()
-		if m < 0 {
-			b += m
-			m = 0
-		}
-		if b < 0 {
-			b = 0
-		}
-
-		list[idx].MsgCode = code
-		list[idx].BaseCost = uint64(b * 2)
-		list[idx].ReqCost = uint64(m * 2)
-	}
-	return list
-}
-
-func (s *requestCostStats) update(msgCode, reqCnt, cost uint64) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	c, ok := s.stats[msgCode]
-	if !ok || reqCnt == 0 {
-		return
-	}
-	c.add(float64(reqCnt), float64(cost))
 }
 
 func (pm *ProtocolManager) blockLoop() {
@@ -371,12 +293,7 @@ func (pm *ProtocolManager) blockLoop() {
 							switch p.announceType {
 
 							case announceTypeSimple:
-								select {
-								case p.announceChn <- announce:
-								default:
-									pm.removePeer(p.id)
-								}
-
+								p.queueSend(func() { p.SendAnnounce(announce) })
 							case announceTypeSigned:
 								if !signed {
 									signedAnnounce = announce
@@ -384,11 +301,7 @@ func (pm *ProtocolManager) blockLoop() {
 									signed = true
 								}
 
-								select {
-								case p.announceChn <- signedAnnounce:
-								default:
-									pm.removePeer(p.id)
-								}
+								p.queueSend(func() { p.SendAnnounce(signedAnnounce) })
 							}
 						}
 					}

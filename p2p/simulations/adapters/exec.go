@@ -97,7 +97,11 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Stack: node.DefaultConfig,
 		Node:  config,
 	}
-	conf.Stack.DataDir = filepath.Join(dir, "data")
+	if config.DataDir != "" {
+		conf.Stack.DataDir = config.DataDir
+	} else {
+		conf.Stack.DataDir = filepath.Join(dir, "data")
+	}
 	conf.Stack.WSHost = "127.0.0.1"
 	conf.Stack.WSPort = 0
 	conf.Stack.WSOrigins = []string{"*"}
@@ -177,7 +181,7 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	}
 
 	// start the one-shot server that waits for startup information
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	statusURL, statusC := n.waitForStartupJSON(ctx)
 

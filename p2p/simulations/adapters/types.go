@@ -90,6 +90,9 @@ type NodeConfig struct {
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
+	// Use an existing database instead of a temporary one if non-empty
+	DataDir string
+
 	// Services are the names of the services which should be run when
 	// starting the node (for SimNodes it should be the names of services
 	// contained in SimAdapter.services, for other nodes it should be
