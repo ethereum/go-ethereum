@@ -27,7 +27,7 @@ type updateHeader struct {
 	metaHash     []byte // SHA3 hash of the metadata chunk (less ownerAddr). Used to prove ownerhsip of the resource.
 }
 
-const metaHashLength = storage.KeyLength
+const metaHashLength = storage.AddressLength
 
 // updateLookupLength bytes
 // 1 byte flags (multihash bool for now)
@@ -76,7 +76,7 @@ func (h *updateHeader) binaryGet(serializedData []byte) error {
 	}
 	cursor := updateLookupLength
 	h.metaHash = make([]byte, metaHashLength)
-	copy(h.metaHash[:storage.KeyLength], serializedData[cursor:cursor+storage.KeyLength])
+	copy(h.metaHash[:storage.AddressLength], serializedData[cursor:cursor+storage.AddressLength])
 	cursor += metaHashLength
 
 	flags := serializedData[cursor]

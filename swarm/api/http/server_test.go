@@ -477,11 +477,11 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		var wait func(context.Context) error
 		ctx := context.TODO()
 		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted)
-		for j := i + 1; j < len(testmanifest); j++ {
-			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
-		}
 		if err != nil {
 			t.Fatal(err)
+		}
+		for j := i + 1; j < len(testmanifest); j++ {
+			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
 		}
 		err = wait(ctx)
 		if err != nil {

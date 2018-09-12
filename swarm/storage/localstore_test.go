@@ -17,11 +17,12 @@
 package storage
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 var (
@@ -50,29 +51,29 @@ func TestValidator(t *testing.T) {
 	chunks := GenerateRandomChunks(259, 2)
 	goodChunk := chunks[0]
 	badChunk := chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs := putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk in spite of no validation, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
+	if errs[1] != nil {
 		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
 
 	// add content address validator and check puts
 	// bad should fail, good should pass
 	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
-	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -81,16 +82,16 @@ func TestValidator(t *testing.T) {
 	var negV boolTestValidator
 	store.Validators = append(store.Validators, negV)
 
-	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -99,22 +100,47 @@ func TestValidator(t *testing.T) {
 	var posV boolTestValidator = true
 	store.Validators = append(store.Validators, posV)
 
-	chunks = GenerateRandomChunks(chunk.DefaultSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
-		t.Fatalf("expected no error on bad content address chunk with content address validator only, but got: %s", err)
+	if errs[1] != nil {
+		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
+
 }
 
 type boolTestValidator bool
 
 func (self boolTestValidator) Validate(addr Address, data []byte) bool {
 	return bool(self)
+}
+
+// putChunks adds chunks  to localstore
+// It waits for receive on the stored channel
+// It logs but does not fail on delivery error
+func putChunks(store *LocalStore, chunks ...Chunk) []error {
+	i := 0
+	f := func(n int64) Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
+	}
+	_, errs := put(store, len(chunks), f)
+	return errs
+}
+
+func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
+	for i := int64(0); i < int64(n); i++ {
+		chunk := f(ch.DefaultSize)
+		err := store.Put(context.TODO(), chunk)
+		errs = append(errs, err)
+		hs = append(hs, chunk.Address())
+	}
+	return hs, errs
 }
