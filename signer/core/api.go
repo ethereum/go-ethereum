@@ -81,10 +81,11 @@ type SignerUI interface {
 
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
-	chainID   *big.Int
-	am        *accounts.Manager
-	UI        SignerUI
-	validator *Validator
+	chainID    *big.Int
+	am         *accounts.Manager
+	UI         SignerUI
+	validator  *Validator
+	rejectMode bool
 }
 
 // Metadata about a request
@@ -200,7 +201,7 @@ var ErrRequestDenied = errors.New("Request denied")
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *AbiDb, lightKDF bool) *SignerAPI {
+func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *AbiDb, lightKDF bool, advancedMode bool) *SignerAPI {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -228,7 +229,10 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 			log.Debug("Trezor support enabled")
 		}
 	}
-	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb)}
+	if advancedMode {
+		log.Info("Clef is in advanced mode: will warn instead of reject")
+	}
+	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb), !advancedMode}
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain
@@ -266,15 +270,28 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
-	resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
-
-	if err != nil {
-		return accounts.Account{}, err
+	var (
+		resp NewAccountResponse
+		err  error
+	)
+	// Three retries to get a valid password
+	for i := 0; i < 3; i++ {
+		resp, err = api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
+		if err != nil {
+			return accounts.Account{}, err
+		}
+		if !resp.Approved {
+			return accounts.Account{}, ErrRequestDenied
+		}
+		if pwErr := ValidatePasswordFormat(resp.Password); pwErr != nil {
+			api.UI.ShowError(fmt.Sprintf("Account creation attempt #%d failed due to password requirements: %v", (i + 1), pwErr))
+		} else {
+			// No error
+			return be[0].(*keystore.KeyStore).NewAccount(resp.Password)
+		}
 	}
-	if !resp.Approved {
-		return accounts.Account{}, ErrRequestDenied
-	}
-	return be[0].(*keystore.KeyStore).NewAccount(resp.Password)
+	// Otherwise fail, with generic error message
+	return accounts.Account{}, errors.New("account creation failed")
 }
 
 // logDiff logs the difference between the incoming (original) transaction and the one returned from the signer.
@@ -306,10 +323,10 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		d0s := ""
 		d1s := ""
 		if d0 != nil {
-			d0s = common.ToHex(*d0)
+			d0s = hexutil.Encode(*d0)
 		}
 		if d1 != nil {
-			d1s = common.ToHex(*d1)
+			d1s = hexutil.Encode(*d1)
 		}
 		if d1s != d0s {
 			modified = true
@@ -332,6 +349,12 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	msgs, err := api.validator.ValidateTransaction(&args, methodSelector)
 	if err != nil {
 		return nil, err
+	}
+	// If we are in 'rejectMode', then reject rather than show the user warnings
+	if api.rejectMode {
+		if err := msgs.getWarnings(); err != nil {
+			return nil, err
+		}
 	}
 
 	req := SignTxRequest{

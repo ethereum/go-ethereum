@@ -220,10 +220,10 @@ func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccou
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- New Account request--------------\n")
-	fmt.Printf("A request has been made to create a new. \n")
-	fmt.Printf("Approving this operation means that a new Account is created,\n")
-	fmt.Printf("and the address show to the caller\n")
+	fmt.Printf("-------- New Account request--------------\n\n")
+	fmt.Printf("A request has been made to create a new account. \n")
+	fmt.Printf("Approving this operation means that a new account is created,\n")
+	fmt.Printf("and the address is returned to the external caller\n\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
 		return NewAccountResponse{false, ""}, nil
@@ -233,8 +233,9 @@ func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccou
 
 // ShowError displays error message to user
 func (ui *CommandlineUI) ShowError(message string) {
-
-	fmt.Printf("ERROR: %v\n", message)
+	fmt.Printf("-------- Error message from Clef-----------\n")
+	fmt.Println(message)
+	fmt.Printf("-------------------------------------------\n")
 }
 
 // ShowInfo displays info message to user

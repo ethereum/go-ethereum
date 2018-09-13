@@ -70,6 +70,10 @@ var (
 		Value: 4,
 		Usage: "log level to emit to the screen",
 	}
+	advancedMode = cli.BoolFlag{
+		Name:  "advanced",
+		Usage: "If enabled, issues warnings instead of rejections for suspicious requests. Default off",
+	}
 	keystoreFlag = cli.StringFlag{
 		Name:  "keystore",
 		Value: filepath.Join(node.DefaultDataDir(), "keystore"),
@@ -191,6 +195,7 @@ func init() {
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
+		advancedMode,
 	}
 	app.Action = signer
 	app.Commands = []cli.Command{initCommand, attestCommand, addCredentialCommand}
@@ -384,7 +389,8 @@ func signer(c *cli.Context) error {
 		c.String(keystoreFlag.Name),
 		c.Bool(utils.NoUSBFlag.Name),
 		ui, db,
-		c.Bool(utils.LightKDFFlag.Name))
+		c.Bool(utils.LightKDFFlag.Name),
+		c.Bool(advancedMode.Name))
 
 	api = apiImpl
 
