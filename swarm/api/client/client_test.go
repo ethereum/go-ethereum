@@ -25,6 +25,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -391,19 +393,12 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	s := common.FromHex(swarmHash)
 	mh := multihash.ToMultihash(s)
 
-	// our mutable resource "name"
-	resourceName := "foo.eth"
+	// our mutable resource topic
+	topic, _ := mru.NewTopic("foo.eth", nil)
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
-		Name:      resourceName,
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	createRequest.SetData(mh, true)
+	createRequest := mru.NewFirstRequest(topic)
+
+	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
@@ -414,12 +409,18 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "6d3bc4664c97d8b821cb74bcae43f592494fb46d2d9cd31e69f3c7c802bbbd8e"
+	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
 	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
-	reader, err := client.GetResource(correctManifestAddrHex)
+	// Check we get a not found error when trying to get the resource with a made-up manifest
+	_, err = client.GetResource(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	if err != ErrNoResourceUpdatesFound {
+		t.Fatalf("Expected to receive ErrNoResourceUpdatesFound error. Got: %s", err)
+	}
+
+	reader, err := client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -447,30 +448,22 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
 
 	// our mutable resource name
-	resourceName := "El Quijote"
+	topic, _ := mru.NewTopic("El Quijote", nil)
+	createRequest := mru.NewFirstRequest(topic)
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
-		Name:      resourceName,
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	createRequest.SetData(databytes, false)
+	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
 	resourceManifestHash, err := client.CreateResource(createRequest)
 
-	correctManifestAddrHex := "cc7904c17b49f9679e2d8006fe25e87e3f5c2072c2b49cab50f15e544471b30a"
+	correctManifestAddrHex := "fcb8e75f53e480e197c083ad1976d265674d0ce776f2bf359c09c413fb5230b8"
 	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
-	reader, err := client.GetResource(correctManifestAddrHex)
+	reader, err := client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -486,12 +479,12 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// define different data
 	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
 
-	updateRequest, err := client.GetResourceMetadata(correctManifestAddrHex)
+	updateRequest, err := client.GetResourceMetadata(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving update request template: %s", err)
 	}
 
-	updateRequest.SetData(databytes, false)
+	updateRequest.SetData(databytes)
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
@@ -500,7 +493,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Error updating resource: %s", err)
 	}
 
-	reader, err = client.GetResource(correctManifestAddrHex)
+	reader, err = client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -513,4 +506,24 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Expected: %v, got %v", databytes, gotData)
 	}
 
+	// now try retrieving resource without a manifest
+
+	view := &mru.View{
+		Topic: topic,
+		User:  signer.Address(),
+	}
+
+	lookupParams := mru.NewQueryLatest(view, lookup.NoClue)
+	reader, err = client.GetResource(lookupParams, "")
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
 }
