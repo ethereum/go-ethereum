@@ -1,5 +1,8 @@
 ### Changelog for external API
 
+#### 4.0.0
+
+* The external `account_Ecrecover`-method was removed. 
 
 #### 3.0.0
 
