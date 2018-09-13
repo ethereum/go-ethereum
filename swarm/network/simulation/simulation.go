@@ -94,7 +94,7 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 	}
 
 	s.Net = simulations.NewNetwork(
-		adapters.NewSimAdapter(adapterServices),
+		adapters.NewTCPAdapter(adapterServices),
 		&simulations.NetworkConfig{ID: "0"},
 	)
 
@@ -164,17 +164,6 @@ var maxParallelCleanups = 10
 func (s *Simulation) Close() {
 	close(s.done)
 
-	// Close all connections before calling the Network Shutdown.
-	// It is possible that p2p.Server.Stop will block if there are
-	// existing connections.
-	for _, c := range s.Net.Conns {
-		if c.Up {
-			s.Net.Disconnect(c.One, c.Other)
-		}
-	}
-	s.shutdownWG.Wait()
-	s.Net.Shutdown()
-
 	sem := make(chan struct{}, maxParallelCleanups)
 	s.mu.RLock()
 	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
@@ -206,6 +195,9 @@ func (s *Simulation) Close() {
 		}
 		close(s.runC)
 	}
+
+	s.shutdownWG.Wait()
+	s.Net.Shutdown()
 }
 
 // Done returns a channel that is closed when the simulation

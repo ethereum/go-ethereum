@@ -187,12 +187,12 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 		return err
 	}
 	if request.metaHash != nil && !bytes.Equal(request.metaHash, metaHash) ||
-		request.rootAddr != nil && !bytes.Equal(request.rootAddr, chunk.Addr) {
+		request.rootAddr != nil && !bytes.Equal(request.rootAddr, chunk.Address()) {
 		return NewError(ErrInvalidValue, "metaHash in UpdateRequest does not match actual metadata")
 	}
 
 	request.metaHash = metaHash
-	request.rootAddr = chunk.Addr
+	request.rootAddr = chunk.Address()
 
 	h.chunkStore.Put(ctx, chunk)
 	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
@@ -202,14 +202,14 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 		resourceUpdate: resourceUpdate{
 			updateHeader: updateHeader{
 				UpdateLookup: UpdateLookup{
-					rootAddr: chunk.Addr,
+					rootAddr: chunk.Address(),
 				},
 			},
 		},
 		ResourceMetadata: request.metadata,
 		updated:          time.Now(),
 	}
-	h.set(chunk.Addr, rsrc)
+	h.set(chunk.Address(), rsrc)
 
 	return nil
 }
@@ -348,7 +348,11 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
 		updateAddr := lp.UpdateAddr()
-		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultRetrieveTimeout)
+		defer cancel()
+
+		chunk, err := h.chunkStore.Get(ctx, updateAddr)
 		if err == nil {
 			if specificversion {
 				return h.updateIndex(rsrc, chunk)
@@ -358,7 +362,11 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			for {
 				newversion := lp.version + 1
 				updateAddr := lp.UpdateAddr()
-				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
+
+				ctx, cancel := context.WithTimeout(context.Background(), defaultRetrieveTimeout)
+				defer cancel()
+
+				newchunk, err := h.chunkStore.Get(ctx, updateAddr)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
 				}
@@ -380,7 +388,10 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 // Load retrieves the Mutable Resource metadata chunk stored at rootAddr
 // Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
 func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource, error) {
-	chunk, err := h.chunkStore.GetWithTimeout(ctx, rootAddr, defaultRetrieveTimeout)
+	//TODO: Maybe add timeout to context, defaultRetrieveTimeout?
+	ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
+	defer cancel()
+	chunk, err := h.chunkStore.Get(ctx, rootAddr)
 	if err != nil {
 		return nil, NewError(ErrNotFound, err.Error())
 	}
@@ -388,11 +399,11 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 	// create the index entry
 	rsrc := &resource{}
 
-	if err := rsrc.ResourceMetadata.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
+	if err := rsrc.ResourceMetadata.binaryGet(chunk.Data()); err != nil { // Will fail if this is not really a metadata chunk
 		return nil, err
 	}
 
-	rsrc.rootAddr, rsrc.metaHash = metadataHash(chunk.SData)
+	rsrc.rootAddr, rsrc.metaHash = metadataHash(chunk.Data())
 	if !bytes.Equal(rsrc.rootAddr, rootAddr) {
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
 	}
@@ -402,17 +413,17 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 }
 
 // update mutable resource index map with specified content
-func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, error) {
+func (h *Handler) updateIndex(rsrc *resource, chunk storage.Chunk) (*resource, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
-	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
+	if err := r.fromChunk(chunk.Address(), chunk.Data()); err != nil {
 		return nil, err
 	}
-	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Address(), "period", r.period, "version", r.version)
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Addr
+	rsrc.lastKey = chunk.Address()
 	rsrc.period = r.period
 	rsrc.version = r.version
 	rsrc.updated = time.Now()
@@ -420,8 +431,8 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.multihash = r.multihash
 	copy(rsrc.data, r.data)
 	rsrc.Reader = bytes.NewReader(rsrc.data)
-	log.Debug("resource synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
-	h.set(chunk.Addr, rsrc)
+	log.Debug("resource synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Address(), "period", rsrc.period, "version", rsrc.version)
+	h.set(chunk.Address(), rsrc)
 	return rsrc, nil
 }
 
@@ -457,7 +468,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
+	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.Data(), "multihash", r.multihash)
 
 	// update our resources map entry if the new update is older than the one we have, if we have it.
 	if rsrc != nil && (r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version)) {
@@ -475,7 +486,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 
 // Retrieves the resource index value for the given nameHash
 func (h *Handler) get(rootAddr storage.Address) *resource {
-	if len(rootAddr) < storage.KeyLength {
+	if len(rootAddr) < storage.AddressLength {
 		log.Warn("Handler.get with invalid rootAddr")
 		return nil
 	}
@@ -488,7 +499,7 @@ func (h *Handler) get(rootAddr storage.Address) *resource {
 
 // Sets the resource index value for the given nameHash
 func (h *Handler) set(rootAddr storage.Address, rsrc *resource) {
-	if len(rootAddr) < storage.KeyLength {
+	if len(rootAddr) < storage.AddressLength {
 		log.Warn("Handler.set with invalid rootAddr")
 		return
 	}

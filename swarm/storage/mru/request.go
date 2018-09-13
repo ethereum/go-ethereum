@@ -182,7 +182,7 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	var declaredRootAddr storage.Address
 	var declaredMetaHash []byte
 
-	declaredRootAddr, err = decodeHexSlice(j.RootAddr, storage.KeyLength, "rootAddr")
+	declaredRootAddr, err = decodeHexSlice(j.RootAddr, storage.AddressLength, "rootAddr")
 	if err != nil {
 		return err
 	}

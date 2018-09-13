@@ -142,7 +142,7 @@ func (r *ResourceMetadata) serializeAndHash() (rootAddr, metaHash []byte, chunkD
 }
 
 // creates a metadata chunk out of a resourceMetadata structure
-func (metadata *ResourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte, err error) {
+func (metadata *ResourceMetadata) newChunk() (chunk storage.Chunk, metaHash []byte, err error) {
 	// the metadata chunk contains a timestamp of when the resource starts to be valid
 	// and also how frequently it is expected to be updated
 	// from this we know at what time we should look for updates, and how often
@@ -157,9 +157,7 @@ func (metadata *ResourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []b
 	}
 
 	// make the chunk and send it to swarm
-	chunk = storage.NewChunk(rootAddr, nil)
-	chunk.SData = chunkData
-	chunk.Size = int64(len(chunkData))
+	chunk = storage.NewChunk(rootAddr, chunkData)
 
 	return chunk, metaHash, nil
 }

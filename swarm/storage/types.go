@@ -25,16 +25,16 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"sync"
+	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 const MaxPO = 16
-const KeyLength = 32
+const AddressLength = 32
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
@@ -116,7 +116,7 @@ func MakeHashFunc(hash string) SwarmHasher {
 		return func() SwarmHash {
 			hasher := sha3.NewKeccak256
 			hasherSize := hasher().Size()
-			segmentCount := chunk.DefaultSize / hasherSize
+			segmentCount := ch.DefaultSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
@@ -169,86 +169,86 @@ func (c AddressCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// Chunk also serves as a request object passed to ChunkStores
-// in case it is a retrieval request, Data is nil and Size is 0
-// Note that Size is not the size of the data chunk, which is Data.Size()
-// but the size of the subtree encoded in the chunk
-// 0 if request, to be supplied by the dpa
-type Chunk struct {
-	Addr  Address // always
-	SData []byte  // nil if request, to be supplied by dpa
-	Size  int64   // size of the data covered by the subtree encoded in this chunk
-	//Source   Peer           // peer
-	C          chan bool // to signal data delivery by the dpa
-	ReqC       chan bool // to signal the request done
-	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
-	dbStored   bool
-	dbStoredMu *sync.Mutex
-	errored    error // flag which is set when the chunk request has errored or timeouted
-	erroredMu  sync.Mutex
+// Chunk interface implemented by context.Contexts and data chunks
+type Chunk interface {
+	Address() Address
+	Payload() []byte
+	SpanBytes() []byte
+	Span() int64
+	Data() []byte
 }
 
-func (c *Chunk) SetErrored(err error) {
-	c.erroredMu.Lock()
-	defer c.erroredMu.Unlock()
-
-	c.errored = err
+type chunk struct {
+	addr  Address
+	sdata []byte
+	span  int64
 }
 
-func (c *Chunk) GetErrored() error {
-	c.erroredMu.Lock()
-	defer c.erroredMu.Unlock()
-
-	return c.errored
-}
-
-func NewChunk(addr Address, reqC chan bool) *Chunk {
-	return &Chunk{
-		Addr:       addr,
-		ReqC:       reqC,
-		dbStoredC:  make(chan bool),
-		dbStoredMu: &sync.Mutex{},
+func NewChunk(addr Address, data []byte) *chunk {
+	return &chunk{
+		addr:  addr,
+		sdata: data,
+		span:  -1,
 	}
 }
 
-func (c *Chunk) markAsStored() {
-	c.dbStoredMu.Lock()
-	defer c.dbStoredMu.Unlock()
+func (c *chunk) Address() Address {
+	return c.addr
+}
 
-	if !c.dbStored {
-		close(c.dbStoredC)
-		c.dbStored = true
+func (c *chunk) SpanBytes() []byte {
+	return c.sdata[:8]
+}
+
+func (c *chunk) Span() int64 {
+	if c.span == -1 {
+		c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
 	}
+	return c.span
 }
 
-func (c *Chunk) WaitToStore() error {
-	<-c.dbStoredC
-	return c.GetErrored()
+func (c *chunk) Data() []byte {
+	return c.sdata
 }
 
-func GenerateRandomChunk(dataSize int64) *Chunk {
-	return GenerateRandomChunks(dataSize, 1)[0]
+func (c *chunk) Payload() []byte {
+	return c.sdata[8:]
 }
 
-func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
-	var i int
+// String() for pretty printing
+func (self *chunk) String() string {
+	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
+}
+
+func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()
-	if dataSize > chunk.DefaultSize {
-		dataSize = chunk.DefaultSize
-	}
+	sdata := make([]byte, dataSize+8)
+	rand.Read(sdata[8:])
+	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
+	hasher.ResetWithLength(sdata[:8])
+	hasher.Write(sdata[8:])
+	return NewChunk(hasher.Sum(nil), sdata)
+}
 
-	for i = 0; i < count; i++ {
-		chunks = append(chunks, NewChunk(nil, nil))
-		chunks[i].SData = make([]byte, dataSize+8)
-		rand.Read(chunks[i].SData)
-		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
-		hasher.ResetWithLength(chunks[i].SData[:8])
-		hasher.Write(chunks[i].SData[8:])
-		chunks[i].Addr = make([]byte, 32)
-		copy(chunks[i].Addr, hasher.Sum(nil))
+func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
+	if dataSize > ch.DefaultSize {
+		dataSize = ch.DefaultSize
 	}
-
+	for i := 0; i < count; i++ {
+		ch := GenerateRandomChunk(ch.DefaultSize)
+		chunks = append(chunks, ch)
+	}
 	return chunks
+}
+
+func GenerateRandomData(l int) (r io.Reader, slice []byte) {
+	slice, err := ioutil.ReadAll(io.LimitReader(rand.Reader, int64(l)))
+	if err != nil {
+		panic("rand error")
+	}
+	// log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return r, slice
 }
 
 // Size, Seek, Read, ReadAt
@@ -273,18 +273,17 @@ func (r *LazyTestSectionReader) Context() context.Context {
 }
 
 type StoreParams struct {
-	Hash                       SwarmHasher `toml:"-"`
-	DbCapacity                 uint64
-	CacheCapacity              uint
-	ChunkRequestsCacheCapacity uint
-	BaseKey                    []byte
+	Hash          SwarmHasher `toml:"-"`
+	DbCapacity    uint64
+	CacheCapacity uint
+	BaseKey       []byte
 }
 
 func NewDefaultStoreParams() *StoreParams {
-	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, defaultChunkRequestsCacheCapacity, nil, nil)
+	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, nil, nil)
 }
 
-func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
+func NewStoreParams(ldbCap uint64, cacheCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
 		basekey = make([]byte, 32)
 	}
@@ -292,11 +291,10 @@ func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHa
 		hash = MakeHashFunc(DefaultHash)
 	}
 	return &StoreParams{
-		Hash:                       hash,
-		DbCapacity:                 ldbCap,
-		CacheCapacity:              cacheCap,
-		ChunkRequestsCacheCapacity: requestsCap,
-		BaseKey:                    basekey,
+		Hash:          hash,
+		DbCapacity:    ldbCap,
+		CacheCapacity: cacheCap,
+		BaseKey:       basekey,
 	}
 }
 
@@ -321,8 +319,8 @@ type Getter interface {
 }
 
 // NOTE: this returns invalid data if chunk is encrypted
-func (c ChunkData) Size() int64 {
-	return int64(binary.LittleEndian.Uint64(c[:8]))
+func (c ChunkData) Size() uint64 {
+	return binary.LittleEndian.Uint64(c[:8])
 }
 
 func (c ChunkData) Data() []byte {
@@ -348,7 +346,8 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
-	if l := len(data); l < 9 || l > chunk.DefaultSize+8 {
+	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
+		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
 	}
 
@@ -358,4 +357,38 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 	hash := hasher.Sum(nil)
 
 	return bytes.Equal(hash, addr[:])
+}
+
+type ChunkStore interface {
+	Put(ctx context.Context, ch Chunk) (err error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
+	Close()
+}
+
+// SyncChunkStore is a ChunkStore which supports syncing
+type SyncChunkStore interface {
+	ChunkStore
+	BinIndex(po uint8) uint64
+	Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
+	FetchFunc(ctx context.Context, ref Address) func(context.Context) error
+}
+
+// FakeChunkStore doesn't store anything, just implements the ChunkStore interface
+// It can be used to inject into a hasherStore if you don't want to actually store data just do the
+// hashing
+type FakeChunkStore struct {
+}
+
+// Put doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
+	return nil
+}
+
+// Gut doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+	panic("FakeChunkStore doesn't support Get")
+}
+
+// Close doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Close() {
 }
