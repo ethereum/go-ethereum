@@ -83,8 +83,9 @@ func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
 
 // PeerBundle contains information about the peers pertaining to an IP address.
 type PeerBundle struct {
-	Location *GeoLocation     `json:"location,omitempty"` // geographical information based on IP
-	Peers    map[string]*Peer `json:"peers,omitempty"`    // the peers' node id is used as key
+	Location    *GeoLocation     `json:"location,omitempty"` // geographical information based on IP
+	Peers       map[string]*Peer `json:"peers,omitempty"`    // the peers' node id is used as key
+	FailedPeers []*Peer          `json:"failedPeers,omitempty"`
 }
 
 // GeoLocation contains geographical information.
