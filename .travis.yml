@@ -53,46 +53,50 @@ jobs:
         branch: master
         tags: true
 
-  - stage: Build and push tomochain image (untagged)
+  - stage: Build and push latest images
     services:
       - docker
     install: skip
     before_script:
       - docker build -t tomochain/tomochain .
-      - docker run tomochain/tomochain
+      - docker build -t tomochain/node -f Dockerfile.node .
     script:
       - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
       - docker tag tomochain/tomochain tomochain/tomochain:latest
       - docker push tomochain/tomochain:latest
       - docker tag tomochain/tomochain tomochain/tomochain:$TRAVIS_BUILD_ID
       - docker push tomochain/tomochain:$TRAVIS_BUILD_ID
-    after_success:
-      - curl -X POST $INFRA_IMAGE_REBUILD_HOOK
+      - docker tag tomochain/node tomochain/node:latest
+      - docker push tomochain/node:latest
+      - docker tag tomochain/node tomochain/node:$TRAVIS_BUILD_ID
+      - docker push tomochain/node:$TRAVIS_BUILD_ID
 
-  - stage: Build and push tomochain image (tagged)
+  - stage: Build and push tagged images
     services:
       - docker
     install: skip
     before_script:
       - docker build -t tomochain/tomochain .
-      - docker run tomochain/tomochain
+      - docker build -t tomochain/tomochain -f Dockerfile.node .
     script:
       - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
       - docker tag tomochain/tomochain tomochain/tomochain:latest
       - docker push tomochain/tomochain:latest
       - docker tag tomochain/tomochain tomochain/tomochain:$TRAVIS_TAG
       - docker push tomochain/tomochain:$TRAVIS_TAG
-    after_success:
-      - curl -X POST $INFRA_IMAGE_REBUILD_HOOK
+      - docker tag tomochain/tomochain tomochain/node:latest
+      - docker push tomochain/node:latest
+      - docker tag tomochain/node tomochain/node:$TRAVIS_TAG
+      - docker push tomochain/node:$TRAVIS_TAG
 
 stages:
   - name: Lint
   - name: Build and test
   - name: Github release
     if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = tomochain/tomochain
-  - name: Build and push tomochain image (untagged)
+  - name: Build and push latest images
     if: type != pull_request AND branch = master AND tag IS blank AND repo = tomochain/tomochain
-  - name: Build and push tomochain image (tagged)
+  - name: Build and push tagged images
     if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = tomochain/tomochain
 
 notifications:
