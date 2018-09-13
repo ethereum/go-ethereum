@@ -831,7 +831,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		header.Coinbase = w.coinbase
 	}
 	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
+		if w.isRunning() {
+			log.Error("Failed to prepare header for mining", "err", err)
+		} else {
+			log.Trace("Failed to prepare header for mining", "err", err)
+		}
+		
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
