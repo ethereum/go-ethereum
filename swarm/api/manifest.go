@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -46,14 +48,15 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash        string       `json:"hash,omitempty"`
-	Path        string       `json:"path,omitempty"`
-	ContentType string       `json:"contentType,omitempty"`
-	Mode        int64        `json:"mode,omitempty"`
-	Size        int64        `json:"size,omitempty"`
-	ModTime     time.Time    `json:"mod_time,omitempty"`
-	Status      int          `json:"status,omitempty"`
-	Access      *AccessEntry `json:"access,omitempty"`
+	Hash         string       `json:"hash,omitempty"`
+	Path         string       `json:"path,omitempty"`
+	ContentType  string       `json:"contentType,omitempty"`
+	Mode         int64        `json:"mode,omitempty"`
+	Size         int64        `json:"size,omitempty"`
+	ModTime      time.Time    `json:"mod_time,omitempty"`
+	Status       int          `json:"status,omitempty"`
+	Access       *AccessEntry `json:"access,omitempty"`
+	ResourceView *mru.View    `json:"resourceView,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -79,11 +82,11 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(ctx context.Context, resourceAddr string) (storage.Address, error) {
+func (a *API) NewResourceManifest(ctx context.Context, view *mru.View) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
-		Hash:        resourceAddr,
-		ContentType: ResourceContentType,
+		ResourceView: view,
+		ContentType:  ResourceContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)
 	data, err := json.Marshal(&manifest)
