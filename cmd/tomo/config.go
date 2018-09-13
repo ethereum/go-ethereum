@@ -151,7 +151,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
-	// read passwords from enviroment
+	// read passwords from environment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
 		if trimmed := strings.TrimSpace(env); trimmed != "" {

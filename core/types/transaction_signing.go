@@ -258,3 +258,14 @@ func deriveChainId(v *big.Int) *big.Int {
 	v = new(big.Int).Sub(v, big.NewInt(35))
 	return v.Div(v, big.NewInt(2))
 }
+
+func CacheSigner(signer Signer, tx *Transaction) {
+	if tx == nil {
+		return
+	}
+	addr, err := signer.Sender(tx)
+	if err != nil {
+		return
+	}
+	tx.from.Store(sigCache{signer: signer, from: addr})
+}
