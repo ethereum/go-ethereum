@@ -343,8 +343,6 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 func DefaultGoerliGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.GoerliChainConfig,
-		Timestamp:  0,
-		ExtraData:  hexutil.MustDecode("0x"),
 		GasLimit:   6000000,
 		Difficulty: big.NewInt(131072),
 		Alloc:      decodePrealloc(goerliAllocData),
