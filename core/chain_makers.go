@@ -128,6 +128,11 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	b.uncles = append(b.uncles, h)
 }
 
+// SetDifficulty sets difficulty of the block
+func (b *BlockGen) SetDifficulty(d *big.Int) {
+	b.header.Difficulty = d
+}
+
 // PrevBlock returns a previously generated block by number. It panics if
 // num is greater or equal to the number of the block being generated.
 // For index -1, PrevBlock returns the parent block given to GenerateChain.
@@ -165,6 +170,9 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	return GenerateChainSeal(config, parent, engine, db, n, gen, nil)
+}
+func GenerateChainSeal(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen), sealer func(block *types.Block) *types.Header) ([]*types.Block, []types.Receipts) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
@@ -205,6 +213,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
+			if sealer != nil {
+				header := sealer(block)
+				return types.NewBlock(header, b.txs, b.uncles, b.receipts), nil
+			}
+
 			return block, b.receipts
 		}
 		return nil, nil

@@ -20,6 +20,7 @@ package clique
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -166,19 +167,12 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
+func RecoverSealer(header *types.Header) (common.Address, error) {
 	// Retrieve the signature from the header extra-data
 	if len(header.Extra) < extraSeal {
 		return common.Address{}, errMissingSignature
 	}
 	signature := header.Extra[len(header.Extra)-extraSeal:]
-
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
 	if err != nil {
@@ -186,7 +180,20 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 	}
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+	return signer, nil
+}
 
+// ecrecover extracts the Ethereum account address from a signed header.
+func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+	// If the signature's already cached, return that
+	hash := header.Hash()
+	if address, known := sigcache.Get(hash); known {
+		return address.(common.Address), nil
+	}
+	signer, err := RecoverSealer(header)
+	if err != nil {
+		return common.Address{}, err
+	}
 	sigcache.Add(hash, signer)
 	return signer, nil
 }
@@ -341,7 +348,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
-		return consensus.ErrUnknownAncestor
+		return fmt.Errorf("unknown ancestor [0x%x] for block %d", header.ParentHash, number)
 	}
 	if parent.Time.Uint64()+c.config.Period > header.Time.Uint64() {
 		return ErrInvalidTimestamp
@@ -411,14 +418,14 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 			// If we have explicit parents, pick from there (enforced)
 			header = parents[len(parents)-1]
 			if header.Hash() != hash || header.Number.Uint64() != number {
-				return nil, consensus.ErrUnknownAncestor
+				return nil, fmt.Errorf("unknown ancestor [0x%x] for block %d", header.ParentHash, number)
 			}
 			parents = parents[:len(parents)-1]
 		} else {
 			// No explicit parents (or no more left), reach out to the database
 			header = chain.GetHeader(hash, number)
 			if header == nil {
-				return nil, consensus.ErrUnknownAncestor
+				return nil, fmt.Errorf("unknown ancestor [0x%x] for block %d", hash, number)
 			}
 		}
 		headers = append(headers, header)
@@ -481,23 +488,23 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 		return err
 	}
 	if _, ok := snap.Signers[signer]; !ok {
-		return errUnauthorized
+		return fmt.Errorf("unauthorised[2]: signer 0x%x is not one of the signers", signer)
 	}
 	for seen, recent := range snap.Recents {
 		if recent == signer {
 			// Signer is among recents, only fail if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
-				return errUnauthorized
+				return fmt.Errorf("unauthorised: signer 0x%x recently signed", signer)
 			}
 		}
 	}
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	inturn := snap.inturn(header.Number.Uint64(), signer)
 	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-		return errInvalidDifficulty
+		return fmt.Errorf("Invalid difficulty [block %d], was %d expected %d (in-turn)", header.Number, header.Difficulty, diffInTurn)
 	}
 	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
-		return errInvalidDifficulty
+		return fmt.Errorf("Invalid difficulty [block %d], was %d expected %d (out-of-turn)", header.Number, header.Difficulty, diffNoTurn)
 	}
 	return nil
 }
@@ -558,7 +565,7 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	// Ensure the timestamp has the correct delay
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
-		return consensus.ErrUnknownAncestor
+		return fmt.Errorf("unknown ancestor [0x%x] for block %d", header.ParentHash, number)
 	}
 	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(c.config.Period))
 	if header.Time.Int64() < time.Now().Unix() {
@@ -613,7 +620,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, results c
 		return err
 	}
 	if _, authorized := snap.Signers[signer]; !authorized {
-		return errUnauthorized
+		return fmt.Errorf("unauthorised[1]: signer 0x%x is not one of the signers", signer)
 	}
 	// If we're amongst the recent signers, wait for the next block
 	for seen, recent := range snap.Recents {
