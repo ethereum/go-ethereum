@@ -445,7 +445,7 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 func (c *ChainIndexer) loadValidSections() {
 	data, _ := c.indexDb.Get([]byte("count"))
 	if len(data) == 8 {
-		c.storedSections = binary.BigEndian.Uint64(data[:])
+		c.storedSections = binary.BigEndian.Uint64(data)
 	}
 }
 
