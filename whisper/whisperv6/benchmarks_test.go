@@ -19,6 +19,7 @@ package whisperv6
 import (
 	"crypto/sha256"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/pbkdf2"
@@ -40,7 +41,7 @@ func BenchmarkEncryptionSym(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		msg, _ := NewSentMessage(params)
-		_, err := msg.Wrap(params)
+		_, err := msg.Wrap(params, time.Now())
 		if err != nil {
 			b.Errorf("failed Wrap with seed %d: %s.", seed, err)
 			b.Errorf("i = %d, len(msg.Raw) = %d, params.Payload = %d.", i, len(msg.Raw), len(params.Payload))
@@ -65,7 +66,7 @@ func BenchmarkEncryptionAsym(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		msg, _ := NewSentMessage(params)
-		_, err := msg.Wrap(params)
+		_, err := msg.Wrap(params, time.Now())
 		if err != nil {
 			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}
@@ -80,7 +81,7 @@ func BenchmarkDecryptionSymValid(b *testing.B) {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	msg, _ := NewSentMessage(params)
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -102,7 +103,7 @@ func BenchmarkDecryptionSymInvalid(b *testing.B) {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	msg, _ := NewSentMessage(params)
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -131,7 +132,7 @@ func BenchmarkDecryptionAsymValid(b *testing.B) {
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
 	msg, _ := NewSentMessage(params)
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -158,7 +159,7 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
 	msg, _ := NewSentMessage(params)
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -200,7 +201,7 @@ func BenchmarkPoW(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		increment(params.Payload)
 		msg, _ := NewSentMessage(params)
-		_, err := msg.Wrap(params)
+		_, err := msg.Wrap(params, time.Now())
 		if err != nil {
 			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}

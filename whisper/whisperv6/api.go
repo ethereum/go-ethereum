@@ -284,7 +284,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 	}
 
 	var result []byte
-	env, err := whisperMsg.Wrap(params)
+	env, err := whisperMsg.Wrap(params, api.w.GetCurrentTime())
 	if err != nil {
 		return nil, err
 	}

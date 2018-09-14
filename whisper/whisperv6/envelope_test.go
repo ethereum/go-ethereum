@@ -21,6 +21,7 @@ package whisperv6
 import (
 	mrand "math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -50,7 +51,7 @@ func TestEnvelopeOpenAcceptsOnlyOneKeyTypeInFilter(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 
-	e, err := msg.Wrap(&params)
+	e, err := msg.Wrap(&params, time.Now())
 	if err != nil {
 		t.Fatalf("Failed to Wrap the message in an envelope with seed %d: %s", seed, err)
 	}

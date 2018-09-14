@@ -22,6 +22,7 @@ import (
 	"crypto/cipher"
 	mrand "math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -77,7 +78,7 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -138,7 +139,7 @@ func TestMessageWrap(t *testing.T) {
 	params.TTL = 1
 	params.WorkTime = 12
 	params.PoW = target
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -156,7 +157,7 @@ func TestMessageWrap(t *testing.T) {
 	params.TTL = 1000000
 	params.WorkTime = 1
 	params.PoW = 10000000.0
-	_, err = msg2.Wrap(params)
+	_, err = msg2.Wrap(params, time.Now())
 	if err == nil {
 		t.Fatalf("unexpectedly reached the PoW target with seed %d.", seed)
 	}
@@ -178,7 +179,7 @@ func TestMessageSeal(t *testing.T) {
 	}
 	params.TTL = 1
 
-	env := NewEnvelope(params.TTL, params.Topic, msg)
+	env := NewEnvelope(params.TTL, params.Topic, msg, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -238,7 +239,7 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -294,7 +295,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.KeySym = make([]byte, aesKeyLength)
-	_, err = msg.Wrap(params)
+	_, err = msg.Wrap(params, time.Now())
 	if err == nil {
 		t.Fatalf("wrapped with zero key, seed: %d.", seed)
 	}
@@ -308,7 +309,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.KeySym = make([]byte, 0)
-	_, err = msg.Wrap(params)
+	_, err = msg.Wrap(params, time.Now())
 	if err == nil {
 		t.Fatalf("wrapped with empty key, seed: %d.", seed)
 	}
@@ -322,7 +323,7 @@ func TestEncryptWithZeroKey(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.KeySym = nil
-	_, err = msg.Wrap(params)
+	_, err = msg.Wrap(params, time.Now())
 	if err == nil {
 		t.Fatalf("wrapped with nil key, seed: %d.", seed)
 	}
@@ -339,7 +340,7 @@ func TestRlpEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("wrapped with zero key, seed: %d.", seed)
 	}
@@ -383,7 +384,7 @@ func singlePaddingTest(t *testing.T, padSize int) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed to wrap, seed: %d and sz=%d.", seed, padSize)
 	}

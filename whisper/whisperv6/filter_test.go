@@ -203,7 +203,7 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := sentMessage.Wrap(params)
+	env, err := sentMessage.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -309,7 +309,7 @@ func TestMatchEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -322,7 +322,7 @@ func TestMatchEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err = msg.Wrap(params)
+	env, err = msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap() with seed %d: %s.", seed, err)
 	}
@@ -367,7 +367,7 @@ func TestMatchEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err = msg.Wrap(params)
+	env, err = msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap() with seed %d: %s.", seed, err)
 	}
@@ -449,7 +449,7 @@ func TestMatchMessageSym(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := sentMessage.Wrap(params)
+	env, err := sentMessage.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -543,7 +543,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := sentMessage.Wrap(params)
+	env, err := sentMessage.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -628,7 +628,7 @@ func generateCompatibeEnvelope(t *testing.T, f *Filter) *Envelope {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := sentMessage.Wrap(params)
+	env, err := sentMessage.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		return nil
@@ -804,7 +804,7 @@ func TestVariableTopics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}

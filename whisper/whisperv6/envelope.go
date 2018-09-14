@@ -62,9 +62,9 @@ func (e *Envelope) rlpWithoutNonce() []byte {
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
+func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage, now time.Time) *Envelope {
 	env := Envelope{
-		Expiry: uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
+		Expiry: uint32(now.Add(time.Second * time.Duration(ttl)).Unix()),
 		TTL:    ttl,
 		Topic:  topic,
 		Data:   msg.Raw,

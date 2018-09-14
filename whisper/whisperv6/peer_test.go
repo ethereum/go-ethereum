@@ -381,7 +381,7 @@ func sendMsg(t *testing.T, expected bool, id int) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	envelope, err := msg.Wrap(&opt)
+	envelope, err := msg.Wrap(&opt, time.Now())
 	if err != nil {
 		t.Fatalf("failed to seal message: %s", err)
 	}
@@ -405,7 +405,7 @@ func TestPeerBasic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d.", seed)
 	}

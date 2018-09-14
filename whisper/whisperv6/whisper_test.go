@@ -477,7 +477,7 @@ func TestExpiry(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 		}
-		env, err := msg.Wrap(params)
+		env, err := msg.Wrap(params, time.Now())
 		if err != nil {
 			t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}
@@ -544,7 +544,7 @@ func TestCustomization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -565,7 +565,7 @@ func TestCustomization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err = msg.Wrap(params)
+	env, err = msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -649,7 +649,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -727,7 +727,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -793,7 +793,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-	env, err := msg.Wrap(params)
+	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}

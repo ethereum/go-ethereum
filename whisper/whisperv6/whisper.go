@@ -59,6 +59,9 @@ const (
 	restrictConnectionBetweenLightClientsIdx        // Restrict connection between two light clients
 )
 
+// timeSource is a functon that returns time.
+type timeSource func() time.Time
+
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
@@ -87,6 +90,8 @@ type Whisper struct {
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
+	timeSource timeSource // source of time for internal whisper usage. time.Now by default.
+
 	mailServer MailServer // MailServer interface
 }
 
@@ -106,6 +111,7 @@ func New(cfg *Config) *Whisper {
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
 		quit:          make(chan struct{}),
 		syncAllowance: DefaultSyncAllowance,
+		timeSource:    time.Now,
 	}
 
 	whisper.filters = NewFilters(whisper)
@@ -210,6 +216,16 @@ func (whisper *Whisper) APIs() []rpc.API {
 // MailServer will process all the incoming messages with p2pRequestCode.
 func (whisper *Whisper) RegisterServer(server MailServer) {
 	whisper.mailServer = server
+}
+
+// UseTimeSource assigns provided time source as a default for a whisper.
+func (whisper *Whisper) UseTimeSource(source timeSource) {
+	whisper.timeSource = source
+}
+
+// GetCurrentTime returns time according to a source used by whisper.
+func (whisper *Whisper) GetCurrentTime() time.Time {
+	return whisper.timeSource()
 }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.
@@ -773,7 +789,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // appropriate time-stamp. In case of error, connection should be dropped.
 // param isP2P indicates whether the message is peer-to-peer (should not be forwarded).
 func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
-	now := uint32(time.Now().Unix())
+	now := uint32(whisper.GetCurrentTime().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
 	if sent > now {
@@ -916,7 +932,7 @@ func (whisper *Whisper) expire() {
 	whisper.statsMu.Lock()
 	defer whisper.statsMu.Unlock()
 	whisper.stats.reset()
-	now := uint32(time.Now().Unix())
+	now := uint32(whisper.GetCurrentTime().Unix())
 	for expiry, hashSet := range whisper.expirations {
 		if expiry < now {
 			// Dump all expired messages and remove timestamp
