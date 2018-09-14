@@ -158,12 +158,15 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	if counter == nil {
 		counter = new(countingWriter)
 	}
-	h := LazyHandler(FuncHandler(func(r *Record) error {
+	h := FuncHandler(func(r *Record) error {
 		_, err := counter.Write(formatter.Format(r))
 		return err
-	}))
+	})
 
 	return FuncHandler(func(r *Record) error {
+		// lazy evaluate, this needs no lock.
+		lazyEvaluateRecord(r)
+
 		counter.Lock()
 		defer counter.Unlock()
 		if counter.count > limit {
@@ -389,31 +392,34 @@ func BufferedHandler(bufSize int, h Handler) Handler {
 // it if you write your own Handler.
 func LazyHandler(h Handler) Handler {
 	return FuncHandler(func(r *Record) error {
-		// go through the values (odd indices) and reassign
-		// the values of any lazy fn to the result of its execution
-		hadErr := false
-		for i := 1; i < len(r.Ctx); i += 2 {
-			lz, ok := r.Ctx[i].(Lazy)
-			if ok {
-				v, err := evaluateLazy(lz)
-				if err != nil {
-					hadErr = true
-					r.Ctx[i] = err
-				} else {
-					if cs, ok := v.(stack.CallStack); ok {
-						v = cs.TrimBelow(r.Call).TrimRuntime()
-					}
-					r.Ctx[i] = v
-				}
-			}
-		}
-
-		if hadErr {
-			r.Ctx = append(r.Ctx, errorKey, "bad lazy")
-		}
-
+		lazyEvaluateRecord(r)
 		return h.Log(r)
 	})
+}
+
+func lazyEvaluateRecord(r *Record) {
+	// go through the values (odd indices) and reassign
+	// the values of any lazy fn to the result of its execution
+	hadErr := false
+	for i := 1; i < len(r.Ctx); i += 2 {
+		lz, ok := r.Ctx[i].(Lazy)
+		if ok {
+			v, err := evaluateLazy(lz)
+			if err != nil {
+				hadErr = true
+				r.Ctx[i] = err
+			} else {
+				if cs, ok := v.(stack.CallStack); ok {
+					v = cs.TrimBelow(r.Call).TrimRuntime()
+				}
+				r.Ctx[i] = v
+			}
+		}
+	}
+
+	if hadErr {
+		r.Ctx = append(r.Ctx, errorKey, "bad lazy")
+	}
 }
 
 func evaluateLazy(lz Lazy) (interface{}, error) {
