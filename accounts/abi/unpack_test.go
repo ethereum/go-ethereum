@@ -118,6 +118,11 @@ var unpackTests = []unpackTest{
 		want: big.NewInt(1),
 	},
 	{
+		def:  `[{"type": "int256"}]`,
+		enc:  "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		want: big.NewInt(-1),
+	},
+	{
 		def:  `[{"type": "address"}]`,
 		enc:  "0000000000000000000000000100000000000000000000000000000000000000",
 		want: common.Address{1},

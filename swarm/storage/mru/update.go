@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 )
@@ -42,7 +43,7 @@ const chunkPrefixLength = 2 + 2
 //
 // Minimum size is Header + 1 (minimum data length, enforced)
 const minimumUpdateDataLength = updateHeaderLength + 1
-const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - chunkPrefixLength
+const maxUpdateDataLength = chunk.DefaultSize - signatureLength - updateHeaderLength - chunkPrefixLength
 
 // binaryPut serializes the resource update information into the given slice
 func (r *resourceUpdate) binaryPut(serializedData []byte) error {

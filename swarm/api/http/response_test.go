@@ -29,7 +29,7 @@ import (
 )
 
 func TestError(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -55,7 +55,7 @@ func TestError(t *testing.T) {
 }
 
 func Test404Page(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -81,7 +81,7 @@ func Test404Page(t *testing.T) {
 }
 
 func Test500Page(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -106,7 +106,7 @@ func Test500Page(t *testing.T) {
 	}
 }
 func Test500PageWith0xHashPrefix(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	var resp *http.Response
@@ -136,7 +136,7 @@ func Test500PageWith0xHashPrefix(t *testing.T) {
 }
 
 func TestJsonResponse(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	var resp *http.Response

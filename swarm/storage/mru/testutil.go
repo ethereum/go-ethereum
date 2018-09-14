@@ -38,10 +38,7 @@ func (t *TestHandler) Close() {
 // NewTestHandler creates Handler object to be used for testing purposes.
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
-	rh, err := NewHandler(params)
-	if err != nil {
-		return nil, fmt.Errorf("resource handler create fail: %v", err)
-	}
+	rh := NewHandler(params)
 	localstoreparams := storage.NewDefaultLocalStoreParams()
 	localstoreparams.Init(path)
 	localStore, err := storage.NewLocalStore(localstoreparams, nil)

@@ -48,6 +48,7 @@ var (
 // interface. It only does header validation during chain insertion.
 type LightChain struct {
 	hc            *core.HeaderChain
+	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
 	odr           OdrBackend
 	chainFeed     event.Feed
@@ -81,13 +82,14 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	blockCache, _ := lru.New(blockCacheLimit)
 
 	bc := &LightChain{
-		chainDb:      odr.Database(),
-		odr:          odr,
-		quit:         make(chan struct{}),
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
-		blockCache:   blockCache,
-		engine:       engine,
+		chainDb:       odr.Database(),
+		indexerConfig: odr.IndexerConfig(),
+		odr:           odr,
+		quit:          make(chan struct{}),
+		bodyCache:     bodyCache,
+		bodyRLPCache:  bodyRLPCache,
+		blockCache:    blockCache,
+		engine:        engine,
 	}
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
@@ -116,19 +118,19 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 }
 
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
+func (self *LightChain) addTrustedCheckpoint(cp TrustedCheckpoint) {
 	if self.odr.ChtIndexer() != nil {
-		StoreChtRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.chtRoot)
-		self.odr.ChtIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreChtRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.CHTRoot)
+		self.odr.ChtIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.bloomTrieRoot)
-		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreBloomTrieRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.BloomRoot)
+		self.odr.BloomTrieIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomIndexer() != nil {
-		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		self.odr.BloomIndexer().AddCheckpoint(cp.SectionIdx, cp.SectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.SectionIdx+1)*self.indexerConfig.ChtSize-1, "hash", cp.SectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -464,22 +466,32 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
 
 func (self *LightChain) SyncCht(ctx context.Context) bool {
+	// If we don't have a CHT indexer, abort
 	if self.odr.ChtIndexer() == nil {
 		return false
 	}
-	headNum := self.CurrentHeader().Number.Uint64()
-	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*CHTFrequencyClient {
-		num := chtCount*CHTFrequencyClient - 1
-		header, err := GetHeaderByNumber(ctx, self.odr, num)
-		if header != nil && err == nil {
-			self.mu.Lock()
-			if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
-				self.hc.SetCurrentHeader(header)
-			}
-			self.mu.Unlock()
-			return true
+	// Ensure the remote CHT head is ahead of us
+	head := self.CurrentHeader().Number.Uint64()
+	sections, _, _ := self.odr.ChtIndexer().Sections()
+
+	latest := sections*self.indexerConfig.ChtSize - 1
+	if clique := self.hc.Config().Clique; clique != nil {
+		latest -= latest % clique.Epoch // epoch snapshot for clique
+	}
+	if head >= latest {
+		return false
+	}
+	// Retrieve the latest useful header and update to it
+	if header, err := GetHeaderByNumber(ctx, self.odr, latest); header != nil && err == nil {
+		self.mu.Lock()
+		defer self.mu.Unlock()
+
+		// Ensure the chain didn't move past the latest block while retrieving it
+		if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
+			log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash())
+			self.hc.SetCurrentHeader(header)
 		}
+		return true
 	}
 	return false
 }

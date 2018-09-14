@@ -68,7 +68,6 @@ type Config struct {
 	SwapAPI           string
 	Cors              string
 	BzzAccount        string
-	BootNodes         string
 	privateKey        *ecdsa.PrivateKey
 }
 
@@ -93,7 +92,6 @@ func NewConfig() (c *Config) {
 		DeliverySkipCheck: false,
 		SyncUpdateDelay:   15 * time.Second,
 		SwapAPI:           "",
-		BootNodes:         "",
 	}
 
 	return

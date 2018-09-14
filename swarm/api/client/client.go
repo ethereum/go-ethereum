@@ -43,6 +43,10 @@ var (
 	DefaultClient  = NewClient(DefaultGateway)
 )
 
+var (
+	ErrUnauthorized = errors.New("unauthorized")
+)
+
 func NewClient(gateway string) *Client {
 	return &Client{
 		Gateway: gateway,
@@ -188,7 +192,7 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
-func (c *Client) DownloadDirectory(hash, path, destDir string) error {
+func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) error {
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -201,13 +205,20 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	if err != nil {
 		return err
 	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
 	req.Header.Set("Accept", "application/x-tar")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
 		return fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	tr := tar.NewReader(res.Body)
@@ -248,7 +259,7 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 // DownloadFile downloads a single file into the destination directory
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
-func (c *Client) DownloadFile(hash, path, dest string) error {
+func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 	hasDestinationFilename := false
 	if stat, err := os.Stat(dest); err == nil {
 		hasDestinationFilename = !stat.IsDir()
@@ -261,9 +272,9 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 		}
 	}
 
-	manifestList, err := c.List(hash, path)
+	manifestList, err := c.List(hash, path, credentials)
 	if err != nil {
-		return fmt.Errorf("could not list manifest: %v", err)
+		return err
 	}
 
 	switch len(manifestList.Entries) {
@@ -280,13 +291,19 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 	if err != nil {
 		return err
 	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
 		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
 	}
 	filename := ""
@@ -367,13 +384,24 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
 // - a prefix of "dir1/" would return [dir1/dir2/, dir1/file3.txt]
 //
 // where entries ending with "/" are common prefixes.
-func (c *Client) List(hash, prefix string) (*api.ManifestList, error) {
-	res, err := http.DefaultClient.Get(c.Gateway + "/bzz-list:/" + hash + "/" + prefix)
+func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, error) {
+	req, err := http.NewRequest(http.MethodGet, c.Gateway+"/bzz-list:/"+hash+"/"+prefix, nil)
+	if err != nil {
+		return nil, err
+	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return nil, ErrUnauthorized
+	default:
 		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	var list api.ManifestList

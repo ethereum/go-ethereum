@@ -1,10 +1,4 @@
-// CookieJar - A contestant's algorithm toolbox
-// Copyright (c) 2013 Peter Szilagyi. All rights reserved.
-//
-// CookieJar is dual licensed: use of this source code is governed by a BSD
-// license that can be found in the LICENSE file. Alternatively, the CookieJar
-// toolbox may be used in accordance with the terms and conditions contained
-// in a signed written agreement between you and the author(s).
+// This is a duplicated and slightly modified version of "gopkg.in/karalabe/cookiejar.v2/collections/prque".
 
 package prque
 
@@ -12,15 +6,24 @@ package prque
 const blockSize = 4096
 
 // A prioritized item in the sorted stack.
+//
+// Note: priorities can "wrap around" the int64 range, a comes before b if (a.priority - b.priority) > 0.
+// The difference between the lowest and highest priorities in the queue at any point should be less than 2^63.
 type item struct {
 	value    interface{}
-	priority float32
+	priority int64
 }
+
+// setIndexCallback is called when the element is moved to a new index.
+// Providing setIndexCallback is optional, it is needed only if the application needs
+// to delete elements other than the top one.
+type setIndexCallback func(a interface{}, i int)
 
 // Internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
 type sstack struct {
+	setIndex setIndexCallback
 	size     int
 	capacity int
 	offset   int
@@ -30,8 +33,9 @@ type sstack struct {
 }
 
 // Creates a new, empty stack.
-func newSstack() *sstack {
+func newSstack(setIndex setIndexCallback) *sstack {
 	result := new(sstack)
+	result.setIndex = setIndex
 	result.active = make([]*item, blockSize)
 	result.blocks = [][]*item{result.active}
 	result.capacity = blockSize
@@ -50,6 +54,9 @@ func (s *sstack) Push(data interface{}) {
 		s.active = s.blocks[s.size/blockSize]
 		s.offset = 0
 	}
+	if s.setIndex != nil {
+		s.setIndex(data.(*item).value, s.size)
+	}
 	s.active[s.offset] = data.(*item)
 	s.offset++
 	s.size++
@@ -65,6 +72,9 @@ func (s *sstack) Pop() (res interface{}) {
 		s.active = s.blocks[s.size/blockSize]
 	}
 	res, s.active[s.offset] = s.active[s.offset], nil
+	if s.setIndex != nil {
+		s.setIndex(res.(*item).value, -1)
+	}
 	return
 }
 
@@ -76,16 +86,21 @@ func (s *sstack) Len() int {
 // Compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
 func (s *sstack) Less(i, j int) bool {
-	return s.blocks[i/blockSize][i%blockSize].priority > s.blocks[j/blockSize][j%blockSize].priority
+	return (s.blocks[i/blockSize][i%blockSize].priority - s.blocks[j/blockSize][j%blockSize].priority) > 0
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.
 func (s *sstack) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
-	s.blocks[ib][io], s.blocks[jb][jo] = s.blocks[jb][jo], s.blocks[ib][io]
+	a, b := s.blocks[jb][jo], s.blocks[ib][io]
+	if s.setIndex != nil {
+		s.setIndex(a.value, i)
+		s.setIndex(b.value, j)
+	}
+	s.blocks[ib][io], s.blocks[jb][jo] = a, b
 }
 
 // Resets the stack, effectively clearing its contents.
 func (s *sstack) Reset() {
-	*s = *newSstack()
+	*s = *newSstack(s.setIndex)
 }

@@ -78,6 +78,7 @@ const (
 	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
 	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ACCESS_PASSWORD          = "SWARM_ACCESS_PASSWORD"
 	GETH_ENV_DATADIR               = "GETH_DATADIR"
 )
 
@@ -232,10 +233,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.Cors = cors
 	}
 
-	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
-		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
-	}
-
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
 		currentConfig.LocalStoreParams.ChunkDbPath = storePath
 	}
@@ -331,10 +328,6 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if cors := os.Getenv(SWARM_ENV_CORS); cors != "" {
 		currentConfig.Cors = cors
-	}
-
-	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
-		currentConfig.BootNodes = bootnodes
 	}
 
 	return currentConfig

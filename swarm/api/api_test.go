@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,9 +29,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+func init() {
+	loglevel := flag.Int("loglevel", 2, "loglevel")
+	flag.Parse()
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+}
 
 func testAPI(t *testing.T, f func(*API, bool)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
@@ -42,7 +50,7 @@ func testAPI(t *testing.T, f func(*API, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewAPI(fileStore, nil, nil)
+	api := NewAPI(fileStore, nil, nil, nil)
 	f(api, false)
 	f(api, true)
 }
@@ -85,7 +93,7 @@ func expResponse(content string, mimeType string, status int) *Response {
 
 func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	addr := storage.Address(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, _, err := api.Get(context.TODO(), addr, path)
+	reader, mimeType, status, _, err := api.Get(context.TODO(), NOOPDecrypt, addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -229,7 +237,7 @@ func TestAPIResolve(t *testing.T) {
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
 			}
-			res, err := api.Resolve(context.TODO(), uri)
+			res, err := api.ResolveURI(context.TODO(), uri, "")
 			if err == nil {
 				if x.expectErr != nil {
 					t.Fatalf("expected error %q, got result %q", x.expectErr, res)
@@ -371,5 +379,57 @@ func TestMultiResolver(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDecryptOriginForbidden(t *testing.T) {
+	ctx := context.TODO()
+	ctx = sctx.SetHost(ctx, "swarm-gateways.net")
+
+	me := &ManifestEntry{
+		Access: &AccessEntry{Type: AccessTypePass},
+	}
+
+	api := NewAPI(nil, nil, nil, nil)
+
+	f := api.Decryptor(ctx, "")
+	err := f(me)
+	if err != ErrDecryptDomainForbidden {
+		t.Fatalf("should fail with ErrDecryptDomainForbidden, got %v", err)
+	}
+}
+
+func TestDecryptOrigin(t *testing.T) {
+	for _, v := range []struct {
+		host        string
+		expectError error
+	}{
+		{
+			host:        "localhost",
+			expectError: ErrDecrypt,
+		},
+		{
+			host:        "127.0.0.1",
+			expectError: ErrDecrypt,
+		},
+		{
+			host:        "swarm-gateways.net",
+			expectError: ErrDecryptDomainForbidden,
+		},
+	} {
+		ctx := context.TODO()
+		ctx = sctx.SetHost(ctx, v.host)
+
+		me := &ManifestEntry{
+			Access: &AccessEntry{Type: AccessTypePass},
+		}
+
+		api := NewAPI(nil, nil, nil, nil)
+
+		f := api.Decryptor(ctx, "")
+		err := f(me)
+		if err != v.expectError {
+			t.Fatalf("should fail with %v, got %v", v.expectError, err)
+		}
 	}
 }
