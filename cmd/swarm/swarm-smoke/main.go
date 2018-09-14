@@ -89,6 +89,12 @@ func main() {
 			Usage:   "upload and sync",
 			Action:  cliUploadAndSync,
 		},
+		{
+			Name:    "resource_sync",
+			Aliases: []string{"r"},
+			Usage:   "resource update generate, upload and sync",
+			Action:  cliResourceUploadAndSync,
+		},
 	}
 
 	sort.Sort(cli.FlagsByName(app.Flags))
