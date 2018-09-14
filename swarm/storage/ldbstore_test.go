@@ -74,7 +74,7 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
 
 func testPoFunc(k Address) (ret uint8) {
 	basekey := make([]byte, 32)
-	return uint8(Proximity(basekey[:], k[:]))
+	return uint8(Proximity(basekey, k[:]))
 }
 
 func (db *testDbStore) close() {

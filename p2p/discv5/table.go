@@ -123,7 +123,7 @@ func (tab *Table) readRandomNodes(buf []*Node) (n int) {
 	var buckets [][]*Node
 	for _, b := range &tab.buckets {
 		if len(b.entries) > 0 {
-			buckets = append(buckets, b.entries[:])
+			buckets = append(buckets, b.entries)
 		}
 	}
 	if len(buckets) == 0 {

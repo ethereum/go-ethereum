@@ -448,7 +448,7 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 // test match of leftmost bytes in given message to node's Kademlia address
 func (p *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
 	local := p.Kademlia.BaseAddr()
-	return bytes.Equal(msg.To[:], local[:len(msg.To)])
+	return bytes.Equal(msg.To, local[:len(msg.To)])
 }
 
 /////////////////////////////////////////////////////////////////////
