@@ -68,8 +68,6 @@ func resourceCreate(ctx *cli.Context) {
 	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
 	newResourceRequest.View.User = resourceGetUser(ctx)
 
-	fmt.Println(newResourceRequest.View.User.Hex())
-
 	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {
 		utils.Fatalf("Error creating resource: %s", err.Error())
