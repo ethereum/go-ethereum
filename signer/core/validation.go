@@ -63,6 +63,9 @@ func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, meth
 		msgs.warn("Tx contains data which is not valid ABI")
 		return
 	}
+	if arglen := len(data) - 4; arglen%32 != 0 {
+		msgs.warn(fmt.Sprintf("Not ABI-encoded data; length should be a multiple of 32 (was %d)", arglen))
+	}
 	var (
 		info *decodedCallData
 		err  error
