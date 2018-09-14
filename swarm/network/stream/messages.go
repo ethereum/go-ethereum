@@ -267,6 +267,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		return nil
 	}
 
+	sp.SetTag("hash", fmt.Sprintf("%064x", want.Bytes()[:]))
 	msg := &WantedHashesMsg{
 		Stream: req.Stream,
 		Want:   want.Bytes(),

@@ -30,7 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
@@ -49,6 +51,17 @@ type synctestConfig struct {
 	//chunksToNodesMap map[string][]int
 	addrToIDMap map[string]enode.ID
 }
+
+const (
+	// EventTypeNode is the type of event emitted when a node is either
+	// created, started or stopped
+	EventTypeChunkCreated   simulations.EventType = "chunkCreated"
+	EventTypeChunkOffered   simulations.EventType = "chunkOffered"
+	EventTypeChunkWanted    simulations.EventType = "chunkWanted"
+	EventTypeChunkDelivered simulations.EventType = "chunkDelivered"
+	EventTypeChunkArrived   simulations.EventType = "chunkArrived"
+	EventTypeSimTerminated  simulations.EventType = "simTerminated"
+)
 
 // Tests in this file should not request chunks from peers.
 // This function will panic indicating that there is a problem if request has been made.
@@ -131,41 +144,47 @@ func TestSyncingViaDirectSubscribe(t *testing.T) {
 	}
 }
 
-func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
-			if err != nil {
-				return nil, nil, err
-			}
-			bucket.Store(bucketKeyStore, store)
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
+var simServiceMap = map[string]simulation.ServiceFunc{
+	"streamer": streamerFunc,
+}
 
-			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				DoSync:          true,
-				SyncUpdateDelay: 3 * time.Second,
-			})
-			bucket.Store(bucketKeyRegistry, r)
+func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				netStore.Close()
-				r.Close()
-			}
+	n := ctx.Config.Node()
+	addr := network.NewAddr(n)
+	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+	if err != nil {
+		return nil, nil, err
+	}
+	bucket.Store(bucketKeyStore, store)
+	localStore := store.(*storage.LocalStore)
+	netStore, err := storage.NewNetStore(localStore, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	delivery := NewDelivery(kad, netStore)
+	netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
-			return r, cleanup, nil
-
-		},
+	r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+		DoSync:          true,
+		SyncUpdateDelay: 3 * time.Second,
 	})
+
+	bucket.Store(bucketKeyRegistry, r)
+
+	cleanup = func() {
+		os.RemoveAll(datadir)
+		netStore.Close()
+		r.Close()
+	}
+
+	return r, cleanup, nil
+
+}
+
+func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
+	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
 	log.Info("Initializing test config")
@@ -204,7 +223,17 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		}
 	}()
 
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	result := runSim(conf, ctx, sim, chunkCount)
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+	log.Info("Simulation ended")
+}
+
+func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulation, chunkCount int) simulation.Result {
+
+	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
@@ -228,6 +257,14 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
 		if err != nil {
 			return err
+		}
+		for _, h := range hashes {
+			evt := &simulations.Event{
+				Type: EventTypeChunkCreated,
+				Node: sim.Net.GetNode(node.ID),
+				Data: fmt.Sprintf("%s", h),
+			}
+			sim.Net.Events().Send(evt)
 		}
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
@@ -281,6 +318,12 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
 					} else {
+						evt := &simulations.Event{
+							Type: EventTypeChunkArrived,
+							Node: sim.Net.GetNode(id),
+							Data: fmt.Sprintf("%s", chunk),
+						}
+						sim.Net.Events().Send(evt)
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
 				}
@@ -295,11 +338,6 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		}
 		return nil
 	})
-
-	if result.Error != nil {
-		t.Fatal(result.Error)
-	}
-	log.Info("Simulation ended")
 }
 
 /*
