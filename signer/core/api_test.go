@@ -140,7 +140,7 @@ func setup(t *testing.T) (*SignerAPI, chan string) {
 			true,
 			ui,
 			db,
-			true, false)
+			true, true)
 	)
 	return api, controller
 }
