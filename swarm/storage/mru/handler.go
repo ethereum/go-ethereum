@@ -123,13 +123,13 @@ func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
 func (h *Handler) NewRequest(ctx context.Context, view *View) (request *Request, err error) {
-
 	if view == nil {
 		return nil, NewError(ErrInvalidValue, "view cannot be nil")
 	}
 
 	now := TimestampProvider.Now().Time
 	request = new(Request)
+	request.Header.Version = ProtocolVersion
 
 	query := NewQueryLatest(view, lookup.NoClue)
 

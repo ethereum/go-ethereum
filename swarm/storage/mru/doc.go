@@ -33,12 +33,12 @@ Structure Summary:
 
 Request: Resource update with signature
 	ResourceUpdate: headers + data
-		UpdateHeader: (placeholder, to be deleted)
-			ID: Information about how to locate a specific update
-				View: Author of the update and what is updating
-					Topic: Item that the updates are about
-					User: User who updates the resource
-				Epoch: time slot where the update is stored
+		Header: Protocol version and reserved for future use placeholders
+		ID: Information about how to locate a specific update
+			View: Author of the update and what is updating
+				Topic: Item that the updates are about
+				User: User who updates the resource
+			Epoch: time slot where the update is stored
 
 */
 package mru

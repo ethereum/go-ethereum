@@ -38,8 +38,9 @@ type Request struct {
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
 	ID
-	Data      string `json:"data,omitempty"`
-	Signature string `json:"signature,omitempty"`
+	ProtocolVersion uint8  `json:"protocolVersion"`
+	Data            string `json:"data,omitempty"`
+	Signature       string `json:"signature,omitempty"`
 }
 
 var zeroAddr = common.Address{}
@@ -58,6 +59,7 @@ func NewFirstRequest(topic Topic) *Request {
 	now := TimestampProvider.Now().Time
 	request.Epoch = lookup.GetFirstEpoch(now)
 	request.View.Topic = topic
+	request.Header.Version = ProtocolVersion
 
 	return request
 }
@@ -230,6 +232,7 @@ func (r *Request) AppendValues(values Values) []byte {
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
 	r.ID = j.ID
+	r.Header.Version = j.ProtocolVersion
 
 	var err error
 	if j.Data != "" {
@@ -273,9 +276,10 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	}
 
 	requestJSON := &updateRequestJSON{
-		ID:        r.ID,
-		Data:      dataString,
-		Signature: signatureString,
+		ID:              r.ID,
+		ProtocolVersion: r.Header.Version,
+		Data:            dataString,
+		Signature:       signatureString,
 	}
 
 	return json.Marshal(requestJSON)

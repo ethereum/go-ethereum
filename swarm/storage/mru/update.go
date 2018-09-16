@@ -17,22 +17,32 @@
 package mru
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-// ResourceUpdate encapsulates the information sent as part of a resource update
-type ResourceUpdate struct {
-	ID          // metainformation about this resource update
-	data []byte // actual data payload
+// ProtocolVersion defines the current version of the protocol that will be included in each update message
+const ProtocolVersion uint8 = 0
+
+const headerLength = 8
+
+// Header defines a update message header including a protocol version byte
+type Header struct {
+	Version uint8                   // Protocol version
+	Padding [headerLength - 1]uint8 // reserved for future use
 }
 
-// Header: (see updateHeader)
-// Data:
-// data (datalength bytes)
-//
-// Minimum size is Header + 1 (minimum data length, enforced)
-const minimumUpdateDataLength = idLength + 1
-const maxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength
+// ResourceUpdate encapsulates the information sent as part of a resource update
+type ResourceUpdate struct {
+	Header Header //
+	ID            // Resource update identifying information
+	data   []byte // actual data payload
+}
+
+const minimumUpdateDataLength = idLength + headerLength + 1
+const maxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
 
 // binaryPut serializes the resource update information into the given slice
 func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
@@ -50,7 +60,12 @@ func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
 	}
 
 	var cursor int
-	// serialize header (see updateHeader)
+	// serialize Header
+	serializedData[cursor] = r.Header.Version
+	copy(serializedData[cursor+1:headerLength], r.Header.Padding[:headerLength-1])
+	cursor += headerLength
+
+	// serialize ID
 	if err := r.ID.binaryPut(serializedData[cursor : cursor+idLength]); err != nil {
 		return err
 	}
@@ -65,7 +80,7 @@ func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
 
 // binaryLength returns the expected number of bytes this structure will take to encode
 func (r *ResourceUpdate) binaryLength() int {
-	return idLength + len(r.data)
+	return idLength + headerLength + len(r.data)
 }
 
 // binaryGet populates this instance from the information contained in the passed byte slice
@@ -73,9 +88,16 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
 		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)
 	}
-	dataLength := len(serializedData) - idLength
-	var cursor int
+	dataLength := len(serializedData) - idLength - headerLength
 	// at this point we can be satisfied that we have the correct data length to read
+
+	var cursor int
+
+	// deserialize Header
+	r.Header.Version = serializedData[cursor]                                      // extract the protocol version
+	copy(r.Header.Padding[:headerLength-1], serializedData[cursor+1:headerLength]) // extract the padding
+	cursor += headerLength
+
 	if err := r.ID.binaryGet(serializedData[cursor : cursor+idLength]); err != nil {
 		return err
 	}
@@ -96,6 +118,8 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 // useful to parse query strings
 func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 	r.data = data
+	version, _ := strconv.ParseUint(values.Get("protocolVersion"), 10, 32)
+	r.Header.Version = uint8(version)
 	return r.ID.FromValues(values)
 }
 
@@ -103,5 +127,6 @@ func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 // useful to build query strings
 func (r *ResourceUpdate) AppendValues(values Values) []byte {
 	r.ID.AppendValues(values)
+	values.Set("protocolVersion", fmt.Sprintf("%d", r.Header.Version))
 	return r.data
 }
