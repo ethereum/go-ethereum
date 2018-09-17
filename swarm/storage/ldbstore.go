@@ -61,6 +61,7 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
+	keySchema      = byte(8)
 )
 
 var (
@@ -734,7 +735,7 @@ func (s *LDBStore) GetSchema() (string, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	data, err := s.db.Get([]byte(`schema`))
+	data, err := s.db.Get(keySchema)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 			return "", nil
@@ -749,7 +750,7 @@ func (s *LDBStore) PutSchema(schema string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	return s.db.Put([]byte(`schema`), []byte(schema))
+	return s.db.Put(keySchema, []byte(schema))
 }
 
 func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
