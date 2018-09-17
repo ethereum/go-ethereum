@@ -136,7 +136,7 @@ func (a Address) Log() string {
 }
 
 func (a Address) String() string {
-	return fmt.Sprintf("%064x", []byte(a)[:])
+	return fmt.Sprintf("%064x", []byte(a))
 }
 
 func (a Address) MarshalJSON() (out []byte, err error) {

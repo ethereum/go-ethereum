@@ -85,7 +85,7 @@ func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
-		Po:          func(k Address) (ret uint8) { return uint8(Proximity(storeparams.BaseKey[:], k[:])) },
+		Po:          func(k Address) (ret uint8) { return uint8(Proximity(storeparams.BaseKey, k[:])) },
 	}
 }
 
@@ -322,7 +322,7 @@ func (s *LDBStore) Export(out io.Writer) (int64, error) {
 		log.Trace("store.export", "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po)
 		data, err := s.db.Get(datakey)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key, err))
 			continue
 		}
 
@@ -455,7 +455,7 @@ func (s *LDBStore) Cleanup() {
 			}
 
 			if !found {
-				log.Warn(fmt.Sprintf("Chunk %x found but count not be accessed with any po", key[:]))
+				log.Warn(fmt.Sprintf("Chunk %x found but count not be accessed with any po", key))
 				errorsFound++
 				continue
 			}
@@ -469,10 +469,10 @@ func (s *LDBStore) Cleanup() {
 		}
 
 		cs := int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-		log.Trace("chunk", "key", fmt.Sprintf("%x", key[:]), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 
 		if len(c.sdata) > ch.DefaultSize+8 {
-			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key[:]), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 			s.delete(index.Idx, getIndexKey(key[1:]), po)
 			removed++
 			errorsFound++
