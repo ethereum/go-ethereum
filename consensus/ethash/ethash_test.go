@@ -117,6 +117,7 @@ func TestRemoteSealer(t *testing.T) {
 	if res := api.SubmitWork(types.BlockNonce{}, sealhash, common.Hash{}); res {
 		t.Error("expect to return false when submit a fake solution")
 	}
+
 	// Push new block with same block number to replace the original one.
 	header = &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1000)}
 	block = types.NewBlockWithHeader(header)
@@ -125,6 +126,31 @@ func TestRemoteSealer(t *testing.T) {
 
 	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return the latest pushed work")
+	}
+}
+
+func TestCustomizedWork(t *testing.T) {
+	ethash := NewTester(nil, true)
+	defer ethash.Close()
+
+	api := &API{ethash}
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	block := types.NewBlockWithHeader(header)
+
+	// Push new work.
+	results := make(chan *types.Block, 1)
+	ethash.Seal(nil, block, results, nil)
+
+	// Get customized mining work.
+	expect := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100), Extra: []byte("extra")}
+	expectSealhash := ethash.SealHash(expect)
+	if work, err := api.GetCustomizedWork("extra"); err != nil || work[0] != expectSealhash.Hex() {
+		t.Errorf("expect to return a customized work, have %s, want %s", work[0], expectSealhash.Hex())
+	}
+
+	// Submit fake solution for customized work
+	if !api.SubmitWork(types.BlockNonce{}, expectSealhash, common.Hash{}) {
+		t.Error("submit solution for customized work failed")
 	}
 }
 

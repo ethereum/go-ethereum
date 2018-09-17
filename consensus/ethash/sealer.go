@@ -245,6 +245,24 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		currentBlock = block
 		works[hash] = block
 	}
+	// customizeWork creates a work package for external miner
+	// with customized extra data.
+	customizeWork := func(extra string) [3]string {
+		newHeader := currentBlock.Header()
+		newHeader.Extra = []byte(extra)
+		newBlock := types.NewBlockWithHeader(newHeader)
+
+		// Recalculate mining work
+		var work [3]string
+		hash := ethash.SealHash(newHeader)
+		work[0] = hash.Hex()
+		work[1] = currentWork[1]
+		work[2] = currentWork[2]
+
+		// Trace the seal work fetched by remote sealer.
+		works[hash] = newBlock
+		return work
+	}
 	// submitWork verifies the submitted pow solution, returning
 	// whether the solution was accepted or not (not can be both a bad pow as well as
 	// any other error, like no pending work or stale mining result).
@@ -313,11 +331,16 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			notifyWork()
 
 		case work := <-ethash.fetchWorkCh:
-			// Return current mining work to remote miner.
 			if currentBlock == nil {
+				// Return error message if there is no available mining work yet.
 				work.errc <- errNoMiningWork
-			} else {
+			} else if work.extra == "" {
+				// Return the default current mining work if no extra customized data
+				// specified.
 				work.res <- currentWork
+			} else {
+				// Return the customized mining work.
+				work.res <- customizeWork(work.extra)
 			}
 
 		case result := <-ethash.submitWorkCh:

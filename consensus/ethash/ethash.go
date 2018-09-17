@@ -431,8 +431,9 @@ type hashrate struct {
 
 // sealWork wraps a seal work package for remote sealer.
 type sealWork struct {
-	errc chan error
-	res  chan [3]string
+	extra string // The specified string used to fill the block extra field
+	errc  chan error
+	res   chan [3]string
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
