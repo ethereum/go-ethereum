@@ -239,6 +239,10 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	spew.Dump(tx.Tx)
 }
 
+func (ui *CommandlineUI) OnMasterPassword(request *PasswordRequest) (PasswordResponse, error) {
+	return PasswordResponse{ui.readPasswordText(request.Prompt)}, nil
+}
+
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
 
 	fmt.Printf("------- Signer info -------\n")
