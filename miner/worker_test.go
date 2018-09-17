@@ -161,6 +161,7 @@ func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, eng
 		t.Errorf("account balance mismatch: have %d, want %d", balance, 1000)
 	}
 	b.txPool.AddLocals(newTxs)
+
 	// Ensure the new tx events has been processed
 	time.Sleep(100 * time.Millisecond)
 	block, state = w.pending()
