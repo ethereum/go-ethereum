@@ -87,7 +87,7 @@ func (w *wizard) makeServer() string {
 	return input
 }
 
-// selectServer lists the user all the currnetly known servers to choose from,
+// selectServer lists the user all the currently known servers to choose from,
 // also granting the option to add a new one.
 func (w *wizard) selectServer() string {
 	// List the available server to the user and wait for a choice
