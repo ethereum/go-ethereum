@@ -80,13 +80,13 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	var (
-		tracer      	vm.Tracer
-		debugLogger 	*vm.StructLogger
-		statedb     	*state.StateDB
-		chainConfig 	*params.ChainConfig
-		sender      	= common.BytesToAddress([]byte("sender"))
-		receiver    	= common.BytesToAddress([]byte("receiver"))
-		genesisConfig	*core.Genesis
+		tracer        vm.Tracer
+		debugLogger   *vm.StructLogger
+		statedb       *state.StateDB
+		chainConfig   *params.ChainConfig
+		sender        = common.BytesToAddress([]byte("sender"))
+		receiver      = common.BytesToAddress([]byte("receiver"))
+		genesisConfig *core.Genesis
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
 		tracer = NewJSONLogger(logconfig, os.Stdout)
@@ -166,9 +166,9 @@ func runCmd(ctx *cli.Context) error {
 		GasLimit:    initialGas,
 		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
-		Difficulty:	 genesisConfig.Difficulty,
-		Time:		 new(big.Int).SetUint64(genesisConfig.Timestamp),
-		Coinbase:	 genesisConfig.Coinbase,
+		Difficulty:  genesisConfig.Difficulty,
+		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
+		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
 			Tracer: tracer,
