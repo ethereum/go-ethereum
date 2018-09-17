@@ -20,7 +20,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -35,8 +38,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -44,6 +49,8 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/scrypt"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -63,6 +70,12 @@ unless you agree to take full responsibility for doing so, and know what you are
 TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE! 
 
 `
+const (
+	keyHeaderKDF = "scrypt"
+
+	scryptR     = 8
+	scryptDKLen = 32
+)
 
 var (
 	logLevelFlag = cli.IntFlag{
@@ -215,13 +228,24 @@ func initializeSecrets(c *cli.Context) error {
 	configDir := c.String(configdirFlag.Name)
 
 	masterSeed := make([]byte, 256)
-	n, err := io.ReadFull(rand.Reader, masterSeed)
+	num, err := io.ReadFull(rand.Reader, masterSeed)
 	if err != nil {
 		return err
 	}
-	if n != len(masterSeed) {
+	if num != len(masterSeed) {
 		return fmt.Errorf("failed to read enough random")
 	}
+
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	if c.Bool(utils.LightKDFFlag.Name) {
+		n, p = keystore.LightScryptN, keystore.LightScryptP
+	}
+	password := getPassPhrase("The master seed of clef is locked with a password. Please give a password. Do not forget this password.", true)
+	cipherSeed, err := encryptSeed(masterSeed, []byte(password), n, p)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt master seed: %v", err)
+	}
+
 	err = os.Mkdir(configDir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
@@ -230,7 +254,7 @@ func initializeSecrets(c *cli.Context) error {
 	if _, err := os.Stat(location); err == nil {
 		return fmt.Errorf("file %v already exists, will not overwrite", location)
 	}
-	err = ioutil.WriteFile(location, masterSeed, 0400)
+	err = ioutil.WriteFile(location, cipherSeed, 0400)
 	if err != nil {
 		return err
 	}
@@ -255,7 +279,7 @@ func attestFile(ctx *cli.Context) error {
 		return err
 	}
 
-	stretchedKey, err := readMasterKey(ctx)
+	stretchedKey, err := readMasterKey(ctx, nil)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
@@ -279,7 +303,7 @@ func addCredential(ctx *cli.Context) error {
 		return err
 	}
 
-	stretchedKey, err := readMasterKey(ctx)
+	stretchedKey, err := readMasterKey(ctx, nil)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
@@ -341,7 +365,7 @@ func signer(c *cli.Context) error {
 	)
 
 	configDir := c.String(configdirFlag.Name)
-	if stretchedKey, err := readMasterKey(c); err != nil {
+	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Info("No master seed provided, rules disabled")
 	} else {
 
@@ -512,7 +536,7 @@ func homeDir() string {
 	}
 	return ""
 }
-func readMasterKey(ctx *cli.Context) ([]byte, error) {
+func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var (
 		file      string
 		configDir = ctx.String(configdirFlag.Name)
@@ -525,15 +549,32 @@ func readMasterKey(ctx *cli.Context) ([]byte, error) {
 	if err := checkFile(file); err != nil {
 		return nil, err
 	}
-	masterKey, err := ioutil.ReadFile(file)
+	cipherKey, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	if len(masterKey) < 256 {
-		return nil, fmt.Errorf("master key of insufficient length, expected >255 bytes, got %d", len(masterKey))
+
+	var password string
+	// If ui is not nil, get the password from ui.
+	if ui != nil {
+		resp, err := ui.OnMasterPassword(&core.PasswordRequest{Prompt: "password to decrypt master seed"})
+		if err != nil {
+			return nil, err
+		}
+		password = resp.Password
+	} else {
+		password = getPassPhrase("Decrypt master seed of clef", false)
 	}
+	masterSeed, err := decryptSeed(cipherKey, []byte(password))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt the master seed of clef")
+	}
+	if len(masterSeed) < 256 {
+		return nil, fmt.Errorf("master seed of insufficient length, expected >255 bytes, got %d", len(masterSeed))
+	}
+
 	// Create vault location
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterKey)[:10]))
+	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterSeed)[:10]))
 	err = os.Mkdir(vaultLocation, 0700)
 	if err != nil && !os.IsExist(err) {
 		return nil, err
@@ -541,7 +582,7 @@ func readMasterKey(ctx *cli.Context) ([]byte, error) {
 	//!TODO, use KDF to stretch the master key
 	//			stretched_key := stretch_key(master_key)
 
-	return masterKey, nil
+	return masterSeed, nil
 }
 
 // checkFile is a convenience function to check if a file
@@ -617,6 +658,174 @@ func testExternalUI(api *core.SignerAPI) {
 		log.Info("No errors")
 	}
 
+}
+
+// getPassPhrase retrieves the password associated with clef, either fetched
+// from a list of preloaded passphrases, or requested interactively from the user.
+// TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
+func getPassPhrase(prompt string, confirmation bool) string {
+	fmt.Println(prompt)
+	password, err := console.Stdin.PromptPassword("Passphrase: ")
+	if err != nil {
+		utils.Fatalf("Failed to read passphrase: %v", err)
+	}
+	if confirmation {
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		if err != nil {
+			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+		}
+		if password != confirm {
+			utils.Fatalf("Passphrases do not match")
+		}
+	}
+	return password
+}
+
+type cryptoJSON struct {
+	Cipher       string                 `json:"cipher"`
+	CipherText   string                 `json:"ciphertext"`
+	CipherParams cipherparamsJSON       `json:"cipherparams"`
+	KDF          string                 `json:"kdf"`
+	KDFParams    map[string]interface{} `json:"kdfparams"`
+	MAC          string                 `json:"mac"`
+}
+
+type cipherparamsJSON struct {
+	IV string `json:"iv"`
+}
+
+func encryptSeed(seed []byte, auth []byte, scryptN, scryptP int) ([]byte, error) {
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
+	derivedKey, err := scrypt.Key(auth, salt, scryptN, scryptR, scryptP, scryptDKLen)
+	if err != nil {
+		return nil, err
+	}
+	encryptKey := derivedKey[:16]
+
+	iv := make([]byte, aes.BlockSize) // 16
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
+	cipherText, err := aesCTRXOR(encryptKey, seed, iv)
+	if err != nil {
+		return nil, err
+	}
+	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
+
+	scryptParamsJSON := make(map[string]interface{}, 5)
+	scryptParamsJSON["n"] = scryptN
+	scryptParamsJSON["r"] = scryptR
+	scryptParamsJSON["p"] = scryptP
+	scryptParamsJSON["dklen"] = scryptDKLen
+	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
+
+	cipherParamsJSON := cipherparamsJSON{
+		IV: hex.EncodeToString(iv),
+	}
+
+	cryptoStruct := cryptoJSON{
+		Cipher:       "aes-128-ctr",
+		CipherText:   hex.EncodeToString(cipherText),
+		CipherParams: cipherParamsJSON,
+		KDF:          keyHeaderKDF,
+		KDFParams:    scryptParamsJSON,
+		MAC:          hex.EncodeToString(mac),
+	}
+	return json.Marshal(cryptoStruct)
+}
+
+func decryptSeed(keyjson []byte, auth []byte) ([]byte, error) {
+	var cryptoStruct cryptoJSON
+	if err := json.Unmarshal(keyjson, &cryptoStruct); err != nil {
+		return nil, err
+	}
+
+	if cryptoStruct.Cipher != "aes-128-ctr" {
+		return nil, fmt.Errorf("Cipher not supported: %v", cryptoStruct.Cipher)
+	}
+
+	mac, err := hex.DecodeString(cryptoStruct.MAC)
+	if err != nil {
+		return nil, err
+	}
+
+	iv, err := hex.DecodeString(cryptoStruct.CipherParams.IV)
+	if err != nil {
+		return nil, err
+	}
+
+	cipherText, err := hex.DecodeString(cryptoStruct.CipherText)
+	if err != nil {
+		return nil, err
+	}
+
+	derivedKey, err := getKDFKey(cryptoStruct, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
+	if !bytes.Equal(calculatedMAC, mac) {
+		return nil, fmt.Errorf("could not decrypt seed with given passphrase")
+	}
+
+	seed, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
+	if err != nil {
+		return nil, err
+	}
+	return seed, err
+}
+
+func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
+	// AES-128 is selected due to size of encryptKey.
+	aesBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(aesBlock, iv)
+	outText := make([]byte, len(inText))
+	stream.XORKeyStream(outText, inText)
+	return outText, err
+}
+
+func getKDFKey(cryptoJSON cryptoJSON, auth []byte) ([]byte, error) {
+	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
+	if err != nil {
+		return nil, err
+	}
+	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
+
+	if cryptoJSON.KDF == keyHeaderKDF {
+		n := ensureInt(cryptoJSON.KDFParams["n"])
+		r := ensureInt(cryptoJSON.KDFParams["r"])
+		p := ensureInt(cryptoJSON.KDFParams["p"])
+		return scrypt.Key(auth, salt, n, r, p, dkLen)
+
+	} else if cryptoJSON.KDF == "pbkdf2" {
+		c := ensureInt(cryptoJSON.KDFParams["c"])
+		prf := cryptoJSON.KDFParams["prf"].(string)
+		if prf != "hmac-sha256" {
+			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: %s", prf)
+		}
+		key := pbkdf2.Key(auth, salt, c, dkLen, sha256.New)
+		return key, nil
+	}
+
+	return nil, fmt.Errorf("Unsupported KDF: %s", cryptoJSON.KDF)
+}
+
+// TODO: can we do without this when unmarshalling dynamic JSON?
+// why do integers in KDF params end up as float64 and not int after
+// unmarshal?
+func ensureInt(x interface{}) int {
+	res, ok := x.(int)
+	if !ok {
+		res = int(x.(float64))
+	}
+	return res
 }
 
 /**
