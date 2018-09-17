@@ -245,7 +245,7 @@ func TestMaliciousAbiStrings(t *testing.T) {
 	for i, tt := range tests {
 		_, err := testSelector(tt, data)
 		if err == nil {
-			t.Errorf("test %d:expected error for selector '%v'", i, tt)
+			t.Errorf("test %d: expected error for selector '%v'", i, tt)
 		}
 	}
 }
