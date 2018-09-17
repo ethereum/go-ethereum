@@ -17,6 +17,7 @@
 package dashboard
 
 import (
+	"container/list"
 	"encoding/json"
 	"time"
 )
@@ -74,11 +75,7 @@ func (m *NetworkMessage) getOrInitBundle(ip string) *PeerBundle {
 // getOrInitPeer returns the peer belonging to the given IP and node id, or
 // initializes the peer if it doesn't exist.
 func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
-	b := m.getOrInitBundle(ip)
-	if _, ok := b.Peers[id]; !ok {
-		b.Peers[id] = new(Peer)
-	}
-	return b.Peers[id]
+	return m.getOrInitBundle(ip).getOrInitPeer(id)
 }
 
 // PeerBundle contains information about the peers pertaining to an IP address.
@@ -86,6 +83,13 @@ type PeerBundle struct {
 	Location    *GeoLocation     `json:"location,omitempty"` // geographical information based on IP
 	Peers       map[string]*Peer `json:"peers,omitempty"`    // the peers' node id is used as key
 	FailedPeers []*Peer          `json:"failedPeers,omitempty"`
+}
+
+func (b *PeerBundle) getOrInitPeer(id string) *Peer {
+	if _, ok := b.Peers[id]; !ok {
+		b.Peers[id] = new(Peer)
+	}
+	return b.Peers[id]
 }
 
 // GeoLocation contains geographical information.
@@ -99,13 +103,14 @@ type GeoLocation struct {
 // Peer contains lifecycle timestamps and traffic information of a given peer.
 type Peer struct {
 	Connected    []time.Time `json:"connected,omitempty"`
-	Handshake    []time.Time `json:"handshake,omitempty"`
 	Disconnected []time.Time `json:"disconnected,omitempty"`
 
 	Ingress ChartEntries `json:"ingress,omitempty"`
 	Egress  ChartEntries `json:"egress,omitempty"`
 
 	DefaultID string `json:"defaultID,omitempty"`
+
+	element *list.Element
 }
 
 // SystemMessage contains the metered system data samples.

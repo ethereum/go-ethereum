@@ -42,19 +42,7 @@ import (
 )
 
 const (
-	activeMemorySampleLimit   = 200 // Maximum number of active memory data samples
-	virtualMemorySampleLimit  = 200 // Maximum number of virtual memory data samples
-	networkIngressSampleLimit = 200 // Maximum number of network ingress data samples
-	networkEgressSampleLimit  = 200 // Maximum number of network egress data samples
-	processCPUSampleLimit     = 200 // Maximum number of process cpu data samples
-	systemCPUSampleLimit      = 200 // Maximum number of system cpu data samples
-	diskReadSampleLimit       = 200 // Maximum number of disk read data samples
-	diskWriteSampleLimit      = 200 // Maximum number of disk write data samples
-
-	peerLimit              = 1000                   // Maximum number of metered peers
-	peerTrafficSampleLimit = 200                    // Maximum number of traffic data samples for a peer
-	peerIngressSampleLimit = peerTrafficSampleLimit // Maximum number of ingress data samples for a peer
-	peerEgressSampleLimit  = peerTrafficSampleLimit // Maximum number of egress data samples for a peer
+	sampleLimit   = 200 // Maximum number of data samples
 )
 
 // Dashboard contains the dashboard internals.
@@ -103,14 +91,14 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
 			},
 			System: &SystemMessage{
-				ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
-				VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
-				NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
-				NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
-				ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
-				SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
-				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
-				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
+				ActiveMemory:   emptyChartEntries(now, sampleLimit, config.Refresh),
+				VirtualMemory:  emptyChartEntries(now, sampleLimit, config.Refresh),
+				NetworkIngress: emptyChartEntries(now, sampleLimit, config.Refresh),
+				NetworkEgress:  emptyChartEntries(now, sampleLimit, config.Refresh),
+				ProcessCPU:     emptyChartEntries(now, sampleLimit, config.Refresh),
+				SystemCPU:      emptyChartEntries(now, sampleLimit, config.Refresh),
+				DiskRead:       emptyChartEntries(now, sampleLimit, config.Refresh),
+				DiskWrite:      emptyChartEntries(now, sampleLimit, config.Refresh),
 			},
 			Network: &NetworkMessage{
 				PeerBundles: make(map[string]*PeerBundle),

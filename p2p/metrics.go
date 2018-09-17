@@ -77,7 +77,6 @@ type PeerConnectEvent struct {
 	IP        string
 	ID        string
 	Connected time.Time
-	Handshake time.Time
 }
 
 // PeerDisconnectEvent contains information about the disconnection of a peer.
@@ -303,6 +302,5 @@ func (c *meteredConn) handshakeDone(id discover.NodeID) {
 		IP:        c.ip,
 		ID:        id.String(),
 		Connected: c.connected,
-		Handshake: time.Now(),
 	})
 }
