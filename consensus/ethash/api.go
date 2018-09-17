@@ -31,27 +31,32 @@ type API struct {
 	ethash *Ethash // Make sure the mode of ethash is normal.
 }
 
-// getWork returns a work package for external miner.
+// GetWork returns a work package for external miner.
 //
 // User can specify a customized extra to replace the extra field
-// in the block header when the given string is not empty.
+// in the block header when the given string pointer is not empty.
 //
 // The work package consists of 3 strings:
 //   result[0] - 32 bytes hex encoded current block header pow-hash
 //   result[1] - 32 bytes hex encoded seed hash used for DAG
 //   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-func (api *API) getWork(extra string) ([3]string, error) {
+func (api *API) GetWork(extra *string) ([3]string, error) {
 	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
 		return [3]string{}, errors.New("not supported")
 	}
 
 	var (
-		workCh = make(chan [3]string, 1)
-		errc   = make(chan error, 1)
+		extraData string
+		workCh    = make(chan [3]string, 1)
+		errc      = make(chan error, 1)
 	)
 
+	if extra != nil {
+		extraData = *extra
+	}
+
 	select {
-	case api.ethash.fetchWorkCh <- &sealWork{extra: extra, errc: errc, res: workCh}:
+	case api.ethash.fetchWorkCh <- &sealWork{extra: extraData, errc: errc, res: workCh}:
 	case <-api.ethash.exitCh:
 		return [3]string{}, errEthashStopped
 	}
@@ -62,18 +67,6 @@ func (api *API) getWork(extra string) ([3]string, error) {
 	case err := <-errc:
 		return [3]string{}, err
 	}
-}
-
-// GetWork returns a default work package for external miner.
-//
-// Note this function is a legacy for backward compatibility.
-func (api *API) GetWork() ([3]string, error) {
-	return api.getWork("")
-}
-
-// GetCustomizedWork returns a customized work package for external miner.
-func (api *API) GetCustomizedWork(extra string) ([3]string, error) {
-	return api.getWork(extra)
 }
 
 // SubmitWork can be used by external miner to submit their POW solution.

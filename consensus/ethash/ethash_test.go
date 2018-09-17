@@ -95,7 +95,7 @@ func TestRemoteSealer(t *testing.T) {
 	defer ethash.Close()
 
 	api := &API{ethash}
-	if _, err := api.GetWork(); err != errNoMiningWork {
+	if _, err := api.GetWork(nil); err != errNoMiningWork {
 		t.Error("expect to return an error indicate there is no mining work")
 	}
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
@@ -110,7 +110,7 @@ func TestRemoteSealer(t *testing.T) {
 		work [3]string
 		err  error
 	)
-	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
+	if work, err = api.GetWork(nil); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return a mining work has same hash")
 	}
 
@@ -124,7 +124,7 @@ func TestRemoteSealer(t *testing.T) {
 	sealhash = ethash.SealHash(header)
 	ethash.Seal(nil, block, results, nil)
 
-	if work, err = api.GetWork(); err != nil || work[0] != sealhash.Hex() {
+	if work, err = api.GetWork(nil); err != nil || work[0] != sealhash.Hex() {
 		t.Error("expect to return the latest pushed work")
 	}
 }
@@ -144,7 +144,8 @@ func TestCustomizedWork(t *testing.T) {
 	// Get customized mining work.
 	expect := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100), Extra: []byte("extra")}
 	expectSealhash := ethash.SealHash(expect)
-	if work, err := api.GetCustomizedWork("extra"); err != nil || work[0] != expectSealhash.Hex() {
+	extra := "extra"
+	if work, err := api.GetWork(&extra); err != nil || work[0] != expectSealhash.Hex() {
 		t.Errorf("expect to return a customized work, have %s, want %s", work[0], expectSealhash.Hex())
 	}
 
@@ -185,7 +186,7 @@ func TestClosedRemoteSealer(t *testing.T) {
 	ethash.Close()
 
 	api := &API{ethash}
-	if _, err := api.GetWork(); err != errEthashStopped {
+	if _, err := api.GetWork(nil); err != errEthashStopped {
 		t.Error("expect to return an error to indicate ethash is stopped")
 	}
 
