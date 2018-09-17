@@ -114,6 +114,10 @@ func (w *wizard) makeGenesis() {
 		}
 		break
 	}
+	// Add a batch of precompile balances to avoid them getting deleted
+	for i := int64(0); i < 256; i++ {
+		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
+	}
 	// Query the user for some custom extras
 	fmt.Println()
 	fmt.Println("Specify your chain/network ID if you want an explicit one (default = random)")
