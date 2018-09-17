@@ -184,3 +184,30 @@ func (ls *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(Address,
 func (ls *LocalStore) Close() {
 	ls.DbStore.Close()
 }
+
+func (ls *LocalStore) Migrate() error {
+	schema, err := ls.DbStore.GetSchema()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+
+	log.Debug("found schema", "schema", schema, "runtime-schema", CurrentDbSchema)
+	if schema != CurrentDbSchema {
+		// run migrations
+
+		if schema == "" {
+			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
+
+			ls.DbStore.Cleanup()
+
+			err := ls.DbStore.PutSchema(DbSchemaHive)
+			if err != nil {
+				log.Error(err.Error())
+				return err
+			}
+		}
+	}
+
+	return nil
+}

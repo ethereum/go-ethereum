@@ -730,6 +730,28 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
+func (s *LDBStore) GetSchema() (string, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	data, err := s.db.Get([]byte(`schema`))
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func (s *LDBStore) PutSchema(schema string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.db.Put([]byte(`schema`), []byte(schema))
+}
+
 func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
