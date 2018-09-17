@@ -139,6 +139,11 @@ func (s *Snapshot) copy() *Snapshot {
 // given snapshot context (e.g. don't try to add an already authorized signer).
 func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
 	_, signer := s.Signers[address]
+
+	if len(s.Signers) == 1 && signer && authorize == false {
+		return false
+	}
+
 	return (signer && !authorize) || (!signer && authorize)
 }
 
