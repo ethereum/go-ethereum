@@ -48,6 +48,8 @@ type ExternalAPI interface {
 	Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
 	// EcRecover - request to perform ecrecover
 	EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error)
+	// SharedSecret - request to obtain a shared ECDH secret (salted and hashed)
+	SharedSecret(ctx context.Context, otherKey, salt hexutil.Bytes) (hexutil.Bytes, error)
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
@@ -60,6 +62,8 @@ type SignerUI interface {
 	ApproveTx(request *SignTxRequest) (SignTxResponse, error)
 	// ApproveSignData prompt the user for confirmation to request to sign data
 	ApproveSignData(request *SignDataRequest) (SignDataResponse, error)
+	// ApproveSharedSecret prompt the user for confirmation to obtain a shared ECDH secret
+	ApproveSharedSecret(request *SharedSecretRequest) (SharedSecretResponse, error)
 	// ApproveExport prompt the user for confirmation to export encrypted Account json
 	ApproveExport(request *ExportRequest) (ExportResponse, error)
 	// ApproveImport prompt the user for confirmation to import Account json
@@ -135,6 +139,15 @@ type (
 		Transaction SendTxArgs `json:"transaction"`
 		Approved    bool       `json:"approved"`
 		Password    string     `json:"password"`
+	}
+	// SharedSecretRequest contains info about the other key
+	SharedSecretRequest struct {
+		Address common.MixedcaseAddress	`json:"address"`
+	}
+	// SharedSecretResponse result from SharedSecretRequest
+	SharedSecretResponse struct {
+		Approved bool   `json:"approved"`
+		Password string `json:"password"`
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
@@ -487,3 +500,4 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 	}
 	return Account{Typ: "Account", URL: acc.URL, Address: acc.Address}, nil
 }
+
