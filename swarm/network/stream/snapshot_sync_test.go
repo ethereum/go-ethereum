@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -149,7 +148,6 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 }
 
 func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
 	n := ctx.Config.Node()
 	addr := network.NewAddr(n)
 	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
@@ -166,7 +164,7 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 	delivery := NewDelivery(kad, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
-	r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 		DoSync:          true,
 		SyncUpdateDelay: 3 * time.Second,
 	})

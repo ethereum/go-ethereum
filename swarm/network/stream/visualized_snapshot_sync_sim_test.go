@@ -39,8 +39,7 @@ func init() {
 	*/
 }
 
-func TestSnapshotSyncWithServer(t *testing.T) {
-
+func setupSim(serviceMap map[string]simulation.ServiceFunc) (int, int, *simulation.Simulation) {
 	nodeCount := *nodes
 	chunkCount := *chunks
 
@@ -49,26 +48,12 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 		chunkCount = 1
 	}
 
-	sim := simulation.New(simServiceMap).WithServer(":8888")
-	defer sim.Close()
+	sim := simulation.New(serviceMap).WithServer(":8888")
+	return nodeCount, chunkCount, sim
+}
 
-	log.Info("Initializing test config")
-
-	conf := &synctestConfig{}
-	//map of discover ID to indexes of chunks expected at that ID
-	conf.idToChunksMap = make(map[discover.NodeID][]int)
-	//map of overlay address to discover ID
-	conf.addrToIDMap = make(map[string]discover.NodeID)
-	//array where the generated chunk hashes will be stored
-	conf.hashes = make([]storage.Address, 0)
-
-	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
-	if err != nil {
-		panic(err)
-	}
-
+func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancelSimRun()
 
 	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		panic(err)
@@ -87,6 +72,75 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 			cancelSimRun()
 		}
 	}()
+
+	return ctx, cancelSimRun
+}
+
+func TestNonExistingHashesWithServer(t *testing.T) {
+	nodeCount, _, sim := setupSim(retrievalSimServiceMap)
+	defer sim.Close()
+
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancelSimRun := watchSim(sim)
+	defer cancelSimRun()
+
+	testDuration := 30 * time.Second
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		//check on the node's FileStore (netstore)
+		id := sim.RandomUpNode().ID
+		item, ok := sim.NodeItem(id, bucketKeyFileStore)
+		if !ok {
+			t.Fatalf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+		fakeHash := storage.GenerateRandomChunk(1000).Address()
+		fmt.Println(fakeHash)
+		reader, _ := fileStore.Retrieve(context.TODO(), fakeHash)
+		if _, err := reader.Size(ctx, nil); err != nil {
+			fmt.Println("expected error for non-existing chunk")
+		}
+
+		time.Sleep(testDuration)
+
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+
+	evt := &simulations.Event{
+		Type: EventTypeSimTerminated,
+	}
+	sim.Net.Events().Send(evt)
+
+}
+
+func TestSnapshotSyncWithServer(t *testing.T) {
+
+	nodeCount, chunkCount, sim := setupSim(simServiceMap)
+	defer sim.Close()
+
+	log.Info("Initializing test config")
+
+	conf := &synctestConfig{}
+	//map of discover ID to indexes of chunks expected at that ID
+	conf.idToChunksMap = make(map[discover.NodeID][]int)
+	//map of overlay address to discover ID
+	conf.addrToIDMap = make(map[string]discover.NodeID)
+	//array where the generated chunk hashes will be stored
+	conf.hashes = make([]storage.Address, 0)
+
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancelSimRun := watchSim(sim)
+	defer cancelSimRun()
 
 	//sim.PeerEvents(
 	offeredHashesFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(1)
