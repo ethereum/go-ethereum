@@ -408,7 +408,7 @@ type Config struct {
 // sealTask wraps a seal block with relative result channel for remote sealer thread.
 type sealTask struct {
 	block   *types.Block
-	results chan<- *types.Block
+	results chan<- *consensus.SealResult
 }
 
 // mineResult wraps the pow solution parameters for the specified block.
@@ -431,7 +431,7 @@ type hashrate struct {
 
 // sealWork wraps a seal work package for remote sealer.
 type sealWork struct {
-	extra string // The specified string used to fill the block extra field
+	extra *string // The specified string used to fill the block extra field
 	errc  chan error
 	res   chan [3]string
 }

@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -37,15 +38,15 @@ func TestTestMode(t *testing.T) {
 	ethash := NewTester(nil, false)
 	defer ethash.Close()
 
-	results := make(chan *types.Block)
+	results := make(chan *consensus.SealResult)
 	err := ethash.Seal(nil, types.NewBlockWithHeader(header), results, nil)
 	if err != nil {
 		t.Fatalf("failed to seal block: %v", err)
 	}
 	select {
-	case block := <-results:
-		header.Nonce = types.EncodeNonce(block.Nonce())
-		header.MixDigest = block.MixDigest()
+	case result := <-results:
+		header.Nonce = types.EncodeNonce(result.Block.Nonce())
+		header.MixDigest = result.Block.MixDigest()
 		if err := ethash.VerifySeal(nil, header); err != nil {
 			t.Fatalf("unexpected verification error: %v", err)
 		}
@@ -103,7 +104,7 @@ func TestRemoteSealer(t *testing.T) {
 	sealhash := ethash.SealHash(header)
 
 	// Push new work.
-	results := make(chan *types.Block)
+	results := make(chan *consensus.SealResult)
 	ethash.Seal(nil, block, results, nil)
 
 	var (
@@ -138,7 +139,7 @@ func TestCustomizedWork(t *testing.T) {
 	block := types.NewBlockWithHeader(header)
 
 	// Push new work.
-	results := make(chan *types.Block, 1)
+	results := make(chan *consensus.SealResult, 1)
 	ethash.Seal(nil, block, results, nil)
 
 	// Get customized mining work.

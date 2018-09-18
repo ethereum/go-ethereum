@@ -91,7 +91,7 @@ type Engine interface {
 	//
 	// Note, the method returns immediately and will send the result async. More
 	// than one result may also be returned depending on the consensus algorithm.
-	Seal(chain ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
+	Seal(chain ChainReader, block *types.Block, results chan<- *SealResult, stop <-chan struct{}) error
 
 	// SealHash returns the hash of a block prior to it being sealed.
 	SealHash(header *types.Header) common.Hash
@@ -113,4 +113,15 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
+}
+
+// SealResult contains a sealed block and the corresponding sealhash.
+//
+// Note for ethash, the sealhash in struct may not match the result of SealHash
+// calculation with the block because we allow remote miner to customize `extra`
+// field for the mining block. The sealhash in struct is the unique id
+// for miner tracked mining work.
+type SealResult struct {
+	SealHash common.Hash
+	Block    *types.Block
 }

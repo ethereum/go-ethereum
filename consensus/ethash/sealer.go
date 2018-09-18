@@ -47,13 +47,13 @@ var (
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
 // the block's difficulty requirements.
-func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *consensus.SealResult, stop <-chan struct{}) error {
 	// If we're running a fake PoW, simply return a 0 nonce immediately
 	if ethash.config.PowMode == ModeFake || ethash.config.PowMode == ModeFullFake {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
 		select {
-		case results <- block.WithSeal(header):
+		case results <- &consensus.SealResult{SealHash: ethash.SealHash(header), Block: block.WithSeal(header)}:
 		default:
 			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", ethash.SealHash(block.Header()))
 		}
@@ -107,10 +107,11 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, resu
 			close(abort)
 		case result = <-locals:
 			// One of the threads found a block, abort all others
+			sealhash := ethash.SealHash(block.Header())
 			select {
-			case results <- result:
+			case results <- &consensus.SealResult{SealHash: sealhash, Block: result}:
 			default:
-				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", ethash.SealHash(block.Header()))
+				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", sealhash)
 			}
 			close(abort)
 		case <-ethash.update:
@@ -187,13 +188,21 @@ search:
 
 // remote is a standalone goroutine to handle remote mining related stuff.
 func (ethash *Ethash) remote(notify []string, noverify bool) {
+	// miningWork wraps a mining block fetched by remote miner and
+	// an unique id tracked by miner.
+	type miningWork struct {
+		sealHash common.Hash
+		block    *types.Block
+	}
+
 	var (
-		works = make(map[common.Hash]*types.Block)
+		works = make(map[common.Hash]*miningWork)
 		rates = make(map[common.Hash]hashrate)
 
-		results      chan<- *types.Block
+		results      chan<- *consensus.SealResult
 		currentBlock *types.Block
 		currentWork  [3]string
+		currentHash  common.Hash
 
 		notifyTransport = &http.Transport{}
 		notifyClient    = &http.Client{
@@ -243,7 +252,9 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 
 		// Trace the seal work fetched by remote sealer.
 		currentBlock = block
-		works[hash] = block
+		works[hash] = &miningWork{block: block, sealHash: hash}
+		currentHash = hash
+		log.Trace("Create mining work", "sealhash", hash, "number", currentBlock.NumberU64())
 	}
 	// customizeWork creates a work package for external miner
 	// with customized extra data.
@@ -260,7 +271,8 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		work[2] = currentWork[2]
 
 		// Trace the seal work fetched by remote sealer.
-		works[hash] = newBlock
+		log.Trace("Create customized work", "sealhash", hash, "original", currentHash, "number", currentBlock.NumberU64())
+		works[hash] = &miningWork{block: newBlock, sealHash: currentHash}
 		return work
 	}
 	// submitWork verifies the submitted pow solution, returning
@@ -272,13 +284,13 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			return false
 		}
 		// Make sure the work submitted is present
-		block := works[sealhash]
-		if block == nil {
+		work := works[sealhash]
+		if work == nil {
 			log.Warn("Work submitted but none pending", "sealhash", sealhash, "curnumber", currentBlock.NumberU64())
 			return false
 		}
 		// Verify the correctness of submitted result.
-		header := block.Header()
+		header := work.block.Header()
 		header.Nonce = nonce
 		header.MixDigest = mixDigest
 
@@ -297,12 +309,12 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		log.Trace("Verified correct proof-of-work", "sealhash", sealhash, "elapsed", time.Since(start))
 
 		// Solutions seems to be valid, return to the miner and notify acceptance.
-		solution := block.WithSeal(header)
+		solution := work.block.WithSeal(header)
 
 		// The submitted solution is within the scope of acceptance.
 		if solution.NumberU64()+staleThreshold > currentBlock.NumberU64() {
 			select {
-			case results <- solution:
+			case results <- &consensus.SealResult{SealHash: work.sealHash, Block: solution}:
 				log.Debug("Work submitted is acceptable", "number", solution.NumberU64(), "sealhash", sealhash, "hash", solution.Hash())
 				return true
 			default:
@@ -334,13 +346,13 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			if currentBlock == nil {
 				// Return error message if there is no available mining work yet.
 				work.errc <- errNoMiningWork
-			} else if work.extra == "" {
+			} else if work.extra == nil {
 				// Return the default current mining work if no extra customized data
 				// specified.
 				work.res <- currentWork
 			} else {
 				// Return the customized mining work.
-				work.res <- customizeWork(work.extra)
+				work.res <- customizeWork(*work.extra)
 			}
 
 		case result := <-ethash.submitWorkCh:
@@ -374,8 +386,8 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 			}
 			// Clear stale pending blocks
 			if currentBlock != nil {
-				for hash, block := range works {
-					if block.NumberU64()+staleThreshold <= currentBlock.NumberU64() {
+				for hash, work := range works {
+					if work.block.NumberU64()+staleThreshold <= currentBlock.NumberU64() {
 						delete(works, hash)
 					}
 				}

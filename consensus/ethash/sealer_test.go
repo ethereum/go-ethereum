@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -175,7 +176,7 @@ func TestStaleSubmission(t *testing.T) {
 			false,
 		},
 	}
-	results := make(chan *types.Block, 16)
+	results := make(chan *consensus.SealResult, 16)
 
 	for id, c := range testcases {
 		for _, h := range c.headers {
@@ -189,20 +190,20 @@ func TestStaleSubmission(t *testing.T) {
 		}
 		select {
 		case res := <-results:
-			if res.Header().Nonce != fakeNonce {
-				t.Errorf("case %d block nonce mismatch, want %s, get %s", id+1, fakeNonce, res.Header().Nonce)
+			if res.Block.Header().Nonce != fakeNonce {
+				t.Errorf("case %d block nonce mismatch, want %s, get %s", id+1, fakeNonce, res.Block.Header().Nonce)
 			}
-			if res.Header().MixDigest != fakeDigest {
-				t.Errorf("case %d block digest mismatch, want %s, get %s", id+1, fakeDigest, res.Header().MixDigest)
+			if res.Block.Header().MixDigest != fakeDigest {
+				t.Errorf("case %d block digest mismatch, want %s, get %s", id+1, fakeDigest, res.Block.Header().MixDigest)
 			}
-			if res.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
-				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Header().Difficulty)
+			if res.Block.Header().Difficulty.Uint64() != c.headers[c.submitIndex].Difficulty.Uint64() {
+				t.Errorf("case %d block difficulty mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Difficulty, res.Block.Header().Difficulty)
 			}
-			if res.Header().Number.Uint64() != c.headers[c.submitIndex].Number.Uint64() {
-				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Header().Number.Uint64())
+			if res.Block.Header().Number.Uint64() != c.headers[c.submitIndex].Number.Uint64() {
+				t.Errorf("case %d block number mismatch, want %d, get %d", id+1, c.headers[c.submitIndex].Number.Uint64(), res.Block.Header().Number.Uint64())
 			}
-			if res.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
-				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Header().ParentHash.Hex())
+			if res.Block.Header().ParentHash != c.headers[c.submitIndex].ParentHash {
+				t.Errorf("case %d block parent hash mismatch, want %s, get %s", id+1, c.headers[c.submitIndex].ParentHash.Hex(), res.Block.Header().ParentHash.Hex())
 			}
 		case <-time.NewTimer(time.Second).C:
 			t.Errorf("case %d fetch ethash result timeout", id+1)

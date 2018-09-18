@@ -46,17 +46,12 @@ func (api *API) GetWork(extra *string) ([3]string, error) {
 	}
 
 	var (
-		extraData string
-		workCh    = make(chan [3]string, 1)
-		errc      = make(chan error, 1)
+		workCh = make(chan [3]string, 1)
+		errc   = make(chan error, 1)
 	)
 
-	if extra != nil {
-		extraData = *extra
-	}
-
 	select {
-	case api.ethash.fetchWorkCh <- &sealWork{extra: extraData, errc: errc, res: workCh}:
+	case api.ethash.fetchWorkCh <- &sealWork{extra: extra, errc: errc, res: workCh}:
 	case <-api.ethash.exitCh:
 		return [3]string{}, errEthashStopped
 	}
