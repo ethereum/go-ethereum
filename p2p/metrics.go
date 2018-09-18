@@ -161,6 +161,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
 func (c *meteredConn) handshakeDone(id enode.ID) {
+	// TODO (kurkomisi): use the node URL instead of the pure node ID. (the String() method of *Node)
 	if atomic.AddInt32(&meteredPeerCount, 1) >= MeteredPeerLimit {
 		// Don't register the peer in the traffic registries.
 		atomic.AddInt32(&meteredPeerCount, -1)
