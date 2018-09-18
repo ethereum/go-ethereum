@@ -159,11 +159,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, err
 	}
 
-	err = lstore.Migrate()
-	if err != nil {
-		return nil, err
-	}
-
 	self.netStore, err = storage.NewNetStore(lstore, nil)
 	if err != nil {
 		return nil, err
@@ -200,6 +195,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	lstore.Validators = []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
 		feedsHandler,
+	}
+
+	err = lstore.Migrate()
+	if err != nil {
+		return nil, err
 	}
 
 	err = lstore.Migrate()

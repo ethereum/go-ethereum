@@ -60,7 +60,7 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
-	keySchema      = byte(8)
+	keySchema      = []byte{8}
 )
 
 var (
