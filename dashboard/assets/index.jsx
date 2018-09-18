@@ -19,8 +19,8 @@
 import React from 'react';
 import {render} from 'react-dom';
 
-import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
-import createMuiTheme from 'material-ui/styles/createMuiTheme';
+import MuiThemeProvider from '@material-ui/core/styles/MuiThemeProvider';
+import createMuiTheme from '@material-ui/core/styles/createMuiTheme';
 
 import Dashboard from './components/Dashboard';
 

@@ -51,7 +51,48 @@ export type TxPool = {
 };
 
 export type Network = {
-	/* TODO (kurkomisi) */
+	peers: Peers,
+	diff:  Array<PeerEvent>
+};
+
+export type PeerEvent = {
+	ip:           string,
+	id:           string,
+	remove:       string,
+	location:     GeoLocation,
+	connected:    Date,
+	disconnected: Date,
+	ingress:      ChartEntries,
+	egress:       ChartEntries,
+};
+
+export type Peers = {
+	bundles: {[string]: PeerBundle},
+};
+
+export type PeerBundle = {
+	location:     GeoLocation,
+	knownPeers:   {[string]: KnownPeer},
+	unknownPeers: Array<UnknownPeer>,
+};
+
+export type KnownPeer = {
+	connected:    Array<Date>,
+	disconnected: Array<Date>,
+	ingress:      Array<ChartEntries>,
+	egress:       Array<ChartEntries>,
+};
+
+export type UnknownPeer = {
+	connected:    Date,
+	disconnected: Date,
+};
+
+export type GeoLocation = {
+	country:   string,
+	city:      string,
+	latitude:  number,
+	longitude: number,
 };
 
 export type System = {
