@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -75,6 +76,25 @@ func TestSendTxSign(t *testing.T) {
 
 		if len(signers) != len(keys) {
 			t.Error("Tx sign for block validators not match")
+		}
+	}
+
+	// Unit test for reward checkpoint.
+	rCheckpoint := uint64(10)
+	chainReward := new(big.Int).SetUint64(15 * params.Ether)
+	for i := uint64(0); i < 100; i++ {
+		if i > 0 && i%rCheckpoint == 0 && i-rCheckpoint > 0 {
+			signers, err := GetRewardForCheckpoint(chainReward, blockSignerAddr, i, rCheckpoint, backend)
+			if err != nil {
+				t.Errorf("Fail to get signers for reward checkpoint: %v", err)
+			}
+			rewards := new(big.Int)
+			for _, reward := range signers {
+				rewards.Add(rewards, reward)
+			}
+			if rewards.Cmp(chainReward) != 0 {
+				t.Errorf("Total reward not same reward checkpoint: %v - %v", chainReward, rewards)
+			}
 		}
 	}
 }

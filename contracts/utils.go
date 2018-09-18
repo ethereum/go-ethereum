@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -68,9 +69,8 @@ func CreateTxSign(blockNumber *big.Int, nonce uint64, blockSigner common.Address
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(client bind.ContractBackend, blockNumber uint64) ([]common.Address, error) {
-	addr := common.HexToAddress(common.BlockSigners)
-	blockSigner, err := contract.NewBlockSigner(addr, client)
+func GetSignersFromContract(addrBlockSigner common.Address, client bind.ContractBackend, blockNumber uint64) ([]common.Address, error) {
+	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
 	if err != nil {
 		log.Error("Fail get instance of blockSigner", "error", err)
 		return nil, err
@@ -83,4 +83,66 @@ func GetSignersFromContract(client bind.ContractBackend, blockNumber uint64) ([]
 	}
 
 	return addrs, nil
+}
+
+// Calculate reward for reward checkpoint.
+func GetRewardForCheckpoint(chainReward *big.Int, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend) (map[common.Address]*big.Int, error) {
+	type rewardLog struct {
+		Sign   uint64   `json:"sign"`
+		Reward *big.Int `json:"reward"`
+	}
+
+	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+	startBlockNumber := number - (rCheckpoint * 2) + 1
+	endBlockNumber := startBlockNumber + rCheckpoint - 1
+	signers := make(map[common.Address]*rewardLog)
+	totalSigner := uint64(0)
+
+	for i := startBlockNumber; i <= endBlockNumber; i++ {
+		addrs, err := GetSignersFromContract(blockSignerAddr, client, i)
+		if err != nil {
+			log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+			return nil, err
+		}
+		// Filter duplicate address.
+		if len(addrs) > 0 {
+			addrSigners := make(map[common.Address]bool)
+			for _, addr := range addrs {
+				if _, ok := addrSigners[addr]; !ok {
+					addrSigners[addr] = true
+				}
+			}
+			for addr := range addrSigners {
+				_, exist := signers[addr]
+				if exist {
+					signers[addr].Sign++
+				} else {
+					signers[addr] = &rewardLog{1, new(big.Int)}
+				}
+				totalSigner++
+			}
+		}
+	}
+
+	resultSigners := make(map[common.Address]*big.Int)
+	// Add reward for signer.
+	calcReward := new(big.Int)
+	// Add reward for signers.
+	for signer, rLog := range signers {
+		calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
+		calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+		rLog.Reward = calcReward
+
+		resultSigners[signer] = calcReward
+	}
+
+	jsonSigners, err := json.Marshal(signers)
+	if err != nil {
+		log.Error("Fail to parse json signers", "error", err)
+		return nil, err
+	}
+
+	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
+
+	return resultSigners, nil
 }
