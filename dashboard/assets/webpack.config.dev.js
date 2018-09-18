@@ -24,7 +24,7 @@ module.exports = merge(common, {
 		new webpack.HotModuleReplacementPlugin(),
 	],
 	// devtool:   'eval',
-	devtool:   'inline-source-map',
+	devtool:   'source-map',
 	devServer: {
 		port:     8081,
 		hot:      true,

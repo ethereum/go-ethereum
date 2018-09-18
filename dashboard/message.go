@@ -66,7 +66,8 @@ type NetworkMessage struct {
 func (m *NetworkMessage) getOrInitBundle(ip string) *PeerBundle {
 	if _, ok := m.PeerBundles[ip]; !ok {
 		m.PeerBundles[ip] = &PeerBundle{
-			Peers: make(map[string]*Peer),
+			Peers: make(PeerMap),
+			FailedPeers: make(PeerMap),
 		}
 	}
 	return m.PeerBundles[ip]
@@ -78,18 +79,40 @@ func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
 	return m.getOrInitBundle(ip).getOrInitPeer(id)
 }
 
+type PeerMap map[string]*Peer
+
+func (pm PeerMap) getOrInit(id string) *Peer {
+	if _, ok := pm[id]; !ok {
+		pm[id] = new(Peer)
+	}
+	return pm[id]
+}
+
+func (pm PeerMap) remove(id string) {
+	delete(pm, id)
+}
+
 // PeerBundle contains information about the peers pertaining to an IP address.
 type PeerBundle struct {
-	Location    *GeoLocation     `json:"location,omitempty"` // geographical information based on IP
-	Peers       map[string]*Peer `json:"peers,omitempty"`    // the peers' node id is used as key
-	FailedPeers []*Peer          `json:"failedPeers,omitempty"`
+	Location    *GeoLocation `json:"location,omitempty"` // geographical information based on IP
+	Peers       PeerMap      `json:"peers,omitempty"`    // the peers' node id is used as key
+	FailedPeers PeerMap      `json:"failedPeers,omitempty"`
 }
 
 func (b *PeerBundle) getOrInitPeer(id string) *Peer {
-	if _, ok := b.Peers[id]; !ok {
-		b.Peers[id] = new(Peer)
-	}
-	return b.Peers[id]
+	return b.Peers.getOrInit(id)
+}
+
+func (b *PeerBundle) removePeer(id string) {
+	b.Peers.remove(id)
+}
+
+func (b *PeerBundle) getOrInitFailedPeer(id string) *Peer {
+	return b.FailedPeers.getOrInit(id)
+}
+
+func (b * PeerBundle) removeFailedPeer(id string) {
+	b.FailedPeers.remove(id)
 }
 
 // GeoLocation contains geographical information.
@@ -108,9 +131,8 @@ type Peer struct {
 	Ingress ChartEntries `json:"ingress,omitempty"`
 	Egress  ChartEntries `json:"egress,omitempty"`
 
-	DefaultID string `json:"defaultID,omitempty"`
-
 	element *list.Element
+	ip, id string
 }
 
 // SystemMessage contains the metered system data samples.

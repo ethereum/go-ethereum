@@ -46,24 +46,12 @@ export const inserter = (update: {[string]: PeerBundle}, prev: {[string]: PeerBu
 				prev[ip].peers[id] = u;
 				return;
 			}
-			// If the handshake was between two metering
-			if (u.defaultID && prev[ip].peers[u.defaultID]) {
-				// TODO (kurkomisi): merge the two in order to keep the previous connection.
-				prev[ip].peers[id] = prev[ip].peers[u.defaultID];
-				delete prev[ip].peers[u.defaultID];
-			}
 			const p: Peer = prev[ip].peers[id];
 			if (u.connected) {
 				if (!Array.isArray(p.connected)) {
 					p.connected = [];
 				}
 				p.connected = [...p.connected, ...u.connected];
-			}
-			if (u.handshake) {
-				if (!Array.isArray(p.handshake)) {
-					p.handshake = [];
-				}
-				p.handshake = [...p.handshake, ...u.handshake];
 			}
 			if (u.disconnected) {
 				if (!Array.isArray(p.disconnected)) {
@@ -126,12 +114,11 @@ class Network extends Component<Props, State> {
 						<TableCell>Ingress</TableCell>
 						<TableCell>Egress</TableCell>
 						<TableCell>Connected</TableCell>
-						<TableCell>Handshake</TableCell>
 						<TableCell>Disconnected</TableCell>
 					</TableRow>
 				</TableHead>
 				<TableBody>
-					{Object.entries(this.props.content.peerBundles).map(([ip, bundle]) => (
+					{Object.entries(this.props.content.peerBundles).map(([ip, bundle]) => { console.log(ip, bundle); return (
 						<TableRow key={ip}>
 							<TableCell>{ip}</TableCell>
 							<TableCell>
@@ -141,25 +128,22 @@ class Network extends Component<Props, State> {
 								})() : ''}
 							</TableCell>
 							<TableCell>
-								{Object.keys(bundle.peers).map(id => id.substring(0, 10)).join(' ')}
+								{bundle.peers && Object.keys(bundle.peers).map(id => id.substring(0, 10)).join(' ')}
 							</TableCell>
 							<TableCell>
-								{Object.values(bundle.peers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
+								{bundle.peers && Object.values(bundle.peers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.values(bundle.peers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
+								{bundle.peers && Object.values(bundle.peers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.values(bundle.peers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{bundle.peers && Object.values(bundle.peers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{Object.values(bundle.peers).map(peer => peer.handshake && peer.handshake.map(time => this.formatTime(time)).join(' ')).join(', ')}
-							</TableCell>
-							<TableCell>
-								{Object.values(bundle.peers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{bundle.peers && Object.values(bundle.peers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 						</TableRow>
-					))}
+					)})}
 				</TableBody>
 			</Table>
 		);

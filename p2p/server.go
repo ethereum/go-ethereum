@@ -387,7 +387,6 @@ func (srv *Server) Stop() {
 	}
 	close(srv.quit)
 	srv.lock.Unlock()
-	closeMetricsFeed()
 	srv.loopWG.Wait()
 }
 
@@ -542,7 +541,6 @@ func (srv *Server) Start() (err error) {
 
 	srv.loopWG.Add(1)
 	go srv.run(dialer)
-	go runMetricsFeedHelper(5 * time.Second)
 	srv.running = true
 	return nil
 }

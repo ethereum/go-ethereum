@@ -18,9 +18,7 @@ package dashboard
 
 import (
 	"container/list"
-	"encoding/json"
 	"fmt"
-	"github.com/mohae/deepcopy"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -29,6 +27,58 @@ import (
 
 const eventBufferLimit = 128 // Maximum number of buffered peer events
 const trafficEventBufferLimit = p2p.MeteredPeerLimit
+const connectionLimit = 100
+
+var autoID int64
+
+type peerLimiter struct {
+	underlying *NetworkMessage
+	failed bool
+	l *list.List
+}
+
+func NewPeerLimiter(underlying *NetworkMessage, failed bool) *peerLimiter {
+	return &peerLimiter{l: list.New(), underlying: underlying, failed: failed}
+}
+
+func (pl *peerLimiter) update(peer *Peer) {
+	return
+	if peer.element == nil {
+		peer.element = pl.l.PushBack(peer)
+	} else {
+		pl.l.MoveToBack(peer.element)
+	}
+	for pl.l.Len() > 2 {//p2p.MeteredPeerLimit {
+		pl.remove(pl.l.Front())
+	}
+}
+
+func (pl *peerLimiter) remove(e *list.Element) {
+	return
+	elem := pl.l.Remove(e)
+	if peer, ok := elem.(*Peer); ok {
+		if pl.failed {
+			fmt.Println(peer.ip, peer.id)
+			pl.underlying.PeerBundles[peer.ip].FailedPeers.remove(peer.id)
+		} else {
+			fmt.Println(peer.ip, peer.id[:10])
+			pl.underlying.PeerBundles[peer.ip].Peers.remove(peer.id)
+		}
+	}
+}
+
+func (pl *peerLimiter) clear() {
+	for pl.l.Front() != nil {
+		pl.remove(pl.l.Front())
+	}
+}
+//
+//func tail(arr []time.Time) []time.Time {
+//	if first := len(arr)-connectionLimit; first > 0 {
+//		return arr[first:]
+//	}
+//	return arr
+//}
 
 // collectPeerData gathers data about the peers and sends it to the clients.
 func (db *Dashboard) collectPeerData() {
@@ -45,148 +95,154 @@ func (db *Dashboard) collectPeerData() {
 
 	var (
 		// Peer event channels.
-		connectCh    = make(chan p2p.PeerConnectEvent, eventBufferLimit)
-		failedCh     = make(chan p2p.PeerFailedEvent, eventBufferLimit)
-		disconnectCh = make(chan p2p.PeerDisconnectEvent, eventBufferLimit)
-		ingressCh    = make(chan p2p.PeerTrafficEvent, trafficEventBufferLimit)
-		egressCh     = make(chan p2p.PeerTrafficEvent, trafficEventBufferLimit)
-
+		peerCh    = make(chan p2p.MeteredPeerEvent, eventBufferLimit)
 		// Subscribe to peer events.
-		subConnect    = p2p.SubscribePeerConnectEvent(connectCh)
-		subFailed     = p2p.SubscribePeerFailedEvent(failedCh)
-		subDisconnect = p2p.SubscribePeerDisconnectEvent(disconnectCh)
-		subIngress    = p2p.SubscribePeerIngressEvent(ingressCh)
-		subEgress     = p2p.SubscribePeerEgressEvent(egressCh)
+		subPeer    = p2p.SubscribePeerEvent(peerCh)
 	)
 	defer func() {
 		// Unsubscribe at the end.
-		subConnect.Unsubscribe()
-		subFailed.Unsubscribe()
-		subDisconnect.Unsubscribe()
-		subIngress.Unsubscribe()
-		subEgress.Unsubscribe()
+		subPeer.Unsubscribe()
 	}()
 
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
-	purgeOrder := list.New()
-	failedPurgeOrder := list.New()
-	update := func(peer *Peer, l *list.List) {
-		if peer.element == nil {
-			peer.element = purgeOrder.PushBack(peer)
-		} else {
-			purgeOrder.MoveToBack(peer.element)
-		}
-	}
-	// Listen for events, and prepare the difference between two metering.
-	diff := &NetworkMessage{
-		PeerBundles: make(map[string]*PeerBundle),
-	}
+	db.peerLock.RLock()
+	//historyPeerLimiter := NewPeerLimiter(db.history.Network, false)
+	//historyFailedPeerLimiter := NewPeerLimiter(db.history.Network, true)
+	//db.peerLock.RUnlock()
+	//// Listen for events, and prepare the difference between two metering.
+	//diff := &NetworkMessage{
+	//	PeerBundles: make(map[string]*PeerBundle),
+	//}
+	//// Needed in order to keep the limit in the diff
+	//diffPeerLimiter := NewPeerLimiter(diff, false)
+	//diffFailedPeerLimiter := NewPeerLimiter(diff, true)
 	for {
 		select {
-		case event := <-connectCh:
-			diffBundle := diff.getOrInitBundle(event.IP)
-			diffBundle.Location = db.geodb.Location(event.IP)
-			diffPeer := diffBundle.getOrInitPeer(event.ID)
-			diffPeer.Connected = append(diffPeer.Connected, event.Connected)
-		case event := <-failedCh:
-			diffBundle := diff.getOrInitBundle(event.IP)
-			diffBundle.Location = db.geodb.Location(event.IP)
-			diffBundle.FailedPeers = append(diffBundle.FailedPeers, &Peer{
-				Connected: []time.Time{event.Connected},
-				Disconnected: []time.Time{event.Disconnected},
-			})
-		case event := <-disconnectCh:
-			diffPeer := diff.getOrInitPeer(event.IP, event.ID)
-			diffPeer.Disconnected = append(diffPeer.Disconnected, event.Disconnected)
-		case event := <-ingressCh:
-			diffPeer := diff.getOrInitPeer(event.IP, event.ID)
-			if len(diffPeer.Ingress) != 1 {
-				diffPeer.Ingress = ChartEntries{&ChartEntry{Value: float64(event.Amount)}}
-			} else {
-				diffPeer.Ingress[0].Value = float64(event.Amount)
-			}
-		case event := <-egressCh:
-			diffPeer := diff.getOrInitPeer(event.IP, event.ID)
-			if len(diffPeer.Egress) != 1 {
-				diffPeer.Egress = ChartEntries{&ChartEntry{Value: float64(event.Amount)}}
-			} else {
-				diffPeer.Egress[0].Value = float64(event.Amount)
-			}
-		case <-ticker.C:
-			now := time.Now()
-			// Merge the diff with the history.
-			db.peerLock.Lock()
-			for ip, diffBundle := range diff.PeerBundles {
-				historyBundle := db.history.Network.getOrInitBundle(ip)
-				historyBundle.Location = diffBundle.Location
-				for id, diffPeer := range diffBundle.Peers {
-					historyPeer := historyBundle.getOrInitPeer(id)
-					historyPeer.Connected = append(historyPeer.Connected, diffPeer.Connected...)
-					historyPeer.Disconnected = append(historyPeer.Disconnected, diffPeer.Disconnected...)
-					if len(diffPeer.Ingress) == 1 {
-						diffPeer.Ingress[0].Time = now
-						if historyPeer.Ingress == nil {
-							historyPeer.Ingress = append(emptyChartEntries(now.Add(-db.config.Refresh), sampleLimit-1, db.config.Refresh), diffPeer.Ingress[0])
-							// The first message about a diffPeer should contain the whole list
-							diffPeer.Ingress = historyPeer.Ingress
-						} else {
-							historyPeer.Ingress = append(historyPeer.Ingress, diffPeer.Ingress[0])[1:]
-						}
-					}
-					if len(diffPeer.Egress) == 1 {
-						diffPeer.Egress[0].Time = now
-						if historyPeer.Egress == nil {
-							historyPeer.Egress = append(emptyChartEntries(now.Add(-db.config.Refresh), sampleLimit-1, db.config.Refresh), diffPeer.Egress[0])
-							// The first message about a diffPeer should contain the whole list
-							diffPeer.Egress = historyPeer.Egress
-						} else {
-							historyPeer.Egress = append(historyPeer.Egress, diffPeer.Egress[0])[1:]
-						}
-					}
-					update(historyPeer, purgeOrder)
-				}
-				historyBundle.FailedPeers = append(historyBundle.FailedPeers, diffBundle.FailedPeers...)
-				for _, fp := range diffBundle.FailedPeers {
-					update(fp, failedPurgeOrder)
-				}
-			}
-			for purgeOrder.Len() > p2p.MeteredPeerLimit {
-				purgeOrder.Remove(purgeOrder.Front())
-			}
-			for failedPurgeOrder.Len() > p2p.MeteredPeerLimit {
-				failedPurgeOrder.Remove(failedPurgeOrder.Front())
-			}
-
-			//ss, _ := json.MarshalIndent(db.history.Network, "", "   ")
-			//fmt.Println(string(ss))
-			db.peerLock.Unlock()
-			// Send the diff to the clients.
-			db.sendToAll(&Message{Network: deepcopy.Copy(diff).(*NetworkMessage)})
-			//s, _ := json.MarshalIndent(diff, "", "   ")
-			//fmt.Println(string(s))
-
-			s, _ := json.MarshalIndent(diff, "", "  ")
-			fmt.Println(string(s))
-			// Prepare for the next metering, clear the diff variable.
-			diff = &NetworkMessage{
-				PeerBundles: make(map[string]*PeerBundle),
-			}
-		case err := <-subConnect.Err():
-			log.Warn("Peer connect subscription error", "err", err)
-			return
-		case err := <-subFailed.Err():
-			log.Warn("Peer failed subscription error", "err", err)
-			return
-		case err := <-subDisconnect.Err():
-			log.Warn("Peer disconnect subscription error", "err", err)
-			return
-		case err := <-subIngress.Err():
-			log.Warn("Peer ingress subscription error", "err", err)
-			return
-		case err := <-subEgress.Err():
-			log.Warn("Peer egress subscription error", "err", err)
+		case event := <-peerCh:
+			fmt.Println(event)
+		//case event := <-connectCh:
+		//	diffBundle := diff.getOrInitBundle(event.IP)
+		//	diffBundle.Location = db.geodb.Location(event.IP)
+		//	diffPeer := diffBundle.getOrInitPeer(event.ID)
+		//	diffPeer.Connected = append(diffPeer.Connected, event.Connected)
+		//	if first := len(diffPeer.Connected)-connectionLimit; first > 0 {
+		//		diffPeer.Connected = diffPeer.Connected[first:]
+		//	}
+		//	diffPeer.ip = event.IP
+		//	diffPeer.id = event.ID
+		//	diffPeerLimiter.update(diffPeer)
+		//case event := <-disconnectCh:
+		//	diffPeer := diff.getOrInitPeer(event.IP, event.ID)
+		//	diffPeer.Disconnected = append(diffPeer.Disconnected, event.Time)
+		//	if first := len(diffPeer.Connected)-connectionLimit; first > 0 {
+		//		diffPeer.Connected = diffPeer.Connected[first:]
+		//	}
+		//	diffPeer.ip = event.IP
+		//	diffPeer.id = event.ID
+		//	diffPeerLimiter.update(diffPeer)
+		//case event := <-ingressCh:
+		//	diffPeer := diff.getOrInitPeer(event.IP, event.ID)
+		//	if len(diffPeer.Ingress) != 1 {
+		//		diffPeer.Ingress = ChartEntries{&ChartEntry{Value: float64(event.Amount)}}
+		//	} else {
+		//		diffPeer.Ingress[0].Value = float64(event.Amount)
+		//	}
+		//	diffPeer.ip = event.IP
+		//	diffPeer.id = event.ID
+		//	diffPeerLimiter.update(diffPeer)
+		//case event := <-egressCh:
+		//	diffPeer := diff.getOrInitPeer(event.IP, event.ID)
+		//	if len(diffPeer.Egress) != 1 {
+		//		diffPeer.Egress = ChartEntries{&ChartEntry{Value: float64(event.Amount)}}
+		//	} else {
+		//		diffPeer.Egress[0].Value = float64(event.Amount)
+		//	}
+		//	diffPeer.ip = event.IP
+		//	diffPeer.id = event.ID
+		//	diffPeerLimiter.update(diffPeer)
+		//case event := <-failedCh:
+		//	diffBundle := diff.getOrInitBundle(event.IP)
+		//	diffBundle.Location = db.geodb.Location(event.IP)
+		//	id := fmt.Sprintf("peer_%d", atomic.AddInt64(&autoID, 1))
+		//	failedPeer := diffBundle.FailedPeers.getOrInit(id)
+		//	failedPeer.Connected = []time.Time{event.Connected}
+		//	failedPeer.Disconnected = []time.Time{event.Disconnected}
+		//	failedPeer.ip = event.IP
+		//	failedPeer.id = id
+		//	diffFailedPeerLimiter.update(failedPeer)
+		//case <-ticker.C:
+		//	now := time.Now()
+		//	// Merge the diff with the history.
+		//	db.peerLock.Lock()
+		//	for ip, diffBundle := range diff.PeerBundles {
+		//		historyBundle := db.history.Network.getOrInitBundle(ip)
+		//		historyBundle.Location = diffBundle.Location
+		//		for id, diffPeer := range diffBundle.Peers {
+		//			historyPeer := historyBundle.getOrInitPeer(id)
+		//			historyPeer.Connected = append(historyPeer.Connected, diffPeer.Connected...)
+		//			if first := len(historyPeer.Connected)-connectionLimit; first > 0 {
+		//				historyPeer.Connected = historyPeer.Connected[first:]
+		//			}
+		//			historyPeer.Disconnected = append(historyPeer.Disconnected, diffPeer.Disconnected...)
+		//			if first := len(historyPeer.Disconnected)-connectionLimit; first > 0 {
+		//				historyPeer.Disconnected = historyPeer.Disconnected[first:]
+		//			}
+		//			if len(diffPeer.Ingress) == 1 {
+		//				diffPeer.Ingress[0].Time = now
+		//				if historyPeer.Ingress == nil {
+		//					historyPeer.Ingress = append(emptyChartEntries(now.Add(-db.config.Refresh), 3/*sampleLimit-1*/, db.config.Refresh), diffPeer.Ingress[0])
+		//					// The first message about a diffPeer should contain the whole list
+		//					diffPeer.Ingress = historyPeer.Ingress
+		//				} else {
+		//					historyPeer.Ingress = append(historyPeer.Ingress, diffPeer.Ingress[0])[1:]
+		//				}
+		//			}
+		//			if len(diffPeer.Egress) == 1 {
+		//				diffPeer.Egress[0].Time = now
+		//				if historyPeer.Egress == nil {
+		//					historyPeer.Egress = append(emptyChartEntries(now.Add(-db.config.Refresh), 3/*sampleLimit-1*/, db.config.Refresh), diffPeer.Egress[0])
+		//					// The first message about a diffPeer should contain the whole list
+		//					diffPeer.Egress = historyPeer.Egress
+		//				} else {
+		//					historyPeer.Egress = append(historyPeer.Egress, diffPeer.Egress[0])[1:]
+		//				}
+		//			}
+		//			historyPeer.ip = diffPeer.ip
+		//			historyPeer.id = diffPeer.id
+		//			historyPeerLimiter.update(historyPeer)
+		//		}
+		//		for id, diffFailedPeer := range diffBundle.FailedPeers {
+		//			historyFailedPeer := historyBundle.getOrInitFailedPeer(id)
+		//			historyFailedPeer.Connected = diffFailedPeer.Connected
+		//			historyFailedPeer.Disconnected = diffFailedPeer.Disconnected
+		//			historyFailedPeer.ip = diffFailedPeer.ip
+		//			historyFailedPeer.id = diffFailedPeer.id
+		//			historyFailedPeerLimiter.update(historyFailedPeer)
+		//		}
+		//	}
+		//	//for elem := historyPeerLimiter.l.Front(); elem != nil; elem = elem.Next() {
+		//	//	s, _ := json.MarshalIndent(elem.Value, "", "  ")
+		//	//	fmt.Println(string(s))
+		//	//}
+		//	//fmt.Println()
+		//	db.peerLock.Unlock()
+		//
+		//	//s, _ := json.MarshalIndent(deepcopy.Copy(diff), "", "  ")
+		//	//fmt.Println(string(s))
+		//	//fmt.Println()
+		//	// Send the diff to the clients.
+		//	db.sendToAll(&Message{Network: deepcopy.Copy(diff).(*NetworkMessage)})
+		//
+		//	// Prepare for the next metering, clear the diff variable.
+		//	diffPeerLimiter.clear()
+		//	diffFailedPeerLimiter.clear()
+		//	diff = &NetworkMessage{
+		//		PeerBundles: make(map[string]*PeerBundle),
+		//	}
+		case err := <-subPeer.Err():
+			log.Warn("Peer subscription error", "err", err)
 			return
 		case errc := <-db.quit:
 			errc <- nil
