@@ -139,7 +139,7 @@ type RetrieveRequestMsg struct {
 }
 
 //TODO: what is the correct price
-func (rrm *RetrieveRequestMsg) GetMsgPrice() *big.Int {
+func (rrm *RetrieveRequestMsg) Price() *big.Int {
 	return big.NewInt(int64(4096))
 }
 
