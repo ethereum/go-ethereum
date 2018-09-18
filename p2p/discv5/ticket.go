@@ -112,7 +112,6 @@ func pongToTicket(localTime mclock.AbsTime, topics []Topic, node *Node, p *ingre
 }
 
 func ticketToPong(t *ticket, pong *pong) {
-	pong.Expiration = uint64(t.issueTime / mclock.AbsTime(time.Second))
 	pong.TopicHash = rlpHash(t.topics)
 	pong.TicketSerial = t.serial
 	pong.WaitPeriods = make([]uint32, len(t.regTime))
