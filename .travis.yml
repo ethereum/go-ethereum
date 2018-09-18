@@ -53,7 +53,7 @@ jobs:
         branch: master
         tags: true
 
-  - stage: Build and push latest images
+  - stage: Build and push image
     services:
       - docker
     install: skip
@@ -71,7 +71,7 @@ jobs:
       - docker tag tomochain/node tomochain/node:$TRAVIS_BUILD_ID
       - docker push tomochain/node:$TRAVIS_BUILD_ID
 
-  - stage: Build and push tagged images
+  - stage: Build and push image (tagged)
     services:
       - docker
     install: skip
@@ -86,6 +86,8 @@ jobs:
       - docker push tomochain/tomochain:$TRAVIS_TAG
       - docker tag tomochain/tomochain tomochain/node:latest
       - docker push tomochain/node:latest
+      - docker tag tomochain/tomochain tomochain/node:testnet
+      - docker push tomochain/node:testnet
       - docker tag tomochain/node tomochain/node:$TRAVIS_TAG
       - docker push tomochain/node:$TRAVIS_TAG
 
@@ -94,9 +96,9 @@ stages:
   - name: Build and test
   - name: Github release
     if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = tomochain/tomochain
-  - name: Build and push latest images
+  - name: Build and push image
     if: type != pull_request AND branch = master AND tag IS blank AND repo = tomochain/tomochain
-  - name: Build and push tagged images
+  - name: Build and push image (tagged)
     if: type != pull_request AND branch =~ ^v AND tag IS present AND repo = tomochain/tomochain
 
 notifications:
