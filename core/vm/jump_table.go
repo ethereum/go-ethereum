@@ -95,14 +95,6 @@ func newConstantinopleInstructionSet() [256]operation {
 		writes:        true,
 		returns:       true,
 	}
-	instructionSet[SSTORE] = operation{
-		execute:       opSstore,
-		gasCost:       gasSStoreEip1283,
-		validateStack: makeStackFunc(2, 0),
-		valid:         true,
-		writes:        true,
-	}
-
 	return instructionSet
 }
 
