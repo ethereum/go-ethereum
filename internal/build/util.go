@@ -143,9 +143,9 @@ func CopyFile(dst, src string, mode os.FileMode) {
 // so that go commands executed by build use the same version of Go as the 'host' that runs
 // build code. e.g.
 //
-//     /usr/lib/go-1.8/bin/go run build/ci.go ...
+//     /usr/lib/go-1.11/bin/go run build/ci.go ...
 //
-// runs using go 1.8 and invokes go 1.8 tools from the same GOROOT. This is also important
+// runs using go 1.11 and invokes go 1.11 tools from the same GOROOT. This is also important
 // because runtime.Version checks on the host should match the tools that are run.
 func GoTool(tool string, args ...string) *exec.Cmd {
 	args = append([]string{tool}, args...)
