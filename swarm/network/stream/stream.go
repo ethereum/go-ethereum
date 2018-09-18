@@ -41,8 +41,8 @@ const (
 	Mid
 	High
 	Top
-	PriorityQueue    = 4   // number of priority queues - Low, Mid, High, Top
-	PriorityQueueCap = 128 // queue capacity
+	PriorityQueue    = 4    // number of priority queues - Low, Mid, High, Top
+	PriorityQueueCap = 4096 // queue capacity
 	HashSize         = 32
 )
 
@@ -639,7 +639,7 @@ func (c *clientParams) clientCreated() {
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
-	Version:    5,
+	Version:    6,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		UnsubscribeMsg{},
