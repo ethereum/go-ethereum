@@ -1,14 +1,19 @@
 # Tomochain
 
-[![Build Status](https://travis-ci.org/tomochain/tomochain.svg?branch=master)](https://travis-ci.org/tomochain/tomochain) [![Join the chat at https://gitter.im/tomochain/tomochain](https://badges.gitter.im/tomochain/tomochain.svg)](https://gitter.im/tomochain/tomochain?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://travis-ci.org/tomochain/tomochain.svg?branch=master)](https://travis-ci.org/tomochain/tomochain)
+[![Join the chat at https://gitter.im/tomochain/tomochain](https://badges.gitter.im/tomochain/tomochain.svg)](https://gitter.im/tomochain/tomochain?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## About Tomochain
 
-TomoChain is an innovative solution to the scalability problem with the Ethereum blockchain. Our mission is to be a leading force in building the Internet of Value, and its infrastructure. We are working to create an alternative, scalable financial system which is more secure, transparent, efficient, inclusive and equitable for everyone.
+TomoChain is an innovative solution to the scalability problem with the Ethereum blockchain.
+Our mission is to be a leading force in building the Internet of Value, and its infrastructure.
+We are working to create an alternative, scalable financial system which is more secure, transparent, efficient, inclusive and equitable for everyone.
 
-TomoChain relies on a system of 150 Masternodes with Proof of Stake Voting consensus that can support near-zero fee, and 2-second transaction confirmation time. Security, stability and chain finality are guaranteed via novel techniques such as double validation, staking via smart-contracts and "true" randomization processes.
+TomoChain relies on a system of 150 Masternodes with Proof of Stake Voting consensus that can support near-zero fee, and 2-second transaction confirmation time.
+Security, stability and chain finality are guaranteed via novel techniques such as double validation, staking via smart-contracts and "true" randomization processes.
 
-Tomochain supports all EVM-compatible smart-contracts, protocols, and atomic cross-chain token transfers. New scaling techniques such as sharding, private-chain generation, hardware integration will be continuously researched and incorporated into Tomochain's masternode architecture which will be an ideal scalable smart-contract public blockchain for decentralized apps, token issuances and token integrations for small and big businesses.
+Tomochain supports all EVM-compatible smart-contracts, protocols, and atomic cross-chain token transfers.
+New scaling techniques such as sharding, private-chain generation, hardware integration will be continuously researched and incorporated into Tomochain's masternode architecture which will be an ideal scalable smart-contract public blockchain for decentralized apps, token issuances and token integrations for small and big businesses.
 
 More details can be found at our [technical white paper](https://tomochain.com/docs/technical-whitepaper---1.0.pdf)
 
@@ -20,15 +25,19 @@ Reading more about us on:
 
 ## Tomochain vs Giants
 
-Tomochain is built by the mindset of standing on the giants shoulder. We have learned from all advanced technical design concept of many well-known public blockchains on the market and shaped up the platform with our own ingredients. See below the overall technical comparison table that we try to make clear the position of Tomochain comparing to some popular blockchains at the top-tier.
+Tomochain is built by the mindset of standing on the giants shoulder.
+We have learned from all advanced technical design concept of many well-known public blockchains on the market and shaped up the platform with our own ingredients.
+See below the overall technical comparison table that we try to make clear the position of Tomochain comparing to some popular blockchains at the top-tier.
 
 ![Tomochain](https://cdn-images-1.medium.com/max/1600/1*LkiIWFHPXh-0Whv3Hm1yMQ.png)
 
-**we just updated the number of masternodes accepted in the network upto 150*
+**We just updated the number of masternodes accepted in the network to a maximum of 150*
 
 ## Building the source
 
-Tomochain provides client binary called `tomo` for both running a masternode and running a full-node. Building `tomo` requires both a Go (1.7+) and a C compiler. Install them by your own way. Once the dependencies are installed, just run below commands:
+Tomochain provides client binary called `tomo` for both running a masternode and running a full-node.
+Building `tomo` requires both a Go (1.7+) and a C compiler.
+Install them by your own way. Once the dependencies are installed, just run below commands:
 
 ```bash
 $ git clone https://github.com/tomochain/tomochain tomochain
@@ -40,19 +49,27 @@ Alternatively, you could quickly download pre-complied binary on our [github rel
 
 ## Running tomo
 
-### Attach to the Tomochain test network
+### Running a tomo masternode
 
-Currently we are publishing our test network 2.0 with full implementation of PoSV consensus at https://stats.testnet.tomochain.com. If you'd like to play ground with creating smart contracts, dapps, you might be interested in give it a try on our test network.
+Please refer to the [official documentation](https://docs.tomochain.com/get-started/run-node/) on how to run a node if you goal is to run a masternode.
+The recommanded ways of running a node and applying to become a masternode are explained in detail there.
 
-In order to connect to one of the masternodes on the test network, just run this below command:
+### Attaching to the Tomochain test network
+
+We published our test network 2.0 with full implementation of PoSV consensus at https://stats.testnet.tomochain.com.
+If you'd like to experiment with smart contracts creation and DApps, you might be interested in giving it a try on our Testnet.
+
+In order to connect to one of the masternodes on the Testnet, just run the command below:
 
 ```bash
 $ tomo attach https://testnet.tomochain.com
 ```
 
-### Run your full node on the Tomochain test network
+This will open the JavaScript console and let you query the blockchain directly via RPC.
 
-If you would like to run your own full node and join the Tomochain test network, run these below commands:
+### Running tomo locally
+
+If you would like to run tomo locally to see how it works under the hood and have a copy of the blockchain, you can try it on our Testnet by running the commands below:
 
 ```bash
 // 1. create a folder to store tomochain data on your machine
@@ -88,13 +105,12 @@ $ account=$(
   | cut -d"{" -f 2 | cut -d"}" -f 1
 )
 
-// 5. prepare the bootnode and stats information
+// 5. prepare the bootnodes list
 $ export BOOTNODES="enode://4d3c2cc0ce7135c1778c6f1cfda623ab44b4b6db55289543d48ecfde7d7111fd420c42174a9f2fea511a04cf6eac4ec69b4456bfaaae0e5bd236107d3172b013@52.221.28.223:30301,enode://298780104303fcdb37a84c5702ebd9ec660971629f68a933fd91f7350c54eea0e294b0857f1fd2e8dba2869fcc36b83e6de553c386cf4ff26f19672955d9f312@13.251.101.216:30301,enode://46dba3a8721c589bede3c134d755eb1a38ae7c5a4c69249b8317c55adc8d46a369f98b06514ecec4b4ff150712085176818d18f59a9e6311a52dbe68cff5b2ae@13.250.94.232:30301"
-$ export param="--unlock $account --bootnodes $BOOTNODES --ethstats sun:anna-coal-flee-carrie-zip-hhhh-tarry-laue-felon-rhine@stats.testnet.tomochain.com:443"
 
-// 6. Start up your full node now
-$ export NAME=YOUR_FULLNODE_NAME
-$ tomo $params \
+// 6. Start up tomo now
+$ export NAME=YOUR_NODE_NAME
+$ tomo \
   --verbosity 4 \
   --datadir $DATA_DIR \
   --keystore $KEYSTORE_DIR \
@@ -116,7 +132,7 @@ $ tomo $params \
   --targetgaslimit "420000000"
 ```
 
-*A bit explain on the flags*
+*Some explanations on the flags*
 
 ```
 --verbosity: log level from 1 to 5. Here we're using 4 for debug messages
@@ -133,28 +149,23 @@ $ tomo $params \
 --targetgaslimit: Target gas limit sets the artificial target gas floor for the blocks to mine (default: 4712388)
 ```
 
-### Becoming a masternode
-Stay tuned for the guideline how to register a candidate on tomomaster once you get your full-node ready.
-
-### Becoming a masternode in two secs
-
-If you're too lazy to go through all the above commands and annoying flags, we provide some magic scripts to boost you up to run a full-node, register as a candidate for masternode selection and join our network at this repository: https://github.com/tomochain/masternode. Please feel free to give it a try and let us know what you get from there.
-
 ## Road map
 
-These following implementation items are eventually dropped into the source code:
+The implementation of the following features is being studied by our research team:
 
 - Layer 2 scalability with state sharding
 - Asynchronize EVM execution
-- Multi-chains interoperable
+- Multi-chains interoperabilty
 - Spam filtering
 - DEX integration
 
 ## Contribution and technical discuss
 
-Thank you for considering to try out our network and/or help out with the source code. We would love to get your help, feel free to lend a hand. Even the smallest bit of code or bug reporting or just discussing ideas are highly appreciated.
+Thank you for considering to try out our network and/or help out with the source code.
+We would love to get your help, feel free to lend a hand.
+Even the smallest bit of code, bug reporting or just discussing ideas are highly appreciated.
 
-If you would like to contribute to tomochain source code, please refer to our Developer Guide for details on configuring development environment, managing dependencies, compiling, testing and submitting your code changes to our repo.
+If you would like to contribute to the tomochain source code, please refer to our Developer Guide for details on configuring development environment, managing dependencies, compiling, testing and submitting your code changes to our repo.
 
 Please also make sure your contributions adhere to the base coding guidelines:
 
