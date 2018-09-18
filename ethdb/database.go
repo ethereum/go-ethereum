@@ -155,15 +155,12 @@ func (db *LDBDatabase) LDB() *leveldb.DB {
 
 // Meter configures the database metrics collectors and
 func (db *LDBDatabase) Meter(prefix string) {
-	if metrics.Enabled {
-		// Initialize all the metrics collector at the requested prefix
-		db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-		db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-		db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-		db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-		db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-	}
-	// Initialize write delay metrics no matter we are in metric mode or not.
+	// Initialize all the metrics collector at the requested prefix
+	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
 	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
 	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
 
