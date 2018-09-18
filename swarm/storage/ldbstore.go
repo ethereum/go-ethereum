@@ -37,7 +37,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -61,7 +60,7 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
-	keySchema      = byte(8)
+	keySchema      = []byte{8}
 )
 
 var (
@@ -419,7 +418,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	}
 }
 
-func (s *LDBStore) Cleanup() {
+func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 	//Iterates over the database and checks that there are no chunks bigger than 4kb
 	var errorsFound, removed, total int
 
@@ -472,7 +471,8 @@ func (s *LDBStore) Cleanup() {
 		cs := int64(binary.LittleEndian.Uint64(c.sdata[:8]))
 		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 
-		if len(c.sdata) > ch.DefaultSize+8 {
+		// if chunk is to be removed
+		if f(c) {
 			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 			s.delete(index.Idx, getIndexKey(key[1:]), po)
 			removed++

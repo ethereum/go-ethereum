@@ -199,7 +199,17 @@ func (ls *LocalStore) Migrate() error {
 		if schema == "" {
 			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
 
-			ls.DbStore.Cleanup()
+			cleanupFunc := func(c *chunk) bool {
+				valid := false
+				for _, v := range ls.Validators {
+					if valid = v.Validate(c.Address(), c.Data()); valid {
+						break
+					}
+				}
+				return valid
+			}
+
+			ls.DbStore.Cleanup(cleanupFunc)
 
 			err := ls.DbStore.PutSchema(DbSchemaHive)
 			if err != nil {
