@@ -52,6 +52,8 @@ type NetStore struct {
 	closeC            chan struct{}
 }
 
+var fetcherTimeout = 2 * time.Minute // timeout to cancel the fetcher even if requests are coming in
+
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
 func NewNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
@@ -168,7 +170,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// no fetcher for the given address, we have to create a new one
 	key := hex.EncodeToString(ref)
 	// create the context during which fetching is kept alive
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), fetcherTimeout)
 	// destroy is called when all requests finish
 	destroy := func() {
 		// remove fetcher from fetchers
