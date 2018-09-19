@@ -153,7 +153,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 }
 
 // handshakeDone is called when a peer handshake is done. Registers the peer to
-// the ingress and the egress traffic registries using the peer's IP and NodeID,
+// the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
 func (c *meteredConn) handshakeDone(id enode.ID) {
 	if atomic.LoadInt32(&meteredPeerCount) >= MeteredPeerLimit {
@@ -180,11 +180,14 @@ func (c *meteredConn) handshakeDone(id enode.ID) {
 // Close delegates a close operation to the underlying connection, unregisters
 // the peer from the traffic registries and emits close event.
 func (c *meteredConn) Close() error {
+	err := c.Conn.Close()
 	c.lock.RLock()
-	if c.metered {
-		// Decrement the metered peer count
-		atomic.AddInt32(&meteredPeerCount, -1)
+	if !c.metered {
+		c.lock.RUnlock()
+		return err
 	}
+	// Decrement the metered peer count
+	atomic.AddInt32(&meteredPeerCount, -1)
 	if c.id == "" {
 		// If the peer disconnects before the handshake
 		c.lock.RUnlock()
@@ -193,7 +196,7 @@ func (c *meteredConn) Close() error {
 			IP:      c.ip,
 			Elapsed: time.Since(c.connected),
 		})
-		return c.Conn.Close()
+		return err
 	}
 	id, ingress, egress := c.id, uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
 	c.lock.RUnlock()
@@ -210,5 +213,5 @@ func (c *meteredConn) Close() error {
 		Ingress: ingress,
 		Egress:  egress,
 	})
-	return c.Conn.Close()
+	return err
 }
