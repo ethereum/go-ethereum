@@ -93,7 +93,7 @@ type meteredConn struct {
 	connected    time.Time     // Connection time of the peer
 	ip           net.IP        // IP address of the peer
 	id           string        // NodeID of the peer
-	metered      bool          // Used when the connection is closed to check if the peer was metered
+	metered      bool          // Checks if the peer is metered
 	ingressMeter metrics.Meter // Meter for the read bytes of the peer
 	egressMeter  metrics.Meter // Meter for the written bytes of the peer
 
@@ -132,7 +132,7 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.ingressMeter != nil {
+	if c.metered {
 		c.ingressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
@@ -145,7 +145,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.egressMeter != nil {
+	if c.metered {
 		c.egressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
