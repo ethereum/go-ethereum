@@ -246,3 +246,7 @@ func (r *rulesetUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 		log.Info("error occurred during execution", "error", err)
 	}
 }
+
+func (r *rulesetUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
+}
