@@ -53,7 +53,7 @@ func setupSim(serviceMap map[string]simulation.ServiceFunc) (int, int, *simulati
 }
 
 func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) {
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 
 	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		panic(err)
@@ -98,10 +98,10 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 		}
 		fileStore := item.(*storage.FileStore)
 		fakeHash := storage.GenerateRandomChunk(1000).Address()
-		fmt.Println(fakeHash)
+		//fmt.Println(fakeHash)
 		reader, _ := fileStore.Retrieve(context.TODO(), fakeHash)
 		if _, err := reader.Size(ctx, nil); err != nil {
-			fmt.Println("expected error for non-existing chunk")
+			log.Debug("expected error for non-existing chunk")
 		}
 
 		time.Sleep(testDuration)
@@ -109,14 +109,20 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 		return nil
 	})
 	if result.Error != nil {
+		sendSimTerminatedEvent(sim)
 		t.Fatal(result.Error)
 	}
 
+	sendSimTerminatedEvent(sim)
+
+}
+
+func sendSimTerminatedEvent(sim *simulation.Simulation) {
 	evt := &simulations.Event{
-		Type: EventTypeSimTerminated,
+		Type:    EventTypeSimTerminated,
+		Control: false,
 	}
 	sim.Net.Events().Send(evt)
-
 }
 
 func TestSnapshotSyncWithServer(t *testing.T) {
@@ -163,22 +169,25 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 			}
 			if *e.Event.MsgCode == uint64(1) {
 				evt := &simulations.Event{
-					Type: EventTypeChunkOffered,
-					Node: sim.Net.GetNode(e.NodeID),
+					Type:    EventTypeChunkOffered,
+					Node:    sim.Net.GetNode(e.NodeID),
+					Control: false,
 					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
 			} else if *e.Event.MsgCode == uint64(2) {
 				evt := &simulations.Event{
-					Type: EventTypeChunkWanted,
-					Node: sim.Net.GetNode(e.NodeID),
+					Type:    EventTypeChunkWanted,
+					Node:    sim.Net.GetNode(e.NodeID),
+					Control: false,
 					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
 			} else if *e.Event.MsgCode == uint64(6) {
 				evt := &simulations.Event{
-					Type: EventTypeChunkDelivered,
-					Node: sim.Net.GetNode(e.NodeID),
+					Type:    EventTypeChunkDelivered,
+					Node:    sim.Net.GetNode(e.NodeID),
+					Control: false,
 					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
@@ -188,7 +197,8 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	result := runSim(conf, ctx, sim, chunkCount)
 
 	evt := &simulations.Event{
-		Type: EventTypeSimTerminated,
+		Type:    EventTypeSimTerminated,
+		Control: false,
 	}
 	sim.Net.Events().Send(evt)
 

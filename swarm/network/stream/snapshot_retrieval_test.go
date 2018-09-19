@@ -129,6 +129,7 @@ func retrievalStreamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s no
 	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 		DoSync:          true,
 		SyncUpdateDelay: 3 * time.Second,
+		DoRetrieve:      true,
 	})
 
 	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
@@ -206,36 +207,22 @@ func runFileRetrievalTest(nodeCount int) error {
 		for !allSuccess {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
-				localChunks := conf.idToChunksMap[id]
 				localSuccess := true
-				for _, ch := range localChunks {
-					//get the real chunk by the index in the index array
-					chunk := conf.hashes[ch]
-					log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
-					//check if the expected chunk is indeed in the localstore
-					var err error
-					//check on the node's FileStore (netstore)
-					item, ok := sim.NodeItem(id, bucketKeyFileStore)
-					if !ok {
-						return fmt.Errorf("No registry")
-					}
-					fileStore := item.(*storage.FileStore)
-					//check all chunks
-					for i, hash := range conf.hashes {
-						reader, _ := fileStore.Retrieve(context.TODO(), hash)
-						//check that we can read the file size and that it corresponds to the generated file size
-						if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-							allSuccess = false
-							log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
-						} else {
-							log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
-						}
-					}
-					if err != nil {
-						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
+				item, ok := sim.NodeItem(id, bucketKeyFileStore)
+				if !ok {
+					return fmt.Errorf("No registry")
+				}
+				fileStore := item.(*storage.FileStore)
+				//check all chunks
+				for i, hash := range conf.hashes {
+					reader, _ := fileStore.Retrieve(context.TODO(), hash)
+					//check that we can read the file size and that it corresponds to the generated file size
+					if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
+						//allSuccess = false
 						localSuccess = false
+						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
 					} else {
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
+						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
 				}
 				allSuccess = localSuccess
@@ -295,8 +282,6 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			conf.addrToIDMap[string(a)] = n
 		}
 
-		//an array for the random files
-		var randomFiles []string
 		//this is the node selected for upload
 		node := sim.RandomUpNode()
 		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
@@ -318,36 +303,22 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		for !allSuccess {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
-				localChunks := conf.idToChunksMap[id]
 				localSuccess := true
-				for _, ch := range localChunks {
-					//get the real chunk by the index in the index array
-					chunk := conf.hashes[ch]
-					log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
-					//check if the expected chunk is indeed in the localstore
-					var err error
-					//check on the node's FileStore (netstore)
-					item, ok := sim.NodeItem(id, bucketKeyFileStore)
-					if !ok {
-						return fmt.Errorf("No registry")
-					}
-					fileStore := item.(*storage.FileStore)
-					//check all chunks
-					for i, hash := range conf.hashes {
-						reader, _ := fileStore.Retrieve(context.TODO(), hash)
-						//check that we can read the file size and that it corresponds to the generated file size
-						if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-							allSuccess = false
-							log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
-						} else {
-							log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
-						}
-					}
-					if err != nil {
-						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
+				//check on the node's FileStore (netstore)
+				item, ok := sim.NodeItem(id, bucketKeyFileStore)
+				if !ok {
+					return fmt.Errorf("No registry")
+				}
+				fileStore := item.(*storage.FileStore)
+				//check all chunks
+				for _, hash := range conf.hashes {
+					reader, _ := fileStore.Retrieve(context.TODO(), hash)
+					//check that we can read the file size and that it corresponds to the generated file size
+					if s, err := reader.Size(ctx, nil); err != nil || s != int64(chunkSize) {
 						localSuccess = false
+						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
 					} else {
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
+						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
 				}
 				allSuccess = localSuccess
