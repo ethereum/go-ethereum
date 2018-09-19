@@ -165,7 +165,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	if err != nil {
 		return err
 	}
-	// true only when quiting
+	// true only when quitting
 	if len(hashes) == 0 {
 		return nil
 	}
