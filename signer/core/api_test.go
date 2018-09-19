@@ -49,10 +49,6 @@ func (ui *HeadlessUI) OnInputRequired(info UserInputRequest) (UserInputResponse,
 func (ui *HeadlessUI) OnSignerStartup(info StartupInfo) {
 }
 
-func (ui *HeadlessUI) OnMasterPassword(request *PasswordRequest) (PasswordResponse, error) {
-	return PasswordResponse{}, nil
-}
-
 func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	fmt.Printf("OnApproved()\n")
 }

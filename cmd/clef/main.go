@@ -20,10 +20,7 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -49,16 +46,14 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/rules"
 	"github.com/ethereum/go-ethereum/signer/storage"
-	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/scrypt"
 	"gopkg.in/urfave/cli.v1"
 )
 
 // ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "3.0.0"
+const ExternalAPIVersion = "4.0.0"
 
 // InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "2.0.0"
+const InternalAPIVersion = "3.0.0"
 
 const legalWarning = `
 WARNING! 
@@ -70,12 +65,6 @@ unless you agree to take full responsibility for doing so, and know what you are
 TLDR; THIS IS NOT PRODUCTION-READY SOFTWARE! 
 
 `
-const (
-	keyHeaderKDF = "scrypt"
-
-	scryptR     = 8
-	scryptDKLen = 32
-)
 
 var (
 	logLevelFlag = cli.IntFlag{
@@ -104,7 +93,7 @@ var (
 	}
 	signerSecretFlag = cli.StringFlag{
 		Name:  "signersecret",
-		Usage: "A file containing the password used to encrypt Clef credentials, e.g. keystore credentials and ruleset hash",
+		Usage: "A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash",
 	}
 	dBFlag = cli.StringFlag{
 		Name:  "4bytedb",
@@ -225,7 +214,7 @@ func initializeSecrets(c *cli.Context) error {
 	if err := initialize(c); err != nil {
 		return err
 	}
-	configDir := c.String(configdirFlag.Name)
+	configDir := c.GlobalString(configdirFlag.Name)
 
 	masterSeed := make([]byte, 256)
 	num, err := io.ReadFull(rand.Reader, masterSeed)
@@ -237,7 +226,7 @@ func initializeSecrets(c *cli.Context) error {
 	}
 
 	n, p := keystore.StandardScryptN, keystore.StandardScryptP
-	if c.Bool(utils.LightKDFFlag.Name) {
+	if c.GlobalBool(utils.LightKDFFlag.Name) {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
 	password := getPassPhrase("The master seed of clef is locked with a password. Please give a password. Do not forget this password.", true)
@@ -250,7 +239,7 @@ func initializeSecrets(c *cli.Context) error {
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
-	location := filepath.Join(configDir, "secrets.dat")
+	location := filepath.Join(configDir, "masterseed.json")
 	if _, err := os.Stat(location); err == nil {
 		return fmt.Errorf("file %v already exists, will not overwrite", location)
 	}
@@ -283,7 +272,7 @@ func attestFile(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.String(configdirFlag.Name)
+	configDir := ctx.GlobalString(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
 
@@ -307,7 +296,7 @@ func addCredential(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.String(configdirFlag.Name)
+	configDir := ctx.GlobalString(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
@@ -326,7 +315,7 @@ func addCredential(ctx *cli.Context) error {
 func initialize(c *cli.Context) error {
 	// Set up the logger to print everything
 	logOutput := os.Stdout
-	if c.Bool(stdiouiFlag.Name) {
+	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
 		fmt.Fprintf(logOutput, legalWarning)
@@ -347,24 +336,26 @@ func signer(c *cli.Context) error {
 	var (
 		ui core.SignerUI
 	)
-	if c.Bool(stdiouiFlag.Name) {
+	if c.GlobalBool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
 		ui = core.NewStdIOUI()
 	} else {
 		log.Info("Using CLI as UI-channel")
 		ui = core.NewCommandlineUI()
 	}
-	db, err := core.NewAbiDBFromFiles(c.String(dBFlag.Name), c.String(customDBFlag.Name))
+	fourByteDb := c.GlobalString(dBFlag.Name)
+	fourByteLocal := c.GlobalString(customDBFlag.Name)
+	db, err := core.NewAbiDBFromFiles(fourByteDb, fourByteLocal)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
+	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
 
 	var (
 		api core.ExternalAPI
 	)
 
-	configDir := c.String(configdirFlag.Name)
+	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
 		log.Info("No master seed provided, rules disabled")
 	} else {
@@ -385,7 +376,7 @@ func signer(c *cli.Context) error {
 		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
 		//Do we have a rule-file?
-		ruleJS, err := ioutil.ReadFile(c.String(ruleFlag.Name))
+		ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFlag.Name))
 		if err != nil {
 			log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
 		} else {
@@ -409,17 +400,15 @@ func signer(c *cli.Context) error {
 	}
 
 	apiImpl := core.NewSignerAPI(
-		c.Int64(utils.NetworkIdFlag.Name),
-		c.String(keystoreFlag.Name),
-		c.Bool(utils.NoUSBFlag.Name),
+		c.GlobalInt64(utils.NetworkIdFlag.Name),
+		c.GlobalString(keystoreFlag.Name),
+		c.GlobalBool(utils.NoUSBFlag.Name),
 		ui, db,
-		c.Bool(utils.LightKDFFlag.Name),
-		c.Bool(advancedMode.Name))
-
+		c.GlobalBool(utils.LightKDFFlag.Name),
+		c.GlobalBool(advancedMode.Name))
 	api = apiImpl
-
 	// Audit logging
-	if logfile := c.String(auditLogFlag.Name); logfile != "" {
+	if logfile := c.GlobalString(auditLogFlag.Name); logfile != "" {
 		api, err = core.NewAuditLogger(logfile, api)
 		if err != nil {
 			utils.Fatalf(err.Error())
@@ -438,13 +427,13 @@ func signer(c *cli.Context) error {
 			Service:   api,
 			Version:   "1.0"},
 	}
-	if c.Bool(utils.RPCEnabledFlag.Name) {
+	if c.GlobalBool(utils.RPCEnabledFlag.Name) {
 
 		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
+		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
 		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
@@ -458,9 +447,9 @@ func signer(c *cli.Context) error {
 		}()
 
 	}
-	if !c.Bool(utils.IPCDisabledFlag.Name) {
+	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if c.IsSet(utils.IPCPathFlag.Name) {
-			ipcapiURL = c.String(utils.IPCPathFlag.Name)
+			ipcapiURL = c.GlobalString(utils.IPCPathFlag.Name)
 		} else {
 			ipcapiURL = filepath.Join(configDir, "clef.ipc")
 		}
@@ -477,7 +466,7 @@ func signer(c *cli.Context) error {
 
 	}
 
-	if c.Bool(testFlag.Name) {
+	if c.GlobalBool(testFlag.Name) {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
@@ -539,12 +528,12 @@ func homeDir() string {
 func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var (
 		file      string
-		configDir = ctx.String(configdirFlag.Name)
+		configDir = ctx.GlobalString(configdirFlag.Name)
 	)
-	if ctx.IsSet(signerSecretFlag.Name) {
-		file = ctx.String(signerSecretFlag.Name)
+	if ctx.GlobalIsSet(signerSecretFlag.Name) {
+		file = ctx.GlobalString(signerSecretFlag.Name)
 	} else {
-		file = filepath.Join(configDir, "secrets.dat")
+		file = filepath.Join(configDir, "masterseed.json")
 	}
 	if err := checkFile(file); err != nil {
 		return nil, err
@@ -557,15 +546,18 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var password string
 	// If ui is not nil, get the password from ui.
 	if ui != nil {
-		resp, err := ui.OnMasterPassword(&core.PasswordRequest{Prompt: "password to decrypt master seed"})
+		resp, err := ui.OnInputRequired(core.UserInputRequest{
+			Title:      "Master Password",
+			Prompt:     "Please enter the password to decrypt the master seed",
+			IsPassword: true})
 		if err != nil {
 			return nil, err
 		}
-		password = resp.Password
+		password = resp.Text
 	} else {
 		password = getPassPhrase("Decrypt master seed of clef", false)
 	}
-	masterSeed, err := decryptSeed(cipherKey, []byte(password))
+	masterSeed, err := decryptSeed(cipherKey, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt the master seed of clef")
 	}
@@ -579,9 +571,6 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	if err != nil && !os.IsExist(err) {
 		return nil, err
 	}
-	//!TODO, use KDF to stretch the master key
-	//			stretched_key := stretch_key(master_key)
-
 	return masterSeed, nil
 }
 
@@ -678,154 +667,31 @@ func getPassPhrase(prompt string, confirmation bool) string {
 			utils.Fatalf("Passphrases do not match")
 		}
 	}
+	//TODO add validation of password (exists already in a separate PR)
 	return password
 }
 
-type cryptoJSON struct {
-	Cipher       string                 `json:"cipher"`
-	CipherText   string                 `json:"ciphertext"`
-	CipherParams cipherparamsJSON       `json:"cipherparams"`
-	KDF          string                 `json:"kdf"`
-	KDFParams    map[string]interface{} `json:"kdfparams"`
-	MAC          string                 `json:"mac"`
-}
-
-type cipherparamsJSON struct {
-	IV string `json:"iv"`
-}
-
+// encryptSeed uses a similar scheme as the keystore uses, but with a different wrapping,
+// to encrypt the master seed
 func encryptSeed(seed []byte, auth []byte, scryptN, scryptP int) ([]byte, error) {
-	salt := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
-	}
-	derivedKey, err := scrypt.Key(auth, salt, scryptN, scryptR, scryptP, scryptDKLen)
+	cryptoStruct, err := keystore.EncryptDataV3(seed, auth, scryptN, scryptP)
 	if err != nil {
 		return nil, err
-	}
-	encryptKey := derivedKey[:16]
-
-	iv := make([]byte, aes.BlockSize) // 16
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
-	}
-	cipherText, err := aesCTRXOR(encryptKey, seed, iv)
-	if err != nil {
-		return nil, err
-	}
-	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
-
-	scryptParamsJSON := make(map[string]interface{}, 5)
-	scryptParamsJSON["n"] = scryptN
-	scryptParamsJSON["r"] = scryptR
-	scryptParamsJSON["p"] = scryptP
-	scryptParamsJSON["dklen"] = scryptDKLen
-	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
-
-	cipherParamsJSON := cipherparamsJSON{
-		IV: hex.EncodeToString(iv),
-	}
-
-	cryptoStruct := cryptoJSON{
-		Cipher:       "aes-128-ctr",
-		CipherText:   hex.EncodeToString(cipherText),
-		CipherParams: cipherParamsJSON,
-		KDF:          keyHeaderKDF,
-		KDFParams:    scryptParamsJSON,
-		MAC:          hex.EncodeToString(mac),
 	}
 	return json.Marshal(cryptoStruct)
 }
 
-func decryptSeed(keyjson []byte, auth []byte) ([]byte, error) {
-	var cryptoStruct cryptoJSON
+// decryptSeed decrypts the master seed
+func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
+	var cryptoStruct keystore.CryptoJSON
 	if err := json.Unmarshal(keyjson, &cryptoStruct); err != nil {
 		return nil, err
 	}
-
-	if cryptoStruct.Cipher != "aes-128-ctr" {
-		return nil, fmt.Errorf("Cipher not supported: %v", cryptoStruct.Cipher)
-	}
-
-	mac, err := hex.DecodeString(cryptoStruct.MAC)
-	if err != nil {
-		return nil, err
-	}
-
-	iv, err := hex.DecodeString(cryptoStruct.CipherParams.IV)
-	if err != nil {
-		return nil, err
-	}
-
-	cipherText, err := hex.DecodeString(cryptoStruct.CipherText)
-	if err != nil {
-		return nil, err
-	}
-
-	derivedKey, err := getKDFKey(cryptoStruct, auth)
-	if err != nil {
-		return nil, err
-	}
-
-	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
-	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, fmt.Errorf("could not decrypt seed with given passphrase")
-	}
-
-	seed, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
+	seed, err := keystore.DecryptDataV3(cryptoStruct, auth)
 	if err != nil {
 		return nil, err
 	}
 	return seed, err
-}
-
-func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
-	// AES-128 is selected due to size of encryptKey.
-	aesBlock, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	stream := cipher.NewCTR(aesBlock, iv)
-	outText := make([]byte, len(inText))
-	stream.XORKeyStream(outText, inText)
-	return outText, err
-}
-
-func getKDFKey(cryptoJSON cryptoJSON, auth []byte) ([]byte, error) {
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
-	if err != nil {
-		return nil, err
-	}
-	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
-
-	if cryptoJSON.KDF == keyHeaderKDF {
-		n := ensureInt(cryptoJSON.KDFParams["n"])
-		r := ensureInt(cryptoJSON.KDFParams["r"])
-		p := ensureInt(cryptoJSON.KDFParams["p"])
-		return scrypt.Key(auth, salt, n, r, p, dkLen)
-
-	} else if cryptoJSON.KDF == "pbkdf2" {
-		c := ensureInt(cryptoJSON.KDFParams["c"])
-		prf := cryptoJSON.KDFParams["prf"].(string)
-		if prf != "hmac-sha256" {
-			return nil, fmt.Errorf("Unsupported PBKDF2 PRF: %s", prf)
-		}
-		key := pbkdf2.Key(auth, salt, c, dkLen, sha256.New)
-		return key, nil
-	}
-
-	return nil, fmt.Errorf("Unsupported KDF: %s", cryptoJSON.KDF)
-}
-
-// TODO: can we do without this when unmarshalling dynamic JSON?
-// why do integers in KDF params end up as float64 and not int after
-// unmarshal?
-func ensureInt(x interface{}) int {
-	res, ok := x.(int)
-	if !ok {
-		res = int(x.(float64))
-	}
-	return res
 }
 
 /**

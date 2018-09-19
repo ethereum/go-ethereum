@@ -105,12 +105,6 @@ func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	}
 }
 
-func (ui *StdIOUI) OnMasterPassword(request *PasswordRequest) (PasswordResponse, error) {
-	var result PasswordResponse
-	err := ui.dispatch("OnMasterPassword", request, &result)
-	return result, err
-}
-
 func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
 	err := ui.dispatch("OnSignerStartup", info, nil)
 	if err != nil {

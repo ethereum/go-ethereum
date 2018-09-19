@@ -79,8 +79,6 @@ type SignerUI interface {
 	// OnApprovedTx notifies the UI about a transaction having been successfully signed.
 	// This method can be used by a UI to keep track of e.g. how much has been sent to a particular recipient.
 	OnApprovedTx(tx ethapi.SignTransactionResult)
-	// OnMasterPassword is invoked when the signer boots, and tells the UI to input the password for the master seed.
-	OnMasterPassword(request *PasswordRequest) (PasswordResponse, error)
 	// OnSignerStartup is invoked when the signer boots, and tells the UI info about external API location and version
 	// information
 	OnSignerStartup(info StartupInfo)
