@@ -102,8 +102,8 @@ type meteredConn struct {
 
 // newMeteredConn creates a new metered connection, bumps the ingress or egress
 // connection meter and also increases the metered peer count. If the metrics
-// system is disabled, the IP address is unspecified or the metered peer count
-// reached the limit, this function returns the original object.
+// system is disabled or the IP address is unspecified, this function returns
+// the original object.
 func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	// Short circuit if metrics are disabled
 	if !metrics.Enabled {
