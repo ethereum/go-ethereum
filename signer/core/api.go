@@ -49,7 +49,9 @@ type ExternalAPI interface {
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
-	Import(ctx context.Context, keyJSON json.RawMessage) (Account, error)
+	// Should be moved to Internal API, in next phase when we have
+	// bi-directional communication
+	//Import(ctx context.Context, keyJSON json.RawMessage) (Account, error)
 }
 
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI for the signer
@@ -475,6 +477,11 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 // Import tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
 // in web3 keystore format. It will decrypt the keyJSON with the given passphrase and on successful
 // decryption it will encrypt the key with the given newPassphrase and store it in the keystore.
+// OBS! This method is removed from the public API. It should not be exposed on the external API
+// for a couple of reasons:
+// 1. Even though it is encrypted, it should still be seen as sensitive data
+// 2. It can be used to DoS clef, by using malicious data with e.g. extreme large
+// values for the kdfparams.
 func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
 	be := api.am.Backends(keystore.KeyStoreType)
 

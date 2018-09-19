@@ -3,6 +3,7 @@
 #### 4.0.0
 
 * The external `account_Ecrecover`-method was removed. 
+* The external `account_Import`-method was removed.
 
 #### 3.0.0
 
