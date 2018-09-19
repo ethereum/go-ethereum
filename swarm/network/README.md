@@ -133,7 +133,7 @@ As part of the deletion protocol then, hashes of insured chunks to be removed ar
 Downstream peer on the other hand needs to make sure that they can only be finger pointed about a chunk they did receive and store.
 For this the check of a state should be exhaustive. If historical syncing finishes on one state, all hashes before are covered, no
 surprises. In other words historical syncing this process is self verifying. With session syncing however, it is not enough to check going back covering the range from old offset to new. Continuity (i.e., that the new state is extension of the old) needs to be verified: after downstream peer reads the range into a buffer, it appends the buffer the last known state at the last known offset and verifies the resulting hash matches
-the latest state. Past intervals of historical syncing are checked via the the session root.
+the latest state. Past intervals of historical syncing are checked via the session root.
 Upstream peer signs the states, downstream peers can use as handover proofs.
 Downstream  peers sign off on a state together with an initial offset.
 

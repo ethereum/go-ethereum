@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
@@ -88,10 +87,10 @@ func TestSwarmNetwork(t *testing.T) {
 			},
 		},
 		{
-			name: "100_nodes",
+			name: "50_nodes",
 			steps: []testSwarmNetworkStep{
 				{
-					nodeCount: 100,
+					nodeCount: 50,
 				},
 			},
 			options: &testSwarmNetworkOptions{
@@ -100,10 +99,10 @@ func TestSwarmNetwork(t *testing.T) {
 			disabled: !*longrunning,
 		},
 		{
-			name: "100_nodes_skip_check",
+			name: "50_nodes_skip_check",
 			steps: []testSwarmNetworkStep{
 				{
-					nodeCount: 100,
+					nodeCount: 50,
 				},
 			},
 			options: &testSwarmNetworkOptions{
@@ -288,12 +287,13 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 
 			config.Init(privkey)
 			config.DeliverySkipCheck = o.SkipCheck
+			config.Port = ""
 
 			swarm, err := NewSwarm(config, nil)
 			if err != nil {
 				return nil, cleanup, err
 			}
-			bucket.Store(simulation.BucketKeyKademlia, swarm.bzz.Hive.Overlay.(*network.Kademlia))
+			bucket.Store(simulation.BucketKeyKademlia, swarm.bzz.Hive.Kademlia)
 			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
 			return swarm, cleanup, nil
 		},
@@ -445,7 +445,7 @@ func retrieve(
 
 				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
-				r, _, _, _, err := swarm.api.Get(context.TODO(), f.addr, "/")
+				r, _, _, _, err := swarm.api.Get(context.TODO(), api.NOOPDecrypt, f.addr, "/")
 				if err != nil {
 					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 					return

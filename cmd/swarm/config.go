@@ -78,6 +78,7 @@ const (
 	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
 	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ACCESS_PASSWORD          = "SWARM_ACCESS_PASSWORD"
 	GETH_ENV_DATADIR               = "GETH_DATADIR"
 )
 
@@ -132,7 +133,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	log.Debug(printConfig(config))
 }
 
-//override the current config with whatever is in the config file, if a config file has been provided
+//configFileOverride overrides the current config with the config file, if a config file has been provided
 func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config, error) {
 	var err error
 
@@ -142,7 +143,8 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 		if filepath = ctx.GlobalString(SwarmTomlConfigPathFlag.Name); filepath == "" {
 			utils.Fatalf("Config file flag provided with invalid file path")
 		}
-		f, err := os.Open(filepath)
+		var f *os.File
+		f, err = os.Open(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -229,10 +231,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
-	}
-
-	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
-		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
 	}
 
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
@@ -330,10 +328,6 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if cors := os.Getenv(SWARM_ENV_CORS); cors != "" {
 		currentConfig.Cors = cors
-	}
-
-	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
-		currentConfig.BootNodes = bootnodes
 	}
 
 	return currentConfig

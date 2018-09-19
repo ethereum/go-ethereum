@@ -47,7 +47,7 @@ func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -88,7 +88,7 @@ func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -186,7 +186,7 @@ func newTestDirectory(t *testing.T) string {
 // TestClientUploadDownloadDirectory tests uploading and downloading a
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -194,7 +194,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// upload the directory
 	client := NewClient(srv.URL)
-	defaultPath := filepath.Join(dir, testDirFiles[0])
+	defaultPath := testDirFiles[0]
 	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
@@ -228,7 +228,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	if err := client.DownloadDirectory(hash, "", tmp); err != nil {
+	if err := client.DownloadDirectory(hash, "", tmp, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range testDirFiles {
@@ -252,7 +252,7 @@ func TestClientFileListEncrypted(t *testing.T) {
 }
 
 func testClientFileList(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -265,7 +265,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 	}
 
 	ls := func(prefix string) []string {
-		list, err := client.List(hash, prefix)
+		list, err := client.List(hash, prefix, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -310,7 +310,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
@@ -376,7 +376,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	client := NewClient(srv.URL)
 	defer srv.Close()
 
@@ -439,7 +439,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
-	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	client := NewClient(srv.URL)
 	defer srv.Close()
 

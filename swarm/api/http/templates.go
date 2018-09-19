@@ -18,6 +18,7 @@ package http
 
 import (
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"path"
 
@@ -45,7 +46,10 @@ func init() {
 		{
 			templateName: "bzz-list",
 			partial:      bzzList,
-			funcs:        template.FuncMap{"basename": path.Base},
+			funcs: template.FuncMap{
+				"basename": path.Base,
+				"leaflink": leafLink,
+			},
 		},
 		{
 			templateName: "landing-page",
@@ -60,6 +64,10 @@ func init() {
 		panic(err)
 	}
 	faviconBytes = bytes
+}
+
+func leafLink(URI api.URI, manifestEntry api.ManifestEntry) string {
+	return fmt.Sprintf("/bzz:/%s/%s", URI.Addr, manifestEntry.Path)
 }
 
 const bzzList = `{{ define "content" }}
@@ -83,10 +91,11 @@ const bzzList = `{{ define "content" }}
       <td>DIR</td>
       <td>-</td>
     </tr>
-    {{ end }} {{ range .List.Entries }}
+    {{ end }}
+    {{ range .List.Entries }}
     <tr>
       <td>
-        <a class="normal-link" href="{{ basename .Path }}">{{ basename .Path }}</a>
+        <a class="normal-link" href="{{ leaflink $.URI . }}">{{ basename .Path }}</a>
       </td>
       <td>{{ .ContentType }}</td>
       <td>{{ .Size }}</td>

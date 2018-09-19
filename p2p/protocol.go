@@ -35,7 +35,7 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
-	// Run is called in a new groutine when the protocol has been
+	// Run is called in a new goroutine when the protocol has been
 	// negotiated with a peer. It should read and write messages from
 	// rw. The Payload for each message must be fully consumed.
 	//
