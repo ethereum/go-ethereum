@@ -174,7 +174,7 @@ func (c *meteredConn) handshakeDone(id enode.ID) {
 		Type:    PeerConnected,
 		IP:      c.ip,
 		ID:      id.String(),
-		Elapsed: time.Now().Sub(c.connected),
+		Elapsed: time.Since(c.connected),
 	})
 }
 
@@ -191,7 +191,7 @@ func (c *meteredConn) Close() error {
 		metricsFeed.Send(MeteredPeerEvent{
 			Type:    PeerHandshakeFailed,
 			IP:      c.ip,
-			Elapsed: time.Now().Sub(c.connected),
+			Elapsed: time.Since(c.connected),
 		})
 		return c.Conn.Close()
 	}
