@@ -95,7 +95,7 @@ func runCmd(ctx *cli.Context) error {
 			// 	VM:       vm,
 			// }
 
-			output, err := evm.Interpreter().Run(contract, []byte(input))
+			output, err := evm.Interpreter().Run(contract, []byte(input), false)
 
 			if err != nil {
 				return err

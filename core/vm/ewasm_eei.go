@@ -862,7 +862,7 @@ func selfDestruct(p *exec.Process, in *InterpreterEWASM, addressOffset int32) {
 
 	in.StateDB.Suicide(contract.Address())
 
-	// Same as for `revert` and `return`, I need to forcefuly terminate
+	// Same as for `revert` and `return`, I need to forcefully terminate
 	// the execution of the contract.
 	in.terminationType = TerminateSuicide
 	p.Terminate()
