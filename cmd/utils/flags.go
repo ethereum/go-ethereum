@@ -621,6 +621,10 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+	UseGrapheneFlag = cli.BoolFlag{
+		Name:  "graphene",
+		Usage: "Enable graphene protocol for block propagation",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1245,6 +1249,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// TODO(fjl): move trie cache generations into config
 	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
 		state.MaxTrieCacheGen = uint16(gen)
+	}
+
+	if ctx.GlobalIsSet(UseGrapheneFlag.Name) {
+		cfg.UseGraphene = ctx.GlobalBool(NoGossipFlag.Name)
 	}
 }
 
