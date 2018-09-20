@@ -257,7 +257,6 @@ func testGetCode(t *testing.T, protocol int) {
 
 	var codereqs []*CodeReq
 	var codes [][]byte
-
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		req := &CodeReq{
@@ -314,11 +313,10 @@ func testGetProofs(t *testing.T, protocol int) {
 	var proofreqs []ProofReq
 	proofsV2 := light.NewNodeSet()
 
-	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, {}}
+	accounts := []common.Address{bankAddr, userAddr1, userAddr2, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
-		root := header.Root
-		trie, _ := trie.New(root, trie.NewDatabase(server.db))
+		trie, _ := trie.New(header.Root, trie.NewDatabase(server.db))
 
 		for _, acc := range accounts {
 			req := ProofReq{
@@ -431,28 +429,27 @@ func TestGetBloombitsProofs(t *testing.T) {
 }
 
 func TestTransactionStatusLes2(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db, nil)
-	chain := pm.blockchain.(*core.BlockChain)
+	server, tearDown := newServerEnv(t, 0, 2, nil)
+	defer tearDown()
+
+	chain := server.pm.blockchain.(*core.BlockChain)
 	config := core.DefaultTxPoolConfig
 	config.Journal = ""
 	txpool := core.NewTxPool(config, params.TestChainConfig, chain)
-	pm.txpool = txpool
-	peer, _ := newTestPeer(t, "peer", 2, pm, true)
-	defer peer.close()
+	server.pm.txpool = txpool
 
 	var reqID uint64
 
 	test := func(tx *types.Transaction, send bool, expStatus txStatus) {
 		reqID++
 		if send {
-			cost := peer.GetRequestCost(SendTxV2Msg, 1)
-			sendRequest(peer.app, SendTxV2Msg, reqID, cost, types.Transactions{tx})
+			cost := server.tPeer.GetRequestCost(SendTxV2Msg, 1)
+			sendRequest(server.tPeer.app, SendTxV2Msg, reqID, cost, types.Transactions{tx})
 		} else {
-			cost := peer.GetRequestCost(GetTxStatusMsg, 1)
-			sendRequest(peer.app, GetTxStatusMsg, reqID, cost, []common.Hash{tx.Hash()})
+			cost := server.tPeer.GetRequestCost(GetTxStatusMsg, 1)
+			sendRequest(server.tPeer.app, GetTxStatusMsg, reqID, cost, []common.Hash{tx.Hash()})
 		}
-		if err := expectResponse(peer.app, TxStatusMsg, reqID, testBufLimit, []txStatus{expStatus}); err != nil {
+		if err := expectResponse(server.tPeer.app, TxStatusMsg, reqID, testBufLimit, []txStatus{expStatus}); err != nil {
 			t.Errorf("transaction status mismatch")
 		}
 	}
@@ -460,16 +457,16 @@ func TestTransactionStatusLes2(t *testing.T) {
 	signer := types.HomesteadSigner{}
 
 	// test error status by sending an underpriced transaction
-	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
+	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
 	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced.Error()})
 
-	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx1, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	test(tx1, false, txStatus{Status: core.TxStatusUnknown}) // query before sending, should be unknown
 	test(tx1, true, txStatus{Status: core.TxStatusPending})  // send valid processable tx, should return pending
 	test(tx1, true, txStatus{Status: core.TxStatusPending})  // adding it again should not return an error
 
-	tx2, _ := types.SignTx(types.NewTransaction(1, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
-	tx3, _ := types.SignTx(types.NewTransaction(2, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx2, _ := types.SignTx(types.NewTransaction(1, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
+	tx3, _ := types.SignTx(types.NewTransaction(2, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	// send transactions in the wrong order, tx3 should be queued
 	test(tx3, true, txStatus{Status: core.TxStatusQueued})
 	test(tx2, true, txStatus{Status: core.TxStatusPending})
@@ -477,7 +474,7 @@ func TestTransactionStatusLes2(t *testing.T) {
 	test(tx3, false, txStatus{Status: core.TxStatusPending})
 
 	// generate and add a block with tx1 and tx2 included
-	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), db, 1, func(i int, block *core.BlockGen) {
+	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 1, func(i int, block *core.BlockGen) {
 		block.AddTx(tx1)
 		block.AddTx(tx2)
 	})
@@ -496,12 +493,12 @@ func TestTransactionStatusLes2(t *testing.T) {
 	}
 
 	// check if their status is included now
-	block1hash := rawdb.ReadCanonicalHash(db, 1)
+	block1hash := rawdb.ReadCanonicalHash(server.db, 1)
 	test(tx1, false, txStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
 	test(tx2, false, txStatus{Status: core.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
 
 	// create a reorg that rolls them back
-	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), db, 2, func(i int, block *core.BlockGen) {})
+	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), server.db, 2, func(i int, block *core.BlockGen) {})
 	if _, err := chain.InsertChain(gchain); err != nil {
 		panic(err)
 	}

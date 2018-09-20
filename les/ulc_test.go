@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -20,7 +19,7 @@ import (
 )
 
 func TestULCSyncWithOnePeer(t *testing.T) {
-	f := newFullPeerPair(t, 1, 4, testChainGen)
+	f := newFullPeerPair(t, 1, 4)
 	ulcConfig := &eth.ULCConfig{
 		MinTrustedFraction: 100,
 		TrustedServers:     []string{f.Node.String()},
@@ -47,7 +46,7 @@ func TestULCSyncWithOnePeer(t *testing.T) {
 }
 
 func TestULCReceiveAnnounce(t *testing.T) {
-	f := newFullPeerPair(t, 1, 4, testChainGen)
+	f := newFullPeerPair(t, 1, 4)
 	ulcConfig := &eth.ULCConfig{
 		MinTrustedFraction: 100,
 		TrustedServers:     []string{f.Node.String()},
@@ -84,8 +83,8 @@ func TestULCReceiveAnnounce(t *testing.T) {
 }
 
 func TestULCShouldNotSyncWithTwoPeersOneHaveEmptyChain(t *testing.T) {
-	f1 := newFullPeerPair(t, 1, 4, testChainGen)
-	f2 := newFullPeerPair(t, 2, 0, nil)
+	f1 := newFullPeerPair(t, 1, 4)
+	f2 := newFullPeerPair(t, 2, 0)
 	ulcConf := &ulc{minTrustedFraction: 100, trustedKeys: make(map[string]struct{})}
 	ulcConf.trustedKeys[f1.Node.ID().String()] = struct{}{}
 	ulcConf.trustedKeys[f2.Node.ID().String()] = struct{}{}
@@ -115,9 +114,9 @@ func TestULCShouldNotSyncWithTwoPeersOneHaveEmptyChain(t *testing.T) {
 }
 
 func TestULCShouldNotSyncWithThreePeersOneHaveEmptyChain(t *testing.T) {
-	f1 := newFullPeerPair(t, 1, 3, testChainGen)
-	f2 := newFullPeerPair(t, 2, 4, testChainGen)
-	f3 := newFullPeerPair(t, 3, 0, nil)
+	f1 := newFullPeerPair(t, 1, 3)
+	f2 := newFullPeerPair(t, 2, 4)
+	f3 := newFullPeerPair(t, 3, 0)
 
 	ulcConfig := &eth.ULCConfig{
 		MinTrustedFraction: 60,
@@ -195,10 +194,10 @@ func connectPeers(full, light pairPeer, version int) (*peer, *peer, error) {
 }
 
 // newFullPeerPair creates node with full sync mode
-func newFullPeerPair(t *testing.T, index int, numberOfblocks int, chainGen func(int, *core.BlockGen)) pairPeer {
+func newFullPeerPair(t *testing.T, index int, numberOfblocks int) pairPeer {
 	db := rawdb.NewMemoryDatabase()
 
-	pmFull := newTestProtocolManagerMust(t, false, numberOfblocks, chainGen, nil, nil, db, nil)
+	pmFull, _ := newTestProtocolManagerMust(t, false, numberOfblocks, nil, nil, nil, db, nil)
 
 	peerPairFull := pairPeer{
 		Name: "full node",
@@ -222,7 +221,7 @@ func newLightPeer(t *testing.T, ulcConfig *eth.ULCConfig) pairPeer {
 
 	odr := NewLesOdr(ldb, light.DefaultClientIndexerConfig, rm)
 
-	pmLight := newTestProtocolManagerMust(t, true, 0, nil, odr, peers, ldb, ulcConfig)
+	pmLight, _ := newTestProtocolManagerMust(t, true, 0, odr, nil, peers, ldb, ulcConfig)
 	peerPairLight := pairPeer{
 		Name: "ulc node",
 		PM:   pmLight,

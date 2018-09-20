@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -67,6 +68,11 @@ type peer struct {
 	network uint64 // Network ID being on
 
 	announceType uint64
+
+	// Checkpoint relative fields
+	advertisedCheckpoint params.TrustedCheckpoint
+	registeredHeight     uint64
+	isHardcode           bool // Indicator whether the checkpoint is hardcoded
 
 	id string
 
@@ -481,6 +487,14 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		send = send.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode()
 		p.fcParams = server.defParams
+
+		if server.protocolManager != nil && server.protocolManager.reg != nil && server.protocolManager.reg.isRunning() {
+			cp, height := server.protocolManager.reg.stableCheckpoint()
+			if cp != nil {
+				send = send.add("checkpoint/value", cp)
+				send = send.add("checkpoint/registerHeight", height)
+			}
+		}
 	} else {
 		//on client node
 		p.announceType = announceTypeSimple
@@ -558,20 +572,40 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			return errResp(ErrUselessPeer, "peer cannot serve requests")
 		}
 
-		var params flowcontrol.ServerParams
-		if err := recv.get("flowControl/BL", &params.BufLimit); err != nil {
+		var sParams flowcontrol.ServerParams
+		if err := recv.get("flowControl/BL", &sParams.BufLimit); err != nil {
 			return err
 		}
-		if err := recv.get("flowControl/MRR", &params.MinRecharge); err != nil {
+		if err := recv.get("flowControl/MRR", &sParams.MinRecharge); err != nil {
 			return err
 		}
 		var MRC RequestCostList
 		if err := recv.get("flowControl/MRC", &MRC); err != nil {
 			return err
 		}
-		p.fcParams = params
-		p.fcServer = flowcontrol.NewServerNode(params, &mclock.System{})
+		p.fcParams = sParams
+		p.fcServer = flowcontrol.NewServerNode(sParams, &mclock.System{})
 		p.fcCosts = MRC.decode()
+
+		// Recap the checkpoint.
+		//
+		// The light client may be connected to several different versions of the server.
+		// (1) Old version server which can not provide stable checkpoint in the handshake packet.
+		//     => Use hardcoded checkpoint or empty checkpoint
+		// (2) New version server but simple checkpoint syncing is not enabled(e.g. mainnet, new testnet or private network)
+		//     => Use hardcoded checkpoint or empty checkpoint
+		// (3) New version server but the provided stable checkpoint is even lower than the hardcoded one.
+		//     => Use hardcoded checkpoint
+		// (4) New version server with valid and higher stable checkpoint
+		//     => Use provided checkpoint
+		hardcoded := params.TrustedCheckpoints[genesis]
+		if err := recv.get("checkpoint/value", &p.advertisedCheckpoint); hardcoded != nil &&
+			(err != nil || p.advertisedCheckpoint.SectionIndex < hardcoded.SectionIndex) {
+			p.advertisedCheckpoint = *hardcoded
+			p.isHardcode = true
+		}
+		recv.get("checkpoint/registerHeight", &p.registeredHeight)
+
 		if !p.isOnlyAnnounce {
 			for msgCode := range reqAvgTimeCost {
 				if p.fcCosts[msgCode] == nil {

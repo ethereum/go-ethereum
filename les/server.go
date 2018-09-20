@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
@@ -56,51 +57,28 @@ type LesServer struct {
 	priorityClientPool *priorityClientPool
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(e *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
-	pm, err := NewProtocolManager(
-		eth.BlockChain().Config(),
-		light.DefaultServerIndexerConfig,
-		false,
-		config.NetworkId,
-		eth.EventMux(),
-		eth.Engine(),
-		newPeerSet(),
-		eth.BlockChain(),
-		eth.TxPool(),
-		eth.ChainDb(),
-		nil,
-		nil,
-		nil,
-		quitSync,
-		new(sync.WaitGroup),
-		config.ULC)
-	if err != nil {
-		return nil, err
-	}
-
 	lesTopics := make([]discv5.Topic, len(AdvertiseProtocolVersions))
 	for i, pv := range AdvertiseProtocolVersions {
-		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
+		lesTopics[i] = lesTopic(e.BlockChain().Genesis().Hash(), pv)
 	}
 
 	srv := &LesServer{
 		lesCommons: lesCommons{
 			config:           config,
-			chainDb:          eth.ChainDb(),
 			iConfig:          light.DefaultServerIndexerConfig,
-			chtIndexer:       light.NewChtIndexer(eth.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
-			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
-			protocolManager:  pm,
+			chainDb:          e.ChainDb(),
+			chtIndexer:       light.NewChtIndexer(e.ChainDb(), nil, params.CHTFrequency, params.HelperTrieProcessConfirmations),
+			bloomTrieIndexer: light.NewBloomTrieIndexer(e.ChainDb(), nil, params.BloomBitsBlocks, params.BloomTrieFrequency),
 		},
-		costTracker:  newCostTracker(eth.ChainDb(), config),
+		costTracker:  newCostTracker(e.ChainDb(), config),
 		quitSync:     quitSync,
 		lesTopics:    lesTopics,
 		onlyAnnounce: config.OnlyAnnounce,
 	}
 
 	logger := log.New()
-	pm.server = srv
 	srv.thcNormal = config.LightServ * 4 / 100
 	if srv.thcNormal < 4 {
 		srv.thcNormal = 4
@@ -108,22 +86,27 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	srv.thcBlockProcessing = config.LightServ/100 + 1
 	srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
 
-	chtSectionCount, _, _ := srv.chtIndexer.Sections()
-	if chtSectionCount != 0 {
-		chtLastSection := chtSectionCount - 1
-		chtSectionHead := srv.chtIndexer.SectionHead(chtLastSection)
-		chtRoot := light.GetChtRoot(pm.chainDb, chtLastSection, chtSectionHead)
-		logger.Info("Loaded CHT", "section", chtLastSection, "head", chtSectionHead, "root", chtRoot)
-	}
-	bloomTrieSectionCount, _, _ := srv.bloomTrieIndexer.Sections()
-	if bloomTrieSectionCount != 0 {
-		bloomTrieLastSection := bloomTrieSectionCount - 1
-		bloomTrieSectionHead := srv.bloomTrieIndexer.SectionHead(bloomTrieLastSection)
-		bloomTrieRoot := light.GetBloomTrieRoot(pm.chainDb, bloomTrieLastSection, bloomTrieSectionHead)
-		logger.Info("Loaded bloom trie", "section", bloomTrieLastSection, "head", bloomTrieSectionHead, "root", bloomTrieRoot)
+	checkpoint := srv.latestLocalCheckpoint()
+	if !checkpoint.Empty() {
+		logger.Info("Loaded latest checkpoint", "section", checkpoint.SectionIndex, "head", checkpoint.SectionHead,
+			"chtroot", checkpoint.CHTRoot, "bloomroot", checkpoint.BloomRoot)
 	}
 
-	srv.chtIndexer.Start(eth.BlockChain())
+	srv.chtIndexer.Start(e.BlockChain())
+
+	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(e.ChainDb(), config.Genesis, config.ConstantinopleOverride)
+	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+		return nil, genesisErr
+	}
+
+	registrar := newCheckpointRegistrar(chainConfig.CheckpointContract, srv.getLocalCheckpoint)
+	pm, err := NewProtocolManager(e.BlockChain().Config(), light.DefaultServerIndexerConfig, config.ULC, false, config.NetworkId, e.EventMux(), newPeerSet(), e.BlockChain(), e.TxPool(), e.ChainDb(), nil, nil, registrar, quitSync, new(sync.WaitGroup))
+	if err != nil {
+		return nil, err
+	}
+	srv.protocolManager = pm
+	pm.server = srv
+
 	return srv, nil
 }
 
@@ -133,6 +116,12 @@ func (s *LesServer) APIs() []rpc.API {
 			Namespace: "les",
 			Version:   "1.0",
 			Service:   NewPrivateLightServerAPI(s),
+			Public:    false,
+		},
+		{
+			Namespace: "les",
+			Version:   "1.0",
+			Service:   NewPrivateLightAPI(&s.lesCommons, s.protocolManager.reg),
 			Public:    false,
 		},
 	}
@@ -229,6 +218,13 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
+}
+
+// SetClient sets the rpc client and starts running checkpoint contract if it is not yet watched.
+func (s *LesServer) SetContractBackend(backend bind.ContractBackend) {
+	if s.protocolManager.reg != nil {
+		s.protocolManager.reg.start(backend)
+	}
 }
 
 // Stop stops the LES service

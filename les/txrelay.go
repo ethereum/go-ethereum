@@ -29,7 +29,7 @@ type ltrInfo struct {
 	sentTo map[*peer]struct{}
 }
 
-type LesTxRelay struct {
+type lesTxRelay struct {
 	txSent       map[common.Hash]*ltrInfo
 	txPending    map[common.Hash]struct{}
 	ps           *peerSet
@@ -40,8 +40,8 @@ type LesTxRelay struct {
 	reqDist *requestDistributor
 }
 
-func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
-	r := &LesTxRelay{
+func newLesTxRelay(ps *peerSet, reqDist *requestDistributor) *lesTxRelay {
+	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
 		ps:        ps,
@@ -51,14 +51,14 @@ func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
 	return r
 }
 
-func (self *LesTxRelay) registerPeer(p *peer) {
+func (self *lesTxRelay) registerPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.peerList = self.ps.AllPeers()
 }
 
-func (self *LesTxRelay) unregisterPeer(p *peer) {
+func (self *lesTxRelay) unregisterPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -67,7 +67,7 @@ func (self *LesTxRelay) unregisterPeer(p *peer) {
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *LesTxRelay) send(txs types.Transactions, count int) {
+func (self *lesTxRelay) send(txs types.Transactions, count int) {
 	sendTo := make(map[*peer]types.Transactions)
 
 	self.peerStartPos++ // rotate the starting position of the peer list
@@ -136,14 +136,14 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 	}
 }
 
-func (self *LesTxRelay) Send(txs types.Transactions) {
+func (self *lesTxRelay) Send(txs types.Transactions) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.send(txs, 3)
 }
 
-func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (self *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -166,7 +166,7 @@ func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	}
 }
 
-func (self *LesTxRelay) Discard(hashes []common.Hash) {
+func (self *lesTxRelay) Discard(hashes []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 

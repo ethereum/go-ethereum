@@ -247,7 +247,6 @@ func (n *Node) Start() error {
 	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
-
 	return nil
 }
 
