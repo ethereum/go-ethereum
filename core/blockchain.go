@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -129,14 +128,14 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks *lru.Cache                // Bad block cache
-	isLocalFn func(common.Address) bool // Function used to determine whether the block author is a local miner account.
+	badBlocks      *lru.Cache              // Bad block cache
+	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, isLocalFn func(common.Address) bool) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(block *types.Block) bool) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieNodeLimit: 256 * 1024 * 1024,
@@ -150,20 +149,20 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
-		chainConfig:  chainConfig,
-		cacheConfig:  cacheConfig,
-		db:           db,
-		triegc:       prque.New(nil),
-		stateCache:   state.NewDatabase(db),
-		quit:         make(chan struct{}),
-		isLocalFn:    isLocalFn,
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
-		blockCache:   blockCache,
-		futureBlocks: futureBlocks,
-		engine:       engine,
-		vmConfig:     vmConfig,
-		badBlocks:    badBlocks,
+		chainConfig:    chainConfig,
+		cacheConfig:    cacheConfig,
+		db:             db,
+		triegc:         prque.New(nil),
+		stateCache:     state.NewDatabase(db),
+		quit:           make(chan struct{}),
+		shouldPreserve: shouldPreserve,
+		bodyCache:      bodyCache,
+		bodyRLPCache:   bodyRLPCache,
+		blockCache:     blockCache,
+		futureBlocks:   futureBlocks,
+		engine:         engine,
+		vmConfig:       vmConfig,
+		badBlocks:      badBlocks,
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
@@ -975,39 +974,11 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		if block.NumberU64() < currentBlock.NumberU64() {
 			reorg = true
 		} else if block.NumberU64() == currentBlock.NumberU64() {
-			if _, ok := bc.engine.(*clique.Clique); ok {
-				// The reason we need to disable the self-reorg preserving for clique
-				// is it can be probable to introduce a deadlock.
-				//
-				// e.g. If there are 7 available signers
-				//
-				// r1   A
-				// r2     B
-				// r3       C
-				// r4         D
-				// r5   A      [X] F G
-				// r6    [X]
-				//
-				// In the round5, the inturn signer E is offline, so the worst case
-				// is A, F and G sign the block of round5 and reject the block of opponents
-				// and in the round6, the last available signer B is offline, the whole
-				// network is stuck.
-				reorg = mrand.Float64() < 0.5
-			} else {
-				currentAuthor, err := bc.engine.Author(currentBlock.Header())
-				if err != nil {
-					return NonStatTy, err
-				}
-				blockAuthor, err := bc.engine.Author(block.Header())
-				if err != nil {
-					return NonStatTy, err
-				}
-				var currentLocal, blockLocal bool
-				if bc.isLocalFn != nil {
-					currentLocal, blockLocal = bc.isLocalFn(currentAuthor), bc.isLocalFn(blockAuthor)
-				}
-				reorg = !currentLocal && (blockLocal || mrand.Float64() < 0.5)
+			var currentPreserve, blockPreserve bool
+			if bc.shouldPreserve != nil {
+				currentPreserve, blockPreserve = bc.shouldPreserve(currentBlock), bc.shouldPreserve(block)
 			}
+			reorg = !currentPreserve && (blockPreserve || mrand.Float64() < 0.5)
 		}
 	}
 	if reorg {
