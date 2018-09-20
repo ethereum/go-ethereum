@@ -17,7 +17,11 @@
 package dashboard
 
 import (
+	"container/list"
+	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/metrics"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -190,6 +194,214 @@ type removedPeer struct {
 	ip, id string
 }
 
+
+
+
+
+
+
+
+
+const (
+	knownPeerLimit   = p2p.MeteredPeerLimit
+	unknownPeerLimit = p2p.MeteredPeerLimit
+)
+
+type PeerContainer struct {
+	Bundles map[string]*PeerBundle `json:"peerBundles,omitempty"`
+
+	activeSeparator list.Element
+	knownPeers      *list.List
+	unknownPeers    *list.List
+
+	refresh time.Duration
+}
+
+func NewPeerContainer(refresh time.Duration) *PeerContainer {
+	return &PeerContainer{
+		Bundles:      make(map[string]*PeerBundle),
+		knownPeers:   list.New(),
+		unknownPeers: list.New(),
+		refresh: refresh,
+	}
+}
+
+func (pc *PeerContainer) getOrInit(ip string) *PeerBundle {
+	if _, ok := pc.Bundles[ip]; !ok {
+		pc.Bundles[ip] = &PeerBundle{
+			KnownPeers: make(map[string]*KnownPeer),
+			parent: pc,
+			ip: ip,
+		}
+	}
+	return pc.Bundles[ip]
+}
+
+func (pc *PeerContainer) updateKnown(ip, id string, cycle *PeerCycle) {
+	pc.getOrInit(ip).updateKnown(id, cycle)
+}
+
+func (pc *PeerContainer) updateUnknown(ip string, peer *UnknownPeer) {
+	pc.getOrInit(ip).updateUnknown(peer)
+}
+
+func (pc *PeerContainer) Update(event *peerEvent) {
+	switch event.t {
+	case peerConnected:
+		connected := time.Now().Add(-event.Elapsed)
+		pc.updateKnown(event.IP.String(), event.ID, &PeerCycle{
+			Connected: &connected,
+		})
+	case peerDisconnected:
+		now := time.Now()
+		pc.updateKnown(event.IP.String(), event.ID, &PeerCycle{
+			Disconnected: &now,
+			Ingress: ChartEntries{
+				&ChartEntry{
+					Time:  now,
+					Value: float64(event.Ingress),
+				},
+			},
+			Egress: ChartEntries{
+				&ChartEntry{
+					Time:  now,
+					Value: float64(event.Egress),
+				},
+			},
+		})
+	case peerHandshakeFailed:
+		now := time.Now()
+		pc.updateUnknown(event.IP.String(), &UnknownPeer{
+			Connected: now.Add(-event.Elapsed),
+			Disconnected: now,
+		})
+	case peerIngress:
+		fmt.Println("Ingress:", event)
+		pc.updateKnown(event.ip, event.id, &PeerCycle{
+			Ingress: ChartEntries{
+				&ChartEntry{
+					Time: time.Now(),
+					Value: float64(event.traffic),
+				},
+			},
+		})
+	case peerEgress:
+		fmt.Println("Egress:", event)
+		pc.updateKnown(event.ip, event.id, &PeerCycle{
+			Egress: ChartEntries{
+				&ChartEntry{
+					Time: time.Now(),
+					Value: float64(event.traffic),
+				},
+			},
+		})
+	default:
+		log.Error("Unknown peer event type", "type", event.Type)
+	}
+}
+
+type PeerBundle struct {
+	Location     *GeoLocation          `json:"location,omitempty"`
+	KnownPeers   map[string]*KnownPeer `json:"knownPeers,omitempty"`
+	UnknownPeers []*UnknownPeer         `json:"unknownPeers,omitempty"`
+
+	parent *PeerContainer
+	ip     string
+}
+
+func (b *PeerBundle) getOrInit(id string) *KnownPeer {
+	if _, ok := b.KnownPeers[id]; !ok {
+		b.KnownPeers[id] = &KnownPeer{
+			parent: b,
+			id: id,
+		}
+	}
+	return b.KnownPeers[id]
+}
+
+func (b *PeerBundle) updateKnown(id string, cycle *PeerCycle) {
+	b.getOrInit(id).update(cycle)
+}
+
+func (b *PeerBundle) updateUnknown(peer *UnknownPeer) {
+	b.UnknownPeers = append(b.UnknownPeers, peer)
+}
+
+type KnownPeer struct {
+	Cycles []*PeerCycle `json:"cycles,omitempty"`
+
+	parent *PeerBundle
+	id     string
+}
+
+func (peer *KnownPeer) update(cycle *PeerCycle) {
+	if cycle.Connected != nil {
+		if peer.Cycles == nil {
+			peer.Cycles = append(peer.Cycles, &PeerCycle{
+				Ingress: emptyChartEntries(time.Now(), 3, peer.parent.parent.refresh),
+				Egress: emptyChartEntries(time.Now(), 3, peer.parent.parent.refresh),
+			})
+		}
+		peer.Cycles = append(peer.Cycles, cycle)
+		return
+	}
+	if cycle.Disconnected != nil {
+		if len(peer.Cycles) < 1 {
+			log.Error("Peer disconnect event appeared without connect")
+			return
+		}
+		last := peer.Cycles[len(peer.Cycles)-1]
+		last.Disconnected = cycle.Disconnected
+		last.Ingress = append(last.Ingress, cycle.Ingress...)
+		last.Egress = append(last.Egress, cycle.Egress...)
+		return
+	}
+}
+
+type PeerCycle struct {
+	Connected    *time.Time `json:"connected,omitempty"`
+	Disconnected *time.Time `json:"disconnected,omitempty"`
+
+	Ingress ChartEntries `json:"ingress,omitempty"`
+	Egress  ChartEntries `json:"egress,omitempty"`
+}
+
+type UnknownPeer struct {
+	Connected    time.Time `json:"connected,omitempty"`
+	Disconnected time.Time `json:"disconnected,omitempty"`
+}
+
+type peerContainerUpdateType int
+
+const (
+	peerConnected       = peerContainerUpdateType(p2p.PeerConnected)
+	peerDisconnected    = peerContainerUpdateType(p2p.PeerDisconnected)
+	peerHandshakeFailed = peerContainerUpdateType(p2p.PeerHandshakeFailed)
+	peerIngress         = peerConnected + peerDisconnected + peerHandshakeFailed + iota
+	peerEgress
+)
+
+type peerEvent struct {
+	*p2p.MeteredPeerEvent
+	ip string
+	id string
+	t peerContainerUpdateType
+	traffic uint64
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // collectPeerData gathers data about the peers and sends it to the clients.
 func (db *Dashboard) collectPeerData() {
 	defer db.wg.Done()
@@ -210,16 +422,35 @@ func (db *Dashboard) collectPeerData() {
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
-	db.peerLock.RLock()
-	//historyMaintainer := NewPeerMaintainer(p2p.MeteredPeerLimit)
-	//historyHandshakeFailedMaintainer := NewPeerMaintainer(p2p.MeteredPeerLimit)
-	//diffMaintainer := NewPeerMaintainer(p2p.MeteredPeerLimit)
-	//diffHandshakeFailedMaintainer := NewPeerMaintainer(p2p.MeteredPeerLimit)
+	pc := NewPeerContainer(db.config.Refresh)
+
+	trafficUpdater := func(prefix string) (func (*map[string]int64) func(name string, i interface{})) {
+		return func (entryMap *map[string]int64) func(name string, i interface{}) {
+			return func(name string, i interface{}) {
+				if m, ok := i.(metrics.Meter); ok {
+					(*entryMap)[strings.TrimPrefix(name, prefix)] = m.Count()
+				}
+			}
+		}
+	}
+	updateIngress := trafficUpdater(p2p.MetricsInboundTraffic+"/")
+	updateEgress := trafficUpdater(p2p.MetricsOutboundTraffic+"/")
+
 	for {
 		select {
 		case event := <-peerCh:
-			fmt.Println(event)
-			//diffMaintainer.Update(event.IP.String(), event.ID)
+			pc.Update(&peerEvent{
+				MeteredPeerEvent: &event,
+				t: peerContainerUpdateType(event.Type),
+			})
+		case <-ticker.C:
+			ingress := make(map[string]int64)
+			egress := make(map[string]int64)
+			p2p.PeerIngressRegistry.Each(updateIngress(&ingress))
+			p2p.PeerEgressRegistry.Each(updateEgress(&egress))
+			//fmt.Println(ingress)
+			s, _ := json.MarshalIndent(pc, "", "  ")
+			fmt.Println(string(s))
 		case err := <-subPeer.Err():
 			log.Warn("Peer subscription error", "err", err)
 			return

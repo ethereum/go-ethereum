@@ -183,12 +183,6 @@ func (c *meteredConn) handshakeDone(nodeID discover.NodeID) {
 func (c *meteredConn) Close() error {
 	err := c.Conn.Close()
 	c.lock.RLock()
-	if !c.metered {
-		c.lock.RUnlock()
-		return err
-	}
-	// Decrement the metered peer count
-	atomic.AddInt32(&meteredPeerCount, -1)
 	if c.id == "" {
 		// If the peer disconnects before the handshake
 		c.lock.RUnlock()
@@ -199,6 +193,12 @@ func (c *meteredConn) Close() error {
 		})
 		return err
 	}
+	if !c.metered {
+		c.lock.RUnlock()
+		return err
+	}
+	// Decrement the metered peer count
+	atomic.AddInt32(&meteredPeerCount, -1)
 	id, ingress, egress := c.id, uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
 	c.lock.RUnlock()
 

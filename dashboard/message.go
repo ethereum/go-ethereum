@@ -17,7 +17,6 @@
 package dashboard
 
 import (
-	"container/list"
 	"encoding/json"
 	"time"
 )
@@ -63,57 +62,57 @@ type NetworkMessage struct {
 
 // getOrInitBundle returns the peer bundle belonging to the given IP, or
 // initializes the bundle if it doesn't exist.
-func (m *NetworkMessage) getOrInitBundle(ip string) *PeerBundle {
-	if _, ok := m.PeerBundles[ip]; !ok {
-		m.PeerBundles[ip] = &PeerBundle{
-			Peers: make(PeerMap),
-			FailedPeers: make(PeerMap),
-		}
-	}
-	return m.PeerBundles[ip]
-}
+//func (m *NetworkMessage) getOrInitBundle(ip string) *PeerBundle {
+//	if _, ok := m.PeerBundles[ip]; !ok {
+//		m.PeerBundles[ip] = &PeerBundle{
+//			Peers: make(PeerMap),
+//			FailedPeers: make(PeerMap),
+//		}
+//	}
+//	return m.PeerBundles[ip]
+//}
+//
+//// getOrInitPeer returns the peer belonging to the given IP and node id, or
+//// initializes the peer if it doesn't exist.
+//func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
+//	return m.getOrInitBundle(ip).getOrInitPeer(id)
+//}
 
-// getOrInitPeer returns the peer belonging to the given IP and node id, or
-// initializes the peer if it doesn't exist.
-func (m *NetworkMessage) getOrInitPeer(ip, id string) *Peer {
-	return m.getOrInitBundle(ip).getOrInitPeer(id)
-}
+//type PeerMap map[string]*Peer
 
-type PeerMap map[string]*Peer
+//func (pm PeerMap) getOrInit(id string) *Peer {
+//	if _, ok := pm[id]; !ok {
+//		pm[id] = new(Peer)
+//	}
+//	return pm[id]
+//}
+//
+//func (pm PeerMap) remove(id string) {
+//	delete(pm, id)
+//}
 
-func (pm PeerMap) getOrInit(id string) *Peer {
-	if _, ok := pm[id]; !ok {
-		pm[id] = new(Peer)
-	}
-	return pm[id]
-}
-
-func (pm PeerMap) remove(id string) {
-	delete(pm, id)
-}
-
-// PeerBundle contains information about the peers pertaining to an IP address.
-type PeerBundle struct {
-	Location    *GeoLocation `json:"location,omitempty"` // geographical information based on IP
-	Peers       PeerMap      `json:"peers,omitempty"`    // the peers' node id is used as key
-	FailedPeers PeerMap      `json:"failedPeers,omitempty"`
-}
-
-func (b *PeerBundle) getOrInitPeer(id string) *Peer {
-	return b.Peers.getOrInit(id)
-}
-
-func (b *PeerBundle) removePeer(id string) {
-	b.Peers.remove(id)
-}
-
-func (b *PeerBundle) getOrInitFailedPeer(id string) *Peer {
-	return b.FailedPeers.getOrInit(id)
-}
-
-func (b * PeerBundle) removeFailedPeer(id string) {
-	b.FailedPeers.remove(id)
-}
+//// PeerBundle contains information about the peers pertaining to an IP address.
+//type PeerBundle struct {
+//	Location    *GeoLocation `json:"location,omitempty"` // geographical information based on IP
+//	Peers       PeerMap      `json:"peers,omitempty"`    // the peers' node id is used as key
+//	FailedPeers PeerMap      `json:"failedPeers,omitempty"`
+//}
+//
+//func (b *PeerBundle) getOrInitPeer(id string) *Peer {
+//	return b.Peers.getOrInit(id)
+//}
+//
+//func (b *PeerBundle) removePeer(id string) {
+//	b.Peers.remove(id)
+//}
+//
+//func (b *PeerBundle) getOrInitFailedPeer(id string) *Peer {
+//	return b.FailedPeers.getOrInit(id)
+//}
+//
+//func (b * PeerBundle) removeFailedPeer(id string) {
+//	b.FailedPeers.remove(id)
+//}
 
 // GeoLocation contains geographical information.
 type GeoLocation struct {
@@ -124,16 +123,16 @@ type GeoLocation struct {
 }
 
 // Peer contains lifecycle timestamps and traffic information of a given peer.
-type Peer struct {
-	Connected    []time.Time `json:"connected,omitempty"`
-	Disconnected []time.Time `json:"disconnected,omitempty"`
-
-	Ingress ChartEntries `json:"ingress,omitempty"`
-	Egress  ChartEntries `json:"egress,omitempty"`
-
-	element *list.Element
-	ip, id string
-}
+//type Peer struct {
+//	Connected    []time.Time `json:"connected,omitempty"`
+//	Disconnected []time.Time `json:"disconnected,omitempty"`
+//
+//	Ingress ChartEntries `json:"ingress,omitempty"`
+//	Egress  ChartEntries `json:"egress,omitempty"`
+//
+//	element *list.Element
+//	ip, id string
+//}
 
 // SystemMessage contains the metered system data samples.
 type SystemMessage struct {
