@@ -30,4 +30,4 @@ const u256Len = 32
 const u128Len = 16
 
 // Max recursion depth for contracts
-const maxCallDepth = 4
+const maxCallDepth = 1024
