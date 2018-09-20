@@ -268,22 +268,23 @@
 			"revisionTime": "2016-07-20T14:16:34Z"
 		},
 		{
-			"checksumSHA1": "I4njd26dG5hxFT2nawuByM4pxzY=",
+			"checksumSHA1": "SEnjvwVyfuU2xBaOfXfwPD5MZqk=",
 			"path": "github.com/mattn/go-colorable",
-			"revision": "5411d3eea5978e6cdc258b30de592b60df6aba96",
-			"revisionTime": "2017-02-10T17:28:01Z"
+			"revision": "efa589957cd060542a26d2dd7832fd6a6c6c3ade",
+			"revisionTime": "2018-03-10T13:32:14Z",
+			"version": "efa589957cd060542a26d2dd7832fd6a6c6c3ade"
 		},
 		{
-			"checksumSHA1": "EkT5JmFvz3zOPWappEFyYWUaeY0=",
+			"checksumSHA1": "GiVgQkx5acnq+JZtYiuHPlhHoso=",
 			"path": "github.com/mattn/go-isatty",
-			"revision": "281032e84ae07510239465db46bf442aa44b953a",
-			"revisionTime": "2017-02-09T17:56:15Z"
+			"revision": "3fb116b820352b7f0c281308a4d6250c22d94e27",
+			"revisionTime": "2018-08-30T10:17:45Z"
 		},
 		{
 			"checksumSHA1": "MNkKJyk2TazKMJYbal5wFHybpyA=",
 			"path": "github.com/mattn/go-runewidth",
-			"revision": "14207d285c6c197daabb5c9793d63e7af9ab2d50",
-			"revisionTime": "2017-02-01T02:35:40Z"
+			"revision": "ce7b0b5c7b45a81508558cd1dba6bb1e4ddb51bb",
+			"revisionTime": "2018-04-08T05:53:51Z"
 		},
 		{
 			"checksumSHA1": "L3leymg2RT8hFl5uL+5KP/LpBkg=",
