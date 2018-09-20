@@ -194,8 +194,8 @@ type getGrapheneData struct {
 
 // grapheneData represents the Bloom filter and IBLT that make up a graphene message
 type grapheneData struct {
-	GrapheneIBLT  []byte
-	GrapheneBloom []byte
+	IBLT          []byte
+	BloomFilter   []byte
 	NPending      uint
 	NTxs          uint
 	Hash          common.Hash

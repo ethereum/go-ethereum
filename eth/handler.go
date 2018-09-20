@@ -789,11 +789,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		expectedDiff := float64(body.NTxs) / (grapheneC * grapheneTau)
 		bloomFPR := expectedDiff / float64((body.NPending - body.NTxs) + 1)
         bloomFilter := bloom.NewWithEstimates(body.NTxs, bloomFPR)
-        bloomFilter.GobDecode(body.GrapheneBloom)
+        bloomFilter.GobDecode(body.BloomFilter)
 
 		ibltRow := grapheneIBLTLookupTable[int(math.Ceil(expectedDiff))]
 		receivedIBLT := iblt.New(ibltRow[0], ibltRow[1])
-		receivedIBLT.UnmarshalBinary(body.GrapheneIBLT)
+		receivedIBLT.UnmarshalBinary(body.IBLT)
 
 		localIBLT := iblt.New(ibltRow[0], ibltRow[1])
 
