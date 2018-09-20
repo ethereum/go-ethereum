@@ -340,9 +340,9 @@ func (p *peer) RequestGraphene(hash common.Hash, nTxs int) error {
 }
 
 // SendGraphene sends the graphene message in response to a RequestGraphene
-func (p *peer) SendGraphene(hash common.Hash, i []byte, b []byte, ni uint, fpr uint, nTxs uint, indexArray []byte, uncles []*types.Header) error {
+func (p *peer) SendGraphene(hash common.Hash, i []byte, b []byte, nPending uint, nTxs uint, indexArray []byte, uncles []*types.Header) error {
 	p.Log().Debug("Sending graphene", "block", hash)
-	return p2p.Send(p.rw, GrapheneMsg, &grapheneData{Hash: hash, GrapheneIBLT: i, GrapheneBloom: b, NIBLT: ni, FPR: fpr, NTxs: nTxs, Indices: indexArray, Uncles: uncles})
+	return p2p.Send(p.rw, GrapheneMsg, &grapheneData{Hash: hash, GrapheneIBLT: i, GrapheneBloom: b, NPending: nPending, NTxs: nTxs, Indices: indexArray, Uncles: uncles})
 }
 
 

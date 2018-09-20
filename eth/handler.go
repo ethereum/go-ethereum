@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"sort"
+	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -40,6 +42,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/sasha-s/go-IBLT"
+	"github.com/willf/bloom"
+
 )
 
 const (
@@ -53,6 +58,23 @@ const (
 
 var (
 	daoChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the DAO handshake challenge
+)
+
+var (
+	grapheneC = 8 * math.Pow(math.Log(2), 2)
+	grapheneTau = 37.5
+	grapheneIBLTLookupTable = [8][2]int {
+		// FIXME: Remove library requirement for powers of 2
+		// FIXME: Remove library requiremenet for min. 2 * nHashFns number of cells 
+		{3, 8},  //According to formula: 1 item -> 3 cells
+		{8, 16}, //2 -> 16
+		{6, 32}, //3 -> 18
+		{7, 32}, //4 -> 21
+		{6, 32}, //5 -> 24
+		{6, 32}, //6 -> 24
+		{9, 32}, //7 -> 27
+		{7, 32},  //8 -> 28
+	}
 )
 
 // errIncompatibleConfig is returned if the requested protocols and configs are
@@ -94,6 +116,9 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
+
+	// switch to enable graphene
+	useGraphene bool
 }
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -111,6 +136,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+		useGraphene: false,
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -628,7 +654,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 		for _, block := range unknown {
-			pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+			if pm.useGraphene {
+				// FIXME: Should we consider Queued too?
+                pending, _ := pm.txpool.Pending()
+                nTxs := 0
+                for _, txs := range pending {
+                    nTxs += len(txs)
+                }
+                p.RequestGraphene(block.Hash, nTxs)
+            } else {
+                pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+            }
 		}
 
 	case msg.Code == NewBlockMsg:
@@ -681,6 +717,123 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddRemotes(txs)
+
+	case msg.Code == GetTxMsg:
+		var hashes []common.Hash
+		if err := msg.Decode(&hashes); err != nil {
+			   return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		var txs []*types.Transaction
+		for _, hash := range hashes {
+			   log.Info("Retrieving transaction", "hash", hash)
+				// FIXME: this function has been removed, but we don't this msg currently
+			   // txs = append(txs, pm.blockchain.GetTxByHash(hash))
+		}
+		if len(txs) > 0 {
+			   p.SendTransactions(txs)
+		}
+
+	case msg.Code == GetGrapheneMsg:
+		var query getGrapheneData
+		msg.Decode(&query)
+		block := pm.blockchain.GetBlockByHash(query.Hash)
+
+		nPendingAtRecv := query.NTxs
+		txs := block.Transactions()
+		nTxsInBlock := uint(len(txs))
+		if nTxsInBlock == 0 {
+			log.Debug("GetGraphene for empty block", "hash", query.Hash)
+			// p.SendGraphene(query.Hash, empty, empty, 0, 0)
+			return nil
+		}
+
+
+		expectedDiff := float64(nTxsInBlock) / (grapheneC * grapheneTau)
+		bloomFPR := expectedDiff / float64((nPendingAtRecv - nTxsInBlock) + 1)
+		bloomFilter := bloom.NewWithEstimates(nTxsInBlock, bloomFPR)
+
+		ibltRow := grapheneIBLTLookupTable[int(math.Ceil(expectedDiff))]
+		senderIBLT := iblt.New(ibltRow[0], ibltRow[1])
+		txIds := make([]string, nTxsInBlock)
+		txPositions := make(map[string]uint32)
+
+		for i, tx := range txs {
+			txHash := tx.Hash().Bytes()[:5]
+			txHashString := string(txHash[:])
+			bloomFilter.Add(txHash)
+			senderIBLT.Add(txHash)
+			txIds = append(txIds, txHashString)
+			txPositions[txHashString] = uint32(i)
+		}
+
+		sort.Strings(txIds)
+		indexArray := make([]byte, nTxsInBlock * 4)
+		for _, txId := range txIds {
+			bs := make([]byte, 4)
+			binary.LittleEndian.PutUint32(bs, txPositions[txId])
+			indexArray = append(indexArray, bs...)
+		}
+
+		ibltBinary, _ := senderIBLT.MarshalBinary()
+		bloomFilterBinary, _ := bloomFilter.GobEncode()
+
+        // include nPendingAtRecv in the response too so we don't have to
+		// calculate it again while recomputing FPR (which can't be serialized because it is a float)
+		p.SendGraphene(query.Hash, ibltBinary, bloomFilterBinary, uint(nPendingAtRecv), uint(nTxsInBlock), indexArray, block.Uncles())
+
+	case msg.Code == GrapheneMsg:
+		var body grapheneData
+		msg.Decode(&body)
+
+		// This recomputation is necessary because floats cannot be serialized
+		expectedDiff := float64(body.NTxs) / (grapheneC * grapheneTau)
+		bloomFPR := expectedDiff / float64((body.NPending - body.NTxs) + 1)
+        bloomFilter := bloom.NewWithEstimates(body.NTxs, bloomFPR)
+        bloomFilter.GobDecode(body.GrapheneBloom)
+
+		ibltRow := grapheneIBLTLookupTable[int(math.Ceil(expectedDiff))]
+		receivedIBLT := iblt.New(ibltRow[0], ibltRow[1])
+		receivedIBLT.UnmarshalBinary(body.GrapheneIBLT)
+
+		localIBLT := iblt.New(ibltRow[0], ibltRow[1])
+
+		nAddedToBloom := 0
+		nTested := 0
+		pending, _ := pm.txpool.Pending()
+		shortTxHashMap := make(map[string]*types.Transaction)
+
+		for _, txs := range pending {
+			for _, tx := range txs {
+				nTested += 1
+				txHash := tx.Hash().Bytes()[:5]
+				txHashString := string(txHash[:])
+				shortTxHashMap[txHashString] = tx
+				if bloomFilter.Test(txHash) {
+					nAddedToBloom += 1
+					localIBLT.Add(txHash)
+				}
+			}
+		}
+
+		localIBLT.Sub(*receivedIBLT)
+		decodedIBLT, _ := localIBLT.Decode()
+
+		for _, txHash := range decodedIBLT.Added {
+			txHashString := string(txHash[:])
+			shortTxHashMap[txHashString] = nil
+		}
+
+		txIds := make([]string, body.NTxs)
+		for k, _ := range shortTxHashMap {
+			txIds = append(txIds, k)
+		}
+		sort.Strings(txIds)
+
+		txs := make([]*types.Transaction, body.NTxs)
+		for i, txId := range txIds {
+			index := binary.LittleEndian.Uint32(body.Indices[4*i:4*i+4])
+			txs[index] = shortTxHashMap[txId]
+		}
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
