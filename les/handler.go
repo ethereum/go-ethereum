@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -97,7 +96,7 @@ type ProtocolManager struct {
 	networkId uint64 // The identity of network.
 
 	txpool       txPool
-	txrelay      *LesTxRelay
+	txrelay      *lesTxRelay
 	blockchain   BlockChain
 	chainDb      ethdb.Database
 	odr          *LesOdr
@@ -111,6 +110,7 @@ type ProtocolManager struct {
 	fetcher      *lightFetcher
 	ulc          *ulc
 	peers        *peerSet
+	reg          *checkpointRegistrar // If reg == nil, it means the checkpoint registrar is not activated
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
@@ -127,23 +127,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(
-	chainConfig *params.ChainConfig,
-	indexerConfig *light.IndexerConfig,
-	client bool,
-	networkId uint64,
-	mux *event.TypeMux,
-	engine consensus.Engine,
-	peers *peerSet,
-	blockchain BlockChain,
-	txpool txPool,
-	chainDb ethdb.Database,
-	odr *LesOdr,
-	txrelay *LesTxRelay,
-	serverPool *serverPool,
-	quitSync chan struct{},
-	wg *sync.WaitGroup,
-	ulcConfig *eth.ULCConfig, synced func() bool) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, indexerConfig *light.IndexerConfig, ulcConfig *eth.ULCConfig, client bool, networkId uint64, mux *event.TypeMux, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, serverPool *serverPool, registrar *checkpointRegistrar, quitSync chan struct{}, wg *sync.WaitGroup, synced func() bool) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		client:      client,
@@ -155,8 +139,8 @@ func NewProtocolManager(
 		odr:         odr,
 		networkId:   networkId,
 		txpool:      txpool,
-		txrelay:     txrelay,
 		serverPool:  serverPool,
+		reg:         registrar,
 		peers:       peers,
 		newPeerCh:   make(chan *peer),
 		quitSync:    quitSync,
