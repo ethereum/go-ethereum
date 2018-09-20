@@ -98,6 +98,13 @@ func (n *Node) Pubkey() *ecdsa.PublicKey {
 	return &key
 }
 
+// Record returns the node's record. The return value is a copy and may
+// be modified by the caller.
+func (n *Node) Record() *enr.Record {
+	cpy := n.r
+	return &cpy
+}
+
 // checks whether n is a valid complete node.
 func (n *Node) ValidateComplete() error {
 	if n.Incomplete() {
