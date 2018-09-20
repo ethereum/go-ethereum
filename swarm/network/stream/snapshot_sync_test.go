@@ -260,7 +260,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 			evt := &simulations.Event{
 				Type: EventTypeChunkCreated,
 				Node: sim.Net.GetNode(node.ID),
-				Data: fmt.Sprintf("%s", h),
+				Data: h.String(),
 			}
 			sim.Net.Events().Send(evt)
 		}
@@ -319,7 +319,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						evt := &simulations.Event{
 							Type: EventTypeChunkArrived,
 							Node: sim.Net.GetNode(id),
-							Data: fmt.Sprintf("%s", chunk),
+							Data: chunk.String(),
 						}
 						sim.Net.Events().Send(evt)
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))

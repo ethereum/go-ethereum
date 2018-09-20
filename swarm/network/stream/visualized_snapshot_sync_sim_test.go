@@ -1,3 +1,19 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 // +build withserver
 
 package stream
@@ -14,31 +30,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	//	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
-func init() {
-	/*
-		var flagSet *flag.FlagSet
-				tracing.Enabled = true
-				tracing.StandaloneSetup()
-					fakeApp := cli.NewApp()
-					flags := []cli.Flag{
-						tracing.TracingEndpointFlag,
-						tracing.TracingSvcFlag,
-					}
-					fakeApp.Flags = append(fakeApp.Flags, flags...)
-					fakeApp.Before = func(ctx *cli.Context) error {
-						tracing.Setup(ctx)
-						return nil
-					}
-					fakeApp.Run([]string{"-tracing.endpoint", tracing.TracingEndpointFlag.Value, "-tracing.svc", tracing.TracingSvcFlag.Value})
+/*
+The tests in this file need to be executed with
 
-					//flagSet = flag.NewFlagSet("traceFlags", 0)
-					//tracing.Setup(cli.NewContext(fakeApp, flagSet, nil))
-	*/
-}
+			-tags=withserver
 
+Also, they will stall if executed stand-alone, because they wait
+for the visualization frontend to send a POST /runsim message.
+*/
+
+//setup the sim, evaluate nodeCount and chunkCount and create the sim
 func setupSim(serviceMap map[string]simulation.ServiceFunc) (int, int, *simulation.Simulation) {
 	nodeCount := *nodes
 	chunkCount := *chunks
@@ -48,10 +51,13 @@ func setupSim(serviceMap map[string]simulation.ServiceFunc) (int, int, *simulati
 		chunkCount = 1
 	}
 
+	//setup the simulation with server, which means the sim won't run
+	//until it receives a POST /runsim from the frontend
 	sim := simulation.New(serviceMap).WithServer(":8888")
 	return nodeCount, chunkCount, sim
 }
 
+//watch for disconnections and wait for healthy
 func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 
@@ -76,6 +82,7 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 	return ctx, cancelSimRun
 }
 
+//This test requests bogus hashes into the network
 func TestNonExistingHashesWithServer(t *testing.T) {
 	nodeCount, _, sim := setupSim(retrievalSimServiceMap)
 	defer sim.Close()
@@ -88,7 +95,10 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 	ctx, cancelSimRun := watchSim(sim)
 	defer cancelSimRun()
 
-	testDuration := 30 * time.Second
+	//in order to get some meaningful visualization, it is beneficial
+	//to define a minimum duration of this test
+	testDuration := 20 * time.Second
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		//check on the node's FileStore (netstore)
 		id := sim.RandomUpNode().ID
@@ -97,13 +107,14 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 			t.Fatalf("No filestore")
 		}
 		fileStore := item.(*storage.FileStore)
+		//create a bogus hash
 		fakeHash := storage.GenerateRandomChunk(1000).Address()
-		//fmt.Println(fakeHash)
+		//try to retrieve it - will propagate RetrieveRequestMsg into the network
 		reader, _ := fileStore.Retrieve(context.TODO(), fakeHash)
 		if _, err := reader.Size(ctx, nil); err != nil {
 			log.Debug("expected error for non-existing chunk")
 		}
-
+		//sleep so that the frontend can have something to display
 		time.Sleep(testDuration)
 
 		return nil
@@ -117,6 +128,7 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 
 }
 
+//send a termination event to the frontend
 func sendSimTerminatedEvent(sim *simulation.Simulation) {
 	evt := &simulations.Event{
 		Type:    EventTypeSimTerminated,
@@ -125,6 +137,10 @@ func sendSimTerminatedEvent(sim *simulation.Simulation) {
 	sim.Net.Events().Send(evt)
 }
 
+//This test is the same as the snapshot sync test,
+//but with a HTTP server
+//It also sends some custom events so that the frontend
+//can visualize messages like SendOfferedMsg, WantedHashesMsg, DeliveryMsg
 func TestSnapshotSyncWithServer(t *testing.T) {
 
 	nodeCount, chunkCount, sim := setupSim(simServiceMap)
@@ -148,7 +164,7 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	ctx, cancelSimRun := watchSim(sim)
 	defer cancelSimRun()
 
-	//sim.PeerEvents(
+	//setup filters in the event feed
 	offeredHashesFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(1)
 	wantedFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(2)
 	deliveryFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(6)
@@ -172,7 +188,6 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 					Type:    EventTypeChunkOffered,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
-					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
 			} else if *e.Event.MsgCode == uint64(2) {
@@ -180,7 +195,6 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 					Type:    EventTypeChunkWanted,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
-					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
 			} else if *e.Event.MsgCode == uint64(6) {
@@ -188,14 +202,15 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 					Type:    EventTypeChunkDelivered,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
-					//Data: fmt.Sprintf("%s", h),
 				}
 				sim.Net.Events().Send(evt)
 			}
 		}
 	}()
+	//run the sim
 	result := runSim(conf, ctx, sim, chunkCount)
 
+	//send terminated event
 	evt := &simulations.Event{
 		Type:    EventTypeSimTerminated,
 		Control: false,
@@ -208,15 +223,3 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	close(quit)
 	log.Info("Simulation ended")
 }
-
-/*
-func decodeMsg(code int) error {
-	val, ok := Spec.NewMsg(code)
-	if !ok {
-		return errorf("invalid msg code", "%v", msg.Code)
-	}
-	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
-		return errorf(ErrDecode, "<= %v: %v", msg, err)
-	}
-}
-*/

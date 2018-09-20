@@ -67,14 +67,6 @@ func Setup(ctx *cli.Context) {
 	}
 }
 
-func StandaloneSetup() {
-	if Enabled {
-		log.Info("Enabling opentracing")
-
-		Closer = initTracer(TracingEndpointFlag.Value, TracingSvcFlag.Value)
-	}
-}
-
 func initTracer(endpoint, svc string) (closer io.Closer) {
 	// Sample configuration for testing. Use constant sampling to sample every trace
 	// and enable LogSpan to log every span via configured Logger.
