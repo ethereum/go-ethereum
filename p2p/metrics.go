@@ -37,10 +37,7 @@ const (
 	MetricsOutboundConnects = "p2p/OutboundConnects" // Name for the registered outbound connects meter
 	MetricsOutboundTraffic  = "p2p/OutboundTraffic"  // Name for the registered outbound traffic meter
 
-	MetricsRegistryIngressPrefix = MetricsInboundTraffic + "/"
-	MetricsRegistryEgressPrefix  = MetricsOutboundTraffic + "/"
-
-	MeteredPeerLimit = 1024
+	MeteredPeerLimit = 1024 // This amount of peers are individually metered
 )
 
 var (
@@ -49,11 +46,11 @@ var (
 	egressConnectMeter  = metrics.NewRegisteredMeter(MetricsOutboundConnects, nil) // Meter counting the egress connections
 	egressTrafficMeter  = metrics.NewRegisteredMeter(MetricsOutboundTraffic, nil)  // Meter metering the cumulative egress traffic
 
-	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsRegistryIngressPrefix) // Registry containing the peer ingress
-	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsRegistryEgressPrefix)  // Registry containing the peer egress
+	PeerIngressRegistry = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsInboundTraffic+"/")  // Registry containing the peer ingress
+	PeerEgressRegistry  = metrics.NewPrefixedChildRegistry(metrics.DefaultRegistry, MetricsOutboundTraffic+"/") // Registry containing the peer egress
 
-	metricsFeed      event.Feed // Event feed for peer metrics
-	meteredPeerCount uint64     // Actually stored peer connection count
+	meteredPeerFeed  event.Feed // Event feed for peer metrics
+	meteredPeerCount int32      // Actually stored peer connection count
 )
 
 // MeteredPeerEventType is the type of peer events emitted by a metered connection.
@@ -72,19 +69,20 @@ const (
 	PeerHandshakeFailed
 )
 
-// MeteredPeerEvent is an event emitted when peers connect or disconnect
+// MeteredPeerEvent is an event emitted when peers connect or disconnect.
 type MeteredPeerEvent struct {
 	Type    MeteredPeerEventType // Type of peer event
 	IP      net.IP               // IP address of the peer
 	ID      string               // NodeID of the peer
 	Elapsed time.Duration        // Time elapsed between the connection and the handshake/disconnection
-	Ingress uint64               // Ingress count in the moment of disconnection
-	Egress  uint64               // Egress count in the moment of disconnection
+	Ingress uint64               // Ingress count at the moment of the event
+	Egress  uint64               // Egress count at the moment of the event
 }
 
-// SubscribePeerEvent registers a subscription of PeerEvent
-func SubscribePeerEvent(ch chan<- MeteredPeerEvent) event.Subscription {
-	return metricsFeed.Subscribe(ch)
+// SubscribeMeteredPeerEvent registers a subscription for peer life-cycle events
+// if metrics collection is enabled.
+func SubscribeMeteredPeerEvent(ch chan<- MeteredPeerEvent) event.Subscription {
+	return meteredPeerFeed.Subscribe(ch)
 }
 
 // meteredConn is a wrapper around a net.Conn that meters both the
@@ -95,6 +93,7 @@ type meteredConn struct {
 	connected    time.Time     // Connection time of the peer
 	ip           net.IP        // IP address of the peer
 	id           string        // NodeID of the peer
+	metered      bool          // Checks if the peer is metered
 	ingressMeter metrics.Meter // Meter for the read bytes of the peer
 	egressMeter  metrics.Meter // Meter for the written bytes of the peer
 
@@ -103,8 +102,8 @@ type meteredConn struct {
 
 // newMeteredConn creates a new metered connection, bumps the ingress or egress
 // connection meter and also increases the metered peer count. If the metrics
-// system is disabled, the IP address is unspecified or the metered peer count
-// reached the limit, this function returns the original object.
+// system is disabled or the IP address is unspecified, this function returns
+// the original object.
 func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 	// Short circuit if metrics are disabled
 	if !metrics.Enabled {
@@ -114,12 +113,6 @@ func newMeteredConn(conn net.Conn, ingress bool, ip net.IP) net.Conn {
 		log.Warn("Peer IP is unspecified")
 		return conn
 	}
-	if atomic.LoadUint64(&meteredPeerCount) >= MeteredPeerLimit {
-		log.Warn("Metered peer count reached the limit")
-		return conn
-	}
-	// Increment the metered peer count
-	atomic.AddUint64(&meteredPeerCount, 1)
 	// Bump the connection counters and wrap the connection
 	if ingress {
 		ingressConnectMeter.Mark(1)
@@ -139,7 +132,7 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.ingressMeter != nil {
+	if c.metered {
 		c.ingressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
@@ -152,7 +145,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.egressMeter != nil {
+	if c.metered {
 		c.egressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
@@ -160,40 +153,51 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 }
 
 // handshakeDone is called when a peer handshake is done. Registers the peer to
-// the ingress and the egress traffic registries using the peer's IP and NodeID,
-// also emits connect event.
-func (c *meteredConn) handshakeDone(id discover.NodeID) {
+// the ingress and the egress traffic registries using the peer's IP and NodeID
+// if the metered peer count didn't reach the limit, also emits connect event.
+func (c *meteredConn) handshakeDone(nodeID discover.NodeID) {
+	if atomic.LoadInt32(&meteredPeerCount) >= MeteredPeerLimit {
+		log.Warn("Metered peer count reached the limit")
+		return
+	}
+	// Increment the metered peer count
+	atomic.AddInt32(&meteredPeerCount, 1)
+	id := nodeID.String()
+	key := fmt.Sprintf("%s/%s", c.ip, id)
 	c.lock.Lock()
-	c.id = id.String()
-	key := fmt.Sprintf("%s/%s", c.ip, c.id)
+	c.id, c.metered = id, true
 	c.ingressMeter = metrics.NewRegisteredMeter(key, PeerIngressRegistry)
 	c.egressMeter = metrics.NewRegisteredMeter(key, PeerEgressRegistry)
 	c.lock.Unlock()
 
-	metricsFeed.Send(MeteredPeerEvent{
+	meteredPeerFeed.Send(MeteredPeerEvent{
 		Type:    PeerConnected,
 		IP:      c.ip,
-		ID:      id.String(),
-		Elapsed: time.Now().Sub(c.connected),
+		ID:      id,
+		Elapsed: time.Since(c.connected),
 	})
 }
 
 // Close delegates a close operation to the underlying connection, unregisters
 // the peer from the traffic registries and emits close event.
 func (c *meteredConn) Close() error {
-	// Decrement the metered peer count
-	atomic.AddUint64(&meteredPeerCount, ^uint64(0))
-
+	err := c.Conn.Close()
 	c.lock.RLock()
-	// If the peer disconnects before the handshake
-	if c.id == "" {
+	if !c.metered {
 		c.lock.RUnlock()
-		metricsFeed.Send(MeteredPeerEvent{
+		return err
+	}
+	// Decrement the metered peer count
+	atomic.AddInt32(&meteredPeerCount, -1)
+	if c.id == "" {
+		// If the peer disconnects before the handshake
+		c.lock.RUnlock()
+		meteredPeerFeed.Send(MeteredPeerEvent{
 			Type:    PeerHandshakeFailed,
 			IP:      c.ip,
-			Elapsed: time.Now().Sub(c.connected),
+			Elapsed: time.Since(c.connected),
 		})
-		return c.Conn.Close()
+		return err
 	}
 	id, ingress, egress := c.id, uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
 	c.lock.RUnlock()
@@ -203,12 +207,12 @@ func (c *meteredConn) Close() error {
 	PeerIngressRegistry.Unregister(key)
 	PeerEgressRegistry.Unregister(key)
 
-	metricsFeed.Send(MeteredPeerEvent{
+	meteredPeerFeed.Send(MeteredPeerEvent{
 		Type:    PeerDisconnected,
 		IP:      c.ip,
 		ID:      id,
 		Ingress: ingress,
 		Egress:  egress,
 	})
-	return c.Conn.Close()
+	return err
 }
