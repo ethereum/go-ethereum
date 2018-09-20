@@ -222,7 +222,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	}
 
 	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1,
-		BitIdx: bitIdx, SectionIdxList: reqList, Config: odr.IndexerConfig()}
+		BitIdx: bitIdx, SectionIndexList: reqList, Config: odr.IndexerConfig()}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	} else {
