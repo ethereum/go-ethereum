@@ -16,18 +16,18 @@ variable which Travis CI makes available to certain builds.
 We want to build go-ethereum with the most recent version of Go, irrespective of the Go
 version that is available in the main Ubuntu repository. In order to make this possible,
 our PPA depends on the ~gophers/ubuntu/archive PPA. Our source package build-depends on
-golang-1.10, which is co-installable alongside the regular golang package. PPA dependencies
+golang-1.11, which is co-installable alongside the regular golang package. PPA dependencies
 can be edited at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
 
 ## Building Packages Locally (for testing)
 
 You need to run Ubuntu to do test packaging.
 
-Add the gophers PPA and install Go 1.10 and Debian packaging tools:
+Add the gophers PPA and install Go 1.11 and Debian packaging tools:
 
     $ sudo apt-add-repository ppa:gophers/ubuntu/archive
     $ sudo apt-get update
-    $ sudo apt-get install build-essential golang-1.10 devscripts debhelper
+    $ sudo apt-get install build-essential golang-1.11 devscripts debhelper
 
 Create the source packages:
 
