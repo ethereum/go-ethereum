@@ -17,12 +17,17 @@
 package main
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -81,6 +86,7 @@ type testCluster struct {
 //
 // When starting more than one node, they are connected together using the
 // admin SetPeer RPC method.
+
 func newTestCluster(t *testing.T, size int) *testCluster {
 	cluster := &testCluster{}
 	defer func() {
@@ -96,18 +102,7 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 	cluster.TmpDir = tmpdir
 
 	// start the nodes
-	cluster.Nodes = make([]*testNode, 0, size)
-	for i := 0; i < size; i++ {
-		dir := filepath.Join(cluster.TmpDir, fmt.Sprintf("swarm%02d", i))
-		if err := os.Mkdir(dir, 0700); err != nil {
-			t.Fatal(err)
-		}
-
-		node := newTestNode(t, dir)
-		node.Name = fmt.Sprintf("swarm%02d", i)
-
-		cluster.Nodes = append(cluster.Nodes, node)
-	}
+	cluster.StartNewNodes(t, size)
 
 	if size == 1 {
 		return cluster
@@ -145,14 +140,52 @@ func (c *testCluster) Shutdown() {
 	os.RemoveAll(c.TmpDir)
 }
 
+func (c *testCluster) Stop() {
+	for _, node := range c.Nodes {
+		node.Shutdown()
+	}
+}
+
+func (c *testCluster) StartNewNodes(t *testing.T, size int) {
+	c.Nodes = make([]*testNode, 0, size)
+	for i := 0; i < size; i++ {
+		dir := filepath.Join(c.TmpDir, fmt.Sprintf("swarm%02d", i))
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+
+		node := newTestNode(t, dir)
+		node.Name = fmt.Sprintf("swarm%02d", i)
+
+		c.Nodes = append(c.Nodes, node)
+	}
+}
+
+func (c *testCluster) StartExistingNodes(t *testing.T, size int, bzzaccount string) {
+	c.Nodes = make([]*testNode, 0, size)
+	for i := 0; i < size; i++ {
+		dir := filepath.Join(c.TmpDir, fmt.Sprintf("swarm%02d", i))
+		node := existingTestNode(t, dir, bzzaccount)
+		node.Name = fmt.Sprintf("swarm%02d", i)
+
+		c.Nodes = append(c.Nodes, node)
+	}
+}
+
+func (c *testCluster) Cleanup() {
+	os.RemoveAll(c.TmpDir)
+}
+
 type testNode struct {
-	Name   string
-	Addr   string
-	URL    string
-	Enode  string
-	Dir    string
-	Client *rpc.Client
-	Cmd    *cmdtest.TestCmd
+	Name       string
+	Addr       string
+	URL        string
+	Enode      string
+	Dir        string
+	IpcPath    string
+	PrivateKey *ecdsa.PrivateKey
+	Client     *rpc.Client
+	Cmd        *cmdtest.TestCmd
 }
 
 const testPassphrase = "swarm-test-passphrase"
@@ -181,20 +214,22 @@ func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accoun
 	return conf, account
 }
 
-func newTestNode(t *testing.T, dir string) *testNode {
-
-	conf, account := getTestAccount(t, dir)
+func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
+	conf, _ := getTestAccount(t, dir)
 	node := &testNode{Dir: dir}
 
+	// use a unique IPCPath when running tests on Windows
+	if runtime.GOOS == "windows" {
+		conf.IPCPath = fmt.Sprintf("bzzd-%s.ipc", bzzaccount)
+	}
+
 	// assign ports
-	httpPort, err := assignTCPPort()
+	ports, err := getAvailableTCPPorts(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p2pPort, err := assignTCPPort()
-	if err != nil {
-		t.Fatal(err)
-	}
+	p2pPort := ports[0]
+	httpPort := ports[1]
 
 	// start the node
 	node.Cmd = runSwarm(t,
@@ -203,7 +238,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		"--datadir", dir,
 		"--ipcpath", conf.IPCPath,
 		"--ens-api", "",
-		"--bzzaccount", account.Address.String(),
+		"--bzzaccount", bzzaccount,
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
 		"--verbosity", "6",
@@ -214,6 +249,17 @@ func newTestNode(t *testing.T, dir string) *testNode {
 			node.Shutdown()
 		}
 	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// ensure that all ports have active listeners
+	// so that the next node will not get the same
+	// when calling getAvailableTCPPorts
+	err = waitTCPPorts(ctx, ports...)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// wait for the node to start
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
@@ -243,21 +289,174 @@ func newTestNode(t *testing.T, dir string) *testNode {
 	return node
 }
 
+func newTestNode(t *testing.T, dir string) *testNode {
+
+	conf, account := getTestAccount(t, dir)
+	ks := keystore.NewKeyStore(path.Join(dir, "keystore"), 1<<18, 1)
+
+	pk := decryptStoreAccount(ks, account.Address.Hex(), []string{testPassphrase})
+
+	node := &testNode{Dir: dir, PrivateKey: pk}
+
+	// assign ports
+	ports, err := getAvailableTCPPorts(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2pPort := ports[0]
+	httpPort := ports[1]
+
+	// start the node
+	node.Cmd = runSwarm(t,
+		"--port", p2pPort,
+		"--nodiscover",
+		"--datadir", dir,
+		"--ipcpath", conf.IPCPath,
+		"--ens-api", "",
+		"--bzzaccount", account.Address.String(),
+		"--bzznetworkid", "321",
+		"--bzzport", httpPort,
+		"--verbosity", "6",
+	)
+	node.Cmd.InputLine(testPassphrase)
+	defer func() {
+		if t.Failed() {
+			node.Shutdown()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// ensure that all ports have active listeners
+	// so that the next node will not get the same
+	// when calling getAvailableTCPPorts
+	err = waitTCPPorts(ctx, ports...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for the node to start
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
+		node.Client, err = rpc.Dial(conf.IPCEndpoint())
+		if err == nil {
+			break
+		}
+	}
+	if node.Client == nil {
+		t.Fatal(err)
+	}
+
+	// load info
+	var info swarm.Info
+	if err := node.Client.Call(&info, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+	node.Addr = net.JoinHostPort("127.0.0.1", info.Port)
+	node.URL = "http://" + node.Addr
+
+	var nodeInfo p2p.NodeInfo
+	if err := node.Client.Call(&nodeInfo, "admin_nodeInfo"); err != nil {
+		t.Fatal(err)
+	}
+	node.Enode = fmt.Sprintf("enode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
+	node.IpcPath = conf.IPCPath
+
+	return node
+}
+
 func (n *testNode) Shutdown() {
 	if n.Cmd != nil {
 		n.Cmd.Kill()
 	}
 }
 
-func assignTCPPort() (string, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", err
+// getAvailableTCPPorts returns a set of ports that
+// nothing is listening on at the time.
+//
+// Function assignTCPPort cannot be called in sequence
+// and guardantee that the same port will be returned in
+// different calls as the listener is closed within the function,
+// not after all listeners are started and selected unique
+// available ports.
+func getAvailableTCPPorts(count int) (ports []string, err error) {
+	for i := 0; i < count; i++ {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		// defer close in the loop to be sure the same port will not
+		// be selected in the next iteration
+		defer l.Close()
+
+		_, port, err := net.SplitHostPort(l.Addr().String())
+		if err != nil {
+			return nil, err
+		}
+		ports = append(ports, port)
 	}
-	l.Close()
-	_, port, err := net.SplitHostPort(l.Addr().String())
-	if err != nil {
-		return "", err
+	return ports, nil
+}
+
+// waitTCPPorts blocks until tcp connections can be
+// established on all provided ports. It runs all
+// ports dialers in parallel, and returns the first
+// encountered error.
+// See waitTCPPort also.
+func waitTCPPorts(ctx context.Context, ports ...string) error {
+	var err error
+	// mu locks err variable that is assigned in
+	// other goroutines
+	var mu sync.Mutex
+
+	// cancel is canceling all goroutines
+	// when the firs error is returned
+	// to prevent unnecessary waiting
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for _, port := range ports {
+		wg.Add(1)
+		go func(port string) {
+			defer wg.Done()
+
+			e := waitTCPPort(ctx, port)
+
+			mu.Lock()
+			defer mu.Unlock()
+			if e != nil && err == nil {
+				err = e
+				cancel()
+			}
+		}(port)
 	}
-	return port, nil
+	wg.Wait()
+
+	return err
+}
+
+// waitTCPPort blocks until tcp connection can be established
+// ona provided port. It has a 3 minute timeout as maximum,
+// to prevent long waiting, but it can be shortened with
+// a provided context instance. Dialer has a 10 second timeout
+// in every iteration, and connection refused error will be
+// retried in 100 milliseconds periods.
+func waitTCPPort(ctx context.Context, port string) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	for {
+		c, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, "tcp", "127.0.0.1:"+port)
+		if err != nil {
+			if operr, ok := err.(*net.OpError); ok {
+				if syserr, ok := operr.Err.(*os.SyscallError); ok && syserr.Err == syscall.ECONNREFUSED {
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+			}
+			return err
+		}
+		return c.Close()
+	}
 }

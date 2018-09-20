@@ -28,18 +28,19 @@ package keystore
 import (
 	"bytes"
 	"crypto/aes"
-	crand "crypto/rand"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
@@ -72,6 +73,10 @@ type keyStorePassphrase struct {
 	keysDirPath string
 	scryptN     int
 	scryptP     int
+	// skipKeyFileVerification disables the security-feature which does
+	// reads and decrypts any newly created keyfiles. This should be 'false' in all
+	// cases except tests -- setting this to 'true' is not recommended.
+	skipKeyFileVerification bool
 }
 
 func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
@@ -93,7 +98,7 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
 func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP}, crand.Reader, auth)
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
 	return a.Address, err
 }
 
@@ -102,7 +107,25 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 	if err != nil {
 		return err
 	}
-	return writeKeyFile(filename, keyjson)
+	// Write into temporary file
+	tmpName, err := writeTemporaryKeyFile(filename, keyjson)
+	if err != nil {
+		return err
+	}
+	if !ks.skipKeyFileVerification {
+		// Verify that we can decrypt the file with the given password.
+		_, err = ks.GetKey(key.Address, tmpName, auth)
+		if err != nil {
+			msg := "An error was encountered when saving and verifying the keystore file. \n" +
+				"This indicates that the keystore is corrupted. \n" +
+				"The corrupted file is stored at \n%v\n" +
+				"Please file a ticket at:\n\n" +
+				"https://github.com/ethereum/go-ethereum/issues." +
+				"The error was : %s"
+			return fmt.Errorf(msg, tmpName, err)
+		}
+	}
+	return os.Rename(tmpName, filename)
 }
 
 func (ks keyStorePassphrase) JoinPath(filename string) string {
@@ -116,7 +139,11 @@ func (ks keyStorePassphrase) JoinPath(filename string) string {
 // blob that can be decrypted later on.
 func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 	authArray := []byte(auth)
-	salt := randentropy.GetEntropyCSPRNG(32)
+
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
 	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)
 	if err != nil {
 		return nil, err
@@ -124,7 +151,10 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 	encryptKey := derivedKey[:16]
 	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
 
-	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
+	iv := make([]byte, aes.BlockSize) // 16
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
 	if err != nil {
 		return nil, err

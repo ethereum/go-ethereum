@@ -195,14 +195,14 @@ func (api *PublicWhisperAPI) DeleteSymKey(ctx context.Context, id string) bool {
 // MakeLightClient turns the node into light client, which does not forward
 // any incoming messages, and sends only messages originated in this node.
 func (api *PublicWhisperAPI) MakeLightClient(ctx context.Context) bool {
-	api.w.lightClient = true
-	return api.w.lightClient
+	api.w.SetLightClientMode(true)
+	return api.w.LightClientMode()
 }
 
 // CancelLightClient cancels light client mode.
 func (api *PublicWhisperAPI) CancelLightClient(ctx context.Context) bool {
-	api.w.lightClient = false
-	return !api.w.lightClient
+	api.w.SetLightClientMode(false)
+	return !api.w.LightClientMode()
 }
 
 //go:generate gencodec -type NewMessage -field-override newMessageOverride -out gen_newmessage_json.go
@@ -272,8 +272,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 
 	// Set asymmetric key that is used to encrypt the message
 	if pubKeyGiven {
-		params.Dst = crypto.ToECDSAPub(req.PublicKey)
-		if !ValidatePublicKey(params.Dst) {
+		if params.Dst, err = crypto.UnmarshalPubkey(req.PublicKey); err != nil {
 			return nil, ErrInvalidPublicKey
 		}
 	}
@@ -360,8 +359,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	}
 
 	if len(crit.Sig) > 0 {
-		filter.Src = crypto.ToECDSAPub(crit.Sig)
-		if !ValidatePublicKey(filter.Src) {
+		if filter.Src, err = crypto.UnmarshalPubkey(crit.Sig); err != nil {
 			return nil, ErrInvalidSigningPubKey
 		}
 	}
@@ -544,8 +542,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	}
 
 	if len(req.Sig) > 0 {
-		src = crypto.ToECDSAPub(req.Sig)
-		if !ValidatePublicKey(src) {
+		if src, err = crypto.UnmarshalPubkey(req.Sig); err != nil {
 			return "", ErrInvalidSigningPubKey
 		}
 	}

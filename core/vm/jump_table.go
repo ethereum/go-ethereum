@@ -24,7 +24,7 @@ import (
 )
 
 type (
-	executionFunc       func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
+	executionFunc       func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
 	gasFunc             func(params.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
 	stackValidationFunc func(*Stack) error
 	memorySizeFunc      func(*Stack) *big.Int
@@ -51,17 +51,17 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet       = NewFrontierInstructionSet()
-	homesteadInstructionSet      = NewHomesteadInstructionSet()
-	byzantiumInstructionSet      = NewByzantiumInstructionSet()
-	constantinopleInstructionSet = NewConstantinopleInstructionSet()
+	frontierInstructionSet       = newFrontierInstructionSet()
+	homesteadInstructionSet      = newHomesteadInstructionSet()
+	byzantiumInstructionSet      = newByzantiumInstructionSet()
+	constantinopleInstructionSet = newConstantinopleInstructionSet()
 )
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
 // byzantium and contantinople instructions.
-func NewConstantinopleInstructionSet() [256]operation {
+func newConstantinopleInstructionSet() [256]operation {
 	// instructions that can be executed during the byzantium phase.
-	instructionSet := NewByzantiumInstructionSet()
+	instructionSet := newByzantiumInstructionSet()
 	instructionSet[SHL] = operation{
 		execute:       opSHL,
 		gasCost:       constGasFunc(GasFastestStep),
@@ -80,14 +80,29 @@ func NewConstantinopleInstructionSet() [256]operation {
 		validateStack: makeStackFunc(2, 1),
 		valid:         true,
 	}
+	instructionSet[EXTCODEHASH] = operation{
+		execute:       opExtCodeHash,
+		gasCost:       gasExtCodeHash,
+		validateStack: makeStackFunc(1, 1),
+		valid:         true,
+	}
+	instructionSet[CREATE2] = operation{
+		execute:       opCreate2,
+		gasCost:       gasCreate2,
+		validateStack: makeStackFunc(4, 1),
+		memorySize:    memoryCreate2,
+		valid:         true,
+		writes:        true,
+		returns:       true,
+	}
 	return instructionSet
 }
 
 // NewByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func NewByzantiumInstructionSet() [256]operation {
+func newByzantiumInstructionSet() [256]operation {
 	// instructions that can be executed during the homestead phase.
-	instructionSet := NewHomesteadInstructionSet()
+	instructionSet := newHomesteadInstructionSet()
 	instructionSet[STATICCALL] = operation{
 		execute:       opStaticCall,
 		gasCost:       gasStaticCall,
@@ -123,8 +138,8 @@ func NewByzantiumInstructionSet() [256]operation {
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func NewHomesteadInstructionSet() [256]operation {
-	instructionSet := NewFrontierInstructionSet()
+func newHomesteadInstructionSet() [256]operation {
+	instructionSet := newFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{
 		execute:       opDelegateCall,
 		gasCost:       gasDelegateCall,
@@ -138,7 +153,7 @@ func NewHomesteadInstructionSet() [256]operation {
 
 // NewFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func NewFrontierInstructionSet() [256]operation {
+func newFrontierInstructionSet() [256]operation {
 	return [256]operation{
 		STOP: {
 			execute:       opStop,

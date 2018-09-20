@@ -51,7 +51,7 @@ func NewCompiler(debug bool) *Compiler {
 // the compiler.
 //
 // feed is the first pass in the compile stage as it
-// collect the used labels in the program and keeps a
+// collects the used labels in the program and keeps a
 // program counter which is used to determine the locations
 // of the jump dests. The labels can than be used in the
 // second stage to push labels and determine the right
@@ -120,7 +120,7 @@ func (c *Compiler) next() token {
 	return token
 }
 
-// compile line compiles a single line instruction e.g.
+// compileLine compiles a single line instruction e.g.
 // "push 1", "jump @label".
 func (c *Compiler) compileLine() error {
 	n := c.next()

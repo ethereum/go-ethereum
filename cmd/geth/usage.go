@@ -83,7 +83,8 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.LightKDFFlag,
 		},
 	},
-	{Name: "DEVELOPER CHAIN",
+	{
+		Name: "DEVELOPER CHAIN",
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
 			utils.DeveloperPeriodFlag,
@@ -113,6 +114,7 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
+			utils.TxPoolLocalsFlag,
 			utils.TxPoolNoLocalsFlag,
 			utils.TxPoolJournalFlag,
 			utils.TxPoolRejournalFlag,
@@ -184,10 +186,14 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.EtherbaseFlag,
-			utils.TargetGasLimitFlag,
-			utils.GasPriceFlag,
-			utils.ExtraDataFlag,
+			utils.MinerNotifyFlag,
+			utils.MinerGasPriceFlag,
+			utils.MinerGasTargetFlag,
+			utils.MinerGasLimitFlag,
+			utils.MinerEtherbaseFlag,
+			utils.MinerExtraDataFlag,
+			utils.MinerRecommitIntervalFlag,
+			utils.MinerNoVerfiyFlag,
 		},
 	},
 	{
@@ -206,10 +212,21 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
-			utils.MetricsEnabledFlag,
 			utils.FakePoWFlag,
 			utils.NoCompactionFlag,
 		}, debug.Flags...),
+	},
+	{
+		Name: "METRICS AND STATS",
+		Flags: []cli.Flag{
+			utils.MetricsEnabledFlag,
+			utils.MetricsEnableInfluxDBFlag,
+			utils.MetricsInfluxDBEndpointFlag,
+			utils.MetricsInfluxDBDatabaseFlag,
+			utils.MetricsInfluxDBUsernameFlag,
+			utils.MetricsInfluxDBPasswordFlag,
+			utils.MetricsInfluxDBHostTagFlag,
+		},
 	},
 	{
 		Name:  "WHISPER (EXPERIMENTAL)",
@@ -218,8 +235,11 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
-			utils.FastSyncFlag,
-			utils.LightModeFlag,
+			utils.MinerLegacyThreadsFlag,
+			utils.MinerLegacyGasTargetFlag,
+			utils.MinerLegacyGasPriceFlag,
+			utils.MinerLegacyEtherbaseFlag,
+			utils.MinerLegacyExtraDataFlag,
 		},
 	},
 	{

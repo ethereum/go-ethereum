@@ -69,7 +69,7 @@ unless its location is changed through the KeyStoreDir configuration option.
 Data Directory Sharing Example
 
 In this example, two node instances named A and B are started with the same data
-directory. Mode instance A opens the database "db", node instance B opens the databases
+directory. Node instance A opens the database "db", node instance B opens the databases
 "db" and "db-2". The following files will be created in the data directory:
 
    data-directory/

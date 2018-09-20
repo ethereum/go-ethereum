@@ -56,7 +56,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	f.Topics = make([][]byte, topicNum)
 	for i := 0; i < topicNum; i++ {
 		f.Topics[i] = make([]byte, 4)
-		mrand.Read(f.Topics[i][:])
+		mrand.Read(f.Topics[i])
 		f.Topics[i][0] = 0x01
 	}
 
@@ -829,16 +829,16 @@ func TestMatchSingleTopic_WithTail_ReturnTrue(t *testing.T) {
 	}
 }
 
-func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
+func TestMatchSingleTopic_PartialTopic_ReturnTrue(t *testing.T) {
 	bt := []byte("tes")
-	topic := BytesToTopic(bt)
+	topic := BytesToTopic([]byte("test"))
 
-	if matchSingleTopic(topic, bt) {
+	if !matchSingleTopic(topic, bt) {
 		t.FailNow()
 	}
 }
 
-func TestMatchSingleTopic_InsufficientLength_ReturnFalse(t *testing.T) {
+func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
 	bt := []byte("test")
 	topic := BytesToTopic([]byte("not_equal"))
 

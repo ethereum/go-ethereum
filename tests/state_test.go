@@ -44,9 +44,6 @@ func TestState(t *testing.T) {
 			key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
 			name := name + "/" + key
 			t.Run(key, func(t *testing.T) {
-				if subtest.Fork == "Constantinople" {
-					t.Skip("constantinople not supported yet")
-				}
 				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
 					_, err := test.Run(subtest, vmconfig)
 					return st.checkFailure(t, name, err)

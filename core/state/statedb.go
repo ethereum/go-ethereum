@@ -489,10 +489,13 @@ func (self *StateDB) Copy() *StateDB {
 			state.stateObjectsDirty[addr] = struct{}{}
 		}
 	}
-
 	for hash, logs := range self.logs {
-		state.logs[hash] = make([]*types.Log, len(logs))
-		copy(state.logs[hash], logs)
+		cpy := make([]*types.Log, len(logs))
+		for i, l := range logs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		state.logs[hash] = cpy
 	}
 	for hash, preimage := range self.preimages {
 		state.preimages[hash] = preimage
@@ -596,7 +599,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().Insert(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
+				s.db.TrieDB().InsertBlob(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
 				stateObject.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.

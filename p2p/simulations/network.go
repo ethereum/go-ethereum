@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-var dialBanTimeout = 200 * time.Millisecond
+var DialBanTimeout = 200 * time.Millisecond
 
 // NetworkConfig defines configuration options for starting a Network
 type NetworkConfig struct {
@@ -78,41 +78,25 @@ func (net *Network) Events() *event.Feed {
 	return &net.events
 }
 
-// NewNode adds a new node to the network with a random ID
-func (net *Network) NewNode() (*Node, error) {
-	conf := adapters.RandomNodeConfig()
-	conf.Services = []string{net.DefaultService}
-	return net.NewNodeWithConfig(conf)
-}
-
 // NewNodeWithConfig adds a new node to the network with the given config,
 // returning an error if a node with the same ID or name already exists
 func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
 
-	// create a random ID and PrivateKey if not set
-	if conf.ID == (discover.NodeID{}) {
-		c := adapters.RandomNodeConfig()
-		conf.ID = c.ID
-		conf.PrivateKey = c.PrivateKey
-	}
-	id := conf.ID
 	if conf.Reachable == nil {
 		conf.Reachable = func(otherID discover.NodeID) bool {
 			_, err := net.InitConn(conf.ID, otherID)
-			return err == nil
+			if err != nil && bytes.Compare(conf.ID.Bytes(), otherID.Bytes()) < 0 {
+				return false
+			}
+			return true
 		}
 	}
 
-	// assign a name to the node if not set
-	if conf.Name == "" {
-		conf.Name = fmt.Sprintf("node%02d", len(net.Nodes)+1)
-	}
-
 	// check the node doesn't already exist
-	if node := net.getNode(id); node != nil {
-		return nil, fmt.Errorf("node with ID %q already exists", id)
+	if node := net.getNode(conf.ID); node != nil {
+		return nil, fmt.Errorf("node with ID %q already exists", conf.ID)
 	}
 	if node := net.getNodeByName(conf.Name); node != nil {
 		return nil, fmt.Errorf("node with name %q already exists", conf.Name)
@@ -132,8 +116,8 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 		Node:   adapterNode,
 		Config: conf,
 	}
-	log.Trace(fmt.Sprintf("node %v created", id))
-	net.nodeMap[id] = len(net.Nodes)
+	log.Trace(fmt.Sprintf("node %v created", conf.ID))
+	net.nodeMap[conf.ID] = len(net.Nodes)
 	net.Nodes = append(net.Nodes, node)
 
 	// emit a "control" event
@@ -181,7 +165,9 @@ func (net *Network) Start(id discover.NodeID) error {
 // startWithSnapshots starts the node with the given ID using the give
 // snapshots
 func (net *Network) startWithSnapshots(id discover.NodeID, snapshots map[string][]byte) error {
-	node := net.GetNode(id)
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	node := net.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -220,9 +206,13 @@ func (net *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEve
 
 		// assume the node is now down
 		net.lock.Lock()
+		defer net.lock.Unlock()
 		node := net.getNode(id)
+		if node == nil {
+			log.Error("Can not find node for id", "id", id)
+			return
+		}
 		node.Up = false
-		net.lock.Unlock()
 		net.events.Send(NewEvent(node))
 	}()
 	for {
@@ -259,7 +249,9 @@ func (net *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEve
 
 // Stop stops the node with the given ID
 func (net *Network) Stop(id discover.NodeID) error {
-	node := net.GetNode(id)
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	node := net.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -312,7 +304,9 @@ func (net *Network) Disconnect(oneID, otherID discover.NodeID) error {
 
 // DidConnect tracks the fact that the "one" node connected to the "other" node
 func (net *Network) DidConnect(one, other discover.NodeID) error {
-	conn, err := net.GetOrCreateConn(one, other)
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	conn, err := net.getOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -327,7 +321,9 @@ func (net *Network) DidConnect(one, other discover.NodeID) error {
 // DidDisconnect tracks the fact that the "one" node disconnected from the
 // "other" node
 func (net *Network) DidDisconnect(one, other discover.NodeID) error {
-	conn := net.GetConn(one, other)
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	conn := net.getConn(one, other)
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -335,7 +331,7 @@ func (net *Network) DidDisconnect(one, other discover.NodeID) error {
 		return fmt.Errorf("%v and %v already disconnected", one, other)
 	}
 	conn.Up = false
-	conn.initiated = time.Now().Add(-dialBanTimeout)
+	conn.initiated = time.Now().Add(-DialBanTimeout)
 	net.events.Send(NewEvent(conn))
 	return nil
 }
@@ -382,6 +378,15 @@ func (net *Network) GetNodeByName(name string) *Node {
 	return net.getNodeByName(name)
 }
 
+// GetNodes returns the existing nodes
+func (net *Network) GetNodes() (nodes []*Node) {
+	net.lock.Lock()
+	defer net.lock.Unlock()
+
+	nodes = append(nodes, net.Nodes...)
+	return nodes
+}
+
 func (net *Network) getNode(id discover.NodeID) *Node {
 	i, found := net.nodeMap[id]
 	if !found {
@@ -397,15 +402,6 @@ func (net *Network) getNodeByName(name string) *Node {
 		}
 	}
 	return nil
-}
-
-// GetNodes returns the existing nodes
-func (net *Network) GetNodes() (nodes []*Node) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
-
-	nodes = append(nodes, net.Nodes...)
-	return nodes
 }
 
 // GetConn returns the connection which exists between "one" and "other"
@@ -476,16 +472,19 @@ func (net *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if time.Since(conn.initiated) < dialBanTimeout {
-		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
-	}
 	if conn.Up {
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
+	if time.Since(conn.initiated) < DialBanTimeout {
+		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
+	}
+
 	err = conn.nodesUp()
 	if err != nil {
+		log.Trace(fmt.Sprintf("nodes not up: %v", err))
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
+	log.Debug("InitConn - connection initiated")
 	conn.initiated = time.Now()
 	return conn, nil
 }

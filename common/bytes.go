@@ -100,7 +100,7 @@ func Hex2BytesFixed(str string, flen int) []byte {
 		return h[len(h)-flen:]
 	}
 	hh := make([]byte, flen)
-	copy(hh[flen-len(h):flen], h[:])
+	copy(hh[flen-len(h):flen], h)
 	return hh
 }
 

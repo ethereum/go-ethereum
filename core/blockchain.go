@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -43,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 var (
@@ -151,7 +151,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:  chainConfig,
 		cacheConfig:  cacheConfig,
 		db:           db,
-		triegc:       prque.New(),
+		triegc:       prque.New(nil),
 		stateCache:   state.NewDatabase(db),
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
@@ -269,8 +269,8 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	defer bc.mu.Unlock()
 
 	// Rewind the header chain, deleting all block bodies until then
-	delFn := func(hash common.Hash, num uint64) {
-		rawdb.DeleteBody(bc.db, hash, num)
+	delFn := func(db rawdb.DatabaseDeleter, hash common.Hash, num uint64) {
+		rawdb.DeleteBody(db, hash, num)
 	}
 	bc.hc.SetHead(head, delFn)
 	currentHeader := bc.hc.CurrentHeader()
@@ -450,14 +450,18 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 	}
 	log.Info("Exporting batch of blocks", "count", last-first+1)
 
+	start, reported := time.Now(), time.Now()
 	for nr := first; nr <= last; nr++ {
 		block := bc.GetBlockByNumber(nr)
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
 		}
-
 		if err := block.EncodeRLP(w); err != nil {
 			return err
+		}
+		if time.Since(reported) >= statsReportLimit {
+			log.Info("Exporting blocks", "exported", block.NumberU64()-first, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
 		}
 	}
 
@@ -672,9 +676,9 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
+			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
 		}
-		if size := triedb.Size(); size != 0 {
+		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup")
 		}
 	}
@@ -895,9 +899,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
 		return NonStatTy, err
 	}
-	// Write other block data using a batch.
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, block)
+	rawdb.WriteBlock(bc.db, block)
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
@@ -913,36 +915,32 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		bc.triegc.Push(root, -float32(block.NumberU64()))
+		bc.triegc.Push(root, -int64(block.NumberU64()))
 
 		if current := block.NumberU64(); current > triesInMemory {
+			// If we exceeded our memory allowance, flush matured singleton nodes to disk
+			var (
+				nodes, imgs = triedb.Size()
+				limit       = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
+			)
+			if nodes > limit || imgs > 4*1024*1024 {
+				triedb.Cap(limit - ethdb.IdealBatchSize)
+			}
 			// Find the next state trie we need to commit
 			header := bc.GetHeaderByNumber(current - triesInMemory)
 			chosen := header.Number.Uint64()
 
-			// Only write to disk if we exceeded our memory allowance *and* also have at
-			// least a given number of tries gapped.
-			var (
-				size  = triedb.Size()
-				limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
-			)
-			if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+			// If we exceeded out time allowance, flush an entire trie to disk
+			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
 				// If we're exceeding limits but haven't reached a large enough memory gap,
 				// warn the user that the system is becoming unstable.
-				if chosen < lastWrite+triesInMemory {
-					switch {
-					case size >= 2*limit:
-						log.Warn("State memory usage too high, committing", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-					case bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit:
-						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-					}
+				if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+					log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 				}
-				// If optimum or critical limits reached, write to disk
-				if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-					triedb.Commit(header.Root, true)
-					lastWrite = chosen
-					bc.gcproc = 0
-				}
+				// Flush an entire trie and restart the counters
+				triedb.Commit(header.Root, true)
+				lastWrite = chosen
+				bc.gcproc = 0
 			}
 			// Garbage collect anything below our required write retention
 			for !bc.triegc.Empty() {
@@ -951,10 +949,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-				triedb.Dereference(root.(common.Hash), common.Hash{})
+				triedb.Dereference(root.(common.Hash))
 			}
 		}
 	}
+
+	// Write other block data using a batch.
+	batch := bc.db.NewBatch()
 	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -1009,10 +1010,14 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // only reason this method exists as a separate one is to make locking cleaner
 // with deferred statements.
 func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*types.Log, error) {
+	// Sanity check that we have something meaningful to import
+	if len(chain) == 0 {
+		return 0, nil, nil, nil
+	}
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
-			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			// Chain broke ancestry, log a message (programming error) and skip insertion
 			log.Error("Non contiguous block insert", "number", chain[i].Number(), "hash", chain[i].Hash(),
 				"parent", chain[i].ParentHash(), "prevnumber", chain[i-1].Number(), "prevhash", chain[i-1].Hash())
 
@@ -1046,6 +1051,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
+
+	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
+	senderCacher.recoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number()), chain)
 
 	// Iterate over the blocks and insert when the verifier permits
 	for i, block := range chain {
@@ -1181,7 +1189,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		stats.processed++
 		stats.usedGas += usedGas
-		stats.report(chain, i, bc.stateCache.TrieDB().Size())
+
+		cache, _ := bc.stateCache.TrieDB().Size()
+		stats.report(chain, i, cache)
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
@@ -1198,8 +1208,8 @@ type insertStats struct {
 	startTime                  mclock.AbsTime
 }
 
-// statsReportLimit is the time limit during import after which we always print
-// out progress. This avoids the user wondering what's going on.
+// statsReportLimit is the time limit during import and export after which we
+// always print out progress. This avoids the user wondering what's going on.
 const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
@@ -1335,9 +1345,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	diff := types.TxDifference(deletedTxs, addedTxs)
 	// When transactions get deleted from the database that means the
 	// receipts that were created in the fork must also be deleted
+	batch := bc.db.NewBatch()
 	for _, tx := range diff {
-		rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
+		rawdb.DeleteTxLookupEntry(batch, tx.Hash())
 	}
+	batch.Write()
+
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
@@ -1387,27 +1400,21 @@ func (bc *BlockChain) update() {
 	}
 }
 
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash   common.Hash   `json:"hash"`
-	Header *types.Header `json:"header"`
-}
-
 // BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
-	headers := make([]BadBlockArgs, 0, bc.badBlocks.Len())
+func (bc *BlockChain) BadBlocks() []*types.Block {
+	blocks := make([]*types.Block, 0, bc.badBlocks.Len())
 	for _, hash := range bc.badBlocks.Keys() {
-		if hdr, exist := bc.badBlocks.Peek(hash); exist {
-			header := hdr.(*types.Header)
-			headers = append(headers, BadBlockArgs{header.Hash(), header})
+		if blk, exist := bc.badBlocks.Peek(hash); exist {
+			block := blk.(*types.Block)
+			blocks = append(blocks, block)
 		}
 	}
-	return headers, nil
+	return blocks
 }
 
 // addBadBlock adds a bad block to the bad-block LRU cache
 func (bc *BlockChain) addBadBlock(block *types.Block) {
-	bc.badBlocks.Add(block.Header().Hash(), block.Header())
+	bc.badBlocks.Add(block.Hash(), block)
 }
 
 // reportBlock logs a bad block error.
@@ -1523,6 +1530,18 @@ func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
 // hash, fetching towards the genesis block.
 func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
 	return bc.hc.GetBlockHashesFromHash(hash, max)
+}
+
+// GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
+// a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
+// number of blocks to be individually checked before we reach the canonical chain.
+//
+// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
+
+	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,

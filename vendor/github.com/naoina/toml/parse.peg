@@ -29,7 +29,7 @@ key <- bareKey / quotedKey
 
 bareKey <- <[0-9A-Za-z\-_]+> { p.SetKey(p.buffer, begin, end) }
 
-quotedKey <- '"' <basicChar+> '"' { p.SetKey(p.buffer, begin-1, end+1) }
+quotedKey <- < '"' basicChar* '"' > { p.SetKey(p.buffer, begin, end) }
 
 val <- (
     <datetime>    { p.SetTime(begin, end) }
@@ -55,7 +55,9 @@ inlineTable <- (
 
 inlineTableKeyValues <- (keyval inlineTableValSep?)*
 
-tableKey <- key (tableKeySep key)*
+tableKey <- tableKeyComp (tableKeySep tableKeyComp)*
+
+tableKeyComp <- key { p.AddTableKey() }
 
 tableKeySep <- ws '.' ws
 
@@ -117,7 +119,7 @@ timeNumoffset <- [\-+] timeHour ':' timeMinute
 timeOffset <- 'Z' / timeNumoffset
 partialTime <- timeHour ':' timeMinute ':' timeSecond timeSecfrac?
 fullDate <- dateFullYear '-' dateMonth '-' dateMDay
-fullTime <- partialTime timeOffset
+fullTime <- partialTime timeOffset?
 datetime <- (fullDate ('T' fullTime)?) / partialTime
 
 digit <- [0-9]

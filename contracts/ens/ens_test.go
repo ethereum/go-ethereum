@@ -35,7 +35,7 @@ var (
 )
 
 func TestENS(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(key)
 
 	ensAddr, ens, err := DeployENS(transactOpts, contractBackend)
@@ -55,7 +55,7 @@ func TestENS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't deploy resolver: %v", err)
 	}
-	if _, err := ens.SetResolver(ensNode(name), resolverAddr); err != nil {
+	if _, err := ens.SetResolver(EnsNode(name), resolverAddr); err != nil {
 		t.Fatalf("can't set resolver: %v", err)
 	}
 	contractBackend.Commit()

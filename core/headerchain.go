@@ -156,13 +156,16 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Delete any canonical number assignments above the new head
+		batch := hc.chainDb.NewBatch()
 		for i := number + 1; ; i++ {
 			hash := rawdb.ReadCanonicalHash(hc.chainDb, i)
 			if hash == (common.Hash{}) {
 				break
 			}
-			rawdb.DeleteCanonicalHash(hc.chainDb, i)
+			rawdb.DeleteCanonicalHash(batch, i)
 		}
+		batch.Write()
+
 		// Overwrite any stale canonical number assignments
 		var (
 			headHash   = header.ParentHash
@@ -205,7 +208,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
-			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			// Chain broke ancestry, log a message (programming error) and skip insertion
 			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", chain[i].Hash(),
 				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", chain[i-1].Hash())
 
@@ -307,6 +310,43 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	return chain
 }
 
+// GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or
+// a close ancestor of it is canonical. maxNonCanonical points to a downwards counter limiting the
+// number of blocks to be individually checked before we reach the canonical chain.
+//
+// Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
+func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
+	if ancestor > number {
+		return common.Hash{}, 0
+	}
+	if ancestor == 1 {
+		// in this case it is cheaper to just read the header
+		if header := hc.GetHeader(hash, number); header != nil {
+			return header.ParentHash, number - 1
+		} else {
+			return common.Hash{}, 0
+		}
+	}
+	for ancestor != 0 {
+		if rawdb.ReadCanonicalHash(hc.chainDb, number) == hash {
+			number -= ancestor
+			return rawdb.ReadCanonicalHash(hc.chainDb, number), number
+		}
+		if *maxNonCanonical == 0 {
+			return common.Hash{}, 0
+		}
+		*maxNonCanonical--
+		ancestor--
+		header := hc.GetHeader(hash, number)
+		if header == nil {
+			return common.Hash{}, 0
+		}
+		hash = header.ParentHash
+		number--
+	}
+	return hash, number
+}
+
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
@@ -401,7 +441,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 
 // DeleteCallback is a callback function that is called by SetHead before
 // each header is deleted.
-type DeleteCallback func(common.Hash, uint64)
+type DeleteCallback func(rawdb.DatabaseDeleter, common.Hash, uint64)
 
 // SetHead rewinds the local chain to a new head. Everything above the new head
 // will be deleted and the new one set.
@@ -411,22 +451,24 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	if hdr := hc.CurrentHeader(); hdr != nil {
 		height = hdr.Number.Uint64()
 	}
-
+	batch := hc.chainDb.NewBatch()
 	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
 		hash := hdr.Hash()
 		num := hdr.Number.Uint64()
 		if delFn != nil {
-			delFn(hash, num)
+			delFn(batch, hash, num)
 		}
-		rawdb.DeleteHeader(hc.chainDb, hash, num)
-		rawdb.DeleteTd(hc.chainDb, hash, num)
+		rawdb.DeleteHeader(batch, hash, num)
+		rawdb.DeleteTd(batch, hash, num)
 
 		hc.currentHeader.Store(hc.GetHeader(hdr.ParentHash, hdr.Number.Uint64()-1))
 	}
 	// Roll back the canonical chain numbering
 	for i := height; i > head; i-- {
-		rawdb.DeleteCanonicalHash(hc.chainDb, i)
+		rawdb.DeleteCanonicalHash(batch, i)
 	}
+	batch.Write()
+
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()

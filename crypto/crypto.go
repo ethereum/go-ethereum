@@ -39,6 +39,8 @@ var (
 	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
 )
 
+var errInvalidPubkey = errors.New("invalid secp256k1 public key")
+
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
@@ -72,6 +74,12 @@ func Keccak512(data ...[]byte) []byte {
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
+}
+
+// CreateAddress2 creates an ethereum address given the address bytes, initial
+// contract code and a salt.
+func CreateAddress2(b common.Address, salt [32]byte, code []byte) common.Address {
+	return common.BytesToAddress(Keccak256([]byte{0xff}, b.Bytes(), salt[:], Keccak256(code))[12:])
 }
 
 // ToECDSA creates a private key with the given D value.
@@ -122,12 +130,13 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 	return math.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
 }
 
-func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
-	if len(pub) == 0 {
-		return nil
-	}
+// UnmarshalPubkey converts bytes to a secp256k1 public key.
+func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
 	x, y := elliptic.Unmarshal(S256(), pub)
-	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}
+	if x == nil {
+		return nil, errInvalidPubkey
+	}
+	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
 }
 
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
