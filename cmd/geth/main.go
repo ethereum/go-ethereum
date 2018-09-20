@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -323,14 +324,33 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
 
-	go func() {
-		// Create a chain state reader for self-derivation
-		rpcClient, err := stack.Attach()
-		if err != nil {
-			utils.Fatalf("Failed to attach to self: %v", err)
-		}
-		stateReader := ethclient.NewClient(rpcClient)
+	// Create a client to interact with local geth node.
+	rpcClient, err := stack.Attach()
+	if err != nil {
+		utils.Fatalf("Failed to attach to self: %v", err)
+	}
+	ethClient := ethclient.NewClient(rpcClient)
 
+	// Set contract backend for ethereum service if local node
+	// is serving LES requests.
+	if ctx.GlobalInt(utils.LightServFlag.Name) > 0 {
+		var ethService *eth.Ethereum
+		if err := stack.Service(&ethService); err != nil {
+			utils.Fatalf("Failed to retrieve ethereum service: %v", err)
+		}
+		ethService.SetContractBackend(ethClient)
+	}
+	// Set contract backend for les service if local node is
+	// running as a light client.
+	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		var lesService *les.LightEthereum
+		if err := stack.Service(&lesService); err != nil {
+			utils.Fatalf("Failed to retrieve light ethereum service: %v", err)
+		}
+		lesService.SetContractBackend(ethClient)
+	}
+
+	go func() {
 		// Open any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
@@ -354,7 +374,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
 
-				event.Wallet.SelfDerive(derivationPaths, stateReader)
+				event.Wallet.SelfDerive(derivationPaths, ethClient)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
@@ -383,7 +403,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						"age", common.PrettyAge(timestamp))
 					stack.Stop()
 				}
-
 			}
 		}()
 	}
