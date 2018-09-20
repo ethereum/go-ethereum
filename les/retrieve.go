@@ -212,7 +212,7 @@ func (r *sentReq) stateRequesting() reqStateFn {
 				// no need to go to stopped state because waiting() already returned false
 				return nil
 			}
-		case rpSoftTimeout:
+		case rpSoftTimeout, rpDeliveredInvalid:
 			// last request timed out, try asking a new peer
 			go r.tryRequest()
 			r.lastReqQueued = true
@@ -242,7 +242,11 @@ func (r *sentReq) stateNoMorePeers() reqStateFn {
 			r.stop(nil)
 			return r.stateStopped
 		}
-		return r.stateNoMorePeers
+		if r.waiting() {
+			return r.stateNoMorePeers
+		}
+		r.stop(light.ErrNoPeers)
+		return nil
 	case <-r.stopCh:
 		return r.stateStopped
 	}
