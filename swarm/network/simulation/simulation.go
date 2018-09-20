@@ -112,7 +112,7 @@ type Result struct {
 }
 
 // Run calls the RunFunc function while taking care of
-// cancelation provided through the Context.
+// cancellation provided through the Context.
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	//if the option is set to run a HTTP server with the simulation,
 	//init the server and start it
