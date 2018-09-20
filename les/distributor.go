@@ -174,18 +174,18 @@ func (sp selectPeerItem) Weight() int64 {
 // nextRequest returns the next possible request from any peer, along with the
 // associated peer and necessary waiting time
 func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
-	checkedPeers := make(map[distPeer]struct{})
-	elem := d.reqQueue.Front()
 	var (
-		bestPeer distPeer
-		bestReq  *distReq
-		bestWait time.Duration
-		sel      *weightedRandomSelect
+		bestPeer     distPeer
+		bestReq      *distReq
+		bestWait     time.Duration
+		sel          *weightedRandomSelect
+		checkedPeers = make(map[distPeer]struct{})
 	)
 
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 
+	elem := d.reqQueue.Front()
 	for (len(d.peers) > 0 || elem == d.reqQueue.Front()) && elem != nil {
 		req := elem.Value.(*distReq)
 		canSend := false
