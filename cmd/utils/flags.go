@@ -1252,7 +1252,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 
 	if ctx.GlobalIsSet(UseGrapheneFlag.Name) {
-		cfg.UseGraphene = ctx.GlobalBool(NoGossipFlag.Name)
+		cfg.UseGraphene = ctx.GlobalBool(UseGrapheneFlag.Name)
 	}
 }
 

@@ -126,6 +126,9 @@ type Config struct {
 	EWASMInterpreter string
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
+
+	// Enable graphene protocol
+	UseGraphene bool
 }
 
 type configMarshaling struct {
