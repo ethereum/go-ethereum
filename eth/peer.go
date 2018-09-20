@@ -327,6 +327,25 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
+// RequestTransactions fetches a batch of transactions
+func (p *peer) RequestTransactions(hashes []common.Hash) error {
+	p.Log().Debug("Requesting transactions", "hashes", hashes)
+	return p2p.Send(p.rw, GetTxMsg, hashes)
+}
+
+// RequestGraphene fetches a graphene message containing a Bloom filter and an IBLT
+func (p *peer) RequestGraphene(hash common.Hash, nTxs int) error {
+	p.Log().Debug("Requesting graphene", "block", hash)
+	return p2p.Send(p.rw, GetGrapheneMsg, &getGrapheneData{NTxs: uint(nTxs), Hash: hash})
+}
+
+// SendGraphene sends the graphene message in response to a RequestGraphene
+func (p *peer) SendGraphene(hash common.Hash, i []byte, b []byte, ni uint, fpr uint, nTxs uint, indexArray []byte, uncles []*types.Header) error {
+	p.Log().Debug("Sending graphene", "block", hash)
+	return p2p.Send(p.rw, GrapheneMsg, &grapheneData{Hash: hash, GrapheneIBLT: i, GrapheneBloom: b, NIBLT: ni, FPR: fpr, NTxs: nTxs, Indices: indexArray, Uncles: uncles})
+}
+
+
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash) error {

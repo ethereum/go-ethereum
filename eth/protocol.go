@@ -41,7 +41,7 @@ var ProtocolName = "eth"
 var ProtocolVersions = []uint{eth63, eth62}
 
 // ProtocolLengths are the number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{17, 8}
+var ProtocolLengths = []uint64{20, 8}
 
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -62,6 +62,9 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+	GetGrapheneMsg = 0x08
+	GrapheneMsg    = 0x09
+	GetTxMsg       = 0x0a
 )
 
 type errCode int
@@ -181,3 +184,22 @@ type blockBody struct {
 
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
+
+
+// getGrapheneData represents a request for a graphene message for a block
+type getGrapheneData struct {
+	NTxs uint
+	Hash common.Hash
+}
+
+// grapheneData represents the Bloom filter and IBLT that make up a graphene message
+type grapheneData struct {
+	GrapheneIBLT  []byte
+	GrapheneBloom []byte
+	FPR           uint
+	NIBLT         uint
+	NTxs          uint
+	Hash          common.Hash
+	Indices       []byte
+	Uncles        []*types.Header
+}
