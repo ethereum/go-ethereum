@@ -156,7 +156,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig, eth.isMinerAccount)
 	if err != nil {
 		return nil, err
 	}
@@ -334,6 +334,30 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
+// isMinerAccount checks whether the specified address is a miner account.
+//
+// This function is used during block chain reorg checking to determine
+// whether a block is mined by local accounts. We regard two types of
+// accounts as local account: etherbase and accounts specified via
+// `txpool.locals` flag.
+func (s *Ethereum) isMinerAccount(addr common.Address) bool {
+	// Check whether the given address is etherbase.
+	s.lock.RLock()
+	etherbase := s.etherbase
+	s.lock.RUnlock()
+	if addr == etherbase {
+		return true
+	}
+	// Check whether the given address is specified by `txpool.local`
+	// CLI flag.
+	for _, account := range s.config.TxPool.Locals {
+		if account == addr {
+			return true
+		}
+	}
+	return false
+}
+
 // SetEtherbase sets the mining reward address.
 func (s *Ethereum) SetEtherbase(etherbase common.Address) {
 	s.lock.Lock()
@@ -366,7 +390,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		s.lock.RUnlock()
 		s.txPool.SetGasPrice(price)
 
-		// Configure the local mining addess
+		// Configure the local mining address
 		eb, err := s.Etherbase()
 		if err != nil {
 			log.Error("Cannot start mining without etherbase", "err", err)
