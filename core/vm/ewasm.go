@@ -56,6 +56,8 @@ type InterpreterEWASM struct {
 	returnData []byte
 
 	terminationType terminationType
+
+	staticMode bool
 }
 
 // NewEWASMInterpreter creates a new wagon-based eWASM interpreter. It
@@ -68,6 +70,10 @@ func NewEWASMInterpreter(evm *EVM, cfg Config) Interpreter {
 // Run loops and evaluates the contract's code with the given input data and returns
 // the return byte-slice and an error if one occurred.
 func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]byte, error) {
+	// Increment the call depth which is restricted to 1024
+	in.evm.depth++
+	defer func() { in.evm.depth-- }()
+
 	in.contract = contract
 	in.contract.Input = input
 	initialGas := contract.Gas
@@ -99,6 +105,10 @@ func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]by
 			if len(sig.ParamTypes) == 0 && len(sig.ReturnTypes) == 0 {
 				_, err = vm.ExecCode(int64(entry.Index))
 
+				if err != nil {
+					in.terminationType = TerminateInvalid
+				}
+
 				if in.StateDB.HasSuicided(contract.Address()) {
 					if initialGas-contract.Gas-params.TxGas < 2*params.SuicideRefundGas {
 						in.StateDB.AddRefund((initialGas - contract.Gas - params.TxGas) / 2)
@@ -106,10 +116,6 @@ func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]by
 						in.StateDB.AddRefund(params.SuicideRefundGas)
 					}
 					err = nil
-				}
-
-				if err != nil {
-					in.terminationType = TerminateInvalid
 				}
 
 				return in.returnData, err

@@ -358,10 +358,6 @@ func readSize(p *exec.Process, offset int32, size int) []byte {
 	return val
 }
 
-func readU256(p *exec.Process, offset int32) []byte {
-	return readSize(p, offset, u256Len)
-}
-
 func useGas(p *exec.Process, in *InterpreterEWASM, amount int64) {
 	in.gasAccounting(uint64(amount))
 }
@@ -394,6 +390,11 @@ func getBlockHash(p *exec.Process, in *InterpreterEWASM, number int64, resultOff
 }
 
 func callCommon(in *InterpreterEWASM, contract, targetContract *Contract, input []byte, value *big.Int, snapshot int, gas int64, ro bool) int32 {
+	if in.evm.depth > maxCallDepth {
+		contract.UseGas(contract.Gas)
+		return ErrEEICallFailure
+	}
+
 	savedVM := in.vm
 
 	in.Run(targetContract, input, ro)
@@ -612,12 +613,20 @@ func callStatic(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset 
 	code := in.StateDB.GetCode(addr)
 	targetContract.SetCallCode(&addr, in.StateDB.GetCodeHash(addr), code)
 
+	saveStatic := in.staticMode
+	in.staticMode = true
+	defer func() { in.staticMode = saveStatic }()
+
 	return callCommon(in, contract, targetContract, input, value, snapshot, gas, true)
 }
 
 func storageStore(p *exec.Process, interpreter *InterpreterEWASM, pathOffset int32, valueOffset int32) {
-	loc := common.BytesToHash(readU256(p, pathOffset))
-	val := common.BytesToHash(readU256(p, valueOffset))
+	if interpreter.staticMode == true {
+		panic("Static mode violation in storageStore")
+	}
+
+	loc := common.BytesToHash(readSize(p, pathOffset, u256Len))
+	val := common.BytesToHash(readSize(p, valueOffset, u256Len))
 
 	fmt.Println(val, loc)
 	nonZeroBytes := 0
@@ -648,7 +657,7 @@ func storageStore(p *exec.Process, interpreter *InterpreterEWASM, pathOffset int
 
 func storageLoad(p *exec.Process, interpreter *InterpreterEWASM, pathOffset int32, resultOffset int32) {
 	interpreter.gasAccounting(interpreter.gasTable.SLoad)
-	loc := common.BytesToHash(readU256(p, pathOffset))
+	loc := common.BytesToHash(readSize(p, pathOffset, u256Len))
 	valBytes := interpreter.StateDB.GetState(interpreter.contract.Address(), loc).Bytes()
 	p.WriteAt(valBytes, int64(resultOffset))
 }
@@ -697,6 +706,8 @@ func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffse
 	}
 	value := swapEndian(readSize(p, int32(valueOffset), u128Len))
 
+	in.terminationType = TerminateFinish
+
 	// EIP150 says that the calling contract should keep 1/64th of the
 	// leftover gas.
 	gas := in.contract.Gas - in.contract.Gas/64
@@ -706,15 +717,17 @@ func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffse
 
 	in.vm = savedVM
 	in.contract = savedContract
-	in.contract.Gas += gasLeft
-	p.WriteAt(addr.Bytes(), int64(resultOffset))
 
 	switch in.terminationType {
 	case TerminateFinish:
+		in.contract.Gas += gasLeft
+		p.WriteAt(addr.Bytes(), int64(resultOffset))
 		return EEICallSuccess
 	case TerminateRevert:
+		in.contract.Gas += gas
 		return ErrEEICallRevert
 	default:
+		in.contract.Gas += gasLeft
 		return ErrEEICallFailure
 	}
 }
@@ -776,25 +789,25 @@ func log(p *exec.Process, in *InterpreterEWASM, dataOffset int32, length int32, 
 		if uint64(len(in.vm.Memory())) <= uint64(topic1) {
 			panic("out of memory")
 		}
-		topics[0] = common.BigToHash(big.NewInt(0).SetBytes(readU256(p, topic1)))
+		topics[0] = common.BigToHash(big.NewInt(0).SetBytes(readSize(p, topic1, u256Len)))
 	}
 	if numberOfTopics > 1 {
 		if uint64(len(in.vm.Memory())) <= uint64(topic2) {
 			panic("out of memory")
 		}
-		topics[1] = common.BigToHash(big.NewInt(0).SetBytes(readU256(p, topic2)))
+		topics[1] = common.BigToHash(big.NewInt(0).SetBytes(readSize(p, topic2, u256Len)))
 	}
 	if numberOfTopics > 2 {
 		if uint64(len(in.vm.Memory())) <= uint64(topic3) {
 			panic("out of memory")
 		}
-		topics[2] = common.BigToHash(big.NewInt(0).SetBytes(readU256(p, topic3)))
+		topics[2] = common.BigToHash(big.NewInt(0).SetBytes(readSize(p, topic3, u256Len)))
 	}
 	if numberOfTopics > 3 {
 		if uint64(len(in.vm.Memory())) <= uint64(topic3) {
 			panic("out of memory")
 		}
-		topics[3] = common.BigToHash(big.NewInt(0).SetBytes(readU256(p, topic4)))
+		topics[3] = common.BigToHash(big.NewInt(0).SetBytes(readSize(p, topic4, u256Len)))
 	}
 
 	in.StateDB.AddLog(&types.Log{
