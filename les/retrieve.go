@@ -212,10 +212,17 @@ func (r *sentReq) stateRequesting() reqStateFn {
 				// no need to go to stopped state because waiting() already returned false
 				return nil
 			}
-		case rpSoftTimeout, rpDeliveredInvalid:
+		case rpSoftTimeout:
 			// last request timed out, try asking a new peer
 			go r.tryRequest()
 			r.lastReqQueued = true
+			return r.stateRequesting
+		case rpDeliveredInvalid:
+			// if it was the last sent request (set to nil by update) then start a new one
+			if !r.lastReqQueued && r.lastReqSentTo == nil {
+				go r.tryRequest()
+				r.lastReqQueued = true
+			}
 			return r.stateRequesting
 		case rpDeliveredValid:
 			r.stop(nil)
