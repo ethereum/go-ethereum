@@ -30,15 +30,21 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 var (
 	DefaultGateway = "http://localhost:8500"
 	DefaultClient  = NewClient(DefaultGateway)
+)
+
+var (
+	ErrUnauthorized = errors.New("unauthorized")
 )
 
 func NewClient(gateway string) *Client {
@@ -52,12 +58,17 @@ type Client struct {
 	Gateway string
 }
 
-// UploadRaw uploads raw data to swarm and returns the resulting hash
-func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
+// UploadRaw uploads raw data to swarm and returns the resulting hash. If toEncrypt is true it
+// uploads encrypted data
+func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, error) {
 	if size <= 0 {
 		return "", errors.New("data size must be greater than zero")
 	}
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/", r)
+	addr := ""
+	if toEncrypt {
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/"+addr, r)
 	if err != nil {
 		return "", err
 	}
@@ -77,18 +88,20 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 	return string(data), nil
 }
 
-// DownloadRaw downloads raw data from swarm
-func (c *Client) DownloadRaw(hash string) (io.ReadCloser, error) {
+// DownloadRaw downloads raw data from swarm and it returns a ReadCloser and a bool whether the
+// content was encrypted
+func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 	uri := c.Gateway + "/bzz-raw:/" + hash
 	res, err := http.DefaultClient.Get(uri)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
-		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
+		return nil, false, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	return res.Body, nil
+	isEncrypted := (res.Header.Get("X-Decrypted") == "true")
+	return res.Body, isEncrypted, nil
 }
 
 // File represents a file in a swarm manifest and is used for uploading and
@@ -125,11 +138,11 @@ func Open(path string) (*File, error) {
 // (if the manifest argument is non-empty) or creates a new manifest containing
 // the file, returning the resulting manifest hash (the file will then be
 // available at bzz:/<hash>/<path>)
-func (c *Client) Upload(file *File, manifest string) (string, error) {
+func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, error) {
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file})
+	return c.TarUpload(manifest, &FileUploader{file}, "", toEncrypt)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -159,19 +172,27 @@ func (c *Client) Download(hash, path string) (*File, error) {
 // directory will then be available at bzz:/<hash>/path/to/file), with
 // the file specified in defaultPath being uploaded to the root of the manifest
 // (i.e. bzz:/<hash>/)
-func (c *Client) UploadDirectory(dir, defaultPath, manifest string) (string, error) {
+func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bool) (string, error) {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", err
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath})
+	if defaultPath != "" {
+		if _, err := os.Stat(filepath.Join(dir, defaultPath)); err != nil {
+			if os.IsNotExist(err) {
+				return "", fmt.Errorf("the default path %q was not found in the upload directory %q", defaultPath, dir)
+			}
+			return "", fmt.Errorf("default path: %v", err)
+		}
+	}
+	return c.TarUpload(manifest, &DirectoryUploader{dir}, defaultPath, toEncrypt)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
-func (c *Client) DownloadDirectory(hash, path, destDir string) error {
+func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) error {
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -184,13 +205,20 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	if err != nil {
 		return err
 	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
 	req.Header.Set("Accept", "application/x-tar")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
 		return fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	tr := tar.NewReader(res.Body)
@@ -228,27 +256,115 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	}
 }
 
+// DownloadFile downloads a single file into the destination directory
+// if the manifest entry does not specify a file name - it will fallback
+// to the hash of the file as a filename
+func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
+	hasDestinationFilename := false
+	if stat, err := os.Stat(dest); err == nil {
+		hasDestinationFilename = !stat.IsDir()
+	} else {
+		if os.IsNotExist(err) {
+			// does not exist - should be created
+			hasDestinationFilename = true
+		} else {
+			return fmt.Errorf("could not stat path: %v", err)
+		}
+	}
+
+	manifestList, err := c.List(hash, path, credentials)
+	if err != nil {
+		return err
+	}
+
+	switch len(manifestList.Entries) {
+	case 0:
+		return fmt.Errorf("could not find path requested at manifest address. make sure the path you've specified is correct")
+	case 1:
+		//continue
+	default:
+		return fmt.Errorf("got too many matches for this path")
+	}
+
+	uri := c.Gateway + "/bzz:/" + hash + "/" + path
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return err
+	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
+	default:
+		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
+	}
+	filename := ""
+	if hasDestinationFilename {
+		filename = dest
+	} else {
+		// try to assert
+		re := regexp.MustCompile("[^/]+$") //everything after last slash
+
+		if results := re.FindAllString(path, -1); len(results) > 0 {
+			filename = results[len(results)-1]
+		} else {
+			if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
+				filename = entry.Path
+			} else {
+				// assume hash as name if there's nothing from the command line
+				filename = hash
+			}
+		}
+		filename = filepath.Join(dest, filename)
+	}
+	filePath, err := filepath.Abs(filename)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	dst, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, res.Body)
+	return err
+}
+
 // UploadManifest uploads the given manifest to swarm
-func (c *Client) UploadManifest(m *api.Manifest) (string, error) {
+func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}
-	return c.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 }
 
 // DownloadManifest downloads a swarm manifest
-func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
-	res, err := c.DownloadRaw(hash)
+func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
+	res, isEncrypted, err := c.DownloadRaw(hash)
 	if err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
 	defer res.Close()
 	var manifest api.Manifest
 	if err := json.NewDecoder(res).Decode(&manifest); err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
-	return &manifest, nil
+	return &manifest, isEncrypted, nil
 }
 
 // List list files in a swarm manifest which have the given prefix, grouping
@@ -268,13 +384,24 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
 // - a prefix of "dir1/" would return [dir1/dir2/, dir1/file3.txt]
 //
 // where entries ending with "/" are common prefixes.
-func (c *Client) List(hash, prefix string) (*api.ManifestList, error) {
-	res, err := http.DefaultClient.Get(c.Gateway + "/bzz-list:/" + hash + "/" + prefix)
+func (c *Client) List(hash, prefix, credentials string) (*api.ManifestList, error) {
+	req, err := http.NewRequest(http.MethodGet, c.Gateway+"/bzz-list:/"+hash+"/"+prefix, nil)
+	if err != nil {
+		return nil, err
+	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
+	}
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized:
+		return nil, ErrUnauthorized
+	default:
 		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
 	var list api.ManifestList
@@ -298,21 +425,11 @@ func (u UploaderFunc) Upload(upload UploadFn) error {
 // DirectoryUploader uploads all files in a directory, optionally uploading
 // a file to the default path
 type DirectoryUploader struct {
-	Dir         string
-	DefaultPath string
+	Dir string
 }
 
 // Upload performs the upload of the directory and default path
 func (d *DirectoryUploader) Upload(upload UploadFn) error {
-	if d.DefaultPath != "" {
-		file, err := Open(d.DefaultPath)
-		if err != nil {
-			return err
-		}
-		if err := upload(file); err != nil {
-			return err
-		}
-	}
 	return filepath.Walk(d.Dir, func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -350,14 +467,28 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+hash, reqR)
+	addr := hash
+
+	// If there is a hash already (a manifest), then that manifest will determine if the upload has
+	// to be encrypted or not. If there is no manifest then the toEncrypt parameter decides if
+	// there is encryption or not.
+	if hash == "" && toEncrypt {
+		// This is the built-in address for the encrypted upload endpoint
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+addr, reqR)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-tar")
+	if defaultPath != "" {
+		q := req.URL.Query()
+		q.Set("defaultpath", defaultPath)
+		req.URL.RawQuery = q.Encode()
+	}
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
@@ -462,4 +593,90 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 		return "", err
 	}
 	return string(data), nil
+}
+
+// CreateResource creates a Mutable Resource with the given name and frequency, initializing it with the provided
+// data. Data is interpreted as multihash or not depending on the multihash parameter.
+// startTime=0 means "now"
+// Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
+// or reference future updates (Client.UpdateResource)
+func (c *Client) CreateResource(request *mru.Request) (string, error) {
+	responseStream, err := c.updateResource(request)
+	if err != nil {
+		return "", err
+	}
+	defer responseStream.Close()
+
+	body, err := ioutil.ReadAll(responseStream)
+	if err != nil {
+		return "", err
+	}
+
+	var manifestAddress string
+	if err = json.Unmarshal(body, &manifestAddress); err != nil {
+		return "", err
+	}
+	return manifestAddress, nil
+}
+
+// UpdateResource allows you to set a new version of your content
+func (c *Client) UpdateResource(request *mru.Request) error {
+	_, err := c.updateResource(request)
+	return err
+}
+
+func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
+	body, err := request.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-resource:/", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Body, nil
+
+}
+
+// GetResource returns a byte stream with the raw content of the resource
+// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// points to that address
+func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
+
+	res, err := http.Get(c.Gateway + "/bzz-resource:/" + manifestAddressOrDomain)
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
+
+}
+
+// GetResourceMetadata returns a structure that describes the Mutable Resource
+// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// points to that address
+func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Request, error) {
+
+	responseStream, err := c.GetResource(manifestAddressOrDomain + "/meta")
+	if err != nil {
+		return nil, err
+	}
+	defer responseStream.Close()
+
+	body, err := ioutil.ReadAll(responseStream)
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata mru.Request
+	if err := metadata.UnmarshalJSON(body); err != nil {
+		return nil, err
+	}
+	return &metadata, nil
 }

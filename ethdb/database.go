@@ -34,9 +34,7 @@ import (
 )
 
 const (
-	writeDelayNThreshold       = 200
-	writeDelayThreshold        = 350 * time.Millisecond
-	writeDelayWarningThrottler = 1 * time.Minute
+	writePauseWarningThrottler = 1 * time.Minute
 )
 
 var OpenFileLimit = 64
@@ -157,15 +155,12 @@ func (db *LDBDatabase) LDB() *leveldb.DB {
 
 // Meter configures the database metrics collectors and
 func (db *LDBDatabase) Meter(prefix string) {
-	if metrics.Enabled {
-		// Initialize all the metrics collector at the requested prefix
-		db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-		db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-		db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-		db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-		db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-	}
-	// Initialize write delay metrics no matter we are in metric mode or not.
+	// Initialize all the metrics collector at the requested prefix
+	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
 	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
 	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
 
@@ -206,8 +201,6 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	// Create storage and warning log tracer for write delay.
 	var (
 		delaystats      [2]int64
-		lastWriteDelay  time.Time
-		lastWriteDelayN time.Time
 		lastWritePaused time.Time
 	)
 
@@ -293,36 +286,17 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-			// If the write delay number been collected in the last minute exceeds the predefined threshold,
-			// print a warning log here.
-			// If a warning that db performance is laggy has been displayed,
-			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
-			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold &&
-				time.Now().After(lastWriteDelayN.Add(writeDelayWarningThrottler)) {
-				db.log.Warn("Write delay number exceeds the threshold (200 per second) in the last minute")
-				lastWriteDelayN = time.Now()
-			}
 		}
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-			// If the write delay duration been collected in the last minute exceeds the predefined threshold,
-			// print a warning log here.
-			// If a warning that db performance is laggy has been displayed,
-			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
-			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() &&
-				time.Now().After(lastWriteDelay.Add(writeDelayWarningThrottler)) {
-				db.log.Warn("Write delay duration exceeds the threshold (35% of the time) in the last minute")
-				lastWriteDelay = time.Now()
-			}
 		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(writeDelayWarningThrottler)) {
+			time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
 			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
-
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
 
 		// Retrieve the database iostats.
@@ -385,6 +359,12 @@ type ldbBatch struct {
 func (b *ldbBatch) Put(key, value []byte) error {
 	b.b.Put(key, value)
 	b.size += len(value)
+	return nil
+}
+
+func (b *ldbBatch) Delete(key []byte) error {
+	b.b.Delete(key)
+	b.size += 1
 	return nil
 }
 
@@ -451,6 +431,10 @@ func (dt *table) NewBatch() Batch {
 
 func (tb *tableBatch) Put(key, value []byte) error {
 	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
+}
+
+func (tb *tableBatch) Delete(key []byte) error {
+	return tb.batch.Delete(append([]byte(tb.prefix), key...))
 }
 
 func (tb *tableBatch) Write() error {

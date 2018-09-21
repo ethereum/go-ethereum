@@ -225,7 +225,7 @@ func initializeSecrets(c *cli.Context) error {
 	if _, err := os.Stat(location); err == nil {
 		return fmt.Errorf("file %v already exists, will not overwrite", location)
 	}
-	err = ioutil.WriteFile(location, masterSeed, 0700)
+	err = ioutil.WriteFile(location, masterSeed, 0400)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts)
+		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
@@ -540,14 +540,14 @@ func readMasterKey(ctx *cli.Context) ([]byte, error) {
 
 // checkFile is a convenience function to check if a file
 // * exists
-// * is mode 0600
+// * is mode 0400
 func checkFile(filename string) error {
 	info, err := os.Stat(filename)
 	if err != nil {
 		return fmt.Errorf("failed stat on %s: %v", filename, err)
 	}
 	// Check the unix permission bits
-	if info.Mode().Perm()&077 != 0 {
+	if info.Mode().Perm()&0377 != 0 {
 		return fmt.Errorf("file (%v) has insecure file permissions (%v)", filename, info.Mode().String())
 	}
 	return nil

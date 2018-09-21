@@ -58,11 +58,14 @@ func CollectProcessMetrics(refresh time.Duration) {
 	memPauses := GetOrRegisterMeter("system/memory/pauses", DefaultRegistry)
 
 	var diskReads, diskReadBytes, diskWrites, diskWriteBytes Meter
+	var diskReadBytesCounter, diskWriteBytesCounter Counter
 	if err := ReadDiskStats(diskstats[0]); err == nil {
 		diskReads = GetOrRegisterMeter("system/disk/readcount", DefaultRegistry)
 		diskReadBytes = GetOrRegisterMeter("system/disk/readdata", DefaultRegistry)
+		diskReadBytesCounter = GetOrRegisterCounter("system/disk/readbytes", DefaultRegistry)
 		diskWrites = GetOrRegisterMeter("system/disk/writecount", DefaultRegistry)
 		diskWriteBytes = GetOrRegisterMeter("system/disk/writedata", DefaultRegistry)
+		diskWriteBytesCounter = GetOrRegisterCounter("system/disk/writebytes", DefaultRegistry)
 	} else {
 		log.Debug("Failed to read disk metrics", "err", err)
 	}
@@ -82,6 +85,9 @@ func CollectProcessMetrics(refresh time.Duration) {
 			diskReadBytes.Mark(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
 			diskWrites.Mark(diskstats[location1].WriteCount - diskstats[location2].WriteCount)
 			diskWriteBytes.Mark(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
+
+			diskReadBytesCounter.Inc(diskstats[location1].ReadBytes - diskstats[location2].ReadBytes)
+			diskWriteBytesCounter.Inc(diskstats[location1].WriteBytes - diskstats[location2].WriteBytes)
 		}
 		time.Sleep(refresh)
 	}

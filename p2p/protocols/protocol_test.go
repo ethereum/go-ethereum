@@ -104,7 +104,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 			return fmt.Errorf("handshake mismatch remote %v > local %v", rmhs.C, lhs.C)
 		}
 
-		handle := func(msg interface{}) error {
+		handle := func(ctx context.Context, msg interface{}) error {
 			switch msg := msg.(type) {
 
 			case *protoHandshake:
@@ -116,7 +116,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 					return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
 				}
 				lhs.C += rhs.C
-				return peer.Send(lhs)
+				return peer.Send(ctx, lhs)
 
 			case *kill:
 				// demonstrates use of peerPool, killing another peer connection as a response to a message

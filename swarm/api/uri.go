@@ -19,8 +19,16 @@ package api
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+//matches hex swarm hashes
+// TODO: this is bad, it should not be hardcoded how long is a hash
+var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?$")
 
 // URI is a reference to content stored in swarm.
 type URI struct {
@@ -32,20 +40,30 @@ type URI struct {
 	//                   (address is not resolved)
 	// * bzz-list      -  list of all files contained in a swarm manifest
 	//
-	// Deprecated Schemes:
-	// * bzzr - raw swarm content
-	// * bzzi - immutable URI of an entry in a swarm manifest
-	//          (address is not resolved)
-	// * bzz-hash - hash of swarm content
-	//
 	Scheme string
 
-	// Addr is either a hexadecimal storage key or it an address which
-	// resolves to a storage key
+	// Addr is either a hexadecimal storage address or it an address which
+	// resolves to a storage address
 	Addr string
+
+	// addr stores the parsed storage address
+	addr storage.Address
 
 	// Path is the path to the content within a swarm manifest
 	Path string
+}
+
+func (u *URI) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + u.String() + `"`), nil
+}
+
+func (u *URI) UnmarshalJSON(value []byte) error {
+	uri, err := Parse(string(value))
+	if err != nil {
+		return err
+	}
+	*u = *uri
+	return nil
 }
 
 // Parse parses rawuri into a URI struct, where rawuri is expected to have one
@@ -59,7 +77,6 @@ type URI struct {
 // * <scheme>://<addr>/<path>
 //
 // with scheme one of bzz, bzz-raw, bzz-immutable, bzz-list or bzz-hash
-// or deprecated ones bzzr and bzzi
 func Parse(rawuri string) (*URI, error) {
 	u, err := url.Parse(rawuri)
 	if err != nil {
@@ -69,7 +86,7 @@ func Parse(rawuri string) (*URI, error) {
 
 	// check the scheme is valid
 	switch uri.Scheme {
-	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzzr", "bzzi":
+	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzz-resource":
 	default:
 		return nil, fmt.Errorf("unknown scheme %q", u.Scheme)
 	}
@@ -91,6 +108,9 @@ func Parse(rawuri string) (*URI, error) {
 	}
 	return uri, nil
 }
+func (u *URI) Resource() bool {
+	return u.Scheme == "bzz-resource"
+}
 
 func (u *URI) Raw() bool {
 	return u.Scheme == "bzz-raw"
@@ -104,18 +124,21 @@ func (u *URI) List() bool {
 	return u.Scheme == "bzz-list"
 }
 
-func (u *URI) DeprecatedRaw() bool {
-	return u.Scheme == "bzzr"
-}
-
-func (u *URI) DeprecatedImmutable() bool {
-	return u.Scheme == "bzzi"
-}
-
 func (u *URI) Hash() bool {
 	return u.Scheme == "bzz-hash"
 }
 
 func (u *URI) String() string {
 	return u.Scheme + ":/" + u.Addr + "/" + u.Path
+}
+
+func (u *URI) Address() storage.Address {
+	if u.addr != nil {
+		return u.addr
+	}
+	if hashMatcher.MatchString(u.Addr) {
+		u.addr = common.Hex2Bytes(u.Addr)
+		return u.addr
+	}
+	return nil
 }

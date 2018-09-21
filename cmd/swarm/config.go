@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -58,19 +59,27 @@ var (
 
 //constants for environment variables
 const (
-	SWARM_ENV_CHEQUEBOOK_ADDR = "SWARM_CHEQUEBOOK_ADDR"
-	SWARM_ENV_ACCOUNT         = "SWARM_ACCOUNT"
-	SWARM_ENV_LISTEN_ADDR     = "SWARM_LISTEN_ADDR"
-	SWARM_ENV_PORT            = "SWARM_PORT"
-	SWARM_ENV_NETWORK_ID      = "SWARM_NETWORK_ID"
-	SWARM_ENV_SWAP_ENABLE     = "SWARM_SWAP_ENABLE"
-	SWARM_ENV_SWAP_API        = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_ENABLE     = "SWARM_SYNC_ENABLE"
-	SWARM_ENV_ENS_API         = "SWARM_ENS_API"
-	SWARM_ENV_ENS_ADDR        = "SWARM_ENS_ADDR"
-	SWARM_ENV_CORS            = "SWARM_CORS"
-	SWARM_ENV_BOOTNODES       = "SWARM_BOOTNODES"
-	GETH_ENV_DATADIR          = "GETH_DATADIR"
+	SWARM_ENV_CHEQUEBOOK_ADDR      = "SWARM_CHEQUEBOOK_ADDR"
+	SWARM_ENV_ACCOUNT              = "SWARM_ACCOUNT"
+	SWARM_ENV_LISTEN_ADDR          = "SWARM_LISTEN_ADDR"
+	SWARM_ENV_PORT                 = "SWARM_PORT"
+	SWARM_ENV_NETWORK_ID           = "SWARM_NETWORK_ID"
+	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
+	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
+	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
+	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_LIGHT_NODE_ENABLE    = "SWARM_LIGHT_NODE_ENABLE"
+	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
+	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
+	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
+	SWARM_ENV_CORS                 = "SWARM_CORS"
+	SWARM_ENV_BOOTNODES            = "SWARM_BOOTNODES"
+	SWARM_ENV_PSS_ENABLE           = "SWARM_PSS_ENABLE"
+	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
+	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
+	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ACCESS_PASSWORD          = "SWARM_ACCESS_PASSWORD"
+	GETH_ENV_DATADIR               = "GETH_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -92,10 +101,8 @@ var tomlSettings = toml.Config{
 
 //before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
-	//check for deprecated flags
-	checkDeprecated(ctx)
 	//start by creating a default config
-	config = bzzapi.NewDefaultConfig()
+	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
 	if err != nil {
@@ -126,7 +133,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	log.Debug(printConfig(config))
 }
 
-//override the current config with whatever is in the config file, if a config file has been provided
+//configFileOverride overrides the current config with the config file, if a config file has been provided
 func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config, error) {
 	var err error
 
@@ -136,7 +143,8 @@ func configFileOverride(config *bzzapi.Config, ctx *cli.Context) (*bzzapi.Config
 		if filepath = ctx.GlobalString(SwarmTomlConfigPathFlag.Name); filepath == "" {
 			utils.Fatalf("Config file flag provided with invalid file path")
 		}
-		f, err := os.Open(filepath)
+		var f *os.File
+		f, err = os.Open(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -168,7 +176,7 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
@@ -191,12 +199,24 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SwapEnabled = true
 	}
 
-	if ctx.GlobalIsSet(SwarmSyncEnabledFlag.Name) {
-		currentConfig.SyncEnabled = true
+	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
+		currentConfig.SyncEnabled = false
 	}
 
-	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
+		currentConfig.SyncUpdateDelay = d
+	}
+
+	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
+		currentConfig.LightNodeEnabled = true
+	}
+
+	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
+		currentConfig.DeliverySkipCheck = true
+	}
+
+	currentConfig.SwapAPI = ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -209,16 +229,20 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.EnsAPIs = ensAPIs
 	}
 
-	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
-		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
-	}
-
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
 
-	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
-		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
+	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
+		currentConfig.LocalStoreParams.ChunkDbPath = storePath
+	}
+
+	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
+		currentConfig.LocalStoreParams.DbCapacity = storeCapacity
+	}
+
+	if storeCacheCapacity := ctx.GlobalUint(SwarmStoreCacheCapacity.Name); storeCacheCapacity != 0 {
+		currentConfig.LocalStoreParams.CacheCapacity = storeCacheCapacity
 	}
 
 	return currentConfig
@@ -239,7 +263,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
@@ -262,17 +286,35 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		}
 	}
 
-	if syncenable := os.Getenv(SWARM_ENV_SYNC_ENABLE); syncenable != "" {
-		if sync, err := strconv.ParseBool(syncenable); err != nil {
-			currentConfig.SyncEnabled = sync
+	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
+		if sync, err := strconv.ParseBool(syncdisable); err != nil {
+			currentConfig.SyncEnabled = !sync
+		}
+	}
+
+	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
+		if skipCheck, err := strconv.ParseBool(v); err != nil {
+			currentConfig.DeliverySkipCheck = skipCheck
+		}
+	}
+
+	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
+		if d, err := time.ParseDuration(v); err != nil {
+			currentConfig.SyncUpdateDelay = d
+		}
+	}
+
+	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
+		if lightnode, err := strconv.ParseBool(lne); err != nil {
+			currentConfig.LightNodeEnabled = lightnode
 		}
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {
-		currentConfig.SwapApi = swapapi
+		currentConfig.SwapAPI = swapapi
 	}
 
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -286,10 +328,6 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if cors := os.Getenv(SWARM_ENV_CORS); cors != "" {
 		currentConfig.Cors = cors
-	}
-
-	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
-		currentConfig.BootNodes = bootnodes
 	}
 
 	return currentConfig
@@ -310,18 +348,6 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
-}
-
-//deprecated flags checked here
-func checkDeprecated(ctx *cli.Context) {
-	// exit if the deprecated --ethapi flag is set
-	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
-		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
-	}
-	// warn if --ens-api flag is set
-	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
-		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
-	}
 }
 
 //validate configuration parameters

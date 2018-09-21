@@ -49,7 +49,7 @@ func runTrace(tracer *Tracer) (json.RawMessage, error) {
 	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
-	_, err := env.Interpreter().Run(contract, []byte{})
+	_, err := env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		return nil, err
 	}
