@@ -17,7 +17,7 @@
 package eth
 
 import (
-    "fmt"
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
@@ -243,10 +243,10 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		available []bool        // Availability of explicitly requested blocks
 		expected  int           // Total number of existing blocks to expect
 	}{
-		{1, nil, nil, 1},             // A single random block should be retrievable
-		{10, nil, nil, 10},           // Multiple random blocks should be retrievable
-		{limit, nil, nil, limit},     // The maximum possible blocks should be retrievable
-		{limit + 1, nil, nil, limit}, // No more than the possible block count should be returned
+		{1, nil, nil, 1},                                                         // A single random block should be retrievable
+		{10, nil, nil, 10},                                                       // Multiple random blocks should be retrievable
+		{limit, nil, nil, limit},                                                 // The maximum possible blocks should be retrievable
+		{limit + 1, nil, nil, limit},                                             // No more than the possible block count should be returned
 		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
 		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
 		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
@@ -467,12 +467,12 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	}
 	// Create a DAO aware protocol manager
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = ethash.NewFaker()
-		db            = ethdb.NewMemDatabase()
-		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
-		gspec         = &core.Genesis{Config: config}
-		genesis       = gspec.MustCommit(db)
+		evmux   = new(event.TypeMux)
+		pow     = ethash.NewFaker()
+		db      = ethdb.NewMemDatabase()
+		config  = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
+		gspec   = &core.Genesis{Config: config}
+		genesis = gspec.MustCommit(db)
 	)
 	blockchain, err := core.NewBlockChain(db, nil, config, pow, vm.Config{}, nil)
 	if err != nil {
@@ -527,7 +527,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 
 func TestBroadcastBlock(t *testing.T) {
 	var tests = []struct {
-		totalPeers int
+		totalPeers        int
 		broadcastExpected int
 	}{
 		{1, 1},
@@ -548,12 +548,12 @@ func TestBroadcastBlock(t *testing.T) {
 
 func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = ethash.NewFaker()
-		db            = ethdb.NewMemDatabase()
-		config        = &params.ChainConfig{}
-		gspec         = &core.Genesis{Config: config}
-		genesis       = gspec.MustCommit(db)
+		evmux   = new(event.TypeMux)
+		pow     = ethash.NewFaker()
+		db      = ethdb.NewMemDatabase()
+		config  = &params.ChainConfig{}
+		gspec   = &core.Genesis{Config: config}
+		genesis = gspec.MustCommit(db)
 	)
 	blockchain, err := core.NewBlockChain(db, nil, config, pow, vm.Config{}, nil)
 	if err != nil {
@@ -585,18 +585,19 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 			}
 		}(peer)
 	}
-	timeoutCh := time.NewTimer(time.Millisecond*100).C
+	timeoutCh := time.NewTimer(time.Millisecond * 100).C
 	var receivedCount int
-	outer: for {
+outer:
+	for {
 		select {
-		case err =<- errCh:
+		case err = <-errCh:
 			break outer
-		case <- doneCh:
+		case <-doneCh:
 			receivedCount++
 			if receivedCount == totalPeers {
 				break outer
 			}
-		case <- timeoutCh:
+		case <-timeoutCh:
 			break outer
 		}
 	}
