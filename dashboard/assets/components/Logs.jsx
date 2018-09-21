@@ -104,9 +104,9 @@ const createChunk = (records: Array<Record>) => {
 
 // ADDED, SAME and REMOVED are used to track the change of the log chunk array.
 // The scroll position is set using these values.
-const ADDED = 1;
-const SAME = 0;
-const REMOVED = -1;
+export const ADDED = 1;
+export const SAME = 0;
+export const REMOVED = -1;
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.

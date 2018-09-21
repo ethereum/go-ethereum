@@ -24,7 +24,8 @@ import Header from './Header';
 import Body from './Body';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
-import {inserter as logInserter} from './Logs';
+import {inserter as logInserter, SAME} from './Logs';
+import {inserter as peerInserter} from './Network';
 
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same
@@ -88,7 +89,9 @@ const defaultContent: () => Content = () => ({
 	home:    {},
 	chain:   {},
 	txpool:  {},
-	network: {},
+	network: {
+		peerBundles: {},
+	},
 	system:  {
 		activeMemory:   [],
 		virtualMemory:  [],
@@ -103,8 +106,8 @@ const defaultContent: () => Content = () => ({
 		chunks:        [],
 		endTop:        false,
 		endBottom:     true,
-		topChanged:    0,
-		bottomChanged: 0,
+		topChanged:    SAME,
+		bottomChanged: SAME,
 	},
 });
 
@@ -119,7 +122,9 @@ const updaters = {
 	home:    null,
 	chain:   null,
 	txpool:  null,
-	network: null,
+	network: {
+		peerBundles: peerInserter,
+	},
 	system:  {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),

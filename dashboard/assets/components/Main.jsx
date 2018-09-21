@@ -21,6 +21,7 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 
 import {MENU} from '../common';
+import Network from './Network';
 import Logs from './Logs';
 import Footer from './Footer';
 import type {Content} from '../types/content';
@@ -89,9 +90,17 @@ class Main extends Component<Props> {
 		let children = null;
 		switch (active) {
 		case MENU.get('home').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('chain').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('txpool').id:
+			children = <div>Work in progress.</div>;
+			break;
 		case MENU.get('network').id:
+			children = <Network content={this.props.content.network} />;
+			break;
 		case MENU.get('system').id:
 			children = <div>Work in progress.</div>;
 			break;

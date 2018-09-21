@@ -388,6 +388,7 @@ func (srv *Server) Stop() {
 	close(srv.quit)
 	srv.lock.Unlock()
 	srv.loopWG.Wait()
+	closeMetricsFeed()
 }
 
 // sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
@@ -838,7 +839,11 @@ func (srv *Server) listenLoop() {
 			}
 		}
 
-		fd = newMeteredConn(fd, true)
+		var ip net.IP
+		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
+			ip = tcp.IP
+		}
+		fd = newMeteredConn(fd, true, ip)
 		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
@@ -877,6 +882,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 	if c.id, err = c.doEncHandshake(srv.PrivateKey, dialDest); err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return err
+	}
+	if conn, ok := c.fd.(*meteredConn); ok {
+		conn.handshakeDone(c.id)
 	}
 	clog := srv.log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// For dialed connections, check that the remote public key matches.

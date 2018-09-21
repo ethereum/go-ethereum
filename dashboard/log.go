@@ -94,13 +94,13 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 		// The last file is continuously updated, and its chunks are streamed,
 		// so in order to avoid log record duplication on the client side, it is
 		// handled differently. Its actual content is always saved in the history.
-		db.lock.Lock()
-		if db.history.Logs != nil {
+		db.logLock.RLock()
+		if db.logHistory != nil {
 			c.msg <- &Message{
-				Logs: db.history.Logs,
+				Logs: deepcopy.Copy(db.logHistory).(*LogsMessage),
 			}
 		}
-		db.lock.Unlock()
+		db.logLock.RUnlock()
 		return
 	case fileNames[idx] == r.Name:
 		idx++
@@ -174,15 +174,15 @@ func (db *Dashboard) streamLogs() {
 		log.Warn("Problem with file", "name", opened.Name(), "err", err)
 		return
 	}
-	db.lock.Lock()
-	db.history.Logs = &LogsMessage{
+	db.logLock.Lock()
+	db.logHistory = &LogsMessage{
 		Source: &LogFile{
 			Name: fi.Name(),
 			Last: true,
 		},
 		Chunk: emptyChunk,
 	}
-	db.lock.Unlock()
+	db.logLock.Unlock()
 
 	watcher := make(chan notify.EventInfo, 10)
 	if err := notify.Watch(db.logdir, watcher, notify.Create); err != nil {
@@ -240,10 +240,10 @@ loop:
 				log.Warn("Problem with file", "name", opened.Name(), "err", err)
 				break loop
 			}
-			db.lock.Lock()
-			db.history.Logs.Source.Name = fi.Name()
-			db.history.Logs.Chunk = emptyChunk
-			db.lock.Unlock()
+			db.logLock.Lock()
+			db.logHistory.Source.Name = fi.Name()
+			db.logHistory.Chunk = emptyChunk
+			db.logLock.Unlock()
 		case <-ticker.C: // Send log updates to the client.
 			if opened == nil {
 				log.Warn("The last log file is not opened")
@@ -266,19 +266,19 @@ loop:
 
 			var l *LogsMessage
 			// Update the history.
-			db.lock.Lock()
-			if bytes.Equal(db.history.Logs.Chunk, emptyChunk) {
-				db.history.Logs.Chunk = chunk
-				l = deepcopy.Copy(db.history.Logs).(*LogsMessage)
+			db.logLock.Lock()
+			if bytes.Equal(db.logHistory.Chunk, emptyChunk) {
+				db.logHistory.Chunk = chunk
+				l = deepcopy.Copy(db.logHistory).(*LogsMessage)
 			} else {
-				b = make([]byte, len(db.history.Logs.Chunk)+len(chunk)-1)
-				copy(b, db.history.Logs.Chunk)
-				b[len(db.history.Logs.Chunk)-1] = ','
-				copy(b[len(db.history.Logs.Chunk):], chunk[1:])
-				db.history.Logs.Chunk = b
+				b = make([]byte, len(db.logHistory.Chunk)+len(chunk)-1)
+				copy(b, db.logHistory.Chunk)
+				b[len(db.logHistory.Chunk)-1] = ','
+				copy(b[len(db.logHistory.Chunk):], chunk[1:])
+				db.logHistory.Chunk = b
 				l = &LogsMessage{Chunk: chunk}
 			}
-			db.lock.Unlock()
+			db.logLock.Unlock()
 
 			db.sendToAll(&Message{Logs: l})
 		case errc = <-db.quit:

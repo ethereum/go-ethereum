@@ -39,6 +39,12 @@
 			"revisionTime": "2018-01-16T20:38:02Z"
 		},
 		{
+			"checksumSHA1": "hp2pna9yEn9hemIjc7asalxL2Qs=",
+			"path": "github.com/apilayer/freegeoip",
+			"revision": "3f942d1392f6439bda0f67b3c650ce468ebdba8e",
+			"revisionTime": "2018-07-02T11:14:01Z"
+		},
+		{
 			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
 			"path": "github.com/aristanetworks/goarista/monotime",
 			"revision": "ea17b1a17847fb6e4c0a91de0b674704693469b0",
@@ -338,6 +344,12 @@
 			"path": "github.com/opentracing/opentracing-go/log",
 			"revision": "bd9c3193394760d98b2fa6ebb2291f0cd1d06a7d",
 			"revisionTime": "2018-06-06T20:41:48Z"
+		},
+		{
+			"checksumSHA1": "a1WxG0wMDGFnjojQghwu1i1SDhk=",
+			"path": "github.com/oschwald/maxminddb-golang",
+			"revision": "c5bec84d1963260297932a1b7a1753c8420717a7",
+			"revisionTime": "2018-02-25T17:45:17Z"
 		},
 		{
 			"checksumSHA1": "Se195FlZ160eaEk/uVx4KdTPSxU=",
