@@ -96,11 +96,16 @@ func (s *StateSuite) TestNull(c *checker.C) {
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	var value common.Hash
+
 	s.state.SetState(address, common.Hash{}, value)
 	s.state.Commit(false)
-	value = s.state.GetState(address, common.Hash{})
+
+	value, dirty := s.state.GetState(address, common.Hash{})
 	if value != (common.Hash{}) {
 		c.Errorf("expected empty hash. got %x", value)
+	}
+	if dirty {
+		c.Errorf("expected non-dirty, got dirty")
 	}
 }
 
@@ -110,20 +115,27 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
 
-	// set initial state object value
+	// snapshot the genesis state
+	genesis := s.state.Snapshot()
+
+	// set initial state object value and snapshot it
 	s.state.SetState(stateobjaddr, storageaddr, data1)
-	// get snapshot of current state
 	snapshot := s.state.Snapshot()
 
-	// set new state object value
+	// set a new state object value, revert it and ensure correct content
 	s.state.SetState(stateobjaddr, storageaddr, data2)
-	// restore snapshot
 	s.state.RevertToSnapshot(snapshot)
 
-	// get state storage value
-	res := s.state.GetState(stateobjaddr, storageaddr)
+	value, dirty := s.state.GetState(stateobjaddr, storageaddr)
+	c.Assert(data1, checker.DeepEquals, value)
+	c.Assert(true, checker.DeepEquals, dirty)
 
-	c.Assert(data1, checker.DeepEquals, res)
+	// revert up to the genesis state and ensure correct content
+	s.state.RevertToSnapshot(genesis)
+
+	value, dirty = s.state.GetState(stateobjaddr, storageaddr)
+	c.Assert(common.Hash{}, checker.DeepEquals, value)
+	c.Assert(false, checker.DeepEquals, dirty)
 }
 
 func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
@@ -208,17 +220,30 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
 
-	if len(so1.cachedStorage) != len(so0.cachedStorage) {
-		t.Errorf("Storage size mismatch: have %d, want %d", len(so1.cachedStorage), len(so0.cachedStorage))
+	if len(so1.dirtyStorage) != len(so0.dirtyStorage) {
+		t.Errorf("Dirty storage size mismatch: have %d, want %d", len(so1.dirtyStorage), len(so0.dirtyStorage))
 	}
-	for k, v := range so1.cachedStorage {
-		if so0.cachedStorage[k] != v {
-			t.Errorf("Storage key %x mismatch: have %v, want %v", k, so0.cachedStorage[k], v)
+	for k, v := range so1.dirtyStorage {
+		if so0.dirtyStorage[k] != v {
+			t.Errorf("Dirty storage key %x mismatch: have %v, want %v", k, so0.dirtyStorage[k], v)
 		}
 	}
-	for k, v := range so0.cachedStorage {
-		if so1.cachedStorage[k] != v {
-			t.Errorf("Storage key %x mismatch: have %v, want none.", k, v)
+	for k, v := range so0.dirtyStorage {
+		if so1.dirtyStorage[k] != v {
+			t.Errorf("Dirty storage key %x mismatch: have %v, want none.", k, v)
+		}
+	}
+	if len(so1.originStorage) != len(so0.originStorage) {
+		t.Errorf("Origin storage size mismatch: have %d, want %d", len(so1.originStorage), len(so0.originStorage))
+	}
+	for k, v := range so1.originStorage {
+		if so0.originStorage[k] != v {
+			t.Errorf("Origin storage key %x mismatch: have %v, want %v", k, so0.originStorage[k], v)
+		}
+	}
+	for k, v := range so0.originStorage {
+		if so1.originStorage[k] != v {
+			t.Errorf("Origin storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
 

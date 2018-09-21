@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -236,12 +237,12 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
-func (self *StateDB) GetState(addr common.Address, bhash common.Hash) common.Hash {
+func (self *StateDB) GetState(addr common.Address, bhash common.Hash) (common.Hash, bool) {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.GetState(self.db, bhash)
 	}
-	return common.Hash{}
+	return common.Hash{}, false
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.
@@ -430,24 +431,19 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash, dirty bool) bool) {
 	so := db.getStateObject(addr)
 	if so == nil {
 		return
 	}
-
-	// When iterating over the storage check the cache first
-	for h, value := range so.cachedStorage {
-		cb(h, value)
-	}
-
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
-		// ignore cached values
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if _, ok := so.cachedStorage[key]; !ok {
-			cb(key, common.BytesToHash(it.Value))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			cb(key, value, true)
+			continue
 		}
+		cb(key, common.BytesToHash(it.Value), false)
 	}
 }
 
@@ -527,9 +523,36 @@ func (self *StateDB) RevertToSnapshot(revid int) {
 	self.validRevisions = self.validRevisions[:idx]
 }
 
-// GetRefund returns the current value of the refund counter.
-func (self *StateDB) GetRefund() uint64 {
-	return self.refund
+// GetRefund returns the current value of the refund counter and any out-of-band
+// refunds at the end of the transaction.
+func (self *StateDB) GetRefund(netSstoreMeter bool) uint64 {
+	// If legacy gas metering is used, return the current refund counter
+	refund := self.refund
+	if !netSstoreMeter {
+		return refund
+	}
+	// If we're already using the Constantinople net sstore gas metering, refund noops
+	for addr := range self.journal.dirties {
+		object := self.stateObjects[addr]
+		for key, value := range object.dirtyStorage {
+			// If the slot didn't change in the end, refund most gas
+			if value == object.originStorage[key] {
+				if value == (common.Hash{}) {
+					refund += params.NetSstoreRefundNoopZero
+				} else {
+					refund += params.NetSstoreRefundNoopNonZero
+				}
+				continue
+			}
+			// If the slot did change, but was set to zero, refund
+			if value == (common.Hash{}) {
+				refund += params.NetSstoreRefund
+				continue
+			}
+			// Sorry, no refund for this slot
+		}
+	}
+	return refund
 }
 
 // Finalise finalises the state by removing the self destructed objects

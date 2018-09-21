@@ -597,7 +597,7 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	if state == nil || err != nil {
 		return nil, err
 	}
-	res := state.GetState(address, common.HexToHash(key))
+	res, _ := state.GetState(address, common.HexToHash(key))
 	return res[:], state.Error()
 }
 

@@ -154,7 +154,7 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 		return nil, errBlockNumberUnsupported
 	}
 	statedb, _ := b.blockchain.State()
-	val := statedb.GetState(contract, key)
+	val, _ := statedb.GetState(contract, key)
 	return val[:], nil
 }
 

@@ -117,23 +117,51 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 
 func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
-		y, x = stack.Back(1), stack.Back(0)
-		val  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
+		y, x         = stack.Back(1), stack.Back(0)
+		value, dirty = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
-	// This checks for 3 scenario's and calculates gas accordingly
-	// 1. From a zero-value address to a non-zero value         (NEW VALUE)
-	// 2. From a non-zero value address to a zero-value address (DELETE)
-	// 3. From a non-zero to a non-zero                         (CHANGE)
-	if val == (common.Hash{}) && y.Sign() != 0 {
-		// 0 => non 0
-		return params.SstoreSetGas, nil
-	} else if val != (common.Hash{}) && y.Sign() == 0 {
-		// non 0 => 0
-		evm.StateDB.AddRefund(params.SstoreRefundGas)
-		return params.SstoreClearGas, nil
-	} else {
-		// non 0 => non 0 (or 0 => 0)
-		return params.SstoreResetGas, nil
+	// The legacy gas metering only takes into consideration the current state
+	if !evm.chainRules.IsConstantinople {
+		// This checks for 3 scenario's and calculates gas accordingly
+		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
+		// 2. From a non-zero value address to a zero-value address (DELETE)
+		// 3. From a non-zero to a non-zero                         (CHANGE)
+		switch {
+		case value == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
+			return params.SstoreSetGas, nil
+		case value != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
+			evm.StateDB.AddRefund(params.SstoreRefundGas)
+			return params.SstoreClearGas, nil
+		default: // non 0 => non 0 (or 0 => 0)
+			return params.SstoreResetGas, nil
+		}
+	}
+	// The new gas metering is based on net gas costs (EIP-1087)
+	//
+	// 0. A ‘dirty map’ for each transaction is maintained, tracking all storage
+	//    slots in all contracts that have been modified in the current transaction.
+	//    The dirty map is scoped in the same manner as updates to storage, meaning
+	//    that changes to the dirty map in a call that later reverts are not retained.
+	// 1. When a storage slot is written to with the value it already contains, 200
+	//    gas is deducted, but is not explicitly marked dirty.
+	// 2. When a storage slot’s value is changed for the first time, the slot is
+	//    marked as dirty. If the slot was previously set to 0, 20000 gas is deducted;
+	//    otherwise, 5000 gas is deducted.
+	// 2. When a storage slot that is already in the dirty map is written to, 200
+	//    gas is deducted.
+	// 3. At the end of the transaction, for each slot in the dirty map:
+	//      * If the slot was 0 before the transaction and is 0 now, refund 19800 gas.
+	//      * If the slot was nonzero before the transaction and its value has not changed, refund 4800 gas.
+	//      * If the slot was nonzero before the transaction and is 0 now, refund 10000 gas.
+	switch {
+	case value == common.BigToHash(y): // noop
+		return params.NetSstoreNoopGas, nil
+	case !dirty && y.Sign() != 0 && value == (common.Hash{}): // clean(0) => anything
+		return params.NetSstoreCleanInitgas, nil
+	case !dirty && y.Sign() != 0: // clean(non 0) => anything
+		return params.NetSstoreCleanUpdateGas, nil
+	default: // dirty(anything) => anything
+		return params.NetSstoreDirtyGas, nil
 	}
 }
 

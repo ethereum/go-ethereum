@@ -229,9 +229,11 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 
 func (st *StateTransition) refundGas() {
 	// Apply refund counter, capped to half of the used gas.
-	refund := st.gasUsed() / 2
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
+	netSstoreMeter := st.evm.ChainConfig().IsConstantinople(st.evm.BlockNumber)
+
+	refund := st.state.GetRefund(netSstoreMeter)
+	if refund > st.gasUsed()/2 {
+		refund = st.gasUsed() / 2
 	}
 	st.gas += refund
 
