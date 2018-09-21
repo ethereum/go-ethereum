@@ -33,7 +33,7 @@ import (
 // faucetDockerfile is the Dockerfile required to build a faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
-FROM ethereum/client-go:alltools-latest
+FROM ethereum/client-go:alltools-{{.Version}}
 
 ADD genesis.json /genesis.json
 ADD account.json /account.json
@@ -90,6 +90,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(faucetDockerfile)).Execute(dockerfile, map[string]interface{}{
+		"Version":       config.node.version,
 		"NetworkID":     config.node.network,
 		"Bootnodes":     strings.Join(bootnodes, ","),
 		"Ethstats":      config.node.ethstats,

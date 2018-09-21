@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -322,5 +323,33 @@ func (w *wizard) readIPAddress() string {
 			continue
 		}
 		return text
+	}
+}
+
+// readDefaultAddress reads a single line from stdin, trimming if from spaces and
+// converts it to either a version in the form "v1.8.15" or "latest". If an empty
+// line is entered, the default value is returned.
+func (w *wizard) readDefaultVersion(def string) string {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		} else if text == "latest" {
+			return text
+		}
+
+		// Match something like 1.8.15 or 1.8.0
+		regex := regexp.MustCompile("^\\d+\\.\\d+\\.\\d+$")
+		if !regex.Match([]byte(strings.TrimSpace(text))) {
+			log.Error("Invalid input, expected a semantic version in the form 1.8.15")
+			continue
+		}
+
+		// Convert to v1.8.15 (the format used for the ethereum docker images)
+		return "v" + text
 	}
 }

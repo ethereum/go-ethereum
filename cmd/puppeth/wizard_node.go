@@ -55,8 +55,14 @@ func (w *wizard) deployNode(boot bool) {
 	}
 	existed := err == nil
 
+	infos.version = "latest"
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.network = w.conf.Genesis.Config.ChainID.Int64()
+
+	// Figure out which version of geth to use
+	fmt.Println()
+	fmt.Printf("Which version of geth to use? (default = %s)\n", infos.version)
+	infos.version = w.readDefaultVersion(infos.version)
 
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()

@@ -38,7 +38,7 @@ func (w *wizard) deployFaucet() {
 	infos, err := checkFaucet(client, w.network)
 	if err != nil {
 		infos = &faucetInfos{
-			node:    &nodeInfos{port: 30303, peersTotal: 25},
+			node:    &nodeInfos{port: 30303, peersTotal: 25, version: "latest"},
 			port:    80,
 			host:    client.server,
 			amount:  1,
@@ -102,6 +102,11 @@ func (w *wizard) deployFaucet() {
 			infos.captchaSecret = w.readPassword()
 		}
 	}
+	// Figure out which version of faucet to use
+	fmt.Println()
+	fmt.Printf("Which version of faucet to use? (default = %s)\n", infos.node.version)
+	infos.node.version = w.readDefaultVersion(infos.node.version)
+
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
 	if infos.node.datadir == "" {

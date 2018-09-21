@@ -32,7 +32,7 @@ import (
 
 // nodeDockerfile is the Dockerfile required to run an Ethereum node.
 var nodeDockerfile = `
-FROM ethereum/client-go:latest
+FROM ethereum/client-go:{{.Version}}
 
 ADD genesis.json /genesis.json
 {{if .Unlock}}
@@ -97,6 +97,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 	}
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(nodeDockerfile)).Execute(dockerfile, map[string]interface{}{
+		"Version":   config.version,
 		"NetworkID": config.network,
 		"Port":      config.port,
 		"Peers":     config.peersTotal,
@@ -165,6 +166,7 @@ type nodeInfos struct {
 	gasTarget  float64
 	gasLimit   float64
 	gasPrice   float64
+	version    string
 }
 
 // Report converts the typed struct into a plain string->string map, containing
