@@ -201,6 +201,13 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		defer reader.Close()
 
 		w.Header().Set("Content-Type", "application/x-tar")
+
+		fileName := uri.Addr
+		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+			fileName = found
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s.tar\"", fileName))
+
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, reader)
 		return
@@ -616,7 +623,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 
 	// All ok, serve the retrieved update
 	log.Debug("Found update", "view", view.Hex(), "ruid", ruid)
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", api.MimeOctetStream)
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }
 
@@ -690,11 +697,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	case uri.Raw():
 		// allow the request to overwrite the content type using a query
 		// parameter
-		contentType := "application/octet-stream"
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
-			contentType = typ
+			w.Header().Set("Content-Type", typ)
 		}
-		w.Header().Set("Content-Type", contentType)
 		http.ServeContent(w, r, "", time.Now(), reader)
 	case uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
@@ -850,8 +855,17 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", contentType)
-	http.ServeContent(w, r, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+
+	fileName := uri.Addr
+	if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+		fileName = found
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+
+	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }
 
 // The size of buffer used for bufio.Reader on LazyChunkReader passed to
