@@ -19,6 +19,7 @@ package stream
 import (
 	"bytes"
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -55,11 +56,12 @@ func TestStreamerRequestSubscription(t *testing.T) {
 }
 
 var (
-	hash0     = sha3.Sum256([]byte{0})
-	hash1     = sha3.Sum256([]byte{1})
-	hash2     = sha3.Sum256([]byte{2})
-	hashesTmp = append(hash0[:], hash1[:]...)
-	hashes    = append(hashesTmp, hash2[:]...)
+	hash0         = sha3.Sum256([]byte{0})
+	hash1         = sha3.Sum256([]byte{1})
+	hash2         = sha3.Sum256([]byte{2})
+	hashesTmp     = append(hash0[:], hash1[:]...)
+	hashes        = append(hashesTmp, hash2[:]...)
+	corruptHashes = append(hashes[:40])
 )
 
 type testClient struct {
@@ -455,6 +457,71 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 	})
 
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
+	tester, streamer, _, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := NewStream("foo", "", true)
+
+	var tc *testClient
+
+	streamer.RegisterClientFunc("foo", func(p *Peer, t string, live bool) (Client, error) {
+		tc = newTestClient(t)
+		return tc, nil
+	})
+
+	peerID := tester.IDs[0]
+
+	err = streamer.Subscribe(peerID, stream, NewRange(5, 8), Top)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Expects: []p2ptest.Expect{
+			{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   stream,
+					History:  NewRange(5, 8),
+					Priority: Top,
+				},
+				Peer: peerID,
+			},
+		},
+	},
+		p2ptest.Exchange{
+			Label: "Corrupt offered hash message",
+			Triggers: []p2ptest.Trigger{
+				{
+					Code: 1,
+					Msg: &OfferedHashesMsg{
+						HandoverProof: &HandoverProof{
+							Handover: &Handover{},
+						},
+						Hashes: corruptHashes,
+						From:   5,
+						To:     8,
+						Stream: stream,
+					},
+					Peer: peerID,
+				},
+			},
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedError := errors.New("Message handler error: (msg code 1): error invalid hashes length (len: 40)")
+	if err := tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.IDs[0], Error: expectedError}); err != nil {
 		t.Fatal(err)
 	}
 }
