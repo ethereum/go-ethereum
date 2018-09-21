@@ -117,7 +117,7 @@ func (t *BlockTest) Run(snapshotter bool) error {
 	if t.json.SealEngine == "NoProof" {
 		engine = ethash.NewFaker()
 	} else {
-		engine = ethash.NewShared()
+		engine = ethash.NewShared(new(big.Int))
 	}
 	cache := &core.CacheConfig{TrieCleanLimit: 0}
 	if snapshotter {

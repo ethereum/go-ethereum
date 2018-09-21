@@ -48,7 +48,8 @@ var (
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, nil}, nil, false)
+	sharedEthash *Ethash
+	ethashMu     sync.Mutex // lock for initializing sharedEthash
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -401,15 +402,16 @@ const (
 
 // Config are the configuration parameters of the ethash.
 type Config struct {
-	CacheDir         string
-	CachesInMem      int
-	CachesOnDisk     int
-	CachesLockMmap   bool
-	DatasetDir       string
-	DatasetsInMem    int
-	DatasetsOnDisk   int
-	DatasetsLockMmap bool
-	PowMode          Mode
+	CacheDir           string
+	CachesInMem        int
+	CachesOnDisk       int
+	CachesLockMmap     bool
+	DatasetDir         string
+	DatasetsInMem      int
+	DatasetsOnDisk     int
+	DatasetsLockMmap   bool
+	PowMode            Mode
+	ProgpowBlockNumber *big.Int // Block number at which to use progpow instead of hashimoto
 
 	Log log.Logger `toml:"-"`
 }
@@ -531,7 +533,12 @@ func NewFullFaker() *Ethash {
 
 // NewShared creates a full sized ethash PoW shared between all requesters running
 // in the same process.
-func NewShared() *Ethash {
+func NewShared(progpowNumber *big.Int) *Ethash {
+	ethashMu.Lock()
+	if sharedEthash == nil {
+		sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, progpowNumber, nil}, nil, false)
+	}
+	ethashMu.Unlock()
 	return &Ethash{shared: sharedEthash}
 }
 
@@ -679,4 +686,27 @@ func (ethash *Ethash) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 // dataset.
 func SeedHash(block uint64) []byte {
 	return seedHash(block)
+}
+
+type powFull func(dataset []uint32, hash []byte, nonce, number uint64) ([]byte, []byte)
+type powLight func(size uint64, cache []uint32, hash []byte, nonce, number uint64) ([]byte, []byte)
+
+// fullPow returns either hashimoto or progpow full checker depending on number
+func (ethash *Ethash) fullPow(number *big.Int) powFull {
+	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) >= 0 {
+		return progpowFull
+	}
+	return func(dataset []uint32, hash []byte, nonce uint64, number uint64) ([]byte, []byte) {
+		return hashimotoFull(dataset, hash, nonce)
+	}
+}
+
+// lightPow returns either hashimoto or progpowdepending on number
+func (ethash *Ethash) lightPow(number *big.Int) powLight {
+	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) >= 0 {
+		return progpowLight
+	}
+	return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+		return hashimotoLight(size, cache, hash, nonce)
+	}
 }
