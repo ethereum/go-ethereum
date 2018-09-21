@@ -28,12 +28,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
-func newTestTable(t transport) (*Table, *enode.DB) {
+var nullNode *enode.Node
+
+func init() {
 	var r enr.Record
 	r.Set(enr.IP{0, 0, 0, 0})
-	n := enode.SignNull(&r, enode.ID{})
+	nullNode = enode.SignNull(&r, enode.ID{})
+}
+
+func newTestTable(t transport) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, n, db, nil)
+	tab, _ := newTable(t, db, nil)
 	return tab, db
 }
 
@@ -70,10 +75,10 @@ func intIP(i int) net.IP {
 
 // fillBucket inserts nodes into the given bucket until it is full.
 func fillBucket(tab *Table, n *node) (last *node) {
-	ld := enode.LogDist(tab.self.ID(), n.ID())
+	ld := enode.LogDist(tab.self().ID(), n.ID())
 	b := tab.bucket(n.ID())
 	for len(b.entries) < bucketSize {
-		b.entries = append(b.entries, nodeAtDistance(tab.self.ID(), ld, intIP(ld)))
+		b.entries = append(b.entries, nodeAtDistance(tab.self().ID(), ld, intIP(ld)))
 	}
 	return b.entries[bucketSize-1]
 }
@@ -81,13 +86,23 @@ func fillBucket(tab *Table, n *node) (last *node) {
 type pingRecorder struct {
 	mu           sync.Mutex
 	dead, pinged map[enode.ID]bool
+	n            *enode.Node
 }
 
 func newPingRecorder() *pingRecorder {
+	var r enr.Record
+	r.Set(enr.IP{0, 0, 0, 0})
+	n := enode.SignNull(&r, enode.ID{})
+
 	return &pingRecorder{
 		dead:   make(map[enode.ID]bool),
 		pinged: make(map[enode.ID]bool),
+		n:      n,
 	}
+}
+
+func (t *pingRecorder) self() *enode.Node {
+	return nullNode
 }
 
 func (t *pingRecorder) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {

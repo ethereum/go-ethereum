@@ -71,7 +71,9 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	test.table, test.udp, _ = newUDP(test.pipe, Config{PrivateKey: test.localkey})
+	db, _ := enode.OpenDB("")
+	ln := enode.NewLocalNode(db, test.localkey)
+	test.table, test.udp, _ = newUDP(test.pipe, ln, Config{PrivateKey: test.localkey})
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
 	<-test.table.initDone
 	return test
@@ -355,12 +357,13 @@ func TestUDP_successfulPing(t *testing.T) {
 
 	// remote is unknown, the table pings back.
 	hash, _ := test.waitPacketOut(func(p *ping) error {
-		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint) {
-			t.Errorf("got ping.From %v, want %v", p.From, test.udp.ourEndpoint)
+		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint()) {
+			t.Errorf("got ping.From %#v, want %#v", p.From, test.udp.ourEndpoint())
 		}
 		wantTo := rpcEndpoint{
 			// The mirrored UDP address is the UDP packet sender.
-			IP: test.remoteaddr.IP, UDP: uint16(test.remoteaddr.Port),
+			IP:  test.remoteaddr.IP,
+			UDP: uint16(test.remoteaddr.Port),
 			TCP: 0,
 		}
 		if !reflect.DeepEqual(p.To, wantTo) {
