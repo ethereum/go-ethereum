@@ -254,13 +254,13 @@ func (self *worker) update() {
 		case <-self.chainHeadCh:
 			self.commitNewWork()
 
-		// Handle ChainSideEvent
+			// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
 			self.uncleMu.Lock()
 			self.possibleUncles[ev.Block.Hash()] = ev.Block
 			self.uncleMu.Unlock()
 
-		// Handle TxPreEvent
+			// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
@@ -278,7 +278,7 @@ func (self *worker) update() {
 				}
 			}
 
-		// System stopped
+			// System stopped
 		case <-self.txSub.Err():
 			return
 		case <-self.chainHeadSub.Err():
@@ -341,10 +341,20 @@ func (self *worker) wait() {
 			}
 
 			if self.config.Clique != nil {
+				c := self.engine.(*clique.Clique)
+				snap, err := c.GetSnapshot(self.chain, block.Header())
+				if err != nil {
+					log.Error("Fail to get snapshot for sign tx signer.")
+					return
+				}
+				if _, authorized := snap.Signers[self.coinbase]; !authorized {
+					log.Error("Coinbase address not in snapshot signers.")
+					return
+				}
 				// Send tx sign to smart contract blockSigners.
 				if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block); err != nil {
 					log.Error("Fail to create tx sign for signer", "error", "err")
-				}	
+				}
 			}
 		}
 	}

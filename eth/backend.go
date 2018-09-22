@@ -180,13 +180,25 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
-	// Inject hook for send tx sign to smartcontract after insert block into chain.
-	if eth.chainConfig.Clique != nil {
-		eth.protocolManager.fetcher.HookCreateTxSign(eth.chainConfig, eth.TxPool(), eth.AccountManager())
-	}
-
 	if eth.chainConfig.Clique != nil {
 		c := eth.engine.(*clique.Clique)
+
+		// Inject hook for send tx sign to smartcontract after insert block into chain.
+		importedHook := func(block *types.Block) {
+			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
+			if err != nil {
+				log.Error("Fail to get snapshot for sign tx validator.")
+				return
+			}
+			if _, authorized := snap.Signers[eth.etherbase]; authorized {
+				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block); err != nil {
+					log.Error("Fail to create tx sign for imported block", "error", err)
+					return
+				}
+			}
+		}
+		eth.protocolManager.fetcher.SetImportedHook(importedHook)
+
 		// Hook reward for clique validator.
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
 			number := header.Number.Uint64()
@@ -200,15 +212,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 				addr := common.HexToAddress(common.BlockSigners)
 				chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
-
-				signers, err := contracts.GetRewardForCheckpoint(chainReward, addr, number, rCheckpoint, client)
+				totalSigner := new(uint64)
+				signers, err := contracts.GetRewardForCheckpoint(addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
 					log.Error("Fail to get signers for reward checkpoint", "error", err)
 				}
-
+				rewardSigners, err := contracts.CalculateReward(chainReward, signers, *totalSigner)
+				if err != nil {
+					log.Error("Fail to calculate reward for signers", "error", err)
+				}
 				// Add reward for signers.
 				if len(signers) > 0 {
-					for signer, calcReward := range signers {
+					for signer, calcReward := range rewardSigners {
 						state.AddBalance(signer, calcReward)
 					}
 				}
