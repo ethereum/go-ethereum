@@ -502,9 +502,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
-// GetBalance returns the amount of wei for the given address in the state of the
-// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
-// block numbers are also allowed.
+// GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
