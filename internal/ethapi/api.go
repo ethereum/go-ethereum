@@ -502,6 +502,55 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+// GetBalance returns the amount of wei for the given address in the state of the
+// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	storageTrie := state.StorageTrie(address)
+	storageHash := types.EmptyRootHash
+	codeHash := state.GetCodeHash(address)
+	storageProof := make([]map[string]interface{}, len(storageKeys))
+
+	if storageTrie != nil {
+		storageHash = storageTrie.Hash()
+	} else {
+		codeHash = crypto.Keccak256Hash(nil)
+	}
+
+	for i := range storageKeys {
+		if storageTrie != nil {
+			storageProof[i] = map[string]interface{}{
+				"key":   storageKeys[i],
+				"value": state.GetState(address, common.HexToHash(storageKeys[i])),
+				"proof": common.ToHexArray(state.GetStorageProof(address, common.HexToHash(storageKeys[i]))),
+			}
+		} else {
+			storageProof[i] = map[string]interface{}{
+				"key":   storageKeys[i],
+				"value": common.Hash{},
+				"proof": []string{},
+			}
+		}
+	}
+
+	fields := map[string]interface{}{
+		"address":      address,
+		"accountProof": common.ToHexArray(state.GetProof(address)),
+		"balance":      (*hexutil.Big)(state.GetBalance(address)),
+		"codeHash":     codeHash,
+		"nonce":        hexutil.Uint64(state.GetNonce(address)),
+		"storageHash":  storageHash,
+		"storageProof": storageProof,
+	}
+
+	return fields, state.Error()
+}
+
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
