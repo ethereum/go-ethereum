@@ -24,9 +24,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
@@ -54,6 +56,7 @@ const (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
+	priceOracle   PriceOracle
 	chequeManager *ChequeManager
 	stateStore    state.Store
 	lock          sync.RWMutex
@@ -71,17 +74,139 @@ type SwapPeer struct {
 	storeID     string
 }
 
+type PriceOracle interface {
+	IsAccountedMsg(event *p2p.PeerEvent) bool
+	GetPriceForMsg(event *p2p.PeerEvent) *PriceTag
+}
+
 //This defines if a price will be debited or credited to an account
 type EntryDirection bool
 
 const (
-	DebitEntry  EntryDirection = true
-	CreditEntry EntryDirection = false
+	ChargeSender   EntryDirection = true
+	ChargeReceiver EntryDirection = false
 )
+
+type PriceTag struct {
+	Price     *big.Int
+	SizeBased bool
+	Direction EntryDirection
+}
+
+type DefaultPriceOracle struct {
+	priceMatrix map[string]map[int]*PriceTag
+}
+
+func (dpo *DefaultPriceOracle) LoadPriceMatrix() {
+	priceMatrix := dpo.loadDefaultPriceMatrix()
+}
+
+func (dpo *DefaultPriceOracle) loadDefaultPriceMatrix() map[string]map[int]*PriceTag {
+	priceMatrix := make(map[string]map[int]*big.Int)
+
+	streamProtocol := stream.Spec.Name
+
+	priceMatrix[streamProtocol] = make(map[int]*PriceTag)
+
+	retrieveRequestMsgIndex := dpo.getIndexForMsgType(stream.RetrieveRequestMsg, stream.Spec.Messages)
+	deliveryMsgIndex := dpo.getIndexForMsgType(stream.ChunkDeliveryMsg, stream.Spec.Messages)
+
+	priceMatrix[streamProtocol][retrieveRequestMsgIndex] = &PriceTag{
+		Price:     big.NewInt(10),
+		SizeBased: false,
+		Direction: ChargeSender,
+	}
+	priceMatrix[streamProtocol][deliveryMsgIndex] = &PriceTag{
+		Price:     big.NewInt(100),
+		SizeBased: true,
+		Direction: ChargeReceiver,
+	}
+
+	return priceMatrix
+
+}
+
+func (dpo *DefaultPriceOracle) getIndexForMsgType(iface interface{}, types []interface{}) {
+	for i, v := range types {
+		if iface == v {
+			return i
+		}
+	}
+	return -1
+}
+
+func (dpo *DefaultPriceOracle) IsAccountedMsg(event *p2p.PeerEvent) bool {
+	if protoPriceMap, ok := dpo.priceMatrix[event.Protocol]; !ok {
+		return false
+	}
+	if msgCode, ok := protoPriceMatrix[event.MsgCode]; !ok {
+		return false
+	}
+	return true
+}
+
+func (dpo *DefaultPriceOracle) GetPriceForMsg(event *p2p.PeerEvent) (*big.Int, EntryDirection) {
+	if dpo.IsAccountedMsg(event) {
+		priceTag := dpo.priceMatrix[event.Protocol][event.MsgCode]
+		price := priceTag.Price
+		if priceTag.SizeBased {
+			price = price * event.MsgSize
+		}
+		return price, priceTag.Direction
+	}
+	return nil, false
+}
 
 //A message which needs accounting needs to implement this interface
 type PricedMsg interface {
 	Price() *big.Int
+}
+
+func (s *Swap) RegisterForEvents(srv *p2p.Server) {
+	go func() {
+		events := make(chan *p2p.PeerEvent)
+		sub := server.SubscribeEvents(events)
+		defer sub.Unsubscribe()
+
+		for {
+			select {
+			case event := <-events:
+				go handleMsgEvent(event)
+			case <-sub.Err():
+				return
+			}
+		}
+	}()
+}
+
+func (s *Swap) handleMsgEvent(event *p2p.PeerEvent) {
+	if !s.priceOracle.IsAccountedMsg(event) {
+		return
+	}
+	s.AccountMsgForPeer(event)
+}
+
+func (s *Swap) AccountMsgForPeer(event *p2p.PeerEvent) {
+	price, direction := s.priceOracle.GetPriceForMsg(event)
+	if price == nil {
+		//TODO what to do in this case? Should not happen
+		panic("This should be accounted for but somehow it failed")
+	}
+
+	if direction == ChargeSender {
+		if event.Type == p2p.PeerEventTypeMsgSend {
+			s.chargeSender(event, price)
+		} else if event.Type == p2p.PeerEventTypeMsgRecv {
+			s.chargeReceiver(event, price)
+		}
+	} else {
+		if event.Type == p2p.PeerEventTypeMsgRecv {
+			s.chargeReceiver(event, price)
+		} else if event.Type == p2p.PeerEventTypeMsgSend {
+			s.chargeSender(event, price)
+		}
+	}
+
 }
 
 //Handler for received messages
@@ -284,13 +409,16 @@ func NewSwapPeer(peer *protocols.Peer, swap *Swap) *SwapPeer {
 }
 
 // New - swap constructor
-func New(stateStore state.Store) (swap *Swap, err error) {
+func New(stateStore state.Store, srv *p2p.Server) (swap *Swap, err error) {
 
 	swap = &Swap{
 		chequeManager: NewChequeManager(stateStore),
 		stateStore:    stateStore,
 		peers:         make(map[discover.NodeID]*SwapPeer),
+		priceOracle:   &DefaultPriceOracle{},
 	}
+
+	swap.RegisterForEvents(srv)
 
 	return
 }
