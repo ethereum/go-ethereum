@@ -142,7 +142,7 @@ type (
 	}
 	// SharedSecretRequest contains info about the other key
 	SharedSecretRequest struct {
-		Address common.MixedcaseAddress	`json:"address"`
+		Address common.MixedcaseAddress `json:"address"`
 	}
 	// SharedSecretResponse result from SharedSecretRequest
 	SharedSecretResponse struct {
@@ -443,6 +443,34 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (c
 	return crypto.PubkeyToAddress(*rpk), nil
 }
 
+// SharedSecret returns the shared ECDH secret, salted and hashed.
+// TODO: Documentation in the Wiki
+func (api *SignerAPI) SharedSecret(ctx context.Context, otherKey, salt hexutil.Bytes) (hexutil.Bytes, error) {
+	// Get the other public key
+	otherPubKey, err := crypto.UnmarshalPubkey(otherKey)
+	if err != nil {
+		return nil, err
+	}
+	addr := crypto.PubkeyToAddress(otherPubKey)
+	// We make the request prior to looking up if we actually have the account, to prevent
+	// account-enumeration via the API
+	req := &SharedSecretRequest{Address: addr}
+	res, err := api.UI.ApproveSharedSecret(req)
+
+	if err != nil {
+		return nil, err
+	}
+	if !res.Approved {
+		return nil, ErrRequestDenied
+	}
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: addr.Address()}
+	wallet, err := api.am.Find(account)
+	if err != nil {
+		return nil, err
+	}
+}
+
 // SignHash is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
@@ -500,4 +528,3 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 	}
 	return Account{Typ: "Account", URL: acc.URL, Address: acc.Address}, nil
 }
-

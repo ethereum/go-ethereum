@@ -16,6 +16,7 @@ package secp256k1
 #define NDEBUG
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
+#include "./libsecp256k1/src/modules/ecdh/main_impl.h"
 #include "ext.h"
 
 typedef void (*callbackFunc) (const char* msg, void* data);
@@ -84,6 +85,22 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	C.secp256k1_ecdsa_recoverable_signature_serialize_compact(context, sigdata, &recid, &sigstruct)
 	sig[64] = byte(recid) // add back recid to get 65 bytes sig
 	return sig, nil
+}
+
+// SharedSecret computes the hashed ECDH shared secret.
+// pubkey must be an EC public key
+// seckey must be an EC private key
+func SharedSecret(pubkey []byte, seckey []byte) ([]byte, error) {
+	if len(seckey) != 32 {
+		return nil, ErrInvalidKey
+	}
+	seckeydata := (*C.uchar)(unsafe.Pointer(&seckey[0]))
+	pubkeydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
+	result := make([]byte, 32)
+	if C.secp256k1_ecdh(context, &result, pubkeydata, seckeydata) != 1 {
+		return nil, ErrInvalidKey
+	}
+	return result, nil
 }
 
 // RecoverPubkey returns the public key of the signer.
