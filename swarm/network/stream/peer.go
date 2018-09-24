@@ -130,7 +130,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8) error {
+func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var sp opentracing.Span
 	ctx, sp = spancontext.StartSpan(
 		ctx,
@@ -138,8 +138,9 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8)
 	defer sp.Finish()
 
 	msg := &ChunkDeliveryMsg{
-		Addr:  chunk.Address(),
-		SData: chunk.Data(),
+		Addr:    chunk.Address(),
+		SData:   chunk.Data(),
+		Syncing: syncing,
 	}
 	return p.SendPriority(ctx, msg, priority)
 }
