@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -152,6 +153,14 @@ func (f *Filter) findCommonAncestor(ctx context.Context, begin, end *types.Heade
 	return end, mainChain, nil
 }
 
+type logList []*types.Log
+
+func (l logList) Len() int      { return len(l) }
+func (l logList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+func (l logList) Less(i, j int) bool {
+	return l[i].BlockNumber < l[j].BlockNumber || (l[i].BlockNumber == l[j].BlockNumber && l[i].Index < l[j].Index)
+}
+
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
@@ -223,6 +232,8 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	rest, err := f.unindexedLogs(ctx, begin.Hash(), end.Hash())
 	logs = append(logs, rest...)
+	sort.Sort(logList(logs))
+
 	f.begin = end.Hash()
 	return logs, err
 }
