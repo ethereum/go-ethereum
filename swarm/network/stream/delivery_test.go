@@ -39,7 +39,7 @@ import (
 )
 
 func TestStreamerRetrieveRequest(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t)
+	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 }
 
 func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t)
+	tester, streamer, _, teardown, err := newStreamerTester(t, nil)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 // upstream request server receives a retrieve Request and responds with
 // offered hashes or delivery if skipHash is set to true
 func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
-	tester, streamer, localStore, teardown, err := newStreamerTester(t)
+	tester, streamer, localStore, teardown, err := newStreamerTester(t, nil)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 }
 
 func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
-	tester, streamer, localStore, teardown, err := newStreamerTester(t)
+	tester, streamer, localStore, teardown, err := newStreamerTester(t, nil)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)

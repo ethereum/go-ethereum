@@ -50,26 +50,27 @@ type Config struct {
 	Swap *swap.LocalProfile
 	Pss  *pss.PssParams
 	//*network.SyncParams
-	Contract          common.Address
-	EnsRoot           common.Address
-	EnsAPIs           []string
-	Path              string
-	ListenAddr        string
-	Port              string
-	PublicKey         string
-	BzzKey            string
-	NodeID            string
-	NetworkID         uint64
-	SwapEnabled       bool
-	SyncEnabled       bool
-	SyncingSkipCheck  bool
-	DeliverySkipCheck bool
-	LightNodeEnabled  bool
-	SyncUpdateDelay   time.Duration
-	SwapAPI           string
-	Cors              string
-	BzzAccount        string
-	privateKey        *ecdsa.PrivateKey
+	Contract             common.Address
+	EnsRoot              common.Address
+	EnsAPIs              []string
+	Path                 string
+	ListenAddr           string
+	Port                 string
+	PublicKey            string
+	BzzKey               string
+	NodeID               string
+	NetworkID            uint64
+	SwapEnabled          bool
+	SyncEnabled          bool
+	SyncingSkipCheck     bool
+	DeliverySkipCheck    bool
+	MaxStreamPeerServers int
+	LightNodeEnabled     bool
+	SyncUpdateDelay      time.Duration
+	SwapAPI              string
+	Cors                 string
+	BzzAccount           string
+	privateKey           *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults

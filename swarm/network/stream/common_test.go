@@ -84,7 +84,7 @@ func createGlobalStore() (string, *mockdb.GlobalStore, error) {
 	return globalStoreDir, globalStore, nil
 }
 
-func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
+func newStreamerTester(t *testing.T, registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
 	// setup
 	addr := network.RandomAddr() // tested peers peer address
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
@@ -114,7 +114,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	delivery := NewDelivery(to, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
-	streamer := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), nil)
+	streamer := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), registryOptions)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()

@@ -84,11 +84,13 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 
 	defer func() {
 		if err != nil {
-			if e := p.Send(context.TODO(), SubscribeErrorMsg{
+			// The error will be sent as a subscribe error message
+			// and will not be returned as it will prevent any new message
+			// exchange between peers over p2p. Instead, error will be returned
+			// only if there is one from sending subscribe error message.
+			err = p.Send(context.TODO(), SubscribeErrorMsg{
 				Error: err.Error(),
-			}); e != nil {
-				log.Error("send stream subscribe error message", "err", err)
-			}
+			})
 		}
 	}()
 

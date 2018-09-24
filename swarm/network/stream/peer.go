@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -45,6 +46,10 @@ func newNotFoundError(t string, s Stream) *notFoundError {
 func (e *notFoundError) Error() string {
 	return fmt.Sprintf("%s not found for stream %q", e.t, e.s)
 }
+
+// ErrMaxPeerServers will be returned if peer server limit is reached.
+// It will be sent in the SubscribeErrorMsg.
+var ErrMaxPeerServers = errors.New("max peer servers")
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
@@ -204,6 +209,11 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	if p.servers[s] != nil {
 		return nil, fmt.Errorf("server %s already registered", s)
 	}
+
+	if p.streamer.maxPeerServers > 0 && len(p.servers) >= p.streamer.maxPeerServers {
+		return nil, ErrMaxPeerServers
+	}
+
 	os := &server{
 		Server:   o,
 		stream:   s,
@@ -346,6 +356,7 @@ func (p *Peer) removeClient(s Stream) error {
 		return newNotFoundError("client", s)
 	}
 	client.close()
+	delete(p.clients, s)
 	return nil
 }
 

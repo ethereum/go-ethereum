@@ -186,6 +186,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		DoSync:          config.SyncEnabled,
 		DoRetrieve:      true,
 		SyncUpdateDelay: config.SyncUpdateDelay,
+		MaxPeerServers:  config.MaxStreamPeerServers,
 	})
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
