@@ -14,20 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rawdb
+package ethdb
 
-// DatabaseReader wraps the Has and Get method of a backing data store.
-type DatabaseReader interface {
-	Has(key []byte) (bool, error)
-	Get(key []byte) ([]byte, error)
+// IdealBatchSize defines the size of the data batches should ideally add in one
+// write.
+const IdealBatchSize = 100 * 1024
+
+// Batch is a write-only database that commits changes to its host database
+// when Write is called. A batch cannot be used concurrently.
+type Batch interface {
+	Writer
+	Deleter
+
+	// ValueSize retrieves the amount of data queued up for writing.
+	ValueSize() int
+
+	// Write flushes any accumulated data to disk.
+	Write() error
+
+	// Reset resets the batch for reuse
+	Reset()
 }
 
-// DatabaseWriter wraps the Put method of a backing data store.
-type DatabaseWriter interface {
-	Put(key []byte, value []byte) error
-}
-
-// DatabaseDeleter wraps the Delete method of a backing data store.
-type DatabaseDeleter interface {
-	Delete(key []byte) error
+// Batcher wraps the NewBatch method of a backing data store.
+type Batcher interface {
+	// NewBatch creates a write-only database that buffers changes to its host db
+	// until a final write is called.
+	NewBatch() Batch
 }

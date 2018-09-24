@@ -938,7 +938,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		go func() {
-			trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
+			trieDb := trie.NewDatabase(rawdb.NewTable(pm.chainDb, light.ChtTablePrefix))
 			for i, req := range req.Reqs {
 				if i != 0 && !task.waitOrStop() {
 					return
@@ -1003,7 +1003,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 					var prefix string
 					if root, prefix = pm.getHelperTrie(req.Type, req.TrieIdx); root != (common.Hash{}) {
-						auxTrie, _ = trie.New(root, trie.NewDatabase(ethdb.NewTable(pm.chainDb, prefix)))
+						auxTrie, _ = trie.New(root, trie.NewDatabase(rawdb.NewTable(pm.chainDb, prefix)))
 					}
 				}
 				if req.AuxReq == auxRoot {
