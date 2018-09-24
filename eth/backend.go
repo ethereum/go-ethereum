@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/freezer"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -69,6 +71,7 @@ type Ethereum struct {
 	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
+	freezer         *freezer.Freezer
 	protocolManager *ProtocolManager
 	lesServer       LesServer
 
@@ -168,6 +171,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+	eth.freezer, err = freezer.New(ctx.ResolvePath("freezer"))
+	if err != nil {
+		return nil, err
+	}
+	go eth.freezer.Freeze(eth.blockchain, chainDb, time.Minute, 60000)
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
