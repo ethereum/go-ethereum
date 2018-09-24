@@ -29,7 +29,7 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 var (
@@ -64,7 +64,7 @@ func NewDockerAdapter() (*DockerAdapter, error) {
 
 	return &DockerAdapter{
 		ExecAdapter{
-			nodes: make(map[discover.NodeID]*ExecNode),
+			nodes: make(map[enode.ID]*ExecNode),
 		},
 	}, nil
 }
