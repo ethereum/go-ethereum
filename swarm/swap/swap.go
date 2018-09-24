@@ -139,7 +139,7 @@ func (dpo *DefaultPriceOracle) IsAccountedMsg(event *p2p.PeerEvent) bool {
 	if protoPriceMap, ok := dpo.priceMatrix[event.Protocol]; !ok {
 		return false
 	}
-	if msgCode, ok := protoPriceMatrix[event.MsgCode]; !ok {
+	if msgCode, ok := protoPriceMap[event.MsgCode]; !ok {
 		return false
 	}
 	return true
@@ -190,7 +190,7 @@ func (s *Swap) AccountMsgForPeer(event *p2p.PeerEvent) {
 	price, direction := s.priceOracle.GetPriceForMsg(event)
 	if price == nil {
 		//TODO what to do in this case? Should not happen
-		panic("This should be accounted for but somehow it failed")
+		log.Crit("Price is nil; this should have been accounted for but somehow it failed")
 	}
 
 	if direction == ChargeSender {
