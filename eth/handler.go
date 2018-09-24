@@ -25,8 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -40,9 +38,10 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -194,7 +193,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
 			},
-			PeerInfo: func(id discover.NodeID) interface{} {
+			PeerInfo: func(id enode.ID) interface{} {
 				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
 					return p.Info()
 				}

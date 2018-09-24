@@ -21,18 +21,20 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	mrand "math/rand"
-	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"net"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 var keys = []string{
@@ -174,8 +176,6 @@ func initialize(t *testing.T) {
 	initBloom(t)
 
 	var err error
-	ip := net.IPv4(127, 0, 0, 1)
-	port0 := 30303
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
@@ -200,29 +200,15 @@ func initialize(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed convert the key: %s.", keys[i])
 		}
-		port := port0 + i
-		addr := fmt.Sprintf(":%d", port) // e.g. ":30303"
 		name := common.MakeName("whisper-go", "2.0")
-		var peers []*discover.Node
-		if i > 0 {
-			peerNodeID := nodes[i-1].id
-			peerPort := uint16(port - 1)
-			peerNode := discover.PubkeyID(&peerNodeID.PublicKey)
-			peer := discover.NewNode(peerNode, ip, peerPort, peerPort)
-			peers = append(peers, peer)
-		}
-
 		node.server = &p2p.Server{
 			Config: p2p.Config{
-				PrivateKey:     node.id,
-				MaxPeers:       NumNodes/2 + 1,
-				Name:           name,
-				Protocols:      node.shh.Protocols(),
-				ListenAddr:     addr,
-				NAT:            nat.Any(),
-				BootstrapNodes: peers,
-				StaticNodes:    peers,
-				TrustedNodes:   peers,
+				PrivateKey: node.id,
+				MaxPeers:   NumNodes/2 + 1,
+				Name:       name,
+				Protocols:  node.shh.Protocols(),
+				ListenAddr: "127.0.0.1:0",
+				NAT:        nat.Any(),
 			},
 		}
 
@@ -230,7 +216,12 @@ func initialize(t *testing.T) {
 	}
 
 	for i := 0; i < NumNodes; i++ {
-		go startServer(t, nodes[i].server)
+		for j := 0; j < i; j++ {
+			peerNodeId := nodes[j].id
+			address, _ := net.ResolveTCPAddr("tcp", nodes[j].server.ListenAddr)
+			peer := enode.NewV4(&peerNodeId.PublicKey, address.IP, address.Port, address.Port)
+			nodes[i].server.AddPeer(peer)
+		}
 	}
 
 	waitForServersToStart(t)
@@ -438,7 +429,7 @@ func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 	cnt := 0
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
+			if peer.peer.ID() == nodes[0].server.Self().ID() {
 				cnt++
 				if peer.powRequirement != masterPow {
 					if mustPass {
@@ -459,7 +450,7 @@ func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 func checkPowExchange(t *testing.T) {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if peer.peer.ID() != discover.PubkeyID(&nodes[0].id.PublicKey) {
+			if peer.peer.ID() != nodes[0].server.Self().ID() {
 				if peer.powRequirement != masterPow {
 					t.Fatalf("node %d: failed to exchange pow requirement in round %d; expected %f, got %f",
 						i, round, masterPow, peer.powRequirement)
@@ -512,4 +503,40 @@ func waitForServersToStart(t *testing.T) {
 		}
 	}
 	t.Fatalf("Failed to start all the servers, running: %d", started)
+}
+
+// two generic whisper node handshake
+func TestPeerHandshakeWithTwoFullNode(t *testing.T) {
+	w1 := Whisper{}
+	p1 := newPeer(&w1, p2p.NewPeer(enode.ID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize), false}})
+	err := p1.handshake()
+	if err != nil {
+		t.Fatal()
+	}
+}
+
+// two generic whisper node handshake. one don't send light flag
+func TestHandshakeWithOldVersionWithoutLightModeFlag(t *testing.T) {
+	w1 := Whisper{}
+	p1 := newPeer(&w1, p2p.NewPeer(enode.ID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize)}})
+	err := p1.handshake()
+	if err != nil {
+		t.Fatal()
+	}
+}
+
+type rwStub struct {
+	payload []interface{}
+}
+
+func (stub *rwStub) ReadMsg() (p2p.Msg, error) {
+	size, r, err := rlp.EncodeToReader(stub.payload)
+	if err != nil {
+		return p2p.Msg{}, err
+	}
+	return p2p.Msg{Code: statusCode, Size: uint32(size), Payload: r}, nil
+}
+
+func (stub *rwStub) WriteMsg(m p2p.Msg) error {
+	return nil
 }
