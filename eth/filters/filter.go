@@ -200,6 +200,10 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 	}
 
+	if end.Number.Cmp(begin.Number) < 0 {
+		return nil, nil
+	}
+
 	ancestor, mainChain, err := f.findCommonAncestor(ctx, begin, end)
 	if err != nil {
 		return nil, err
@@ -287,7 +291,7 @@ func (f *Filter) indexedLogs(ctx context.Context, begin, end uint64) ([]*types.L
 func (f *Filter) unindexedLogs(ctx context.Context, begin, end common.Hash) ([]*types.Log, error) {
 	var logs []*types.Log
 
-	for begin != end {
+	for {
 		header, err := f.backend.HeaderByHash(ctx, end)
 		if header == nil || err != nil {
 			return logs, err
@@ -297,6 +301,9 @@ func (f *Filter) unindexedLogs(ctx context.Context, begin, end common.Hash) ([]*
 			return logs, err
 		}
 		logs = append(logs, found...)
+		if begin == end {
+			break
+		}
 		end = header.ParentHash
 	}
 	return logs, nil
