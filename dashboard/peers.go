@@ -29,180 +29,7 @@ import (
 )
 
 const (
-	eventBufferLimit = 128 // Maximum number of buffered peer events
-	connectionLimit  = 16
-)
-
-var autoID int64
-
-// maintainedPeer is the element of the peer maintainer's linked list.
-// Similarly to an ordinary linked list element it knows the previous
-// and the next elements, and also has a pointer to its parent map in
-// order to remove itself from there when it is removed from the list.
-type maintainedPeer struct {
-	// To simplify the implementation, the list is implemented as a ring,
-	// such that 'root' is both the next element of the last list element
-	// and the previous element of the first list element.
-	prev   *maintainedPeer // Pointer to the previous element
-	next   *maintainedPeer // Pointer to the next element
-	parent *idContainer    // Pointer to the parent
-	id     string          // NodeID of the peer
-}
-
-// idContainer contains the NodeIDs belonging to an IP address.
-// The pointer to the parent makes it possible for the container
-// to remove itself from the parent's map when becomes empty.
-type idContainer struct {
-	parent *PeerMaintainer            // Pointer to the parent of the container
-	ip     string                     // IP of the peer
-	peers  map[string]*maintainedPeer // NodeIDs belonging to the given IP
-}
-
-// update moves the list element belonging to the given ID to the end,
-// or inserts a new element to the end of the list if the given ID didn't
-// appear yet in the container. Returns the IP and the ID of the removed
-// peer if an element removal happened, or nil otherwise.
-func (idc *idContainer) update(id string) *removedPeer {
-	maintainer := idc.parent
-	if _, ok := idc.peers[id]; !ok {
-		e := &maintainedPeer{
-			parent: idc,
-			id:     id,
-		}
-		maintainer.insert(e, maintainer.root.prev)
-		idc.peers[id] = e
-	} else {
-		maintainer.insert(maintainer.remove(idc.peers[id]), maintainer.root.prev)
-	}
-	if maintainer.len > maintainer.limit {
-		first := maintainer.remove(maintainer.root.next)
-		return &removedPeer{
-			ip: first.parent.ip,
-			id: first.id,
-		}
-	}
-	return nil
-}
-
-// remove removes the peer belonging to the given ID and removes itself too
-// from the parent container if becomes empty.
-func (idc *idContainer) remove(id string) {
-	delete(idc.peers, id)
-	if len(idc.peers) < 1 {
-		idc.parent.removeIP(idc.ip)
-		idc.parent = nil
-	}
-}
-
-// PeerMaintainer is an abstract layer above the metered peer container,
-// maintaining the peers. i.e. sorting them based on their activity and
-// removing the oldest inactive ones when their count reaches the limit.
-//
-// Consists of a map of maps which represent the peers grouped by the IP
-// address then by the NodeID. The elements on the bottom of the tree are
-// doubly linked and sorted by their activity. i.e. the first element is
-// the peer that is inactive for the longest time. This makes it possible
-// to count the peers and remove the oldest one effectively.
-//
-// When a peer event appears, the active peer goes to the end of the list
-// and in case of removal the IP and the ID of the removed peer is returned.
-type PeerMaintainer struct {
-	ids   map[string]*idContainer // NodeIDs grouped by IP
-	root  maintainedPeer          // Sentinel list element
-	len   int                     // Current list length excluding the sentinel element
-	limit int                     // Maximum number of maintained peers
-}
-
-// init initializes the peer maintainer.
-func (pm *PeerMaintainer) init(limit int) *PeerMaintainer {
-	if limit < 0 {
-		limit = 0
-	}
-	pm.ids = make(map[string]*idContainer)
-	pm.root.prev = &pm.root
-	pm.root.next = &pm.root
-	pm.len = 0
-	pm.limit = limit
-	return pm
-}
-
-// NewPeerMaintainer returns an initialized peer maintainer.
-func NewPeerMaintainer(limit int) *PeerMaintainer {
-	return new(PeerMaintainer).init(limit)
-}
-
-// Update updates the peer element belonging to the given IP and ID.
-func (pm *PeerMaintainer) Update(ip, id string) *removedPeer {
-	return pm.getOrInitIDs(ip).update(id)
-}
-
-// getOrInitIDs returns the ID map. Initializes it if it doesn't exist.
-func (pm *PeerMaintainer) getOrInitIDs(ip string) *idContainer {
-	if _, ok := pm.ids[ip]; !ok {
-		pm.ids[ip] = &idContainer{
-			parent: pm,
-			ip:     ip,
-			peers:  make(map[string]*maintainedPeer),
-		}
-	}
-	return pm.ids[ip]
-}
-
-// insert inserts 'e' after 'at' and increments the current list length.
-func (pm *PeerMaintainer) insert(e, at *maintainedPeer) {
-	n := at.next
-	at.next = e
-	e.prev = at
-	e.next = n
-	n.prev = e
-	pm.len++
-}
-
-// remove removes e from the list and from the maintainer tree.
-func (pm *PeerMaintainer) remove(e *maintainedPeer) *maintainedPeer {
-	e.next.prev = e.prev
-	e.prev.next = e.next
-	e.prev = nil
-	e.next = nil
-	e.parent.remove(e.id)
-	e.parent = nil
-	pm.len--
-	return e
-}
-
-// clear cleans up the peer maintainer.
-func (pm *PeerMaintainer) clear() {
-	for pm.root.next != &pm.root {
-		next := pm.root.next
-		pm.root.next = next.next
-		next.prev = nil
-		next.next = nil
-		next.parent.remove(next.id)
-		next.parent = nil
-	}
-}
-
-// removeIP removes the peers belonging to the given IP. It is supposed that
-// 'ids' is empty, because the clearing direction is from bottom to top.
-func (pm *PeerMaintainer) removeIP(ip string) {
-	delete(pm.ids, ip)
-}
-
-// removedPeer contains the IP and the ID of the peer that was removed from
-// the peer maintainer.
-type removedPeer struct {
-	ip, id string
-}
-
-
-
-
-
-
-
-
-
-const (
+	eventBufferLimit = 128
 	knownPeerLimit   = p2p.MeteredPeerLimit
 	unknownPeerLimit = p2p.MeteredPeerLimit
 )
@@ -210,155 +37,182 @@ const (
 type PeerContainer struct {
 	Bundles map[string]*PeerBundle `json:"peerBundles,omitempty"`
 
-	activeSeparator list.Element
+	activeSeparator *list.Element
 	knownPeers      *list.List
-	unknownPeers    *list.List
+	unknownPeers    []*PeerBundle
 
+	geodb   *GeoDB
 	refresh time.Duration
 }
 
-func NewPeerContainer(refresh time.Duration) *PeerContainer {
+func NewPeerContainer(geodb *GeoDB, refresh time.Duration) *PeerContainer {
 	return &PeerContainer{
 		Bundles:      make(map[string]*PeerBundle),
 		knownPeers:   list.New(),
-		unknownPeers: list.New(),
-		refresh: refresh,
+		unknownPeers: make([]*PeerBundle, 0, unknownPeerLimit),
+		geodb:        geodb,
+		refresh:      refresh,
 	}
 }
 
-func (pc *PeerContainer) getOrInit(ip string) *PeerBundle {
+func (pc *PeerContainer) getOrInitBundle(ip string) *PeerBundle {
 	if _, ok := pc.Bundles[ip]; !ok {
 		pc.Bundles[ip] = &PeerBundle{
+			Location:   pc.geodb.Location(ip),
 			KnownPeers: make(map[string]*KnownPeer),
-			parent: pc,
-			ip: ip,
+			parent:     pc,
+			ip:         ip,
 		}
 	}
 	return pc.Bundles[ip]
 }
 
-func (pc *PeerContainer) updateKnown(ip, id string, cycle *PeerCycle) {
-	pc.getOrInit(ip).updateKnown(id, cycle)
+func (pc *PeerContainer) updateKnown(ip, id string, session *PeerSession) (removedIP, removedID string) {
+	peer := pc.getOrInitBundle(ip).getOrInitKnown(id)
+	if peer.Sessions == nil {
+		peer.Sessions = []*PeerSession{{
+			Ingress: emptyChartEntries(time.Now(), 5, pc.refresh),
+			Egress:  emptyChartEntries(time.Now(), 5, pc.refresh),
+		}}
+	}
+	if peer.listElement != nil {
+		if peer.listElement == pc.activeSeparator {
+			pc.activeSeparator = pc.activeSeparator.Prev()
+		}
+		pc.knownPeers.Remove(peer.listElement)
+	}
+	if pc.knownPeers.Len() >= knownPeerLimit {
+		removed := pc.knownPeers.Remove(pc.knownPeers.Back())
+		if p, ok := removed.(*KnownPeer); ok {
+			removedIP, removedID = p.parent.ip, p.id
+			p.delete()
+		} else {
+			log.Warn("Bad value used as peer", "value", removed)
+		}
+	}
+	if pc.activeSeparator == nil {
+		peer.listElement = pc.knownPeers.PushFront(peer)
+	} else {
+		peer.listElement = pc.knownPeers.InsertAfter(peer, pc.activeSeparator)
+	}
+	peer.update(session)
+	if peer.Sessions[len(peer.Sessions)-1].Disconnected == nil {
+		pc.activeSeparator = peer.listElement
+	}
+	return removedIP, removedID
 }
 
 func (pc *PeerContainer) updateUnknown(ip string, peer *UnknownPeer) {
-	pc.getOrInit(ip).updateUnknown(peer)
+	if len(pc.unknownPeers) >= unknownPeerLimit {
+		removed := pc.unknownPeers[0]
+		removed.UnknownPeers = removed.UnknownPeers[1:]
+		pc.unknownPeers = pc.unknownPeers[1:]
+	}
+	bundle := pc.getOrInitBundle(ip)
+	bundle.UnknownPeers = append(bundle.UnknownPeers, peer)
+	pc.unknownPeers = append(pc.unknownPeers, bundle)
 }
 
-func (pc *PeerContainer) Update(event *peerEvent) {
-	switch event.t {
-	case peerConnected:
-		connected := time.Now().Add(-event.Elapsed)
-		pc.updateKnown(event.IP.String(), event.ID, &PeerCycle{
-			Connected: &connected,
-		})
-	case peerDisconnected:
-		now := time.Now()
-		pc.updateKnown(event.IP.String(), event.ID, &PeerCycle{
-			Disconnected: &now,
-			Ingress: ChartEntries{
-				&ChartEntry{
-					Time:  now,
-					Value: float64(event.Ingress),
-				},
-			},
-			Egress: ChartEntries{
-				&ChartEntry{
-					Time:  now,
-					Value: float64(event.Egress),
-				},
-			},
-		})
-	case peerHandshakeFailed:
-		now := time.Now()
-		pc.updateUnknown(event.IP.String(), &UnknownPeer{
-			Connected: now.Add(-event.Elapsed),
-			Disconnected: now,
-		})
-	case peerIngress:
-		fmt.Println("Ingress:", event)
-		pc.updateKnown(event.ip, event.id, &PeerCycle{
-			Ingress: ChartEntries{
-				&ChartEntry{
-					Time: time.Now(),
-					Value: float64(event.traffic),
-				},
-			},
-		})
-	case peerEgress:
-		fmt.Println("Egress:", event)
-		pc.updateKnown(event.ip, event.id, &PeerCycle{
-			Egress: ChartEntries{
-				&ChartEntry{
-					Time: time.Now(),
-					Value: float64(event.traffic),
-				},
-			},
-		})
-	default:
-		log.Error("Unknown peer event type", "type", event.Type)
+func (pc *PeerContainer) clear() {
+	for pc.knownPeers.Front() != nil {
+		first := pc.knownPeers.Front()
+		if p, ok := first.Value.(*KnownPeer); ok {
+			p.delete()
+		} else {
+			log.Warn("Bad value used as peer", "value", first)
+		}
+	}
+	pc.activeSeparator = nil
+}
+
+func (pc *PeerContainer) updateTraffic(traffic *peerTraffic) {
+	now := time.Now()
+	for e := pc.knownPeers.Front(); e != nil; e = e.Next() {
+		if p, ok := e.Value.(*KnownPeer); ok {
+			key := fmt.Sprintf("%s/%s", p.parent.ip, p.id)
+			p.updateTraffic(
+				&ChartEntry{Time: now, Value: float64(traffic.ingress[key])},
+				&ChartEntry{Time: now, Value: float64(traffic.egress[key])},
+			)
+		} else {
+			log.Warn("Bad value used as peer", "value", e.Value)
+		}
 	}
 }
 
 type PeerBundle struct {
 	Location     *GeoLocation          `json:"location,omitempty"`
 	KnownPeers   map[string]*KnownPeer `json:"knownPeers,omitempty"`
-	UnknownPeers []*UnknownPeer         `json:"unknownPeers,omitempty"`
+	UnknownPeers []*UnknownPeer        `json:"unknownPeers,omitempty"`
 
-	parent *PeerContainer
-	ip     string
+	parent  *PeerContainer
+	ip      string
+	element list.Element
 }
 
-func (b *PeerBundle) getOrInit(id string) *KnownPeer {
+func (b *PeerBundle) getOrInitKnown(id string) *KnownPeer {
 	if _, ok := b.KnownPeers[id]; !ok {
 		b.KnownPeers[id] = &KnownPeer{
 			parent: b,
-			id: id,
+			id:     id,
 		}
 	}
 	return b.KnownPeers[id]
 }
 
-func (b *PeerBundle) updateKnown(id string, cycle *PeerCycle) {
-	b.getOrInit(id).update(cycle)
-}
-
-func (b *PeerBundle) updateUnknown(peer *UnknownPeer) {
-	b.UnknownPeers = append(b.UnknownPeers, peer)
-}
-
 type KnownPeer struct {
-	Cycles []*PeerCycle `json:"cycles,omitempty"`
+	Sessions []*PeerSession `json:"sessions,omitempty"`
 
 	parent *PeerBundle
 	id     string
+
+	listElement *list.Element
 }
 
-func (peer *KnownPeer) update(cycle *PeerCycle) {
-	if cycle.Connected != nil {
-		if peer.Cycles == nil {
-			peer.Cycles = append(peer.Cycles, &PeerCycle{
-				Ingress: emptyChartEntries(time.Now(), 3, peer.parent.parent.refresh),
-				Egress: emptyChartEntries(time.Now(), 3, peer.parent.parent.refresh),
-			})
-		}
-		peer.Cycles = append(peer.Cycles, cycle)
-		return
+func (peer *KnownPeer) delete() {
+	delete(peer.parent.KnownPeers, peer.id)
+	fmt.Println(peer, "to make sure p is not cleared")
+	if len(peer.parent.KnownPeers) < 1 && len(peer.parent.UnknownPeers) < 1 {
+		delete(peer.parent.parent.Bundles, peer.parent.ip)
 	}
-	if cycle.Disconnected != nil {
-		if len(peer.Cycles) < 1 {
-			log.Error("Peer disconnect event appeared without connect")
-			return
-		}
-		last := peer.Cycles[len(peer.Cycles)-1]
-		last.Disconnected = cycle.Disconnected
-		last.Ingress = append(last.Ingress, cycle.Ingress...)
-		last.Egress = append(last.Egress, cycle.Egress...)
-		return
+	peer.listElement = nil
+	peer.parent = nil
+	for i := range peer.Sessions {
+		peer.Sessions[i] = nil
+	}
+	peer.Sessions = nil
+}
+
+func (peer *KnownPeer) update(session *PeerSession) {
+	if session.Connected != nil && session.Disconnected != nil && session.Connected.After(*session.Disconnected) {
+		peer.Sessions[len(peer.Sessions)-1].Disconnected = session.Disconnected
+		session.Disconnected = nil
+	}
+	if session.Connected != nil {
+		peer.Sessions = append(peer.Sessions, session)
+	}
+	last := peer.Sessions[len(peer.Sessions)-1]
+	if session.Disconnected != nil {
+		last.Disconnected = session.Disconnected
+	}
+	for i := 0; i < len(session.Ingress) && i < len(session.Egress); i++ {
+		peer.updateTraffic(session.Ingress[i], session.Egress[i])
 	}
 }
 
-type PeerCycle struct {
+func (peer *KnownPeer) updateTraffic(ingress, egress *ChartEntry) {
+	first, last := peer.Sessions[0], peer.Sessions[len(peer.Sessions)-1]
+	if len(first.Ingress) < 2 || len(first.Egress) < 2 {
+		peer.Sessions = peer.Sessions[1:]
+	} else {
+		first.Ingress = first.Ingress[1:]
+		first.Egress = first.Egress[1:]
+	}
+	last.Ingress = append(last.Ingress, ingress)
+	last.Egress = append(last.Egress, egress)
+}
+
+type PeerSession struct {
 	Connected    *time.Time `json:"connected,omitempty"`
 	Disconnected *time.Time `json:"disconnected,omitempty"`
 
@@ -371,36 +225,10 @@ type UnknownPeer struct {
 	Disconnected time.Time `json:"disconnected,omitempty"`
 }
 
-type peerContainerUpdateType int
-
-const (
-	peerConnected       = peerContainerUpdateType(p2p.PeerConnected)
-	peerDisconnected    = peerContainerUpdateType(p2p.PeerDisconnected)
-	peerHandshakeFailed = peerContainerUpdateType(p2p.PeerHandshakeFailed)
-	peerIngress         = peerConnected + peerDisconnected + peerHandshakeFailed + iota
-	peerEgress
-)
-
-type peerEvent struct {
-	*p2p.MeteredPeerEvent
-	ip string
-	id string
-	t peerContainerUpdateType
-	traffic uint64
+type peerTraffic struct {
+	ingress map[string]int64
+	egress  map[string]int64
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // collectPeerData gathers data about the peers and sends it to the clients.
 func (db *Dashboard) collectPeerData() {
@@ -422,10 +250,10 @@ func (db *Dashboard) collectPeerData() {
 	ticker := time.NewTicker(db.config.Refresh)
 	defer ticker.Stop()
 
-	pc := NewPeerContainer(db.config.Refresh)
+	pc := NewPeerContainer(db.geodb, db.config.Refresh)
 
-	trafficUpdater := func(prefix string) (func (*map[string]int64) func(name string, i interface{})) {
-		return func (entryMap *map[string]int64) func(name string, i interface{}) {
+	trafficUpdater := func(prefix string) func(*map[string]int64) func(name string, i interface{}) {
+		return func(entryMap *map[string]int64) func(name string, i interface{}) {
 			return func(name string, i interface{}) {
 				if m, ok := i.(metrics.Meter); ok {
 					(*entryMap)[strings.TrimPrefix(name, prefix)] = m.Count()
@@ -433,24 +261,54 @@ func (db *Dashboard) collectPeerData() {
 			}
 		}
 	}
-	updateIngress := trafficUpdater(p2p.MetricsInboundTraffic+"/")
-	updateEgress := trafficUpdater(p2p.MetricsOutboundTraffic+"/")
+	updateIngress := trafficUpdater(p2p.MetricsInboundTraffic + "/")
+	updateEgress := trafficUpdater(p2p.MetricsOutboundTraffic + "/")
 
 	for {
 		select {
 		case event := <-peerCh:
-			pc.Update(&peerEvent{
-				MeteredPeerEvent: &event,
-				t: peerContainerUpdateType(event.Type),
-			})
+			now := time.Now()
+			switch event.Type {
+			case p2p.PeerConnected:
+				connected := now.Add(-event.Elapsed)
+				pc.updateKnown(event.IP.String(), event.ID, &PeerSession{
+					Connected: &connected,
+				})
+			case p2p.PeerDisconnected:
+				pc.updateKnown(event.IP.String(), event.ID, &PeerSession{
+					Disconnected: &now,
+					Ingress: ChartEntries{
+						&ChartEntry{
+							Time:  now,
+							Value: float64(event.Ingress),
+						},
+					},
+					Egress: ChartEntries{
+						&ChartEntry{
+							Time:  now,
+							Value: float64(event.Egress),
+						},
+					},
+				})
+			case p2p.PeerHandshakeFailed:
+				pc.updateUnknown(event.IP.String(), &UnknownPeer{
+					Connected:    now.Add(-event.Elapsed),
+					Disconnected: now,
+				})
+			default:
+				log.Error("Unknown metered peer event type", "type", event.Type)
+			}
 		case <-ticker.C:
-			ingress := make(map[string]int64)
-			egress := make(map[string]int64)
-			p2p.PeerIngressRegistry.Each(updateIngress(&ingress))
-			p2p.PeerEgressRegistry.Each(updateEgress(&egress))
-			//fmt.Println(ingress)
+			traffic := peerTraffic{
+				ingress: make(map[string]int64),
+				egress:  make(map[string]int64),
+			}
+			p2p.PeerIngressRegistry.Each(updateIngress(&traffic.ingress))
+			p2p.PeerEgressRegistry.Each(updateEgress(&traffic.egress))
+			pc.updateTraffic(&traffic)
 			s, _ := json.MarshalIndent(pc, "", "  ")
 			fmt.Println(string(s))
+			//db.sendToAll(&Message{Network: pc})
 		case err := <-subPeer.Err():
 			log.Warn("Peer subscription error", "err", err)
 			return

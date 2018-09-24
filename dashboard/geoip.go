@@ -48,9 +48,6 @@ type GeoDB struct {
 	geodb *freegeoip.DB
 }
 
-// TODO (kurkomisi): freegeoip newReader - error opening the maxmindDB file (/tmp/freegeoip/db.gz)
-// error message: "gzip: invalid header" - possibly a bad update of the file
-
 // Open creates a new geoip database with an up-to-date database from the internet.
 func OpenGeoDB() (*GeoDB, error) {
 	// Initiate a geoip database to cross reference locations
@@ -59,11 +56,11 @@ func OpenGeoDB() (*GeoDB, error) {
 		return nil, err
 	}
 	// Wait until the database is updated to the latest data
-	//select {
-	//case <-db.NotifyOpen():
-	//case err := <-db.NotifyError():
-	//	return nil, err
-	//}
+	select {
+	case <-db.NotifyOpen():
+	case err := <-db.NotifyError():
+		return nil, err
+	}
 	// Assemble and return our custom wrapper
 	return &GeoDB{geodb: db}, nil
 }
@@ -82,8 +79,7 @@ func (db *GeoDB) Lookup(ip net.IP) *GeoDBInfo {
 }
 
 func (db *GeoDB) Location (ip string) *GeoLocation {
-	//location := db.Lookup(net.ParseIP(ip))
-	location := &GeoDBInfo{}
+	location := db.Lookup(net.ParseIP(ip))
 	return &GeoLocation{
 		Country:   location.Country.Names.English,
 		City:      location.City.Names.English,

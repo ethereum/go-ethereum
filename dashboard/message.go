@@ -26,7 +26,7 @@ type Message struct {
 	Home    *HomeMessage    `json:"home,omitempty"`
 	Chain   *ChainMessage   `json:"chain,omitempty"`
 	TxPool  *TxPoolMessage  `json:"txpool,omitempty"`
-	Network *NetworkMessage `json:"network,omitempty"`
+	Network *PeerContainer  `json:"network,omitempty"`
 	System  *SystemMessage  `json:"system,omitempty"`
 	Logs    *LogsMessage    `json:"logs,omitempty"`
 }
@@ -80,7 +80,7 @@ type NetworkMessage struct {
 
 //type PeerMap map[string]*Peer
 
-//func (pm PeerMap) getOrInit(id string) *Peer {
+//func (pm PeerMap) getOrInitBundle(id string) *Peer {
 //	if _, ok := pm[id]; !ok {
 //		pm[id] = new(Peer)
 //	}
@@ -99,7 +99,7 @@ type NetworkMessage struct {
 //}
 //
 //func (b *PeerBundle) getOrInitPeer(id string) *Peer {
-//	return b.Peers.getOrInit(id)
+//	return b.Peers.getOrInitBundle(id)
 //}
 //
 //func (b *PeerBundle) removePeer(id string) {
@@ -107,7 +107,7 @@ type NetworkMessage struct {
 //}
 //
 //func (b *PeerBundle) getOrInitFailedPeer(id string) *Peer {
-//	return b.FailedPeers.getOrInit(id)
+//	return b.FailedPeers.getOrInitBundle(id)
 //}
 //
 //func (b * PeerBundle) removeFailedPeer(id string) {
