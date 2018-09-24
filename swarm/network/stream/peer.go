@@ -130,6 +130,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
+// Depending on the `syncing` parameter we send different message types
 func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var sp opentracing.Span
 	ctx, sp = spancontext.StartSpan(
@@ -137,10 +138,23 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 		"send.chunk.delivery")
 	defer sp.Finish()
 
-	msg := &ChunkDeliveryMsg{
-		Addr:    chunk.Address(),
-		SData:   chunk.Data(),
-		Syncing: syncing,
+	var msg interface{}
+
+	//we send different types of messages if delivery is for syncing or retrievals,
+	//even if handling and content of the message are the same,
+	//because swap accounting decides which messages need accounting based on the message type
+	if syncing {
+		msg = &ChunkDeliveryMsgSyncing{
+			Addr:    chunk.Address(),
+			SData:   chunk.Data(),
+			Syncing: syncing,
+		}
+	} else {
+		msg = &ChunkDeliveryMsgRetrieval{
+			Addr:    chunk.Address(),
+			SData:   chunk.Data(),
+			Syncing: syncing,
+		}
 	}
 	return p.SendPriority(ctx, msg, priority)
 }
