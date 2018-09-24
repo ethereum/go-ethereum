@@ -14,23 +14,42 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package enr
+package pipes
 
 import (
-	"crypto/ecdsa"
-	"math/big"
-	"testing"
+	"net"
 )
 
-// Checks that failure to sign leaves the record unmodified.
-func TestSignError(t *testing.T) {
-	invalidKey := &ecdsa.PrivateKey{D: new(big.Int), PublicKey: *pubkey}
+// NetPipe wraps net.Pipe in a signature returning an error
+func NetPipe() (net.Conn, net.Conn, error) {
+	p1, p2 := net.Pipe()
+	return p1, p2, nil
+}
 
-	var r Record
-	if err := SignV4(&r, invalidKey); err == nil {
-		t.Fatal("expected error from SignV4")
+// TCPPipe creates an in process full duplex pipe based on a localhost TCP socket
+func TCPPipe() (net.Conn, net.Conn, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
 	}
-	if len(r.pairs) > 0 {
-		t.Fatal("expected empty record, have", r.pairs)
+	defer l.Close()
+
+	var aconn net.Conn
+	aerr := make(chan error, 1)
+	go func() {
+		var err error
+		aconn, err = l.Accept()
+		aerr <- err
+	}()
+
+	dconn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		<-aerr
+		return nil, nil, err
 	}
+	if err := <-aerr; err != nil {
+		dconn.Close()
+		return nil, nil, err
+	}
+	return aconn, dconn, nil
 }

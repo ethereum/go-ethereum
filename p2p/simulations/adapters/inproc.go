@@ -27,7 +27,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
+	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/simulations/pipes"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/gorilla/websocket"
 )
@@ -35,8 +36,9 @@ import (
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
 // connects them using in-memory net.Pipe connections
 type SimAdapter struct {
+	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
-	nodes    map[discover.NodeID]*SimNode
+	nodes    map[enode.ID]*SimNode
 	services map[string]ServiceFunc
 }
 
@@ -45,7 +47,16 @@ type SimAdapter struct {
 // particular node are passed to the NewNode function in the NodeConfig)
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		nodes:    make(map[discover.NodeID]*SimNode),
+		pipe:     pipes.NetPipe,
+		nodes:    make(map[enode.ID]*SimNode),
+		services: services,
+	}
+}
+
+func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
+	return &SimAdapter{
+		pipe:     pipes.TCPPipe,
+		nodes:    make(map[enode.ID]*SimNode),
 		services: services,
 	}
 }
@@ -92,40 +103,35 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	simNode := &SimNode{
-		ID:        id,
-		config:    config,
-		node:      n,
-		adapter:   s,
-		running:   make(map[string]node.Service),
-		connected: make(map[discover.NodeID]bool),
+		ID:      id,
+		config:  config,
+		node:    n,
+		adapter: s,
+		running: make(map[string]node.Service),
 	}
 	s.nodes[id] = simNode
 	return simNode, nil
 }
 
 // Dial implements the p2p.NodeDialer interface by connecting to the node using
-// an in-memory net.Pipe connection
-func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
-	node, ok := s.GetNode(dest.ID)
+// an in-memory net.Pipe
+func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
+	node, ok := s.GetNode(dest.ID())
 	if !ok {
-		return nil, fmt.Errorf("unknown node: %s", dest.ID)
-	}
-	if node.connected[dest.ID] {
-		return nil, fmt.Errorf("dialed node: %s", dest.ID)
+		return nil, fmt.Errorf("unknown node: %s", dest.ID())
 	}
 	srv := node.Server()
 	if srv == nil {
-		return nil, fmt.Errorf("node not running: %s", dest.ID)
+		return nil, fmt.Errorf("node not running: %s", dest.ID())
 	}
 	pipe1, pipe2 := net.Pipe()
 	go srv.SetupConn(pipe1, 0, nil)
-	node.connected[dest.ID] = true
 	return pipe2, nil
 }
 
 // DialRPC implements the RPCDialer interface by creating an in-memory RPC
 // client of the given node
-func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+func (s *SimAdapter) DialRPC(id enode.ID) (*rpc.Client, error) {
 	node, ok := s.GetNode(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
@@ -138,7 +144,7 @@ func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
 }
 
 // GetNode returns the node with the given ID if it exists
-func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
+func (s *SimAdapter) GetNode(id enode.ID) (*SimNode, bool) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 	node, ok := s.nodes[id]
@@ -150,14 +156,13 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // protocols directly over that pipe
 type SimNode struct {
 	lock         sync.RWMutex
-	ID           discover.NodeID
+	ID           enode.ID
 	config       *NodeConfig
 	adapter      *SimAdapter
 	node         *node.Node
 	running      map[string]node.Service
 	client       *rpc.Client
 	registerOnce sync.Once
-	connected    map[discover.NodeID]bool
 }
 
 // Addr returns the node's discovery address
@@ -165,9 +170,9 @@ func (self *SimNode) Addr() []byte {
 	return []byte(self.Node().String())
 }
 
-// Node returns a discover.Node representing the SimNode
-func (self *SimNode) Node() *discover.Node {
-	return discover.NewNode(self.ID, net.IP{127, 0, 0, 1}, 30303, 30303)
+// Node returns a node descriptor representing the SimNode
+func (sn *SimNode) Node() *enode.Node {
+	return sn.config.Node()
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
