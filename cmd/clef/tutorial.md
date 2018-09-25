@@ -52,7 +52,7 @@ INFO [02-21|12:14:38] Ruleset attestation updated              sha256=6c21d17374
 At this point, we then start the signer with the rule-file:
 
 ```text
-#./signer --rules rules.json
+#./signer --rules rules.js
 
 INFO [02-21|12:15:18] Using CLI as UI-channel
 INFO [02-21|12:15:18] Loaded 4byte db                          signatures=5509 file=./4byte.json
@@ -153,7 +153,7 @@ INFO [02-21|14:36:30] Ruleset attestation updated              sha256=2a0cb661da
 And start the signer:
 
 ```
-#./signer --rules rules.js
+#./signer --rules rules.js --rpc
 
 INFO [02-21|14:41:56] Using CLI as UI-channel
 INFO [02-21|14:41:56] Loaded 4byte db                          signatures=5509 file=./4byte.json
@@ -190,7 +190,7 @@ INFO [02-21|14:42:56] Op rejected
 The signer also stores all traffic over the external API in a log file. The last 4 lines shows the two requests and their responses:
 
 ```text
-#tail audit.log -n 4
+#tail -n 4 audit.log
 t=2018-02-21T14:42:41+0100 lvl=info msg=Sign       api=signer type=request  metadata="{\"remote\":\"127.0.0.1:49706\",\"local\":\"localhost:8550\",\"scheme\":\"HTTP/1.1\"}" addr="0x694267f14675d7e1b9494fd8d72fefe1755710fa [chksum INVALID]" data=202062617a6f6e6b2062617a2067617a0a
 t=2018-02-21T14:42:42+0100 lvl=info msg=Sign       api=signer type=response data=93e6161840c3ae1efc26dc68dedab6e8fc233bb3fefa1b4645dbf6609b93dace160572ea4ab33240256bb6d3dadb60dcd9c515d6374d3cf614ee897408d41d541c error=nil
 t=2018-02-21T14:42:56+0100 lvl=info msg=Sign       api=signer type=request  metadata="{\"remote\":\"127.0.0.1:49708\",\"local\":\"localhost:8550\",\"scheme\":\"HTTP/1.1\"}" addr="0x694267f14675d7e1b9494fd8d72fefe1755710fa [chksum INVALID]" data=2020626f6e6b2062617a2067617a0a
