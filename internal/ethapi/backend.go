@@ -43,7 +43,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	ExternalSigner() *ExternalSignerClient
-	
+
 	// BlockChain API
 	SetHead(number uint64)
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
@@ -102,7 +102,7 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(apiBackend),
-		},{
+		}, {
 			Namespace: "personal",
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
