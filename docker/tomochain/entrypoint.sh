@@ -6,6 +6,7 @@
 # - PRIVATE_KEY (default to empty)
 # - BOOTNODES (default to empty)
 # - EXTIP (default to empty)
+# - VERBOSITY (default to 3)
 # - SYNC_MODE (default to 'full')
 # - NETWORK_ID (default to '89')
 # - WS_SECRET (default to empty)
@@ -141,7 +142,7 @@ fi
 echo "dump: $IDENTITY $account $BOOTNODES"
 
 exec tomo $params \
-  --verbosity 4 \
+  --verbosity $VERBOSITY \
   --datadir $DATA_DIR \
   --keystore $KEYSTORE_DIR \
   --identity $IDENTITY \
