@@ -155,6 +155,7 @@ func (peer *ServerNode) QueueRequest(reqID, maxCost uint64) {
 	peer.lock.Lock()
 	defer peer.lock.Unlock()
 
+	peer.recalcBLE(mclock.Now())
 	peer.bufEstimate -= maxCost
 	peer.sumCost += maxCost
 	peer.pending[reqID] = peer.sumCost

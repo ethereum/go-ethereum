@@ -127,7 +127,15 @@ func (d *requestDistributor) loop() {
 		loop:
 			for {
 				peer, req, wait := d.nextRequest()
-				if req != nil && wait == 0 {
+				// no request to send and nothing to wait for; the next
+				// queued request will wake up the loop
+				if req == nil {
+					break loop
+				}
+				// send non-wait or short-wait request immediately.
+				if wait == 0 || wait <= distMaxWait {
+					time.Sleep(wait)
+
 					chn := req.sentChn // save sentChn because remove sets it to nil
 					d.remove(req)
 					send := req.request(peer)
@@ -136,23 +144,14 @@ func (d *requestDistributor) loop() {
 					}
 					chn <- peer
 					close(chn)
-				} else {
-					if wait == 0 {
-						// no request to send and nothing to wait for; the next
-						// queued request will wake up the loop
-						break loop
-					}
-					d.loopNextSent = true // a "next" signal has been sent, do not send another one until this one has been received
-					if wait > distMaxWait {
-						// waiting times may be reduced by incoming request replies, if it is too long, recalculate it periodically
-						wait = distMaxWait
-					}
-					go func() {
-						time.Sleep(wait)
-						d.loopChn <- struct{}{}
-					}()
-					break loop
+					continue
 				}
+				d.loopNextSent = true
+				go func() {
+					time.Sleep(distMaxWait)
+					d.loopChn <- struct{}{}
+				}()
+				break loop
 			}
 			d.lock.Unlock()
 		}
@@ -174,24 +173,29 @@ func (sp selectPeerItem) Weight() int64 {
 // nextRequest returns the next possible request from any peer, along with the
 // associated peer and necessary waiting time
 func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
-	checkedPeers := make(map[distPeer]struct{})
-	elem := d.reqQueue.Front()
-	var (
-		bestPeer distPeer
-		bestReq  *distReq
-		bestWait time.Duration
-		sel      *weightedRandomSelect
-	)
-
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 
-	for (len(d.peers) > 0 || elem == d.reqQueue.Front()) && elem != nil {
+	// Short circuit if there is no available peer or no pending request.
+	if len(d.peers) == 0 || d.reqQueue.Len() == 0 {
+		return nil, nil, 0
+	}
+
+	type queueReq struct {
+		req        *distReq
+		peer       distPeer
+		waitNeeded time.Duration
+	}
+	// Iterate request queue to find out the request with the least waiting time.
+	var bestReq *queueReq
+	for elem := d.reqQueue.Front(); elem != nil; {
 		req := elem.Value.(*distReq)
-		canSend := false
+		var (
+			sel        *weightedRandomSelect
+			currentReq *queueReq
+		)
 		for peer := range d.peers {
-			if _, ok := checkedPeers[peer]; !ok && peer.canQueue() && req.canSend(peer) {
-				canSend = true
+			if peer.canQueue() && req.canSend(peer) {
 				cost := req.getCost(peer)
 				wait, bufRemain := peer.waitBefore(cost)
 				if wait == 0 {
@@ -200,28 +204,44 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 					}
 					sel.update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
 				} else {
-					if bestReq == nil || wait < bestWait {
-						bestPeer = peer
-						bestReq = req
-						bestWait = wait
+					if currentReq == nil || wait < currentReq.waitNeeded {
+						currentReq = &queueReq{
+							req:        req,
+							peer:       peer,
+							waitNeeded: wait,
+						}
 					}
 				}
-				checkedPeers[peer] = struct{}{}
 			}
 		}
+		// Find out no-wait-request, pass back directly.
+		if sel != nil {
+			c := sel.choose().(selectPeerItem)
+			return c.peer, c.req, 0
+		}
 		next := elem.Next()
-		if !canSend && elem == d.reqQueue.Front() {
+		if currentReq != nil {
+			// Find out short-wait-request, abort further filtering
+			if currentReq.waitNeeded <= distMaxWait {
+				return currentReq.peer, currentReq.req, currentReq.waitNeeded
+			} else {
+				if bestReq == nil || currentReq.waitNeeded < bestReq.waitNeeded {
+					bestReq = currentReq
+				}
+			}
+		} else {
+			// Can't find any suitable peers, drop the request directly
 			close(req.sentChn)
 			d.remove(req)
 		}
 		elem = next
-	}
 
-	if sel != nil {
-		c := sel.choose().(selectPeerItem)
-		return c.peer, c.req, 0
 	}
-	return bestPeer, bestReq, bestWait
+	if bestReq != nil {
+		return bestReq.peer, bestReq.req, bestReq.waitNeeded
+	}
+	// Can't find anymore request that can be sent.
+	return nil, nil, 0
 }
 
 // queue adds a request to the distribution queue, returns a channel where the

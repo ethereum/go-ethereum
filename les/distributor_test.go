@@ -57,8 +57,7 @@ func (p *testDistPeer) send(r *testDistReq) {
 	p.sumCost += r.cost
 }
 
-func (p *testDistPeer) worker(t *testing.T, checkOrder bool, stop chan struct{}) {
-	var last uint64
+func (p *testDistPeer) worker(t *testing.T, stop chan struct{}) {
 	for {
 		wait := time.Millisecond
 		p.lock.Lock()
@@ -66,12 +65,6 @@ func (p *testDistPeer) worker(t *testing.T, checkOrder bool, stop chan struct{})
 			rq := p.sent[0]
 			wait = time.Duration(rq.procTime)
 			p.sumCost -= rq.cost
-			if checkOrder {
-				if rq.order <= last {
-					t.Errorf("Requests processed in wrong order")
-				}
-				last = rq.order
-			}
 			p.sent = p.sent[1:]
 		}
 		p.lock.Unlock()
@@ -125,7 +118,7 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}
-		go peers[i].worker(t, !resend, stop)
+		go peers[i].worker(t, stop)
 		dist.registerTestPeer(peers[i])
 	}
 
@@ -182,4 +175,43 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	}
 
 	wg.Wait()
+}
+
+func TestProcessRequestOutOrder(t *testing.T) {
+	stop := make(chan struct{})
+	defer close(stop)
+
+	dist := newRequestDistributor(nil, stop)
+	var peers [2]*testDistPeer
+	for i := range peers {
+		peers[i] = &testDistPeer{}
+		go peers[i].worker(t, stop)
+		dist.registerTestPeer(peers[i])
+	}
+	peers[0].sumCost = 10 * testDistMaxCost // distMaxWait
+
+	peerChs := make([]chan distPeer, 2)
+	for i, cost := range []uint64{11 * testDistMaxCost, 100} {
+		rq := &testDistReq{
+			cost:      cost,
+			procTime:  cost,
+			order:     uint64(i + 1),
+			canSendTo: make(map[*testDistPeer]struct{}),
+		}
+		rq.canSendTo[peers[i]] = struct{}{}
+		req := &distReq{
+			getCost: rq.getCost,
+			canSend: rq.canSend,
+			request: rq.request,
+		}
+		peerChs[i] = dist.queue(req)
+	}
+
+	select {
+	case <-peerChs[0]:
+		t.Error("expect to be processed later")
+	case <-peerChs[1]:
+	case <-time.NewTicker(time.Second).C:
+		t.Error("waiting assigned peer timeout")
+	}
 }
