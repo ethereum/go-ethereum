@@ -84,3 +84,81 @@ func TestCalcDifficulty(t *testing.T) {
 		}
 	}
 }
+
+//func TestTransitionToProgpow(t *testing.T) {
+//	fn := filepath.Join("..", "..", "tests", "hashi_to_pp_at_5.rlp.gz")
+//	fh, err := os.Open(fn)
+//	if err != nil {
+//		t.Skip(err)
+//	}
+//	defer fh.Close()
+//
+//	var reader io.Reader = fh
+//	if strings.HasSuffix(fn, ".gz") {
+//		if reader, err = gzip.NewReader(reader); err != nil {
+//			t.Skip(err)
+//		}
+//	}
+//	stream := rlp.NewStream(reader, 0)
+//	config := &params.ChainConfig{
+//		HomesteadBlock: big.NewInt(1),
+//		EIP150Block:    big.NewInt(2),
+//		EIP155Block:    big.NewInt(3),
+//		EIP158Block:    big.NewInt(3),
+//		ProgpowBlock:   big.NewInt(5),
+//	}
+//	genesis := core.Genesis{Config: config,
+//		GasLimit:  0x47b760,
+//		Alloc:     core.GenesisAlloc{},
+//		Timestamp: 0x59a4e76d,
+//		ExtraData: hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
+//	}
+//	db := ethdb.NewMemDatabase()
+//	genesis.MustCommit(db)
+//
+//	engine := New(Config{
+//		CacheDir:           "",
+//		CachesInMem:        1,
+//		CachesOnDisk:       1,
+//		DatasetDir:         "",
+//		DatasetsInMem:      1,
+//		DatasetsOnDisk:     1,
+//		ProgpowBlockNumber: config.ProgpowBlock,
+//	}, nil, false)
+//	bc, err := core.NewBlockChain(db, nil, config, engine, vm.Config{}, nil)
+//	//fmt.Printf("Genesis hash %x\n", bc.Genesis().Hash())
+//	if err != nil {
+//		t.Skip(err)
+//	}
+//	blocks := make(types.Blocks, 100)
+//	n := 0
+//	for batch := 0; ; batch++ {
+//		// Load a batch of RLP blocks.
+//		i := 0
+//		for ; i < 100; i++ {
+//			var b types.Block
+//			if err := stream.Decode(&b); err == io.EOF {
+//				break
+//			} else if err != nil {
+//				t.Errorf("at block %d: %v", n, err)
+//			}
+//			// don't import first block
+//			if b.NumberU64() == 0 {
+//				i--
+//				continue
+//			}
+//			blocks[i] = &b
+//			n++
+//		}
+//		if i == 0 {
+//			break
+//		}
+//		if _, err := bc.InsertChain(blocks[:i]); err != nil {
+//			t.Fatalf("invalid block %d: %v", n, err)
+//		}
+//	}
+//	if bc.CurrentBlock().Number().Cmp(big.NewInt(1054)) != 0 {
+//		t.Errorf("Expected to import 1054 blocks, got %v", bc.CurrentBlock().Number())
+//
+//	}
+//}

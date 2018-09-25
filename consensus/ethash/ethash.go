@@ -211,6 +211,7 @@ type cache struct {
 	dump  *os.File  // File descriptor of the memory mapped cache
 	mmap  mmap.MMap // Memory map itself to unmap before releasing
 	cache []uint32  // The actual cache data content (may be memory mapped)
+	cDag  []uint32  // The cDag used by progpow. May be nil
 	once  sync.Once // Ensures the cache is generated only once
 }
 
@@ -232,6 +233,8 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 		if dir == "" {
 			c.cache = make([]uint32, size/4)
 			generateCache(c.cache, c.epoch, seed)
+			c.cDag = make([]uint32, progpowCacheWords)
+			generateCDag(c.cDag, c.cache, c.epoch)
 			return
 		}
 		// Disk storage is needed, this will get fancy
@@ -251,6 +254,8 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 		c.dump, c.mmap, c.cache, err = memoryMap(path, lock)
 		if err == nil {
 			logger.Debug("Loaded old ethash cache from disk")
+			c.cDag = make([]uint32, progpowCacheWords)
+			generateCDag(c.cDag, c.cache, c.epoch)
 			return
 		}
 		logger.Debug("Failed to load old ethash cache", "err", err)
@@ -263,6 +268,8 @@ func (c *cache) generate(dir string, limit int, lock bool, test bool) {
 			c.cache = make([]uint32, size/4)
 			generateCache(c.cache, c.epoch, seed)
 		}
+		c.cDag = make([]uint32, progpowCacheWords)
+		generateCDag(c.cDag, c.cache, c.epoch)
 		// Iterate over all previous instances and delete old ones
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)
@@ -693,7 +700,7 @@ type powLight func(size uint64, cache []uint32, hash []byte, nonce, number uint6
 
 // fullPow returns either hashimoto or progpow full checker depending on number
 func (ethash *Ethash) fullPow(number *big.Int) powFull {
-	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) >= 0 {
+	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
 		return progpowFull
 	}
 	return func(dataset []uint32, hash []byte, nonce uint64, number uint64) ([]byte, []byte) {
@@ -701,10 +708,20 @@ func (ethash *Ethash) fullPow(number *big.Int) powFull {
 	}
 }
 
-// lightPow returns either hashimoto or progpowdepending on number
+// lightPow returns either hashimoto or progpow depending on number
 func (ethash *Ethash) lightPow(number *big.Int) powLight {
-	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) >= 0 {
-		return progpowLight
+	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
+		return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+			ethashCache := ethash.cache(blockNumber)
+			if ethashCache.cDag == nil {
+				log.Warn("cDag is nil, suboptimal performance")
+				var cDag []uint32
+				cDag = make([]uint32, progpowCacheWords)
+				generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
+				ethashCache.cDag = cDag
+			}
+			return progpowLight(size, cache, hash, nonce, blockNumber, ethashCache.cDag)
+		}
 	}
 	return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 		return hashimotoLight(size, cache, hash, nonce)

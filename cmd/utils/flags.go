@@ -1814,14 +1814,15 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readOnly bool) (chain *core.B
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
 			engine = ethash.New(ethash.Config{
-				CacheDir:         stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
-				CachesInMem:      eth.DefaultConfig.Ethash.CachesInMem,
-				CachesOnDisk:     eth.DefaultConfig.Ethash.CachesOnDisk,
-				CachesLockMmap:   eth.DefaultConfig.Ethash.CachesLockMmap,
-				DatasetDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
-				DatasetsInMem:    eth.DefaultConfig.Ethash.DatasetsInMem,
-				DatasetsOnDisk:   eth.DefaultConfig.Ethash.DatasetsOnDisk,
-				DatasetsLockMmap: eth.DefaultConfig.Ethash.DatasetsLockMmap,
+				CacheDir:           stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:        eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:       eth.DefaultConfig.Ethash.CachesOnDisk,
+				CachesLockMmap:     eth.DefaultConfig.Ethash.CachesLockMmap,
+				DatasetDir:         stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:      eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk:     eth.DefaultConfig.Ethash.DatasetsOnDisk,
+				DatasetsLockMmap:   eth.DefaultConfig.Ethash.DatasetsLockMmap,
+				ProgpowBlockNumber: config.ProgpowBlock,
 			}, nil, false)
 		}
 	}

@@ -4,52 +4,66 @@ import (
 	"encoding/binary"
 
 	"golang.org/x/crypto/sha3"
+	"math/bits"
 )
 
 const (
-	progpowCacheWords = 4 * 1024 // Total size 16*1024 bytes
-	progpowLanes      = 32
-	progpowRegs       = 16
-	progpowCntCache   = 8
-	progpowCntMath    = 8
-	progpowCntMem     = loopAccesses
-	progpowMixBytes   = 2 * mixBytes
+	progpowCacheWords   = 4 * 1024 // Total size 16*1024 bytes
+	progpowLanes        = 32
+	progpowRegs         = 16
+	progpowCntCache     = 8
+	progpowCntMath      = 8
+	progpowPeriodLength = 50 // Blocks per progpow epoch (N)
+	progpowCntMem       = loopAccesses
+	progpowMixBytes     = 2 * mixBytes
 )
 
 func progpowLight(size uint64, cache []uint32, hash []byte, nonce uint64,
-	blockNumber uint64) ([]byte, []byte) {
+	blockNumber uint64, cDag []uint32) ([]byte, []byte) {
 	keccak512 := makeHasher(sha3.NewLegacyKeccak512())
 
-	lookup := func(index uint32) uint32 {
-		rawData := generateDatasetItem(cache, index/16, keccak512)
-		data := binary.LittleEndian.Uint32(rawData[(index%16)*4:])
-		return data
+	lookup := func(index uint32) []byte {
+		return generateDatasetItem(cache, index/16, keccak512)
 	}
-	return progpow(hash, nonce, size, blockNumber, lookup)
+	return progpow(hash, nonce, size, blockNumber, cDag, lookup)
 }
 
-func progpowFull(dataset []uint32, hash []byte, nonce uint64,
-	blockNumber uint64) ([]byte, []byte) {
-	lookup := func(index uint32) uint32 {
-		return dataset[index]
+func progpowFull(dataset []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
+
+	lookup := func(index uint32) []byte {
+		mix := make([]byte, hashBytes)
+
+		for i := uint32(0); i < hashWords; i++ {
+			binary.LittleEndian.PutUint32(mix[i*4:], dataset[index+i])
+		}
+
+		return mix
 	}
-	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, lookup)
+
+	cDag := make([]uint32, progpowCacheWords)
+
+	for i := uint32(0); i < progpowCacheWords; i += 2 {
+		cDag[i+0] = dataset[i+0]
+		cDag[i+1] = dataset[i+1]
+	}
+
+	return progpow(hash, nonce, uint64(len(dataset))*4, blockNumber, cDag, lookup)
 }
 
 func rotl32(x uint32, n uint32) uint32 {
-	return (((x) << (n % 32)) | ((x) >> (32 - (n % 32))))
+	return ((x) << (n % 32)) | ((x) >> (32 - (n % 32)))
 }
 
 func rotr32(x uint32, n uint32) uint32 {
-	return (((x) >> (n % 32)) | ((x) << (32 - (n % 32))))
+	return ((x) >> (n % 32)) | ((x) << (32 - (n % 32)))
 }
 
 func lower32(in uint64) uint32 {
-	return uint32(in & uint64(0x00000000FFFFFFFF))
+	return uint32(in)
 }
 
 func higher32(in uint64) uint32 {
-	return uint32((in >> 32) & uint64(0x00000000FFFFFFFF))
+	return uint32(in >> 32)
 }
 
 var keccakfRNDC = [24]uint32{
@@ -58,7 +72,7 @@ var keccakfRNDC = [24]uint32{
 	0x8000808b, 0x0000008b, 0x00008089, 0x00008003, 0x00008002, 0x00000080,
 	0x0000800a, 0x8000000a, 0x80008081, 0x00008080, 0x80000001, 0x80008008}
 
-func keccakF800Round(st [25]uint32, r int) [25]uint32 {
+func keccakF800Round(st *[25]uint32, r int) {
 	var keccakfROTC = [24]uint32{1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2,
 		14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61,
 		20, 44}
@@ -80,8 +94,7 @@ func keccakF800Round(st [25]uint32, r int) [25]uint32 {
 
 	// Rho Pi
 	t := st[1]
-	for i := 0; i < 24; i++ {
-		j := keccakfPILN[i]
+	for i, j := range keccakfPILN {
 		bc[0] = st[j]
 		st[j] = rotl32(t, keccakfROTC[i])
 		t = bc[0]
@@ -89,26 +102,26 @@ func keccakF800Round(st [25]uint32, r int) [25]uint32 {
 
 	//  Chi
 	for j := 0; j < 25; j += 5 {
-		for i := 0; i < 5; i++ {
-			bc[i] = st[j+i]
-		}
-		for i := 0; i < 5; i++ {
-			st[j+i] ^= (^bc[(i+1)%5]) & bc[(i+2)%5]
-		}
+		bc[0] = st[j+0]
+		bc[1] = st[j+1]
+		bc[2] = st[j+2]
+		bc[3] = st[j+3]
+		bc[4] = st[j+4]
+		st[j+0] ^= ^bc[1] & bc[2]
+		st[j+1] ^= ^bc[2] & bc[3]
+		st[j+2] ^= ^bc[3] & bc[4]
+		st[j+3] ^= ^bc[4] & bc[0]
+		st[j+4] ^= ^bc[0] & bc[1]
 	}
 
 	//  Iota
 	st[0] ^= keccakfRNDC[r]
-	return st
+	//return st
 }
 
 func keccakF800Short(headerHash []byte, nonce uint64, result []uint32) uint64 {
 	var st [25]uint32
 
-	for i := 0; i < 25; i++ {
-		st[i] = 0
-	}
-
 	for i := 0; i < 8; i++ {
 		st[i] = (uint32(headerHash[4*i])) +
 			(uint32(headerHash[4*i+1]) << 8) +
@@ -121,19 +134,20 @@ func keccakF800Short(headerHash []byte, nonce uint64, result []uint32) uint64 {
 	for i := 0; i < 8; i++ {
 		st[10+i] = result[i]
 	}
+
 	for r := 0; r < 21; r++ {
-		st = keccakF800Round(st, r)
+		keccakF800Round(&st, r)
 	}
-	st = keccakF800Round(st, 21)
-	return (uint64(st[0]) << 32) | uint64(st[1])
+	keccakF800Round(&st, 21)
+	ret := make([]byte, 8)
+	binary.BigEndian.PutUint32(ret[4:], st[0])
+	binary.BigEndian.PutUint32(ret, st[1])
+	return binary.LittleEndian.Uint64(ret)
 }
 
 func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
 	var st [25]uint32
 
-	for i := 0; i < 25; i++ {
-		st[i] = 0
-	}
 	for i := 0; i < 8; i++ {
 		st[i] = (uint32(headerHash[4*i])) +
 			(uint32(headerHash[4*i+1]) << 8) +
@@ -146,10 +160,10 @@ func keccakF800Long(headerHash []byte, nonce uint64, result []uint32) []byte {
 	for i := 0; i < 8; i++ {
 		st[10+i] = result[i]
 	}
-	for r := 0; r < 21; r++ {
-		st = keccakF800Round(st, r)
+
+	for r := 0; r <= 21; r++ {
+		keccakF800Round(&st, r)
 	}
-	st = keccakF800Round(st, 21)
 	ret := make([]byte, 32)
 	for i := 0; i < 8; i++ {
 		binary.LittleEndian.PutUint32(ret[i*4:], st[i])
@@ -198,25 +212,6 @@ func fillMix(seed uint64, laneId uint32) [progpowRegs]uint32 {
 	return mix
 }
 
-func clz(a uint32) uint32 {
-	for i := uint32(0); i < 32; i++ {
-		if (a >> (31 - i)) > 0 {
-			return i
-		}
-	}
-	return uint32(32)
-}
-
-func popcount(a uint32) uint32 {
-	count := uint32(0)
-	for i := uint32(0); i < 32; i++ {
-		if ((a >> (31 - i)) & uint32(1)) == uint32(1) {
-			count += 1
-		}
-	}
-	return count
-}
-
 // Merge new data from b into the value in a
 // Assuming A has high entropy only do ops that retain entropy
 // even if B is low entropy
@@ -229,7 +224,7 @@ func merge(a *uint32, b uint32, r uint32) {
 		*a = (*a ^ b) * 33
 	case 2:
 		*a = rotl32(*a, ((r>>16)%32)) ^ b
-	case 3:
+	default:
 		*a = rotr32(*a, ((r>>16)%32)) ^ b
 	}
 }
@@ -285,43 +280,50 @@ func progpowMath(a uint32, b uint32, r uint32) uint32 {
 	case 8:
 		return a ^ b
 	case 9:
-		return clz(a) + clz(b)
+		return uint32(bits.LeadingZeros32(a) + bits.LeadingZeros32(b))
 	case 10:
-		return popcount(a) + popcount(b)
+		return uint32(bits.OnesCount32(a) + bits.OnesCount32(b))
+
 	default:
 		return 0
 	}
-	return 0
 }
 
-func progpowLoop(seed uint64, loop uint32,
-	mix *[progpowLanes][progpowRegs]uint32,
-	lookup func(index uint32) uint32,
+func progpowLoop(seed uint64, loop uint32, mix *[progpowLanes][progpowRegs]uint32,
+	lookup func(index uint32) []byte,
 	cDag []uint32, datasetSize uint32) {
 	// All lanes share a base address for the global load
 	// Global offset uses mix[0] to guarantee it depends on the load result
 	gOffset := mix[loop%progpowLanes][0] % datasetSize
 	gOffset = gOffset * progpowLanes
-	iMax := uint32(0)
+	//iMax := uint32(0)
+
+	dagData := lookup(2 * gOffset)
+
 	// Lanes can execute in parallel and will be convergent
 	for l := uint32(0); l < progpowLanes; l++ {
 		mixSeqCnt := uint32(0)
 
+		index := 2 * (gOffset + l)
+		if l != 0 && index%16 == 0 {
+			dagData = lookup(index)
+		}
+
 		// global load to sequential locations
-		data64 := uint64(lookup(2*(gOffset+l)+1))<<32 |
-			uint64(lookup(2*(gOffset+l)))
+		data64 := binary.LittleEndian.Uint64(dagData[(index%16)*4:])
 
 		// initialize the seed and mix destination sequence
 		randState, mixSeq := progpowInit(seed)
 
-		if progpowCntCache > progpowCntMath {
-			iMax = progpowCntCache
-		} else {
-			iMax = progpowCntMath
-		}
+		//if progpowCntCache > progpowCntMath {
+		//	iMax = progpowCntCache
+		//} else {
+		//	iMax = progpowCntMath
+		//}
 
-		for i := uint32(0); i < iMax; i++ {
-			if i < progpowCntCache {
+		for i := uint32(0); i < 8; i++ {
+			//if i < progpowCntCache
+			{
 				// Cached memory access
 				// lanes access random location
 				src1 := kiss99(&randState) % progpowRegs
@@ -333,7 +335,8 @@ func progpowLoop(seed uint64, loop uint32,
 				merge(&mix[l][dest], data32, r)
 			}
 
-			if i < progpowCntMath {
+			//if i < progpowCntMath
+			{
 				// Random Math
 				src11 := kiss99(&randState)
 				src1 := src11 % progpowRegs
@@ -357,32 +360,20 @@ func progpowLoop(seed uint64, loop uint32,
 	}
 }
 
-func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64,
-	lookup func(index uint32) uint32) ([]byte, []byte) {
-	var mix [progpowLanes][progpowRegs]uint32
-	var laneResults [progpowLanes]uint32
-
-	cDag := make([]uint32, progpowCacheWords)
+func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64, cDag []uint32,
+	lookup func(index uint32) []byte) ([]byte, []byte) {
+	var (
+		mix         [progpowLanes][progpowRegs]uint32
+		laneResults [progpowLanes]uint32
+	)
 	result := make([]uint32, 8)
-
-	// initialize cDag
-	for i := uint32(0); i < progpowCacheWords; i += 2 {
-		cDag[i] = lookup(2 * i)
-		cDag[i+1] = lookup(2*i + 1)
-	}
-	for i := uint32(0); i < 8; i++ {
-		result[i] = 0
-	}
-
 	seed := keccakF800Short(hash, nonce, result)
 	for lane := uint32(0); lane < progpowLanes; lane++ {
 		mix[lane] = fillMix(seed, lane)
 	}
-
-	blockNumberRounded := (blockNumber / epochLength) * epochLength
+	period := (blockNumber / progpowPeriodLength)
 	for l := uint32(0); l < progpowCntMem; l++ {
-		progpowLoop(blockNumberRounded, l, &mix, lookup, cDag,
-			uint32(size/progpowMixBytes))
+		progpowLoop(period, l, &mix, lookup, cDag, uint32(size/progpowMixBytes))
 	}
 
 	// Reduce mix data to a single per-lane result
@@ -392,20 +383,16 @@ func progpow(hash []byte, nonce uint64, size uint64, blockNumber uint64,
 			fnv1a(&laneResults[lane], mix[lane][i])
 		}
 	}
-
 	for i := uint32(0); i < 8; i++ {
 		result[i] = 0x811c9dc5
 	}
 	for lane := uint32(0); lane < progpowLanes; lane++ {
 		fnv1a(&result[lane%8], laneResults[lane])
 	}
-
-	digest := keccakF800Long(hash, seed, result[:])
-
-	resultBytes := make([]byte, 8*4)
+	finalHash := keccakF800Long(hash, seed, result[:])
+	mixHash := make([]byte, 8*4)
 	for i := 0; i < 8; i++ {
-		binary.LittleEndian.PutUint32(resultBytes[i*4:], result[i])
+		binary.LittleEndian.PutUint32(mixHash[i*4:], result[i])
 	}
-
-	return digest[:], resultBytes[:]
+	return mixHash[:], finalHash[:]
 }
