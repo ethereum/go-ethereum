@@ -115,6 +115,9 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 	}
 }
 
+// findCommonAncestor returns the highest numbered block that is the ancestor of
+// both `begin` and `end`. `end` must have a block number greater than or equal
+// to `begin`.
 func (f *Filter) findCommonAncestor(ctx context.Context, begin, end *types.Header) (*types.Header, bool, error) {
 	var err error
 	var mainChain bool
@@ -153,6 +156,7 @@ func (f *Filter) findCommonAncestor(ctx context.Context, begin, end *types.Heade
 	return end, mainChain, nil
 }
 
+// logList allows sorting event logs by block number and log index
 type logList []*types.Log
 
 func (l logList) Len() int      { return len(l) }

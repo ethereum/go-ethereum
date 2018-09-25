@@ -320,6 +320,9 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	return logsSub.ID, nil
 }
 
+// getBlockHash returns the block hash of the requested block.
+// `hash` is used if supplied; if not the canonoical block at `number` is looked up.
+// If neither is supplied, the latest canonical block hash is returned.
 func (api *PublicFilterAPI) getBlockHash(ctx context.Context, number *big.Int, hash *common.Hash) (common.Hash, error) {
 	if hash != nil {
 		return *hash, nil

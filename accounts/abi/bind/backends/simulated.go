@@ -319,6 +319,9 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	return nil
 }
 
+// getBlockHash returns the block hash of the requested block.
+// `hash` is used if supplied; if not the canonoical block at `number` is looked up.
+// If neither is supplied, the latest canonical block hash is returned.
 func (b *SimulatedBackend) getBlockHash(number *big.Int, hash *common.Hash) (common.Hash, error) {
 	if hash != nil {
 		return *hash, nil
