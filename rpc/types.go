@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -135,6 +136,11 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
 	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
 		input = input[1 : len(input)-1]
+	} else {
+		// Integer block number
+		value, err := strconv.Atoi(string(data))
+		*bn = BlockNumber(value)
+		return err
 	}
 
 	switch input {
