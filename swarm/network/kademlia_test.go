@@ -38,71 +38,42 @@ func testKadPeerAddr(s string) *BzzAddr {
 	return &BzzAddr{OAddr: a, UAddr: a}
 }
 
-type testDropPeer struct {
-	Peer
-	dropc chan error
-}
-
-type dropError struct {
-	error
-	addr string
-}
-
-func (d *testDropPeer) Drop(err error) {
-	err2 := &dropError{err, binStr(d)}
-	d.dropc <- err2
-}
-
-type testKademlia struct {
-	*Kademlia
-	Discovery bool
-	dropc     chan error
-}
-
-func newTestKademlia(b string) *testKademlia {
+func newTestKademlia(b string) *Kademlia {
 	params := NewKadParams()
 	params.MinBinSize = 1
 	params.MinProxBinSize = 2
 	base := pot.NewAddressFromString(b)
-	return &testKademlia{
-		NewKademlia(base, params),
-		false,
-		make(chan error),
-	}
+	return NewKademlia(base, params)
 }
 
-func (k *testKademlia) newTestKadPeer(s string) Peer {
-	return &testDropPeer{&BzzPeer{BzzAddr: testKadPeerAddr(s)}, k.dropc}
+func newTestKadPeer(k *Kademlia, s string) *Peer {
+	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, k)
 }
 
-func (k *testKademlia) On(ons ...string) *testKademlia {
+func On(k *Kademlia, ons ...string) {
 	for _, s := range ons {
-		k.Kademlia.On(k.newTestKadPeer(s).(OverlayConn))
+		k.On(newTestKadPeer(k, s))
 	}
-	return k
 }
 
-func (k *testKademlia) Off(offs ...string) *testKademlia {
+func Off(k *Kademlia, offs ...string) {
 	for _, s := range offs {
-		k.Kademlia.Off(k.newTestKadPeer(s).(OverlayConn))
+		k.Off(newTestKadPeer(k, s))
 	}
-
-	return k
 }
 
-func (k *testKademlia) Register(regs ...string) *testKademlia {
-	var as []OverlayAddr
+func Register(k *Kademlia, regs ...string) {
+	var as []*BzzAddr
 	for _, s := range regs {
 		as = append(as, testKadPeerAddr(s))
 	}
-	err := k.Kademlia.Register(as)
+	err := k.Register(as...)
 	if err != nil {
 		panic(err.Error())
 	}
-	return k
 }
 
-func testSuggestPeer(t *testing.T, k *testKademlia, expAddr string, expPo int, expWant bool) error {
+func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {
 	addr, o, want := k.SuggestPeer()
 	if binStr(addr) != expAddr {
 		return fmt.Errorf("incorrect peer address suggested. expected %v, got %v", expAddr, binStr(addr))
@@ -116,7 +87,7 @@ func testSuggestPeer(t *testing.T, k *testKademlia, expAddr string, expPo int, e
 	return nil
 }
 
-func binStr(a OverlayPeer) string {
+func binStr(a *BzzAddr) string {
 	if a == nil {
 		return "<nil>"
 	}
@@ -125,15 +96,17 @@ func binStr(a OverlayPeer) string {
 
 func TestSuggestPeerBug(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
-	k := newTestKademlia("00000000").On(
+	k := newTestKademlia("00000000")
+	On(k,
 		"10000000", "11000000",
 		"01000000",
 
 		"00010000", "00011000",
-	).Off(
+	)
+	Off(k,
 		"01000000",
 	)
-	err := testSuggestPeer(t, k, "01000000", 0, false)
+	err := testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -141,140 +114,140 @@ func TestSuggestPeerBug(t *testing.T) {
 
 func TestSuggestPeerFindPeers(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
-	k := newTestKademlia("00000000").On("00100000")
-	err := testSuggestPeer(t, k, "<nil>", 0, false)
+	k := newTestKademlia("00000000")
+	On(k, "00100000")
+	err := testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// 2 row gap, saturated proxbin, no callables -> want PO 0
-	k.On("00010000")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "00010000")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// 1 row gap (1 less), saturated proxbin, no callables -> want PO 1
-	k.On("10000000")
-	err = testSuggestPeer(t, k, "<nil>", 1, false)
+	On(k, "10000000")
+	err = testSuggestPeer(k, "<nil>", 1, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// no gap (1 less), saturated proxbin, no callables -> do not want more
-	k.On("01000000", "00100001")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "01000000", "00100001")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// oversaturated proxbin, > do not want more
-	k.On("00100001")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "00100001")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// reintroduce gap, disconnected peer callable
-	// log.Info(k.String())
-	k.Off("01000000")
-	err = testSuggestPeer(t, k, "01000000", 0, false)
+	Off(k, "01000000")
+	err = testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// second time disconnected peer not callable
 	// with reasonably set Interval
-	err = testSuggestPeer(t, k, "<nil>", 1, true)
+	err = testSuggestPeer(k, "<nil>", 1, true)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// on and off again, peer callable again
-	k.On("01000000")
-	k.Off("01000000")
-	err = testSuggestPeer(t, k, "01000000", 0, false)
+	On(k, "01000000")
+	Off(k, "01000000")
+	err = testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("01000000")
+	On(k, "01000000")
 	// new closer peer appears, it is immediately wanted
-	k.Register("00010001")
-	err = testSuggestPeer(t, k, "00010001", 0, false)
+	Register(k, "00010001")
+	err = testSuggestPeer(k, "00010001", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	// PO1 disconnects
-	k.On("00010001")
+	On(k, "00010001")
 	log.Info(k.String())
-	k.Off("01000000")
+	Off(k, "01000000")
 	log.Info(k.String())
 	// second time, gap filling
-	err = testSuggestPeer(t, k, "01000000", 0, false)
+	err = testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("01000000")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "01000000")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	k.MinBinSize = 2
-	err = testSuggestPeer(t, k, "<nil>", 0, true)
+	err = testSuggestPeer(k, "<nil>", 0, true)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.Register("01000001")
-	err = testSuggestPeer(t, k, "01000001", 0, false)
+	Register(k, "01000001")
+	err = testSuggestPeer(k, "01000001", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("10000001")
+	On(k, "10000001")
 	log.Trace(fmt.Sprintf("Kad:\n%v", k.String()))
-	err = testSuggestPeer(t, k, "<nil>", 1, true)
+	err = testSuggestPeer(k, "<nil>", 1, true)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("01000001")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "01000001")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	k.MinBinSize = 3
-	k.Register("10000010")
-	err = testSuggestPeer(t, k, "10000010", 0, false)
+	Register(k, "10000010")
+	err = testSuggestPeer(k, "10000010", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("10000010")
-	err = testSuggestPeer(t, k, "<nil>", 1, false)
+	On(k, "10000010")
+	err = testSuggestPeer(k, "<nil>", 1, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("01000010")
-	err = testSuggestPeer(t, k, "<nil>", 2, false)
+	On(k, "01000010")
+	err = testSuggestPeer(k, "<nil>", 2, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("00100010")
-	err = testSuggestPeer(t, k, "<nil>", 3, false)
+	On(k, "00100010")
+	err = testSuggestPeer(k, "<nil>", 3, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	k.On("00010010")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	On(k, "00010010")
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -282,10 +255,8 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 }
 
 func TestSuggestPeerRetries(t *testing.T) {
-	t.Skip("Test is disabled, because it is flaky. It fails with kademlia_test.go:346: incorrect peer address suggested. expected <nil>, got 01000000")
-	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
-	k.RetryInterval = int64(100 * time.Millisecond) // cycle
+	k.RetryInterval = int64(300 * time.Millisecond) // cycle
 	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
@@ -296,53 +267,53 @@ func TestSuggestPeerRetries(t *testing.T) {
 		time.Sleep(time.Duration(ts))
 	}
 
-	k.Register("01000000")
-	k.On("00000001", "00000010")
-	err := testSuggestPeer(t, k, "01000000", 0, false)
+	Register(k, "01000000")
+	On(k, "00000001", "00000010")
+	err := testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	sleep(1)
-	err = testSuggestPeer(t, k, "01000000", 0, false)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	sleep(1)
-	err = testSuggestPeer(t, k, "01000000", 0, false)
+	err = testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	err = testSuggestPeer(k, "<nil>", 0, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	sleep(1)
+	err = testSuggestPeer(k, "01000000", 0, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	sleep(2)
-	err = testSuggestPeer(t, k, "01000000", 0, false)
+	err = testSuggestPeer(k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	sleep(2)
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
+	err = testSuggestPeer(k, "<nil>", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -350,7 +321,9 @@ func TestSuggestPeerRetries(t *testing.T) {
 }
 
 func TestKademliaHiveString(t *testing.T) {
-	k := newTestKademlia("00000000").On("01000000", "00100000").Register("10000000", "10000001")
+	k := newTestKademlia("00000000")
+	On(k, "01000000", "00100000")
+	Register(k, "10000000", "10000001")
 	k.MaxProxDisplay = 8
 	h := k.String()
 	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n000  0                              |  2 8100 (0) 8000 (0)\n============ DEPTH: 1 ==========================================\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
@@ -378,7 +351,7 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 			continue
 		}
 		p := &BzzAddr{OAddr: a, UAddr: a}
-		if err := k.Register([]OverlayAddr{p}); err != nil {
+		if err := k.Register(p); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -392,12 +365,12 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 		if a == nil {
 			break
 		}
-		k.On(&BzzPeer{BzzAddr: a.(*BzzAddr)})
+		k.On(NewPeer(&BzzPeer{BzzAddr: a}, k))
 	}
 
 	h := k.Healthy(pp)
 	if !(h.GotNN && h.KnowNN && h.Full) {
-		t.Error("not healthy")
+		t.Fatalf("not healthy: %#v\n%v", h, k.String())
 	}
 }
 

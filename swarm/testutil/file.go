@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -13,32 +13,32 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package storage
+
+package testutil
 
 import (
-	"context"
-	"sync"
-
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"io"
+	"io/ioutil"
+	"os"
+	"strings"
+	"testing"
 )
 
-// PutChunks adds chunks  to localstore
-// It waits for receive on the stored channel
-// It logs but does not fail on delivery error
-func PutChunks(store *LocalStore, chunks ...*Chunk) {
-	wg := sync.WaitGroup{}
-	wg.Add(len(chunks))
-	go func() {
-		for _, c := range chunks {
-			<-c.dbStoredC
-			if err := c.GetErrored(); err != nil {
-				log.Error("chunk store fail", "err", err, "key", c.Addr)
-			}
-			wg.Done()
-		}
-	}()
-	for _, c := range chunks {
-		go store.Put(context.TODO(), c)
+// TempFileWithContent is a helper function that creates a temp file that contains the following string content then closes the file handle
+// it returns the complete file path
+func TempFileWithContent(t *testing.T, content string) string {
+	tempFile, err := ioutil.TempFile("", "swarm-temp-file")
+	if err != nil {
+		t.Fatal(err)
 	}
-	wg.Wait()
+
+	_, err = io.Copy(tempFile, strings.NewReader(content))
+	if err != nil {
+		os.RemoveAll(tempFile.Name())
+		t.Fatal(err)
+	}
+	if err = tempFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return tempFile.Name()
 }

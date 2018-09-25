@@ -124,6 +124,11 @@ type Config struct {
 
 	// specify time to exit after syncing
 	ExitWhenSynced time.Duration
+  
+	// Type of the EWASM interpreter ("" for detault)
+	EWASMInterpreter string
+	// Type of the EVM interpreter ("" for default)
+	EVMInterpreter string
 }
 
 type configMarshaling struct {

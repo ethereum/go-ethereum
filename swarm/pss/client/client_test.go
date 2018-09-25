@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -232,12 +232,11 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 
 func newServices() adapters.Services {
 	stateStore := state.NewInmemoryStore()
-	kademlias := make(map[discover.NodeID]*network.Kademlia)
-	kademlia := func(id discover.NodeID) *network.Kademlia {
+	kademlias := make(map[enode.ID]*network.Kademlia)
+	kademlia := func(id enode.ID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := network.NewAddrFromNodeID(id)
 		params := network.NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -245,7 +244,7 @@ func newServices() adapters.Services {
 		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
-		kademlias[id] = network.NewKademlia(addr.Over(), params)
+		kademlias[id] = network.NewKademlia(id[:], params)
 		return kademlias[id]
 	}
 	return adapters.Services{
@@ -269,7 +268,7 @@ func newServices() adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{

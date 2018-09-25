@@ -82,17 +82,14 @@ func TestNewSwarm(t *testing.T) {
 				if s.dns != nil {
 					t.Error("dns initialized, but it should not be")
 				}
-				if s.lstore == nil {
-					t.Error("localstore not initialized")
+				if s.netStore == nil {
+					t.Error("netStore not initialized")
 				}
 				if s.streamer == nil {
 					t.Error("streamer not initialized")
 				}
 				if s.fileStore == nil {
 					t.Error("fileStore not initialized")
-				}
-				if s.lstore.Validators == nil {
-					t.Error("localstore validators not initialized")
 				}
 				if s.bzz == nil {
 					t.Error("bzz not initialized")

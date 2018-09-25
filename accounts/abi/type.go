@@ -103,7 +103,12 @@ func NewType(t string) (typ Type, err error) {
 		return typ, err
 	}
 	// parse the type and size of the abi-type.
-	parsedType := typeRegex.FindAllStringSubmatch(t, -1)[0]
+	matches := typeRegex.FindAllStringSubmatch(t, -1)
+	if len(matches) == 0 {
+		return Type{}, fmt.Errorf("invalid type '%v'", t)
+	}
+	parsedType := matches[0]
+
 	// varSize is the size of the variable
 	var varSize int
 	if len(parsedType[3]) > 0 {

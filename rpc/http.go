@@ -37,7 +37,7 @@ import (
 
 const (
 	contentType             = "application/json"
-	maxRequestContentLength = 1024 * 128
+	maxRequestContentLength = 1024 * 512
 )
 
 var nullAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
@@ -238,6 +238,12 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
 	ctx = context.WithValue(ctx, "scheme", r.Proto)
 	ctx = context.WithValue(ctx, "local", r.Host)
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		ctx = context.WithValue(ctx, "User-Agent", ua)
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		ctx = context.WithValue(ctx, "Origin", origin)
+	}
 
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	codec := NewJSONCodec(&httpReadWriteNopCloser{body, w})

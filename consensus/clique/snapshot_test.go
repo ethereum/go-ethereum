@@ -19,23 +19,17 @@ package clique
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"math/big"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-type testerVote struct {
-	signer string
-	voted  string
-	auth   bool
-}
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
 // mapped from textual names used in the tests below to actual Ethereum private
@@ -50,17 +44,26 @@ func newTesterAccountPool() *testerAccountPool {
 	}
 }
 
-func (ap *testerAccountPool) sign(header *types.Header, signer string) {
-	// Ensure we have a persistent key for the signer
-	if ap.accounts[signer] == nil {
-		ap.accounts[signer], _ = crypto.GenerateKey()
+// checkpoint creates a Clique checkpoint signer section from the provided list
+// of authorized signers and embeds it into the provided header.
+func (ap *testerAccountPool) checkpoint(header *types.Header, signers []string) {
+	auths := make([]common.Address, len(signers))
+	for i, signer := range signers {
+		auths[i] = ap.address(signer)
 	}
-	// Sign the header and embed the signature in extra data
-	sig, _ := crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
-	copy(header.Extra[len(header.Extra)-65:], sig)
+	sort.Sort(signersAscending(auths))
+	for i, auth := range auths {
+		copy(header.Extra[extraVanity+i*common.AddressLength:], auth.Bytes())
+	}
 }
 
+// address retrieves the Ethereum address of a tester account by label, creating
+// a new account if no previous one exists yet.
 func (ap *testerAccountPool) address(account string) common.Address {
+	// Return the zero account for non-addresses
+	if account == "" {
+		return common.Address{}
+	}
 	// Ensure we have a persistent key for the account
 	if ap.accounts[account] == nil {
 		ap.accounts[account], _ = crypto.GenerateKey()
@@ -69,32 +72,38 @@ func (ap *testerAccountPool) address(account string) common.Address {
 	return crypto.PubkeyToAddress(ap.accounts[account].PublicKey)
 }
 
-// testerChainReader implements consensus.ChainReader to access the genesis
-// block. All other methods and requests will panic.
-type testerChainReader struct {
-	db ethdb.Database
-}
-
-func (r *testerChainReader) Config() *params.ChainConfig                 { return params.AllCliqueProtocolChanges }
-func (r *testerChainReader) CurrentHeader() *types.Header                { panic("not supported") }
-func (r *testerChainReader) GetHeader(common.Hash, uint64) *types.Header { panic("not supported") }
-func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block   { panic("not supported") }
-func (r *testerChainReader) GetHeaderByHash(common.Hash) *types.Header   { panic("not supported") }
-func (r *testerChainReader) GetHeaderByNumber(number uint64) *types.Header {
-	if number == 0 {
-		return rawdb.ReadHeader(r.db, rawdb.ReadCanonicalHash(r.db, 0), 0)
+// sign calculates a Clique digital signature for the given block and embeds it
+// back into the header.
+func (ap *testerAccountPool) sign(header *types.Header, signer string) {
+	// Ensure we have a persistent key for the signer
+	if ap.accounts[signer] == nil {
+		ap.accounts[signer], _ = crypto.GenerateKey()
 	}
-	return nil
+	// Sign the header and embed the signature in extra data
+	sig, _ := crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
-// Tests that voting is evaluated correctly for various simple and complex scenarios.
-func TestVoting(t *testing.T) {
+// testerVote represents a single block signed by a parcitular account, where
+// the account may or may not have cast a Clique vote.
+type testerVote struct {
+	signer     string
+	voted      string
+	auth       bool
+	checkpoint []string
+	newbatch   bool
+}
+
+// Tests that Clique signer voting is evaluated correctly for various simple and
+// complex scenarios, as well as that a few special corner cases fail correctly.
+func TestClique(t *testing.T) {
 	// Define the various voting scenarios to test
 	tests := []struct {
 		epoch   uint64
 		signers []string
 		votes   []testerVote
 		results []string
+		failure error
 	}{
 		{
 			// Single signer, no votes cast
@@ -322,10 +331,49 @@ func TestVoting(t *testing.T) {
 			votes: []testerVote{
 				{signer: "A", voted: "C", auth: true},
 				{signer: "B"},
-				{signer: "A"}, // Checkpoint block, (don't vote here, it's validated outside of snapshots)
+				{signer: "A", checkpoint: []string{"A", "B"}},
 				{signer: "B", voted: "C", auth: true},
 			},
 			results: []string{"A", "B"},
+		}, {
+			// An unauthorized signer should not be able to sign blocks
+			signers: []string{"A"},
+			votes: []testerVote{
+				{signer: "B"},
+			},
+			failure: errUnauthorizedSigner,
+		}, {
+			// An authorized signer that signed recenty should not be able to sign again
+			signers: []string{"A", "B"},
+			votes: []testerVote{
+				{signer: "A"},
+				{signer: "A"},
+			},
+			failure: errRecentlySigned,
+		}, {
+			// Recent signatures should not reset on checkpoint blocks imported in a batch
+			epoch:   3,
+			signers: []string{"A", "B", "C"},
+			votes: []testerVote{
+				{signer: "A"},
+				{signer: "B"},
+				{signer: "A", checkpoint: []string{"A", "B", "C"}},
+				{signer: "A"},
+			},
+			failure: errRecentlySigned,
+		}, {
+			// Recent signatures should not reset on checkpoint blocks imported in a new
+			// batch (https://github.com/ethereum/go-ethereum/issues/17593). Whilst this
+			// seems overly specific and weird, it was a Rinkeby consensus split.
+			epoch:   3,
+			signers: []string{"A", "B", "C"},
+			votes: []testerVote{
+				{signer: "A"},
+				{signer: "B"},
+				{signer: "A", checkpoint: []string{"A", "B", "C"}},
+				{signer: "A", newbatch: true},
+			},
+			failure: errRecentlySigned,
 		},
 	}
 	// Run through the scenarios and test them
@@ -356,28 +404,78 @@ func TestVoting(t *testing.T) {
 		genesis.Commit(db)
 
 		// Assemble a chain of headers from the cast votes
-		headers := make([]*types.Header, len(tt.votes))
-		for j, vote := range tt.votes {
-			headers[j] = &types.Header{
-				Number:   big.NewInt(int64(j) + 1),
-				Time:     big.NewInt(int64(j) * 15),
-				Coinbase: accounts.address(vote.voted),
-				Extra:    make([]byte, extraVanity+extraSeal),
+		config := *params.TestChainConfig
+		config.Clique = &params.CliqueConfig{
+			Period: 1,
+			Epoch:  tt.epoch,
+		}
+		engine := New(config.Clique, db)
+		engine.fakeDiff = true
+
+		blocks, _ := core.GenerateChain(&config, genesis.ToBlock(db), engine, db, len(tt.votes), func(j int, gen *core.BlockGen) {
+			// Cast the vote contained in this block
+			gen.SetCoinbase(accounts.address(tt.votes[j].voted))
+			if tt.votes[j].auth {
+				var nonce types.BlockNonce
+				copy(nonce[:], nonceAuthVote)
+				gen.SetNonce(nonce)
 			}
+		})
+		// Iterate through the blocks and seal them individually
+		for j, block := range blocks {
+			// Geth the header and prepare it for signing
+			header := block.Header()
 			if j > 0 {
-				headers[j].ParentHash = headers[j-1].Hash()
+				header.ParentHash = blocks[j-1].Hash()
 			}
-			if vote.auth {
-				copy(headers[j].Nonce[:], nonceAuthVote)
+			header.Extra = make([]byte, extraVanity+extraSeal)
+			if auths := tt.votes[j].checkpoint; auths != nil {
+				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
+				accounts.checkpoint(header, auths)
 			}
-			accounts.sign(headers[j], vote.signer)
+			header.Difficulty = diffInTurn // Ignored, we just need a valid number
+
+			// Generate the signature, embed it into the header and the block
+			accounts.sign(header, tt.votes[j].signer)
+			blocks[j] = block.WithSeal(header)
+		}
+		// Split the blocks up into individual import batches (cornercase testing)
+		batches := [][]*types.Block{nil}
+		for j, block := range blocks {
+			if tt.votes[j].newbatch {
+				batches = append(batches, nil)
+			}
+			batches[len(batches)-1] = append(batches[len(batches)-1], block)
 		}
 		// Pass all the headers through clique and ensure tallying succeeds
-		head := headers[len(headers)-1]
-
-		snap, err := New(&params.CliqueConfig{Epoch: tt.epoch}, db).snapshot(&testerChainReader{db: db}, head.Number.Uint64(), head.Hash(), headers)
+		chain, err := core.NewBlockChain(db, nil, &config, engine, vm.Config{}, nil)
 		if err != nil {
-			t.Errorf("test %d: failed to create voting snapshot: %v", i, err)
+			t.Errorf("test %d: failed to create test chain: %v", i, err)
+			continue
+		}
+		failed := false
+		for j := 0; j < len(batches)-1; j++ {
+			if k, err := chain.InsertChain(batches[j]); err != nil {
+				t.Errorf("test %d: failed to import batch %d, block %d: %v", i, j, k, err)
+				failed = true
+				break
+			}
+		}
+		if failed {
+			continue
+		}
+		if _, err = chain.InsertChain(batches[len(batches)-1]); err != tt.failure {
+			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
+		}
+		if tt.failure != nil {
+			continue
+		}
+		// No failure was produced or requested, generate the final voting snapshot
+		head := blocks[len(blocks)-1]
+
+		snap, err := engine.snapshot(chain, head.NumberU64(), head.Hash(), nil)
+		if err != nil {
+			t.Errorf("test %d: failed to retrieve voting snapshot: %v", i, err)
 			continue
 		}
 		// Verify the final list of signers against the expected ones

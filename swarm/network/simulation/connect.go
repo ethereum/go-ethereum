@@ -19,14 +19,14 @@ package simulation
 import (
 	"strings"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // ConnectToPivotNode connects the node with provided NodeID
 // to the pivot node, already set by Simulation.SetPivotNode method.
 // It is useful when constructing a star network topology
 // when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToPivotNode(id discover.NodeID) (err error) {
+func (s *Simulation) ConnectToPivotNode(id enode.ID) (err error) {
 	pid := s.PivotNodeID()
 	if pid == nil {
 		return ErrNoPivotNode
@@ -38,7 +38,7 @@ func (s *Simulation) ConnectToPivotNode(id discover.NodeID) (err error) {
 // to the last node that is up, and avoiding connection to self.
 // It is useful when constructing a chain network topology
 // when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
+func (s *Simulation) ConnectToLastNode(id enode.ID) (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
 	if l < 2 {
@@ -53,7 +53,7 @@ func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 
 // ConnectToRandomNode connects the node with provieded NodeID
 // to a random node that is up.
-func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
+func (s *Simulation) ConnectToRandomNode(id enode.ID) (err error) {
 	n := s.RandomUpNode(id)
 	if n == nil {
 		return ErrNodeNotFound
@@ -64,7 +64,7 @@ func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
 // ConnectNodesFull connects all nodes one to another.
 // It provides a complete connectivity in the network
 // which should be rarely needed.
-func (s *Simulation) ConnectNodesFull(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesFull(ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = s.UpNodeIDs()
 	}
@@ -82,7 +82,7 @@ func (s *Simulation) ConnectNodesFull(ids []discover.NodeID) (err error) {
 
 // ConnectNodesChain connects all nodes in a chain topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesChain(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesChain(ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = s.UpNodeIDs()
 	}
@@ -98,7 +98,7 @@ func (s *Simulation) ConnectNodesChain(ids []discover.NodeID) (err error) {
 
 // ConnectNodesRing connects all nodes in a ring topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesRing(ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = s.UpNodeIDs()
 	}
@@ -118,7 +118,7 @@ func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
 // ConnectNodesStar connects all nodes in a star topology
 // with the center at provided NodeID.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = s.UpNodeIDs()
 	}
@@ -138,7 +138,7 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID)
 // ConnectNodesStarPivot connects all nodes in a star topology
 // with the center at already set pivot node.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
+func (s *Simulation) ConnectNodesStarPivot(ids []enode.ID) (err error) {
 	id := s.PivotNodeID()
 	if id == nil {
 		return ErrNoPivotNode
@@ -147,7 +147,7 @@ func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
 }
 
 // connect connects two nodes but ignores already connected error.
-func (s *Simulation) connect(oneID, otherID discover.NodeID) error {
+func (s *Simulation) connect(oneID, otherID enode.ID) error {
 	return ignoreAlreadyConnectedErr(s.Net.Connect(oneID, otherID))
 }
 

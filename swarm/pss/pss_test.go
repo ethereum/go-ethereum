@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -556,23 +556,6 @@ OUTER:
 	}
 }
 
-type pssTestPeer struct {
-	*protocols.Peer
-	addr []byte
-}
-
-func (t *pssTestPeer) Address() []byte {
-	return t.addr
-}
-
-func (t *pssTestPeer) Update(addr network.OverlayAddr) network.OverlayAddr {
-	return addr
-}
-
-func (t *pssTestPeer) Off() network.OverlayAddr {
-	return &pssTestPeer{}
-}
-
 // forwarding should skip peers that do not have matching pss capabilities
 func TestMismatch(t *testing.T) {
 
@@ -582,7 +565,7 @@ func TestMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// initialize overlay
+	// initialize kad
 	baseaddr := network.RandomAddr()
 	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
 	rw := &p2p.MsgPipeRW{}
@@ -593,11 +576,11 @@ func TestMismatch(t *testing.T) {
 		Name:    pssProtocolName,
 		Version: 0,
 	}
-	nid, _ := discover.HexID("0x01")
-	wrongpsspeer := &pssTestPeer{
-		Peer: protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
-		addr: wrongpssaddr.Over(),
-	}
+	nid := enode.ID{0x01}
+	wrongpsspeer := network.NewPeer(&network.BzzPeer{
+		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
+		BzzAddr: &network.BzzAddr{OAddr: wrongpssaddr.Over(), UAddr: nil},
+	}, kad)
 
 	// one peer doesn't even have pss (boo!)
 	nopssaddr := network.RandomAddr()
@@ -605,17 +588,17 @@ func TestMismatch(t *testing.T) {
 		Name:    "nopss",
 		Version: 1,
 	}
-	nid, _ = discover.HexID("0x02")
-	nopsspeer := &pssTestPeer{
-		Peer: protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
-		addr: nopssaddr.Over(),
-	}
+	nid = enode.ID{0x02}
+	nopsspeer := network.NewPeer(&network.BzzPeer{
+		Peer:    protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
+		BzzAddr: &network.BzzAddr{OAddr: nopssaddr.Over(), UAddr: nil},
+	}, kad)
 
 	// add peers to kademlia and activate them
 	// it's safe so don't check errors
-	kad.Register([]network.OverlayAddr{wrongpsspeer})
+	kad.Register(wrongpsspeer.BzzAddr)
 	kad.On(wrongpsspeer)
-	kad.Register([]network.OverlayAddr{nopsspeer})
+	kad.Register(nopsspeer.BzzAddr)
 	kad.On(nopsspeer)
 
 	// create pss
@@ -940,11 +923,11 @@ func testSendAsym(t *testing.T) {
 
 type Job struct {
 	Msg      []byte
-	SendNode discover.NodeID
-	RecvNode discover.NodeID
+	SendNode enode.ID
+	RecvNode enode.ID
 }
 
-func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID]string, topic string) {
+func worker(id int, jobs <-chan Job, rpcs map[enode.ID]*rpc.Client, pubkeys map[enode.ID]string, topic string) {
 	for j := range jobs {
 		rpcs[j.SendNode].Call(nil, "pss_sendAsym", pubkeys[j.RecvNode], topic, hexutil.Encode(j.Msg))
 	}
@@ -994,7 +977,7 @@ func TestNetwork10000(t *testing.T) {
 
 func testNetwork(t *testing.T) {
 	type msgnotifyC struct {
-		id     discover.NodeID
+		id     enode.ID
 		msgIdx int
 	}
 
@@ -1006,16 +989,16 @@ func testNetwork(t *testing.T) {
 
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
-	nodes := make([]discover.NodeID, nodecount)
-	bzzaddrs := make(map[discover.NodeID]string, nodecount)
-	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
-	pubkeys := make(map[discover.NodeID]string, nodecount)
+	nodes := make([]enode.ID, nodecount)
+	bzzaddrs := make(map[enode.ID]string, nodecount)
+	rpcs := make(map[enode.ID]*rpc.Client, nodecount)
+	pubkeys := make(map[enode.ID]string, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
-	nodemsgcount := make(map[discover.NodeID]int, nodecount)
+	nodemsgcount := make(map[enode.ID]int, nodecount)
 
-	trigger := make(chan discover.NodeID)
+	trigger := make(chan enode.ID)
 
 	var a adapters.NodeAdapter
 	if adapter == "exec" {
@@ -1055,7 +1038,7 @@ func testNetwork(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
+	triggerChecks := func(trigger chan enode.ID, id enode.ID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -1559,12 +1542,11 @@ func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error
 
 func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewInmemoryStore()
-	kademlias := make(map[discover.NodeID]*network.Kademlia)
-	kademlia := func(id discover.NodeID) *network.Kademlia {
+	kademlias := make(map[enode.ID]*network.Kademlia)
+	kademlia := func(id enode.ID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := network.NewAddrFromNodeID(id)
 		params := network.NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -1572,7 +1554,7 @@ func newServices(allowRaw bool) adapters.Services {
 		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
-		kademlias[id] = network.NewKademlia(addr.Over(), params)
+		kademlias[id] = network.NewKademlia(id[:], params)
 		return kademlias[id]
 	}
 	return adapters.Services{
@@ -1623,7 +1605,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
 			hp.Discovery = false
 			config := &network.BzzConfig{
@@ -1636,17 +1618,13 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 }
 
-func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *PssParams) *Pss {
-
-	var nid discover.NodeID
-	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
-	addr := network.NewAddrFromNodeID(nid)
-
+func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *PssParams) *Pss {
+	nid := enode.PubkeyToIDV4(&privkey.PublicKey)
 	// set up routing if kademlia is not passed to us
-	if overlay == nil {
+	if kad == nil {
 		kp := network.NewKadParams()
 		kp.MinProxBinSize = 3
-		overlay = network.NewKademlia(addr.Over(), kp)
+		kad = network.NewKademlia(nid[:], kp)
 	}
 
 	// create pss
@@ -1654,7 +1632,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps, err := NewPss(overlay, pp)
+	ps, err := NewPss(kad, pp)
 	if err != nil {
 		return nil
 	}

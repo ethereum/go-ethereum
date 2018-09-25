@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -72,6 +73,10 @@ type keyStorePassphrase struct {
 	keysDirPath string
 	scryptN     int
 	scryptP     int
+	// skipKeyFileVerification disables the security-feature which does
+	// reads and decrypts any newly created keyfiles. This should be 'false' in all
+	// cases except tests -- setting this to 'true' is not recommended.
+	skipKeyFileVerification bool
 }
 
 func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
@@ -93,7 +98,7 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
 func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP}, rand.Reader, auth)
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
 	return a.Address, err
 }
 
@@ -102,7 +107,25 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 	if err != nil {
 		return err
 	}
-	return writeKeyFile(filename, keyjson)
+	// Write into temporary file
+	tmpName, err := writeTemporaryKeyFile(filename, keyjson)
+	if err != nil {
+		return err
+	}
+	if !ks.skipKeyFileVerification {
+		// Verify that we can decrypt the file with the given password.
+		_, err = ks.GetKey(key.Address, tmpName, auth)
+		if err != nil {
+			msg := "An error was encountered when saving and verifying the keystore file. \n" +
+				"This indicates that the keystore is corrupted. \n" +
+				"The corrupted file is stored at \n%v\n" +
+				"Please file a ticket at:\n\n" +
+				"https://github.com/ethereum/go-ethereum/issues." +
+				"The error was : %s"
+			return fmt.Errorf(msg, tmpName, err)
+		}
+	}
+	return os.Rename(tmpName, filename)
 }
 
 func (ks keyStorePassphrase) JoinPath(filename string) string {

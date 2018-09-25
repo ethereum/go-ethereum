@@ -39,7 +39,7 @@ func hash(ctx *cli.Context) {
 	defer f.Close()
 
 	stat, _ := f.Stat()
-	fileStore := storage.NewFileStore(storage.NewMapChunkStore(), storage.NewFileStoreParams())
+	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams())
 	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)

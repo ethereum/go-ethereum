@@ -72,7 +72,7 @@ type UpdateLookup struct {
 // 4 bytes period
 // 4 bytes version
 // storage.Keylength for rootAddr
-const updateLookupLength = 4 + 4 + storage.KeyLength
+const updateLookupLength = 4 + 4 + storage.AddressLength
 
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
 func (u *UpdateLookup) UpdateAddr() (updateAddr storage.Address) {
@@ -90,7 +90,7 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	if len(serializedData) != updateLookupLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
 	}
-	if len(u.rootAddr) != storage.KeyLength {
+	if len(u.rootAddr) != storage.AddressLength {
 		return NewError(ErrInvalidValue, "UpdateLookup.binaryPut called without rootAddr set")
 	}
 	binary.LittleEndian.PutUint32(serializedData[:4], u.period)
@@ -111,7 +111,7 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	}
 	u.period = binary.LittleEndian.Uint32(serializedData[:4])
 	u.version = binary.LittleEndian.Uint32(serializedData[4:8])
-	u.rootAddr = storage.Address(make([]byte, storage.KeyLength))
+	u.rootAddr = storage.Address(make([]byte, storage.AddressLength))
 	copy(u.rootAddr[:], serializedData[8:])
 	return nil
 }

@@ -96,7 +96,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 }
 
 // create an update chunk.
-func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
+func (r *SignedResourceUpdate) toChunk() (storage.Chunk, error) {
 
 	// Check that the update is signed and serialized
 	// For efficiency, data is serialized during signature and cached in
@@ -105,14 +105,11 @@ func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
-	chunk := storage.NewChunk(r.updateAddr, nil)
 	resourceUpdateLength := r.resourceUpdate.binaryLength()
-	chunk.SData = r.binaryData
-
 	// signature is the last item in the chunk data
-	copy(chunk.SData[resourceUpdateLength:], r.signature[:])
+	copy(r.binaryData[resourceUpdateLength:], r.signature[:])
 
-	chunk.Size = int64(len(chunk.SData))
+	chunk := storage.NewChunk(r.updateAddr, r.binaryData)
 	return chunk, nil
 }
 

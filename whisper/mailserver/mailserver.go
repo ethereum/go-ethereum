@@ -118,7 +118,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bl
 	var err error
 	var zero common.Hash
 	kl := NewDbKey(lower, zero)
-	ku := NewDbKey(upper, zero)
+	ku := NewDbKey(upper+1, zero) // LevelDB is exclusive, while the Whisper API is inclusive
 	i := s.db.NewIterator(&util.Range{Start: kl.raw, Limit: ku.raw}, nil)
 	defer i.Release()
 

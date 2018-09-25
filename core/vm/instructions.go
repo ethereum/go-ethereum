@@ -355,7 +355,7 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *
 	defer interpreter.intPool.put(shift) // First operand back into the pool
 
 	if shift.Cmp(common.Big256) >= 0 {
-		if value.Sign() > 0 {
+		if value.Sign() >= 0 {
 			value.SetUint64(0)
 		} else {
 			value.SetInt64(-1)
@@ -727,7 +727,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 }
 
 func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	// Pop gas. The actual gas in in interpreter.evm.callGasTemp.
+	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
 	interpreter.intPool.put(stack.pop())
 	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.

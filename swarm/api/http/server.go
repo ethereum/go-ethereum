@@ -129,7 +129,7 @@ func NewServer(api *api.API, corsString string) *Server {
 	})
 	mux.Handle("/bzz-immutable:/", methodHandler{
 		"GET": Adapt(
-			http.HandlerFunc(server.HandleGet),
+			http.HandlerFunc(server.HandleBzzGet),
 			defaultMiddlewares...,
 		),
 	})

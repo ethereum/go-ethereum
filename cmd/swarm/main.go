@@ -18,6 +18,7 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -37,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
@@ -208,6 +209,10 @@ var (
 		Name:  "data",
 		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
 	}
+	SwarmCompressedFlag = cli.BoolFlag{
+		Name:  "compressed",
+		Usage: "Prints encryption keys in compressed form",
+	}
 )
 
 //declare a few constant error messages, useful for later error check comparisons in test
@@ -250,6 +255,14 @@ func init() {
 			CustomHelpTemplate: helpTemplate,
 			Name:               "version",
 			Usage:              "Print version numbers",
+			Description:        "The output of this command is supposed to be machine-readable",
+		},
+		{
+			Action:             keys,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "print-keys",
+			Flags:              []cli.Flag{SwarmCompressedFlag},
+			Usage:              "Print public key information",
 			Description:        "The output of this command is supposed to be machine-readable",
 		},
 		{
@@ -306,6 +319,7 @@ func init() {
 							Flags: []cli.Flag{
 								SwarmAccessGrantKeysFlag,
 								SwarmDryRunFlag,
+								utils.PasswordFileFlag,
 							},
 							Name:        "act",
 							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
@@ -580,6 +594,17 @@ func main() {
 	}
 }
 
+func keys(ctx *cli.Context) error {
+	privateKey := getPrivKey(ctx)
+	pub := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
+	pubCompressed := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
+	if !ctx.Bool(SwarmCompressedFlag.Name) {
+		fmt.Println(fmt.Sprintf("publicKey=%s", pub))
+	}
+	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
+	return nil
+}
+
 func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
 	fmt.Println("Version:", sv.VersionWithMeta)
@@ -763,10 +788,10 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		return
 	}
 
-	cfg.P2P.BootstrapNodes = []*discover.Node{}
+	cfg.P2P.BootstrapNodes = []*enode.Node{}
 
 	for _, url := range SwarmBootnodes {
-		node, err := discover.ParseNode(url)
+		node, err := enode.ParseV4(url)
 		if err != nil {
 			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 		}

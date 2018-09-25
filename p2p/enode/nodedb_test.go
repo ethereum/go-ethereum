@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package discover
+package enode
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -28,24 +29,21 @@ import (
 )
 
 var nodeDBKeyTests = []struct {
-	id    NodeID
+	id    ID
 	field string
 	key   []byte
 }{
 	{
-		id:    NodeID{},
+		id:    ID{},
 		field: "version",
 		key:   []byte{0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e}, // field
 	},
 	{
-		id:    MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		id:    HexID("51232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 		field: ":discover",
-		key: []byte{0x6e, 0x3a, // prefix
-			0x1d, 0xd9, 0xd6, 0x5c, 0x45, 0x52, 0xb5, 0xeb, // node id
-			0x43, 0xd5, 0xad, 0x55, 0xa2, 0xee, 0x3f, 0x56, //
-			0xc6, 0xcb, 0xc1, 0xc6, 0x4a, 0x5c, 0x8d, 0x65, //
-			0x9f, 0x51, 0xfc, 0xd5, 0x1b, 0xac, 0xe2, 0x43, //
-			0x51, 0x23, 0x2b, 0x8d, 0x78, 0x21, 0x61, 0x7d, //
+		key: []byte{
+			0x6e, 0x3a, // prefix
+			0x51, 0x23, 0x2b, 0x8d, 0x78, 0x21, 0x61, 0x7d, // node id
 			0x2b, 0x29, 0xb5, 0x4b, 0x81, 0xcd, 0xef, 0xb9, //
 			0xb3, 0xe9, 0xc3, 0x7d, 0x7f, 0xd5, 0xf6, 0x32, //
 			0x70, 0xbc, 0xc9, 0xe1, 0xa6, 0xf6, 0xa4, 0x39, //
@@ -54,7 +52,7 @@ var nodeDBKeyTests = []struct {
 	},
 }
 
-func TestNodeDBKeys(t *testing.T) {
+func TestDBKeys(t *testing.T) {
 	for i, tt := range nodeDBKeyTests {
 		if key := makeKey(tt.id, tt.field); !bytes.Equal(key, tt.key) {
 			t.Errorf("make test %d: key mismatch: have 0x%x, want 0x%x", i, key, tt.key)
@@ -78,9 +76,9 @@ var nodeDBInt64Tests = []struct {
 	{key: []byte{0x03}, value: 3},
 }
 
-func TestNodeDBInt64(t *testing.T) {
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
-	defer db.close()
+func TestDBInt64(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
 
 	tests := nodeDBInt64Tests
 	for i := 0; i < len(tests); i++ {
@@ -101,9 +99,9 @@ func TestNodeDBInt64(t *testing.T) {
 	}
 }
 
-func TestNodeDBFetchStore(t *testing.T) {
-	node := NewNode(
-		MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+func TestDBFetchStore(t *testing.T) {
+	node := NewV4(
+		hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 		net.IP{192, 168, 0, 1},
 		30303,
 		30303,
@@ -111,47 +109,47 @@ func TestNodeDBFetchStore(t *testing.T) {
 	inst := time.Now()
 	num := 314
 
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
-	defer db.close()
+	db, _ := OpenDB("")
+	defer db.Close()
 
 	// Check fetch/store operations on a node ping object
-	if stored := db.lastPingReceived(node.ID); stored.Unix() != 0 {
+	if stored := db.LastPingReceived(node.ID()); stored.Unix() != 0 {
 		t.Errorf("ping: non-existing object: %v", stored)
 	}
-	if err := db.updateLastPingReceived(node.ID, inst); err != nil {
+	if err := db.UpdateLastPingReceived(node.ID(), inst); err != nil {
 		t.Errorf("ping: failed to update: %v", err)
 	}
-	if stored := db.lastPingReceived(node.ID); stored.Unix() != inst.Unix() {
+	if stored := db.LastPingReceived(node.ID()); stored.Unix() != inst.Unix() {
 		t.Errorf("ping: value mismatch: have %v, want %v", stored, inst)
 	}
 	// Check fetch/store operations on a node pong object
-	if stored := db.lastPongReceived(node.ID); stored.Unix() != 0 {
+	if stored := db.LastPongReceived(node.ID()); stored.Unix() != 0 {
 		t.Errorf("pong: non-existing object: %v", stored)
 	}
-	if err := db.updateLastPongReceived(node.ID, inst); err != nil {
+	if err := db.UpdateLastPongReceived(node.ID(), inst); err != nil {
 		t.Errorf("pong: failed to update: %v", err)
 	}
-	if stored := db.lastPongReceived(node.ID); stored.Unix() != inst.Unix() {
+	if stored := db.LastPongReceived(node.ID()); stored.Unix() != inst.Unix() {
 		t.Errorf("pong: value mismatch: have %v, want %v", stored, inst)
 	}
 	// Check fetch/store operations on a node findnode-failure object
-	if stored := db.findFails(node.ID); stored != 0 {
+	if stored := db.FindFails(node.ID()); stored != 0 {
 		t.Errorf("find-node fails: non-existing object: %v", stored)
 	}
-	if err := db.updateFindFails(node.ID, num); err != nil {
+	if err := db.UpdateFindFails(node.ID(), num); err != nil {
 		t.Errorf("find-node fails: failed to update: %v", err)
 	}
-	if stored := db.findFails(node.ID); stored != num {
+	if stored := db.FindFails(node.ID()); stored != num {
 		t.Errorf("find-node fails: value mismatch: have %v, want %v", stored, num)
 	}
 	// Check fetch/store operations on an actual node object
-	if stored := db.node(node.ID); stored != nil {
+	if stored := db.Node(node.ID()); stored != nil {
 		t.Errorf("node: non-existing object: %v", stored)
 	}
-	if err := db.updateNode(node); err != nil {
+	if err := db.UpdateNode(node); err != nil {
 		t.Errorf("node: failed to update: %v", err)
 	}
-	if stored := db.node(node.ID); stored == nil {
+	if stored := db.Node(node.ID()); stored == nil {
 		t.Errorf("node: not found")
 	} else if !reflect.DeepEqual(stored, node) {
 		t.Errorf("node: data mismatch: have %v, want %v", stored, node)
@@ -165,19 +163,19 @@ var nodeDBSeedQueryNodes = []struct {
 	// This one should not be in the result set because its last
 	// pong time is too far in the past.
 	{
-		node: NewNode(
-			MustHexID("0x84d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
 			net.IP{127, 0, 0, 3},
 			30303,
 			30303,
 		),
 		pong: time.Now().Add(-3 * time.Hour),
 	},
-	// This one shouldn't be in in the result set because its
+	// This one shouldn't be in the result set because its
 	// nodeID is the local node's ID.
 	{
-		node: NewNode(
-			MustHexID("0x57d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("ff93ff820abacd4351b0f14e47b324bc82ff014c226f3f66a53535734a3c150e7e38ca03ef0964ba55acddc768f5e99cd59dea95ddd4defbab1339c92fa319b2"),
 			net.IP{127, 0, 0, 3},
 			30303,
 			30303,
@@ -187,8 +185,8 @@ var nodeDBSeedQueryNodes = []struct {
 
 	// These should be in the result set.
 	{
-		node: NewNode(
-			MustHexID("0x22d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("c2b5eb3f5dde05f815b63777809ee3e7e0cbb20035a6b00ce327191e6eaa8f26a8d461c9112b7ab94698e7361fa19fd647e603e73239002946d76085b6f928d6"),
 			net.IP{127, 0, 0, 1},
 			30303,
 			30303,
@@ -196,8 +194,8 @@ var nodeDBSeedQueryNodes = []struct {
 		pong: time.Now().Add(-2 * time.Second),
 	},
 	{
-		node: NewNode(
-			MustHexID("0x44d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("6ca1d400c8ddf8acc94bcb0dd254911ad71a57bed5e0ae5aa205beed59b28c2339908e97990c493499613cff8ecf6c3dc7112a8ead220cdcd00d8847ca3db755"),
 			net.IP{127, 0, 0, 2},
 			30303,
 			30303,
@@ -205,56 +203,91 @@ var nodeDBSeedQueryNodes = []struct {
 		pong: time.Now().Add(-3 * time.Second),
 	},
 	{
-		node: NewNode(
-			MustHexID("0xe2d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("234dc63fe4d131212b38236c4c3411288d7bec61cbf7b120ff12c43dc60c96182882f4291d209db66f8a38e986c9c010ff59231a67f9515c7d1668b86b221a47"),
 			net.IP{127, 0, 0, 3},
 			30303,
 			30303,
 		),
 		pong: time.Now().Add(-1 * time.Second),
 	},
+	{
+		node: NewV4(
+			hexPubkey("c013a50b4d1ebce5c377d8af8cb7114fd933ffc9627f96ad56d90fef5b7253ec736fd07ef9a81dc2955a997e54b7bf50afd0aa9f110595e2bec5bb7ce1657004"),
+			net.IP{127, 0, 0, 3},
+			30303,
+			30303,
+		),
+		pong: time.Now().Add(-2 * time.Second),
+	},
+	{
+		node: NewV4(
+			hexPubkey("f141087e3e08af1aeec261ff75f48b5b1637f594ea9ad670e50051646b0416daa3b134c28788cbe98af26992a47652889cd8577ccc108ac02c6a664db2dc1283"),
+			net.IP{127, 0, 0, 3},
+			30303,
+			30303,
+		),
+		pong: time.Now().Add(-2 * time.Second),
+	},
 }
 
-func TestNodeDBSeedQuery(t *testing.T) {
-	db, _ := newNodeDB("", nodeDBVersion, nodeDBSeedQueryNodes[1].node.ID)
-	defer db.close()
+func TestDBSeedQuery(t *testing.T) {
+	// Querying seeds uses seeks an might not find all nodes
+	// every time when the database is small. Run the test multiple
+	// times to avoid flakes.
+	const attempts = 15
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = testSeedQuery(); err == nil {
+			return
+		}
+	}
+	if err != nil {
+		t.Errorf("no successful run in %d attempts: %v", attempts, err)
+	}
+}
+
+func testSeedQuery() error {
+	db, _ := OpenDB("")
+	defer db.Close()
 
 	// Insert a batch of nodes for querying
 	for i, seed := range nodeDBSeedQueryNodes {
-		if err := db.updateNode(seed.node); err != nil {
-			t.Fatalf("node %d: failed to insert: %v", i, err)
+		if err := db.UpdateNode(seed.node); err != nil {
+			return fmt.Errorf("node %d: failed to insert: %v", i, err)
 		}
-		if err := db.updateLastPongReceived(seed.node.ID, seed.pong); err != nil {
-			t.Fatalf("node %d: failed to insert bondTime: %v", i, err)
+		if err := db.UpdateLastPongReceived(seed.node.ID(), seed.pong); err != nil {
+			return fmt.Errorf("node %d: failed to insert bondTime: %v", i, err)
 		}
 	}
 
 	// Retrieve the entire batch and check for duplicates
-	seeds := db.querySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
-	have := make(map[NodeID]struct{})
+	seeds := db.QuerySeeds(len(nodeDBSeedQueryNodes)*2, time.Hour)
+	have := make(map[ID]struct{})
 	for _, seed := range seeds {
-		have[seed.ID] = struct{}{}
+		have[seed.ID()] = struct{}{}
 	}
-	want := make(map[NodeID]struct{})
-	for _, seed := range nodeDBSeedQueryNodes[2:] {
-		want[seed.node.ID] = struct{}{}
+	want := make(map[ID]struct{})
+	for _, seed := range nodeDBSeedQueryNodes[1:] {
+		want[seed.node.ID()] = struct{}{}
 	}
 	if len(seeds) != len(want) {
-		t.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(want))
+		return fmt.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(want))
 	}
 	for id := range have {
 		if _, ok := want[id]; !ok {
-			t.Errorf("extra seed: %v", id)
+			return fmt.Errorf("extra seed: %v", id)
 		}
 	}
 	for id := range want {
 		if _, ok := have[id]; !ok {
-			t.Errorf("missing seed: %v", id)
+			return fmt.Errorf("missing seed: %v", id)
 		}
 	}
+	return nil
 }
 
-func TestNodeDBPersistency(t *testing.T) {
+func TestDBPersistency(t *testing.T) {
 	root, err := ioutil.TempDir("", "nodedb-")
 	if err != nil {
 		t.Fatalf("failed to create temporary data folder: %v", err)
@@ -267,34 +300,24 @@ func TestNodeDBPersistency(t *testing.T) {
 	)
 
 	// Create a persistent database and store some values
-	db, err := newNodeDB(filepath.Join(root, "database"), nodeDBVersion, NodeID{})
+	db, err := OpenDB(filepath.Join(root, "database"))
 	if err != nil {
 		t.Fatalf("failed to create persistent database: %v", err)
 	}
 	if err := db.storeInt64(testKey, testInt); err != nil {
 		t.Fatalf("failed to store value: %v.", err)
 	}
-	db.close()
+	db.Close()
 
 	// Reopen the database and check the value
-	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion, NodeID{})
+	db, err = OpenDB(filepath.Join(root, "database"))
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
 	if val := db.fetchInt64(testKey); val != testInt {
 		t.Fatalf("value mismatch: have %v, want %v", val, testInt)
 	}
-	db.close()
-
-	// Change the database version and check flush
-	db, err = newNodeDB(filepath.Join(root, "database"), nodeDBVersion+1, NodeID{})
-	if err != nil {
-		t.Fatalf("failed to open persistent database: %v", err)
-	}
-	if val := db.fetchInt64(testKey); val != 0 {
-		t.Fatalf("value mismatch: have %v, want %v", val, 0)
-	}
-	db.close()
+	db.Close()
 }
 
 var nodeDBExpirationNodes = []struct {
@@ -303,8 +326,8 @@ var nodeDBExpirationNodes = []struct {
 	exp  bool
 }{
 	{
-		node: NewNode(
-			MustHexID("0x01d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("8d110e2ed4b446d9b5fb50f117e5f37fb7597af455e1dab0e6f045a6eeaa786a6781141659020d38bdc5e698ed3d4d2bafa8b5061810dfa63e8ac038db2e9b67"),
 			net.IP{127, 0, 0, 1},
 			30303,
 			30303,
@@ -312,8 +335,8 @@ var nodeDBExpirationNodes = []struct {
 		pong: time.Now().Add(-nodeDBNodeExpiration + time.Minute),
 		exp:  false,
 	}, {
-		node: NewNode(
-			MustHexID("0x02d9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		node: NewV4(
+			hexPubkey("913a205579c32425b220dfba999d215066e5bdbf900226b11da1907eae5e93eb40616d47412cf819664e9eacbdfcca6b0c6e07e09847a38472d4be46ab0c3672"),
 			net.IP{127, 0, 0, 2},
 			30303,
 			30303,
@@ -323,16 +346,16 @@ var nodeDBExpirationNodes = []struct {
 	},
 }
 
-func TestNodeDBExpiration(t *testing.T) {
-	db, _ := newNodeDB("", nodeDBVersion, NodeID{})
-	defer db.close()
+func TestDBExpiration(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
 
 	// Add all the test nodes and set their last pong time
 	for i, seed := range nodeDBExpirationNodes {
-		if err := db.updateNode(seed.node); err != nil {
+		if err := db.UpdateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
-		if err := db.updateLastPongReceived(seed.node.ID, seed.pong); err != nil {
+		if err := db.UpdateLastPongReceived(seed.node.ID(), seed.pong); err != nil {
 			t.Fatalf("node %d: failed to update bondTime: %v", i, err)
 		}
 	}
@@ -341,40 +364,9 @@ func TestNodeDBExpiration(t *testing.T) {
 		t.Fatalf("failed to expire nodes: %v", err)
 	}
 	for i, seed := range nodeDBExpirationNodes {
-		node := db.node(seed.node.ID)
+		node := db.Node(seed.node.ID())
 		if (node == nil && !seed.exp) || (node != nil && seed.exp) {
 			t.Errorf("node %d: expiration mismatch: have %v, want %v", i, node, seed.exp)
 		}
-	}
-}
-
-func TestNodeDBSelfExpiration(t *testing.T) {
-	// Find a node in the tests that shouldn't expire, and assign it as self
-	var self NodeID
-	for _, node := range nodeDBExpirationNodes {
-		if !node.exp {
-			self = node.node.ID
-			break
-		}
-	}
-	db, _ := newNodeDB("", nodeDBVersion, self)
-	defer db.close()
-
-	// Add all the test nodes and set their last pong time
-	for i, seed := range nodeDBExpirationNodes {
-		if err := db.updateNode(seed.node); err != nil {
-			t.Fatalf("node %d: failed to insert: %v", i, err)
-		}
-		if err := db.updateLastPongReceived(seed.node.ID, seed.pong); err != nil {
-			t.Fatalf("node %d: failed to update bondTime: %v", i, err)
-		}
-	}
-	// Expire the nodes and make sure self has been evacuated too
-	if err := db.expireNodes(); err != nil {
-		t.Fatalf("failed to expire nodes: %v", err)
-	}
-	node := db.node(self)
-	if node != nil {
-		t.Errorf("self not evacuated")
 	}
 }

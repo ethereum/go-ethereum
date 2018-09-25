@@ -56,7 +56,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	f.Topics = make([][]byte, topicNum)
 	for i := 0; i < topicNum; i++ {
 		f.Topics[i] = make([]byte, 4)
-		mrand.Read(f.Topics[i][:])
+		mrand.Read(f.Topics[i])
 		f.Topics[i][0] = 0x01
 	}
 
