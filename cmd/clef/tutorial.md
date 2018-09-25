@@ -31,7 +31,7 @@ NOTE: This file does not contain your accounts. Those need to be backed up separ
 
 ## Creating rules
 
-Now, you can create a rule-file. Note that it is not mandatory to use predefined rules, but it's good practice.
+Now, you can create a rule-file. Note that it is not mandatory to use predefined rules, but it's really handy.
 
 ```javascript
 function ApproveListing(){
@@ -51,9 +51,9 @@ Get the `sha256` hash. If you have openssl, you can do `openssl sha256 rules.js`
 INFO [02-21|12:14:38] Ruleset attestation updated              sha256=6c21d1737429d6d4f2e55146da0797782f3c0a0355227f19d702df377c165d72
 ```
 
-...and load a mock-up `4byte.json` by downloading the file from this repository to your local repo:
+...and (this is required only for non-production versions) load a mock-up `4byte.json` by copying the file from the source to your current working directory:
 ```text
-#wget -O 4byte.json https://github.com/ethereum/go-ethereum/blob/master/cmd/clef/4byte.json
+#cp $GOPATH/src/github.com/ethereum/go-ethereum/cmd/clef/4byte.json $PWD
 ```
 
 At this point, we can start the signer with the rule-file:
@@ -148,7 +148,7 @@ In this example:
     * auto-rejected if it does not.
 * Any other signing-requests will be passed along for manual approve/reject.
 
-_Note: make sure that `0x694...` is an account you have access to. You can create it either via the clef or the traditional account cli tool. If the latter was chosen, make sure both clef and geth use the same data directory by specifing `--networkid your_network_id` and `--keystore path/to/your/keystore` when running clef._
+_Note: make sure that `0x694...` is an account you have access to. You can create it either via the clef or the traditional account cli tool. If the latter was chosen, make sure both clef and geth use the same keystore by specifing `--keystore path/to/your/keystore` when running clef._
 
 Attest the new file...
 ```text
