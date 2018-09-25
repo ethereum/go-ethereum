@@ -149,7 +149,7 @@ func TestPasswordValidation(t *testing.T) {
 		{"password\nwith\nlinebreak", true},
 		{"password\twith\vtabs", true},
 		// Ok passwords
-		{"passwordWhichIsOk", false},
+		{"password WhichIsOk", false},
 		{"passwordOk!@#$%^&*()", false},
 		{"12301203123012301230123012", false},
 	}
