@@ -43,7 +43,7 @@ type unconfirmedBlock struct {
 }
 
 // unconfirmedBlocks implements a data structure to maintain locally mined blocks
-// have have not yet reached enough maturity to guarantee chain inclusion. It is
+// have not yet reached enough maturity to guarantee chain inclusion. It is
 // used by the miner to provide logs to the user when a previously mined block
 // has a high enough guarantee to not be reorged out of the canonical chain.
 type unconfirmedBlocks struct {

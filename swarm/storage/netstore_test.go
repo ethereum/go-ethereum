@@ -25,17 +25,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var sourcePeerID = enode.HexID("99d8594b52298567d2ca3f4c441a5ba0140ee9245e26460d01102a52773c73b9")
 
 type mockNetFetcher struct {
 	peers           *sync.Map
-	sources         []*discover.NodeID
+	sources         []*enode.ID
 	peersPerRequest [][]Address
 	requestCalled   bool
 	offerCalled     bool
@@ -43,7 +42,7 @@ type mockNetFetcher struct {
 	ctx             context.Context
 }
 
-func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
+func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
 	m.offerCalled = true
 	m.sources = append(m.sources, source)
 }

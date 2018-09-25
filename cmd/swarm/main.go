@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
@@ -795,10 +795,10 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		return
 	}
 
-	cfg.P2P.BootstrapNodes = []*discover.Node{}
+	cfg.P2P.BootstrapNodes = []*enode.Node{}
 
 	for _, url := range SwarmBootnodes {
-		node, err := discover.ParseNode(url)
+		node, err := enode.ParseV4(url)
 		if err != nil {
 			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 		}

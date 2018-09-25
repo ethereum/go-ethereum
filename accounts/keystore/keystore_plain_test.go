@@ -37,7 +37,7 @@ func tmpKeyStoreIface(t *testing.T, encrypted bool) (dir string, ks keyStore) {
 		t.Fatal(err)
 	}
 	if encrypted {
-		ks = &keyStorePassphrase{d, veryLightScryptN, veryLightScryptP}
+		ks = &keyStorePassphrase{d, veryLightScryptN, veryLightScryptP, true}
 	} else {
 		ks = &keyStorePlain{d}
 	}
@@ -191,7 +191,7 @@ func TestV1_1(t *testing.T) {
 
 func TestV1_2(t *testing.T) {
 	t.Parallel()
-	ks := &keyStorePassphrase{"testdata/v1", LightScryptN, LightScryptP}
+	ks := &keyStorePassphrase{"testdata/v1", LightScryptN, LightScryptP, true}
 	addr := common.HexToAddress("cb61d5a9c4896fb9658090b597ef0e7be6f7b67e")
 	file := "testdata/v1/cb61d5a9c4896fb9658090b597ef0e7be6f7b67e/cb61d5a9c4896fb9658090b597ef0e7be6f7b67e"
 	k, err := ks.GetKey(addr, file, "g")

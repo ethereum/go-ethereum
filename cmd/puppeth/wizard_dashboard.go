@@ -92,7 +92,7 @@ func (w *wizard) deployDashboard() {
 				pages = append(pages, page)
 			}
 		}
-		// Promt the user to chose one, enter manually or simply not list this service
+		// Prompt the user to chose one, enter manually or simply not list this service
 		defLabel, defChoice := "don't list", len(pages)+2
 		if len(pages) > 0 {
 			defLabel, defChoice = pages[0], 1

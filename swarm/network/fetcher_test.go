@@ -22,11 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-var requestedPeerID = discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
-var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var requestedPeerID = enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+var sourcePeerID = enode.HexID("99d8594b52298567d2ca3f4c441a5ba0140ee9245e26460d01102a52773c73b9")
 
 // mockRequester pushes every request to the requestC channel when its doRequest function is called
 type mockRequester struct {
@@ -45,7 +45,7 @@ func newMockRequester(waitTimes ...time.Duration) *mockRequester {
 	}
 }
 
-func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*discover.NodeID, chan struct{}, error) {
+func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*enode.ID, chan struct{}, error) {
 	waitTime := time.Duration(0)
 	if m.ctr < len(m.waitTimes) {
 		waitTime = m.waitTimes[m.ctr]
@@ -389,9 +389,9 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 // and not skip unknown one.
 func TestRequestSkipPeer(t *testing.T) {
 	addr := make([]byte, 32)
-	peers := []discover.NodeID{
-		discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
-		discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+	peers := []enode.ID{
+		enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8"),
+		enode.HexID("99d8594b52298567d2ca3f4c441a5ba0140ee9245e26460d01102a52773c73b9"),
 	}
 
 	peersToSkip := new(sync.Map)
@@ -411,7 +411,7 @@ func TestRequestSkipPeer(t *testing.T) {
 // after RequestTimeout has passed.
 func TestRequestSkipPeerExpired(t *testing.T) {
 	addr := make([]byte, 32)
-	peer := discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+	peer := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
 	// set RequestTimeout to a low value and reset it after the test
 	defer func(t time.Duration) { RequestTimeout = t }(RequestTimeout)
@@ -437,7 +437,7 @@ func TestRequestSkipPeerExpired(t *testing.T) {
 // by value to peersToSkip map is not time.Duration.
 func TestRequestSkipPeerPermanent(t *testing.T) {
 	addr := make([]byte, 32)
-	peer := discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+	peer := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
 	// set RequestTimeout to a low value and reset it after the test
 	defer func(t time.Duration) { RequestTimeout = t }(RequestTimeout)

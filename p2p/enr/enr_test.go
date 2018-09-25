@@ -18,21 +18,15 @@ package enr
 
 import (
 	"bytes"
-	"encoding/hex"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-)
-
-var (
-	privkey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	pubkey     = &privkey.PublicKey
 )
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -85,18 +79,6 @@ func TestGetSetUDP(t *testing.T) {
 	var port2 UDP
 	require.NoError(t, r.Load(&port2))
 	assert.Equal(t, port, port2)
-}
-
-// TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the Secp256k1 key.
-func TestGetSetSecp256k1(t *testing.T) {
-	var r Record
-	if err := SignV4(&r, privkey); err != nil {
-		t.Fatal(err)
-	}
-
-	var pk Secp256k1
-	require.NoError(t, r.Load(&pk))
-	assert.EqualValues(t, pubkey, &pk)
 }
 
 func TestLoadErrors(t *testing.T) {
@@ -167,23 +149,20 @@ func TestSortedGetAndSet(t *testing.T) {
 func TestDirty(t *testing.T) {
 	var r Record
 
-	if r.Signed() {
-		t.Error("Signed returned true for zero record")
-	}
 	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
 		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 
-	require.NoError(t, SignV4(&r, privkey))
-	if !r.Signed() {
-		t.Error("Signed return false for signed record")
+	require.NoError(t, signTest([]byte{5}, &r))
+	if len(r.signature) == 0 {
+		t.Error("record is not signed")
 	}
 	_, err := rlp.EncodeToBytes(r)
 	assert.NoError(t, err)
 
 	r.SetSeq(3)
-	if r.Signed() {
-		t.Error("Signed returned true for modified record")
+	if len(r.signature) != 0 {
+		t.Error("signature still set after modification")
 	}
 	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
 		t.Errorf("expected errEncodeUnsigned, got %#v", err)
@@ -210,7 +189,7 @@ func TestSignEncodeAndDecode(t *testing.T) {
 	var r Record
 	r.Set(UDP(30303))
 	r.Set(IP{127, 0, 0, 1})
-	require.NoError(t, SignV4(&r, privkey))
+	require.NoError(t, signTest([]byte{5}, &r))
 
 	blob, err := rlp.EncodeToBytes(r)
 	require.NoError(t, err)
@@ -224,48 +203,6 @@ func TestSignEncodeAndDecode(t *testing.T) {
 	assert.Equal(t, blob, blob2)
 }
 
-func TestNodeAddr(t *testing.T) {
-	var r Record
-	if addr := r.NodeAddr(); addr != nil {
-		t.Errorf("wrong address on empty record: got %v, want %v", addr, nil)
-	}
-
-	require.NoError(t, SignV4(&r, privkey))
-	expected := "a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7"
-	assert.Equal(t, expected, hex.EncodeToString(r.NodeAddr()))
-}
-
-var pyRecord, _ = hex.DecodeString("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f")
-
-// TestPythonInterop checks that we can decode and verify a record produced by the Python
-// implementation.
-func TestPythonInterop(t *testing.T) {
-	var r Record
-	if err := rlp.DecodeBytes(pyRecord, &r); err != nil {
-		t.Fatalf("can't decode: %v", err)
-	}
-
-	var (
-		wantAddr, _ = hex.DecodeString("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
-		wantSeq     = uint64(1)
-		wantIP      = IP{127, 0, 0, 1}
-		wantUDP     = UDP(30303)
-	)
-	if r.Seq() != wantSeq {
-		t.Errorf("wrong seq: got %d, want %d", r.Seq(), wantSeq)
-	}
-	if addr := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
-		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
-	}
-	want := map[Entry]interface{}{new(IP): &wantIP, new(UDP): &wantUDP}
-	for k, v := range want {
-		desc := fmt.Sprintf("loading key %q", k.ENRKey())
-		if assert.NoError(t, r.Load(k), desc) {
-			assert.Equal(t, k, v, desc)
-		}
-	}
-}
-
 // TestRecordTooBig tests that records bigger than SizeLimit bytes cannot be signed.
 func TestRecordTooBig(t *testing.T) {
 	var r Record
@@ -273,13 +210,13 @@ func TestRecordTooBig(t *testing.T) {
 
 	// set a big value for random key, expect error
 	r.Set(WithEntry(key, randomString(SizeLimit)))
-	if err := SignV4(&r, privkey); err != errTooBig {
+	if err := signTest([]byte{5}, &r); err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
 	r.Set(WithEntry(key, randomString(100)))
-	require.NoError(t, SignV4(&r, privkey))
+	require.NoError(t, signTest([]byte{5}, &r))
 }
 
 // TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.
@@ -295,7 +232,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		r.Set(WithEntry(key, &value))
 	}
 
-	require.NoError(t, SignV4(&r, privkey))
+	require.NoError(t, signTest([]byte{5}, &r))
 	_, err := rlp.EncodeToBytes(r)
 	require.NoError(t, err)
 
@@ -308,11 +245,40 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 	}
 }
 
-func BenchmarkDecode(b *testing.B) {
-	var r Record
-	for i := 0; i < b.N; i++ {
-		rlp.DecodeBytes(pyRecord, &r)
+type testSig struct{}
+
+type testID []byte
+
+func (id testID) ENRKey() string { return "testid" }
+
+func signTest(id []byte, r *Record) error {
+	r.Set(ID("test"))
+	r.Set(testID(id))
+	return r.SetSig(testSig{}, makeTestSig(id, r.Seq()))
+}
+
+func makeTestSig(id []byte, seq uint64) []byte {
+	sig := make([]byte, 8, len(id)+8)
+	binary.BigEndian.PutUint64(sig[:8], seq)
+	sig = append(sig, id...)
+	return sig
+}
+
+func (testSig) Verify(r *Record, sig []byte) error {
+	var id []byte
+	if err := r.Load((*testID)(&id)); err != nil {
+		return err
 	}
-	b.StopTimer()
-	r.NodeAddr()
+	if !bytes.Equal(sig, makeTestSig(id, r.Seq())) {
+		return ErrInvalidSig
+	}
+	return nil
+}
+
+func (testSig) NodeAddr(r *Record) []byte {
+	var id []byte
+	if err := r.Load((*testID)(&id)); err != nil {
+		return nil
+	}
+	return id
 }

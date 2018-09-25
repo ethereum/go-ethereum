@@ -197,7 +197,7 @@ func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) 
 
 // // StartSyncing is called on the Peer to start the syncing process
 // // the idea is that it is called only after kademlia is close to healthy
-// func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
+// func StartSyncing(s *Streamer, peerId enode.ID, po uint8, nn bool) {
 // 	lastPO := po
 // 	if nn {
 // 		lastPO = maxPO
