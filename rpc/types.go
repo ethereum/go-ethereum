@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -162,4 +163,29 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
+}
+
+type BlockNumberOrHash string
+
+func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
+	*bnh = BlockNumberOrHash(data)
+	return nil
+}
+
+func (bnh BlockNumberOrHash) IsHash() bool {
+	return bnh[0] == '"' && bnh[len(bnh)-1] == '"' && len(bnh) == 44
+}
+
+func (bnh BlockNumberOrHash) Hash() *common.Hash {
+	if !bnh.IsHash() {
+		return nil
+	}
+	hash := common.HexToHash(string(bnh[1 : len(bnh)-1]))
+	return &hash
+}
+
+func (bnh BlockNumberOrHash) Number() int64 {
+	var bn BlockNumber
+	(&bn).UnmarshalJSON([]byte(bnh))
+	return bn.Int64()
 }

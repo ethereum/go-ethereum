@@ -223,18 +223,18 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// Gather all indexed logs, and finish with non indexed ones
 	if mainChain {
 		size, sections := f.backend.BloomStatus()
-		if indexed := sections * size; indexed > begin.Number.Uint64() {
+		if indexed := sections * size; indexed > ancestor.Number.Uint64() {
 			if indexed > end.Number.Uint64() {
-				logs, err = f.indexedLogs(ctx, begin.Number.Uint64(), end.Number.Uint64())
+				logs, err = f.indexedLogs(ctx, ancestor.Number.Uint64(), end.Number.Uint64())
 			} else {
-				logs, err = f.indexedLogs(ctx, begin.Number.Uint64(), indexed-1)
+				logs, err = f.indexedLogs(ctx, ancestor.Number.Uint64(), indexed-1)
 			}
 			if err != nil {
 				return logs, err
 			}
 		}
 	}
-	rest, err := f.unindexedLogs(ctx, begin.Hash(), end.Hash())
+	rest, err := f.unindexedLogs(ctx, ancestor.Hash(), end.Hash())
 	logs = append(logs, rest...)
 	sort.Sort(logList(logs))
 

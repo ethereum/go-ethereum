@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -476,11 +475,11 @@ func returnLogs(logs []*types.Log) []*types.Log {
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	type input struct {
-		BlockHash *common.Hash  `json:"blockHash"`
-		FromBlock *string       `json:"fromBlock"`
-		ToBlock   *string       `json:"toBlock"`
-		Addresses interface{}   `json:"address"`
-		Topics    []interface{} `json:"topics"`
+		BlockHash *common.Hash           `json:"blockHash"`
+		FromBlock *rpc.BlockNumberOrHash `json:"fromBlock"`
+		ToBlock   *rpc.BlockNumberOrHash `json:"toBlock"`
+		Addresses interface{}            `json:"address"`
+		Topics    []interface{}          `json:"topics"`
 	}
 
 	var raw input
@@ -496,19 +495,17 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		args.BlockHash = raw.BlockHash
 	} else {
 		if raw.FromBlock != nil {
-			if strings.HasPrefix(*raw.FromBlock, "0x") {
-				hash := common.HexToHash(*raw.FromBlock)
-				args.FromBlockHash = &hash
+			if raw.FromBlock.IsHash() {
+				args.FromBlockHash = raw.FromBlock.Hash()
 			} else {
-				args.FromBlock.UnmarshalJSON([]byte(*raw.FromBlock))
+				args.FromBlock = big.NewInt(int64(raw.FromBlock.Number()))
 			}
 		}
 		if raw.ToBlock != nil {
-			if strings.HasPrefix(*raw.ToBlock, "0x") {
-				hash := common.HexToHash(*raw.ToBlock)
-				args.ToBlockHash = &hash
+			if raw.ToBlock.IsHash() {
+				args.ToBlockHash = raw.ToBlock.Hash()
 			} else {
-				args.ToBlock.UnmarshalJSON([]byte(*raw.ToBlock))
+				args.ToBlock = big.NewInt(int64(raw.ToBlock.Number()))
 			}
 		}
 	}
