@@ -177,7 +177,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 
 // IsHash returns true iff the value is a block hash.
 func (bnh BlockNumberOrHash) IsHash() bool {
-	return bnh[0] == '"' && bnh[len(bnh)-1] == '"' && len(bnh) == 44
+	return bnh[0] == '"' && bnh[len(bnh)-1] == '"' && len(bnh) == 68
 }
 
 // Hash returns the hash value, or nil if the value is not a hash.
