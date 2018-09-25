@@ -104,38 +104,11 @@ var (
 	}
 )
 
-// trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
-// the appropriate section index and head hash. It is used to start light syncing from this checkpoint
-// and avoid downloading the entire header chain while still being able to securely access old headers/logs.
-type TrustedCheckpoint struct {
-	name                            string
-	SectionIdx                      uint64
-	SectionHead, CHTRoot, BloomRoot common.Hash
-}
-
 // trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
-var trustedCheckpoints = map[common.Hash]TrustedCheckpoint{
-	params.MainnetGenesisHash: {
-		name:        "mainnet",
-		SectionIdx:  187,
-		SectionHead: common.HexToHash("e6baa034efa31562d71ff23676512dec6562c1ad0301e08843b907e81958c696"),
-		CHTRoot:     common.HexToHash("28001955219719cf06de1b08648969139d123a9835fc760547a1e4dabdabc15a"),
-		BloomRoot:   common.HexToHash("395ca2373fc662720ac6b58b3bbe71f68aa0f38b63b2d3553dd32ff3c51eebc4"),
-	},
-	params.TestnetGenesisHash: {
-		name:        "ropsten",
-		SectionIdx:  117,
-		SectionHead: common.HexToHash("9529b38631ae30783f56cbe4c3b9f07575b770ecba4f6e20a274b1e2f40fede1"),
-		CHTRoot:     common.HexToHash("6f48e9f101f1fac98e7d74fbbcc4fda138358271ffd974d40d2506f0308bb363"),
-		BloomRoot:   common.HexToHash("8242342e66e942c0cd893484e6736b9862ceb88b43ca344bb06a8285ac1b6d64"),
-	},
-	params.RinkebyGenesisHash: {
-		name:        "rinkeby",
-		SectionIdx:  85,
-		SectionHead: common.HexToHash("92cfa67afc4ad8ab0dcbc6fa49efd14b5b19402442e7317e6bc879d85f89d64d"),
-		CHTRoot:     common.HexToHash("2802ec92cd7a54a75bca96afdc666ae7b99e5d96cf8192dcfb09588812f51564"),
-		BloomRoot:   common.HexToHash("ebefeb31a9a42866d8cf2d2477704b4c3d7c20d0e4e9b5aaa77f396e016a1263"),
-	},
+var trustedCheckpoints = map[common.Hash]*params.TrustedCheckpoint{
+	params.MainnetGenesisHash: params.MainnetTrustedCheckpoint,
+	params.TestnetGenesisHash: params.TestnetTrustedCheckpoint,
+	params.RinkebyGenesisHash: params.RinkebyTrustedCheckpoint,
 }
 
 var (
@@ -329,7 +302,7 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(ctx context.Context, section
 	for i := 0; i < 20; i++ {
 		go func() {
 			for bitIndex := range indexCh {
-				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIdxList: []uint64{section - 1}, Config: b.odr.IndexerConfig()}
+				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIndexList: []uint64{section - 1}, Config: b.odr.IndexerConfig()}
 				for {
 					if err := b.odr.Retrieve(ctx, r); err == ErrNoPeers {
 						// if there are no peers to serve, retry later

@@ -34,7 +34,7 @@ func TestStreamerSubscribe(t *testing.T) {
 	}
 
 	stream := NewStream("foo", "", true)
-	err = streamer.Subscribe(tester.IDs[0], stream, NewRange(0, 0), Top)
+	err = streamer.Subscribe(tester.Nodes[0].ID(), stream, NewRange(0, 0), Top)
 	if err == nil || err.Error() != "stream foo not registered" {
 		t.Fatalf("Expected error %v, got %v", "stream foo not registered", err)
 	}
@@ -48,7 +48,7 @@ func TestStreamerRequestSubscription(t *testing.T) {
 	}
 
 	stream := NewStream("foo", "", false)
-	err = streamer.RequestSubscription(tester.IDs[0], stream, &Range{}, Top)
+	err = streamer.RequestSubscription(tester.Nodes[0].ID(), stream, &Range{}, Top)
 	if err == nil || err.Error() != "stream foo not registered" {
 		t.Fatalf("Expected error %v, got %v", "stream foo not registered", err)
 	}
@@ -135,10 +135,10 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 		return newTestClient(t), nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	stream := NewStream("foo", "", true)
-	err = streamer.Subscribe(peerID, stream, NewRange(5, 8), Top)
+	err = streamer.Subscribe(node.ID(), stream, NewRange(5, 8), Top)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -154,7 +154,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 						History:  NewRange(5, 8),
 						Priority: Top,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		},
@@ -173,7 +173,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 						To:     8,
 						Stream: stream,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 			Expects: []p2ptest.Expect{
@@ -185,7 +185,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 						From:   9,
 						To:     0,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		},
@@ -194,7 +194,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = streamer.Unsubscribe(peerID, stream)
+	err = streamer.Unsubscribe(node.ID(), stream)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -207,7 +207,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 				Msg: &UnsubscribeMsg{
 					Stream: stream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -230,7 +230,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 		return newTestServer(t), nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -242,7 +242,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 					History:  NewRange(5, 8),
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -257,7 +257,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 					From:   6,
 					To:     9,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -274,7 +274,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 				Msg: &UnsubscribeMsg{
 					Stream: stream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -297,7 +297,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 		return newTestServer(t), nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -308,7 +308,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 					Stream:   stream,
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -323,7 +323,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 					From:   1,
 					To:     1,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -340,7 +340,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 				Msg: &UnsubscribeMsg{
 					Stream: stream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -363,7 +363,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 
 	stream := NewStream("bar", "", true)
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -375,7 +375,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 					History:  NewRange(5, 8),
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -384,7 +384,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 				Msg: &SubscribeErrorMsg{
 					Error: "stream bar not registered",
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -409,7 +409,7 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 		}, nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -421,7 +421,7 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 					History:  NewRange(5, 8),
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -436,7 +436,7 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 					From:   6,
 					To:     9,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 			{
 				Code: 1,
@@ -449,7 +449,7 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 					To:     1,
 					Hashes: make([]byte, HashSize),
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -475,9 +475,9 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		return tc, nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
-	err = streamer.Subscribe(peerID, stream, NewRange(5, 8), Top)
+	err = streamer.Subscribe(node.ID(), stream, NewRange(5, 8), Top)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -492,7 +492,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 					History:  NewRange(5, 8),
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	},
@@ -510,7 +510,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 						To:     8,
 						Stream: stream,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 			Expects: []p2ptest.Expect{
@@ -522,7 +522,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 						From:   9,
 						To:     0,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		})
@@ -569,10 +569,10 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 		return newTestServer(t), nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	stream := NewStream("foo", "", true)
-	err = streamer.RequestSubscription(peerID, stream, NewRange(5, 8), Top)
+	err = streamer.RequestSubscription(node.ID(), stream, NewRange(5, 8), Top)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -588,7 +588,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 						History:  NewRange(5, 8),
 						Priority: Top,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		},
@@ -602,7 +602,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 						History:  NewRange(5, 8),
 						Priority: Top,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 			Expects: []p2ptest.Expect{
@@ -617,7 +617,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 						From:   6,
 						To:     9,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 				{
 					Code: 1,
@@ -630,7 +630,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 						To:     1,
 						Hashes: make([]byte, HashSize),
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		},
@@ -639,7 +639,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = streamer.Quit(peerID, stream)
+	err = streamer.Quit(node.ID(), stream)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -652,7 +652,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 				Msg: &QuitMsg{
 					Stream: stream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -663,7 +663,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 
 	historyStream := getHistoryStream(stream)
 
-	err = streamer.Quit(peerID, historyStream)
+	err = streamer.Quit(node.ID(), historyStream)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -676,7 +676,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 				Msg: &QuitMsg{
 					Stream: historyStream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})

@@ -24,9 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
-
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -36,7 +35,7 @@ type (
 
 type NetFetcher interface {
 	Request(ctx context.Context)
-	Offer(ctx context.Context, source *discover.NodeID)
+	Offer(ctx context.Context, source *enode.ID)
 }
 
 // NetStore is an extension of local storage
@@ -51,6 +50,8 @@ type NetStore struct {
 	NewNetFetcherFunc NewNetFetcherFunc
 	closeC            chan struct{}
 }
+
+var fetcherTimeout = 2 * time.Minute // timeout to cancel the fetcher even if requests are coming in
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
@@ -168,7 +169,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// no fetcher for the given address, we have to create a new one
 	key := hex.EncodeToString(ref)
 	// create the context during which fetching is kept alive
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), fetcherTimeout)
 	// destroy is called when all requests finish
 	destroy := func() {
 		// remove fetcher from fetchers
@@ -263,10 +264,11 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	// If there is a source in the context then it is an offer, otherwise a request
 	sourceIF := rctx.Value("source")
 	if sourceIF != nil {
-		var source *discover.NodeID
-		id := discover.MustHexID(sourceIF.(string))
-		source = &id
-		f.netFetcher.Offer(rctx, source)
+		var source enode.ID
+		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
+			return nil, err
+		}
+		f.netFetcher.Offer(rctx, &source)
 	} else {
 		f.netFetcher.Request(rctx)
 	}

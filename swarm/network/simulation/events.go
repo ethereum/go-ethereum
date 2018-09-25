@@ -20,15 +20,14 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
-
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // PeerEvent is the type of the channel returned by Simulation.PeerEvents.
 type PeerEvent struct {
 	// NodeID is the ID of node that the event is caught on.
-	NodeID discover.NodeID
+	NodeID enode.ID
 	// Event is the event that is caught.
 	Event *p2p.PeerEvent
 	// Error is the error that may have happened during event watching.
@@ -69,7 +68,7 @@ func (f *PeerEventsFilter) MsgCode(c uint64) *PeerEventsFilter {
 // PeerEvents returns a channel of events that are captured by admin peerEvents
 // subscription nodes with provided NodeIDs. Additional filters can be set to ignore
 // events that are not relevant.
-func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
+func (s *Simulation) PeerEvents(ctx context.Context, ids []enode.ID, filters ...*PeerEventsFilter) <-chan PeerEvent {
 	eventC := make(chan PeerEvent)
 
 	// wait group to make sure all subscriptions to admin peerEvents are established
@@ -78,7 +77,7 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 	for _, id := range ids {
 		s.shutdownWG.Add(1)
 		subsWG.Add(1)
-		go func(id discover.NodeID) {
+		go func(id enode.ID) {
 			defer s.shutdownWG.Done()
 
 			client, err := s.Net.GetNode(id).Client()
