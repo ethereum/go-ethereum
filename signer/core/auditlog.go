@@ -33,11 +33,10 @@ type AuditLogger struct {
 	api ExternalAPI
 }
 
-func (l *AuditLogger) List(ctx context.Context) (Accounts, error) {
+func (l *AuditLogger) List(ctx context.Context) ([]common.Address, error) {
 	l.log.Info("List", "type", "request", "metadata", MetadataFromContext(ctx).String())
 	res, e := l.api.List(ctx)
-
-	l.log.Info("List", "type", "response", "data", res.String())
+	l.log.Info("List", "type", "response", "data", res)
 
 	return res, e
 }
@@ -72,14 +71,6 @@ func (l *AuditLogger) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 	return b, e
 }
 
-func (l *AuditLogger) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
-	l.log.Info("EcRecover", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"data", common.Bytes2Hex(data))
-	a, e := l.api.EcRecover(ctx, data, sig)
-	l.log.Info("EcRecover", "type", "response", "addr", a.String(), "error", e)
-	return a, e
-}
-
 func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
 	l.log.Info("Export", "type", "request", "metadata", MetadataFromContext(ctx).String(),
 		"addr", addr.Hex())
@@ -89,14 +80,14 @@ func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.Raw
 	return j, e
 }
 
-func (l *AuditLogger) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
-	// Don't actually log the json contents
-	l.log.Info("Import", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"keyJSON size", len(keyJSON))
-	a, e := l.api.Import(ctx, keyJSON)
-	l.log.Info("Import", "type", "response", "addr", a.String(), "error", e)
-	return a, e
-}
+//func (l *AuditLogger) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
+//	// Don't actually log the json contents
+//	l.log.Info("Import", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+//		"keyJSON size", len(keyJSON))
+//	a, e := l.api.Import(ctx, keyJSON)
+//	l.log.Info("Import", "type", "response", "addr", a.String(), "error", e)
+//	return a, e
+//}
 
 func NewAuditLogger(path string, api ExternalAPI) (*AuditLogger, error) {
 	l := log.New("api", "signer")
