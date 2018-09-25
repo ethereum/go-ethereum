@@ -229,7 +229,16 @@ func initializeSecrets(c *cli.Context) error {
 	if c.GlobalBool(utils.LightKDFFlag.Name) {
 		n, p = keystore.LightScryptN, keystore.LightScryptP
 	}
-	password := getPassPhrase("The master seed of clef is locked with a password. Please give a password. Do not forget this password.", true)
+	text := "The master seed of clef is locked with a password. Please give a password. Do not forget this password."
+	var password string
+	for {
+		password = getPassPhrase(text, true)
+		if err := core.ValidatePasswordFormat(password); err != nil {
+			fmt.Printf("invalid password: %v\n", err)
+		} else {
+			break
+		}
+	}
 	cipherSeed, err := encryptSeed(masterSeed, []byte(password), n, p)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt master seed: %v", err)
