@@ -40,7 +40,7 @@ import (
 type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 	config   *Config
-	extapi   *ethapi.ExternalSignerAPI// If non-empty, the ipc-path or http(s)-url to an external signer
+	extapi   *ethapi.ExternalSignerClient // If non-empty, the ipc-path or http(s)-url to an external signer
 
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
 
@@ -554,11 +554,11 @@ func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
 }
 
-func (n *Node) SetExternalAPI(api *ethapi.ExternalSignerAPI){
+func (n *Node) SetExternalAPI(api *ethapi.ExternalSignerClient){
 	n.extapi = api
 }
 
-func (n *Node) ExternalSignerAPI() *ethapi.ExternalSignerAPI{
+func (n *Node) ExternalSignerAPI() *ethapi.ExternalSignerClient {
 	return n.extapi
 }
 // apis returns the collection of RPC descriptors this node offers.

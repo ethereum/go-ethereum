@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts"
 	"math/big"
 	"runtime"
 	"sync"
@@ -76,7 +77,7 @@ type Ethereum struct {
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
-	externalSigner *ethapi.ExternalSignerAPI
+	externalSigner *ethapi.ExternalSignerClient
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -100,7 +101,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, api *ethapi.ExternalSignerAPI) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config, api *ethapi.ExternalSignerClient) (*Ethereum, error) {
 	// Ensure configuration values are compatible and sane
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -413,10 +414,19 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		if _, ok := s.engine.(*clique.Clique); ok {
-			//TODO @holiman
-			log.Error("Etherbase account unavailable locally", "err", err)
-			return fmt.Errorf("signer not configured: %v", err)
+		if clique, ok := s.engine.(*clique.Clique); ok {
+			if s.ExternalSigner() != nil {
+				signerFn := func(a accounts.Account, header *types.Header) ([]byte, error) {
+					rlpHeader, err := rlp.EncodeToBytes(header)
+					if err != nil {
+						return nil, err
+					}
+					return s.ExternalSigner().SignCliqueBlock(a.Address, rlpHeader)
+				}
+				clique.Authorize(eb, signerFn)
+			} else {
+				return fmt.Errorf("external signer not configured")
+			}
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
@@ -444,16 +454,16 @@ func (s *Ethereum) StopMining() {
 func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
-func (s *Ethereum) BlockChain() *core.BlockChain              { return s.blockchain }
-func (s *Ethereum) TxPool() *core.TxPool                      { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux                  { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine                  { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database                   { return s.chainDb }
-func (s *Ethereum) IsListening() bool                         { return true } // Always listening
-func (s *Ethereum) EthVersion() int                           { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() uint64                        { return s.networkID }
-func (s *Ethereum) Downloader() *downloader.Downloader        { return s.protocolManager.downloader }
-func (s *Ethereum) ExternalSigner() *ethapi.ExternalSignerAPI { return s.externalSigner }
+func (s *Ethereum) BlockChain() *core.BlockChain                 { return s.blockchain }
+func (s *Ethereum) TxPool() *core.TxPool                         { return s.txPool }
+func (s *Ethereum) EventMux() *event.TypeMux                     { return s.eventMux }
+func (s *Ethereum) Engine() consensus.Engine                     { return s.engine }
+func (s *Ethereum) ChainDb() ethdb.Database                      { return s.chainDb }
+func (s *Ethereum) IsListening() bool                            { return true } // Always listening
+func (s *Ethereum) EthVersion() int                              { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Ethereum) NetVersion() uint64                           { return s.networkID }
+func (s *Ethereum) Downloader() *downloader.Downloader           { return s.protocolManager.downloader }
+func (s *Ethereum) ExternalSigner() *ethapi.ExternalSignerClient { return s.externalSigner }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

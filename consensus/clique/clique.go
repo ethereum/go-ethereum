@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -136,9 +136,9 @@ var (
 	errRecentlySigned = errors.New("recently signed")
 )
 
-// SignerFn is a signer callback function to request a hash to be signed by a
+// SignerFn is a signer callback function to request a block header to be signed by a
 // backing account.
-type SignerFn func(accounts.Account, []byte) ([]byte, error)
+type SignerFn func(accounts.Account, *types.Header) ([]byte, error)
 
 // sigHash returns the hash which is used as input for the proof-of-authority
 // signing. It is the hash of the entire header apart from the 65 byte signature
@@ -646,7 +646,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, results c
 		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
 	}
 	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, sigHash(header).Bytes())
+	sighash, err := signFn(accounts.Account{Address: signer}, header)
 	if err != nil {
 		return err
 	}

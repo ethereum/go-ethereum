@@ -219,7 +219,7 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
-func (b *EthAPIBackend) ExternalSigner() *ethapi.ExternalSignerAPI {
+func (b *EthAPIBackend) ExternalSigner() *ethapi.ExternalSignerClient {
 	return b.eth.externalSigner
 }
 

@@ -183,7 +183,7 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 type PrivateAccountAPI struct {
 	nonceLock *AddrLocker
 	b         Backend
-	extapi    *ExternalSignerAPI // external signer, nil if not used
+	extapi    *ExternalSignerClient // external signer, nil if not used
 }
 
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
@@ -200,7 +200,7 @@ func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
 func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 	addresses := make([]common.Address, 0) // return [] instead of nil if empty
 	if s.extapi != nil {
-		if accounts, err := s.extapi.listAccounts(); err == nil {
+		if accounts, err := s.extapi.ListAccounts(); err == nil {
 			return accounts
 		}
 		return addresses
@@ -219,7 +219,7 @@ type rawWallet struct {
 
 // NewAccount will create a new account and returns the address for the new account.
 func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
-	return s.extapi.newAccount()
+	return s.extapi.NewAccount()
 }
 
 // fetchKeystore retrives the encrypted keystore from the account manager.
@@ -253,7 +253,7 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args SendTxArgs
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
-	return s.extapi.signTransaction(ctx, args)
+	return s.extapi.SignTransaction(ctx, args)
 }
 
 // SendTransaction will create a transaction from the given arguments and
@@ -806,7 +806,7 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 type PublicTransactionPoolAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
-	extapi    *ExternalSignerAPI // external signer, nil if not used
+	extapi    *ExternalSignerClient // external signer, nil if not used
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
@@ -1057,7 +1057,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
 	}
-	signed, err := s.extapi.signTransaction(ctx, args)
+	signed, err := s.extapi.SignTransaction(ctx, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1114,7 +1114,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 		err error
 	)
 
-	tx, err = s.extapi.signTransaction(ctx, args)
+	tx, err = s.extapi.SignTransaction(ctx, args)
 
 	if err != nil {
 		return nil, err
@@ -1166,7 +1166,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err = s.extapi.signTransaction(ctx, sendArgs)
+			signedTx, err = s.extapi.SignTransaction(ctx, sendArgs)
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -1300,24 +1300,24 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
-// ExternalSignerAPI provides an API to interact with an external signer (clef)
+// ExternalSignerClient provides an API to interact with an external signer (clef)
 // It proxies request to the external signer while forwarding relevant
 // request headers
-type ExternalSignerAPI struct {
+type ExternalSignerClient struct {
 	client *rpc.Client
 }
 
-func NewExternalSigner(endpoint string) (*ExternalSignerAPI, error) {
+func NewExternalSigner(endpoint string) (*ExternalSignerClient, error) {
 	client, err := rpc.DialHTTP(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	return &ExternalSignerAPI{
+	return &ExternalSignerClient{
 		client: client,
 	}, nil
 }
 
-func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxArgs) (*types.Transaction, error) {
+func (api *ExternalSignerClient) SignTransaction(ctx context.Context, args SendTxArgs) (*types.Transaction, error) {
 	if api == nil{
 		return nil, errors.New("External API not initialized")
 	}
@@ -1327,7 +1327,7 @@ func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxAr
 	}
 	return res.Tx, nil
 }
-func (api *ExternalSignerAPI) listAccounts() ([]common.Address, error) {
+func (api *ExternalSignerClient) ListAccounts() ([]common.Address, error) {
 	if api == nil{
 		return []common.Address{}, errors.New("External API not initialized")
 	}
@@ -1337,15 +1337,29 @@ func (api *ExternalSignerAPI) listAccounts() ([]common.Address, error) {
 	}
 	return res, nil
 }
-func (api *ExternalSignerAPI) newAccount() (common.Address, error) {
+func (api *ExternalSignerClient) NewAccount() (common.Address, error) {
 	if api == nil{
 		return common.Address{}, errors.New("External API not initialized")
 	}
 	var res accounts.Account
 
 	if err := api.client.Call(&res, "account_new"); err != nil {
-		return res.Address, nil
+		return common.Address{}, err
 	}
-	return common.Address{}, nil
+	return res.Address, nil
+}
+func (api *ExternalSignerClient) SignCliqueBlock(a common.Address, rlpBlock hexutil.Bytes) (hexutil.Bytes, error) {
+	if api == nil{
+		return nil, errors.New("External API not initialized")
+	}
+	var sig hexutil.Bytes
+	if err := api.client.Call(&sig, "account_signData", "application/clique", a, rlpBlock); err != nil {
+		return nil, err
+	}
+	if sig[64] != 27 && sig[64] != 28 {
+		return nil, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+	}
+	sig[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
 
+	return sig, nil
 }

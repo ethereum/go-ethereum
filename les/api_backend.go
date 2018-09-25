@@ -183,7 +183,7 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 	return b.eth.eventMux
 }
 
-func (b *LesApiBackend) ExternalSigner() *ethapi.ExternalSignerAPI{
+func (b *LesApiBackend) ExternalSigner() *ethapi.ExternalSignerClient {
 	return b.eth.externalSigner
 }
 
