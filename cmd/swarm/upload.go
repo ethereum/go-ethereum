@@ -138,6 +138,12 @@ func upload(ctx *cli.Context) {
 // 3. cleans the path, e.g. /a/b/../c -> /a/c
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
+	if i := strings.Index(p, ":"); i > 0 {
+		return p
+	}
+	if i := strings.Index(p, "@"); i > 0 {
+		return p
+	}
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := homeDir(); home != "" {
 			p = home + p[1:]
