@@ -129,7 +129,7 @@ func (s *AESEncryptedStorage) writeEncryptedStorage(creds map[string]storedCrede
 	return nil
 }
 
-// encrypt encrypts plaingtext with the given key, with additionaldata
+// encrypt encrypts plaintext with the given key, with additional data
 // The 'additionalData' is used to place the (plaintext) KV-store key into the V,
 // to prevent the possibility to alter a K, or swap two entries in the KV store with eachother.
 func encrypt(key []byte, plaintext []byte, additionalData []byte) ([]byte, []byte, error) {
