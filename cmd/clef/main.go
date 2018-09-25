@@ -366,7 +366,7 @@ func signer(c *cli.Context) error {
 
 	configDir := c.GlobalString(configdirFlag.Name)
 	if stretchedKey, err := readMasterKey(c, ui); err != nil {
-		log.Info("No master seed provided, rules disabled")
+		log.Info("No master seed provided, rules disabled", "error", err)
 	} else {
 
 		if err != nil {
@@ -551,7 +551,6 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var password string
 	// If ui is not nil, get the password from ui.
 	if ui != nil {
@@ -676,8 +675,13 @@ func getPassPhrase(prompt string, confirmation bool) string {
 			utils.Fatalf("Passphrases do not match")
 		}
 	}
-	//TODO add validation of password (exists already in a separate PR)
 	return password
+}
+
+type encryptedSeedStorage struct {
+	Description string              `json:"description"`
+	Version     int                 `json:"version"`
+	Params      keystore.CryptoJSON `json:"params"`
 }
 
 // encryptSeed uses a similar scheme as the keystore uses, but with a different wrapping,
@@ -687,16 +691,19 @@ func encryptSeed(seed []byte, auth []byte, scryptN, scryptP int) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(cryptoStruct)
+	return json.Marshal(&encryptedSeedStorage{"Clef seed", 1, cryptoStruct})
 }
 
 // decryptSeed decrypts the master seed
 func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
-	var cryptoStruct keystore.CryptoJSON
-	if err := json.Unmarshal(keyjson, &cryptoStruct); err != nil {
+	var encSeed encryptedSeedStorage
+	if err := json.Unmarshal(keyjson, &encSeed); err != nil {
 		return nil, err
 	}
-	seed, err := keystore.DecryptDataV3(cryptoStruct, auth)
+	if encSeed.Version != 1 {
+		log.Warn(fmt.Sprintf("unsupported encryption format of seed: %d, operation will likely fail", encSeed.Version))
+	}
+	seed, err := keystore.DecryptDataV3(encSeed.Params, auth)
 	if err != nil {
 		return nil, err
 	}
