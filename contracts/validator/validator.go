@@ -27,8 +27,8 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 	}, nil
 }
 
-func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, candidates []common.Address, caps []*big.Int) (common.Address, *Validator, error) {
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, candidates, caps, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
+func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Validator, error) {
+	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
