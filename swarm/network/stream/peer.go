@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/swap"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -54,8 +53,7 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
-	//*protocols.Peer
-	*swap.SwapPeer
+	*protocols.Peer
 	streamer *Registry
 	pq       *pq.PriorityQueue
 	serverMu sync.RWMutex
@@ -77,7 +75,7 @@ type WrappedPriorityMsg struct {
 // NewPeer is the constructor for Peer
 func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	p := &Peer{
-		SwapPeer:     swap.NewSwapPeer(peer, streamer.swap),
+		Peer:         peer,
 		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer:     streamer,
 		servers:      make(map[Stream]*server),

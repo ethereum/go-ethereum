@@ -34,8 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/swap"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (
@@ -103,8 +101,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	})
 	RegisterSwarmSyncerServer(streamer, syncChunkStore)
 	RegisterSwarmSyncerClient(streamer, syncChunkStore)
-
-	streamer.swap = swap
 
 	if options.DoSync {
 		// latestIntC function ensures that
@@ -385,7 +381,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 		}
 	}
 
-	return sp.RunAccountedProtocol(sp.HandleMsg)
+	return sp.Run(sp.HandleMsg)
 }
 
 // updateSyncing subscribes to SYNC streams by iterating over the

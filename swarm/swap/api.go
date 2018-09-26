@@ -30,7 +30,7 @@ var (
 
 //This is the API definition to access swarm swap accounting data via RPC
 type API struct {
-	*Protocol
+	swap *Swap
 }
 
 //TODO: define metrics
@@ -39,13 +39,13 @@ type SwapMetrics struct {
 }
 
 //Create a new API instance
-func NewAPI(swap *Protocol) *API {
-	return &API{Protocol: swap}
+func NewAPI(swap *Swap) *API {
+	return &API{swap: swap}
 }
 
 //Get the balance for this node with a specific peer
 func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
-	balance = swapapi.swap.peers[peer].balance
+	balance = swapapi.swap.peers[peer]
 	if balance == nil {
 		err = ErrNoSuchPeerAccounting
 	}
@@ -58,8 +58,8 @@ func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (
 //It assumes that if a disfavorable balance is represented as a negative value
 func (swapapi *API) Balance(ctx context.Context) (balance *big.Int, err error) {
 	balance = big.NewInt(0)
-	for _, peer := range swapapi.swap.peers {
-		balance.Add(balance, peer.balance)
+	for _, peerBalance := range swapapi.swap.peers {
+		balance.Add(balance, peerBalance)
 	}
 	return
 }

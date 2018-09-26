@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -42,29 +41,25 @@ const (
 type Protocol struct {
 	peersMu sync.RWMutex
 	peers   map[discover.NodeID]*Peer
-	swap    *Swap
 }
 
 //This is the peer representing a participant in this protocol
 type Peer struct {
 	*protocols.Peer
-	swapProtocol *Protocol
 }
 
 //Create a new protocol instance
-func NewSwapProtocol(swapAccount *Swap) *Protocol {
+func NewProtocol() *Protocol {
 	proto := &Protocol{
 		peers: make(map[discover.NodeID]*Peer),
-		swap:  swapAccount,
 	}
 	return proto
 }
 
 // NewPeer is the constructor for the protocol Peer
-func NewPeer(peer *protocols.Peer, swap *Protocol) *Peer {
+func NewPeer(peer *protocols.Peer) *Peer {
 	p := &Peer{
-		Peer:         peer,
-		swapProtocol: swap,
+		Peer: peer,
 	}
 	return p
 }
@@ -79,17 +74,19 @@ type IssueChequeMsg struct {
 //redeem a cheque, which means it kicks off the process to cash it in.
 //In this case, this message is sent to peer A
 type RedeemChequeMsg struct {
+	Cheque *Cheque
 }
 
 /////////////////////////////////////////////////////////////////////
 // SECTION: node.Service interface
 /////////////////////////////////////////////////////////////////////
-func (p *Protocol) Start(srv *p2p.Server) error {
+func (s *Swap) Start(srv *p2p.Server) error {
+	s.registerForEvents(srv)
 	log.Debug("Started swap")
 	return nil
 }
 
-func (p *Protocol) Stop() error {
+func (s *Swap) Stop() error {
 	log.Info("swap shutting down")
 	return nil
 }
@@ -104,23 +101,23 @@ var swapSpec = &protocols.Spec{
 	},
 }
 
-func (p *Protocol) Protocols() []p2p.Protocol {
+func (s *Swap) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
 			Name:    swapSpec.Name,
 			Version: swapSpec.Version,
 			Length:  swapSpec.Length(),
-			Run:     p.Run,
+			Run:     s.run,
 		},
 	}
 }
 
-func (p *Protocol) APIs() []rpc.API {
+func (s *Swap) APIs() []rpc.API {
 	apis := []rpc.API{
 		{
 			Namespace: "swap",
 			Version:   "1.0",
-			Service:   NewAPI(p),
+			Service:   NewAPI(s),
 			Public:    true,
 		},
 	}
@@ -130,55 +127,52 @@ func (p *Protocol) APIs() []rpc.API {
 /////////////////////////////////////////////////////////////////////
 // SECTION: p2p.protocol interface
 /////////////////////////////////////////////////////////////////////
-func (swap *Protocol) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (s *Swap) run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	p := protocols.NewPeer(peer, rw, swapSpec)
-	sp := NewPeer(p, swap)
-	swap.setPeer(sp)
-	defer swap.deletePeer(sp)
-	defer swap.Close()
+	sp := NewPeer(p)
+	s.protocol.setPeer(sp)
+	defer s.protocol.deletePeer(sp)
+	defer s.protocol.Close()
 	return sp.Run(sp.handleSwapMsg)
 }
 
-func (swap *Protocol) NodeInfo() interface{} {
+func (s *Swap) NodeInfo() interface{} {
 	return nil
 }
 
-func (swap *Protocol) PeerInfo(id discover.NodeID) interface{} {
+func (s *Swap) PeerInfo(id discover.NodeID) interface{} {
 	return nil
 }
 
 //------------------------------------------------------------------------------------------
-func (swap *Protocol) Close() {
+func (proto *Protocol) Close() {
 }
 
-func (swap *Protocol) getPeer(peerId discover.NodeID) *Peer {
-	swap.peersMu.RLock()
-	defer swap.peersMu.RUnlock()
+func (proto *Protocol) getPeer(peerId discover.NodeID) *Peer {
+	proto.peersMu.RLock()
+	defer proto.peersMu.RUnlock()
 
-	return swap.peers[peerId]
+	return proto.peers[peerId]
 }
 
-func (swap *Protocol) setPeer(peer *Peer) {
-	swap.peersMu.Lock()
-	defer swap.peersMu.Unlock()
+func (proto *Protocol) setPeer(peer *Peer) {
+	proto.peersMu.Lock()
+	defer proto.peersMu.Unlock()
 
-	swap.peers[peer.ID()] = peer
-	metrics.GetOrRegisterGauge("swap.peers", nil).Update(int64(len(swap.peers)))
+	proto.peers[peer.ID()] = peer
 }
 
-func (swap *Protocol) deletePeer(peer *Peer) {
-	swap.peersMu.Lock()
-	defer swap.peersMu.Unlock()
+func (proto *Protocol) deletePeer(peer *Peer) {
+	proto.peersMu.Lock()
+	defer proto.peersMu.Unlock()
 
-	delete(swap.peers, peer.ID())
-	metrics.GetOrRegisterGauge("swap.peers", nil).Update(int64(len(swap.peers)))
-	swap.peersMu.Unlock()
+	delete(proto.peers, peer.ID())
 }
 
-func (swap *Protocol) peersCount() (c int) {
-	swap.peersMu.Lock()
-	c = len(swap.peers)
-	swap.peersMu.Unlock()
+func (proto *Protocol) peersCount() (c int) {
+	proto.peersMu.Lock()
+	c = len(proto.peers)
+	proto.peersMu.Unlock()
 	return
 }
 
@@ -198,13 +192,13 @@ func (p *Peer) handleSwapMsg(ctx context.Context, msg interface{}) error {
 }
 
 //A IssueChequeMsg has been received
-func (sp *Peer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
+func (p *Peer) handleIssueChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	log.Debug("SwapProtocolPeer: handleIssueChequeMsg")
 	return err
 }
 
 //A RedeemChequeMsg has been received
-func (sp *Peer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
+func (p *Peer) handleRedeemChequeMsg(ctx context.Context, msg interface{}) (err error) {
 	log.Debug("SwapProtocolPeer: handleRedeemChequeMsg")
 	return err
 }

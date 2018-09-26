@@ -19,8 +19,6 @@ package stream
 import (
 	"context"
 	"errors"
-	"math/big"
-	"time"
 
 	"fmt"
 
@@ -136,11 +134,6 @@ type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
 	HopCount  uint8
-}
-
-//TODO: what is the correct price
-func (rrm *RetrieveRequestMsg) Price() *big.Int {
-	return big.NewInt(int64(4096))
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {

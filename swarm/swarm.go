@@ -215,6 +215,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
+	if config.SwapEnabled {
+		self.swap = swap.New(stateStore)
+	}
+
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
@@ -370,6 +374,10 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	}
 	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", self.bzz.Hive.BaseAddr()))
 
+	if self.swap != nil {
+		self.swap.Start(srv)
+	}
+
 	if self.ps != nil {
 		self.ps.Start(srv)
 	}
@@ -447,6 +455,10 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 
 	if self.ps != nil {
 		protos = append(protos, self.ps.Protocols()...)
+	}
+
+	if self.swap != nil {
+		protos = append(protos, self.swap.Protocols()...)
 	}
 	return
 }

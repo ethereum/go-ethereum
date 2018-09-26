@@ -35,6 +35,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
+			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
 
 			dir, err := ioutil.TempDir("", "swap-network-test-node")
 			if err != nil {
@@ -63,6 +64,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			if err != nil {
 				return nil, cleanup, err
 			}
+
 			bucket.Store(bucketKeySwarm, swarm)
 			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
 			return swarm, cleanup, nil
