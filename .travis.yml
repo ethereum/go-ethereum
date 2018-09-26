@@ -6,9 +6,7 @@ jobs:
   include:
 
   - stage: Lint
-    os: linux
     sudo: false
-    dist: trusty
     go: '1.10'
     git:
       submodules: false
@@ -16,8 +14,6 @@ jobs:
         - go run build/ci.go lint
 
   - stage: Build and test
-    os: linux
-    dist: trusty
     go: 1.9.x
     script:
     - sudo modprobe fuse
@@ -27,9 +23,7 @@ jobs:
     - while sleep 540; do echo "[ still running ]"; done &
     - go run build/ci.go test -coverage
     - kill %1
-  - os: linux
-    dist: trusty
-    go: '1.10'
+  - go: '1.10'
     script:
     - sudo modprobe fuse
     - sudo chmod 666 /dev/fuse
@@ -42,12 +36,12 @@ jobs:
   - stage: Github release
     go: '1.10'
     script:
-      - make tomo-linux-amd64
+      - make tomo
     deploy:
       provider: releases
       api_key: $GITHUB_TOKEN
       file:
-        - "build/bin/tomo-linux-amd64"
+        - "build/bin/tomo"
       skip_cleanup: true
       on:
         branch: master
