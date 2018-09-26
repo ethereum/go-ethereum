@@ -24,10 +24,10 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -1402,7 +1402,7 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.NewTicker(10 * time.Millisecond)
 	defer futureTimer.Stop()
 	for {
 		select {
