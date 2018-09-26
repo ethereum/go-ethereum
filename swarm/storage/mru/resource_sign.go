@@ -60,7 +60,16 @@ func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) 
 	return
 }
 
-// PublicKey returns the public key of the signer's private key
+// Address returns the public key of the signer's private key
 func (s *GenericSigner) Address() common.Address {
 	return s.address
+}
+
+// getUserAddr extracts the address of the resource update signer
+func getUserAddr(digest common.Hash, signature Signature) (common.Address, error) {
+	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
+	if err != nil {
+		return common.Address{}, err
+	}
+	return crypto.PubkeyToAddress(*pub), nil
 }
