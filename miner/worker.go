@@ -52,8 +52,8 @@ const (
 	chainHeadChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
-	// Timeout waiting for M1
-	m1Timeout = 10
+	// timeout waiting for M1
+	waitPeriod = 10
 )
 
 // Agent can register themself with the worker
@@ -477,7 +477,7 @@ func (self *worker) commitNewWork() {
 					return
 				}
 				h := hop(len(masternodes), preIndex, curIndex)
-				gap := int64(c.GetPeriod()) * int64(h)
+				gap := waitPeriod * int64(h)
 				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
 			L:
 				select {
@@ -487,9 +487,9 @@ func (self *worker) commitNewWork() {
 						self.chainHeadCh <- newBlock
 						return
 					}
-				case <-time.After(time.Duration(gap+m1Timeout) * time.Second):
+				case <-time.After(time.Duration(gap) * time.Second):
 					// wait enough. It's my turn
-					log.Info("Wait enough. It's my turn", "waited seconds", gap+m1Timeout)
+					log.Info("Wait enough. It's my turn", "waited seconds", gap)
 					break L
 				}
 			}
