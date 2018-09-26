@@ -763,7 +763,7 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 }
 
 // TestMaxPeerServersWithoutUnsubscribe creates a registry with a limited
-// number of stream servers, and performs subscriptions to detect sunscriptions
+// number of stream servers, and performs subscriptions to detect subscriptions
 // error message exchange.
 func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
