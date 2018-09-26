@@ -29,7 +29,6 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"golang.org/x/tools/imports"
 )
 
 // Lang is a target programming language selector to generate bindings for.
@@ -145,15 +144,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
-	// For Go bindings pass the code through goimports to clean it up and double check
-	if lang == LangGo {
-		code, err := imports.Process(".", buffer.Bytes(), nil)
-		if err != nil {
-			return "", fmt.Errorf("%v\n%s", err, buffer)
-		}
-		return string(code), nil
-	}
-	// For all others just return as is for now
+
 	return buffer.String(), nil
 }
 
