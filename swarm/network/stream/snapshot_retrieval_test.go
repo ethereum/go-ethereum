@@ -205,6 +205,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		// or until the timeout is reached.
 		allSuccess := false
 		for !allSuccess {
+			allSuccess = true
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localSuccess := true
@@ -225,11 +226,14 @@ func runFileRetrievalTest(nodeCount int) error {
 						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
 				}
-				allSuccess = localSuccess
+				if !localSuccess {
+					allSuccess = false
+					break
+				}
 			}
 		}
 		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
+			return fmt.Errorf("Not all retrievals succeeded!")
 		}
 		return nil
 	})
@@ -301,6 +305,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		// or until the timeout is reached.
 		allSuccess := false
 		for !allSuccess {
+			allSuccess = true
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localSuccess := true
@@ -321,11 +326,14 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
 				}
-				allSuccess = localSuccess
+				if !localSuccess {
+					allSuccess = false
+					break
+				}
 			}
 		}
 		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
+			return fmt.Errorf("Not all retrievals succeeded!")
 		}
 		return nil
 	})
