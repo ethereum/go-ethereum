@@ -575,13 +575,16 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 			return errUnauthorized
 		}
 	}
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(len(masternodes)/2 + 1); seen > number-limit {
-				// Only take into account the non-epoch blocks
-				if number%c.config.Epoch != 0 {
-					return errUnauthorized
+	if len(masternodes) > 1 {
+		for seen, recent := range snap.Recents {
+			if recent == signer {
+				// Signer is among recents, only fail if the current block doesn't shift it out
+				// There is only case that we don't allow signer to create two continuous blocks.
+				if limit := uint64(2); seen > number-limit {
+					// Only take into account the non-epoch blocks
+					if number%c.config.Epoch != 0 {
+						return errUnauthorized
+					}
 				}
 			}
 		}
@@ -755,16 +758,20 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 		}
 	}
 	// If we're amongst the recent signers, wait for the next block
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(len(masternodes)/2 + 1); number < limit || seen > number-limit {
-				// Only take into account the non-epoch blocks
-				if number%c.config.Epoch != 0 {
-					log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
-					log.Info("Signed recently, must wait for others")
-					<-stop
-					return nil, nil
+	// only check recent signers if there are more than one signer.
+	if len(masternodes) > 1 {
+		for seen, recent := range snap.Recents {
+			if recent == signer {
+				// Signer is among recents, only wait if the current block doesn't shift it out
+				// There is only case that we don't allow signer to create two continuous blocks.
+				if limit := uint64(2); number < limit || seen > number-limit {
+					// Only take into account the non-epoch blocks
+					if number%c.config.Epoch != 0 {
+						log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
+						log.Info("Signed recently, must wait for others")
+						<-stop
+						return nil, nil
+					}
 				}
 			}
 		}
