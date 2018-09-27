@@ -95,6 +95,7 @@ var (
 		Name:   "bzznetworkid",
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",
 		EnvVar: SWARM_ENV_NETWORK_ID,
+		Value:  3,
 	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
