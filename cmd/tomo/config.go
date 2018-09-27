@@ -20,12 +20,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"gopkg.in/urfave/cli.v1"
 	"io"
 	"os"
 	"reflect"
-	"unicode"
 	"strings"
-	"gopkg.in/urfave/cli.v1"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/dashboard"
@@ -151,7 +151,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
-	// read passwords from enviroment
+	// read passwords from environment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
 		if trimmed := strings.TrimSpace(env); trimmed != "" {
