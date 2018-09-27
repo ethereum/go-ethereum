@@ -19,8 +19,8 @@ package core
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"math/big"
 	"os"
