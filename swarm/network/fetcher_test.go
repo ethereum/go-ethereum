@@ -33,7 +33,7 @@ type mockRequester struct {
 	// requests []Request
 	requestC  chan *Request   // when a request is coming it is pushed to requestC
 	waitTimes []time.Duration // with waitTimes[i] you can define how much to wait on the ith request (optional)
-	ctr       int             //counts the number of requests
+	count     int             //counts the number of requests
 	quitC     chan struct{}
 }
 
@@ -47,9 +47,9 @@ func newMockRequester(waitTimes ...time.Duration) *mockRequester {
 
 func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*enode.ID, chan struct{}, error) {
 	waitTime := time.Duration(0)
-	if m.ctr < len(m.waitTimes) {
-		waitTime = m.waitTimes[m.ctr]
-		m.ctr++
+	if m.count < len(m.waitTimes) {
+		waitTime = m.waitTimes[m.count]
+		m.count++
 	}
 	time.Sleep(waitTime)
 	m.requestC <- request
@@ -83,7 +83,7 @@ func TestFetcherSingleRequest(t *testing.T) {
 	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	select {
 	case request := <-requester.requestC:
@@ -98,6 +98,11 @@ func TestFetcherSingleRequest(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		if _, ok := request.peersToSkip.Load(requestedPeerID.String()); !ok {
 			t.Fatalf("request.peersToSkip does not contain peer returned by the request function")
+		}
+
+		// hopCount in the forwarded request should be incremented
+		if request.HopCount != 1 {
+			t.Fatalf("Expected request.HopCount 1 got %v", request.HopCount)
 		}
 
 		// fetch should trigger a request, if it doesn't happen in time, test should fail
@@ -123,7 +128,7 @@ func TestFetcherCancelStopsFetcher(t *testing.T) {
 	rctx, rcancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer rcancel()
 	// we call Request with an active context
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
 	select {
@@ -151,7 +156,7 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 	rcancel()
 
 	// we call Request with a cancelled context
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
 	select {
@@ -162,7 +167,7 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 
 	// if there is another Request with active context, there should be a request, because the fetcher itself is not cancelled
 	rctx = context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	select {
 	case <-requester.requestC:
@@ -200,7 +205,7 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 
 	// call Request after the Offer
 	rctx = context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	// there should be exactly 1 request coming from fetcher
 	var request *Request
@@ -241,7 +246,7 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 
 	// call Request first
 	rctx := context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	// there should be a request coming from fetcher
 	var request *Request
@@ -296,7 +301,7 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 
 	// call the fetch function with an active context
 	rctx := context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	// after 100ms the first request should be initiated
 	time.Sleep(100 * time.Millisecond)
@@ -338,7 +343,7 @@ func TestFetcherFactory(t *testing.T) {
 
 	fetcher := fetcherFactory.New(context.Background(), addr, peersToSkip)
 
-	fetcher.Request(context.Background())
+	fetcher.Request(context.Background(), 0)
 
 	// check if the created fetchFunction really starts a fetcher and initiates a request
 	select {
@@ -368,7 +373,7 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
-	fetcher.Request(rctx)
+	fetcher.Request(rctx, 0)
 
 	select {
 	case <-requester.requestC:
@@ -455,5 +460,28 @@ func TestRequestSkipPeerPermanent(t *testing.T) {
 
 	if !r.SkipPeer(peer.String()) {
 		t.Errorf("peer not skipped")
+	}
+}
+
+func TestFetcherMaxHopCount(t *testing.T) {
+	requester := newMockRequester()
+	addr := make([]byte, 32)
+	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	peersToSkip := &sync.Map{}
+
+	go fetcher.run(ctx, peersToSkip)
+
+	rctx := context.Background()
+	fetcher.Request(rctx, maxHopCount)
+
+	// if hopCount is already at max no request should be initiated
+	select {
+	case <-requester.requestC:
+		t.Fatalf("cancelled fetcher initiated request")
+	case <-time.After(200 * time.Millisecond):
 	}
 }
