@@ -40,6 +40,7 @@ type mockNetFetcher struct {
 	offerCalled     bool
 	quit            <-chan struct{}
 	ctx             context.Context
+	hopCounts       []uint8
 }
 
 func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
@@ -47,7 +48,7 @@ func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
 	m.sources = append(m.sources, source)
 }
 
-func (m *mockNetFetcher) Request(ctx context.Context) {
+func (m *mockNetFetcher) Request(ctx context.Context, hopCount uint8) {
 	m.requestCalled = true
 	var peers []Address
 	m.peers.Range(func(key interface{}, _ interface{}) bool {
@@ -55,6 +56,7 @@ func (m *mockNetFetcher) Request(ctx context.Context) {
 		return true
 	})
 	m.peersPerRequest = append(m.peersPerRequest, peers)
+	m.hopCounts = append(m.hopCounts, hopCount)
 }
 
 type mockNetFetchFuncFactory struct {
@@ -412,7 +414,8 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx := context.WithValue(context.Background(), "hopcount", uint8(5))
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 
 	// We call get for a not available chunk, it will timeout because the chunk is not delivered
@@ -425,6 +428,10 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 	// NetStore should call NetFetcher.Request and wait for the chunk
 	if !fetcher.requestCalled {
 		t.Fatal("Expected NetFetcher.Request to be called")
+	}
+
+	if fetcher.hopCounts[0] != 5 {
+		t.Fatalf("Expected NetFetcher.Request be called with hopCount 5, got %v", fetcher.hopCounts[0])
 	}
 }
 

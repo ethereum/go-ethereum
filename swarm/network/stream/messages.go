@@ -26,7 +26,7 @@ import (
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 var syncBatchTimeout = 30 * time.Second
@@ -197,10 +197,16 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	if err != nil {
 		return err
 	}
+
 	hashes := req.Hashes
-	want, err := bv.New(len(hashes) / HashSize)
+	lenHashes := len(hashes)
+	if lenHashes%HashSize != 0 {
+		return fmt.Errorf("error invalid hashes length (len: %v)", lenHashes)
+	}
+
+	want, err := bv.New(lenHashes / HashSize)
 	if err != nil {
-		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
+		return fmt.Errorf("error initiaising bitvector of length %v: %v", lenHashes/HashSize, err)
 	}
 
 	ctr := 0
@@ -208,7 +214,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 
 	ctx = context.WithValue(ctx, "source", p.ID().String())
-	for i := 0; i < len(hashes); i += HashSize {
+	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 
 		if wait := c.NeedData(ctx, hash); wait != nil {
