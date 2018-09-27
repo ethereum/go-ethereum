@@ -269,7 +269,6 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
 		var gDir string
 		var globalStore *mockdb.GlobalStore
 		if *useMockStore {
@@ -285,12 +284,11 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 				}
 			}()
 		}
-		for !allSuccess {
-			allSuccess = true
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
-				localSuccess := true
 				for _, ch := range localChunks {
 					//get the real chunk by the index in the index array
 					chunk := conf.hashes[ch]
@@ -312,9 +310,9 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 					}
 					if err != nil {
 						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
-						localSuccess = false
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
 					} else {
 						evt := &simulations.Event{
 							Type: EventTypeChunkArrived,
@@ -325,16 +323,9 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
 				}
-				if !localSuccess {
-					allSuccess = false
-					break
-				}
 			}
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
-		}
-		return nil
 	})
 }
 
@@ -495,13 +486,11 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		}
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
-		for !allSuccess {
-			allSuccess = true
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
-				localSuccess := true
 				for _, ch := range localChunks {
 					//get the real chunk by the index in the index array
 					chunk := conf.hashes[ch]
@@ -523,23 +512,16 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 					}
 					if err != nil {
 						log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
-						localSuccess = false
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
 					} else {
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
 				}
-				if !localSuccess {
-					allSuccess = false
-					break
-				}
 			}
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all chunks succeeded!")
-		}
-		return nil
 	})
 
 	if result.Error != nil {

@@ -203,15 +203,13 @@ func runFileRetrievalTest(nodeCount int) error {
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
-		for !allSuccess {
-			allSuccess = true
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
-				//for each expected chunk, check if it is in the local store
-				localSuccess := true
+				//for each expected file, check if it is in the local store
 				item, ok := sim.NodeItem(id, bucketKeyFileStore)
 				if !ok {
-					return fmt.Errorf("No registry")
+					return fmt.Errorf("No filestore")
 				}
 				fileStore := item.(*storage.FileStore)
 				//check all chunks
@@ -219,23 +217,16 @@ func runFileRetrievalTest(nodeCount int) error {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
 					//check that we can read the file size and that it corresponds to the generated file size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-						//allSuccess = false
-						localSuccess = false
 						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
+						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
 					} else {
 						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
 				}
-				if !localSuccess {
-					allSuccess = false
-					break
-				}
 			}
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all retrievals succeeded!")
-		}
-		return nil
 	})
 
 	if result.Error != nil {
@@ -303,39 +294,32 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		allSuccess := false
-		for !allSuccess {
-			allSuccess = true
+	REPEAT:
+		for {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
-				localSuccess := true
 				//check on the node's FileStore (netstore)
 				item, ok := sim.NodeItem(id, bucketKeyFileStore)
 				if !ok {
-					return fmt.Errorf("No registry")
+					return fmt.Errorf("No filestore")
 				}
 				fileStore := item.(*storage.FileStore)
 				//check all chunks
 				for _, hash := range conf.hashes {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
-					//check that we can read the file size and that it corresponds to the generated file size
+					//check that we can read the chunk size and that it corresponds to the generated chunk size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(chunkSize) {
-						localSuccess = false
-						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
+						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
+						time.Sleep(500 * time.Millisecond)
+						continue REPEAT
 					} else {
-						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
+						log.Debug(fmt.Sprintf("Chunk with root hash %x successfully retrieved", hash))
 					}
 				}
-				if !localSuccess {
-					allSuccess = false
-					break
-				}
 			}
+			// all nodes and files found, exit loop and return without error
+			return nil
 		}
-		if !allSuccess {
-			return fmt.Errorf("Not all retrievals succeeded!")
-		}
-		return nil
 	})
 
 	if result.Error != nil {
