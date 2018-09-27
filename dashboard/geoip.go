@@ -42,6 +42,14 @@ type GeoDBInfo struct {
 	} `maxminddb:"location" json:"location,omitempty"`
 }
 
+// GeoLocation contains geographical information.
+type GeoLocation struct {
+	Country   string  `json:"country,omitempty"`
+	City      string  `json:"city,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
+}
+
 // GeoDB represents a geoip database that can be queried for IP to geographical
 // information conversions.
 type GeoDB struct {

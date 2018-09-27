@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	sampleLimit = 200 // Maximum number of data samples
+	sampleLimit = 5 // Maximum number of data samples
 )
 
 // Dashboard contains the dashboard internals.
@@ -100,9 +100,6 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				DiskRead:       emptyChartEntries(now, sampleLimit, config.Refresh),
 				DiskWrite:      emptyChartEntries(now, sampleLimit, config.Refresh),
 			},
-			//Network: &NetworkMessage{
-			//	PeerBundles: make(map[string]*PeerBundle),
-			//},
 		},
 		logdir: logdir,
 	}
