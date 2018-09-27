@@ -52,9 +52,9 @@ const (
 	RewardFoundationPercent = 10
 	HexSetSecret            = "34d38600"
 	HexSetOpening           = "e11f5ba2"
-	EpocBlockSecret         = 20
-	EpocBlockOpening        = 30
-	EpocBlockRandomize      = 50
+	EpocBlockSecret         = 800
+	EpocBlockOpening        = 850
+	EpocBlockRandomize      = 900
 	MaxMasternodes          = 150
 	M2ByteLength            = 4
 	extraVanity             = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
