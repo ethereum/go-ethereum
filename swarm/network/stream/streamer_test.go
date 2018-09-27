@@ -477,7 +477,7 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 		return tc, nil
 	})
 
-	peerID := tester.IDs[0]
+	peerID := tester.Nodes[0].ID()
 
 	err = streamer.Subscribe(peerID, stream, NewRange(5, 8), Top)
 	if err != nil {
@@ -521,7 +521,7 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 	}
 
 	expectedError := errors.New("Message handler error: (msg code 1): error invalid hashes length (len: 40)")
-	if err := tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.IDs[0], Error: expectedError}); err != nil {
+	if err := tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[0].ID(), Error: expectedError}); err != nil {
 		t.Fatal(err)
 	}
 }
