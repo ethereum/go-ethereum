@@ -124,7 +124,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
 	//set the resolved config path (geth --datadir)
-	config.Path = stack.InstanceDir()
+	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
 	config.Init(prvkey)
 	//configuration phase completed here
@@ -182,7 +182,7 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
-			currentConfig.Path = datadir
+			currentConfig.Path = expandPath(datadir)
 		}
 	}
 
@@ -226,6 +226,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		if len(ensAPIs) == 1 && ensAPIs[0] == "" {
 			ensAPIs = nil
 		}
+		for i := range ensAPIs {
+			ensAPIs[i] = expandPath(ensAPIs[i])
+		}
+
 		currentConfig.EnsAPIs = ensAPIs
 	}
 
@@ -268,7 +272,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if datadir := os.Getenv(GETH_ENV_DATADIR); datadir != "" {
-		currentConfig.Path = datadir
+		currentConfig.Path = expandPath(datadir)
 	}
 
 	bzzport := os.Getenv(SWARM_ENV_PORT)
