@@ -43,8 +43,6 @@ type updateRequestJSON struct {
 	Signature       string `json:"signature,omitempty"`
 }
 
-var zeroAddr = common.Address{}
-
 // Request layout
 // resourceUpdate bytes
 // SignatureLength bytes
