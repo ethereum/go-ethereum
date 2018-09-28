@@ -819,15 +819,6 @@ func TestBindings(t *testing.T) {
 	if !common.FileExist(gocmd) {
 		t.Skip("go sdk not found for testing")
 	}
-	// Skip the test if the go-ethereum sources are symlinked (https://github.com/golang/go/issues/14845)
-	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend(nil,uint64(10000000000)))\n}")
-	linkTestDeps, err := imports.Process(os.TempDir(), []byte(linkTestCode), nil)
-	if err != nil {
-		t.Fatalf("failed check for goimports symlink bug: %v", err)
-	}
-	if !strings.Contains(string(linkTestDeps), "go-ethereum") {
-		t.Skip("symlinked environment doesn't support bind (https://github.com/golang/go/issues/14845)")
-	}
 	// Create a temporary workspace for the test suite
 	ws, err := ioutil.TempDir("", "")
 	if err != nil {
