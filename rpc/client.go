@@ -80,12 +80,12 @@ type BatchElem struct {
 // A value of this type can a JSON-RPC request, notification, successful response or
 // error response. Which one it is depends on the fields.
 type jsonrpcMessage struct {
-	Version string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method,omitempty"`
-	Params  json.RawMessage `json:"params,omitempty"`
-	Error   *jsonError      `json:"error,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
+	Version string           `json:"jsonrpc"`
+	ID      json.RawMessage  `json:"id,omitempty"`
+	Method  string           `json:"method,omitempty"`
+	Params  json.RawMessage  `json:"params,omitempty"`
+	Error   *jsonError       `json:"error,omitempty"`
+	Result  *json.RawMessage `json:"result,omitempty"`
 }
 
 func (msg *jsonrpcMessage) isNotification() bool {
@@ -310,10 +310,10 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		return err
 	case resp.Error != nil:
 		return resp.Error
-	case len(resp.Result) == 0:
+	case resp.Result == nil:
 		return ErrNoResult
 	default:
-		return json.Unmarshal(resp.Result, &result)
+		return json.Unmarshal(*resp.Result, &result)
 	}
 }
 
@@ -381,11 +381,11 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 			elem.Error = resp.Error
 			continue
 		}
-		if len(resp.Result) == 0 {
+		if resp.Result == nil {
 			elem.Error = ErrNoResult
 			continue
 		}
-		elem.Error = json.Unmarshal(resp.Result, elem.Result)
+		elem.Error = json.Unmarshal(*resp.Result, elem.Result)
 	}
 	return err
 }
@@ -665,7 +665,7 @@ func (c *Client) handleResponse(msg *jsonrpcMessage) {
 		op.err = msg.Error
 		return
 	}
-	if op.err = json.Unmarshal(msg.Result, &op.sub.subid); op.err == nil {
+	if op.err = json.Unmarshal(*msg.Result, &op.sub.subid); op.err == nil {
 		go op.sub.start()
 		c.subs[op.sub.subid] = op.sub
 	}
