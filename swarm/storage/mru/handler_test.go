@@ -39,10 +39,9 @@ var (
 	startTime = Timestamp{
 		Time: uint64(4200),
 	}
-	resourceFrequency = uint64(42)
-	cleanF            func()
-	resourceName      = "føø.bar"
-	hashfunc          = storage.MakeHashFunc(storage.DefaultHash)
+	cleanF       func()
+	resourceName = "føø.bar"
+	hashfunc     = storage.MakeHashFunc(storage.DefaultHash)
 )
 
 func init() {
