@@ -19,157 +19,218 @@ package mru
 import (
 	"bytes"
 	"encoding/json"
+	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 )
-
-// updateRequestJSON represents a JSON-serialized UpdateRequest
-type updateRequestJSON struct {
-	Name      string `json:"name,omitempty"`
-	Frequency uint64 `json:"frequency,omitempty"`
-	StartTime uint64 `json:"startTime,omitempty"`
-	Owner     string `json:"ownerAddr,omitempty"`
-	RootAddr  string `json:"rootAddr,omitempty"`
-	MetaHash  string `json:"metaHash,omitempty"`
-	Version   uint32 `json:"version,omitempty"`
-	Period    uint32 `json:"period,omitempty"`
-	Data      string `json:"data,omitempty"`
-	Multihash bool   `json:"multiHash"`
-	Signature string `json:"signature,omitempty"`
-}
 
 // Request represents an update and/or resource create message
 type Request struct {
-	SignedResourceUpdate
-	metadata ResourceMetadata
-	isNew    bool
+	ResourceUpdate // actual content that will be put on the chunk, less signature
+	Signature      *Signature
+	idAddr         storage.Address // cached chunk address for the update (not serialized, for internal use)
+	binaryData     []byte          // cached serialized data (does not get serialized again!, for efficiency/internal use)
 }
 
-var zeroAddr = common.Address{}
+// updateRequestJSON represents a JSON-serialized UpdateRequest
+type updateRequestJSON struct {
+	ID
+	ProtocolVersion uint8  `json:"protocolVersion"`
+	Data            string `json:"data,omitempty"`
+	Signature       string `json:"signature,omitempty"`
+}
 
-// NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(metadata *ResourceMetadata) (*Request, error) {
+// Request layout
+// resourceUpdate bytes
+// SignatureLength bytes
+const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
 
-	request, err := NewCreateRequest(metadata)
-	if err != nil {
-		return nil, err
-	}
+// NewFirstRequest returns a ready to sign request to publish a first update
+func NewFirstRequest(topic Topic) *Request {
+
+	request := new(Request)
 
 	// get the current time
 	now := TimestampProvider.Now().Time
+	request.Epoch = lookup.GetFirstEpoch(now)
+	request.View.Topic = topic
+	request.Header.Version = ProtocolVersion
 
-	request.version = 1
-	request.period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
-	if err != nil {
-		return nil, err
-	}
-	return request, nil
-}
-
-// NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *ResourceMetadata) (request *Request, err error) {
-	if metadata.StartTime.Time == 0 { // get the current time
-		metadata.StartTime = TimestampProvider.Now()
-	}
-
-	if metadata.Owner == zeroAddr {
-		return nil, NewError(ErrInvalidValue, "OwnerAddr is not set")
-	}
-
-	request = &Request{
-		metadata: *metadata,
-	}
-	request.rootAddr, request.metaHash, _, err = request.metadata.serializeAndHash()
-	request.isNew = true
-	return request, nil
-}
-
-// Frequency returns the resource's expected update frequency
-func (r *Request) Frequency() uint64 {
-	return r.metadata.Frequency
-}
-
-// Name returns the resource human-readable name
-func (r *Request) Name() string {
-	return r.metadata.Name
-}
-
-// Multihash returns true if the resource data should be interpreted as a multihash
-func (r *Request) Multihash() bool {
-	return r.multihash
-}
-
-// Period returns in which period the resource will be published
-func (r *Request) Period() uint32 {
-	return r.period
-}
-
-// Version returns the resource version to publish
-func (r *Request) Version() uint32 {
-	return r.version
-}
-
-// RootAddr returns the metadata chunk address
-func (r *Request) RootAddr() storage.Address {
-	return r.rootAddr
-}
-
-// StartTime returns the time that the resource was/will be created at
-func (r *Request) StartTime() Timestamp {
-	return r.metadata.StartTime
-}
-
-// Owner returns the resource owner's address
-func (r *Request) Owner() common.Address {
-	return r.metadata.Owner
-}
-
-// Sign executes the signature to validate the resource and sets the owner address field
-func (r *Request) Sign(signer Signer) error {
-	if r.metadata.Owner != zeroAddr && r.metadata.Owner != signer.Address() {
-		return NewError(ErrInvalidSignature, "Signer does not match current owner of the resource")
-	}
-
-	if err := r.SignedResourceUpdate.Sign(signer); err != nil {
-		return err
-	}
-	r.metadata.Owner = signer.Address()
-	return nil
+	return request
 }
 
 // SetData stores the payload data the resource will be updated with
-func (r *Request) SetData(data []byte, multihash bool) {
+func (r *Request) SetData(data []byte) {
 	r.data = data
-	r.multihash = multihash
-	r.signature = nil
-	if !r.isNew {
-		r.metadata.Frequency = 0 // mark as update
-	}
+	r.Signature = nil
 }
 
-func (r *Request) IsNew() bool {
-	return r.metadata.Frequency > 0 && (r.period <= 1 || r.version <= 1)
-}
-
+// IsUpdate returns true if this request models a signed update or otherwise it is a signature request
 func (r *Request) IsUpdate() bool {
-	return r.signature != nil
+	return r.Signature != nil
+}
+
+// Verify checks that signatures are valid and that the signer owns the resource to be updated
+func (r *Request) Verify() (err error) {
+	if len(r.data) == 0 {
+		return NewError(ErrInvalidValue, "Update does not contain data")
+	}
+	if r.Signature == nil {
+		return NewError(ErrInvalidSignature, "Missing signature field")
+	}
+
+	digest, err := r.GetDigest()
+	if err != nil {
+		return err
+	}
+
+	// get the address of the signer (which also checks that it's a valid signature)
+	r.View.User, err = getUserAddr(digest, *r.Signature)
+	if err != nil {
+		return err
+	}
+
+	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
+	// that was used to retrieve this chunk
+	// if this validation fails, someone forged a chunk.
+	if !bytes.Equal(r.idAddr, r.Addr()) {
+		return NewError(ErrInvalidSignature, "Signature address does not match with update user address")
+	}
+
+	return nil
+}
+
+// Sign executes the signature to validate the resource
+func (r *Request) Sign(signer Signer) error {
+	r.View.User = signer.Address()
+	r.binaryData = nil           //invalidate serialized data
+	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
+	if err != nil {
+		return err
+	}
+
+	signature, err := signer.Sign(digest)
+	if err != nil {
+		return err
+	}
+
+	// Although the Signer interface returns the public address of the signer,
+	// recover it from the signature to see if they match
+	userAddr, err := getUserAddr(digest, signature)
+	if err != nil {
+		return NewError(ErrInvalidSignature, "Error verifying signature")
+	}
+
+	if userAddr != signer.Address() { // sanity check to make sure the Signer is declaring the same address used to sign!
+		return NewError(ErrInvalidSignature, "Signer address does not match update user address")
+	}
+
+	r.Signature = &signature
+	r.idAddr = r.Addr()
+	return nil
+}
+
+// GetDigest creates the resource update digest used in signatures
+// the serialized payload is cached in .binaryData
+func (r *Request) GetDigest() (result common.Hash, err error) {
+	hasher := hashPool.Get().(hash.Hash)
+	defer hashPool.Put(hasher)
+	hasher.Reset()
+	dataLength := r.ResourceUpdate.binaryLength()
+	if r.binaryData == nil {
+		r.binaryData = make([]byte, dataLength+signatureLength)
+		if err := r.ResourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
+			return result, err
+		}
+	}
+	hasher.Write(r.binaryData[:dataLength]) //everything except the signature.
+
+	return common.BytesToHash(hasher.Sum(nil)), nil
+}
+
+// create an update chunk.
+func (r *Request) toChunk() (storage.Chunk, error) {
+
+	// Check that the update is signed and serialized
+	// For efficiency, data is serialized during signature and cached in
+	// the binaryData field when computing the signature digest in .getDigest()
+	if r.Signature == nil || r.binaryData == nil {
+		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
+	}
+
+	resourceUpdateLength := r.ResourceUpdate.binaryLength()
+
+	// signature is the last item in the chunk data
+	copy(r.binaryData[resourceUpdateLength:], r.Signature[:])
+
+	chunk := storage.NewChunk(r.idAddr, r.binaryData)
+	return chunk, nil
+}
+
+// fromChunk populates this structure from chunk data. It does not verify the signature is valid.
+func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
+	// for update chunk layout see Request definition
+
+	//deserialize the resource update portion
+	if err := r.ResourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
+		return err
+	}
+
+	// Extract the signature
+	var signature *Signature
+	cursor := r.ResourceUpdate.binaryLength()
+	sigdata := chunkdata[cursor : cursor+signatureLength]
+	if len(sigdata) > 0 {
+		signature = &Signature{}
+		copy(signature[:], sigdata)
+	}
+
+	r.Signature = signature
+	r.idAddr = updateAddr
+	r.binaryData = chunkdata
+
+	return nil
+
+}
+
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
+func (r *Request) FromValues(values Values, data []byte) error {
+	signatureBytes, err := hexutil.Decode(values.Get("signature"))
+	if err != nil {
+		r.Signature = nil
+	} else {
+		if len(signatureBytes) != signatureLength {
+			return NewError(ErrInvalidSignature, "Incorrect signature length")
+		}
+		r.Signature = new(Signature)
+		copy(r.Signature[:], signatureBytes)
+	}
+	err = r.ResourceUpdate.FromValues(values, data)
+	if err != nil {
+		return err
+	}
+	r.idAddr = r.Addr()
+	return err
+}
+
+// AppendValues serializes this structure into the provided string key-value store
+// useful to build query strings
+func (r *Request) AppendValues(values Values) []byte {
+	if r.Signature != nil {
+		values.Set("signature", hexutil.Encode(r.Signature[:]))
+	}
+	return r.ResourceUpdate.AppendValues(values)
 }
 
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.version = j.Version
-	r.period = j.Period
-	r.multihash = j.Multihash
-	r.metadata.Name = j.Name
-	r.metadata.Frequency = j.Frequency
-	r.metadata.StartTime.Time = j.StartTime
-
-	if err := decodeHexArray(r.metadata.Owner[:], j.Owner, "ownerAddr"); err != nil {
-		return err
-	}
+	r.ID = j.ID
+	r.Header.Version = j.ProtocolVersion
 
 	var err error
 	if j.Data != "" {
@@ -179,71 +240,16 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 		}
 	}
 
-	var declaredRootAddr storage.Address
-	var declaredMetaHash []byte
-
-	declaredRootAddr, err = decodeHexSlice(j.RootAddr, storage.AddressLength, "rootAddr")
-	if err != nil {
-		return err
-	}
-	declaredMetaHash, err = decodeHexSlice(j.MetaHash, 32, "metaHash")
-	if err != nil {
-		return err
-	}
-
-	if r.IsNew() {
-		// for new resource creation, rootAddr and metaHash are optional because
-		// we can derive them from the content itself.
-		// however, if the user sent them, we check them for consistency.
-
-		r.rootAddr, r.metaHash, _, err = r.metadata.serializeAndHash()
-		if err != nil {
-			return err
-		}
-		if j.RootAddr != "" && !bytes.Equal(declaredRootAddr, r.rootAddr) {
-			return NewError(ErrInvalidValue, "rootAddr does not match resource metadata")
-		}
-		if j.MetaHash != "" && !bytes.Equal(declaredMetaHash, r.metaHash) {
-			return NewError(ErrInvalidValue, "metaHash does not match resource metadata")
-		}
-
-	} else {
-		//Update message
-		r.rootAddr = declaredRootAddr
-		r.metaHash = declaredMetaHash
-	}
-
 	if j.Signature != "" {
 		sigBytes, err := hexutil.Decode(j.Signature)
 		if err != nil || len(sigBytes) != signatureLength {
 			return NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
-		r.signature = new(Signature)
-		r.updateAddr = r.UpdateAddr()
-		copy(r.signature[:], sigBytes)
+		r.Signature = new(Signature)
+		r.idAddr = r.Addr()
+		copy(r.Signature[:], sigBytes)
 	}
 	return nil
-}
-
-func decodeHexArray(dst []byte, src, name string) error {
-	bytes, err := decodeHexSlice(src, len(dst), name)
-	if err != nil {
-		return err
-	}
-	if bytes != nil {
-		copy(dst, bytes)
-	}
-	return nil
-}
-
-func decodeHexSlice(src string, expectedLength int, name string) (bytes []byte, err error) {
-	if src != "" {
-		bytes, err = hexutil.Decode(src)
-		if err != nil || len(bytes) != expectedLength {
-			return nil, NewErrorf(ErrInvalidValue, "Cannot decode %s", name)
-		}
-	}
-	return bytes, nil
 }
 
 // UnmarshalJSON takes a JSON structure stored in a byte array and populates the Request object
@@ -259,38 +265,19 @@ func (r *Request) UnmarshalJSON(rawData []byte) error {
 // MarshalJSON takes an update request and encodes it as a JSON structure into a byte array
 // Implements json.Marshaler interface
 func (r *Request) MarshalJSON() (rawData []byte, err error) {
-	var signatureString, dataHashString, rootAddrString, metaHashString string
-	if r.signature != nil {
-		signatureString = hexutil.Encode(r.signature[:])
+	var signatureString, dataString string
+	if r.Signature != nil {
+		signatureString = hexutil.Encode(r.Signature[:])
 	}
 	if r.data != nil {
-		dataHashString = hexutil.Encode(r.data)
-	}
-	if r.rootAddr != nil {
-		rootAddrString = hexutil.Encode(r.rootAddr)
-	}
-	if r.metaHash != nil {
-		metaHashString = hexutil.Encode(r.metaHash)
-	}
-	var ownerAddrString string
-	if r.metadata.Frequency == 0 {
-		ownerAddrString = ""
-	} else {
-		ownerAddrString = hexutil.Encode(r.metadata.Owner[:])
+		dataString = hexutil.Encode(r.data)
 	}
 
 	requestJSON := &updateRequestJSON{
-		Name:      r.metadata.Name,
-		Frequency: r.metadata.Frequency,
-		StartTime: r.metadata.StartTime.Time,
-		Version:   r.version,
-		Period:    r.period,
-		Owner:     ownerAddrString,
-		Data:      dataHashString,
-		Multihash: r.multihash,
-		Signature: signatureString,
-		RootAddr:  rootAddrString,
-		MetaHash:  metaHashString,
+		ID:              r.ID,
+		ProtocolVersion: r.Header.Version,
+		Data:            dataString,
+		Signature:       signatureString,
 	}
 
 	return json.Marshal(requestJSON)

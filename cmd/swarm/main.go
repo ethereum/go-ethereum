@@ -203,21 +203,29 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
-	SwarmResourceMultihashFlag = cli.BoolFlag{
-		Name:  "multihash",
-		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as raw, literal data that will be included in the resource",
+	SwarmCompressedFlag = cli.BoolFlag{
+		Name:  "compressed",
+		Usage: "Prints encryption keys in compressed form",
 	}
 	SwarmResourceNameFlag = cli.StringFlag{
 		Name:  "name",
-		Usage: "User-defined name for the new resource",
+		Usage: "User-defined name for the new resource, limited to 32 characters. If combined with topic, the resource will be a subtopic with this name",
+	}
+	SwarmResourceTopicFlag = cli.StringFlag{
+		Name:  "topic",
+		Usage: "User-defined topic this resource is tracking, hex encoded. Limited to 64 hexadecimal characters",
 	}
 	SwarmResourceDataOnCreateFlag = cli.StringFlag{
 		Name:  "data",
 		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
 	}
-	SwarmCompressedFlag = cli.BoolFlag{
-		Name:  "compressed",
-		Usage: "Prints encryption keys in compressed form",
+	SwarmResourceManifestFlag = cli.StringFlag{
+		Name:  "manifest",
+		Usage: "Refers to the resource through a manifest",
+	}
+	SwarmResourceUserFlag = cli.StringFlag{
+		Name:  "user",
+		Usage: "Indicates the user who updates the resource",
 	}
 )
 
@@ -347,27 +355,53 @@ func init() {
 					Action:             resourceCreate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
-					Usage:              "creates a new Mutable Resource",
-					ArgsUsage:          "<frequency>",
-					Description:        "creates a new Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceMultihashFlag},
+					Usage:              "creates and publishes a new Mutable Resource manifest",
+					Description: `creates and publishes a new Mutable Resource manifest pointing to a specified user's updates about a particular topic.
+					The resource topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						the Mutable Resource tracks a discussion about that contract.
+					The --user flag allows to have this manifest refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)`,
+					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
 				},
 				{
 					Action:             resourceUpdate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "update",
 					Usage:              "updates the content of an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
-					Description:        "updates the content of an existing Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceMultihashFlag},
+					ArgsUsage:          "<0x Hex data>",
+					Description: `publishes a new update on the specified topic
+					The resource topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						the Mutable Resource tracks a discussion about that contract.
+					
+					If you have a manifest, you can specify it with --manifest to refer to the resource,
+					instead of using --topic / --name
+					`,
+					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag},
 				},
 				{
 					Action:             resourceInfo,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "info",
 					Usage:              "obtains information about an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain>",
-					Description:        "obtains information about an existing Mutable Resource",
+					Description: `obtains information about an existing Mutable Resource
+					The topic can be specified directly with the --topic flag as an hex string
+					If no topic is specified, the default topic (zero) will be used
+					The --name flag can be used to specify subtopics with a specific name.
+					The --user flag allows to refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)
+					If you have a manifest, you can specify it with --manifest instead of --topic / --name / ---user
+					to refer to the resource`,
+					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
 				},
 			},
 		},

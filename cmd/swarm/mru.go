@@ -19,10 +19,11 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
@@ -34,62 +35,38 @@ func NewGenericSigner(ctx *cli.Context) mru.Signer {
 	return mru.NewGenericSigner(getPrivKey(ctx))
 }
 
+func getTopic(ctx *cli.Context) (topic mru.Topic) {
+	var name = ctx.String(SwarmResourceNameFlag.Name)
+	var relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+	var relatedTopicBytes []byte
+	var err error
+
+	if relatedTopic != "" {
+		relatedTopicBytes, err = hexutil.Decode(relatedTopic)
+		if err != nil {
+			utils.Fatalf("Error parsing topic: %s", err)
+		}
+	}
+
+	topic, err = mru.NewTopic(name, relatedTopicBytes)
+	if err != nil {
+		utils.Fatalf("Error parsing topic: %s", err)
+	}
+	return topic
+}
+
 // swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
 // swarm resource info <Manifest Address or ENS domain>
 
 func resourceCreate(ctx *cli.Context) {
-	args := ctx.Args()
-
 	var (
-		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client      = swarm.NewClient(bzzapi)
-		multihash   = ctx.Bool(SwarmResourceMultihashFlag.Name)
-		initialData = ctx.String(SwarmResourceDataOnCreateFlag.Name)
-		name        = ctx.String(SwarmResourceNameFlag.Name)
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
 	)
 
-	if len(args) < 1 {
-		fmt.Println("Incorrect number of arguments")
-		cli.ShowCommandHelpAndExit(ctx, "create", 1)
-		return
-	}
-	signer := NewGenericSigner(ctx)
-	frequency, err := strconv.ParseUint(args[0], 10, 64)
-	if err != nil {
-		fmt.Printf("Frequency formatting error: %s\n", err.Error())
-		cli.ShowCommandHelpAndExit(ctx, "create", 1)
-		return
-	}
-
-	metadata := mru.ResourceMetadata{
-		Name:      name,
-		Frequency: frequency,
-		Owner:     signer.Address(),
-	}
-
-	var newResourceRequest *mru.Request
-	if initialData != "" {
-		initialDataBytes, err := hexutil.Decode(initialData)
-		if err != nil {
-			fmt.Printf("Error parsing data: %s\n", err.Error())
-			cli.ShowCommandHelpAndExit(ctx, "create", 1)
-			return
-		}
-		newResourceRequest, err = mru.NewCreateUpdateRequest(&metadata)
-		if err != nil {
-			utils.Fatalf("Error creating new resource request: %s", err)
-		}
-		newResourceRequest.SetData(initialDataBytes, multihash)
-		if err = newResourceRequest.Sign(signer); err != nil {
-			utils.Fatalf("Error signing resource update: %s", err.Error())
-		}
-	} else {
-		newResourceRequest, err = mru.NewCreateRequest(&metadata)
-		if err != nil {
-			utils.Fatalf("Error creating new resource request: %s", err)
-		}
-	}
+	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
+	newResourceRequest.View.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {
@@ -104,32 +81,43 @@ func resourceUpdate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
-		bzzapi    = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client    = swarm.NewClient(bzzapi)
-		multihash = ctx.Bool(SwarmResourceMultihashFlag.Name)
+		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client                  = swarm.NewClient(bzzapi)
+		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
 
-	if len(args) < 2 {
+	if len(args) < 1 {
 		fmt.Println("Incorrect number of arguments")
 		cli.ShowCommandHelpAndExit(ctx, "update", 1)
 		return
 	}
+
 	signer := NewGenericSigner(ctx)
-	manifestAddressOrDomain := args[0]
-	data, err := hexutil.Decode(args[1])
+
+	data, err := hexutil.Decode(args[0])
 	if err != nil {
 		utils.Fatalf("Error parsing data: %s", err.Error())
 		return
 	}
 
+	var updateRequest *mru.Request
+	var query *mru.Query
+
+	if manifestAddressOrDomain == "" {
+		query = new(mru.Query)
+		query.User = signer.Address()
+		query.Topic = getTopic(ctx)
+
+	}
+
 	// Retrieve resource status and metadata out of the manifest
-	updateRequest, err := client.GetResourceMetadata(manifestAddressOrDomain)
+	updateRequest, err = client.GetResourceMetadata(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving resource status: %s", err.Error())
 	}
 
 	// set the new data
-	updateRequest.SetData(data, multihash)
+	updateRequest.SetData(data)
 
 	// sign update
 	if err = updateRequest.Sign(signer); err != nil {
@@ -146,17 +134,19 @@ func resourceUpdate(ctx *cli.Context) {
 
 func resourceInfo(ctx *cli.Context) {
 	var (
-		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client = swarm.NewClient(bzzapi)
+		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client                  = swarm.NewClient(bzzapi)
+		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
-	args := ctx.Args()
-	if len(args) < 1 {
-		fmt.Println("Incorrect number of arguments.")
-		cli.ShowCommandHelpAndExit(ctx, "info", 1)
-		return
+
+	var query *mru.Query
+	if manifestAddressOrDomain == "" {
+		query = new(mru.Query)
+		query.Topic = getTopic(ctx)
+		query.User = resourceGetUser(ctx)
 	}
-	manifestAddressOrDomain := args[0]
-	metadata, err := client.GetResourceMetadata(manifestAddressOrDomain)
+
+	metadata, err := client.GetResourceMetadata(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
 		return
@@ -166,4 +156,17 @@ func resourceInfo(ctx *cli.Context) {
 		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
 	}
 	fmt.Println(string(encodedMetadata))
+}
+
+func resourceGetUser(ctx *cli.Context) common.Address {
+	var user = ctx.String(SwarmResourceUserFlag.Name)
+	if user != "" {
+		return common.HexToAddress(user)
+	}
+	pk := getPrivKey(ctx)
+	if pk == nil {
+		utils.Fatalf("Cannot read private key. Must specify --user or --bzzaccount")
+	}
+	return crypto.PubkeyToAddress(pk.PublicKey)
+
 }
