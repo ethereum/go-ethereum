@@ -631,8 +631,8 @@ func testExternalUI(api *core.SignerAPI) {
 
 	_, err = api.SignTransaction(ctx, core.SendTxArgs{From: common.MixedcaseAddress{}}, nil)
 	checkErr("SignTransaction", err)
-	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
-	checkErr("Sign", err)
+	_, err = api.SignData(ctx, "text/plain", common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
+	checkErr("SignData", err)
 	_, err = api.List(ctx)
 	checkErr("List", err)
 	_, err = api.New(ctx)
