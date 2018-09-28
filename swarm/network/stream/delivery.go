@@ -96,6 +96,11 @@ func (s *SwarmChunkServer) processDeliveries() {
 	}
 }
 
+// SessionIndex returns zero in all cases for SwarmChunkServer.
+func (s *SwarmChunkServer) SessionIndex() (uint64, error) {
+	return 0, nil
+}
+
 // SetNextBatch
 func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
 	select {
@@ -141,7 +146,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		"retrieve.request")
 	defer osp.Finish()
 
-	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
+	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
 		return err
 	}

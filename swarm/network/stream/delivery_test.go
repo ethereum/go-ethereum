@@ -88,7 +88,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	peer := streamer.getPeer(node.ID())
 
 	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", false),
+		Stream:   NewStream(swarmChunkServerStreamName, "", true),
 		History:  nil,
 		Priority: Top,
 	})
@@ -136,7 +136,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	node := tester.Nodes[0]
 	peer := streamer.getPeer(node.ID())
 
-	stream := NewStream(swarmChunkServerStreamName, "", false)
+	stream := NewStream(swarmChunkServerStreamName, "", true)
 
 	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
 		Stream:   stream,
@@ -409,7 +409,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				return fmt.Errorf("No registry")
 			}
 			registry := item.(*Registry)
-			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
+			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", true), NewRange(0, 0), Top)
 			if err != nil {
 				return err
 			}

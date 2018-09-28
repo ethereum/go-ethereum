@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"math"
 	"strconv"
 	"time"
 
@@ -36,28 +35,17 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po        uint8
-	store     storage.SyncChunkStore
-	sessionAt uint64
-	start     uint64
-	live      bool
-	quit      chan struct{}
+	po    uint8
+	store storage.SyncChunkStore
+	quit  chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
 func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
-	sessionAt := syncChunkStore.BinIndex(po)
-	var start uint64
-	if live {
-		start = sessionAt
-	}
 	return &SwarmSyncerServer{
-		po:        po,
-		store:     syncChunkStore,
-		sessionAt: sessionAt,
-		start:     start,
-		live:      live,
-		quit:      make(chan struct{}),
+		po:    po,
+		store: syncChunkStore,
+		quit:  make(chan struct{}),
 	}, nil
 }
 
@@ -88,25 +76,15 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 	return chunk.Data(), nil
 }
 
+// SessionIndex returns current storage bin (po) index.
+func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
+	return s.store.BinIndex(s.po), nil
+}
+
 // GetBatch retrieves the next batch of hashes from the dbstore
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
-	if s.live {
-		if from == 0 {
-			from = s.start
-		}
-		if to <= from || from >= s.sessionAt {
-			to = math.MaxUint64
-		}
-	} else {
-		if (to < from && to != 0) || from > s.sessionAt {
-			return nil, 0, 0, nil, nil
-		}
-		if to == 0 || to > s.sessionAt {
-			to = s.sessionAt
-		}
-	}
 
 	var ticker *time.Ticker
 	defer func() {

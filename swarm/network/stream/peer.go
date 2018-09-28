@@ -166,7 +166,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		"send.offered.hashes")
 	defer sp.Finish()
 
-	hashes, from, to, proof, err := s.SetNextBatch(f, t)
+	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
 		return err
 	}
@@ -214,10 +214,15 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 		return nil, ErrMaxPeerServers
 	}
 
+	sessionIndex, err := o.SessionIndex()
+	if err != nil {
+		return nil, err
+	}
 	os := &server{
-		Server:   o,
-		stream:   s,
-		priority: priority,
+		Server:       o,
+		stream:       s,
+		priority:     priority,
+		sessionIndex: sessionIndex,
 	}
 	p.servers[s] = os
 	return os, nil

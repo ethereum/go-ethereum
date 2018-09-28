@@ -107,13 +107,19 @@ func (self *testClient) BatchDone(Stream, uint64, []byte, []byte) func() (*Takeo
 func (self *testClient) Close() {}
 
 type testServer struct {
-	t string
+	t            string
+	sessionIndex uint64
 }
 
-func newTestServer(t string) *testServer {
+func newTestServer(t string, sessionIndex uint64) *testServer {
 	return &testServer{
-		t: t,
+		t:            t,
+		sessionIndex: sessionIndex,
 	}
+}
+
+func (s *testServer) SessionIndex() (uint64, error) {
+	return s.sessionIndex, nil
 }
 
 func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
@@ -230,7 +236,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	stream := NewStream("foo", "", false)
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 10), nil
 	})
 
 	node := tester.Nodes[0]
@@ -297,7 +303,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 	stream := NewStream("foo", "", true)
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 0), nil
 	})
 
 	node := tester.Nodes[0]
@@ -324,7 +330,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 					},
 					Hashes: make([]byte, HashSize),
 					From:   1,
-					To:     1,
+					To:     0,
 				},
 				Peer: node.ID(),
 			},
@@ -361,7 +367,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 	}
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 0), nil
 	})
 
 	stream := NewStream("bar", "", true)
@@ -407,9 +413,7 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 	stream := NewStream("foo", "", true)
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return &testServer{
-			t: t,
-		}, nil
+		return newTestServer(t, 10), nil
 	})
 
 	node := tester.Nodes[0]
@@ -448,8 +452,8 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 					HandoverProof: &HandoverProof{
 						Handover: &Handover{},
 					},
-					From:   1,
-					To:     1,
+					From:   11,
+					To:     0,
 					Hashes: make([]byte, HashSize),
 				},
 				Peer: node.ID(),
@@ -634,7 +638,7 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 	}
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 10), nil
 	})
 
 	node := tester.Nodes[0]
@@ -694,8 +698,8 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 						HandoverProof: &HandoverProof{
 							Handover: &Handover{},
 						},
-						From:   1,
-						To:     1,
+						From:   11,
+						To:     0,
 						Hashes: make([]byte, HashSize),
 					},
 					Peer: node.ID(),
@@ -769,7 +773,7 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 	}
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 0), nil
 	})
 
 	node := tester.Nodes[0]
@@ -799,7 +803,7 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 						},
 						Hashes: make([]byte, HashSize),
 						From:   1,
-						To:     1,
+						To:     0,
 					},
 					Peer: node.ID(),
 				},
@@ -843,7 +847,7 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 	}
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
-		return newTestServer(t), nil
+		return newTestServer(t, 0), nil
 	})
 
 	node := tester.Nodes[0]
@@ -903,7 +907,7 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 						},
 						Hashes: make([]byte, HashSize),
 						From:   1,
-						To:     1,
+						To:     0,
 					},
 					Peer: node.ID(),
 				},
