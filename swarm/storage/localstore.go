@@ -211,7 +211,7 @@ func (ls *LocalStore) Migrate() error {
 
 			ls.DbStore.Cleanup(cleanupFunc)
 
-			err := ls.DbStore.PutSchema(DbSchemaHive)
+			err := ls.DbStore.PutSchema(DbSchemaPurity)
 			if err != nil {
 				log.Error(err.Error())
 				return err
