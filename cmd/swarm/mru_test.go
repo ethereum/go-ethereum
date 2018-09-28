@@ -25,7 +25,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -33,12 +35,16 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 )
 
 func TestCLIResourceUpdate(t *testing.T) {
+
+	srv := testutil.NewTestSwarmServer(t, func(api *api.API) testutil.TestServer {
+		return swarmhttp.NewServer(api, "")
+	}, nil)
 	log.Info("starting 1 node cluster")
-	cluster := newTestCluster(t, 1)
-	defer cluster.Shutdown()
+	defer srv.Close()
 
 	// create a private key file for signing
 	pkfile, err := ioutil.TempFile("", "swarm-test")
@@ -69,7 +75,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 	hexData := hexutil.Encode(data)
 
 	flags := []string{
-		"--bzzapi", cluster.Nodes[0].URL,
+		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
 		"resource", "update",
 		"--topic", topic.Hex(),
@@ -82,7 +88,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 	cmd.ExpectExit()
 
 	// now try to get the update using the client
-	client := swarm.NewClient(cluster.Nodes[0].URL)
+	client := swarm.NewClient(srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +127,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 
 	// Now retrieve info for the next update
 	flags = []string{
-		"--bzzapi", cluster.Nodes[0].URL,
+		"--bzzapi", srv.URL,
 		"resource", "info",
 		"--topic", topic.Hex(),
 		"--user", address.Hex(),
@@ -146,7 +152,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 
 	// test publishing a manifest
 	flags = []string{
-		"--bzzapi", cluster.Nodes[0].URL,
+		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
 		"resource", "create",
 		"--topic", topic.Hex(),
