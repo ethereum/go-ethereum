@@ -87,9 +87,17 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	VerbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag,
-	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
+	VerbosityFlag,
+	//vmoduleFlag,
+	//backtraceAtFlag,
+	//debugFlag,
+	//pprofFlag,
+	//pprofAddrFlag,
+	//pprofPortFlag,
+	//memprofilerateFlag,
+	//blockprofilerateFlag,
+	//cpuprofileFlag,
+	//traceFlag,
 }
 
 var Glogger *log.GlogHandler

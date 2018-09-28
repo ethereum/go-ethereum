@@ -65,41 +65,41 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "TOMOCHAIN",
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
-			utils.NoUSBFlag,
+			//utils.NoUSBFlag,
 			utils.NetworkIdFlag,
-			utils.TestnetFlag,
-			utils.RinkebyFlag,
+			//utils.TestnetFlag,
+			//utils.RinkebyFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
-			utils.LightServFlag,
-			utils.LightPeersFlag,
-			utils.LightKDFFlag,
+			//utils.LightServFlag,
+			//utils.LightPeersFlag,
+			//utils.LightKDFFlag,
 		},
 	},
-	{Name: "DEVELOPER CHAIN",
-		Flags: []cli.Flag{
-			utils.DeveloperFlag,
-			utils.DeveloperPeriodFlag,
-		},
-	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
-		},
-	},
+	//{Name: "DEVELOPER CHAIN",
+	//	Flags: []cli.Flag{
+	//		utils.DeveloperFlag,
+	//		utils.DeveloperPeriodFlag,
+	//	},
+	//},
+	//{
+	//	Name: "ETHASH",
+	//	Flags: []cli.Flag{
+	//		utils.EthashCacheDirFlag,
+	//		utils.EthashCachesInMemoryFlag,
+	//		utils.EthashCachesOnDiskFlag,
+	//		utils.EthashDatasetDirFlag,
+	//		utils.EthashDatasetsInMemoryFlag,
+	//		utils.EthashDatasetsOnDiskFlag,
+	//	},
+	//},
 	//{
 	//	Name: "DASHBOARD",
 	//	Flags: []cli.Flag{
@@ -110,30 +110,30 @@ var AppHelpFlagGroups = []flagGroup{
 	//		utils.DashboardAssetsFlag,
 	//	},
 	//},
-	{
-		Name: "TRANSACTION POOL",
-		Flags: []cli.Flag{
-			utils.TxPoolNoLocalsFlag,
-			utils.TxPoolJournalFlag,
-			utils.TxPoolRejournalFlag,
-			utils.TxPoolPriceLimitFlag,
-			utils.TxPoolPriceBumpFlag,
-			utils.TxPoolAccountSlotsFlag,
-			utils.TxPoolGlobalSlotsFlag,
-			utils.TxPoolAccountQueueFlag,
-			utils.TxPoolGlobalQueueFlag,
-			utils.TxPoolLifetimeFlag,
-		},
-	},
-	{
-		Name: "PERFORMANCE TUNING",
-		Flags: []cli.Flag{
-			utils.CacheFlag,
-			utils.CacheDatabaseFlag,
-			utils.CacheGCFlag,
-			utils.TrieCacheGenFlag,
-		},
-	},
+	//{
+	//	Name: "TRANSACTION POOL",
+	//	Flags: []cli.Flag{
+	//		utils.TxPoolNoLocalsFlag,
+	//		utils.TxPoolJournalFlag,
+	//		utils.TxPoolRejournalFlag,
+	//		utils.TxPoolPriceLimitFlag,
+	//		utils.TxPoolPriceBumpFlag,
+	//		utils.TxPoolAccountSlotsFlag,
+	//		utils.TxPoolGlobalSlotsFlag,
+	//		utils.TxPoolAccountQueueFlag,
+	//		utils.TxPoolGlobalQueueFlag,
+	//		utils.TxPoolLifetimeFlag,
+	//	},
+	//},
+	//{
+	//	Name: "PERFORMANCE TUNING",
+	//	Flags: []cli.Flag{
+	//		utils.CacheFlag,
+	//		utils.CacheDatabaseFlag,
+	//		utils.CacheGCFlag,
+	//		utils.TrieCacheGenFlag,
+	//	},
+	//},
 	{
 		Name: "ACCOUNT",
 		Flags: []cli.Flag{
@@ -173,14 +173,14 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MaxPendingPeersFlag,
 			utils.NATFlag,
 			utils.NoDiscoverFlag,
-			utils.DiscoveryV5Flag,
-			utils.NetrestrictFlag,
+			//utils.DiscoveryV5Flag,
+			//utils.NetrestrictFlag,
 			utils.NodeKeyFileFlag,
 			utils.NodeKeyHexFlag,
 		},
 	},
 	{
-		Name: "MINER",
+		Name: "STAKER",
 		Flags: []cli.Flag{
 			utils.StakingEnabledFlag,
 			utils.StakerThreadsFlag,
@@ -190,31 +190,31 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.ExtraDataFlag,
 		},
 	},
-	{
-		Name: "GAS PRICE ORACLE",
-		Flags: []cli.Flag{
-			utils.GpoBlocksFlag,
-			utils.GpoPercentileFlag,
-		},
-	},
-	{
-		Name: "VIRTUAL MACHINE",
-		Flags: []cli.Flag{
-			utils.VMEnableDebugFlag,
-		},
-	},
+	//{
+	//	Name: "GAS PRICE ORACLE",
+	//	Flags: []cli.Flag{
+	//		utils.GpoBlocksFlag,
+	//		utils.GpoPercentileFlag,
+	//	},
+	//},
+	//{
+	//	Name: "VIRTUAL MACHINE",
+	//	Flags: []cli.Flag{
+	//		utils.VMEnableDebugFlag,
+	//	},
+	//},
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
 			utils.MetricsEnabledFlag,
-			utils.FakePoWFlag,
-			utils.NoCompactionFlag,
+			//utils.FakePoWFlag,
+			//utils.NoCompactionFlag,
 		}, debug.Flags...),
 	},
-	{
-		Name:  "WHISPER (EXPERIMENTAL)",
-		Flags: whisperFlags,
-	},
+	//{
+	//	Name:  "WHISPER (EXPERIMENTAL)",
+	//	Flags: whisperFlags,
+	//},
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
