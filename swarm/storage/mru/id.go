@@ -29,21 +29,21 @@ import (
 
 // ID uniquely identifies an update on the network.
 type ID struct {
-	View         `json:"view"`
+	Feed         `json:"view"`
 	lookup.Epoch `json:"epoch"`
 }
 
 // ID layout:
-// View viewLength bytes
+// Feed feedLength bytes
 // Epoch EpochLength
-const idLength = viewLength + lookup.EpochLength
+const idLength = feedLength + lookup.EpochLength
 
 // Addr calculates the resource update chunk address corresponding to this ID
 func (u *ID) Addr() (updateAddr storage.Address) {
 	serializedData := make([]byte, idLength)
 	var cursor int
-	u.View.binaryPut(serializedData[cursor : cursor+viewLength])
-	cursor += viewLength
+	u.Feed.binaryPut(serializedData[cursor : cursor+feedLength])
+	cursor += feedLength
 
 	eid := u.Epoch.ID()
 	copy(serializedData[cursor:cursor+lookup.EpochLength], eid[:])
@@ -61,10 +61,10 @@ func (u *ID) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize ID. Expected %d, got %d", idLength, len(serializedData))
 	}
 	var cursor int
-	if err := u.View.binaryPut(serializedData[cursor : cursor+viewLength]); err != nil {
+	if err := u.Feed.binaryPut(serializedData[cursor : cursor+feedLength]); err != nil {
 		return err
 	}
-	cursor += viewLength
+	cursor += feedLength
 
 	epochBytes, err := u.Epoch.MarshalBinary()
 	if err != nil {
@@ -88,10 +88,10 @@ func (u *ID) binaryGet(serializedData []byte) error {
 	}
 
 	var cursor int
-	if err := u.View.binaryGet(serializedData[cursor : cursor+viewLength]); err != nil {
+	if err := u.Feed.binaryGet(serializedData[cursor : cursor+feedLength]); err != nil {
 		return err
 	}
-	cursor += viewLength
+	cursor += feedLength
 
 	if err := u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength]); err != nil {
 		return err
@@ -108,8 +108,8 @@ func (u *ID) FromValues(values Values) error {
 	u.Epoch.Level = uint8(level)
 	u.Epoch.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
 
-	if u.View.User == (common.Address{}) {
-		return u.View.FromValues(values)
+	if u.Feed.User == (common.Address{}) {
+		return u.Feed.FromValues(values)
 	}
 	return nil
 }
@@ -119,5 +119,5 @@ func (u *ID) FromValues(values Values) error {
 func (u *ID) AppendValues(values Values) {
 	values.Set("level", fmt.Sprintf("%d", u.Epoch.Level))
 	values.Set("time", fmt.Sprintf("%d", u.Epoch.Time))
-	u.View.AppendValues(values)
+	u.Feed.AppendValues(values)
 }

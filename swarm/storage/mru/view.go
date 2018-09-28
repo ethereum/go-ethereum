@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// View represents a particular user's view of a resource
-type View struct {
+// Feed represents a particular user's view of a resource
+type Feed struct {
 	Topic Topic          `json:"topic"`
 	User  common.Address `json:"user"`
 }
@@ -34,11 +34,11 @@ type View struct {
 // View layout:
 // TopicLength bytes
 // userAddr common.AddressLength bytes
-const viewLength = TopicLength + common.AddressLength
+const feedLength = TopicLength + common.AddressLength
 
-// mapKey calculates a unique id for this view for the cache map in `Handler`
-func (u *View) mapKey() uint64 {
-	serializedData := make([]byte, viewLength)
+// mapKey calculates a unique id for this feed. Used by the cache map in `Handler`
+func (u *Feed) mapKey() uint64 {
+	serializedData := make([]byte, feedLength)
 	u.binaryPut(serializedData)
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
@@ -48,10 +48,10 @@ func (u *View) mapKey() uint64 {
 	return *(*uint64)(unsafe.Pointer(&hash[0]))
 }
 
-// binaryPut serializes this View instance into the provided slice
-func (u *View) binaryPut(serializedData []byte) error {
-	if len(serializedData) != viewLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", viewLength, len(serializedData))
+// binaryPut serializes this Feed instance into the provided slice
+func (u *Feed) binaryPut(serializedData []byte) error {
+	if len(serializedData) != feedLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", feedLength, len(serializedData))
 	}
 	var cursor int
 	copy(serializedData[cursor:cursor+TopicLength], u.Topic[:TopicLength])
@@ -64,14 +64,14 @@ func (u *View) binaryPut(serializedData []byte) error {
 }
 
 // binaryLength returns the expected size of this structure when serialized
-func (u *View) binaryLength() int {
-	return viewLength
+func (u *Feed) binaryLength() int {
+	return feedLength
 }
 
 // binaryGet restores the current instance from the information contained in the passed slice
-func (u *View) binaryGet(serializedData []byte) error {
-	if len(serializedData) != viewLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read View. Expected %d, got %d", viewLength, len(serializedData))
+func (u *Feed) binaryGet(serializedData []byte) error {
+	if len(serializedData) != feedLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read Feed. Expected %d, got %d", feedLength, len(serializedData))
 	}
 
 	var cursor int
@@ -84,16 +84,16 @@ func (u *View) binaryGet(serializedData []byte) error {
 	return nil
 }
 
-// Hex serializes the View to a hex string
-func (u *View) Hex() string {
-	serializedData := make([]byte, viewLength)
+// Hex serializes the Feed to a hex string
+func (u *Feed) Hex() string {
+	serializedData := make([]byte, feedLength)
 	u.binaryPut(serializedData)
 	return hexutil.Encode(serializedData)
 }
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (u *View) FromValues(values Values) (err error) {
+func (u *Feed) FromValues(values Values) (err error) {
 	topic := values.Get("topic")
 	if topic != "" {
 		if err := u.Topic.FromHex(values.Get("topic")); err != nil {
@@ -119,7 +119,7 @@ func (u *View) FromValues(values Values) (err error) {
 
 // AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (u *View) AppendValues(values Values) {
+func (u *Feed) AppendValues(values Values) {
 	values.Set("topic", u.Topic.Hex())
 	values.Set("user", u.User.Hex())
 }

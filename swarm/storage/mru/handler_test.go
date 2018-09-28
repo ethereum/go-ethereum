@@ -40,7 +40,7 @@ var (
 		Time: uint64(4200),
 	}
 	cleanF       func()
-	resourceName = "føø.bar"
+	subtopicName = "føø.bar"
 	hashfunc     = storage.MakeHashFunc(storage.DefaultHash)
 )
 
@@ -73,7 +73,7 @@ func (f *fakeTimeProvider) Now() Timestamp {
 }
 
 // make updates and retrieve them based on periods and versions
-func TestResourceHandler(t *testing.T) {
+func TestFeedsHandler(t *testing.T) {
 
 	// make fake timeProvider
 	clock := &fakeTimeProvider{
@@ -83,7 +83,7 @@ func TestResourceHandler(t *testing.T) {
 	// signer containing private key
 	signer := newAliceSigner()
 
-	rh, datadir, teardownTest, err := setupTest(clock, signer)
+	feedsHandler, datadir, teardownTest, err := setupTest(clock, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +93,8 @@ func TestResourceHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	topic, _ := NewTopic("Mess with mru code and see what ghost catches you", nil)
-	view := View{
+	topic, _ := NewTopic("Mess with Swarm Feeds code and see what ghost catches you", nil)
+	view := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -108,13 +108,13 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	request := NewFirstRequest(view.Topic) // this timestamps the update at t = 4200 (start time)
-	resourcekey := make(map[string]storage.Address)
+	chunkAddress := make(map[string]storage.Address)
 	data := []byte(updates[0])
 	request.SetData(data)
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[0]], err = rh.Update(ctx, request)
+	chunkAddress[updates[0]], err = feedsHandler.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestResourceHandler(t *testing.T) {
 	// move the clock ahead 21 seconds
 	clock.FastForward(21) // t=4221
 
-	request, err = rh.NewRequest(ctx, &request.View) // this timestamps the update at t = 4221
+	request, err = feedsHandler.NewRequest(ctx, &request.Feed) // this timestamps the update at t = 4221
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,14 +136,14 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[1]], err = rh.Update(ctx, request)
+	chunkAddress[updates[1]], err = feedsHandler.Update(ctx, request)
 	if err == nil {
 		t.Fatal("Expected update to fail since an update in this epoch already exists")
 	}
 
 	// move the clock ahead 21 seconds
 	clock.FastForward(21) // t=4242
-	request, err = rh.NewRequest(ctx, &request.View)
+	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +151,14 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[1]], err = rh.Update(ctx, request)
+	chunkAddress[updates[1]], err = feedsHandler.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// move the clock ahead 42 seconds
 	clock.FastForward(42) // t=4284
-	request, err = rh.NewRequest(ctx, &request.View)
+	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,14 +167,14 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[2]], err = rh.Update(ctx, request)
+	chunkAddress[updates[2]], err = feedsHandler.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// move the clock ahead 1 second
 	clock.FastForward(1) // t=4285
-	request, err = rh.NewRequest(ctx, &request.View)
+	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,25 +187,25 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[3]], err = rh.Update(ctx, request)
+	chunkAddress[updates[3]], err = feedsHandler.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(time.Second)
-	rh.Close()
+	feedsHandler.Close()
 
 	// check we can retrieve the updates after close
 	clock.FastForward(2000) // t=6285
 
-	rhparams := &HandlerParams{}
+	feedParams := &HandlerParams{}
 
-	rh2, err := NewTestHandler(datadir, rhparams)
+	feedsHandler2, err := NewTestHandler(datadir, feedParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := rh2.Lookup(ctx, NewQueryLatest(&request.View, lookup.NoClue))
+	rsrc2, err := feedsHandler2.Lookup(ctx, NewQueryLatest(&request.Feed, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// specific point in time
-	rsrc, err := rh2.Lookup(ctx, NewQuery(&request.View, 4284, lookup.NoClue))
+	rsrc, err := feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, 4284, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// beyond the first should yield an error
-	rsrc, err = rh2.Lookup(ctx, NewQuery(&request.View, startTime.Time-1, lookup.NoClue))
+	rsrc, err = feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, startTime.Time-1, lookup.NoClue))
 	if err == nil {
 		t.Fatalf("expected previous to fail, returned epoch %s data %v", rsrc.Epoch.String(), rsrc.data)
 	}
@@ -270,7 +270,7 @@ func TestSparseUpdates(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	topic, _ := NewTopic("Very slow updates", nil)
-	view := View{
+	view := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -349,12 +349,12 @@ func TestValidator(t *testing.T) {
 	defer teardownTest()
 
 	// create new resource
-	topic, _ := NewTopic(resourceName, nil)
-	view := View{
+	topic, _ := NewTopic(subtopicName, nil)
+	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
-	mr := NewFirstRequest(view.Topic)
+	mr := NewFirstRequest(feed.Topic)
 
 	// chunk with address
 	data := []byte("foo")
@@ -410,9 +410,9 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// set up resource handler and add is as a validator to the localstore
-	rhParams := &HandlerParams{}
-	rh := NewHandler(rhParams)
-	store.Validators = append(store.Validators, rh)
+	fhParams := &HandlerParams{}
+	fh := NewHandler(fhParams)
+	store.Validators = append(store.Validators, fh)
 
 	// create content addressed chunks, one good, one faulty
 	chunks := storage.GenerateRandomChunks(chunk.DefaultSize, 2)
@@ -420,7 +420,7 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 
 	topic, _ := NewTopic("xyzzy", nil)
-	view := View{
+	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -430,7 +430,7 @@ func TestValidatorInStore(t *testing.T) {
 		Epoch: lookup.Epoch{Time: 42,
 			Level: 1,
 		},
-		View: view,
+		Feed: feed,
 	}
 
 	updateAddr := id.Addr()
@@ -438,7 +438,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	r := new(Request)
 	r.idAddr = updateAddr
-	r.ResourceUpdate.ID = id
+	r.Update.ID = id
 	r.data = data
 
 	r.Sign(signer)
@@ -451,20 +451,20 @@ func TestValidatorInStore(t *testing.T) {
 	// put the chunks in the store and check their error status
 	err = store.Put(context.Background(), goodChunk)
 	if err == nil {
-		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
+		t.Fatal("expected error on good content address chunk with feed update validator only, but got nil")
 	}
 	err = store.Put(context.Background(), badChunk)
 	if err == nil {
-		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
+		t.Fatal("expected error on bad content address chunk with feed update validator only, but got nil")
 	}
 	err = store.Put(context.Background(), uglyChunk)
 	if err != nil {
-		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
+		t.Fatalf("expected no error on feed update chunk with feed update validator only, but got: %s", err)
 	}
 }
 
 // create rpc and resourcehandler
-func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, datadir string, teardown func(), err error) {
+func setupTest(timeProvider timestampProvider, signer Signer) (fh *TestHandler, datadir string, teardown func(), err error) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -478,7 +478,7 @@ func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, 
 	}
 
 	// temp datadir
-	datadir, err = ioutil.TempDir("", "rh")
+	datadir, err = ioutil.TempDir("", "fh")
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -487,9 +487,9 @@ func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, 
 	}
 
 	TimestampProvider = timeProvider
-	rhparams := &HandlerParams{}
-	rh, err = NewTestHandler(datadir, rhparams)
-	return rh, datadir, cleanF, err
+	fhParams := &HandlerParams{}
+	fh, err = NewTestHandler(datadir, fhParams)
+	return fh, datadir, cleanF, err
 }
 
 func newAliceSigner() *GenericSigner {

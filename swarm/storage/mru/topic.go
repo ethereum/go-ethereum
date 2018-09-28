@@ -29,7 +29,7 @@ import (
 // TopicLength establishes the max length of a topic string
 const TopicLength = storage.AddressLength
 
-// Topic represents what a resource talks about
+// Topic represents what a feed is about
 type Topic [TopicLength]byte
 
 // ErrTopicTooLong is returned when creating a topic with a name/related content too long

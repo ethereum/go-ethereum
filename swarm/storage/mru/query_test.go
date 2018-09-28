@@ -21,11 +21,11 @@ import (
 )
 
 func getTestQuery() *Query {
-	ul := getTestID()
+	id := getTestID()
 	return &Query{
 		TimeLimit: 5000,
-		View:      ul.View,
-		Hint:      ul.Epoch,
+		Feed:      id.Feed,
+		Hint:      id.Epoch,
 	}
 }
 

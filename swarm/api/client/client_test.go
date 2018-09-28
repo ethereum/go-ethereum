@@ -508,7 +508,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	// now try retrieving resource without a manifest
 
-	view := &mru.View{
+	view := &mru.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}

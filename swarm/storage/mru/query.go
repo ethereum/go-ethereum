@@ -27,7 +27,7 @@ import (
 // Query is used to specify constraints when performing an update lookup
 // TimeLimit indicates an upper bound for the search. Set to 0 for "now"
 type Query struct {
-	View
+	Feed
 	Hint      lookup.Epoch
 	TimeLimit uint64
 }
@@ -41,8 +41,8 @@ func (q *Query) FromValues(values Values) error {
 	level, _ := strconv.ParseUint(values.Get("hint.level"), 10, 32)
 	q.Hint.Level = uint8(level)
 	q.Hint.Time, _ = strconv.ParseUint(values.Get("hint.time"), 10, 64)
-	if q.View.User == (common.Address{}) {
-		return q.View.FromValues(values)
+	if q.Feed.User == (common.Address{}) {
+		return q.Feed.FromValues(values)
 	}
 	return nil
 }
@@ -59,20 +59,20 @@ func (q *Query) AppendValues(values Values) {
 	if q.Hint.Time != 0 {
 		values.Set("hint.time", fmt.Sprintf("%d", q.Hint.Time))
 	}
-	q.View.AppendValues(values)
+	q.Feed.AppendValues(values)
 }
 
 // NewQuery constructs an Query structure to find updates on or before `time`
 // if time == 0, the latest update will be looked up
-func NewQuery(view *View, time uint64, hint lookup.Epoch) *Query {
+func NewQuery(feed *Feed, time uint64, hint lookup.Epoch) *Query {
 	return &Query{
 		TimeLimit: time,
-		View:      *view,
+		Feed:      *feed,
 		Hint:      hint,
 	}
 }
 
 // NewQueryLatest generates lookup parameters that look for the latest version of a resource
-func NewQueryLatest(view *View, hint lookup.Epoch) *Query {
-	return NewQuery(view, 0, hint)
+func NewQueryLatest(feed *Feed, hint lookup.Epoch) *Query {
+	return NewQuery(feed, 0, hint)
 }

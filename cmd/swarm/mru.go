@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Command resource allows the user to create and update signed mutable resource updates
+// Command resource allows the user to create and update signed Swarm Feeds
 package main
 
 import (
@@ -66,7 +66,7 @@ func resourceCreate(ctx *cli.Context) {
 	)
 
 	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
-	newResourceRequest.View.User = resourceGetUser(ctx)
+	newResourceRequest.Feed.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {

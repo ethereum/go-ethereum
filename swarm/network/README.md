@@ -37,7 +37,7 @@ Using the streamer logic, various stream types are easy to implement:
   * live session syncing
   * historical syncing
 * simple retrieve requests and deliveries
-* mutable resource updates streams
+* Swarm Feeds streams
 * receipting for finger pointing
 
 ## Syncing

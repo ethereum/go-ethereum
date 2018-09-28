@@ -20,31 +20,31 @@ import (
 	"testing"
 )
 
-func getTestResourceUpdate() *ResourceUpdate {
-	return &ResourceUpdate{
+func getTestFeedUpdate() *Update {
+	return &Update{
 		ID:   *getTestID(),
 		data: []byte("El que lee mucho y anda mucho, ve mucho y sabe mucho"),
 	}
 }
 
-func TestResourceUpdateSerializer(t *testing.T) {
-	testBinarySerializerRecovery(t, getTestResourceUpdate(), "0x0000000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781ce803000000000019456c20717565206c6565206d7563686f207920616e6461206d7563686f2c207665206d7563686f20792073616265206d7563686f")
+func TestUpdateSerializer(t *testing.T) {
+	testBinarySerializerRecovery(t, getTestFeedUpdate(), "0x0000000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781ce803000000000019456c20717565206c6565206d7563686f207920616e6461206d7563686f2c207665206d7563686f20792073616265206d7563686f")
 }
 
-func TestResourceUpdateLengthCheck(t *testing.T) {
-	testBinarySerializerLengthCheck(t, getTestResourceUpdate())
+func TestUpdateLengthCheck(t *testing.T) {
+	testBinarySerializerLengthCheck(t, getTestFeedUpdate())
 	// Test fail if update is too big
-	update := getTestResourceUpdate()
+	update := getTestFeedUpdate()
 	update.data = make([]byte, maxUpdateDataLength+100)
 	serialized := make([]byte, update.binaryLength())
 	if err := update.binaryPut(serialized); err == nil {
-		t.Fatal("Expected resourceUpdate.binaryPut to fail since update is too big")
+		t.Fatal("Expected update.binaryPut to fail since update is too big")
 	}
 
 	// test fail if data is empty or nil
 	update.data = nil
 	serialized = make([]byte, update.binaryLength())
 	if err := update.binaryPut(serialized); err == nil {
-		t.Fatal("Expected resourceUpdate.binaryPut to fail since data is empty")
+		t.Fatal("Expected update.binaryPut to fail since data is empty")
 	}
 }

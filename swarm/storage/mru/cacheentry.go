@@ -26,23 +26,23 @@ import (
 
 const (
 	hasherCount            = 8
-	resourceHashAlgorithm  = storage.SHA3Hash
+	feedsHashAlgorithm     = storage.SHA3Hash
 	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
 // cacheEntry caches resource data and the metadata of its root chunk.
 type cacheEntry struct {
-	ResourceUpdate
+	Update
 	*bytes.Reader
 	lastKey storage.Address
 }
 
 // implements storage.LazySectionReader
 func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
-	return int64(len(r.ResourceUpdate.data)), nil
+	return int64(len(r.Update.data)), nil
 }
 
 //returns the resource's topic
 func (r *cacheEntry) Topic() Topic {
-	return r.View.Topic
+	return r.Feed.Topic
 }

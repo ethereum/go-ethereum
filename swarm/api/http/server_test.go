@@ -206,7 +206,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 }
 
-// Test resource updates using the raw update methods
+// Test Swarm Feeds using the raw update methods
 func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	signer, _ := newTestSigner()
@@ -406,7 +406,7 @@ func TestBzzResource(t *testing.T) {
 
 	// test manifest-less queries
 	log.Info("get first update in update1Timestamp via direct query")
-	query := mru.NewQuery(&updateRequest.View, update1Timestamp, lookup.NoClue)
+	query := mru.NewQuery(&updateRequest.Feed, update1Timestamp, lookup.NoClue)
 
 	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {

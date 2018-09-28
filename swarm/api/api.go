@@ -956,14 +956,14 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	return addr, manifestEntryMap, nil
 }
 
-// ResourceLookup finds mutable resource updates at specific periods and versions
+// ResourceLookup finds Swarm Feeds at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, query *mru.Query) ([]byte, error) {
 	_, err := a.resource.Lookup(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	var data []byte
-	_, data, err = a.resource.GetContent(&query.View)
+	_, data, err = a.resource.GetContent(&query.Feed)
 	if err != nil {
 		return nil, err
 	}
@@ -971,7 +971,7 @@ func (a *API) ResourceLookup(ctx context.Context, query *mru.Query) ([]byte, err
 }
 
 // ResourceNewRequest creates a Request object to update a specific mutable resource
-func (a *API) ResourceNewRequest(ctx context.Context, view *mru.View) (*mru.Request, error) {
+func (a *API) ResourceNewRequest(ctx context.Context, view *mru.Feed) (*mru.Request, error) {
 	return a.resource.NewRequest(ctx, view)
 }
 
@@ -993,7 +993,7 @@ var ErrCannotLoadResourceManifest = errors.New("Cannot load resource manifest")
 var ErrNotAResourceManifest = errors.New("Not a resource manifest")
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the Resource's view ID.
-func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (*mru.View, error) {
+func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (*mru.Feed, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
 		return nil, ErrCannotLoadResourceManifest
@@ -1016,8 +1016,8 @@ var ErrCannotResolveResourceView = errors.New("Cannot resolve resource view")
 
 // ResolveResourceView attempts to extract View information out of the manifest, if provided
 // If not, it attempts to extract the View out of a set of key-value pairs
-func (a *API) ResolveResourceView(ctx context.Context, uri *URI, values mru.Values) (*mru.View, error) {
-	var view *mru.View
+func (a *API) ResolveResourceView(ctx context.Context, uri *URI, values mru.Values) (*mru.Feed, error) {
+	var view *mru.Feed
 	var err error
 	if uri.Addr != "" {
 		// resolve the content key.
@@ -1036,7 +1036,7 @@ func (a *API) ResolveResourceView(ctx context.Context, uri *URI, values mru.Valu
 		}
 		log.Debug("handle.get.resource: resolved", "manifestkey", manifestAddr, "view", view.Hex())
 	} else {
-		var v mru.View
+		var v mru.Feed
 		if err := v.FromValues(values); err != nil {
 			return nil, ErrCannotResolveResourceView
 

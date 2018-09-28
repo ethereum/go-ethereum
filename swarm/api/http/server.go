@@ -517,7 +517,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var updateRequest mru.Request
-	updateRequest.View = *view
+	updateRequest.Feed = *view
 	query := r.URL.Query()
 
 	if err := updateRequest.FromValues(query, body); err != nil { // decodes request from query parameters
@@ -544,7 +544,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and saves the
 		// resource view ID used to retrieve the resource later
-		m, err := s.api.NewResourceManifest(r.Context(), &updateRequest.View)
+		m, err := s.api.NewResourceManifest(r.Context(), &updateRequest.Feed)
 		if err != nil {
 			RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
@@ -563,7 +563,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Retrieve mutable resource updates:
+// Retrieve Swarm Feeds:
 // bzz-resource://<id> - get latest update
 // bzz-resource://<id>/?period=n - get latest update on period n
 // bzz-resource://<id>/?period=n&version=m - get update version m of period n
@@ -606,7 +606,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupParams := &mru.Query{View: *view}
+	lookupParams := &mru.Query{Feed: *view}
 	if err = lookupParams.FromValues(r.URL.Query()); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
 		return

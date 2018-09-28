@@ -53,25 +53,25 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	charlie := newCharlieSigner() //Charlie
 	bob := newBobSigner()         //Bob
 
-	// Create a resource to our good guy Charlie's name
-	topic, _ := NewTopic("a good resource name", nil)
-	createRequest := NewFirstRequest(topic)
-	createRequest.User = charlie.Address()
+	// Create a feed to our good guy Charlie's name
+	topic, _ := NewTopic("a good topic name", nil)
+	firstRequest := NewFirstRequest(topic)
+	firstRequest.User = charlie.Address()
 
 	// We now encode the create message to simulate we send it over the wire
-	messageRawData, err := createRequest.MarshalJSON()
+	messageRawData, err := firstRequest.MarshalJSON()
 	if err != nil {
-		t.Fatalf("Error encoding create resource request: %s", err)
+		t.Fatalf("Error encoding first feed update request: %s", err)
 	}
 
 	// ... the message arrives and is decoded...
-	var recoveredCreateRequest Request
-	if err := recoveredCreateRequest.UnmarshalJSON(messageRawData); err != nil {
-		t.Fatalf("Error decoding create resource request: %s", err)
+	var recoveredFirstRequest Request
+	if err := recoveredFirstRequest.UnmarshalJSON(messageRawData); err != nil {
+		t.Fatalf("Error decoding first feed update request: %s", err)
 	}
 
 	// ... but verification should fail because it is not signed!
-	if err := recoveredCreateRequest.Verify(); err == nil {
+	if err := recoveredFirstRequest.Verify(); err == nil {
 		t.Fatal("Expected Verify to fail since the message is not signed")
 	}
 
@@ -85,13 +85,13 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
-		ResourceUpdate: ResourceUpdate{
+		Update: Update{
 			ID: ID{
 				Epoch: lookup.Epoch{
 					Time:  1000,
 					Level: 1,
 				},
-				View: createRequest.ResourceUpdate.View,
+				Feed: firstRequest.Update.Feed,
 			},
 			data: data,
 		},
@@ -191,7 +191,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 func getTestRequest() *Request {
 	return &Request{
-		ResourceUpdate: *getTestResourceUpdate(),
+		Update: *getTestFeedUpdate(),
 	}
 }
 
@@ -258,7 +258,7 @@ func TestReverse(t *testing.T) {
 	defer teardownTest()
 
 	topic, _ := NewTopic("Cervantes quotes", nil)
-	view := View{
+	view := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -266,7 +266,7 @@ func TestReverse(t *testing.T) {
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
 	request := new(Request)
-	request.View = view
+	request.Feed = view
 	request.Epoch = epoch
 	request.data = data
 
@@ -291,15 +291,15 @@ func TestReverse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveredaddress, err := getUserAddr(checkdigest, *checkUpdate.Signature)
+	recoveredAddr, err := getUserAddr(checkdigest, *checkUpdate.Signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}
-	originaladdress := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
+	originalAddr := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
 
 	// check that the metadata retrieved from the chunk matches what we gave it
-	if recoveredaddress != originaladdress {
-		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
+	if recoveredAddr != originalAddr {
+		t.Fatalf("addresses dont match: %x != %x", originalAddr, recoveredAddr)
 	}
 
 	if !bytes.Equal(key[:], chunk.Address()[:]) {

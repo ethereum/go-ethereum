@@ -34,8 +34,8 @@ import (
 type Handler struct {
 	chunkStore      *storage.NetStore
 	HashSize        int
-	resources       map[uint64]*cacheEntry
-	resourceLock    sync.RWMutex
+	cache           map[uint64]*cacheEntry
+	cacheLock       sync.RWMutex
 	storeTimeout    time.Duration
 	queryMaxPeriods uint32
 }
@@ -52,26 +52,26 @@ var hashPool sync.Pool
 func init() {
 	hashPool = sync.Pool{
 		New: func() interface{} {
-			return storage.MakeHashFunc(resourceHashAlgorithm)()
+			return storage.MakeHashFunc(feedsHashAlgorithm)()
 		},
 	}
 }
 
 // NewHandler creates a new Mutable Resource API
 func NewHandler(params *HandlerParams) *Handler {
-	rh := &Handler{
-		resources: make(map[uint64]*cacheEntry),
+	fh := &Handler{
+		cache: make(map[uint64]*cacheEntry),
 	}
 
 	for i := 0; i < hasherCount; i++ {
-		hashfunc := storage.MakeHashFunc(resourceHashAlgorithm)()
-		if rh.HashSize == 0 {
-			rh.HashSize = hashfunc.Size()
+		hashfunc := storage.MakeHashFunc(feedsHashAlgorithm)()
+		if fh.HashSize == 0 {
+			fh.HashSize = hashfunc.Size()
 		}
 		hashPool.Put(hashfunc)
 	}
 
-	return rh
+	return fh
 }
 
 // SetStore sets the store backend for the Mutable Resource API
@@ -95,7 +95,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// First, deserialize the chunk
 	var r Request
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Debug("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
+		log.Debug("Invalid feed update chunk", "addr", chunkAddr.Hex(), "err", err.Error())
 		return false
 	}
 
@@ -103,7 +103,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// If it fails, it means either the signature is not valid, data is corrupted
 	// or someone is trying to update someone else's resource.
 	if err := r.Verify(); err != nil {
-		log.Debug("Invalid signature", "err", err)
+		log.Debug("Invalid feed update signature", "err", err)
 		return false
 	}
 
@@ -111,32 +111,32 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 }
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
-func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
-	if view == nil {
+func (h *Handler) GetContent(feed *Feed) (storage.Address, []byte, error) {
+	if feed == nil {
 		return nil, nil, NewError(ErrInvalidValue, "view is nil")
 	}
-	rsrc := h.get(view)
-	if rsrc == nil {
+	feedUpdate := h.get(feed)
+	if feedUpdate == nil {
 		return nil, nil, NewError(ErrNotFound, "resource does not exist")
 	}
-	return rsrc.lastKey, rsrc.data, nil
+	return feedUpdate.lastKey, feedUpdate.data, nil
 }
 
 // NewRequest prepares a Request structure with all the necessary information to
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
-func (h *Handler) NewRequest(ctx context.Context, view *View) (request *Request, err error) {
-	if view == nil {
-		return nil, NewError(ErrInvalidValue, "view cannot be nil")
+func (h *Handler) NewRequest(ctx context.Context, feed *Feed) (request *Request, err error) {
+	if feed == nil {
+		return nil, NewError(ErrInvalidValue, "feed cannot be nil")
 	}
 
 	now := TimestampProvider.Now().Time
 	request = new(Request)
 	request.Header.Version = ProtocolVersion
 
-	query := NewQueryLatest(view, lookup.NoClue)
+	query := NewQueryLatest(feed, lookup.NoClue)
 
-	rsrc, err := h.Lookup(ctx, query)
+	feedUpdate, err := h.Lookup(ctx, query)
 	if err != nil {
 		if err.(*Error).code != ErrNotFound {
 			return nil, err
@@ -145,11 +145,11 @@ func (h *Handler) NewRequest(ctx context.Context, view *View) (request *Request,
 		// or that the resource really does not have updates
 	}
 
-	request.View = *view
+	request.Feed = *feed
 
 	// if we already have an update, then find next epoch
-	if rsrc != nil {
-		request.Epoch = lookup.GetNextEpoch(rsrc.Epoch, now)
+	if feedUpdate != nil {
+		request.Epoch = lookup.GetNextEpoch(feedUpdate.Epoch, now)
 	} else {
 		request.Epoch = lookup.GetFirstEpoch(now)
 	}
@@ -172,7 +172,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 	}
 
 	if query.Hint == lookup.NoClue { // try to use our cache
-		entry := h.get(&query.View)
+		entry := h.get(&query.Feed)
 		if entry != nil && entry.Epoch.Time <= timeLimit { // avoid bad hints
 			query.Hint = entry.Epoch
 		}
@@ -183,19 +183,19 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	var ul ID
-	ul.View = query.View
+	var id ID
+	id.Feed = query.Feed
 	var readCount int
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
 	requestPtr, err := lookup.Lookup(timeLimit, query.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		readCount++
-		ul.Epoch = epoch
+		id.Epoch = epoch
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
-		chunk, err := h.chunkStore.Get(ctx, ul.Addr())
+		chunk, err := h.chunkStore.Get(ctx, id.Addr())
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}
@@ -227,19 +227,19 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 
 	updateAddr := request.Addr()
-	log.Trace("resource cache update", "topic", request.Topic.Hex(), "updatekey", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
+	log.Trace("feed cache update", "topic", request.Topic.Hex(), "updateaddr", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
 
-	rsrc := h.get(&request.View)
-	if rsrc == nil {
-		rsrc = &cacheEntry{}
-		h.set(&request.View, rsrc)
+	feedUpdate := h.get(&request.Feed)
+	if feedUpdate == nil {
+		feedUpdate = &cacheEntry{}
+		h.set(&request.Feed, feedUpdate)
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = updateAddr
-	rsrc.ResourceUpdate = request.ResourceUpdate
-	rsrc.Reader = bytes.NewReader(rsrc.data)
-	return rsrc, nil
+	feedUpdate.lastKey = updateAddr
+	feedUpdate.Update = request.Update
+	feedUpdate.Reader = bytes.NewReader(feedUpdate.data)
+	return feedUpdate, nil
 }
 
 // Update adds an actual data update
@@ -255,8 +255,8 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
-	rsrc := h.get(&r.View)
-	if rsrc != nil && rsrc.Epoch.Equals(r.Epoch) { // This is the only cheap check we can do for sure
+	feedUpdate := h.get(&r.Feed)
+	if feedUpdate != nil && feedUpdate.Epoch.Equals(r.Epoch) { // This is the only cheap check we can do for sure
 		return nil, NewError(ErrInvalidValue, "A former update in this epoch is already known to exist")
 	}
 
@@ -267,32 +267,32 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.Data())
+	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.Data())
 	// update our resources map cache entry if the new update is older than the one we have, if we have it.
-	if rsrc != nil && r.Epoch.After(rsrc.Epoch) {
-		rsrc.Epoch = r.Epoch
-		rsrc.data = make([]byte, len(r.data))
-		rsrc.lastKey = r.idAddr
-		copy(rsrc.data, r.data)
-		rsrc.Reader = bytes.NewReader(rsrc.data)
+	if feedUpdate != nil && r.Epoch.After(feedUpdate.Epoch) {
+		feedUpdate.Epoch = r.Epoch
+		feedUpdate.data = make([]byte, len(r.data))
+		feedUpdate.lastKey = r.idAddr
+		copy(feedUpdate.data, r.data)
+		feedUpdate.Reader = bytes.NewReader(feedUpdate.data)
 	}
 
 	return r.idAddr, nil
 }
 
 // Retrieves the resource cache value for the given nameHash
-func (h *Handler) get(view *View) *cacheEntry {
+func (h *Handler) get(view *Feed) *cacheEntry {
 	mapKey := view.mapKey()
-	h.resourceLock.RLock()
-	defer h.resourceLock.RUnlock()
-	rsrc := h.resources[mapKey]
-	return rsrc
+	h.cacheLock.RLock()
+	defer h.cacheLock.RUnlock()
+	feedUpdate := h.cache[mapKey]
+	return feedUpdate
 }
 
 // Sets the resource cache value for the given View
-func (h *Handler) set(view *View, rsrc *cacheEntry) {
+func (h *Handler) set(view *Feed, feedUpdate *cacheEntry) {
 	mapKey := view.mapKey()
-	h.resourceLock.Lock()
-	defer h.resourceLock.Unlock()
-	h.resources[mapKey] = rsrc
+	h.cacheLock.Lock()
+	defer h.cacheLock.Unlock()
+	h.cache[mapKey] = feedUpdate
 }

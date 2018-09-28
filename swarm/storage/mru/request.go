@@ -29,10 +29,10 @@ import (
 
 // Request represents an update and/or resource create message
 type Request struct {
-	ResourceUpdate // actual content that will be put on the chunk, less signature
-	Signature      *Signature
-	idAddr         storage.Address // cached chunk address for the update (not serialized, for internal use)
-	binaryData     []byte          // cached serialized data (does not get serialized again!, for efficiency/internal use)
+	Update     // actual content that will be put on the chunk, less signature
+	Signature  *Signature
+	idAddr     storage.Address // cached chunk address for the update (not serialized, for internal use)
+	binaryData []byte          // cached serialized data (does not get serialized again!, for efficiency/internal use)
 }
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
@@ -44,11 +44,11 @@ type updateRequestJSON struct {
 }
 
 // Request layout
-// resourceUpdate bytes
+// Update bytes
 // SignatureLength bytes
 const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
 
-// NewFirstRequest returns a ready to sign request to publish a first update
+// NewFirstRequest returns a ready to sign request to publish a first feed update
 func NewFirstRequest(topic Topic) *Request {
 
 	request := new(Request)
@@ -56,7 +56,7 @@ func NewFirstRequest(topic Topic) *Request {
 	// get the current time
 	now := TimestampProvider.Now().Time
 	request.Epoch = lookup.GetFirstEpoch(now)
-	request.View.Topic = topic
+	request.Feed.Topic = topic
 	request.Header.Version = ProtocolVersion
 
 	return request
@@ -88,7 +88,7 @@ func (r *Request) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	r.View.User, err = getUserAddr(digest, *r.Signature)
+	r.Feed.User, err = getUserAddr(digest, *r.Signature)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (r *Request) Verify() (err error) {
 
 // Sign executes the signature to validate the resource
 func (r *Request) Sign(signer Signer) error {
-	r.View.User = signer.Address()
+	r.Feed.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {
@@ -139,10 +139,10 @@ func (r *Request) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
-	dataLength := r.ResourceUpdate.binaryLength()
+	dataLength := r.Update.binaryLength()
 	if r.binaryData == nil {
 		r.binaryData = make([]byte, dataLength+signatureLength)
-		if err := r.ResourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
+		if err := r.Update.binaryPut(r.binaryData[:dataLength]); err != nil {
 			return result, err
 		}
 	}
@@ -161,10 +161,10 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
-	resourceUpdateLength := r.ResourceUpdate.binaryLength()
+	updateLength := r.Update.binaryLength()
 
 	// signature is the last item in the chunk data
-	copy(r.binaryData[resourceUpdateLength:], r.Signature[:])
+	copy(r.binaryData[updateLength:], r.Signature[:])
 
 	chunk := storage.NewChunk(r.idAddr, r.binaryData)
 	return chunk, nil
@@ -175,13 +175,13 @@ func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error 
 	// for update chunk layout see Request definition
 
 	//deserialize the resource update portion
-	if err := r.ResourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
+	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}
 
 	// Extract the signature
 	var signature *Signature
-	cursor := r.ResourceUpdate.binaryLength()
+	cursor := r.Update.binaryLength()
 	sigdata := chunkdata[cursor : cursor+signatureLength]
 	if len(sigdata) > 0 {
 		signature = &Signature{}
@@ -209,7 +209,7 @@ func (r *Request) FromValues(values Values, data []byte) error {
 		r.Signature = new(Signature)
 		copy(r.Signature[:], signatureBytes)
 	}
-	err = r.ResourceUpdate.FromValues(values, data)
+	err = r.Update.FromValues(values, data)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (r *Request) AppendValues(values Values) []byte {
 	if r.Signature != nil {
 		values.Set("signature", hexutil.Encode(r.Signature[:]))
 	}
-	return r.ResourceUpdate.AppendValues(values)
+	return r.Update.AppendValues(values)
 }
 
 // fromJSON takes an update request JSON and populates an UpdateRequest

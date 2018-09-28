@@ -101,7 +101,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 	}
 
 	// View configures whose updates we will be looking up.
-	view := mru.View{
+	view := mru.Feed{
 		Topic: topic,
 		User:  address,
 	}
@@ -146,8 +146,8 @@ func TestCLIResourceUpdate(t *testing.T) {
 	}
 
 	// make sure the retrieved view is the same
-	if request.View != view {
-		t.Fatalf("Expected view to be: %s, got %s", view, request.View)
+	if request.Feed != view {
+		t.Fatalf("Expected view to be: %s, got %s", view, request.Feed)
 	}
 
 	// test publishing a manifest

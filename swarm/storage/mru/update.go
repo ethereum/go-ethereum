@@ -34,8 +34,8 @@ type Header struct {
 	Padding [headerLength - 1]uint8 // reserved for future use
 }
 
-// ResourceUpdate encapsulates the information sent as part of a resource update
-type ResourceUpdate struct {
+// Update encapsulates the information sent as part of a feed update
+type Update struct {
 	Header Header //
 	ID            // Resource update identifying information
 	data   []byte // actual data payload
@@ -44,15 +44,15 @@ type ResourceUpdate struct {
 const minimumUpdateDataLength = idLength + headerLength + 1
 const maxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
 
-// binaryPut serializes the resource update information into the given slice
-func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
+// binaryPut serializes the feed update information into the given slice
+func (r *Update) binaryPut(serializedData []byte) error {
 	datalength := len(r.data)
 	if datalength == 0 {
-		return NewError(ErrInvalidValue, "cannot update a resource with no data")
+		return NewError(ErrInvalidValue, "a feed update must contain data")
 	}
 
 	if datalength > maxUpdateDataLength {
-		return NewErrorf(ErrInvalidValue, "data is too big (length=%d). Max length=%d", datalength, maxUpdateDataLength)
+		return NewErrorf(ErrInvalidValue, "feed update data is too big (length=%d). Max length=%d", datalength, maxUpdateDataLength)
 	}
 
 	if len(serializedData) != r.binaryLength() {
@@ -79,12 +79,12 @@ func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
 }
 
 // binaryLength returns the expected number of bytes this structure will take to encode
-func (r *ResourceUpdate) binaryLength() int {
+func (r *Update) binaryLength() int {
 	return idLength + headerLength + len(r.data)
 }
 
 // binaryGet populates this instance from the information contained in the passed byte slice
-func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
+func (r *Update) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
 		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)
 	}
@@ -116,7 +116,7 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
+func (r *Update) FromValues(values Values, data []byte) error {
 	r.data = data
 	version, _ := strconv.ParseUint(values.Get("protocolVersion"), 10, 32)
 	r.Header.Version = uint8(version)
@@ -125,7 +125,7 @@ func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 
 // AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (r *ResourceUpdate) AppendValues(values Values) []byte {
+func (r *Update) AppendValues(values Values) []byte {
 	r.ID.AppendValues(values)
 	values.Set("protocolVersion", fmt.Sprintf("%d", r.Header.Version))
 	return r.data

@@ -1,5 +1,5 @@
 /*
-Package mru defines Mutable resource updates.
+Package feeds defines Swarm Feeds.
 
 A Mutable Resource is an entity which allows updates to a resource
 without resorting to ENS on each update.

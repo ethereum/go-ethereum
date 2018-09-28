@@ -56,7 +56,7 @@ type ManifestEntry struct {
 	ModTime      time.Time    `json:"mod_time,omitempty"`
 	Status       int          `json:"status,omitempty"`
 	Access       *AccessEntry `json:"access,omitempty"`
-	ResourceView *mru.View    `json:"resourceView,omitempty"`
+	ResourceView *mru.Feed    `json:"resourceView,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -82,7 +82,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(ctx context.Context, view *mru.View) (storage.Address, error) {
+func (a *API) NewResourceManifest(ctx context.Context, view *mru.Feed) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
 		ResourceView: view,
