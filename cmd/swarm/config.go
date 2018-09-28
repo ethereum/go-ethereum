@@ -179,7 +179,9 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		if err != nil {
 			utils.Fatalf("invalid cli flag %s: %v", SwarmNetworkIdFlag.Name, err)
 		}
-		currentConfig.NetworkID = id
+		if id != 0 {
+			currentConfig.NetworkID = id
+		}
 	}
 
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
@@ -272,7 +274,9 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		if err != nil {
 			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_NETWORK_ID, err)
 		}
-		currentConfig.NetworkID = id
+		if id != 0 {
+			currentConfig.NetworkID = id
+		}
 	}
 
 	if datadir := os.Getenv(GETH_ENV_DATADIR); datadir != "" {
