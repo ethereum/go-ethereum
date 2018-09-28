@@ -147,6 +147,27 @@ type Config struct {
 	Logger log.Logger `toml:",omitempty"`
 }
 
+type ServerIf interface {
+	AddProtocols([]Protocol)
+	Start() error
+	Stop()
+	// ca cree tout chez devp2p (rlpx, encrypted handhake, etc.
+	// Je pense que nous on va rien faire meme si je dois verifier que secio est actif)
+	SetupConn(net.Conn, ConnFlag, *enode.Node) error
+	NodeInfo() *NodeInfo
+	PeersInfo() []*PeerInfo
+	Self() *enode.Node
+	AddPeer(node *enode.Node)
+	RemovePeer(node *enode.Node)
+	AddTrustedPeer(node *enode.Node)
+	RemoveTrustedPeer(node *enode.Node)
+	SubscribeEvents(chan *PeerEvent) event.Subscription
+	PeerCount() int
+	Peers() []*Peer
+	Name() string
+	MaxPeers() int
+}
+
 // Server manages all peer connections.
 type Server struct {
 	// Config fields may not be modified while the server is running.
@@ -191,10 +212,10 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int32
+type ConnFlag int32
 
 const (
-	dynDialedConn connFlag = 1 << iota
+	dynDialedConn ConnFlag = 1 << iota
 	staticDialedConn
 	inboundConn
 	trustedConn
@@ -206,7 +227,7 @@ type conn struct {
 	fd net.Conn
 	transport
 	node  *enode.Node
-	flags connFlag
+	flags ConnFlag
 	cont  chan error // The run loop uses cont to signal errors to SetupConn.
 	caps  []Cap      // valid after the protocol handshake
 	name  string     // valid after the protocol handshake
@@ -235,7 +256,7 @@ func (c *conn) String() string {
 	return s
 }
 
-func (f connFlag) String() string {
+func (f ConnFlag) String() string {
 	s := ""
 	if f&trustedConn != 0 {
 		s += "-trusted"
@@ -255,14 +276,14 @@ func (f connFlag) String() string {
 	return s
 }
 
-func (c *conn) is(f connFlag) bool {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+func (c *conn) is(f ConnFlag) bool {
+	flags := ConnFlag(atomic.LoadInt32((*int32)(&c.flags)))
 	return flags&f != 0
 }
 
-func (c *conn) set(f connFlag, val bool) {
+func (c *conn) set(f ConnFlag, val bool) {
 	for {
-		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		oldFlags := ConnFlag(atomic.LoadInt32((*int32)(&c.flags)))
 		flags := oldFlags
 		if val {
 			flags |= f
@@ -273,6 +294,10 @@ func (c *conn) set(f connFlag, val bool) {
 			return
 		}
 	}
+}
+
+func (srv *Server) Name() string {
+	return srv.Config.Name
 }
 
 // Peers returns all connected peers.
@@ -291,6 +316,10 @@ func (srv *Server) Peers() []*Peer {
 	case <-srv.quit:
 	}
 	return ps
+}
+
+func (srv *Server) AddProtocols(protos []Protocol) {
+	srv.Protocols = append(srv.Protocols, protos...)
 }
 
 // PeerCount returns the number of connected peers.
@@ -540,7 +569,7 @@ func (srv *Server) Start() (err error) {
 
 	// handshake
 	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name(), ID: pubkey[1:]}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -775,7 +804,7 @@ func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount i
 
 func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
-	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
+	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers():
 		return DiscTooManyPeers
 	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
@@ -789,7 +818,7 @@ func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int
 }
 
 func (srv *Server) maxInboundConns() int {
-	return srv.MaxPeers - srv.maxDialedConns()
+	return srv.MaxPeers() - srv.maxDialedConns()
 }
 func (srv *Server) maxDialedConns() int {
 	if srv.NoDiscovery || srv.NoDial {
@@ -799,7 +828,7 @@ func (srv *Server) maxDialedConns() int {
 	if r == 0 {
 		r = defaultDialRatio
 	}
-	return srv.MaxPeers / r
+	return srv.MaxPeers() / r
 }
 
 type tempError interface {
@@ -863,7 +892,7 @@ func (srv *Server) listenLoop() {
 // SetupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) SetupConn(fd net.Conn, flags ConnFlag, dialDest *enode.Node) error {
 	self := srv.Self()
 	if self == nil {
 		return errors.New("shutdown")
@@ -877,7 +906,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	return err
 }
 
-func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) setupConn(c *conn, flags ConnFlag, dialDest *enode.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
@@ -1018,7 +1047,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 
 	// Gather and assemble the generic node infos
 	info := &NodeInfo{
-		Name:       srv.Name,
+		Name:       srv.Name(),
 		Enode:      node.String(),
 		ID:         node.ID().String(),
 		IP:         node.IP().String(),
@@ -1059,4 +1088,8 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+func (srv *Server) MaxPeers() int {
+	return srv.Config.MaxPeers
 }

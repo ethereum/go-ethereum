@@ -262,6 +262,12 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "Zkp39z/brPDQUmRVisP90WpSljM=",
+			"path": "github.com/libp2p/go-libp2p-blankhost",
+			"revision": "d1dca03c3ddffd1bc45cd6259eae9a7ede5da35c",
+			"revisionTime": "2018-09-24T12:10:29Z"
+		},
+		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
 			"path": "github.com/maruel/panicparse/stack",
 			"revision": "ad661195ed0e88491e0f14be6613304e3b1141d6",
@@ -297,6 +303,12 @@
 			"path": "github.com/mohae/deepcopy",
 			"revision": "c48cc78d482608239f6c4c92a4abd87eb8761c90",
 			"revisionTime": "2017-09-29T03:49:55Z"
+		},
+		{
+			"checksumSHA1": "oThw7uD1i97WvthJmCUi8DwRwf8=",
+			"path": "github.com/multiformats/go-multiaddr",
+			"revision": "a80cfc331ffff8bc519e401d8789d324196d1775",
+			"revisionTime": "2018-09-24T09:07:54Z"
 		},
 		{
 			"checksumSHA1": "FYM/8R2CqS6PSNAoKl6X5gNJ20A=",

@@ -46,7 +46,7 @@ type Node struct {
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
 
 	serverConfig p2p.Config
-	server       *p2p.Server // Currently running P2P networking layer
+	server       p2p.ServerIf // Currently running P2P networking layer
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
@@ -162,7 +162,7 @@ func (n *Node) Start() error {
 	if n.serverConfig.NodeDatabase == "" {
 		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
-	running := &p2p.Server{Config: n.serverConfig}
+	var running p2p.ServerIf = &p2p.Server{Config: n.serverConfig}
 	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
@@ -191,7 +191,7 @@ func (n *Node) Start() error {
 	}
 	// Gather the protocols and start the freshly assembled P2P server
 	for _, service := range services {
-		running.Protocols = append(running.Protocols, service.Protocols()...)
+		running.AddProtocols(service.Protocols())
 	}
 	if err := running.Start(); err != nil {
 		return convertFileLockError(err)
@@ -501,7 +501,7 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 // Server retrieves the currently running P2P network layer. This method is meant
 // only to inspect fields of the currently running server, life cycle management
 // should be left to this Node entity.
-func (n *Node) Server() *p2p.Server {
+func (n *Node) Server() p2p.ServerIf {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 

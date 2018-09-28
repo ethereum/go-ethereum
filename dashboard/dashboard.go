@@ -129,7 +129,7 @@ func (db *Dashboard) APIs() []rpc.API { return nil }
 
 // Start starts the data collection thread and the listening server of the dashboard.
 // Implements the node.Service interface.
-func (db *Dashboard) Start(server *p2p.Server) error {
+func (db *Dashboard) Start(server p2p.ServerIf) error {
 	log.Info("Starting dashboard")
 
 	db.wg.Add(2)

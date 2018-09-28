@@ -90,7 +90,7 @@ type Service interface {
 
 	// Start is called after all services have been constructed and the networking
 	// layer was also initialized to spawn any goroutines required by the service.
-	Start(server *p2p.Server) error
+	Start(server p2p.ServerIf) error
 
 	// Stop terminates all goroutines belonging to the service, blocking until they
 	// are all terminated.

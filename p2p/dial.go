@@ -73,7 +73,7 @@ type dialstate struct {
 	netrestrict *netutil.Netlist
 
 	lookupRunning bool
-	dialing       map[enode.ID]connFlag
+	dialing       map[enode.ID]ConnFlag
 	lookupBuf     []*enode.Node // current discovery lookup results
 	randomNodes   []*enode.Node // filled from Table
 	static        map[enode.ID]*dialTask
@@ -107,7 +107,7 @@ type task interface {
 // A dialTask is generated for each node that is dialed. Its
 // fields cannot be accessed while the task is running.
 type dialTask struct {
-	flags        connFlag
+	flags        ConnFlag
 	dest         *enode.Node
 	lastResolved time.Time
 	resolveDelay time.Duration
@@ -132,7 +132,7 @@ func newDialState(static []*enode.Node, bootnodes []*enode.Node, ntab discoverTa
 		ntab:        ntab,
 		netrestrict: netrestrict,
 		static:      make(map[enode.ID]*dialTask),
-		dialing:     make(map[enode.ID]connFlag),
+		dialing:     make(map[enode.ID]ConnFlag),
 		bootnodes:   make([]*enode.Node, len(bootnodes)),
 		randomNodes: make([]*enode.Node, maxdyn/2),
 		hist:        new(dialHistory),
@@ -164,7 +164,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	}
 
 	var newtasks []task
-	addDial := func(flag connFlag, n *enode.Node) bool {
+	addDial := func(flag ConnFlag, n *enode.Node) bool {
 		if err := s.checkDial(n, peers); err != nil {
 			log.Trace("Skipping dial candidate", "id", n.ID(), "addr", &net.TCPAddr{IP: n.IP(), Port: n.TCP()}, "err", err)
 			return false

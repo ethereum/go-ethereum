@@ -115,7 +115,7 @@ type registerReq struct {
 type serverPool struct {
 	db     ethdb.Database
 	dbKey  []byte
-	server *p2p.Server
+	server p2p.ServerIf
 	quit   chan struct{}
 	wg     *sync.WaitGroup
 	connWg sync.WaitGroup
@@ -162,14 +162,14 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *s
 	return pool
 }
 
-func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
+func (pool *serverPool) start(server p2p.ServerIf, topic discv5.Topic) {
 	pool.server = server
 	pool.topic = topic
 	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
 	pool.wg.Add(1)
 	pool.loadNodes()
 
-	if pool.server.DiscV5 != nil {
+	if pool.server.(*p2p.Server).DiscV5 != nil {
 		pool.discSetPeriod = make(chan time.Duration, 1)
 		pool.discNodes = make(chan *enode.Node, 100)
 		pool.discLookups = make(chan bool, 100)
@@ -183,7 +183,7 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 func (pool *serverPool) discoverNodes() {
 	ch := make(chan *discv5.Node)
 	go func() {
-		pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, ch, pool.discLookups)
+		pool.server.(*p2p.Server).DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, ch, pool.discLookups)
 		close(ch)
 	}()
 	for n := range ch {
