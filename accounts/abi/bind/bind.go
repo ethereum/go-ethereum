@@ -23,6 +23,7 @@ package bind
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"regexp"
 	"strings"
 	"text/template"
@@ -144,7 +145,15 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
-
+	// For Go bindings pass the code through gofmt to clean it up
+	if lang == LangGo {
+		code, err := format.Source(buffer.Bytes())
+		if err != nil {
+			return "", fmt.Errorf("%v\n%s", err, buffer)
+		}
+		return string(code), nil
+	}
+	// For all others just return as is for now
 	return buffer.String(), nil
 }
 
