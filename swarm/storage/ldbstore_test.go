@@ -19,6 +19,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -338,6 +339,111 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	}
 
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+}
+
+// TestLDBStoreCollectGarbageOrdered checks if the most recently added chunks according to capacity are left after garbage collection
+func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
+	capacity := 10000
+	chunkCount := 20000
+	hasher := MakeHashFunc(DefaultHash)()
+
+	// four byte value incremented sequentially as chunk data (one chunk has 1024 values)
+	var byteValue uint32 = 0
+
+	// lru buffer
+	cursor := 0
+	buf := make([][ch.DefaultSize]byte, capacity)
+
+	// record keeping
+	madeChunks := make([]Chunk, capacity)
+	madeAddrs := make([]Address, capacity)
+	matchAddrs := make([]Address, capacity)
+
+	// needed for hashing (all chunks are full chunks here)
+	meta := make([]byte, 8)
+	binary.LittleEndian.PutUint64(meta, uint64(ch.DefaultSize))
+
+	// the store
+	store, cleanup := newLDBStore(t)
+	store.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	for i := 0; i < chunkCount; i++ {
+		hasher.ResetWithLength(meta)
+
+		// write (same) sequential data to buffer and hasher
+		for j := 0; j < ch.DefaultSize; j += 4 { // uint32 intervals
+			byteValueByte := [4]byte{}
+			binary.LittleEndian.PutUint32(byteValueByte[:], byteValue)
+			copy(buf[cursor][j:], byteValueByte[:])
+			hasher.Write(byteValueByte[:])
+			byteValue++
+		}
+
+		// create chunk, add to record keeping and put chunk in store
+		madeChunks[cursor] = NewChunk(hasher.Sum(nil), buf[cursor][:])
+		madeAddrs[cursor] = madeChunks[cursor].Address()
+		matchAddrs[cursor] = madeChunks[cursor].Address()
+		savedChunk, err := mput(store, 1, func(n int64) Chunk { return madeChunks[cursor] })
+		if err != nil {
+			t.Fatalf("store put fail: %v", err)
+		} else if !bytes.Equal(savedChunk[0].Address(), madeAddrs[cursor]) { // probably redundant but let's be careful for now
+			t.Fatalf("saved addr mismatch %x/%x: %v", savedChunk[0].Address(), madeAddrs[cursor], err)
+		}
+
+		log.Debug("putting", "address", matchAddrs[cursor])
+
+		// wrap cursor on capacity.
+		cursor++
+		cursor %= capacity
+	}
+
+	log.Info("chunks put, sir", "cursor", cursor, "lastvalue", byteValue, "count", len(madeAddrs))
+
+	// madeAddrs should now contain only the last added chunks.
+	var matches uint64
+	var seq uint64
+	err := mget(store, madeAddrs, func(h Address, retrievedChunk Chunk) error {
+		oldMatch := matches
+		seq++
+
+		// matchedAddr originally equal to madeAddr
+		// when an element is found, remove it
+		for i, matchedAddr := range matchAddrs {
+			if bytes.Equal(matchedAddr, h) {
+				matchAddrs[i] = matchAddrs[len(matchAddrs)-1]
+
+				// last one needs special treatment
+				if len(matchAddrs) == 1 {
+					matchAddrs = []Address{}
+				} else {
+					matchAddrs = matchAddrs[:len(matchAddrs)-1]
+				}
+
+				matches++
+				log.Debug("found match", "addr", h, "match", matches, "seq", seq, "left", len(matchAddrs))
+				break
+			}
+		}
+
+		// we don't seem to reach this, which suggests retrieve fails are handled further up...?
+		if oldMatch == matches {
+			log.Warn("no match", "addr", h, "left", len(matchAddrs))
+			return fmt.Errorf("not found (%d): %x", matches, h)
+		}
+
+		return nil
+	})
+
+	// check the retrieve errors
+	if err != nil {
+		t.Fatalf("matches %d/%d, retrieve fail: %v", matches, capacity, err)
+	}
+
+	// if all elements are found the array should be empty
+	if len(matchAddrs) > 0 {
+		t.Fatalf("expected 0 chunks in match array, have %d", len(matchAddrs))
+	}
 }
 
 // TestLDBStoreAddRemove tests that we can put and then delete a given chunk
