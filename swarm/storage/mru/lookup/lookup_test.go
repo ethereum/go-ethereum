@@ -38,9 +38,7 @@ func write(store Store, epoch lookup.Epoch, value *Data) {
 }
 
 func update(store Store, last lookup.Epoch, now uint64, value *Data) lookup.Epoch {
-	var epoch lookup.Epoch
-
-	epoch = lookup.GetNextEpoch(last, now)
+	epoch := lookup.GetNextEpoch(last, now)
 
 	write(store, epoch, value)
 

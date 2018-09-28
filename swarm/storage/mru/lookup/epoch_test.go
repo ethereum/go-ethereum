@@ -42,15 +42,15 @@ func TestAfter(t *testing.T) {
 		Level: 4,
 	}
 
-	if b.After(a) != true {
+	if !b.After(a) {
 		t.Fatal("Expected 'after' to be true, got false")
 	}
 
-	if b.After(b) != false {
+	if b.After(b) {
 		t.Fatal("Expected 'after' to be false when both epochs are identical, got true")
 	}
 
-	if b.After(c) != true {
+	if !b.After(c) {
 		t.Fatal("Expected 'after' to be true when both epochs have the same time but the level is lower in the first one, but got false")
 	}
 
