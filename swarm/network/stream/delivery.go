@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -47,7 +47,7 @@ var (
 type Delivery struct {
 	chunkStore storage.SyncChunkStore
 	kad        *network.Kademlia
-	getPeer    func(discover.NodeID) *Peer
+	getPeer    func(enode.ID) *Peer
 }
 
 func NewDelivery(kad *network.Kademlia, chunkStore storage.SyncChunkStore) *Delivery {
@@ -128,6 +128,7 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
+	HopCount  uint8
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
@@ -148,7 +149,9 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), network.RequestTimeout)
+	ctx = context.WithValue(ctx, "peer", sp.ID().String())
+	ctx = context.WithValue(ctx, "hopcount", req.HopCount)
+	ctx, cancel = context.WithTimeout(ctx, network.RequestTimeout)
 
 	go func() {
 		select {
@@ -213,7 +216,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*discover.NodeID, chan struct{}, error) {
+func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*enode.ID, chan struct{}, error) {
 	requestFromPeersCount.Inc(1)
 	var sp *Peer
 	spID := req.Source
@@ -247,6 +250,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
+		HopCount:  req.HopCount,
 	}, Top)
 	if err != nil {
 		return nil, nil, err

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -29,16 +30,6 @@ import (
 // - ABI-data validation
 // - Transaction semantics validation
 // The package provides warnings for typical pitfalls
-
-func (vs *ValidationMessages) crit(msg string) {
-	vs.Messages = append(vs.Messages, ValidationInfo{"CRITICAL", msg})
-}
-func (vs *ValidationMessages) warn(msg string) {
-	vs.Messages = append(vs.Messages, ValidationInfo{"WARNING", msg})
-}
-func (vs *ValidationMessages) info(msg string) {
-	vs.Messages = append(vs.Messages, ValidationInfo{"Info", msg})
-}
 
 type Validator struct {
 	db *AbiDb
@@ -71,6 +62,9 @@ func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, meth
 	if len(data) < 4 {
 		msgs.warn("Tx contains data which is not valid ABI")
 		return
+	}
+	if arglen := len(data) - 4; arglen%32 != 0 {
+		msgs.warn(fmt.Sprintf("Not ABI-encoded data; length should be a multiple of 32 (was %d)", arglen))
 	}
 	var (
 		info *decodedCallData
@@ -160,4 +154,18 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 func (v *Validator) ValidateTransaction(txArgs *SendTxArgs, methodSelector *string) (*ValidationMessages, error) {
 	msgs := &ValidationMessages{}
 	return msgs, v.validate(msgs, txArgs, methodSelector)
+}
+
+var Printable7BitAscii = regexp.MustCompile("^[A-Za-z0-9!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ ]+$")
+
+// ValidatePasswordFormat returns an error if the password is too short, or consists of characters
+// outside the range of the printable 7bit ascii set
+func ValidatePasswordFormat(password string) error {
+	if len(password) < 10 {
+		return errors.New("password too short (<10 characters)")
+	}
+	if !Printable7BitAscii.MatchString(password) {
+		return errors.New("password contains invalid characters - only 7bit printable ascii allowed")
+	}
+	return nil
 }

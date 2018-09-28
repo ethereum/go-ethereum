@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
@@ -36,7 +36,7 @@ type hs0 struct {
 
 // message to kill/drop the peer with nodeID
 type kill struct {
-	C discover.NodeID
+	C enode.ID
 }
 
 // message to drop connection
@@ -144,7 +144,7 @@ func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTes
 	return p2ptest.NewProtocolTester(t, conf.ID, 2, newProtocol(pp))
 }
 
-func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest.Exchange {
+func protoHandshakeExchange(id enode.ID, proto *protoHandshake) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -172,13 +172,13 @@ func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp)
 	// TODO: make this more than one handshake
-	id := s.IDs[0]
-	if err := s.TestExchanges(protoHandshakeExchange(id, proto)...); err != nil {
+	node := s.Nodes[0]
+	if err := s.TestExchanges(protoHandshakeExchange(node.ID(), proto)...); err != nil {
 		t.Fatal(err)
 	}
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
-		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.IDs[i], Error: err})
+		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.Nodes[i].ID(), Error: err})
 	}
 	if err := s.TestDisconnected(disconnects...); err != nil {
 		t.Fatal(err)
@@ -197,7 +197,7 @@ func TestProtoHandshakeSuccess(t *testing.T) {
 	runProtoHandshake(t, &protoHandshake{42, "420"})
 }
 
-func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
+func moduleHandshakeExchange(id enode.ID, resp uint) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -224,16 +224,16 @@ func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
 func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp)
-	id := s.IDs[0]
-	if err := s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...); err != nil {
+	node := s.Nodes[0]
+	if err := s.TestExchanges(protoHandshakeExchange(node.ID(), &protoHandshake{42, "420"})...); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.TestExchanges(moduleHandshakeExchange(id, resp)...); err != nil {
+	if err := s.TestExchanges(moduleHandshakeExchange(node.ID(), resp)...); err != nil {
 		t.Fatal(err)
 	}
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
-		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.IDs[i], Error: err})
+		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.Nodes[i].ID(), Error: err})
 	}
 	if err := s.TestDisconnected(disconnects...); err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestModuleHandshakeSuccess(t *testing.T) {
 }
 
 // testing complex interactions over multiple peers, relaying, dropping
-func testMultiPeerSetup(a, b discover.NodeID) []p2ptest.Exchange {
+func testMultiPeerSetup(a, b enode.ID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		{
@@ -305,7 +305,7 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp)
 
-	if err := s.TestExchanges(testMultiPeerSetup(s.IDs[0], s.IDs[1])...); err != nil {
+	if err := s.TestExchanges(testMultiPeerSetup(s.Nodes[0].ID(), s.Nodes[1].ID())...); err != nil {
 		t.Fatal(err)
 	}
 	// after some exchanges of messages, we can test state changes
@@ -318,15 +318,15 @@ WAIT:
 	for {
 		select {
 		case <-tick.C:
-			if pp.Has(s.IDs[0]) {
+			if pp.Has(s.Nodes[0].ID()) {
 				break WAIT
 			}
 		case <-timeout.C:
 			t.Fatal("timeout")
 		}
 	}
-	if !pp.Has(s.IDs[1]) {
-		t.Fatalf("missing peer test-1: %v (%v)", pp, s.IDs)
+	if !pp.Has(s.Nodes[1].ID()) {
+		t.Fatalf("missing peer test-1: %v (%v)", pp, s.Nodes)
 	}
 
 	// peer 0 sends kill request for peer with index <peer>
@@ -334,8 +334,8 @@ WAIT:
 		Triggers: []p2ptest.Trigger{
 			{
 				Code: 2,
-				Msg:  &kill{s.IDs[peer]},
-				Peer: s.IDs[0],
+				Msg:  &kill{s.Nodes[peer].ID()},
+				Peer: s.Nodes[0].ID(),
 			},
 		},
 	})
@@ -350,7 +350,7 @@ WAIT:
 			{
 				Code: 3,
 				Msg:  &drop{},
-				Peer: s.IDs[(peer+1)%2],
+				Peer: s.Nodes[(peer+1)%2].ID(),
 			},
 		},
 	})
@@ -362,14 +362,14 @@ WAIT:
 	// check the actual discconnect errors on the individual peers
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
-		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.IDs[i], Error: err})
+		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.Nodes[i].ID(), Error: err})
 	}
 	if err := s.TestDisconnected(disconnects...); err != nil {
 		t.Fatal(err)
 	}
 	// test if disconnected peers have been removed from peerPool
-	if pp.Has(s.IDs[peer]) {
-		t.Fatalf("peer test-%v not dropped: %v (%v)", peer, pp, s.IDs)
+	if pp.Has(s.Nodes[peer].ID()) {
+		t.Fatalf("peer test-%v not dropped: %v (%v)", peer, pp, s.Nodes)
 	}
 
 }

@@ -18,15 +18,16 @@ package mru
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"time"
 )
 
 // TimestampProvider sets the time source of the mru package
 var TimestampProvider timestampProvider = NewDefaultTimestampProvider()
 
-// Encodes a point in time as a Unix epoch
+// Timestamp encodes a point in time as a Unix epoch
 type Timestamp struct {
-	Time uint64 // Unix epoch timestamp, in seconds
+	Time uint64 `json:"time"` // Unix epoch timestamp, in seconds
 }
 
 // 8 bytes uint64 Time
@@ -55,6 +56,18 @@ func (t *Timestamp) binaryPut(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON implements the json.Unmarshaller interface
+func (t *Timestamp) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &t.Time)
+}
+
+// MarshalJSON implements the json.Marshaller interface
+func (t *Timestamp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Time)
+}
+
+// DefaultTimestampProvider is a TimestampProvider that uses system time
+// as time source
 type DefaultTimestampProvider struct {
 }
 

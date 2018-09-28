@@ -1,72 +1,50 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package mru
 
 import (
-	"bytes"
 	"testing"
 )
 
-const serializedUpdateHex = "0x490034004f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fbf74a10ce8f26ffc8bfaa07c3031a34b2c61f517955e7deb1592daccf96c69cf000456c20717565206c6565206d7563686f207920616e6461206d7563686f2c207665206d7563686f20792073616265206d7563686f"
-const serializedUpdateMultihashHex = "0x490022004f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fbf74a10ce8f26ffc8bfaa07c3031a34b2c61f517955e7deb1592daccf96c69cf0011b200102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1c1e1f20"
-
-func getTestResourceUpdate() *resourceUpdate {
-	return &resourceUpdate{
-		updateHeader: *getTestUpdateHeader(false),
-		data:         []byte("El que lee mucho y anda mucho, ve mucho y sabe mucho"),
+func getTestResourceUpdate() *ResourceUpdate {
+	return &ResourceUpdate{
+		ID:   *getTestID(),
+		data: []byte("El que lee mucho y anda mucho, ve mucho y sabe mucho"),
 	}
-}
-
-func getTestResourceUpdateMultihash() *resourceUpdate {
-	return &resourceUpdate{
-		updateHeader: *getTestUpdateHeader(true),
-		data:         []byte{0x1b, 0x20, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 28, 30, 31, 32},
-	}
-}
-
-func compareResourceUpdate(a, b *resourceUpdate) bool {
-	return compareUpdateHeader(&a.updateHeader, &b.updateHeader) &&
-		bytes.Equal(a.data, b.data)
 }
 
 func TestResourceUpdateSerializer(t *testing.T) {
-	var serializedUpdateLength = len(serializedUpdateHex)/2 - 1 // hack to calculate the byte length out of the hex representation
-	update := getTestResourceUpdate()
-	serializedUpdate := make([]byte, serializedUpdateLength)
-	if err := update.binaryPut(serializedUpdate); err != nil {
-		t.Fatal(err)
-	}
-	compareByteSliceToExpectedHex(t, "serializedUpdate", serializedUpdate, serializedUpdateHex)
+	testBinarySerializerRecovery(t, getTestResourceUpdate(), "0x0000000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781ce803000000000019456c20717565206c6565206d7563686f207920616e6461206d7563686f2c207665206d7563686f20792073616265206d7563686f")
+}
 
-	// Test fail if update does not contain data
-	update.data = nil
-	if err := update.binaryPut(serializedUpdate); err == nil {
-		t.Fatal("Expected resourceUpdate.binaryPut to fail since update does not contain data")
-	}
-
+func TestResourceUpdateLengthCheck(t *testing.T) {
+	testBinarySerializerLengthCheck(t, getTestResourceUpdate())
 	// Test fail if update is too big
-	update.data = make([]byte, 10000)
-	if err := update.binaryPut(serializedUpdate); err == nil {
+	update := getTestResourceUpdate()
+	update.data = make([]byte, maxUpdateDataLength+100)
+	serialized := make([]byte, update.binaryLength())
+	if err := update.binaryPut(serialized); err == nil {
 		t.Fatal("Expected resourceUpdate.binaryPut to fail since update is too big")
 	}
 
-	// Test fail if passed slice is not of the exact size required for this update
-	update.data = make([]byte, 1)
-	if err := update.binaryPut(serializedUpdate); err == nil {
-		t.Fatal("Expected resourceUpdate.binaryPut to fail since passed slice is not of the appropriate size")
+	// test fail if data is empty or nil
+	update.data = nil
+	serialized = make([]byte, update.binaryLength())
+	if err := update.binaryPut(serialized); err == nil {
+		t.Fatal("Expected resourceUpdate.binaryPut to fail since data is empty")
 	}
-
-	// Test serializing a multihash update
-	var serializedUpdateMultihashLength = len(serializedUpdateMultihashHex)/2 - 1 // hack to calculate the byte length out of the hex representation
-	update = getTestResourceUpdateMultihash()
-	serializedUpdate = make([]byte, serializedUpdateMultihashLength)
-	if err := update.binaryPut(serializedUpdate); err != nil {
-		t.Fatal(err)
-	}
-	compareByteSliceToExpectedHex(t, "serializedUpdate", serializedUpdate, serializedUpdateMultihashHex)
-
-	// mess with the multihash to test it fails with a wrong multihash error
-	update.data[1] = 79
-	if err := update.binaryPut(serializedUpdate); err == nil {
-		t.Fatal("Expected resourceUpdate.binaryPut to fail since data contains an invalid multihash")
-	}
-
 }
