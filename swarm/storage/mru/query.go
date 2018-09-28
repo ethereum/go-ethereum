@@ -36,7 +36,7 @@ type Query struct {
 // useful to parse query strings
 func (q *Query) FromValues(values Values) error {
 	time, _ := strconv.ParseUint(values.Get("time"), 10, 64)
-	q.TimeLimit = uint64(time)
+	q.TimeLimit = time
 
 	level, _ := strconv.ParseUint(values.Get("hint.level"), 10, 32)
 	q.Hint.Level = uint8(level)
