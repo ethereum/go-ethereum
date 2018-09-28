@@ -1040,7 +1040,7 @@ func xgoTool(args []string) *exec.Cmd {
 func doPurge(cmdline []string) {
 	var (
 		store = flag.String("store", "", `Destination from where to purge archives (usually "gethstore/builds")`)
-		limit = flag.Int("days", 30, `Age threshold above which to delete unstalbe archives`)
+		limit = flag.Int("days", 30, `Age threshold above which to delete unstable archives`)
 	)
 	flag.CommandLine.Parse(cmdline)
 
