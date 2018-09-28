@@ -32,9 +32,13 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`^bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
 	// This test is broken
 	bt.fails(`blockhashNonConstArg_Constantinople`, "Broken test")
-
-	// Still failing tests
-	//	bt.skipLoad(`^bcWalletTest.*_Byzantium$`)
+	// Slow tests
+	bt.slow(`^bcExploitTest/DelegateCallSpam.json`)
+	bt.slow(`^bcExploitTest/ShanghaiLove.json`)
+	bt.slow(`^bcExploitTest/SuicideIssue.json`)
+	bt.slow(`^bcForkStressTest/`)
+	bt.slow(`^bcGasPricerTest/RPC_API_Test.json`)
+	bt.slow(`^bcWalletTest/`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, name, test.Run()); err != nil {
