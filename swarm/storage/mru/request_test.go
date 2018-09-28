@@ -183,7 +183,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// mess with the lookup key to make sure Verify fails:
-	recoveredRequest.Time = 77999
+	recoveredRequest.Time = 77999 // this will alter the lookup key
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
 	}
@@ -212,7 +212,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	r.data = []byte("Al bien hacer jamás le falta premio") // put some arbitrary length data
 	_, err = r.toChunk()
 	if err == nil {
-		t.Fatal("expected request.toChunk to fail when there is no signature", err)
+		t.Fatal("expected request.toChunk to fail when there is no signature")
 	}
 
 	charlie := newCharlieSigner()
@@ -309,6 +309,6 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("Expected epoch to be '%s', was '%s'", epoch.String(), checkUpdate.Epoch.String())
 	}
 	if !bytes.Equal(data, checkUpdate.data) {
-		t.Fatalf("Expectedn data '%x', was '%x'", data, checkUpdate.data)
+		t.Fatalf("Expected data '%x', was '%x'", data, checkUpdate.data)
 	}
 }

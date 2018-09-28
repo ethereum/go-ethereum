@@ -112,9 +112,12 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
 func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
+	if view == nil {
+		return nil, nil, NewError(ErrInvalidValue, "view is nil")
+	}
 	rsrc := h.get(view)
 	if rsrc == nil {
-		return nil, nil, NewError(ErrNotFound, " does not exist")
+		return nil, nil, NewError(ErrNotFound, "resource does not exist")
 	}
 	return rsrc.lastKey, rsrc.data, nil
 }
@@ -279,10 +282,6 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 
 // Retrieves the resource cache value for the given nameHash
 func (h *Handler) get(view *View) *cacheEntry {
-	if view == nil {
-		log.Warn("Handler.get with invalid View")
-		return nil
-	}
 	mapKey := view.mapKey()
 	h.resourceLock.RLock()
 	defer h.resourceLock.RUnlock()
@@ -292,10 +291,6 @@ func (h *Handler) get(view *View) *cacheEntry {
 
 // Sets the resource cache value for the given View
 func (h *Handler) set(view *View, rsrc *cacheEntry) {
-	if view == nil {
-		log.Warn("Handler.set with invalid View")
-		return
-	}
 	mapKey := view.mapKey()
 	h.resourceLock.Lock()
 	defer h.resourceLock.Unlock()

@@ -74,7 +74,7 @@ func Hint(last uint64) Epoch {
 // but limited to not return a level that is smaller than the last-1
 func GetNextLevel(last Epoch, now uint64) uint8 {
 	// First XOR the last epoch base time with the current clock.
-	// This will set all the common most significant bits will to zero.
+	// This will set all the common most significant bits to zero.
 	mix := (last.Base() ^ now)
 
 	// Then, make sure we stop the below loop before one level below the current, by setting
@@ -149,32 +149,32 @@ func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interf
 				return value, nil
 			}
 			hint = epoch
-		} else {
-			if epoch.Base() == hint.Base() {
-				if lastFound != nil {
-					return lastFound, nil
-				}
-				// we have reached the hint itself
-				if hint == worstHint {
-					return nil, nil
-				}
-				// check it out
-				value, err = read(hint, now)
-				if err != nil {
-					return nil, err
-				}
-				if value != nil {
-					return value, nil
-				}
-				// bad hint.
-				epoch = hint
-				hint = worstHint
+			continue
+		}
+		if epoch.Base() == hint.Base() {
+			if lastFound != nil {
+				return lastFound, nil
 			}
-			base := epoch.Base()
-			if base == 0 {
+			// we have reached the hint itself
+			if hint == worstHint {
 				return nil, nil
 			}
-			t = base - 1
+			// check it out
+			value, err = read(hint, now)
+			if err != nil {
+				return nil, err
+			}
+			if value != nil {
+				return value, nil
+			}
+			// bad hint.
+			epoch = hint
+			hint = worstHint
 		}
+		base := epoch.Base()
+		if base == 0 {
+			return nil, nil
+		}
+		t = base - 1
 	}
 }
