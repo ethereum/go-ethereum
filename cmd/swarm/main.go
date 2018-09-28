@@ -116,6 +116,12 @@ var (
 		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
 		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
 	}
+	SwarmMaxStreamPeerServersFlag = cli.IntFlag{
+		Name:   "max-stream-peer-servers",
+		Usage:  "Limit of Stream peer servers, 0 denotes unlimited",
+		EnvVar: SWARM_ENV_MAX_STREAM_PEER_SERVERS,
+		Value:  10000, // A very large default value is possible as stream servers have very small memory footprint
+	}
 	SwarmLightNodeEnabled = cli.BoolFlag{
 		Name:   "lightnode",
 		Usage:  "Enable Swarm LightNode (default false)",
@@ -542,6 +548,7 @@ pv(1) tool to get a progress bar:
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
+		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
 		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,

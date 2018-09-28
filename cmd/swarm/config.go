@@ -59,27 +59,28 @@ var (
 
 //constants for environment variables
 const (
-	SWARM_ENV_CHEQUEBOOK_ADDR      = "SWARM_CHEQUEBOOK_ADDR"
-	SWARM_ENV_ACCOUNT              = "SWARM_ACCOUNT"
-	SWARM_ENV_LISTEN_ADDR          = "SWARM_LISTEN_ADDR"
-	SWARM_ENV_PORT                 = "SWARM_PORT"
-	SWARM_ENV_NETWORK_ID           = "SWARM_NETWORK_ID"
-	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
-	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
-	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SWARM_ENV_LIGHT_NODE_ENABLE    = "SWARM_LIGHT_NODE_ENABLE"
-	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
-	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
-	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
-	SWARM_ENV_CORS                 = "SWARM_CORS"
-	SWARM_ENV_BOOTNODES            = "SWARM_BOOTNODES"
-	SWARM_ENV_PSS_ENABLE           = "SWARM_PSS_ENABLE"
-	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
-	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
-	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
-	SWARM_ACCESS_PASSWORD          = "SWARM_ACCESS_PASSWORD"
-	GETH_ENV_DATADIR               = "GETH_DATADIR"
+	SWARM_ENV_CHEQUEBOOK_ADDR         = "SWARM_CHEQUEBOOK_ADDR"
+	SWARM_ENV_ACCOUNT                 = "SWARM_ACCOUNT"
+	SWARM_ENV_LISTEN_ADDR             = "SWARM_LISTEN_ADDR"
+	SWARM_ENV_PORT                    = "SWARM_PORT"
+	SWARM_ENV_NETWORK_ID              = "SWARM_NETWORK_ID"
+	SWARM_ENV_SWAP_ENABLE             = "SWARM_SWAP_ENABLE"
+	SWARM_ENV_SWAP_API                = "SWARM_SWAP_API"
+	SWARM_ENV_SYNC_DISABLE            = "SWARM_SYNC_DISABLE"
+	SWARM_ENV_SYNC_UPDATE_DELAY       = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_MAX_STREAM_PEER_SERVERS = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
+	SWARM_ENV_LIGHT_NODE_ENABLE       = "SWARM_LIGHT_NODE_ENABLE"
+	SWARM_ENV_DELIVERY_SKIP_CHECK     = "SWARM_DELIVERY_SKIP_CHECK"
+	SWARM_ENV_ENS_API                 = "SWARM_ENS_API"
+	SWARM_ENV_ENS_ADDR                = "SWARM_ENS_ADDR"
+	SWARM_ENV_CORS                    = "SWARM_CORS"
+	SWARM_ENV_BOOTNODES               = "SWARM_BOOTNODES"
+	SWARM_ENV_PSS_ENABLE              = "SWARM_PSS_ENABLE"
+	SWARM_ENV_STORE_PATH              = "SWARM_STORE_PATH"
+	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
+	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
+	GETH_ENV_DATADIR                  = "GETH_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -207,6 +208,9 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncUpdateDelay = d
 	}
 
+	// any value including 0 is acceptable
+	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
+
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
 	}
@@ -306,6 +310,14 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		if d, err := time.ParseDuration(v); err != nil {
 			currentConfig.SyncUpdateDelay = d
 		}
+	}
+
+	if max := os.Getenv(SWARM_ENV_MAX_STREAM_PEER_SERVERS); max != "" {
+		m, err := strconv.Atoi(max)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_MAX_STREAM_PEER_SERVERS, err)
+		}
+		currentConfig.MaxStreamPeerServers = m
 	}
 
 	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
