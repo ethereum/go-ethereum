@@ -78,10 +78,10 @@ func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	return b, e
 }
 
-func (l *AuditLogger) EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
+func (l *AuditLogger) EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
 	l.log.Info("EcRecover", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"data", common.Bytes2Hex(data), "sig", common.Bytes2Hex(sig))
-	b, e := l.api.EcRecover(ctx, data, sig)
+		"data", common.Bytes2Hex(data), "sig", common.Bytes2Hex(sig), "content-type", contentType)
+	b, e := l.api.EcRecover(ctx, contentType, data, sig)
 	l.log.Info("EcRecover", "type", "response", "address", b.String(), "error", e)
 	return b, e
 }
