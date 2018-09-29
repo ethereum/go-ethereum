@@ -347,12 +347,13 @@ Bash example:
 ```
 
 
-### account_sign
+### account_signData
 
 #### Sign data
    Signs a chunk of data and returns the calculated signature.
 
 #### Arguments
+  - content type [string]: type of data to sign
   - account [address]: account to sign with
   - data [data]: data to sign
 
@@ -364,8 +365,9 @@ Bash example:
 {
   "id": 3,
   "jsonrpc": "2.0",
-  "method": "account_sign",
+  "method": "account_signData",
   "params": [
+    "data/plain",
     "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
     "0xaabbccdd"
   ]
@@ -383,10 +385,11 @@ Response
 
 ### account_ecRecover
 
-#### Recover address
+#### Sign data
    Derive the address from the account that was used to sign data from the data and signature.
-   
+
 #### Arguments
+  - content type [string]: type of signed data
   - data [data]: data that was signed
   - signature [data]: the signature to verify
 
@@ -400,6 +403,7 @@ Response
   "jsonrpc": "2.0",
   "method": "account_ecRecover",
   "params": [
+    "data/plain",
     "0xaabbccdd",
     "0x5b6693f153b48ec1c706ba4169960386dbaa6903e249cc79a8e6ddc434451d417e1e57327872c7f538beeb323c300afa9999a3d4a5de6caf3be0d5ef832b67ef1c"
   ]
@@ -413,7 +417,6 @@ Response
   "jsonrpc": "2.0",
   "result": "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db"
 }
-
 ```
 
 ### account_import
