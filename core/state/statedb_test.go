@@ -435,3 +435,41 @@ func TestCopyOfCopy(t *testing.T) {
 		t.Fatalf("2nd copy fail, expected 42, got %v", got)
 	}
 }
+
+// TestCopyStorage tests that the preimages of an account's storage should be saved to trie between
+// the copy of StateDB
+// See https://github.com/ethereum/go-ethereum/pull/17785
+func TestCopyStorage(t *testing.T) {
+	db := NewDatabase(ethdb.NewMemDatabase())
+	state1, _ := New(common.Hash{}, db)
+
+	stateobjaddr := common.HexToAddress("zwb")
+	storage := map[common.Hash]common.Hash{
+		common.BytesToHash([]byte{0}): common.BytesToHash([]byte{100}),
+		common.BytesToHash([]byte{1}): common.BytesToHash([]byte{101}),
+		common.BytesToHash([]byte{2}): common.BytesToHash([]byte{102}),
+	}
+
+	for k, v := range storage {
+		state1.SetState(stateobjaddr, k, v)
+	}
+
+	// DO what as the miner does
+	state1.Finalise(false)
+	state2 := state1.Copy()
+	state2.IntermediateRoot(false)
+	state2.Commit(false)
+
+	dump := state2.RawDump()
+
+	addr := strings.TrimPrefix(stateobjaddr.Hex(), "0x")
+	gotStorage := dump.Accounts[addr].Storage
+	if len(gotStorage) != len(storage) {
+		t.Fatalf("the number of storage not the same, expected(%d), got(%d)", len(storage), len(gotStorage))
+	}
+	for k, v := range gotStorage {
+		if want, ok := storage[common.HexToHash(k)]; !ok || want != common.HexToHash(v) {
+			t.Fatalf("dump storage mismatched:\ngot: %s\nwant: %s\n", v, want)
+		}
+	}
+}
