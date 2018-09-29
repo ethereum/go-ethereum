@@ -50,7 +50,7 @@ import (
 )
 
 // ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "4.0.0"
+const ExternalAPIVersion = "5.0.0"
 
 // InternalAPIVersion -- see intapi_changelog.md
 const InternalAPIVersion = "3.0.0"
