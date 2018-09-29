@@ -34,7 +34,7 @@ var errTimedOut = errors.New("timed out")
 // a service and a number of dummy peers that can send (trigger) or
 // receive (expect) messages
 type ProtocolSession struct {
-	Server  *p2p.Server
+	Server  p2p.ServerIf
 	Nodes   []*enode.Node
 	adapter *adapters.SimAdapter
 	events  chan *p2p.PeerEvent

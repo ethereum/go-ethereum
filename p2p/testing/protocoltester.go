@@ -142,7 +142,7 @@ func (t *testNode) APIs() []rpc.API {
 	return nil
 }
 
-func (t *testNode) Start(server *p2p.Server) error {
+func (t *testNode) Start(server p2p.ServerIf) error {
 	return nil
 }
 

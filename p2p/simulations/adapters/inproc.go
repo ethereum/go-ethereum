@@ -326,7 +326,7 @@ func (sn *SimNode) ServiceMap() map[string]node.Service {
 }
 
 // Server returns the underlying p2p.Server
-func (sn *SimNode) Server() *p2p.Server {
+func (sn *SimNode) Server() p2p.ServerIf {
 	return sn.node.Server()
 }
 
