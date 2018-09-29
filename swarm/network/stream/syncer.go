@@ -40,8 +40,8 @@ type SwarmSyncerServer struct {
 	quit  chan struct{}
 }
 
-// NewSwarmSyncerServer is contructor for SwarmSyncerServer
-func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
+// NewSwarmSyncerServer is constructor for SwarmSyncerServer
+func NewSwarmSyncerServer(po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
 		po:    po,
 		store: syncChunkStore,
@@ -50,12 +50,12 @@ func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkS
 }
 
 func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore storage.SyncChunkStore) {
-	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
+	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(live, po, syncChunkStore)
+		return NewSwarmSyncerServer(po, syncChunkStore)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
