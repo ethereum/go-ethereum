@@ -527,7 +527,7 @@ func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *Handove
 
 // Server interface for outgoing peer Streamer
 type Server interface {
-	// SessionIndex is called then a server is initialized
+	// SessionIndex is called when a server is initialized
 	// to get the current cursor state of the stream data.
 	// Based on this index, live and history stream intervals
 	// will be adjusted before calling SetNextBatch.
