@@ -71,6 +71,14 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 	return b, e
 }
 
+func (l *AuditLogger) EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
+	l.log.Info("EcRecover", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"data", common.Bytes2Hex(data), "sig", common.Bytes2Hex(sig), "content-type", contentType)
+	b, e := l.api.EcRecover(ctx, contentType, data, sig)
+	l.log.Info("EcRecover", "type", "response", "address", b.String(), "error", e)
+	return b, e
+}
+
 func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
 	l.log.Info("Export", "type", "request", "metadata", MetadataFromContext(ctx).String(),
 		"addr", addr.Hex())

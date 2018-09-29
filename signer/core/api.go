@@ -52,6 +52,8 @@ type ExternalAPI interface {
 	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// SignData - request to sign the given data (plus prefix)
 	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	// EcRecover - recover public key from given message and signature
+	EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
@@ -690,7 +692,6 @@ func SignDataPlain(data []byte) ([]byte, string) {
 
 // Determines the content type and then recovers the address associated with the given sig
 func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data, sig hexutil.Bytes) (common.Address, error) {
-	fmt.Println("Effing Muffins")
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return common.Address{}, err
