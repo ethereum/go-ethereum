@@ -108,6 +108,30 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
+type SigFormat struct {
+	Mime		string
+	ByteVersion	byte
+}
+
+var (
+	ApplicationValidator = SigFormat{
+		"application/validator",
+		0x00,
+	}
+	ApplicationClique = SigFormat{
+		"application/clique",
+		0x01,
+	}
+	DataPlain = SigFormat{
+		"data/plain",
+		0x45,
+	}
+	DataStructured = SigFormat{
+		"data/structured",
+		0x46,
+	}
+)
+
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
 	m := Metadata{"NA", "NA", "NA", "", ""} // batman
@@ -523,7 +547,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 // where the V value will be 27 or 28 for legacy reasons.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
 
-	var req, err = api.determineSignatureFormat(contentType, data)
+	var req, err = api.DetermineSignatureFormat(contentType, data)
 	if err != nil {
 		return nil, err
 	}
@@ -555,41 +579,16 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 	return signature, nil
 }
 
-// EcRecover returns the address for the Account that was used to create the signature.
-// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
-// the address of:
-// hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
-// addr = ecrecover(hash, signature)
-//
-// Note, the signature must conform to the secp256k1 curve R, S and V values, where
-// the V value must be be 27 or 28 for legacy reasons.
-//
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
-func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data, sig hexutil.Bytes) (common.Address, error) {
-	if len(sig) != 65 {
-		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
-	}
-	if sig[64] != 27 && sig[64] != 28 {
-		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
-	}
-	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
-	hash, _ := SignDataPlain(data)
-	rpk, err := crypto.SigToPub(hash, sig)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return crypto.PubkeyToAddress(*rpk), nil
-}
-
 // Determines which signature method should be used based upon the mime type
-func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
+func (api *SignerAPI) DetermineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
 	var req *SignDataRequest
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, err
 	}
 	switch mediaType {
-	case "application/clique":
+	case ApplicationClique.Mime:
+		// Clique is the Ethereum PoA standard
 		header := &types.Header{}
 		if err := rlp.DecodeBytes(data, header); err != nil {
 			return nil, err
@@ -600,40 +599,26 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.
 		}
 		msg := fmt.Sprintf("Clique block %d [0x%x]", header.Number, header.Hash())
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	case "application/validator":
-		// Sign calculates an Ethereum ECDSA signature for:
-		// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+	case ApplicationValidator.Mime:
+		// Data with an intended validator
 
-		// In the cases where it matter ensure that the charset is handled. The charset
-		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
-		// charset, ok := params["charset"]
-		// As it is now, we accept any charset and just treat it as 'raw'.
-
-		sighash, msg := DataWithValidatorHash(data)
+		sighash, msg := SignDataWithValidator(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	case "data/structured":
-		// EIP712 typed data
+	case DataStructured.Mime:
+		// Typed data according to EIP712
 
-		// Sign calculates an Ethereum ECDSA signature for:
-		// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
-
-		// In the cases where it matter ensure that the charset is handled. The charset
-		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
-		// charset, ok := params["charset"]
-		// As it is now, we accept any charset and just treat it as 'raw'.
-
-		sighash, msg := DataStructuredHash(data)
+		sighash, msg := SignDataStructured(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	case "data/plain":
+	case DataPlain.Mime:
 		// Sign calculates an Ethereum ECDSA signature for:
-		// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+		// keccack256("\x19${byte version}Ethereum Signed Message:\n" + len(message) + message))
 
-		// In the cases where it matter ensure that the charset is handled. The charset
+		// In the cases where it matters ensure that the charset is handled. The charset
 		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
 		// charset, ok := params["charset"]
 		// As it is now, we accept any charset and just treat it as 'raw'.
 
-		sighash, msg := DataPlainHash(data)
+		sighash, msg := SignDataPlain(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 	default:
 		return nil, fmt.Errorf("content type '%s' not implemented for signing", contentType)
@@ -676,30 +661,70 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	return hash.Bytes(), nil
 }
 
-// DataWithValidatorHash signs the given message according to EIP191.
-//
-// https://github.com/ethereum/EIPs/issues/712
-func DataWithValidatorHash(data []byte) ([]byte, string) {
-	return nil, ""
+// DataWithValidatorHash signs the given message which can be further recovered
+// with the given validator.
+func SignDataWithValidator(data []byte) ([]byte, string) {
+	msg := "TODO"
+	return crypto.Keccak256([]byte(msg)), msg
 }
 
 // DataStructuredHash signs the given message according to EIP712.
 //
 // https://github.com/ethereum/EIPs/issues/712
-func DataStructuredHash(data []byte) ([]byte, string) {
-	return nil, ""
+func SignDataStructured(data []byte) ([]byte, string) {
+	msg := "TODO"
+	return crypto.Keccak256([]byte(msg)), msg
 }
 
-// DataPlainHash is a helper function that calculates a hash for the given message that can be
+// SignDataPlain is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
 // The hash is calculated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+//	keccak256("\x19${byte version}Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
-func DataPlainHash(data []byte) ([]byte, string) {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+func SignDataPlain(data []byte) ([]byte, string) {
+	msg := fmt.Sprintf("\x19\\x%xEthereum Signed Message:\n%d%s", DataPlain.ByteVersion, len(data), data)
 	return crypto.Keccak256([]byte(msg)), msg
+}
+
+// Determines the content type and then recovers the address associated with the given sig
+func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data, sig hexutil.Bytes) (common.Address, error) {
+	fmt.Println("Effing Muffins")
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return common.Address{}, err
+	}
+	switch mediaType {
+	case DataPlain.Mime:
+		// Returns the address for the Account that was used to create the signature.
+		//
+		// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
+		// the address of:
+		// hash = keccak256("\x19${byte version}Ethereum Signed Message:\n"${message length}${message})
+		// addr = ecrecover(hash, signature)
+		//
+		// Note, the signature must conform to the secp256k1 curve R, S and V values, where
+		// the V value must be be 27 or 28 for legacy reasons.
+		//
+		// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
+
+		if len(sig) != 65 {
+			return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
+		}
+		if sig[64] != 27 && sig[64] != 28 {
+			return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+		}
+		sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
+		hash, _ := SignDataPlain(data)
+		rpk, err := crypto.SigToPub(hash, sig)
+		if err != nil {
+			return common.Address{}, err
+		}
+		return crypto.PubkeyToAddress(*rpk), nil
+	default:
+		return common.Address{}, fmt.Errorf("content type '%s' not implemented for ecRecover", contentType)
+	}
 }
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.
