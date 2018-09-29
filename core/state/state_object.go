@@ -217,6 +217,18 @@ func (self *stateObject) setState(key, value common.Hash) {
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (self *stateObject) updateTrie(db Database) Trie {
 	tr := self.getTrie(db)
+
+	// save the originStorage first, ensure all non empty keys in originStorage saved to trie.
+	// if the object is copyed from another one,
+	// the dirtyStorage is empty and the originStorage is not empty.
+	for key, value := range self.originStorage {
+		if value != (common.Hash{}) {
+			// Encoding []byte cannot fail, ok to ignore the error.
+			v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+			self.setError(tr.TryUpdate(key[:], v))
+		}
+	}
+
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
 
@@ -226,7 +238,7 @@ func (self *stateObject) updateTrie(db Database) Trie {
 		}
 		self.originStorage[key] = value
 
-		if (value == common.Hash{}) {
+		if value == (common.Hash{}) {
 			self.setError(tr.TryDelete(key[:]))
 			continue
 		}
@@ -237,7 +249,7 @@ func (self *stateObject) updateTrie(db Database) Trie {
 	return tr
 }
 
-// UpdateRoot sets the trie root to the current root hash of
+// updateRoot sets the trie root to the current root hash of
 func (self *stateObject) updateRoot(db Database) {
 	self.updateTrie(db)
 	self.data.Root = self.trie.Hash()
