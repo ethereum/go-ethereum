@@ -18,7 +18,6 @@ package ethdb_test
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -165,7 +164,7 @@ func testParallelPutGet(db ethdb.Database, t *testing.T) {
 			defer pending.Done()
 			err := db.Put([]byte(key), []byte("v"+key))
 			if err != nil {
-				panic("put failed: " + err.Error())
+				t.Fatal("put failed:", err.Error())
 			}
 		}(strconv.Itoa(i))
 	}
@@ -177,10 +176,10 @@ func testParallelPutGet(db ethdb.Database, t *testing.T) {
 			defer pending.Done()
 			data, err := db.Get([]byte(key))
 			if err != nil {
-				panic("get failed: " + err.Error())
+				t.Fatal("get failed:", err.Error())
 			}
 			if !bytes.Equal(data, []byte("v"+key)) {
-				panic(fmt.Sprintf("get failed, got %q expected %q", []byte(data), []byte("v"+key)))
+				t.Fatalf("get failed, got %q expected %q", []byte(data), []byte("v"+key))
 			}
 		}(strconv.Itoa(i))
 	}
@@ -192,7 +191,7 @@ func testParallelPutGet(db ethdb.Database, t *testing.T) {
 			defer pending.Done()
 			err := db.Delete([]byte(key))
 			if err != nil {
-				panic("delete failed: " + err.Error())
+				t.Fatal("delete failed:", err.Error())
 			}
 		}(strconv.Itoa(i))
 	}
@@ -204,7 +203,7 @@ func testParallelPutGet(db ethdb.Database, t *testing.T) {
 			defer pending.Done()
 			_, err := db.Get([]byte(key))
 			if err == nil {
-				panic("get succeeded")
+				t.Fatal("get succeeded")
 			}
 		}(strconv.Itoa(i))
 	}
