@@ -31,6 +31,7 @@ const (
 	HashLength    = 32
 	AddressLength = 20
 	BlockSigners  = "0x0000000000000000000000000000000000000089"
+	Validator     = "0x0000000000000000000000000000000000000088"
 )
 
 var (

@@ -530,8 +530,15 @@ func (self *worker) commitNewWork() {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	if (work.config.Clique != nil) && (work.Block.NumberU64()%work.config.Clique.Epoch) == 0 {
-		core.Checkpoint <- 1
+	if work.config.Clique != nil {
+		// epoch block
+		if (work.Block.NumberU64() % work.config.Clique.Epoch) == 0 {
+			core.CheckpointCh <- 1
+		}
+		// prepare set of masternodes for the next epoch
+		if (work.Block.NumberU64() % work.config.Clique.Epoch) == (work.config.Clique.Epoch - core.M1Gap) {
+			core.M1Ch <- 1
+		}
 	}
 	self.push(work)
 }
