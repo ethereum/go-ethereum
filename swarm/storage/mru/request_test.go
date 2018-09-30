@@ -228,7 +228,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	var recovered Request
 	recovered.fromChunk(chunk.Address(), chunk.Data())
 	if !reflect.DeepEqual(recovered, r) {
-		t.Fatal("Expected recovered SignedResource update to equal the original one")
+		t.Fatal("Expected recovered Request update to equal the original one")
 	}
 }
 
@@ -248,7 +248,7 @@ func TestReverse(t *testing.T) {
 	// signer containing private key
 	signer := newAliceSigner()
 
-	// set up rpc and create resourcehandler
+	// set up rpc and create Feeds handler
 	_, _, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)

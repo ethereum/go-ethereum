@@ -35,7 +35,7 @@ const (
 	ErrCnt
 )
 
-// Error is a the typed error object used for Mutable Resources
+// Error is a the typed error object used for Swarm Feeds
 type Error struct {
 	code int
 	err  string

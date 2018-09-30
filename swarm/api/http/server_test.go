@@ -58,47 +58,6 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-func TestResourcePostMode(t *testing.T) {
-	path := ""
-	errstr := "resourcePostMode for '%s' should be raw %v frequency %d, was raw %v, frequency %d"
-	r, f, err := resourcePostMode(path)
-	if err != nil {
-		t.Fatal(err)
-	} else if r || f != 0 {
-		t.Fatalf(errstr, path, false, 0, r, f)
-	}
-
-	path = "raw"
-	r, f, err = resourcePostMode(path)
-	if err != nil {
-		t.Fatal(err)
-	} else if !r || f != 0 {
-		t.Fatalf(errstr, path, true, 0, r, f)
-	}
-
-	path = "13"
-	r, f, err = resourcePostMode(path)
-	if err != nil {
-		t.Fatal(err)
-	} else if r || f == 0 {
-		t.Fatalf(errstr, path, false, 13, r, f)
-	}
-
-	path = "raw/13"
-	r, f, err = resourcePostMode(path)
-	if err != nil {
-		t.Fatal(err)
-	} else if !r || f == 0 {
-		t.Fatalf(errstr, path, true, 13, r, f)
-	}
-
-	path = "foo/13"
-	r, f, err = resourcePostMode(path)
-	if err == nil {
-		t.Fatal("resourcePostMode for 'foo/13' should fail, returned error nil")
-	}
-}
-
 func serverFunc(api *api.API) testutil.TestServer {
 	return NewServer(api, "")
 }
@@ -111,12 +70,12 @@ func newTestSigner() (*mru.GenericSigner, error) {
 	return mru.NewGenericSigner(privKey), nil
 }
 
-// test the transparent resolving of multihash resource types with bzz:// scheme
+// test the transparent resolving of multihash-containing feed updates with bzz:// scheme
 //
-// first upload data, and store the multihash to the resulting manifest in a resource update
+// first upload data, and store the multihash to the resulting manifest in a feed update
 // retrieving the update with the multihash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
-func TestBzzResourceMultihash(t *testing.T) {
+func TestBzzFeedMultihash(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
@@ -154,7 +113,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,12 +141,12 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
+	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
 	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
-	// get bzz manifest transparent resource resolve
+	// get bzz manifest transparent feed update resolve
 	testBzzUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(testBzzUrl)
 	if err != nil {
@@ -207,7 +166,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 }
 
 // Test Swarm Feeds using the raw update methods
-func TestBzzResource(t *testing.T) {
+func TestBzzFeed(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	signer, _ := newTestSigner()
 
@@ -234,8 +193,8 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// creates resource and sets update 1
-	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
+	// creates feed and sets update 1
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,9 +221,9 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
+	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
 	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
 	// get the manifest
@@ -289,12 +248,12 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctViewHex := "0x666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
-	if manifest.Entries[0].ResourceView.Hex() != correctViewHex {
-		t.Fatalf("Expected manifest Resource View '%s', got '%s'", correctViewHex, manifest.Entries[0].ResourceView.Hex())
+	correctFeedHex := "0x666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	if manifest.Entries[0].Feed.Hex() != correctFeedHex {
+		t.Fatalf("Expected manifest Feed '%s', got '%s'", correctFeedHex, manifest.Entries[0].Feed.Hex())
 	}
 
-	// get bzz manifest transparent resource resolve
+	// get bzz manifest transparent feed update resolve
 	testBzzUrl := fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(testBzzUrl)
 	if err != nil {
@@ -302,7 +261,7 @@ func TestBzzResource(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
-		t.Fatal("Expected error status since resource is not multihash. Received 200 OK")
+		t.Fatal("Expected error status since feed update does not contain multihash. Received 200 OK")
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -310,21 +269,21 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get non-existent name, should fail
-	testBzzResUrl := fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
+	testBzzResUrl := fmt.Sprintf("%s/bzz-feed:/bar", srv.URL)
 	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("Expected get non-existent resource to fail with StatusNotFound (404), got %d", resp.StatusCode)
+		t.Fatalf("Expected get non-existent feed manifest to fail with StatusNotFound (404), got %d", resp.StatusCode)
 	}
 
 	resp.Body.Close()
 
-	// get latest update (1.1) through resource directly
+	// get latest update through bzz-feed directly
 	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
-	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s", srv.URL, correctManifestAddrHex)
 	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
@@ -346,15 +305,15 @@ func TestBzzResource(t *testing.T) {
 	srv.CurrentTime++
 	log.Info("update 2")
 
-	// 1.- get metadata about this resource
-	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
+	// 1.- get metadata about this Feed
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s/", srv.URL, correctManifestAddrHex)
 	resp, err = http.Get(testBzzResUrl + "?meta=1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Get resource metadata returned %s", resp.Status)
+		t.Fatalf("Get feed metadata returned %s", resp.Status)
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -362,13 +321,13 @@ func TestBzzResource(t *testing.T) {
 	}
 	updateRequest = &mru.Request{}
 	if err = updateRequest.UnmarshalJSON(b); err != nil {
-		t.Fatalf("Error decoding resource metadata: %s", err)
+		t.Fatalf("Error decoding feed metadata: %s", err)
 	}
 	updateRequest.SetData(update2Data)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	testUrl, err = url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
+	testUrl, err = url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,9 +344,9 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("Update returned %s", resp.Status)
 	}
 
-	// get latest update (1.2) through resource directly
+	// get latest update through bzz-feed directly
 	log.Info("get update 1.2")
-	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s", srv.URL, correctManifestAddrHex)
 	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
@@ -408,13 +367,13 @@ func TestBzzResource(t *testing.T) {
 	log.Info("get first update in update1Timestamp via direct query")
 	query := mru.NewQuery(&updateRequest.Feed, update1Timestamp, lookup.NoClue)
 
-	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
+	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	values := urlq.Query()
-	query.AppendValues(values) // this adds view query parameters
+	query.AppendValues(values) // this adds feed query parameters
 	urlq.RawQuery = values.Encode()
 	resp, err = http.Get(urlq.String())
 	if err != nil {

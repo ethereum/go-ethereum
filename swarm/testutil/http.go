@@ -48,14 +48,14 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	}
 	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
-	// mutable resources test setup
-	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
+	// Swarm Feeds test setup
+	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rhparams := &mru.HandlerParams{}
-	rh, err := mru.NewTestHandler(resourceDir, rhparams)
+	rh, err := mru.NewTestHandler(feedsDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 			srv.Close()
 			rh.Close()
 			os.RemoveAll(dir)
-			os.RemoveAll(resourceDir)
+			os.RemoveAll(feedsDir)
 		},
 		CurrentTime: 42,
 	}

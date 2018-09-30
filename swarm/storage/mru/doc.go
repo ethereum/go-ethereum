@@ -26,7 +26,7 @@ The Feed Update data is:
 updatedata = Feed|Epoch|data
 
 The full update data that goes in the chunk payload is:
-resourcedata|sign(resourcedata)
+updatedata|sign(updatedata)
 
 Structure Summary:
 

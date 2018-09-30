@@ -186,15 +186,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
 
-	var resourceHandler *mru.Handler
-	rhparams := &mru.HandlerParams{}
+	var feedsHandler *mru.Handler
+	fhParams := &mru.HandlerParams{}
 
-	resourceHandler = mru.NewHandler(rhparams)
-	resourceHandler.SetStore(self.netStore)
+	feedsHandler = mru.NewHandler(fhParams)
+	feedsHandler.SetStore(self.netStore)
 
 	lstore.Validators = []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
-		resourceHandler,
+		feedsHandler,
 	}
 
 	log.Debug("Setup local storage")
@@ -210,7 +210,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler, self.privateKey)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")

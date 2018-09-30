@@ -38,12 +38,12 @@ import (
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 )
 
-func TestCLIResourceUpdate(t *testing.T) {
+func TestCLIFeedUpdate(t *testing.T) {
 
 	srv := testutil.NewTestSwarmServer(t, func(api *api.API) testutil.TestServer {
 		return swarmhttp.NewServer(api, "")
 	}, nil)
-	log.Info("starting 1 node cluster")
+	log.Info("starting a test swarm server")
 	defer srv.Close()
 
 	// create a private key file for signing
@@ -77,13 +77,13 @@ func TestCLIResourceUpdate(t *testing.T) {
 	flags := []string{
 		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
-		"resource", "update",
+		"feed", "update",
 		"--topic", topic.Hex(),
 		"--name", name,
 		hexData}
 
 	// create an update and expect an exit without errors
-	log.Info(fmt.Sprintf("updating a resource with 'swarm resource update'"))
+	log.Info(fmt.Sprintf("updating a feed with 'swarm feed update'"))
 	cmd := runSwarm(t, flags...)
 	cmd.ExpectExit()
 
@@ -100,17 +100,17 @@ func TestCLIResourceUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// View configures whose updates we will be looking up.
-	view := mru.Feed{
+	// Feed configures whose updates we will be looking up.
+	feed := mru.Feed{
 		Topic: topic,
 		User:  address,
 	}
 
 	// Build a query to get the latest update
-	query := mru.NewQueryLatest(&view, lookup.NoClue)
+	query := mru.NewQueryLatest(&feed, lookup.NoClue)
 
 	// retrieve content!
-	reader, err := client.GetResource(query, "")
+	reader, err := client.QueryFeed(query, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +128,12 @@ func TestCLIResourceUpdate(t *testing.T) {
 	// Now retrieve info for the next update
 	flags = []string{
 		"--bzzapi", srv.URL,
-		"resource", "info",
+		"feed", "info",
 		"--topic", topic.Hex(),
 		"--user", address.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("getting resource info with 'swarm resource info'"))
+	log.Info(fmt.Sprintf("getting feed info with 'swarm feed info'"))
 	cmd = runSwarm(t, flags...)
 	_, matches := cmd.ExpectRegexp(`.*`) // regex hack to extract stdout
 	cmd.ExpectExit()
@@ -145,28 +145,28 @@ func TestCLIResourceUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// make sure the retrieved view is the same
-	if request.Feed != view {
-		t.Fatalf("Expected view to be: %s, got %s", view, request.Feed)
+	// make sure the retrieved Feed is the same
+	if request.Feed != feed {
+		t.Fatalf("Expected feed to be: %s, got %s", feed, request.Feed)
 	}
 
 	// test publishing a manifest
 	flags = []string{
 		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
-		"resource", "create",
+		"feed", "create",
 		"--topic", topic.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("Publishing manifest with 'swarm resource create'"))
+	log.Info(fmt.Sprintf("Publishing manifest with 'swarm feed create'"))
 	cmd = runSwarm(t, flags...)
 	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
 	cmd.ExpectExit()
 
-	manifestAddress := matches[0] // read the received resource manifest
+	manifestAddress := matches[0] // read the received feed manifest
 
 	// now attempt to lookup the latest update using a manifest instead
-	reader, err = client.GetResource(nil, manifestAddress)
+	reader, err = client.QueryFeed(nil, manifestAddress)
 	if err != nil {
 		t.Fatal(err)
 	}

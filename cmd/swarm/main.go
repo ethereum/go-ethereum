@@ -207,25 +207,25 @@ var (
 		Name:  "compressed",
 		Usage: "Prints encryption keys in compressed form",
 	}
-	SwarmResourceNameFlag = cli.StringFlag{
+	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
-		Usage: "User-defined name for the new resource, limited to 32 characters. If combined with topic, the resource will be a subtopic with this name",
+		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",
 	}
-	SwarmResourceTopicFlag = cli.StringFlag{
+	SwarmFeedTopicFlag = cli.StringFlag{
 		Name:  "topic",
-		Usage: "User-defined topic this resource is tracking, hex encoded. Limited to 64 hexadecimal characters",
+		Usage: "User-defined topic this feed is tracking, hex encoded. Limited to 64 hexadecimal characters",
 	}
-	SwarmResourceDataOnCreateFlag = cli.StringFlag{
+	SwarmFeedDataOnCreateFlag = cli.StringFlag{
 		Name:  "data",
-		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
+		Usage: "Initializes the feed with the given hex-encoded data. Data must be prefixed by 0x",
 	}
-	SwarmResourceManifestFlag = cli.StringFlag{
+	SwarmFeedManifestFlag = cli.StringFlag{
 		Name:  "manifest",
-		Usage: "Refers to the resource through a manifest",
+		Usage: "Refers to the feed through a manifest",
 	}
-	SwarmResourceUserFlag = cli.StringFlag{
+	SwarmFeedUserFlag = cli.StringFlag{
 		Name:  "user",
-		Usage: "Indicates the user who updates the resource",
+		Usage: "Indicates the user who updates the feed",
 	}
 )
 
@@ -346,62 +346,62 @@ func init() {
 		},
 		{
 			CustomHelpTemplate: helpTemplate,
-			Name:               "resource",
-			Usage:              "(Advanced) Create and update Mutable Resources",
+			Name:               "feed",
+			Usage:              "(Advanced) Create and update Swarm Feeds",
 			ArgsUsage:          "<create|update|info>",
-			Description:        "Works with Mutable Resource Updates",
+			Description:        "Works with Swarm Feeds",
 			Subcommands: []cli.Command{
 				{
-					Action:             resourceCreate,
+					Action:             feedCreateManifest,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
-					Usage:              "creates and publishes a new Mutable Resource manifest",
-					Description: `creates and publishes a new Mutable Resource manifest pointing to a specified user's updates about a particular topic.
-					The resource topic can be built in the following ways:
+					Usage:              "creates and publishes a new Feed manifest",
+					Description: `creates and publishes a new Feed manifest pointing to a specified user's updates about a particular topic.
+					The feed topic can be built in the following ways:
 					* use --topic to set the topic to an arbitrary binary hex string.
 					* use --name to set the topic to a human-readable name.
-					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					    For example --name could be set to "profile-picture", meaning this feed allows to get this user's current profile picture.
 					* use both --topic and --name to create named subtopics. 
 						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
-						the Mutable Resource tracks a discussion about that contract.
+						this feed tracks a discussion about that contract.
 					The --user flag allows to have this manifest refer to a user other than yourself. If not specified,
 					it will then default to your local account (--bzzaccount)`,
-					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
+					Flags: []cli.Flag{SwarmFeedNameFlag, SwarmFeedTopicFlag, SwarmFeedUserFlag},
 				},
 				{
-					Action:             resourceUpdate,
+					Action:             feedUpdate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "update",
-					Usage:              "updates the content of an existing Mutable Resource",
+					Usage:              "updates the content of an existing Swarm Feed",
 					ArgsUsage:          "<0x Hex data>",
 					Description: `publishes a new update on the specified topic
-					The resource topic can be built in the following ways:
+					The feed topic can be built in the following ways:
 					* use --topic to set the topic to an arbitrary binary hex string.
 					* use --name to set the topic to a human-readable name.
-					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					    For example --name could be set to "profile-picture", meaning this feed allows to get this user's current profile picture.
 					* use both --topic and --name to create named subtopics. 
 						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
-						the Mutable Resource tracks a discussion about that contract.
+						this feed tracks a discussion about that contract.
 					
-					If you have a manifest, you can specify it with --manifest to refer to the resource,
+					If you have a manifest, you can specify it with --manifest to refer to the feed,
 					instead of using --topic / --name
 					`,
-					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag},
+					Flags: []cli.Flag{SwarmFeedManifestFlag, SwarmFeedNameFlag, SwarmFeedTopicFlag},
 				},
 				{
-					Action:             resourceInfo,
+					Action:             feedInfo,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "info",
-					Usage:              "obtains information about an existing Mutable Resource",
-					Description: `obtains information about an existing Mutable Resource
+					Usage:              "obtains information about an existing Swarm Feed",
+					Description: `obtains information about an existing Swarm Feed
 					The topic can be specified directly with the --topic flag as an hex string
 					If no topic is specified, the default topic (zero) will be used
 					The --name flag can be used to specify subtopics with a specific name.
 					The --user flag allows to refer to a user other than yourself. If not specified,
 					it will then default to your local account (--bzzaccount)
 					If you have a manifest, you can specify it with --manifest instead of --topic / --name / ---user
-					to refer to the resource`,
-					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
+					to refer to the feed`,
+					Flags: []cli.Flag{SwarmFeedManifestFlag, SwarmFeedNameFlag, SwarmFeedTopicFlag, SwarmFeedUserFlag},
 				},
 			},
 		},
@@ -738,7 +738,7 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
-// Used only by client commands, such as `resource`
+// Used only by client commands, such as `feed`
 func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	// booting up the swarm node just as we do in bzzd action
 	bzzconfig, err := buildConfig(ctx)

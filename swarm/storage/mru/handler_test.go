@@ -396,7 +396,7 @@ func TestValidatorInStore(t *testing.T) {
 	signer := newAliceSigner()
 
 	// set up localstore
-	datadir, err := ioutil.TempDir("", "storage-testresourcevalidator")
+	datadir, err := ioutil.TempDir("", "storage-testfeedsvalidator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +463,7 @@ func TestValidatorInStore(t *testing.T) {
 	}
 }
 
-// create rpc and resourcehandler
+// create rpc and Feeds Handler
 func setupTest(timeProvider timestampProvider, signer Signer) (fh *TestHandler, datadir string, teardown func(), err error) {
 
 	var fsClean func()

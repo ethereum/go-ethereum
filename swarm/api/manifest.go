@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	ManifestType        = "application/bzz-manifest+json"
-	ResourceContentType = "application/bzz-resource"
+	ManifestType    = "application/bzz-manifest+json"
+	FeedContentType = "application/bzz-feed"
 
 	manifestSizeLimit = 5 * 1024 * 1024
 )
@@ -48,15 +48,15 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash         string       `json:"hash,omitempty"`
-	Path         string       `json:"path,omitempty"`
-	ContentType  string       `json:"contentType,omitempty"`
-	Mode         int64        `json:"mode,omitempty"`
-	Size         int64        `json:"size,omitempty"`
-	ModTime      time.Time    `json:"mod_time,omitempty"`
-	Status       int          `json:"status,omitempty"`
-	Access       *AccessEntry `json:"access,omitempty"`
-	ResourceView *mru.Feed    `json:"resourceView,omitempty"`
+	Hash        string       `json:"hash,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	ContentType string       `json:"contentType,omitempty"`
+	Mode        int64        `json:"mode,omitempty"`
+	Size        int64        `json:"size,omitempty"`
+	ModTime     time.Time    `json:"mod_time,omitempty"`
+	Status      int          `json:"status,omitempty"`
+	Access      *AccessEntry `json:"access,omitempty"`
+	Feed        *mru.Feed    `json:"feed,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -80,13 +80,13 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	return addr, err
 }
 
-// Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
+// Manifest hack for supporting Feeds from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(ctx context.Context, view *mru.Feed) (storage.Address, error) {
+func (a *API) NewFeedManifest(ctx context.Context, feed *mru.Feed) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
-		ResourceView: view,
-		ContentType:  ResourceContentType,
+		Feed:        feed,
+		ContentType: FeedContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)
 	data, err := json.Marshal(&manifest)

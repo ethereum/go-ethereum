@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Handler is the API for Mutable Resources
-// It enables creating, updating, syncing and retrieving resources and their update data
+// Handler is the API for Feeds
+// It enables creating, updating, syncing and retrieving feed updates and their data
 package mru
 
 import (
@@ -265,7 +265,7 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
 	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.Data())
-	// update our resources map cache entry if the new update is older than the one we have, if we have it.
+	// update our feed updates map cache entry if the new update is older than the one we have, if we have it.
 	if feedUpdate != nil && r.Epoch.After(feedUpdate.Epoch) {
 		feedUpdate.Epoch = r.Epoch
 		feedUpdate.data = make([]byte, len(r.data))
