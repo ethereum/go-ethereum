@@ -48,12 +48,22 @@ func (self *StateDB) RawDump() Dump {
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
 		addr := self.trie.GetKey(it.Key)
+
+		obj, ok := self.stateObjects[common.BytesToAddress(addr)]
+
 		var data Account
-		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-			panic(err)
+
+		if ok {
+			data = obj.data
+		} else {
+
+			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
+				panic(err)
+			}
+
+			obj = newObject(nil, common.BytesToAddress(addr), data)
 		}
 
-		obj := newObject(nil, common.BytesToAddress(addr), data)
 		account := DumpAccount{
 			Balance:  data.Balance.String(),
 			Nonce:    data.Nonce,
@@ -64,7 +74,7 @@ func (self *StateDB) RawDump() Dump {
 		}
 		storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
 		for storageIt.Next() {
-			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			account.Storage[common.Bytes2Hex(obj.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
 		dump.Accounts[common.Bytes2Hex(addr)] = account
 	}
