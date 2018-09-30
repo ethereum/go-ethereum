@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feeds
 
 import (
 	"encoding/binary"
@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// TimestampProvider sets the time source of the mru package
+// TimestampProvider sets the time source of the feeds package
 var TimestampProvider timestampProvider = NewDefaultTimestampProvider()
 
 // Timestamp encodes a point in time as a Unix epoch

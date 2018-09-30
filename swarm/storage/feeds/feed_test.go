@@ -13,26 +13,24 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package mru
+package feeds
 
 import (
 	"testing"
 )
 
-func getTestQuery() *Query {
-	id := getTestID()
-	return &Query{
-		TimeLimit: 5000,
-		Feed:      id.Feed,
-		Hint:      id.Epoch,
+func getTestFeed() *Feed {
+	topic, _ := NewTopic("world news report, every hour", nil)
+	return &Feed{
+		Topic: topic,
+		User:  newCharlieSigner().Address(),
 	}
 }
 
-func TestQueryValues(t *testing.T) {
-	var expected = KV{"hint.level": "25", "hint.time": "1000", "time": "5000", "topic": "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000", "user": "0x876A8936A7Cd0b79Ef0735AD0896c1AFe278781c"}
+func TestFeedSerializerDeserializer(t *testing.T) {
+	testBinarySerializerRecovery(t, getTestFeed(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c")
+}
 
-	query := getTestQuery()
-	testValueSerializer(t, query, expected)
-
+func TestFeedSerializerLengthCheck(t *testing.T) {
+	testBinarySerializerLengthCheck(t, getTestFeed())
 }

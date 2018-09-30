@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -56,7 +56,7 @@ type ManifestEntry struct {
 	ModTime     time.Time    `json:"mod_time,omitempty"`
 	Status      int          `json:"status,omitempty"`
 	Access      *AccessEntry `json:"access,omitempty"`
-	Feed        *mru.Feed    `json:"feed,omitempty"`
+	Feed        *feeds.Feed  `json:"feed,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -82,7 +82,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 
 // Manifest hack for supporting Feeds from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewFeedManifest(ctx context.Context, feed *mru.Feed) (storage.Address, error) {
+func (a *API) NewFeedManifest(ctx context.Context, feed *feeds.Feed) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
 		Feed:        feed,

@@ -27,15 +27,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func NewGenericSigner(ctx *cli.Context) mru.Signer {
-	return mru.NewGenericSigner(getPrivKey(ctx))
+func NewGenericSigner(ctx *cli.Context) feeds.Signer {
+	return feeds.NewGenericSigner(getPrivKey(ctx))
 }
 
-func getTopic(ctx *cli.Context) (topic mru.Topic) {
+func getTopic(ctx *cli.Context) (topic feeds.Topic) {
 	var name = ctx.String(SwarmFeedNameFlag.Name)
 	var relatedTopic = ctx.String(SwarmFeedTopicFlag.Name)
 	var relatedTopicBytes []byte
@@ -48,7 +48,7 @@ func getTopic(ctx *cli.Context) (topic mru.Topic) {
 		}
 	}
 
-	topic, err = mru.NewTopic(name, relatedTopicBytes)
+	topic, err = feeds.NewTopic(name, relatedTopicBytes)
 	if err != nil {
 		utils.Fatalf("Error parsing topic: %s", err)
 	}
@@ -65,7 +65,7 @@ func feedCreateManifest(ctx *cli.Context) {
 		client = swarm.NewClient(bzzapi)
 	)
 
-	newFeedUpdateRequest := mru.NewFirstRequest(getTopic(ctx))
+	newFeedUpdateRequest := feeds.NewFirstRequest(getTopic(ctx))
 	newFeedUpdateRequest.Feed.User = feedGetUser(ctx)
 
 	manifestAddress, err := client.CreateFeedWithManifest(newFeedUpdateRequest)
@@ -100,18 +100,18 @@ func feedUpdate(ctx *cli.Context) {
 		return
 	}
 
-	var updateRequest *mru.Request
-	var query *mru.Query
+	var updateRequest *feeds.Request
+	var query *feeds.Query
 
 	if manifestAddressOrDomain == "" {
-		query = new(mru.Query)
+		query = new(feeds.Query)
 		query.User = signer.Address()
 		query.Topic = getTopic(ctx)
 
 	}
 
-	// Retrieve feed status and metadata out of the manifest
-	updateRequest, err = client.GetFeedMetadata(query, manifestAddressOrDomain)
+	// Retrieve a feed update request
+	updateRequest, err = client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving feed status: %s", err.Error())
 	}
@@ -139,14 +139,14 @@ func feedInfo(ctx *cli.Context) {
 		manifestAddressOrDomain = ctx.String(SwarmFeedManifestFlag.Name)
 	)
 
-	var query *mru.Query
+	var query *feeds.Query
 	if manifestAddressOrDomain == "" {
-		query = new(mru.Query)
+		query = new(feeds.Query)
 		query.Topic = getTopic(ctx)
 		query.User = feedGetUser(ctx)
 	}
 
-	metadata, err := client.GetFeedMetadata(query, manifestAddressOrDomain)
+	metadata, err := client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving feed metadata: %s", err.Error())
 		return

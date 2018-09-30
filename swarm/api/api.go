@@ -45,9 +45,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
-	"github.com/opentracing/opentracing-go"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
+
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -235,14 +236,14 @@ on top of the FileStore
 it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	feeds     *mru.Handler
+	feeds     *feeds.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedsHandler *mru.Handler, pk *ecdsa.PrivateKey) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedsHandler *feeds.Handler, pk *ecdsa.PrivateKey) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
@@ -408,7 +409,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			if entry.Feed == nil {
 				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode Feed in manifest")
 			}
-			_, err := a.feeds.Lookup(ctx, mru.NewQueryLatest(entry.Feed, lookup.NoClue))
+			_, err := a.feeds.Lookup(ctx, feeds.NewQueryLatest(entry.Feed, lookup.NoClue))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -957,7 +958,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 }
 
 // FeedsLookup finds Swarm Feeds Updates at specific points in time, or the latest update
-func (a *API) FeedsLookup(ctx context.Context, query *mru.Query) ([]byte, error) {
+func (a *API) FeedsLookup(ctx context.Context, query *feeds.Query) ([]byte, error) {
 	_, err := a.feeds.Lookup(ctx, query)
 	if err != nil {
 		return nil, err
@@ -971,12 +972,12 @@ func (a *API) FeedsLookup(ctx context.Context, query *mru.Query) ([]byte, error)
 }
 
 // FeedsNewRequest creates a Request object to update a specific Feed
-func (a *API) FeedsNewRequest(ctx context.Context, feed *mru.Feed) (*mru.Request, error) {
+func (a *API) FeedsNewRequest(ctx context.Context, feed *feeds.Feed) (*feeds.Request, error) {
 	return a.feeds.NewRequest(ctx, feed)
 }
 
 // FeedsUpdate publishes a new update on the given Feed
-func (a *API) FeedsUpdate(ctx context.Context, request *mru.Request) (storage.Address, error) {
+func (a *API) FeedsUpdate(ctx context.Context, request *feeds.Request) (storage.Address, error) {
 	return a.feeds.Update(ctx, request)
 }
 
@@ -992,7 +993,7 @@ var ErrCannotLoadFeedManifest = errors.New("Cannot load feed manifest")
 var ErrNotAFeedManifest = errors.New("Not a feed manifest")
 
 // ResolveFeedManifest retrieves the Feed manifest for the given address, and returns the referenced Feed.
-func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*mru.Feed, error) {
+func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feeds.Feed, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
 		return nil, ErrCannotLoadFeedManifest
@@ -1015,8 +1016,8 @@ var ErrCannotResolveFeed = errors.New("Cannot resolve Feed")
 
 // ResolveFeed attempts to extract Feed information out of the manifest, if provided
 // If not, it attempts to extract the Feed out of a set of key-value pairs
-func (a *API) ResolveFeed(ctx context.Context, uri *URI, values mru.Values) (*mru.Feed, error) {
-	var feed *mru.Feed
+func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feeds.Values) (*feeds.Feed, error) {
+	var feed *feeds.Feed
 	var err error
 	if uri.Addr != "" {
 		// resolve the content key.
@@ -1035,7 +1036,7 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values mru.Values) (*mr
 		}
 		log.Debug("handle.get.feed: resolved", "manifestkey", manifestAddr, "feed", feed.Hex())
 	} else {
-		var v mru.Feed
+		var v feeds.Feed
 		if err := v.FromValues(values); err != nil {
 			return nil, ErrCannotResolveFeed
 

@@ -38,7 +38,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,7 +48,7 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -62,12 +62,12 @@ func serverFunc(api *api.API) testutil.TestServer {
 	return NewServer(api, "")
 }
 
-func newTestSigner() (*mru.GenericSigner, error) {
+func newTestSigner() (*feeds.GenericSigner, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {
 		return nil, err
 	}
-	return mru.NewGenericSigner(privKey), nil
+	return feeds.NewGenericSigner(privKey), nil
 }
 
 // test the transparent resolving of multihash-containing feed updates with bzz:// scheme
@@ -103,8 +103,8 @@ func TestBzzFeedMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	topic, _ := mru.NewTopic("foo.eth", nil)
-	updateRequest := mru.NewFirstRequest(topic)
+	topic, _ := feeds.NewTopic("foo.eth", nil)
+	updateRequest := feeds.NewFirstRequest(topic)
 
 	updateRequest.SetData(mh)
 
@@ -182,8 +182,8 @@ func TestBzzFeed(t *testing.T) {
 	//data for update 2
 	update2Data := []byte("foo")
 
-	topic, _ := mru.NewTopic("foo.eth", nil)
-	updateRequest := mru.NewFirstRequest(topic)
+	topic, _ := feeds.NewTopic("foo.eth", nil)
+	updateRequest := feeds.NewFirstRequest(topic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestBzzFeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest = &mru.Request{}
+	updateRequest = &feeds.Request{}
 	if err = updateRequest.UnmarshalJSON(b); err != nil {
 		t.Fatalf("Error decoding feed metadata: %s", err)
 	}
@@ -365,7 +365,7 @@ func TestBzzFeed(t *testing.T) {
 
 	// test manifest-less queries
 	log.Info("get first update in update1Timestamp via direct query")
-	query := mru.NewQuery(&updateRequest.Feed, update1Timestamp, lookup.NoClue)
+	query := feeds.NewQuery(&updateRequest.Feed, update1Timestamp, lookup.NoClue)
 
 	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {

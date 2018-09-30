@@ -14,31 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feeds
 
-import "github.com/ethereum/go-ethereum/common/hexutil"
+import (
+	"testing"
+)
 
-type binarySerializer interface {
-	binaryPut(serializedData []byte) error
-	binaryLength() int
-	binaryGet(serializedData []byte) error
+func getTestQuery() *Query {
+	id := getTestID()
+	return &Query{
+		TimeLimit: 5000,
+		Feed:      id.Feed,
+		Hint:      id.Epoch,
+	}
 }
 
-// Values interface represents a string key-value store
-// useful for building query strings
-type Values interface {
-	Get(key string) string
-	Set(key, value string)
-}
+func TestQueryValues(t *testing.T) {
+	var expected = KV{"hint.level": "25", "hint.time": "1000", "time": "5000", "topic": "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000", "user": "0x876A8936A7Cd0b79Ef0735AD0896c1AFe278781c"}
 
-type valueSerializer interface {
-	FromValues(values Values) error
-	AppendValues(values Values)
-}
+	query := getTestQuery()
+	testValueSerializer(t, query, expected)
 
-// Hex serializes the structure and converts it to a hex string
-func Hex(bin binarySerializer) string {
-	b := make([]byte, bin.binaryLength())
-	bin.binaryPut(b)
-	return hexutil.Encode(b)
 }

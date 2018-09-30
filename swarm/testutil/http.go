@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 )
 
 type TestServer interface {
@@ -54,8 +54,8 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 		t.Fatal(err)
 	}
 
-	rhparams := &mru.HandlerParams{}
-	rh, err := mru.NewTestHandler(feedsDir, rhparams)
+	rhparams := &feeds.HandlerParams{}
+	rh, err := feeds.NewTestHandler(feedsDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 		},
 		CurrentTime: 42,
 	}
-	mru.TimestampProvider = tss
+	feeds.TimestampProvider = tss
 	return tss
 }
 
@@ -92,6 +92,6 @@ func (t *TestSwarmServer) Close() {
 	t.cleanup()
 }
 
-func (t *TestSwarmServer) Now() mru.Timestamp {
-	return mru.Timestamp{Time: t.CurrentTime}
+func (t *TestSwarmServer) Now() feeds.Timestamp {
+	return feeds.Timestamp{Time: t.CurrentTime}
 }

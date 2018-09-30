@@ -1,4 +1,4 @@
-package mru
+package feeds
 
 import (
 	"testing"

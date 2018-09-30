@@ -14,35 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feeds
 
-import (
-	"bytes"
-	"context"
-	"time"
+import "github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
-)
-
-const (
-	hasherCount            = 8
-	feedsHashAlgorithm     = storage.SHA3Hash
-	defaultRetrieveTimeout = 100 * time.Millisecond
-)
-
-// cacheEntry caches the last known update of a specific Feed.
-type cacheEntry struct {
-	Update
-	*bytes.Reader
-	lastKey storage.Address
+type binarySerializer interface {
+	binaryPut(serializedData []byte) error
+	binaryLength() int
+	binaryGet(serializedData []byte) error
 }
 
-// implements storage.LazySectionReader
-func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
-	return int64(len(r.Update.data)), nil
+// Values interface represents a string key-value store
+// useful for building query strings
+type Values interface {
+	Get(key string) string
+	Set(key, value string)
 }
 
-//returns the Feed's topic
-func (r *cacheEntry) Topic() Topic {
-	return r.Feed.Topic
+type valueSerializer interface {
+	FromValues(values Values) error
+	AppendValues(values Values)
+}
+
+// Hex serializes the structure and converts it to a hex string
+func Hex(bin binarySerializer) string {
+	b := make([]byte, bin.binaryLength())
+	bin.binaryPut(b)
+	return hexutil.Encode(b)
 }

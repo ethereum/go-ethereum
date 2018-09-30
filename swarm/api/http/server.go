@@ -40,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 
 	"github.com/rs/cors"
 )
@@ -466,7 +466,7 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.feed", "ruid", ruid)
 	var err error
 
-	// Creation and update must send mru.updateRequestJSON JSON structure
+	// Creation and update must send feeds.updateRequestJSON JSON structure
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -484,7 +484,7 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updateRequest mru.Request
+	var updateRequest feeds.Request
 	updateRequest.Feed = *feed
 	query := r.URL.Query()
 
@@ -582,7 +582,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupParams := &mru.Query{Feed: *feed}
+	lookupParams := &feeds.Query{Feed: *feed}
 	if err = lookupParams.FromValues(r.URL.Query()); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid feed update request:%s", err), http.StatusBadRequest)
 		return
@@ -606,7 +606,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcErr, ok := err.(*mru.Error)
+	rsrcErr, ok := err.(*feeds.Error)
 	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}

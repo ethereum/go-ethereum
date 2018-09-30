@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feeds
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func (e *Error) Error() string {
 }
 
 // Code returns the error code
-// Error codes are enumerated in the error.go file within the mru package
+// Error codes are enumerated in the error.go file within the feeds package
 func (e *Error) Code() int {
 	return e.code
 }

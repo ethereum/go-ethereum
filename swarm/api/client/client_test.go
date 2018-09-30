@@ -25,14 +25,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -361,12 +361,12 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 }
 
-func newTestSigner() (*mru.GenericSigner, error) {
+func newTestSigner() (*feeds.GenericSigner, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {
 		return nil, err
 	}
-	return mru.NewGenericSigner(privKey), nil
+	return feeds.NewGenericSigner(privKey), nil
 }
 
 // test the transparent resolving of multihash feed updates with bzz:// scheme
@@ -394,9 +394,9 @@ func TestClientCreateFeedMultihash(t *testing.T) {
 	mh := multihash.ToMultihash(s)
 
 	// our feed topic
-	topic, _ := mru.NewTopic("foo.eth", nil)
+	topic, _ := feeds.NewTopic("foo.eth", nil)
 
-	createRequest := mru.NewFirstRequest(topic)
+	createRequest := feeds.NewFirstRequest(topic)
 
 	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
@@ -448,8 +448,8 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
 
 	// our feed topic name
-	topic, _ := mru.NewTopic("El Quijote", nil)
-	createRequest := mru.NewFirstRequest(topic)
+	topic, _ := feeds.NewTopic("El Quijote", nil)
+	createRequest := feeds.NewFirstRequest(topic)
 
 	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
@@ -479,7 +479,7 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 	// define different data
 	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
 
-	updateRequest, err := client.GetFeedMetadata(nil, correctManifestAddrHex)
+	updateRequest, err := client.GetFeedRequest(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving update request template: %s", err)
 	}
@@ -508,12 +508,12 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 
 	// now try retrieving feed updates without a manifest
 
-	feed := &mru.Feed{
+	feed := &feeds.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
 
-	lookupParams := mru.NewQueryLatest(feed, lookup.NoClue)
+	lookupParams := feeds.NewQueryLatest(feed, lookup.NoClue)
 	reader, err = client.QueryFeed(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving feed updates: %s", err)
