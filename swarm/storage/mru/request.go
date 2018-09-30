@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 )
 
-// Request represents an update and/or resource create message
+// Request represents a request to sign or signed Feed Update message
 type Request struct {
 	Update     // actual content that will be put on the chunk, less signature
 	Signature  *Signature
@@ -62,7 +62,7 @@ func NewFirstRequest(topic Topic) *Request {
 	return request
 }
 
-// SetData stores the payload data the resource will be updated with
+// SetData stores the payload data the feed update will be updated with
 func (r *Request) SetData(data []byte) {
 	r.data = data
 	r.Signature = nil
@@ -73,7 +73,7 @@ func (r *Request) IsUpdate() bool {
 	return r.Signature != nil
 }
 
-// Verify checks that signatures are valid and that the signer owns the resource to be updated
+// Verify checks that signatures are valid
 func (r *Request) Verify() (err error) {
 	if len(r.data) == 0 {
 		return NewError(ErrInvalidValue, "Update does not contain data")
@@ -103,7 +103,7 @@ func (r *Request) Verify() (err error) {
 	return nil
 }
 
-// Sign executes the signature to validate the resource
+// Sign executes the signature to validate the update message
 func (r *Request) Sign(signer Signer) error {
 	r.Feed.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
@@ -133,7 +133,7 @@ func (r *Request) Sign(signer Signer) error {
 	return nil
 }
 
-// GetDigest creates the resource update digest used in signatures
+// GetDigest creates the feed update digest used in signatures
 // the serialized payload is cached in .binaryData
 func (r *Request) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
@@ -174,7 +174,7 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see Request definition
 
-	//deserialize the resource update portion
+	//deserialize the feed update portion
 	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}

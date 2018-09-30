@@ -28,7 +28,7 @@ const signatureLength = 65
 // Signature is an alias for a static byte array with the size of a signature
 type Signature [signatureLength]byte
 
-// Signer signs Mutable Resource update payloads
+// Signer signs Feed update payloads
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
 	Address() common.Address
@@ -65,7 +65,7 @@ func (s *GenericSigner) Address() common.Address {
 	return s.address
 }
 
-// getUserAddr extracts the address of the resource update signer
+// getUserAddr extracts the address of the Feed update signer
 func getUserAddr(digest common.Hash, signature Signature) (common.Address, error) {
 	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	if err != nil {

@@ -37,7 +37,7 @@ type Header struct {
 // Update encapsulates the information sent as part of a feed update
 type Update struct {
 	Header Header //
-	ID            // Resource update identifying information
+	ID            // Feed Update identifying information
 	data   []byte // actual data payload
 }
 
@@ -86,7 +86,7 @@ func (r *Update) binaryLength() int {
 // binaryGet populates this instance from the information contained in the passed byte slice
 func (r *Update) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
-		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)
+		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a feed update chunk", minimumUpdateDataLength)
 	}
 	dataLength := len(serializedData) - idLength - headerLength
 	// at this point we can be satisfied that we have the correct data length to read

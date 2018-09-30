@@ -29,7 +29,7 @@ import (
 
 // ID uniquely identifies an update on the network.
 type ID struct {
-	Feed         `json:"view"`
+	Feed         `json:"feed"`
 	lookup.Epoch `json:"epoch"`
 }
 
@@ -38,7 +38,7 @@ type ID struct {
 // Epoch EpochLength
 const idLength = feedLength + lookup.EpochLength
 
-// Addr calculates the resource update chunk address corresponding to this ID
+// Addr calculates the feed update chunk address corresponding to this ID
 func (u *ID) Addr() (updateAddr storage.Address) {
 	serializedData := make([]byte, idLength)
 	var cursor int

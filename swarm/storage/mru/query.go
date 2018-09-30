@@ -72,7 +72,7 @@ func NewQuery(feed *Feed, time uint64, hint lookup.Epoch) *Query {
 	}
 }
 
-// NewQueryLatest generates lookup parameters that look for the latest version of a resource
+// NewQueryLatest generates lookup parameters that look for the latest update to a feed
 func NewQueryLatest(feed *Feed, hint lookup.Epoch) *Query {
 	return NewQuery(feed, 0, hint)
 }

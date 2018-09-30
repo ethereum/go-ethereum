@@ -57,7 +57,7 @@ func init() {
 	}
 }
 
-// NewHandler creates a new Mutable Resource API
+// NewHandler creates a new Swarm Feeds API
 func NewHandler(params *HandlerParams) *Handler {
 	fh := &Handler{
 		cache: make(map[uint64]*cacheEntry),
@@ -74,13 +74,13 @@ func NewHandler(params *HandlerParams) *Handler {
 	return fh
 }
 
-// SetStore sets the store backend for the Mutable Resource API
+// SetStore sets the store backend for the Swarm Feeds API
 func (h *Handler) SetStore(store *storage.NetStore) {
 	h.chunkStore = store
 }
 
 // Validate is a chunk validation method
-// If it looks like a resource update, the chunk address is checked against the userAddr of the update's signature
+// If it looks like a feed update, the chunk address is checked against the userAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
@@ -89,7 +89,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	}
 
 	// check if it is a properly formatted update chunk with
-	// valid signature and proof of ownership of the resource it is trying
+	// valid signature and proof of ownership of the feed it is trying
 	// to update
 
 	// First, deserialize the chunk
@@ -99,9 +99,9 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		return false
 	}
 
-	// Verify signatures and that the signer actually owns the resource
+	// Verify signatures and that the signer actually owns the feed
 	// If it fails, it means either the signature is not valid, data is corrupted
-	// or someone is trying to update someone else's resource.
+	// or someone is trying to update someone else's feed.
 	if err := r.Verify(); err != nil {
 		log.Debug("Invalid feed update signature", "err", err)
 		return false
@@ -110,14 +110,14 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	return true
 }
 
-// GetContent retrieves the data payload of the last synced update of the Mutable Resource
+// GetContent retrieves the data payload of the last synced update of the Feed
 func (h *Handler) GetContent(feed *Feed) (storage.Address, []byte, error) {
 	if feed == nil {
-		return nil, nil, NewError(ErrInvalidValue, "view is nil")
+		return nil, nil, NewError(ErrInvalidValue, "feed is nil")
 	}
 	feedUpdate := h.get(feed)
 	if feedUpdate == nil {
-		return nil, nil, NewError(ErrNotFound, "resource does not exist")
+		return nil, nil, NewError(ErrNotFound, "feed update not cached")
 	}
 	return feedUpdate.lastKey, feedUpdate.data, nil
 }
@@ -142,7 +142,7 @@ func (h *Handler) NewRequest(ctx context.Context, feed *Feed) (request *Request,
 			return nil, err
 		}
 		// not finding updates means that there is a network error
-		// or that the resource really does not have updates
+		// or that the feed really does not have updates
 	}
 
 	request.Feed = *feed
@@ -157,13 +157,10 @@ func (h *Handler) NewRequest(ctx context.Context, feed *Feed) (request *Request,
 	return request, nil
 }
 
-// Lookup retrieves a specific or latest version of the resource
-// Lookup works differently depending on the configuration of `ID`
-// See the `ID` documentation and helper functions:
-// `LookupLatest` and `LookupBefore`
-// When looking for the latest update, it starts at the next period after the current time.
-// upon failure tries the corresponding keys of each previous period until one is found
-// (or startTime is reached, in which case there are no updates).
+// Lookup retrieves a specific or latest feed update
+// Lookup works differently depending on the configuration of `query`
+// See the `query` documentation and helper functions:
+// `NewQueryLatest` and `NewQuery`
 func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error) {
 
 	timeLimit := query.TimeLimit
@@ -213,17 +210,17 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		return nil, err
 	}
 
-	log.Info(fmt.Sprintf("Resource lookup finished in %d lookups", readCount))
+	log.Info(fmt.Sprintf("Feed lookup finished in %d lookups", readCount))
 
 	request, _ := requestPtr.(*Request)
 	if request == nil {
-		return nil, NewError(ErrNotFound, "no updates found")
+		return nil, NewError(ErrNotFound, "no feed updates found")
 	}
 	return h.updateCache(request)
 
 }
 
-// update mutable resource cache map with specified content
+// update feed updates cache with specified content
 func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 
 	updateAddr := request.Addr()
@@ -242,10 +239,10 @@ func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 	return feedUpdate, nil
 }
 
-// Update adds an actual data update
-// Uses the Mutable Resource metadata currently loaded in the resources map entry.
-// It is the caller's responsibility to make sure that this data is not stale.
-// Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
+// Update publishes a feed update
+// Note that a Feed update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature.
+// This results in a max payload of `maxUpdateDataLength` (check update.go for more details)
+// An error will be returned if the total length of the chunk payload will exceed this limit.
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
 // on the network.
 func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
@@ -280,18 +277,18 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	return r.idAddr, nil
 }
 
-// Retrieves the resource cache value for the given nameHash
-func (h *Handler) get(view *Feed) *cacheEntry {
-	mapKey := view.mapKey()
+// Retrieves the feed update cache value for the given nameHash
+func (h *Handler) get(feed *Feed) *cacheEntry {
+	mapKey := feed.mapKey()
 	h.cacheLock.RLock()
 	defer h.cacheLock.RUnlock()
 	feedUpdate := h.cache[mapKey]
 	return feedUpdate
 }
 
-// Sets the resource cache value for the given View
-func (h *Handler) set(view *Feed, feedUpdate *cacheEntry) {
-	mapKey := view.mapKey()
+// Sets the feed update cache value for the given Feed
+func (h *Handler) set(feed *Feed, feedUpdate *cacheEntry) {
+	mapKey := feed.mapKey()
 	h.cacheLock.Lock()
 	defer h.cacheLock.Unlock()
 	h.cache[mapKey] = feedUpdate

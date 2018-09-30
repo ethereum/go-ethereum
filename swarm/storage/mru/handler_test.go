@@ -89,12 +89,12 @@ func TestFeedsHandler(t *testing.T) {
 	}
 	defer teardownTest()
 
-	// create a new resource
+	// create a new Feed
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	topic, _ := NewTopic("Mess with Swarm Feeds code and see what ghost catches you", nil)
-	view := Feed{
+	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -107,7 +107,7 @@ func TestFeedsHandler(t *testing.T) {
 		"clyde",  // t=4285
 	}
 
-	request := NewFirstRequest(view.Topic) // this timestamps the update at t = 4200 (start time)
+	request := NewFirstRequest(feed.Topic) // this timestamps the update at t = 4200 (start time)
 	chunkAddress := make(map[string]storage.Address)
 	data := []byte(updates[0])
 	request.SetData(data)
@@ -205,38 +205,38 @@ func TestFeedsHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := feedsHandler2.Lookup(ctx, NewQueryLatest(&request.Feed, lookup.NoClue))
+	update2, err := feedsHandler2.Lookup(ctx, NewQueryLatest(&request.Feed, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// last update should be "clyde"
-	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
+	if !bytes.Equal(update2.data, []byte(updates[len(updates)-1])) {
+		t.Fatalf("feed update data was %v, expected %v", string(update2.data), updates[len(updates)-1])
 	}
-	if rsrc2.Level != 22 {
-		t.Fatalf("resource epoch level was %d, expected 22", rsrc2.Level)
+	if update2.Level != 22 {
+		t.Fatalf("feed update epoch level was %d, expected 22", update2.Level)
 	}
-	if rsrc2.Base() != 0 {
-		t.Fatalf("resource epoch base time was %d, expected 0", rsrc2.Base())
+	if update2.Base() != 0 {
+		t.Fatalf("feed update epoch base time was %d, expected 0", update2.Base())
 	}
-	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
+	log.Debug("Latest lookup", "epoch base time", update2.Base(), "epoch level", update2.Level, "data", update2.data)
 
 	// specific point in time
-	rsrc, err := feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, 4284, lookup.NoClue))
+	update, err := feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, 4284, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
-	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
+	if !bytes.Equal(update.data, []byte(updates[2])) {
+		t.Fatalf("feed update data (historical) was %v, expected %v", string(update2.data), updates[2])
 	}
-	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
+	log.Debug("Historical lookup", "epoch base time", update2.Base(), "epoch level", update2.Level, "data", update2.data)
 
 	// beyond the first should yield an error
-	rsrc, err = feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, startTime.Time-1, lookup.NoClue))
+	update, err = feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, startTime.Time-1, lookup.NoClue))
 	if err == nil {
-		t.Fatalf("expected previous to fail, returned epoch %s data %v", rsrc.Epoch.String(), rsrc.data)
+		t.Fatalf("expected previous to fail, returned epoch %s data %v", update.Epoch.String(), update.data)
 	}
 
 }
@@ -266,11 +266,11 @@ func TestSparseUpdates(t *testing.T) {
 	defer teardownTest()
 	defer os.RemoveAll(datadir)
 
-	// create a new resource
+	// create a new Feed
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	topic, _ := NewTopic("Very slow updates", nil)
-	view := Feed{
+	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -280,7 +280,7 @@ func TestSparseUpdates(t *testing.T) {
 	var epoch lookup.Epoch
 	var lastUpdateTime uint64
 	for T := uint64(0); T < today; T += 5 * Year {
-		request := NewFirstRequest(view.Topic)
+		request := NewFirstRequest(feed.Topic)
 		request.Epoch = lookup.GetNextEpoch(epoch, T)
 		request.data = generateData(T) // this generates some data that depends on T, so we can check later
 		request.Sign(signer)
@@ -295,14 +295,14 @@ func TestSparseUpdates(t *testing.T) {
 		lastUpdateTime = T
 	}
 
-	query := NewQuery(&view, today, lookup.NoClue)
+	query := NewQuery(&feed, today, lookup.NoClue)
 
 	_, err = rh.Lookup(ctx, query)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, content, err := rh.GetContent(&view)
+	_, content, err := rh.GetContent(&feed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestSparseUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, content, err = rh.GetContent(&view)
+	_, content, err = rh.GetContent(&feed)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestValidator(t *testing.T) {
 	}
 	defer teardownTest()
 
-	// create new resource
+	// create new Feed
 	topic, _ := NewTopic(subtopicName, nil)
 	feed := Feed{
 		Topic: topic,
@@ -382,7 +382,7 @@ func TestValidator(t *testing.T) {
 }
 
 // tests that the content address validator correctly checks the data
-// tests that resource update chunks are passed through content address validator
+// tests that Feed update chunks are passed through content address validator
 // there is some redundancy in this test as it also tests content addressed chunks,
 // which should be evaluated as invalid chunks by this validator
 func TestValidatorInStore(t *testing.T) {
@@ -409,7 +409,7 @@ func TestValidatorInStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// set up resource handler and add is as a validator to the localstore
+	// set up Swarm Feeds handler and add is as a validator to the localstore
 	fhParams := &HandlerParams{}
 	fh := NewHandler(fhParams)
 	store.Validators = append(store.Validators, fh)
@@ -425,7 +425,7 @@ func TestValidatorInStore(t *testing.T) {
 		User:  signer.Address(),
 	}
 
-	// create a resource update chunk with correct publickey
+	// create a feed update chunk with correct publickey
 	id := ID{
 		Epoch: lookup.Epoch{Time: 42,
 			Level: 1,

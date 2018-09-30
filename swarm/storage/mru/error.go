@@ -52,7 +52,7 @@ func (e *Error) Code() int {
 	return e.code
 }
 
-// NewError creates a new Mutable Resource Error object with the specified code and custom error message
+// NewError creates a new Swarm Feeds Error object with the specified code and custom error message
 func NewError(code int, s string) error {
 	if code < 0 || code >= ErrCnt {
 		panic("no such error code!")

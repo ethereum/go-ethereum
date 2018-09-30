@@ -47,7 +47,7 @@ func areEqualJSON(s1, s2 string) (bool, error) {
 }
 
 // TestEncodingDecodingUpdateRequests ensures that requests are serialized properly
-// while also checking cryptographically that only the owner of a resource can update it.
+// while also checking cryptographically that only the owner of a Feed can update it.
 func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	charlie := newCharlieSigner() //Charlie
@@ -75,12 +75,10 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatal("Expected Verify to fail since the message is not signed")
 	}
 
-	// We now assume that the resource was created and propagated. With rootAddr we can retrieve the resource metadata
-	// and recover the information above. To sign an update, we need the rootAddr and the metaHash to construct
-	// proof of ownership
+	// We now assume that the feed ypdate was created and propagated.
 
-	const expectedSignature = "0x32c2d2c7224e24e4d3ae6a10595fc6e945f1b3ecdf548a04d8247c240a50c9240076aa7730abad6c8a46dfea00cfb8f43b6211f02db5c4cc5ed8584cb0212a4d00"
-	const expectedJSON = `{"view":{"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"epoch":{"time":1000,"level":1},"protocolVersion":0,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
+	const expectedSignature = "0x7235b27a68372ddebcf78eba48543fa460864b0b0e99cb533fcd3664820e603312d29426dd00fb39628f5299480a69bf6e462838d78de49ce0704c754c9deb2601"
+	const expectedJSON = `{"feed":{"topic":"0x6120676f6f6420746f706963206e616d65000000000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"epoch":{"time":1000,"level":1},"protocolVersion":0,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
@@ -138,7 +136,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 	}
 
-	// Now imagine Bob wants to create an update of his own about the same resource,
+	// Now imagine Bob wants to create an update of his own about the same Feed,
 	// signing a message with his private key
 	if err := request.Sign(bob); err != nil {
 		t.Fatalf("Error signing: %s", err)
@@ -258,7 +256,7 @@ func TestReverse(t *testing.T) {
 	defer teardownTest()
 
 	topic, _ := NewTopic("Cervantes quotes", nil)
-	view := Feed{
+	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -266,7 +264,7 @@ func TestReverse(t *testing.T) {
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
 	request := new(Request)
-	request.Feed = view
+	request.Feed = feed
 	request.Epoch = epoch
 	request.data = data
 

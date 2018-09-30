@@ -74,7 +74,7 @@ func (t *Topic) FromHex(hex string) error {
 	return nil
 }
 
-// Name will try to extract the resource name out of the topic
+// Name will try to extract the topic name out of the Topic
 func (t *Topic) Name(relatedContent []byte) string {
 	nameBytes := *t
 	if relatedContent != nil {

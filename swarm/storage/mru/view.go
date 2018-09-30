@@ -25,13 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Feed represents a particular user's view of a resource
+// Feed represents a particular user's stream of updates on a Topic
 type Feed struct {
 	Topic Topic          `json:"topic"`
 	User  common.Address `json:"user"`
 }
 
-// View layout:
+// Feed layout:
 // TopicLength bytes
 // userAddr common.AddressLength bytes
 const feedLength = TopicLength + common.AddressLength
@@ -51,7 +51,7 @@ func (u *Feed) mapKey() uint64 {
 // binaryPut serializes this Feed instance into the provided slice
 func (u *Feed) binaryPut(serializedData []byte) error {
 	if len(serializedData) != feedLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", feedLength, len(serializedData))
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize Feed. Expected %d, got %d", feedLength, len(serializedData))
 	}
 	var cursor int
 	copy(serializedData[cursor:cursor+TopicLength], u.Topic[:TopicLength])
