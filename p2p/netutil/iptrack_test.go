@@ -17,6 +17,7 @@
 package netutil
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ const (
 	opStatement = iota
 	opContact
 	opPredict
+	opCheckFullCone
 )
 
 type iptrackTestEvent struct {
@@ -55,8 +57,25 @@ func TestIPTracker(t *testing.T) {
 			{opStatement, 10100, "127.0.0.1", "127.0.0.2"},
 			{opPredict, 10200, "127.0.0.1", ""},
 		},
+		"fullcone": {
+			{opContact, 0, "", "127.0.0.2"},
+			{opStatement, 10, "127.0.0.1", "127.0.0.2"},
+			{opContact, 2000, "", "127.0.0.3"},
+			{opStatement, 2010, "127.0.0.1", "127.0.0.3"},
+			{opContact, 3000, "", "127.0.0.4"},
+			{opStatement, 3010, "127.0.0.1", "127.0.0.4"},
+			{opCheckFullCone, 3500, "false", ""},
+		},
+		"fullcone_2": {
+			{opContact, 0, "", "127.0.0.2"},
+			{opStatement, 10, "127.0.0.1", "127.0.0.2"},
+			{opContact, 2000, "", "127.0.0.3"},
+			{opStatement, 2010, "127.0.0.1", "127.0.0.3"},
+			{opStatement, 3000, "127.0.0.1", "127.0.0.4"},
+			{opContact, 3010, "", "127.0.0.4"},
+			{opCheckFullCone, 3500, "true", ""},
+		},
 	}
-
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) { runIPTrackerTest(t, test) })
 	}
@@ -79,6 +98,11 @@ func runIPTrackerTest(t *testing.T, evs []iptrackTestEvent) {
 		case opPredict:
 			if pred := it.PredictEndpoint(); pred != ev.ip {
 				t.Errorf("op %d: wrong prediction %q, want %q", i, pred, ev.ip)
+			}
+		case opCheckFullCone:
+			pred := fmt.Sprintf("%t", it.PredictFullConeNAT())
+			if pred != ev.ip {
+				t.Errorf("op %d: wrong prediction %s, want %s", i, pred, ev.ip)
 			}
 		}
 	}

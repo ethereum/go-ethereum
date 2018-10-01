@@ -31,7 +31,6 @@ type IPTracker struct {
 	clock         mclock.Clock
 	statements    map[string]ipStatement
 	contact       map[string]mclock.AbsTime
-	// TODO add DistinctNetSet for additional protection
 }
 
 type ipStatement struct {
@@ -57,13 +56,15 @@ func NewIPTracker(window, contactWindow time.Duration, minStatements int) *IPTra
 	}
 }
 
-// PredictFullConeNAT checks whether the local host is behind full cone NAT.
+// PredictFullConeNAT checks whether the local host is behind full cone NAT. It predicts by
+// checking whether any statement has been received from a node we didn't contact before
+// the statement was made.
 func (it *IPTracker) PredictFullConeNAT() bool {
 	now := it.clock.Now()
 	it.gcContact(now)
 	it.gcStatements(now)
-	for host := range it.statements {
-		if _, ok := it.contact[host]; !ok {
+	for host, st := range it.statements {
+		if c, ok := it.contact[host]; !ok || c > st.time {
 			return true
 		}
 	}
@@ -92,7 +93,8 @@ func (it *IPTracker) AddStatement(host, endpoint string) {
 	it.statements[host] = ipStatement{endpoint, it.clock.Now()}
 }
 
-// AddContact records that a packet containing endpoint information has been sent to a certain host.
+// AddContact records that a packet containing our endpoint information has been sent to a
+// certain host.
 func (it *IPTracker) AddContact(host string) {
 	it.contact[host] = it.clock.Now()
 }
