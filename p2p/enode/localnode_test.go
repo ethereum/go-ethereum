@@ -65,4 +65,12 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 	if s := ln2.Node().Seq(); s != 3 {
 		t.Fatalf("wrong seq %d on new instance, want 3", s)
 	}
+
+	// Create a new instance with a different node key on the same database.
+	// This should reset the sequence number.
+	key, _ := crypto.GenerateKey()
+	ln3 := NewLocalNode(db, key)
+	if s := ln3.Node().Seq(); s != 1 {
+		t.Fatalf("wrong seq %d on instance with changed key, want 1", s)
+	}
 }

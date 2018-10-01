@@ -63,10 +63,10 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 		id:       PubkeyToIDV4(&key.PublicKey),
 		db:       db,
 		key:      key,
-		seq:      db.LocalSeq(),
 		udpTrack: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
 		entries:  make(map[string]enr.Entry),
 	}
+	ln.seq = db.localSeq(ln.id)
 	ln.invalidate()
 	return ln
 }
@@ -242,5 +242,5 @@ func (ln *LocalNode) sign() {
 
 func (ln *LocalNode) bumpSeq() {
 	ln.seq++
-	ln.db.storeLocalSeq(ln.seq)
+	ln.db.storeLocalSeq(ln.id, ln.seq)
 }

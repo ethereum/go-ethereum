@@ -328,13 +328,13 @@ func (db *DB) UpdateFindFails(id ID, fails int) error {
 }
 
 // LocalSeq retrieves the local record sequence counter.
-func (db *DB) LocalSeq() uint64 {
-	return db.fetchUint64([]byte(dbLocalSeq))
+func (db *DB) localSeq(id ID) uint64 {
+	return db.fetchUint64(makeKey(id, dbLocalSeq))
 }
 
 // storeLocalSeq stores the local record sequence counter.
-func (db *DB) storeLocalSeq(n uint64) {
-	db.storeUint64([]byte(dbLocalSeq), n)
+func (db *DB) storeLocalSeq(id ID, n uint64) {
+	db.storeUint64(makeKey(id, dbLocalSeq), n)
 }
 
 // QuerySeeds retrieves random nodes to be used as potential seed nodes
