@@ -719,9 +719,8 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	}
 	decodeIndex(idata, index)
 	s.batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
-	// presumably, we only want to increase the access count of the chunk in question, and not the offset of any future ones?
-	//s.accessCnt++
-	index.Access = s.accessCnt + 1
+	s.accessCnt++
+	index.Access = s.accessCnt
 	idata = encodeIndex(index)
 	s.batch.Put(ikey, idata)
 	select {
