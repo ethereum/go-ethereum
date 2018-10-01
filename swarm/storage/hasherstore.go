@@ -32,10 +32,13 @@ type hasherStore struct {
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
 	refSize   int64         // reference size (content hash + possibly encryption key)
-	nrChunks  uint64        // number of chunks to store
 	errC      chan error    // global error channel
 	doneC     chan struct{} // closed by Close() call to indicate that count is the final number of chunks
 	quitC     chan struct{} // closed to quit unterminated routines
+	// nrChunks is used with atomic functions
+	// it is required to be at the end of the struct to ensure 64bit alignment for arm architecture
+	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	nrChunks uint64 // number of chunks to store
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.

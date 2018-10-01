@@ -22,16 +22,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
-	"net/http"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -118,10 +117,9 @@ func upload(ctx *cli.Context) {
 				return "", fmt.Errorf("error opening file: %s", err)
 			}
 			defer f.Close()
-			if mimeType == "" {
-				mimeType = detectMimeType(file)
+			if mimeType != "" {
+				f.ContentType = mimeType
 			}
-			f.ContentType = mimeType
 			return client.Upload(f, "", toEncrypt)
 		}
 	}
@@ -138,6 +136,12 @@ func upload(ctx *cli.Context) {
 // 3. cleans the path, e.g. /a/b/../c -> /a/c
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
+	if i := strings.Index(p, ":"); i > 0 {
+		return p
+	}
+	if i := strings.Index(p, "@"); i > 0 {
+		return p
+	}
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := homeDir(); home != "" {
 			p = home + p[1:]
@@ -152,22 +156,6 @@ func homeDir() string {
 	}
 	if usr, err := user.Current(); err == nil {
 		return usr.HomeDir
-	}
-	return ""
-}
-
-func detectMimeType(file string) string {
-	if ext := filepath.Ext(file); ext != "" {
-		return mime.TypeByExtension(ext)
-	}
-	f, err := os.Open(file)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	buf := make([]byte, 512)
-	if n, _ := f.Read(buf); n > 0 {
-		return http.DetectContentType(buf)
 	}
 	return ""
 }

@@ -40,7 +40,7 @@ func (t *TestHandler) Close() {
 
 type mockNetFetcher struct{}
 
-func (m *mockNetFetcher) Request(ctx context.Context) {
+func (m *mockNetFetcher) Request(ctx context.Context, hopCount uint8) {
 }
 func (m *mockNetFetcher) Offer(ctx context.Context, source *enode.ID) {
 }

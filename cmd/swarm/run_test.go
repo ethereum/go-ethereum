@@ -242,7 +242,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 		"--bzzaccount", bzzaccount,
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", "3",
+		"--verbosity", fmt.Sprint(*loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {
@@ -318,7 +318,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		"--bzzaccount", account.Address.String(),
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", "3",
+		"--verbosity", fmt.Sprint(*loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {

@@ -60,6 +60,7 @@ type Registry struct {
 	delivery       *Delivery
 	intervalsStore state.Store
 	doRetrieve     bool
+	maxPeerServers int
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -68,6 +69,7 @@ type RegistryOptions struct {
 	DoSync          bool
 	DoRetrieve      bool
 	SyncUpdateDelay time.Duration
+	MaxPeerServers  int // The limit of servers for each peer in registry
 }
 
 // NewRegistry is Streamer constructor
@@ -87,6 +89,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
 		doRetrieve:     options.DoRetrieve,
+		maxPeerServers: options.MaxPeerServers,
 	}
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
@@ -639,7 +642,7 @@ func (c *clientParams) clientCreated() {
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
-	Version:    6,
+	Version:    7,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		UnsubscribeMsg{},

@@ -36,6 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
+const numberOfAccountsToDerive = 10
+
 // ExternalAPI defines the external API through which signing requests are made.
 type ExternalAPI interface {
 	// List available accounts
@@ -79,6 +82,9 @@ type SignerUI interface {
 	// OnSignerStartup is invoked when the signer boots, and tells the UI info about external API location and version
 	// information
 	OnSignerStartup(info StartupInfo)
+	// OnInputRequried is invoked when clef requires user input, for example master password or
+	// pin-code for unlocking hardware wallets
+	OnInputRequired(info UserInputRequest) (UserInputResponse, error)
 }
 
 // SignerAPI defines the actual implementation of ExternalAPI
@@ -194,6 +200,14 @@ type (
 	StartupInfo struct {
 		Info map[string]interface{} `json:"info"`
 	}
+	UserInputRequest struct {
+		Prompt     string `json:"prompt"`
+		Title      string `json:"title"`
+		IsPassword bool   `json:"isPassword"`
+	}
+	UserInputResponse struct {
+		Text string `json:"text"`
+	}
 )
 
 var ErrRequestDenied = errors.New("Request denied")
@@ -215,6 +229,9 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 	if len(ksLocation) > 0 {
 		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
 	}
+	if advancedMode {
+		log.Info("Clef is in advanced mode: will warn instead of reject")
+	}
 	if !noUSB {
 		// Start a USB hub for Ledger hardware wallets
 		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
@@ -231,10 +248,94 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 			log.Debug("Trezor support enabled")
 		}
 	}
-	if advancedMode {
-		log.Info("Clef is in advanced mode: will warn instead of reject")
+	signer := &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb), !advancedMode}
+	if !noUSB {
+		signer.startUSBListener()
 	}
-	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb), !advancedMode}
+	return signer
+}
+func (api *SignerAPI) openTrezor(url accounts.URL) {
+	resp, err := api.UI.OnInputRequired(UserInputRequest{
+		Prompt: "Pin required to open Trezor wallet\n" +
+			"Look at the device for number positions\n\n" +
+			"7 | 8 | 9\n" +
+			"--+---+--\n" +
+			"4 | 5 | 6\n" +
+			"--+---+--\n" +
+			"1 | 2 | 3\n\n",
+		IsPassword: true,
+		Title:      "Trezor unlock",
+	})
+	if err != nil {
+		log.Warn("failed getting trezor pin", "err", err)
+		return
+	}
+	// We're using the URL instead of the pointer to the
+	// Wallet -- perhaps it is not actually present anymore
+	w, err := api.am.Wallet(url.String())
+	if err != nil {
+		log.Warn("wallet unavailable", "url", url)
+		return
+	}
+	err = w.Open(resp.Text)
+	if err != nil {
+		log.Warn("failed to open wallet", "wallet", url, "err", err)
+		return
+	}
+
+}
+
+// startUSBListener starts a listener for USB events, for hardware wallet interaction
+func (api *SignerAPI) startUSBListener() {
+	events := make(chan accounts.WalletEvent, 16)
+	am := api.am
+	am.Subscribe(events)
+	go func() {
+
+		// Open any wallets already attached
+		for _, wallet := range am.Wallets() {
+			if err := wallet.Open(""); err != nil {
+				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
+				if err == usbwallet.ErrTrezorPINNeeded {
+					go api.openTrezor(wallet.URL())
+				}
+			}
+		}
+		// Listen for wallet event till termination
+		for event := range events {
+			switch event.Kind {
+			case accounts.WalletArrived:
+				if err := event.Wallet.Open(""); err != nil {
+					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
+					if err == usbwallet.ErrTrezorPINNeeded {
+						go api.openTrezor(event.Wallet.URL())
+					}
+				}
+			case accounts.WalletOpened:
+				status, _ := event.Wallet.Status()
+				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+
+				derivationPath := accounts.DefaultBaseDerivationPath
+				if event.Wallet.URL().Scheme == "ledger" {
+					derivationPath = accounts.DefaultLedgerBaseDerivationPath
+				}
+				var nextPath = derivationPath
+				// Derive first N accounts, hardcoded for now
+				for i := 0; i < numberOfAccountsToDerive; i++ {
+					acc, err := event.Wallet.Derive(nextPath, true)
+					if err != nil {
+						log.Warn("account derivation failed", "error", err)
+					} else {
+						log.Info("derived account", "address", acc.Address)
+					}
+					nextPath[len(nextPath)-1]++
+				}
+			case accounts.WalletDropped:
+				log.Info("Old wallet dropped", "url", event.Wallet.URL())
+				event.Wallet.Close()
+			}
+		}
+	}()
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain

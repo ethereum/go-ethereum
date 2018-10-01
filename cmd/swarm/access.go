@@ -130,7 +130,7 @@ func accessNewACT(ctx *cli.Context) {
 		if err != nil {
 			utils.Fatalf("had an error reading the grantee public key list")
 		}
-		pkGrantees = strings.Split(string(bytes), "\n")
+		pkGrantees = strings.Split(strings.Trim(string(bytes), "\n"), "\n")
 	}
 
 	if passGranteesFilename != "" {
@@ -138,7 +138,7 @@ func accessNewACT(ctx *cli.Context) {
 		if err != nil {
 			utils.Fatalf("could not read password filename: %v", err)
 		}
-		passGrantees = strings.Split(string(bytes), "\n")
+		passGrantees = strings.Split(strings.Trim(string(bytes), "\n"), "\n")
 	}
 	accessKey, ae, actManifest, err = api.DoACT(ctx, privateKey, salt, pkGrantees, passGrantees)
 	if err != nil {

@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	blockDelayTimeout = time.Second * 10 // timeout for a peer to announce a head that has already been confirmed by others
-	maxNodeCount      = 20               // maximum number of fetcherTreeNode entries remembered for each peer
+	blockDelayTimeout    = time.Second * 10 // timeout for a peer to announce a head that has already been confirmed by others
+	maxNodeCount         = 20               // maximum number of fetcherTreeNode entries remembered for each peer
+	serverStateAvailable = 100              // number of recent blocks where state availability is assumed
 )
 
 // lightFetcher implements retrieval of newly announced headers. It also provides a peerHasBlock function for the
@@ -215,8 +216,8 @@ func (f *lightFetcher) syncLoop() {
 // registerPeer adds a new peer to the fetcher's peer set
 func (f *lightFetcher) registerPeer(p *peer) {
 	p.lock.Lock()
-	p.hasBlock = func(hash common.Hash, number uint64) bool {
-		return f.peerHasBlock(p, hash, number)
+	p.hasBlock = func(hash common.Hash, number uint64, hasState bool) bool {
+		return f.peerHasBlock(p, hash, number, hasState)
 	}
 	p.lock.Unlock()
 
@@ -344,19 +345,25 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 
 // peerHasBlock returns true if we can assume the peer knows the given block
 // based on its announcements
-func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bool {
+func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64, hasState bool) bool {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+
+	fp := f.peers[p]
+	if fp == nil || fp.root == nil {
+		return false
+	}
+
+	if hasState {
+		if fp.lastAnnounced == nil || fp.lastAnnounced.number > number+serverStateAvailable {
+			return false
+		}
+	}
 
 	if f.syncing {
 		// always return true when syncing
 		// false positives are acceptable, a more sophisticated condition can be implemented later
 		return true
-	}
-
-	fp := f.peers[p]
-	if fp == nil || fp.root == nil {
-		return false
 	}
 
 	if number >= fp.root.number {

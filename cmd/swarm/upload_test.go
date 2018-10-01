@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// +build !windows
+
 package main
 
 import (
@@ -32,7 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
