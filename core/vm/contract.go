@@ -58,15 +58,11 @@ type Contract struct {
 
 	Gas   uint64
 	value *big.Int
-
-	Args []byte
-
-	DelegateCall bool
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
 func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
-	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object}
 
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
@@ -118,7 +114,6 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 // AsDelegate sets the contract to be a delegate call and returns the current
 // contract (for chaining calls)
 func (c *Contract) AsDelegate() *Contract {
-	c.DelegateCall = true
 	// NOTE: caller must, at all times be a contract. It should never happen
 	// that caller is something other than a Contract.
 	parent := c.caller.(*Contract)
@@ -177,6 +172,8 @@ func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []by
 	c.CodeAddr = addr
 }
 
+// SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
+// In case hash is not provided, the jumpdest analysis will not be saved to the parent context
 func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash codeAndHash) {
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash

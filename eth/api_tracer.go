@@ -390,6 +390,13 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 	}
 	return api.TraceBlock(ctx, blob, config)
 }
+func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, index int, config *TraceConfig) ([]*txTraceResult, error) {
+	if len := len(api.eth.blockchain.BadBlocks()); index < len {
+		block := api.eth.blockchain.BadBlocks()[index]
+		return api.traceBlock(ctx, block, config)
+	}
+	return nil, fmt.Errorf("index out of range")
+}
 
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
