@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -124,10 +123,16 @@ func Open(path string) (*File, error) {
 		f.Close()
 		return nil, err
 	}
+
+	contentType, err := api.DetectContentType(f.Name(), f)
+	if err != nil {
+		return nil, err
+	}
+
 	return &File{
 		ReadCloser: f,
 		ManifestEntry: api.ManifestEntry{
-			ContentType: mime.TypeByExtension(filepath.Ext(path)),
+			ContentType: contentType,
 			Mode:        int64(stat.Mode()),
 			Size:        stat.Size(),
 			ModTime:     stat.ModTime(),
