@@ -345,7 +345,9 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
 	capacity := 10000
 	chunkCount := 20000
+	gcThreshold := int(maxGCitems * gcArrayFreeRatio)
 	hasher := MakeHashFunc(DefaultHash)()
+	writeBatchTolerance := 128 // according to log ldb seems to write in batches of 6
 
 	// four byte value incremented sequentially as chunk data (one chunk has 1024 values)
 	var byteValue uint32 = 0
@@ -355,9 +357,10 @@ func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
 	buf := make([][ch.DefaultSize]byte, capacity)
 
 	// record keeping
-	madeChunks := make([]Chunk, capacity)
-	madeAddrs := make([]Address, capacity)
-	matchAddrs := make([]Address, capacity)
+	chunkSaveCount := gcThreshold - writeBatchTolerance
+	madeChunks := make([]Chunk, chunkSaveCount)
+	madeAddrs := make([]Address, chunkSaveCount)
+	matchAddrs := make([]Address, chunkSaveCount)
 
 	// needed for hashing (all chunks are full chunks here)
 	meta := make([]byte, 8)
@@ -368,6 +371,7 @@ func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
 	store.setCapacity(uint64(capacity))
 	defer cleanup()
 
+	log.Info("gc ordered test", "gcthreshold", gcThreshold, "savecount", chunkSaveCount, "cap", capacity, "count", chunkCount)
 	for i := 0; i < chunkCount; i++ {
 		hasher.ResetWithLength(meta)
 
@@ -380,25 +384,37 @@ func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
 			byteValue++
 		}
 
-		// create chunk, add to record keeping and put chunk in store
-		madeChunks[cursor] = NewChunk(hasher.Sum(nil), buf[cursor][:])
-		madeAddrs[cursor] = madeChunks[cursor].Address()
-		matchAddrs[cursor] = madeChunks[cursor].Address()
-		savedChunk, err := mput(store, 1, func(n int64) Chunk { return madeChunks[cursor] })
+		// create and put chunk
+		newChunk := NewChunk(hasher.Sum(nil), buf[cursor][:])
+		_, err := mput(store, 1, func(n int64) Chunk { return newChunk })
 		if err != nil {
 			t.Fatalf("store put fail: %v", err)
-		} else if !bytes.Equal(savedChunk[0].Address(), madeAddrs[cursor]) { // probably redundant but let's be careful for now
-			t.Fatalf("saved addr mismatch %x/%x: %v", savedChunk[0].Address(), madeAddrs[cursor], err)
 		}
 
-		log.Debug("putting", "address", matchAddrs[cursor])
+		log.Trace("putting", "address", newChunk.Address(), "i", i)
 
-		// wrap cursor on capacity.
-		cursor++
-		cursor %= capacity
+		// add to record keeping if it's among the last chunkSaveCount chunks
+		if i > chunkCount-chunkSaveCount {
+			madeChunks[cursor] = newChunk
+			madeAddrs[cursor] = madeChunks[cursor].Address()
+			matchAddrs[cursor] = madeChunks[cursor].Address()
+
+			// get the chunk at least gcThreshold times. That should put the chunk access count comfortable above the limit of any previously added chunks (and give time to flush the db batch writes, too)
+			for i := 0; i < gcThreshold; i++ {
+				log.Trace("accessing", "address", madeChunks[cursor].Address())
+				store.Get(context.TODO(), madeChunks[cursor].Address())
+			}
+
+			cursor++
+
+			// wrap cursor on capacity.
+			//cursor %= capacity
+
+		}
+
 	}
 
-	log.Info("chunks put, sir", "cursor", cursor, "lastvalue", byteValue, "count", len(madeAddrs))
+	log.Info("chunks put, sir", "cursor", cursor, "capacity", capacity, "lastvalue", byteValue, "count", len(madeAddrs))
 
 	// madeAddrs should now contain only the last added chunks.
 	var matches uint64
@@ -437,7 +453,7 @@ func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
 
 	// check the retrieve errors
 	if err != nil {
-		t.Fatalf("matches %d/%d, retrieve fail: %v", matches, capacity, err)
+		t.Fatalf("matches %d/%d, retrieve fail: %v", matches, chunkSaveCount, err)
 	}
 
 	// if all elements are found the array should be empty
