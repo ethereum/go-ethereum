@@ -168,7 +168,7 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
 	if p.pairRw != nil {
-		log.Trace("p2p Send New Block with pairRw", "p", p, "number", block.NumberU64())
+		log.Trace("p2p send new block to the pairRw connection", "p", p, "number", block.NumberU64())
 		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
 	} else {
 		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
