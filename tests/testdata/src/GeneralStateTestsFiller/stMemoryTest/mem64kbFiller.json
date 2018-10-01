@@ -1,0 +1,111 @@
+{
+    "mem64kb" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "42949672960",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : "Frontier",
+                "result" : {
+                    "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                        "balance" : "0x0de0b6b3a764000a",
+                        "code" : "0x602a61f9e05261f9e05160015559600055",
+                        "nonce" : "0x00",
+                        "storage" : {
+                            "0x00" : "0xfa00",
+                            "0x01" : "0x2a"
+                        }
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "0x012453",
+                        "code" : "0x",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "0x63fffedba3",
+                        "code" : "0x",
+                        "nonce" : "0x01",
+                        "storage" : {
+                        }
+                    }
+                }
+            },
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Homestead", "EIP150", "EIP158"],
+                "result" : {
+                    "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                        "balance" : "0x0de0b6b3a764000a",
+                        "code" : "0x602a61f9e05261f9e05160015559600055",
+                        "nonce" : "0x00",
+                        "storage" : {
+                            "0x00" : "0xfa00",
+                            "0x01" : "0x2a"
+                        }
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "0x012453",
+                        "code" : "0x",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "0x63fffedba3",
+                        "code" : "0x",
+                        "nonce" : "0x01",
+                        "storage" : {
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "1000000000000000000",
+                "code" : "{ (MSTORE 63968 42) [[ 1 ]] (MLOAD 63968) [[ 0 ]] (MSIZE) } ",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "429496729600",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "1342183640"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "value" : [
+                "10"
+            ]
+        }
+    }
+}

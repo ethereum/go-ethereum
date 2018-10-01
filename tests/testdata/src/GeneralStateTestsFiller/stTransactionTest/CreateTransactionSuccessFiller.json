@@ -1,0 +1,106 @@
+{
+    "CreateTransactionSuccess" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "1000000000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+                    "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
+                        "balance" : "100",
+                        "code" : "0x60e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56",
+                        "nonce" : "0",
+                        "storage" : {
+                        }
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150"],
+                "result" : {
+                    "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
+                        "balance" : "100",
+                        "code" : "0x60e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56",
+                        "nonce" : "0",
+                        "storage" : {
+                        }
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP158"],
+                "result" : {
+                    "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
+                        "balance" : "100",
+                        "code" : "0x60e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56",
+                        "nonce" : "1",
+                        "storage" : {
+                        }
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                    "6295ee1b4f6dd65047762f924ecd367c17eabf8f" : {
+                        "balance" : "100",
+                        "code" : "0x60e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56",
+                        "nonce" : "1",
+                        "storage" : {
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x602280600c6000396000f30060e060020a600035048063f8a8fd6d14601457005b601a6020565b60006000f35b56"
+            ],
+            "gasLimit" : [
+                "70000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "",
+            "value" : [
+                "100"
+            ]
+        }
+    }
+}

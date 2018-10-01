@@ -1,0 +1,120 @@
+{
+    "refund_singleSuicide" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "1000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+                    "1000000000000000000000000000000000000001" : {
+                        "shouldnotexist" : "1"
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "10881"
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "289119",
+                        "nonce" : "1"
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150"],
+                "result" : {
+                    "1000000000000000000000000000000000000001" : {
+                        "shouldnotexist" : "1"
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "13711"
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "286289",
+                        "nonce" : "1"
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP158"],
+                "result" : {
+                    "1000000000000000000000000000000000000001" : {
+                        "shouldnotexist" : "1"
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "13771"
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "286229",
+                        "nonce" : "1"
+                    }
+                }
+            }
+        ],
+         "pre" : {
+            "1000000000000000000000000000000000000001" : {
+                "balance" : "1000000000000000000",
+                "nonce" : "0",
+                "//comment1" : "contract Killer {",
+                "//comment2" : "  function homicide() {",
+                "//comment3" : "      suicide(msg.sender);",
+                "//comment4" : "    }",
+                "//comment5" : "",
+                "//comment6" : "    function multipleHomocide() {",
+                "//comment7" : "        Killer k  = this;",
+                "//comment8" : "        k.homicide();",
+                "//comment9" : "    }",
+                "//comment10" : "",
+                "//comment11" : "    function run() returns (bool)",
+                "//comment12" : "    {",
+                "//comment13" : "  multipleHomocide();",
+                "//comment14" : "  return true;",
+                "//comment15" : "    }",
+                "//comment16" : "}",
+                "code" : "0x606060405260e060020a600035046309e587a58114602e5780632e4699ed146049578063c040622614609b575b005b602c3373ffffffffffffffffffffffffffffffffffffffff16ff5b602c5b60003090508073ffffffffffffffffffffffffffffffffffffffff166309e587a56040518160e060020a0281526004018090506000604051808303816000876161da5a03f11560025750505050565b60a5600060b9604c565b604080519115158252519081900360200190f35b5060019056",
+                "storage" : {
+                }
+            },
+             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                 "balance" : "300000",
+                 "nonce" : "0",
+                 "code" : "",
+                 "storage": {}
+             }
+         },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "300000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000001",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

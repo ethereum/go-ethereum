@@ -1,0 +1,100 @@
+{
+    "TestStoreGasPrices" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "storage" : {
+                            "0x" : "0x4e2d",
+                            "0x01" : "0x1395",
+                            "0x02" : "0x1395",
+                            "0x03" : "0x1395",
+                            "0x04" : "0x1395",
+                            "0x05" : "0x1395"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "100000",
+		"//comment1" : "contract main",
+		"//comment2" : "{",
+		"//comment3" : "  uint[32] m_gasUsed;",
+		"//comment4" : "  int storage;",
+		"//comment5" : "  function run() returns (bool)",
+		"//comment6" : "  {",
+		"//comment7" : "     uint startgas = msg.gas;",
+                "//comment8" : "",
+                "//comment9" : "     storage = 1;  //zero to non zero",
+                "//comment10" : "     m_gasUsed[0] = startgas - msg.gas;",
+                "//comment11" : "     startgas = msg.gas;",
+                "//comment12" : "",
+                "//comment13" : "     storage = 2;  //non zero to non zero",
+                "//comment14" : "     m_gasUsed[1] = startgas - msg.gas;",
+                "//comment15" : "     startgas = msg.gas;",
+                "//comment16" : "",
+                "//comment17" : "     storage = 2;  //non zero to same non zero",
+                "//comment18" : "     m_gasUsed[2] = startgas - msg.gas;",
+                "//comment19" : "     startgas = msg.gas;",
+                "//comment20" : "",
+                "//comment21" : "     storage = 24784793845734;  //non zero to huge non zero",
+                "//comment22" : "     m_gasUsed[3] = startgas - msg.gas;",
+                "//comment23" : "     startgas = msg.gas;",
+                "//comment24" : "",
+                "//comment25" : "     storage = 2;  //huge non zero to non zero",
+                "//comment26" : "     m_gasUsed[4] = startgas - msg.gas;",
+                "//comment27" : "     startgas = msg.gas;",
+                "//comment28" : "",
+                "//comment29" : "     storage = 0;  //non zero to zero",
+                "//comment30" : "     m_gasUsed[5] = startgas - msg.gas;",
+                "//comment31" : "     startgas = msg.gas;",
+                "//comment32" : "",
+                "//comment33" : "     return true;",
+                "//comment34" : "  }",
+                "//comment35" : "}",
+                "code" : "0x7c01000000000000000000000000000000000000000000000000000000006000350463c04062268114602d57005b6033603d565b8060005260206000f35b600060005a600160205590505a81036000555a600260205590505a81036001555a600260205590505a81036002555a65168aa8d53fe660205590505a81036003555a600260205590505a81036004555a600060205590505a81036005555a5060019291505056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "50000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "35000000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

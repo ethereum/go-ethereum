@@ -1,0 +1,107 @@
+{
+    "CREATE_empty000CreateinInitCode_Transaction" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/GeneralStateTestsFiller/stCreateTest/CREATE_empty000CreateinInitCode_TransactionFiller.json",
+            "sourceHash" : "7a0b8102a7ed439931af21c2f9986b2448c350602aaae875c8f456b659a42ba0"
+        },
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x989680",
+            "currentNumber" : "0x01",
+            "currentTimestamp" : "0x03e8",
+            "previousHash" : "0x5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "post" : {
+            "Byzantium" : [
+                {
+                    "hash" : "0x130a3511ff49e18b6c345692ae59f91919b89ce32c4ff1d0b5117baf99266e9f",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "EIP150" : [
+                {
+                    "hash" : "0x14f55f5a337ba2e8d3282dc8e35821cf9e0418040fe8a38a4cc685d0b3de91f8",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "EIP158" : [
+                {
+                    "hash" : "0x130a3511ff49e18b6c345692ae59f91919b89ce32c4ff1d0b5117baf99266e9f",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "Frontier" : [
+                {
+                    "hash" : "0xa31291b591da36e79fe99a2dea8664d3e327097d50416054c348d5e7a9277d84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "Homestead" : [
+                {
+                    "hash" : "0x0eadf14941ab52c4bd16e5f80717342215a2ffc76116af4237d0fe1761f5db3f",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ]
+        },
+        "pre" : {
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xe8d4a51000",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xe8d4a51000",
+                "code" : "0x600c600155",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x6000600060006000600073c94f5374fce5edbc8e2a8697c15331677e6ebf0b61ea60f150600060006000f0"
+            ],
+            "gasLimit" : [
+                "0x0927c0"
+            ],
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "secretKey" : "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "",
+            "value" : [
+                "0x00"
+            ]
+        }
+    }
+}

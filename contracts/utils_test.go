@@ -171,13 +171,13 @@ func TestGenM2FromRandomize(t *testing.T) {
 		rand.Seed(time.Now().UTC().UnixNano())
 		a = append(a, int64(rand.Intn(9999)))
 	}
-	b, err := GenM2FromRandomize(a)
+	b, err := GenM2FromRandomize(a, common.MaxMasternodes)
 	t.Log("randomize", b, "len", len(b))
 	if err != nil {
 		t.Error("Fail to test gen m2 for randomize.", err)
 	}
 	// Test Permutation Without Fixed-point.
-	M1List := NewSlice(int64(0), MaxMasternodes, 1)
+	M1List := NewSlice(int64(0), common.MaxMasternodes, 1)
 	for i, m1 := range M1List {
 		if m1 == b[i] {
 			t.Errorf("Error check Permutation Without Fixed-point %v - %v - %v", i, b[i], a)

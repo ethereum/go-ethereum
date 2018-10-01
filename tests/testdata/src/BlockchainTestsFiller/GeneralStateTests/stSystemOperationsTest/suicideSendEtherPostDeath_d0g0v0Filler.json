@@ -1,0 +1,62 @@
+{
+    "suicideSendEtherPostDeath_d0g0v0" : {
+        "blocks" : [
+            {
+                "blockHeaderPremine" : {
+                    "difficulty" : "0x020000",
+                    "gasLimit" : "0x989680",
+                    "timestamp" : "0x03e8",
+                    "updatePoW" : "1"
+                },
+                "transactions" : [
+                    {
+                        "data" : "0x4d536fe3",
+                        "gasLimit" : "0x2dc6c0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0x49a9f64355ac77855a3b55dbff4641731274683f4ebd27317d235c052ad17a5c",
+                        "s" : "0x486736d73963f6c8958852d2a240f31f0cb1dde0c100a6f52aeb6e470717391b",
+                        "to" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+                        "v" : "0x1c",
+                        "value" : "0x0186a0"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "131072",
+            "extraData" : "0x42",
+            "gasLimit" : "0x989680",
+            "gasUsed" : "0",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf99eb1626cfa6db435c0836235942d7ccaa935f1ae247d3f1c21e495685f903a",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "pre" : {
+            "0x095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x60606040526000357c01000000000000000000000000000000000000000000000000000000009004806335f46994146100445780634d536fe31461005157610042565b005b61004f600450610072565b005b61005c60045061008d565b6040518082815260200191505060405180910390f35b3073ffffffffffffffffffffffffffffffffffffffff16ff5b565b600060003073ffffffffffffffffffffffffffffffffffffffff166335f46994604051817c01000000000000000000000000000000000000000000000000000000000281526004018090506000604051808303816000876161da5a03f115610002575050503073ffffffffffffffffffffffffffffffffffffffff163190503373ffffffffffffffffffffffffffffffffffffffff16600082604051809050600060405180830381858888f1935050505050809150610147565b509056",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

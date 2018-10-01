@@ -1,0 +1,79 @@
+{
+    "SuicidesAndSendMoneyToItselfEtherDestroyed" : {
+        "env" : {
+            "currentCoinbase" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "1000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "111488",
+                        "nonce" : "1"
+                    },
+                    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "10502"
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150", "EIP158"],
+                "result" : {
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "108988",
+                        "nonce" : "1"
+                    },
+                    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "13002"
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "122000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000",
+                "code" : "{(SELFDESTRUCT 0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "31700"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "c94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "10"
+            ]
+        }
+    }
+}

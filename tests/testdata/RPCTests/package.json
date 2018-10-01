@@ -1,0 +1,29 @@
+{
+  "name": "rpctests",
+  "version": "0.0.1",
+  "description": "Ethereum cpp client RPC tests",
+  "main": "./main.js",
+  "devDependencies": {    
+    "web3": "^0.15.3",
+    "async": "^1.5"
+  },
+  "scripts": {
+
+  },
+  "repository": {
+    
+  },
+  "author": "cpp-ethereum team",
+  "license": "MIT",
+  "bugs": {
+    
+  },
+  "homepage": "",
+  "standard": {
+    "ignore": [
+      "node_modules/*",
+      "build/*",
+      "test/resources/*"
+    ]
+  }
+}

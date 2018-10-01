@@ -1,0 +1,24 @@
+{
+    "WrongVRSTestVEqual39" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttVValue/WrongVRSTestVEqual39Filler.json",
+            "sourceHash" : "41ac9a098f11129b85f29dc4638b4b637891c56854c258e881ad1e50ef056c54"
+        },
+        "rlp" : "0xf85f800182520894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8027a098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa01887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

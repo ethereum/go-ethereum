@@ -1,0 +1,29 @@
+{
+    "smod8_byZero": {
+        "env" : {
+        "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+        "currentNumber" : "0",
+        "currentGasLimit" : "1000000",
+        "currentDifficulty" : "256",
+        "currentTimestamp" : "1",
+        "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "pre" : {
+        "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+            "balance" : "1000000000000000000",
+            "nonce" : "0",
+            "code" : "{ [[ 0 ]] (- (SMOD (- 0 200) 0) 13)}",
+            "storage": {}
+        }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "100000"
+        }
+    }
+}

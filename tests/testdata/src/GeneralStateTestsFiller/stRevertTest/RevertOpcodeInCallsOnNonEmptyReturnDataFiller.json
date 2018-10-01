@@ -1,0 +1,304 @@
+{
+    "RevertOpcodeInCallsOnNonEmptyReturnData" : {
+        "_info" : {
+            "comment" : "This test checks that the returndata buffer is changed when a subcall REVERTs.  In each test case, a non-empty returndata buffer is set up, and then calls into a contract that REVERTs."
+        },
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+	    {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead", "EIP150", "EIP158"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+                        }
+                    },
+		    "b0005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead", "EIP150", "EIP158"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "b0005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+							"0x0a" : "0x01"
+                        }
+                    },
+		    "b0005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "0",
+			"storage" : {
+                            "0x02" : "0x01"
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "b0005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 1,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+							"0x0a" : "0x01"
+                        }
+                    },
+		    "b1005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "0",
+			"storage" : {
+                            "0x02" : "0x01"
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 1,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "b1005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 2,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+                            "0x0a" : "0x01"
+                        }
+                    },
+		    "b2005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "0",
+			"storage" : {
+                            "0x02" : "0x01"
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 2,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "b2005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 3,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+                        }
+		    },
+		    "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+                            "0x0a" : "0x01"
+                        }
+                    },
+		    "b3005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "0",
+			"storage" : {
+                            "0x00" : "0x01"
+                        }
+		     },
+		    "b3305374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "0",
+			"storage" : {
+                            "0x05" : "0x01"
+                        }
+		     }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	     "094f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[10]] (CALL 260000 (CALLDATALOAD 0) 0 0 0 0 0)}",
+                "nonce" : "0",
+                "storage" : {
+					"0x0a" : "0xff"
+                }
+            },
+	    "b0005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[0]] (CALL 50000 0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[2]] (RETURNDATASIZE) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b1005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[0]] (CALLCODE 50000 0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[2]] (RETURNDATASIZE) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b2005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[0]] (DELEGATECALL 50000 0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0) [[2]] (RETURNDATASIZE) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b3005374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[0]] (CALL 100000 0xb3305374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[2]] (RETURNDATASIZE) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b3305374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "code" : "{ (CALL 0 0xffff5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[4]] (CALL 50000 0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) [[5]] (RETURNDATASIZE) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+            "balance" : "1",
+            "//comment" : "Recording it's called at [[1]], and reverting. The store into [[3]] should not be reached.",
+            "code" : "{ [[1]] 12 (REVERT 0 1) [[3]] 13 }",
+            "nonce" : "0",
+            "storage" : {
+            }
+        },
+	    "ffff5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1",
+                "// comment" : "This should return 12 as a return value.  This sets the returndata buffer of the caller to be 64-byte long.",
+                "code" : "{ [1] 12 (RETURN 0 64) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+		"0x000000000000000000000000b0005374fce5edbc8e2a8697c15331677e6ebf0b",
+		"0x000000000000000000000000b1005374fce5edbc8e2a8697c15331677e6ebf0b",
+		"0x000000000000000000000000b2005374fce5edbc8e2a8697c15331677e6ebf0b",
+		"0x000000000000000000000000b3005374fce5edbc8e2a8697c15331677e6ebf0b"
+            ],
+            "gasLimit" : [
+                "860000", "28000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "094f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

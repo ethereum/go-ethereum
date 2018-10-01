@@ -1,0 +1,27 @@
+{
+    "TransactionWithHihghGasLimit63m1" : {
+	     "expect" : [
+            {
+                "network" : ["EIP158", "Byzantium", "Constantinople"],
+                "result" : "valid"
+            },
+            {
+                "network" : ["Frontier", "Homestead", "EIP150"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+	         "gasLimit" : "2^63 - 1",
+            "gasLimit" : "9223372036854775807",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "0",
+            "v" : "37",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x1887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+        }
+    }
+}

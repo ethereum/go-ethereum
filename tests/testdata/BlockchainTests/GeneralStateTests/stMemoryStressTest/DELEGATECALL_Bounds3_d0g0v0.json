@@ -1,0 +1,607 @@
+{
+    "DELEGATECALL_Bounds3_d0g0v0_Byzantium" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/BlockchainTestsFiller/GeneralStateTests/stMemoryStressTest/DELEGATECALL_Bounds3_d0g0v0Filler.json",
+            "sourceHash" : "95a801cb104af024b5ae5243e4e449a35631d532249b72e465209c9eacac34d3"
+        },
+        "blocks" : [
+            {
+                "blockHeader" : {
+                    "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                    "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                    "difficulty" : "0x020000",
+                    "extraData" : "",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "gasUsed" : "0x0249f0",
+                    "hash" : "0xf1612e45bdf30b73c469761a0838815212709e9a1112e8119de6f562656f926e",
+                    "mixHash" : "0xaed5a608643c6447c23c336e94035b11e663d9804d169c1695f07e3455198a91",
+                    "nonce" : "0x679f35b6c9e036af",
+                    "number" : "0x01",
+                    "parentHash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+                    "receiptTrie" : "0xa0e10907f175886de9bd8cd4ac2c21d1db4109a3a9fecf60f54015ee102803fd",
+                    "stateRoot" : "0x1f1c07722f8402e80914fa1ab59ceefa2fea5f1f5c0fa3242625624884d41c41",
+                    "timestamp" : "0x03e8",
+                    "transactionsTrie" : "0x20ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04",
+                    "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                },
+                "rlp" : "0xf90265f901fda0ebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa01f1c07722f8402e80914fa1ab59ceefa2fea5f1f5c0fa3242625624884d41c41a020ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04a0a0e10907f175886de9bd8cd4ac2c21d1db4109a3a9fecf60f54015ee102803fdb90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001887fffffffffffffff830249f08203e880a0aed5a608643c6447c23c336e94035b11e663d9804d169c1695f07e3455198a9188679f35b6c9e036aff862f8608001830249f094100000000000000000000000000000000000000001801ba0a8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1aa030d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feecc0",
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0249f0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0xa8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1a",
+                        "s" : "0x30d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feec",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "0x020000",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0x00",
+            "hash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0x00",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fd",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "genesisRLP" : "0xf901fff901faa00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0f5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fda056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000080887fffffffffffffff808203b642a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421880102030405060708c0c0",
+        "lastblockhash" : "0xf1612e45bdf30b73c469761a0838815212709e9a1112e8119de6f562656f926e",
+        "network" : "Byzantium",
+        "postState" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x29a2241af62e49f0",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb60f",
+                "code" : "",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    },
+    "DELEGATECALL_Bounds3_d0g0v0_EIP150" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/BlockchainTestsFiller/GeneralStateTests/stMemoryStressTest/DELEGATECALL_Bounds3_d0g0v0Filler.json",
+            "sourceHash" : "95a801cb104af024b5ae5243e4e449a35631d532249b72e465209c9eacac34d3"
+        },
+        "blocks" : [
+            {
+                "blockHeader" : {
+                    "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                    "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                    "difficulty" : "0x020000",
+                    "extraData" : "",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "gasUsed" : "0x0249f0",
+                    "hash" : "0xfbe49fec19b85308199ae2445431a0a35fe0facde7fb779f8bd63076b883e29d",
+                    "mixHash" : "0x98882c07a8da76af10e835e6f3f87625c05bea6f3486e2d32f31c9526fdef0a4",
+                    "nonce" : "0xd17e11b6175979fb",
+                    "number" : "0x01",
+                    "parentHash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+                    "receiptTrie" : "0x35b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48",
+                    "stateRoot" : "0x624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289e",
+                    "timestamp" : "0x03e8",
+                    "transactionsTrie" : "0x20ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04",
+                    "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                },
+                "rlp" : "0xf90265f901fda0ebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289ea020ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04a035b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001887fffffffffffffff830249f08203e880a098882c07a8da76af10e835e6f3f87625c05bea6f3486e2d32f31c9526fdef0a488d17e11b6175979fbf862f8608001830249f094100000000000000000000000000000000000000001801ba0a8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1aa030d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feecc0",
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0249f0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0xa8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1a",
+                        "s" : "0x30d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feec",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "0x020000",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0x00",
+            "hash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0x00",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fd",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "genesisRLP" : "0xf901fff901faa00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0f5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fda056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000080887fffffffffffffff808203b642a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421880102030405060708c0c0",
+        "lastblockhash" : "0xfbe49fec19b85308199ae2445431a0a35fe0facde7fb779f8bd63076b883e29d",
+        "network" : "EIP150",
+        "postState" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x4563918244f649f0",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb60f",
+                "code" : "",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    },
+    "DELEGATECALL_Bounds3_d0g0v0_EIP158" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/BlockchainTestsFiller/GeneralStateTests/stMemoryStressTest/DELEGATECALL_Bounds3_d0g0v0Filler.json",
+            "sourceHash" : "95a801cb104af024b5ae5243e4e449a35631d532249b72e465209c9eacac34d3"
+        },
+        "blocks" : [
+            {
+                "blockHeader" : {
+                    "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                    "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                    "difficulty" : "0x020000",
+                    "extraData" : "",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "gasUsed" : "0x0249f0",
+                    "hash" : "0xaa022d4e5b1e73c70ffa17eb135e572fded0ecbbdb6e9e0a7208b5828f7d0a03",
+                    "mixHash" : "0xa56347aef8d7a953cc5bb9a52db72264f1f087008d8d82773a71c5532e43bc89",
+                    "nonce" : "0xa5e17ed4fb16e97e",
+                    "number" : "0x01",
+                    "parentHash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+                    "receiptTrie" : "0x35b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48",
+                    "stateRoot" : "0x624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289e",
+                    "timestamp" : "0x03e8",
+                    "transactionsTrie" : "0x20ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04",
+                    "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                },
+                "rlp" : "0xf90265f901fda0ebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289ea020ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04a035b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001887fffffffffffffff830249f08203e880a0a56347aef8d7a953cc5bb9a52db72264f1f087008d8d82773a71c5532e43bc8988a5e17ed4fb16e97ef862f8608001830249f094100000000000000000000000000000000000000001801ba0a8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1aa030d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feecc0",
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0249f0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0xa8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1a",
+                        "s" : "0x30d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feec",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "0x020000",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0x00",
+            "hash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0x00",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fd",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "genesisRLP" : "0xf901fff901faa00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0f5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fda056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000080887fffffffffffffff808203b642a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421880102030405060708c0c0",
+        "lastblockhash" : "0xaa022d4e5b1e73c70ffa17eb135e572fded0ecbbdb6e9e0a7208b5828f7d0a03",
+        "network" : "EIP158",
+        "postState" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x4563918244f649f0",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb60f",
+                "code" : "",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    },
+    "DELEGATECALL_Bounds3_d0g0v0_Frontier" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/BlockchainTestsFiller/GeneralStateTests/stMemoryStressTest/DELEGATECALL_Bounds3_d0g0v0Filler.json",
+            "sourceHash" : "95a801cb104af024b5ae5243e4e449a35631d532249b72e465209c9eacac34d3"
+        },
+        "blocks" : [
+            {
+                "blockHeader" : {
+                    "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                    "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                    "difficulty" : "0x020000",
+                    "extraData" : "",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "gasUsed" : "0x0249f0",
+                    "hash" : "0x1eeb67a27ed1a641c5b7ed94824b9803ee043198e8ea27f491418390f486f262",
+                    "mixHash" : "0xb2336661ff1ecc98e445783eee3d7ac985c17795943c2bbc250449e8f3eaf497",
+                    "nonce" : "0x39d1e5cde0b33e78",
+                    "number" : "0x01",
+                    "parentHash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+                    "receiptTrie" : "0x35b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48",
+                    "stateRoot" : "0x624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289e",
+                    "timestamp" : "0x03e8",
+                    "transactionsTrie" : "0x20ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04",
+                    "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                },
+                "rlp" : "0xf90265f901fda0ebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289ea020ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04a035b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001887fffffffffffffff830249f08203e880a0b2336661ff1ecc98e445783eee3d7ac985c17795943c2bbc250449e8f3eaf4978839d1e5cde0b33e78f862f8608001830249f094100000000000000000000000000000000000000001801ba0a8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1aa030d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feecc0",
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0249f0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0xa8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1a",
+                        "s" : "0x30d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feec",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "0x020000",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0x00",
+            "hash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0x00",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fd",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "genesisRLP" : "0xf901fff901faa00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0f5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fda056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000080887fffffffffffffff808203b642a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421880102030405060708c0c0",
+        "lastblockhash" : "0x1eeb67a27ed1a641c5b7ed94824b9803ee043198e8ea27f491418390f486f262",
+        "network" : "Frontier",
+        "postState" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x4563918244f649f0",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb60f",
+                "code" : "",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    },
+    "DELEGATECALL_Bounds3_d0g0v0_Homestead" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/BlockchainTestsFiller/GeneralStateTests/stMemoryStressTest/DELEGATECALL_Bounds3_d0g0v0Filler.json",
+            "sourceHash" : "95a801cb104af024b5ae5243e4e449a35631d532249b72e465209c9eacac34d3"
+        },
+        "blocks" : [
+            {
+                "blockHeader" : {
+                    "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                    "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+                    "difficulty" : "0x020000",
+                    "extraData" : "",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "gasUsed" : "0x0249f0",
+                    "hash" : "0x817093fc33640304cba1f94d3dd16ba7b9c1a241aad885f19eb397faab55f463",
+                    "mixHash" : "0x307057593881aca0e10d1aca70aea9c865ec0b6e1270241f2a17567fbca2f05b",
+                    "nonce" : "0xcf664ec514fb6ca1",
+                    "number" : "0x01",
+                    "parentHash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+                    "receiptTrie" : "0x35b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48",
+                    "stateRoot" : "0x624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289e",
+                    "timestamp" : "0x03e8",
+                    "transactionsTrie" : "0x20ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04",
+                    "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                },
+                "rlp" : "0xf90265f901fda0ebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0624be5d6d5e0ba93febd13ebd09d5c2412a4e9ec1b75a4f98b0c74aab877289ea020ba9b55d8fc4eca7a8962efa4eaa263e5b5d9e0bb537692518fd1649965ac04a035b742a6965941f39fd36ecab99a46d01c35611afeebb30227f063937d31bf48b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001887fffffffffffffff830249f08203e880a0307057593881aca0e10d1aca70aea9c865ec0b6e1270241f2a17567fbca2f05b88cf664ec514fb6ca1f862f8608001830249f094100000000000000000000000000000000000000001801ba0a8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1aa030d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feecc0",
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0249f0",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0xa8d69db5cc7b988975447a2e77fa471a04e8738915df60767b3104a95bf95c1a",
+                        "s" : "0x30d6d7f9cd259c5937c46412312a382eabaf62794a7f6d6183891f864057feec",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "0x020000",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0x00",
+            "hash" : "0xebce90c0078d1bb20d0b943a536bf331226647ba36d48d5ff9f115bd1fbb3e40",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0x00",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fd",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "genesisRLP" : "0xf901fff901faa00000000000000000000000000000000000000000000000000000000000000000a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347942adc25665018aa1fe0e6bc666dac8fc2697ff9baa0f5e8bf5dddfa18ca8d6fc1a422fd82cd131dca72866474bcdcff1e6f4ac278fda056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000080887fffffffffffffff808203b642a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421880102030405060708c0c0",
+        "lastblockhash" : "0x817093fc33640304cba1f94d3dd16ba7b9c1a241aad885f19eb397faab55f463",
+        "network" : "Homestead",
+        "postState" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x4563918244f649f0",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb60f",
+                "code" : "",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x67ffffffffffffffff600067ffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff60006fffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60007310000000000000000000000000000000000000016707fffffffffffffff45067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7310000000000000000000000000000000000000016707fffffffffffffff4",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x1000000000000000000000000000000000000001" : {
+                "balance" : "0x00",
+                "code" : "0x600054600101600055",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,106 @@
+{
+    "static_RevertDepth2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x00" : "0x00",
+		            "0x01" : "0x00",
+		            "0x02" : "0x00"
+		        }
+		    },
+		    "b000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x00" : "0x00",
+		            "0x01" : "0x00"
+		        }
+		    },
+		    "c000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x00" : "0x00"
+		        }
+		    },
+		    "d000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x00" : "0x00",
+		            "0x01" : "0x00",
+		            "0x02" : "0x00"
+		        }
+		    },
+		    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"nonce" : "1"
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "a000000000000000000000000000000000000000" : {
+                "balance" : "",
+                "code" : "{ [[0]] (ADD 1 (SLOAD 0)) [[1]] (STATICCALL 150000 0xb000000000000000000000000000000000000000 0 0 0 0) [[2]] (STATICCALL 150000 0xd000000000000000000000000000000000000000 0 0 0 0)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b000000000000000000000000000000000000000" : {
+                "balance" : "",
+                "code" : "{  (STATICCALL 50000 0xc000000000000000000000000000000000000000 0 0 0 0) (MSTORE 1 1) }",
+                "nonce" : "",
+                "storage" : {
+                }
+            },
+	    "c000000000000000000000000000000000000000" : {
+                "balance" : "",
+                "code" : "{ (MSTORE 1 1) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "d000000000000000000000000000000000000000" : {
+                "balance" : "",
+                "code" : "{ (STATICCALL 50000 0xc000000000000000000000000000000000000000 0 0 0 0) [[ 1 ]] (GAS) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+	    "data" : "In transaction T to A, A call B call C, then A call D calls C, D fails after calling C.",
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "170685"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "a000000000000000000000000000000000000000",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

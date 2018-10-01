@@ -1,0 +1,58 @@
+{
+    "evmBytecode": {
+        "env": {
+            "currentCoinbase": "0x1000000000000000000000000000000000000000",
+            "currentDifficulty": "0x20000",
+            "currentGasLimit": "0x54a60a4202e088",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8",
+            "previousHash": "0x0da7f1041f7b60aec6b67cafa0c08c10c9954d0b43737891d204ff372d166593"
+        },
+        "expect" : [
+		{
+		        "indexes" : {
+		            "data" : [0],
+		            "gas" : 0,
+		            "value" : 0
+		        },
+		        "network" : ["ALL"],
+		        "result" : {
+		            "0xb94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+				"storage": {
+				    "0x01" : "0x00"
+				}						
+			    },
+			    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+				"nonce": "0x01"
+			    }
+		        }
+		}
+	],
+        "pre": {
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                "balance": "0x38beec8feeca2598",
+                "code": "",
+                "nonce": "0x00",
+                "storage": {}
+            },
+            "0xb94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+                "balance": "0",
+                "code": "0x67FFFFFFFFFFFFFFFF600160006000FB",
+                "nonce": "0x3f",
+                "storage": {
+		}
+            }
+        },
+        "transaction": {
+            "data": [
+		""
+	    ],
+            "gasLimit": ["120000"],
+            "gasPrice": "0x01",
+            "nonce": "0x00",
+            "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to": "0xb94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value": ["0x00"]
+        }
+    }
+}

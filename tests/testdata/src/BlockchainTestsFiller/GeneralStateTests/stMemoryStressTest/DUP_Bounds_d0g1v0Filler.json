@@ -1,0 +1,62 @@
+{
+    "DUP_Bounds_d0g1v0" : {
+        "blocks" : [
+            {
+                "blockHeaderPremine" : {
+                    "difficulty" : "0x020000",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "timestamp" : "0x03e8",
+                    "updatePoW" : "1"
+                },
+                "transactions" : [
+                    {
+                        "data" : "",
+                        "gasLimit" : "0x0f4240",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0x3e25058b9043ef9130f5423b04831a80989f086dacf5ff8468da47b0790086d7",
+                        "s" : "0x4115beb874eee5f516fd60c91471249bde75186e260632ebf3567b7f05b3ea40",
+                        "to" : "0x1000000000000000000000000000000000000000",
+                        "v" : "0x1b",
+                        "value" : "0x01"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "difficulty" : "131072",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf99eb1626cfa6db435c0836235942d7ccaa935f1ae247d3f1c21e495685f903a",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "pre" : {
+            "0x1000000000000000000000000000000000000000" : {
+                "balance" : "0x00",
+                "code" : "0x600080505063ffffffff80505067ffffffffffffffff8050506fffffffffffffffffffffffffffffffff8050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff805050600060008150505063ffffffff63ffffffff8150505067ffffffffffffffff67ffffffffffffffff815050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff815050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff81505050600060006000825050505063ffffffff63ffffffff63ffffffff825050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff82505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff82505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8250505050600060006000600083505050505063ffffffff63ffffffff63ffffffff63ffffffff83505050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff8350505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff8350505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff835050505050600060006000600060008450505050505063ffffffff63ffffffff63ffffffff63ffffffff63ffffffff8450505050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff845050505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff845050505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff84505050505050600060006000600060006000855050505050505063ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff855050505050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff85505050505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff85505050505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8550505050505050600060006000600060006000600086505050505050505063ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff86505050505050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff8650505050505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff8650505050505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff865050505050505050600060006000600060006000600060008750505050505050505063ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff63ffffffff8750505050505050505067ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff67ffffffffffffffff875050505050505050506fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff6fffffffffffffffffffffffffffffffff875050505050505050507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff87",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x7fffffffffffffff",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

@@ -254,7 +254,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 			// Check m2 exists on chaindb.
 			// Get secrets and opening at epoc block checkpoint.
-			if number > 0 && number%contracts.EpocBlockRandomize == 0 {
+			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				var candidates []int64
 				// Get signers from snapshot.
 				snap, err := c.GetSnapshot(eth.blockchain, chain.CurrentHeader())
@@ -263,8 +263,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return err
 				}
 				signers := snap.Signers
+				lenSigners := int64(len(signers))
 
-				if len(signers) > 0 {
+				if lenSigners > 0 {
 					for addr := range signers {
 						random, err := contracts.GetRandomizeFromContract(client, addr)
 						if err != nil {
@@ -272,15 +273,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 						candidates = append(candidates, random)
 					}
-				}
 
-				// Get randomize m2 list.
-				m2, err := contracts.GenM2FromRandomize(candidates)
-				if err != nil {
-					log.Error("Can not get m2 from randomize SC", "error", err)
-				}
-				if len(m2) > 0 {
-					header.Validators = contracts.BuildValidatorFromM2(m2)
+					// Get randomize m2 list.
+					m2, err := contracts.GenM2FromRandomize(candidates, lenSigners)
+					if err != nil {
+						log.Error("Can not get m2 from randomize SC", "error", err)
+					}
+					if len(m2) > 0 {
+						header.Validators = contracts.BuildValidatorFromM2(m2)
+					}
 				}
 			}
 

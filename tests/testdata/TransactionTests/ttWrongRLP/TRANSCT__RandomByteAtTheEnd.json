@@ -1,0 +1,24 @@
+{
+    "TRANSCT__RandomByteAtTheEnd" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttWrongRLP/TRANSCT__RandomByteAtTheEndCopier.json",
+            "sourceHash" : "f8fd3bf8eafc63f9bd1ab6ee0e7ab9a30ed670609da25293856a7adb5fc1d843"
+        },
+        "rlp" : "0xf86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3ef"
+    }
+}

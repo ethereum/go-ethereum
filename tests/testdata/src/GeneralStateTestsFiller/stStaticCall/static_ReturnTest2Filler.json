@@ -1,0 +1,68 @@
+{
+    "static_ReturnTest2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "1000000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                    "194f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "storage" : {
+                            "0x00" : "0x15",
+                            "0x01" : "0x3f"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "194f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "{(MSTORE 0 0x15)(STATICCALL 7000 0xb94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 32 32 32) [[0]](MLOAD 0) [[1]](MLOAD 32) (RETURN 0 64)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000",
+                "code" : "{(MSTORE 0 (MUL 3 (CALLDATALOAD 0)))(RETURN 0 32)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "250000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "194f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

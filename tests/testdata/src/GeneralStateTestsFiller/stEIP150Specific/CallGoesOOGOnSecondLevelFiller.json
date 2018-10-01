@@ -1,0 +1,106 @@
+{
+    "CallGoesOOGOnSecondLevel" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150", "EIP158"],
+                "result" : {
+		    "1000000000000000000000000000000000000110" : {
+		        "storage" : {
+		        }
+		    },
+		    "1000000000000000000000000000000000000111" : {
+		        "storage" : {
+		        }
+		    },
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+		    "1000000000000000000000000000000000000110" : {
+		        "storage" : {
+		        }
+		    },
+		    "1000000000000000000000000000000000000111" : {
+		        "storage" : {
+		        }
+		    },
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "OOG Call because call goes OOG on second level",
+		"code" : "{ (SSTORE 8 (GAS)) (SSTORE 9 (CALL 600000 0x1000000000000000000000000000000000000110 0 0 0 0 0)) } ",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000110" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "Inner CaLL goes OOG on EIP150",
+		"code" : "{ (SSTORE 8 (GAS)) (SSTORE 9 (CALL 600000 0x1000000000000000000000000000000000000111 0 0 0 0 0)) } ",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000111" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (SSTORE 8 (GAS)) (CREATE 0 0 0) (CREATE 0 0 0) (SSTORE 9 (GAS)) (SSTORE 10 (GAS)) }",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "220000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

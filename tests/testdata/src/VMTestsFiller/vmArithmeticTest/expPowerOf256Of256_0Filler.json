@@ -1,0 +1,44 @@
+{
+    "expPowerOf256Of256_0": {
+        "env" : {
+        "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+        "currentNumber" : "0",
+        "currentGasLimit" : "10000000",
+        "currentDifficulty" : "256",
+        "currentTimestamp" : "1",
+        "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "expect" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "storage" : {
+                    "0x" : "0x0100",
+                    "0x01" : "0x0100",
+                    "0x02" : "0x0100",
+                    "0x03" : "0xff",
+                    "0x04" : "0xff",
+                    "0x05" : "0xff",
+                    "0x06" : "0x0101",
+                    "0x07" : "0x0101",
+                    "0x08" : "0x0101"
+                }
+            }
+        },
+        "pre" : {
+        "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+            "balance" : "1000000000000000000",
+            "nonce" : "0",
+            "code" : "{ [[ 0 ]] (EXP 256 (EXP 256 0)) [[ 1 ]] (EXP 256 (EXP 255 0)) [[ 2 ]] (EXP 256 (EXP 257 0)) [[ 3 ]] (EXP 255 (EXP 256 0)) [[ 4 ]] (EXP 255 (EXP 255 0)) [[ 5 ]] (EXP 255 (EXP 257 0)) [[ 6 ]] (EXP 257 (EXP 256 0)) [[ 7 ]] (EXP 257 (EXP 255 0)) [[ 8 ]] (EXP 257 (EXP 257 0)) }",
+            "storage": {}
+        }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "1000000"
+        }
+    }
+}

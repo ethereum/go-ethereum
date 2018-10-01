@@ -1,0 +1,35 @@
+# Use return with big offset, causes BN error in ethereumjs-vm
+---
+CREATE_ContractRETURNBigOffset:
+  env:
+    currentCoinbase: 2adc25665018aa1fe0e6bc666dac8fc2697ff9ba
+    currentDifficulty: '0x020000'
+    currentGasLimit: '89128960'
+    currentNumber: '1'
+    currentTimestamp: '1000'
+    previousHash: 5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6
+  pre:
+    a94f5374fce5edbc8e2a8697c15331677e6ebf0b:
+      balance: '100000000000'
+      code: ''
+      nonce: ''
+      storage: {}
+  transaction:
+    data:
+    #- { (RETURN 0x074ac2 0x010000) }
+    #- { (RETURN 0x074ac2 0x051eb8) }
+    #- { (RETURN 0x074ac2 0x051eb9) }
+    #- { (RETURN 0x074ac2 0x0d15bc) }
+    - '0x6201000062074ac2f3'
+    - '0x62051eb862074ac2f3'
+    - '0x62051eb962074ac2f3'
+    - '0x620d15bc62074ac2f3'
+    gasLimit:
+    - '0x5000001'
+    gasPrice: '0x02'
+    nonce: '0x00'
+    secretKey: 45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8
+    to: ''
+    value:
+    - '0'
+

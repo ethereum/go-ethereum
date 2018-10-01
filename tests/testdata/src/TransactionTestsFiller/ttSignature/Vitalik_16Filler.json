@@ -1,0 +1,23 @@
+{
+    "Vitalik_16" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "invalid",
+		"sender" : "3c24d7329e92f84f08556ceb6df1cdb0104ca49f"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "0x6d6f6f7365",
+            "gasLimit" : "0x0493e0",
+            "gasPrice" : "",
+            "nonce" : "0x13",
+            "to" : "0000000000000000000000000000000000000012",
+            "value" : "0x00",
+            "v" : "0x2a",
+            "r" : "0xd0e340578f9d733986f6a55c5401953c90f7ccd46fe72d5588592dd9cbdf1e03",
+            "s" : "0x01d8d63149bd986f363084ac064e8387850d80e5238cc16ed4d30fd0a5af7261"
+        }
+    }
+}

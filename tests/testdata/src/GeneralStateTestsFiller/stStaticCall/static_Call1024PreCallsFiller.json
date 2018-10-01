@@ -1,0 +1,118 @@
+{
+    "static_Call1024PreCalls" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "bbbf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		            "0x00" : "0x01",
+			    "0x01" : "0x00",
+			    "0x02" : "0x01",
+			    "0x03" : "0x01"
+		        }
+		    },
+		    "1000000000000000000000000000000000000000" : {
+			"storage" : {
+                            "0x00" : "0x01",
+			    "0x01" : "0x7fffeffffffe3617"
+                        }
+		     }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "cbbf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		            "0x00" : "0x00",
+			    "0x01" : "0x00",
+			    "0x02" : "0x00",
+			    "0x03" : "0x00"
+		        }
+		    },
+		    "1000000000000000000000000000000000000000" : {
+			"storage" : {
+                            "0x00" : "0x01",
+			    "0x01" : "0x7fffffffffdd3145"
+                        }
+		     }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+
+	    "1000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "{  [[ 0 ]] (CALL (GAS) (CALLDATALOAD 0) (CALLVALUE) 0 0 0 0) [[ 1 ]] (GAS) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+
+            "aaaf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "7000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "bbbf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "2024",
+                "code" : "{ [[ 2 ]] (STATICCALL 0xffff 0xaaaf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0) [[ 3 ]] (STATICCALL 0xffff 0xaaaf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0)  [[ 0 ]] (ADD @@0 1) [[ 1 ]] (STATICCALL 0xfffffffffff 0xbbbf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "cbbf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "2024",
+                "code" : "{ (STATICCALL 0xffff 0xaaaf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0) (STATICCALL 0xffff 0xaaaf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0)  (MSTORE 0 (ADD (MLOAD 0) 1)) (STATICCALL 0xfffffffffff 0xcbbf5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x000000000000000000000000bbbf5374fce5edbc8e2a8697c15331677e6ebf0b",
+		"0x000000000000000000000000cbbf5374fce5edbc8e2a8697c15331677e6ebf0b"
+            ],
+            "gasLimit" : [
+                "0x7ffffffffffffff0"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "10"
+            ]
+        }
+    }
+}

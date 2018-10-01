@@ -1,0 +1,27 @@
+{
+    "V_equals38" : {
+	     "expect" : [
+            {
+                "network" : ["EIP158", "Byzantium", "Constantinople"],
+                "result" : "valid",
+                "sender" : "10d1d0f00e24ed10a9290ab187ab008a2a210559"
+            },
+            {
+                "network" : ["Frontier", "Homestead", "EIP150"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "21000",
+            "gasPrice" : "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "nonce" : "0",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "0",
+            "v" : "38",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x1887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+        }
+    }
+}

@@ -1,0 +1,36 @@
+{
+    "RightVRSTest" : {
+        "Byzantium" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "Constantinople" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "EIP150" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "EIP158" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "Frontier" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "Homestead" : {
+            "hash" : "1cbb233404f49e96cb795d0ea74f485eca2c41a216e0ce80694cef4dd7a45b50",
+            "sender" : "58d79230fc81a042315da7d243272798e27cb40c"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttSignature/RightVRSTestFiller.json",
+            "sourceHash" : "87d3cf8cb2250790e69a12465ba1a752243caa41d35ffc218b7258da0a829952"
+        },
+        "rlp" : "0xf85f030182520894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa01887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

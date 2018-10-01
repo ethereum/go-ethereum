@@ -46,19 +46,9 @@ import (
 )
 
 const (
-	HexSignMethod           = "e341eaa4"
-	RewardMasterPercent     = 40
-	RewardVoterPercent      = 50
-	RewardFoundationPercent = 10
-	HexSetSecret            = "34d38600"
-	HexSetOpening           = "e11f5ba2"
-	EpocBlockSecret         = 800
-	EpocBlockOpening        = 850
-	EpocBlockRandomize      = 900
-	MaxMasternodes          = 150
-	M2ByteLength            = 4
-	extraVanity             = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal               = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+	M2ByteLength = 4
+	extraVanity  = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal    = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 )
 
 type rewardLog struct {
@@ -101,7 +91,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		exist, _ := chainDb.Has(randomizeKeyName)
 
 		// Set secret for randomize.
-		if !exist && checkNumber > 0 && EpocBlockSecret <= checkNumber && EpocBlockOpening > checkNumber {
+		if !exist && checkNumber > 0 && common.EpocBlockSecret <= checkNumber && common.EpocBlockOpening > checkNumber {
 			// Only process when private key empty in state db.
 			// Save randomize key into state db.
 			randomizeKeyValue := RandStringByte(32)
@@ -125,7 +115,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		}
 
 		// Set opening for randomize.
-		if exist && checkNumber > 0 && EpocBlockOpening <= checkNumber && EpocBlockRandomize >= checkNumber {
+		if exist && checkNumber > 0 && common.EpocBlockOpening <= checkNumber && common.EpocBlockRandomize >= checkNumber {
 			randomizeKeyValue, err := chainDb.Get(randomizeKeyName)
 			if err != nil {
 				log.Error("Fail to get randomize key from state db.", "error", err)
@@ -157,7 +147,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 
 // Create tx sign.
 func CreateTxSign(blockNumber *big.Int, blockHash common.Hash, nonce uint64, blockSigner common.Address) *types.Transaction {
-	data := common.Hex2Bytes(HexSignMethod)
+	data := common.Hex2Bytes(common.HexSignMethod)
 	inputData := append(data, common.LeftPadBytes(blockNumber.Bytes(), 32)...)
 	inputData = append(inputData, common.LeftPadBytes(blockHash.Bytes(), 32)...)
 	tx := types.NewTransaction(nonce, blockSigner, big.NewInt(0), 200000, big.NewInt(0), inputData)
@@ -167,7 +157,7 @@ func CreateTxSign(blockNumber *big.Int, blockHash common.Hash, nonce uint64, blo
 
 // Send secret key into randomize smartcontract.
 func BuildTxSecretRandomize(nonce uint64, randomizeAddr common.Address, epocNumber uint64, randomizeKey []byte) (*types.Transaction, error) {
-	data := common.Hex2Bytes(HexSetSecret)
+	data := common.Hex2Bytes(common.HexSetSecret)
 	rand.Seed(time.Now().UnixNano())
 	secretNumb := rand.Intn(int(epocNumber))
 
@@ -191,7 +181,7 @@ func BuildTxSecretRandomize(nonce uint64, randomizeAddr common.Address, epocNumb
 
 // Send opening to randomize SMC.
 func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomizeKey []byte) (*types.Transaction, error) {
-	data := common.Hex2Bytes(HexSetOpening)
+	data := common.Hex2Bytes(common.HexSetOpening)
 	inputData := append(data, randomizeKey...)
 	tx := types.NewTransaction(nonce, randomizeAddr, big.NewInt(0), 4200000, big.NewInt(0), inputData)
 
@@ -235,9 +225,9 @@ func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common
 }
 
 // Generate m2 listing from randomize array.
-func GenM2FromRandomize(randomizes []int64) ([]int64, error) {
-	blockValidator := NewSlice(int64(0), MaxMasternodes, 1)
-	randIndexs := make([]int64, MaxMasternodes)
+func GenM2FromRandomize(randomizes []int64, lenSigners int64) ([]int64, error) {
+	blockValidator := NewSlice(int64(0), lenSigners, 1)
+	randIndexs := make([]int64, lenSigners)
 	total := int64(0)
 	var temp int64 = 0
 	for _, j := range randomizes {
@@ -413,7 +403,7 @@ func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *co
 func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
 	balances := make(map[common.Address]*big.Int)
-	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent))
+	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
@@ -425,7 +415,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 	}
 
 	if len(voters) > 0 {
-		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(RewardVoterPercent))
+		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
 		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
 		totalCap := new(big.Int)
 		// Get voters capacities.
@@ -456,7 +446,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		}
 	}
 
-	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent))
+	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardFoundationPercent))
 	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
 	balances[foudationWalletAddr] = foudationReward
 
@@ -578,7 +568,7 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 
 // Get m2 list from checkpoint block.
 func GetM2FromCheckpointBlock(checkpointBlock types.Block) ([]common.Address, error) {
-	if checkpointBlock.Number().Int64()%EpocBlockRandomize != 0 {
+	if checkpointBlock.Number().Int64()%common.EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
 
@@ -587,8 +577,15 @@ func GetM2FromCheckpointBlock(checkpointBlock types.Block) ([]common.Address, er
 	validators := ExtractValidatorsFromBytes(checkpointBlock.Header().Validators)
 
 	var m2List []common.Address
+	lenMasternodes := len(masternodes)
+	var valAddr common.Address
 	for validatorIndex := range validators {
-		m2List = append(m2List, masternodes[validatorIndex])
+		if validatorIndex < lenMasternodes {
+			valAddr = masternodes[validatorIndex]
+		} else {
+			valAddr = masternodes[validatorIndex-lenMasternodes]
+		}
+		m2List = append(m2List, valAddr)
 	}
 
 	return m2List, nil

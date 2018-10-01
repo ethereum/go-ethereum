@@ -1,0 +1,24 @@
+{
+    "RLPIncorrectByteEncoding127" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttWrongRLP/RLPIncorrectByteEncoding127Copier.json",
+            "sourceHash" : "3a4f211835cf2e3a695dad85168c96d4b48b67092e203e42624ebc484e26106d"
+        },
+        "rlp" : "0xf860817f0182520894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

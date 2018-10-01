@@ -1,0 +1,37 @@
+{
+    "kv1": {
+        "env" : {
+        "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+        "currentNumber" : "0",
+        "currentGasLimit" : "1000000",
+        "currentDifficulty" : "256",
+        "currentTimestamp" : "1",
+        "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "expect" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "storage" : {
+                    "0x45" : "0xcd1722f3947def4cf144679da39c4c32bdc35681"
+                }
+            }
+        },
+        "pre" : {
+        "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+            "balance" : "100000000000000000000000",
+            "nonce" : "0",
+            "code" : "{    [[69]] (caller)   (return 0 (lll     (when (= (caller) @@69)       (def 'i 0x80)       (for {} (< @i (calldatasize)) [i](+ @i 64)         [[ (calldataload @i) ]] (calldataload (+ @i 32))       )     )   0))}",
+	    "code" : "0x33604555602d80600f6000396000f3604554331415602c575b366080511015602b576020608051013560805135556040608051016080526009565b5b",
+            "storage": {}
+        }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "100000"
+        }
+    }
+}

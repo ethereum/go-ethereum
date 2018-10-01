@@ -1,0 +1,24 @@
+{
+    "Vitalik_15" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttSignature/Vitalik_15Filler.json",
+            "sourceHash" : "e8920bbc5dfffbb5a93b49d6777d2c6ab64a0fe9623450f7040570c88ea3a82b"
+        },
+        "rlp" : "0xf8651280830493e094000000000000000000000000000000000000000180856d6f6f736529a0376d0277dd3a2a9229dbcb5530b532c7e4cb0f821e0ca27d9acb940970d500d8a00ab2798f9d9c2f7551eb29d56878f8e342b45ca45f413b0fcba793d094f36f2b"
+    }
+}

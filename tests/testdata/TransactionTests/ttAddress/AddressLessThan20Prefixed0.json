@@ -1,0 +1,36 @@
+{
+    "AddressLessThan20Prefixed0" : {
+        "Byzantium" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "Constantinople" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "EIP150" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "EIP158" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "Frontier" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "Homestead" : {
+            "hash" : "2781a1444a7a4a646bf551f90913054dc47b2f3493d4a82a057445eb9e1c98cf",
+            "sender" : "2fbffb0b9f709fd1fa4db9ff7342f2e6b3b2b7a6"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttAddress/AddressLessThan20Prefixed0Filler.json",
+            "sourceHash" : "c10a162dc48a3bc2a5f245c6c0aaede958ba6d76352907d777693e49cd621abe"
+        },
+        "rlp" : "0xf85f800182520894000000000000000000000000000b9331677e6ebf0a801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa01887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "TransactionWithHighNonce32_correctS" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "valid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "21000",
+            "gasPrice" : "1",
+            "nonce" : "4294967296",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "0",
+            "v" : "27",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0x1fffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+        }
+    }
+}
