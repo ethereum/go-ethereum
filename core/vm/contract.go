@@ -49,10 +49,10 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
-	jumpdests destinations // result of JUMPDEST analysis.
+	jumpdests destinations // Aggregated result of JUMPDEST analysis.
 
 	Code     []byte
-	CodeHash common.Hash
+	CodeHash *common.Hash
 	CodeAddr *common.Address
 	Input    []byte
 
@@ -82,6 +82,37 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 	c.value = value
 
 	return c
+}
+
+func (c *Contract) validJumpdest(dest *big.Int) bool {
+	udest := dest.Uint64()
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
+	// Don't bother checking for JUMPDEST in that case.
+	if dest.BitLen() >= 63 || udest >= uint64(len(c.Code)) {
+		return false
+	}
+	// Only JUMPDESTs allowed for destinations
+	if OpCode(c.Code[udest]) != JUMPDEST {
+		return false
+	}
+	var analysis bitvec
+	// Do we have a contract hash already?
+	if c.CodeHash != nil {
+		var exist bool
+		// Does parent context have the analysis?
+		analysis, exist = c.jumpdests[*c.CodeHash]
+		if !exist {
+			// Do the analysis
+			analysis = codeBitmap(c.Code)
+			// Save in parent context
+			c.jumpdests[*c.CodeHash] = analysis
+		}
+		return analysis.codeSegment(udest)
+	}
+	//Don't have the hash, most likely a piece of initcode not already in state trie
+	analysis = codeBitmap(c.Code)
+	// Don't bother saving this
+	return analysis.codeSegment(udest)
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current
@@ -138,16 +169,16 @@ func (c *Contract) Value() *big.Int {
 	return c.value
 }
 
-// SetCode sets the code to the contract
-func (c *Contract) SetCode(hash common.Hash, code []byte) {
-	c.Code = code
-	c.CodeHash = hash
-}
-
 // SetCallCode sets the code of the contract and address of the backing data
 // object
 func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
 	c.Code = code
-	c.CodeHash = hash
+	c.CodeHash = &hash
+	c.CodeAddr = addr
+}
+
+func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash codeAndHash) {
+	c.Code = codeAndHash.code
+	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
 }

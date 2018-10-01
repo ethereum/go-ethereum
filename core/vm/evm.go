@@ -395,7 +395,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash codeAndHash, gas uint64, 
 	// EVM. The contract is a scoped environment for this execution context
 	// only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
-	contract.SetCallCode(&address, codeAndHash.Hash(), codeAndHash.code)
+	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, address, gas, nil
