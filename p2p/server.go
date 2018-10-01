@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -572,7 +573,7 @@ func (srv *Server) setupListening() error {
 	laddr := listener.Addr().(*net.TCPAddr)
 	srv.ListenAddr = laddr.String()
 	srv.listener = listener
-	srv.localnode.SetStaticTCP(laddr.Port)
+	srv.localnode.Set(enr.TCP(laddr.Port))
 
 	srv.loopWG.Add(1)
 	go srv.listenLoop()

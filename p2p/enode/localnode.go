@@ -38,8 +38,9 @@ const (
 	iptrackContactWindow = 10 * time.Minute
 )
 
-// LocalNode produces the signed node record of a local node, i.e. a node
-// run in the current process.
+// LocalNode produces the signed node record of a local node, i.e. a node run in the
+// current process. Setting ENR entries via the Set method updates the record. A new version
+// of the record is signed on demand when the Node method is called.
 type LocalNode struct {
 	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date.
 	id  ID
@@ -52,11 +53,11 @@ type LocalNode struct {
 	entries     map[string]enr.Entry
 	udpTrack    *netutil.IPTracker // predicts external UDP endpoint
 	staticIP    net.IP
-	staticTCP   int
 	fallbackIP  net.IP
 	fallbackUDP int
 }
 
+// NewLocalNode creates a local node.
 func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 	ln := &LocalNode{
 		id:       PubkeyToIDV4(&key.PublicKey),
@@ -126,6 +127,8 @@ func (ln *LocalNode) delete(e enr.Entry) {
 	}
 }
 
+// SetStaticIP sets the local IP to the given one unconditionally.
+// This disables endpoint prediction.
 func (ln *LocalNode) SetStaticIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
@@ -134,6 +137,8 @@ func (ln *LocalNode) SetStaticIP(ip net.IP) {
 	ln.updateEndpoints()
 }
 
+// SetFallbackIP sets the last-resort IP address. This address is used
+// if no endpoint prediction can be made and no static IP is set.
 func (ln *LocalNode) SetFallbackIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
@@ -142,19 +147,13 @@ func (ln *LocalNode) SetFallbackIP(ip net.IP) {
 	ln.updateEndpoints()
 }
 
+// SetFallbackUDP sets the last-resort UDP port. This port is used
+// if no endpoint prediction can be made.
 func (ln *LocalNode) SetFallbackUDP(port int) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
 	ln.fallbackUDP = port
-	ln.updateEndpoints()
-}
-
-func (ln *LocalNode) SetStaticTCP(port int) {
-	ln.mu.Lock()
-	defer ln.mu.Unlock()
-
-	ln.staticTCP = port
 	ln.updateEndpoints()
 }
 
@@ -182,29 +181,23 @@ func (ln *LocalNode) updateEndpoints() {
 	// Determine the endpoints.
 	newIP := ln.fallbackIP
 	newUDP := ln.fallbackUDP
-	if ip, port := predictAddr(ln.udpTrack); ip != nil {
-		newIP = ip
-		newUDP = port
-	}
 	if ln.staticIP != nil {
 		newIP = ln.staticIP
+	} else if ip, port := predictAddr(ln.udpTrack); ip != nil {
+		newIP = ip
+		newUDP = port
 	}
 
 	// Update the record.
 	if newIP != nil && !newIP.IsUnspecified() {
 		ln.set(enr.IP(newIP))
+		if newUDP != 0 {
+			ln.set(enr.UDP(newUDP))
+		} else {
+			ln.delete(enr.UDP(0))
+		}
 	} else {
 		ln.delete(enr.IP{})
-	}
-	if newUDP != 0 {
-		ln.set(enr.UDP(newUDP))
-	} else {
-		ln.delete(enr.UDP(0))
-	}
-	if ln.staticTCP != 0 {
-		ln.set(enr.TCP(ln.staticTCP))
-	} else {
-		ln.delete(enr.TCP(0))
 	}
 }
 
