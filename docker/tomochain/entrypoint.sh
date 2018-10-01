@@ -98,6 +98,7 @@ if [[ $accountsCount -le 0 ]]; then
       --datadir $DATA_DIR \
       --keystore $KEYSTORE_DIR \
       --password ./password
+    rm ./private_key
   else
     echo "Creating new account"
     tomo account new \
