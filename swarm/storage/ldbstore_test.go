@@ -343,9 +343,9 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 // TestLDBStoreCollectGarbageOrdered checks if the most recently added chunks according to capacity are left after garbage collection
 func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
-	capacity := 10000
-	chunkCount := 20000
 	gcThreshold := int(maxGCitems * gcArrayFreeRatio)
+	capacity := maxGCitems * 2
+	chunkCount := capacity * 2
 	hasher := MakeHashFunc(DefaultHash)()
 	writeBatchTolerance := 128 // according to log ldb seems to write in batches of 6
 
