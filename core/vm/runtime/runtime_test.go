@@ -17,7 +17,6 @@
 package runtime
 
 import (
-	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"strings"
 	"testing"
@@ -27,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestDefaults(t *testing.T) {
