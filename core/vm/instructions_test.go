@@ -18,12 +18,11 @@ package vm
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -544,14 +543,21 @@ func TestCreate2Addreses(t *testing.T) {
 			code:     "0x",
 			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
 		},
-
 	} {
 
 		origin := common.BytesToAddress(common.FromHex(tt.origin))
 		salt := common.BytesToHash(common.FromHex(tt.salt))
 		code := common.FromHex(tt.code)
 		address := crypto.CreateAddress2(origin, salt, code)
-		fmt.Printf("Example %d\n* address `0x%x`\n* salt `0x%x`\n* code `0x%x`\n* result: `%s`\n\n", i,origin, salt, code, address.String())
+		/*
+			stack          := newstack()
+			// salt, but we don't need that for this test
+			stack.push(big.NewInt(int64(len(code)))) //size
+			stack.push(big.NewInt(0)) // memstart
+			stack.push(big.NewInt(0)) // value
+			gas, _ := gasCreate2(params.GasTable{}, nil, nil, stack, nil, 0)
+			fmt.Printf("Example %d\n* address `0x%x`\n* salt `0x%x`\n* init_code `0x%x`\n* gas (assuming no mem expansion): `%v`\n* result: `%s`\n\n", i,origin, salt, code, gas, address.String())
+		*/
 		expected := common.BytesToAddress(common.FromHex(tt.expected))
 		if bytes.Compare(expected.Bytes(), address.Bytes()) != 0 {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
