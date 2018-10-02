@@ -256,12 +256,12 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-var app = utils.NewApp(gitCommit, "Ethereum Swarm")
+var app = utils.NewApp("", "Ethereum Swarm")
 
 // This init function creates the cli.App.
 func init() {
 	app.Action = bzzd
-	app.HideVersion = true // we have a command to print the version
+	app.Version = sv.ArchiveVersion(gitCommit)
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		{
