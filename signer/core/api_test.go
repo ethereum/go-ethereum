@@ -245,7 +245,21 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
-func TestSignData(t *testing.T) {
+func signApplicationValidator(t *testing.T) {
+	// TODO
+}
+
+func signApplicationClique(t *testing.T) {
+	// https://etherscan.io/block/1
+	//header := &types.Header{
+	//	"0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
+	//	"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+	//	"0x05a56e2d52c817161883f50c441c3228cfe54d9f",
+	//}
+	// TODO
+}
+
+func signDataPlain(t *testing.T) {
 	api, control := setup(t)
 	//Create two accounts
 	createAccount(control, api, t)
@@ -259,7 +273,7 @@ func TestSignData(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	h, err := api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
+	h, err := api.SignData(context.Background(), DataPlain.Mime, a, []byte("EHLO world"))
 	if h != nil {
 		t.Errorf("Expected nil-data, got %x", h)
 	}
@@ -267,7 +281,7 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected ErrLocked! %v", err)
 	}
 	control <- "No way"
-	h, err = api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
+	h, err = api.SignData(context.Background(), DataPlain.Mime, a, []byte("EHLO world"))
 	if h != nil {
 		t.Errorf("Expected nil-data, got %x", h)
 	}
@@ -276,7 +290,7 @@ func TestSignData(t *testing.T) {
 	}
 	control <- "Y"
 	control <- "a_long_password"
-	h, err = api.SignData(context.Background(), "text/plain", a, []byte("EHLO world"))
+	h, err = api.SignData(context.Background(), DataPlain.Mime, a, []byte("EHLO world"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,6 +298,25 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(h))
 	}
 }
+
+func signDataStructured(t *testing.T) {
+	// TODO
+}
+
+func TestSignData(t *testing.T) {
+	// application/validator or `0x00`
+	signApplicationValidator(t)
+
+	// application/clique or `0x01`
+	signApplicationClique(t)
+
+	// data/plain or `0x45`
+	signDataPlain(t)
+
+	// data/structured `0x46`
+	signDataStructured(t)
+}
+
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)

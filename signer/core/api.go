@@ -111,8 +111,8 @@ type Metadata struct {
 }
 
 type SigFormat struct {
-	Mime		string
-	ByteVersion	byte
+	Mime        string
+	ByteVersion byte
 }
 
 var (
@@ -663,14 +663,14 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	return hash.Bytes(), nil
 }
 
-// DataWithValidatorHash signs the given message which can be further recovered
+// SignDataWithValidator signs the given message which can be further recovered
 // with the given validator.
 func SignDataWithValidator(data []byte) ([]byte, string) {
 	msg := "TODO"
 	return crypto.Keccak256([]byte(msg)), msg
 }
 
-// DataStructuredHash signs the given message according to EIP712.
+// SignDataStructured signs the given message according to EIP712.
 //
 // https://github.com/ethereum/EIPs/issues/712
 func SignDataStructured(data []byte) ([]byte, string) {
