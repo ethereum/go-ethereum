@@ -16,7 +16,7 @@
 
 // +build !js
 
-package ethdb
+package keyvalue
 
 import (
 	"fmt"
@@ -26,23 +26,38 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/database"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
-	writePauseWarningThrottler = 1 * time.Minute
+	// leveldbDegradationWarnInterval specifies how often warning should be printed
+	// if the leveldb database cannot keep up with requested writes.
+	leveldbDegradationWarnInterval = time.Minute
+
+	// leveldbMinCache is the minimum amount of memory in megabytes to allocate to
+	// leveldb read and write caching, split half and half.
+	leveldbMinCache = 16
+
+	// leveldbMinHandles is the minimum number of files handles to allocate to the
+	// open database files.
+	leveldbMinHandles = 16
+
+	// metricsGatheringInterval specifies the interval to retrieve leveldb database
+	// compaction, io and pause stats to report to the user.
+	metricsGatheringInterval = 3 * time.Second
 )
 
-var OpenFileLimit = 64
-
-type LDBDatabase struct {
+// LeveldbDatabase is a persistent key-value store. Apart from basic data storage
+// functionality it also supports batch writes and iterating over the keyspace in
+// binary-alphabetical order.
+type LeveldbDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
@@ -60,17 +75,16 @@ type LDBDatabase struct {
 	log log.Logger // Contextual logger tracking the database path
 }
 
-// NewLDBDatabase returns a LevelDB wrapped object.
-func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
-	logger := log.New("database", file)
-
+// NewLeveldbDatabase returns a wrapped LevelDB object.
+func NewLeveldbDatabase(file string, cache int, handles int, namespace string) (database.KeyValueStore, error) {
 	// Ensure we have some minimal caching and file guarantees
-	if cache < 16 {
-		cache = 16
+	if cache < leveldbMinCache {
+		cache = leveldbMinCache
 	}
-	if handles < 16 {
-		handles = 16
+	if handles < leveldbMinHandles {
+		handles = leveldbMinHandles
 	}
+	logger := log.New("database", file)
 	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*1024*1024), "handles", handles)
 
 	// Open the db and recover any potential corruptions
@@ -83,56 +97,32 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
-	// (Re)check for errors and abort if opening of the db failed
 	if err != nil {
 		return nil, err
 	}
-	return &LDBDatabase{
-		fn:  file,
-		db:  db,
-		log: logger,
-	}, nil
-}
-
-// Path returns the path to the database directory.
-func (db *LDBDatabase) Path() string {
-	return db.fn
-}
-
-// Put puts the given key / value to the queue
-func (db *LDBDatabase) Put(key []byte, value []byte) error {
-	return db.db.Put(key, value, nil)
-}
-
-func (db *LDBDatabase) Has(key []byte) (bool, error) {
-	return db.db.Has(key, nil)
-}
-
-// Get returns the given key if it's present.
-func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
-	dat, err := db.db.Get(key, nil)
-	if err != nil {
-		return nil, err
+	// Assemble the wrapper with all the registered metrics
+	ldb := &LeveldbDatabase{
+		fn:       file,
+		db:       db,
+		log:      logger,
+		quitChan: make(chan chan error),
 	}
-	return dat, nil
+	ldb.compTimeMeter = metrics.NewRegisteredMeter(namespace+"compact/time", nil)
+	ldb.compReadMeter = metrics.NewRegisteredMeter(namespace+"compact/input", nil)
+	ldb.compWriteMeter = metrics.NewRegisteredMeter(namespace+"compact/output", nil)
+	ldb.diskReadMeter = metrics.NewRegisteredMeter(namespace+"disk/read", nil)
+	ldb.diskWriteMeter = metrics.NewRegisteredMeter(namespace+"disk/write", nil)
+	ldb.writeDelayMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/duration", nil)
+	ldb.writeDelayNMeter = metrics.NewRegisteredMeter(namespace+"compact/writedelay/counter", nil)
+
+	// Start up the metrics gathering and return
+	go ldb.meter(metricsGatheringInterval)
+	return ldb, nil
 }
 
-// Delete deletes the key from the queue and database
-func (db *LDBDatabase) Delete(key []byte) error {
-	return db.db.Delete(key, nil)
-}
-
-func (db *LDBDatabase) NewIterator() iterator.Iterator {
-	return db.db.NewIterator(nil, nil)
-}
-
-// NewIteratorWithPrefix returns a iterator to iterate over subset of database content with a particular prefix.
-func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
-	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
-}
-
-func (db *LDBDatabase) Close() {
-	// Stop the metrics collection to avoid internal database races
+// Close stops th emetrics collection, flushes any pending data to disk and closes
+// all io access to the underlying key-value store.
+func (db *LeveldbDatabase) Close() error {
 	db.quitLock.Lock()
 	defer db.quitLock.Unlock()
 
@@ -144,41 +134,68 @@ func (db *LDBDatabase) Close() {
 		}
 		db.quitChan = nil
 	}
-	err := db.db.Close()
-	if err == nil {
-		db.log.Info("Database closed")
-	} else {
-		db.log.Error("Failed to close database", "err", err)
+	return db.db.Close()
+}
+
+// Has retrieves if a key is present in the key-value store.
+func (db *LeveldbDatabase) Has(key []byte) (bool, error) {
+	return db.db.Has(key, nil)
+}
+
+// Get retrieves the given key if it's present in the key-value store.
+func (db *LeveldbDatabase) Get(key []byte) ([]byte, error) {
+	dat, err := db.db.Get(key, nil)
+	if err != nil {
+		return nil, err
+	}
+	return dat, nil
+}
+
+// Put inserts the given value into the key-value store.
+func (db *LeveldbDatabase) Put(key []byte, value []byte) error {
+	return db.db.Put(key, value, nil)
+}
+
+// Delete removes the key from the key-value store.
+func (db *LeveldbDatabase) Delete(key []byte) error {
+	return db.db.Delete(key, nil)
+}
+
+// NewBatch creates a write-only key-value store that buffers changes to its host
+// database until a final write is called.
+func (db *LeveldbDatabase) NewBatch() database.Batch {
+	return &leveldbBatch{
+		db: db.db,
+		b:  new(leveldb.Batch),
 	}
 }
 
-func (db *LDBDatabase) LDB() *leveldb.DB {
-	return db.db
+// NewIterator creates a binary-alphabetical iterator over the entire keyspace
+// contained within the leveldb database.
+func (db *LeveldbDatabase) NewIterator() database.Iterator {
+	return db.NewIteratorWithPrefix(nil)
 }
 
-// Meter configures the database metrics collectors and
-func (db *LDBDatabase) Meter(prefix string) {
-	// Initialize all the metrics collector at the requested prefix
-	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
-	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
+// NewIteratorWithPrefix creates a binary-alphabetical iterator over a subset
+// of database content with a particular key prefix.
+func (db *LeveldbDatabase) NewIteratorWithPrefix(prefix []byte) database.Iterator {
+	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
+}
 
-	// Create a quit channel for the periodic collector and run it
-	db.quitLock.Lock()
-	db.quitChan = make(chan chan error)
-	db.quitLock.Unlock()
+// Stat returns a particular internal stat of the database.
+func (db *LeveldbDatabase) Stat(property string) (string, error) {
+	return db.db.GetProperty(property)
+}
 
-	go db.meter(3 * time.Second)
+// Path returns the path to the database directory.
+func (db *LeveldbDatabase) Path() string {
+	return db.fn
 }
 
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 //
-// This is how a stats table look like (currently):
+// This is how a stats leveldbTable look like (currently):
 //   Compactions
 //    Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)
 //   -------+------------+---------------+---------------+---------------+---------------
@@ -192,7 +209,7 @@ func (db *LDBDatabase) Meter(prefix string) {
 //
 // This is how the iostats look like (currently):
 // Read(MB):3895.04860 Write(MB):3654.64712
-func (db *LDBDatabase) meter(refresh time.Duration) {
+func (db *LeveldbDatabase) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
@@ -221,19 +238,19 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		// Find the compaction table, skip the header
+		// Find the compaction leveldbTable, skip the header
 		lines := strings.Split(stats, "\n")
 		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
 			lines = lines[1:]
 		}
 		if len(lines) <= 3 {
-			db.log.Error("Compaction table not found")
-			merr = errors.New("compaction table not found")
+			db.log.Error("Compaction leveldbTable not found")
+			merr = errors.New("compaction leveldbTable not found")
 			continue
 		}
 		lines = lines[3:]
 
-		// Iterate over all the table rows, and accumulate the entries
+		// Iterate over all the leveldbTable rows, and accumulate the entries
 		for j := 0; j < len(compactions[i%2]); j++ {
 			compactions[i%2][j] = 0
 		}
@@ -296,7 +313,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
-			time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
+			time.Now().After(lastWritePaused.Add(leveldbDegradationWarnInterval)) {
 			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
@@ -349,37 +366,40 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
-func (db *LDBDatabase) NewBatch() Batch {
-	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
-}
-
-type ldbBatch struct {
+// leveldbBatch is a write-only leveldb batch that commits changes to its host
+// database when Write is called. A batch cannot be used concurrently.
+type leveldbBatch struct {
 	db   *leveldb.DB
 	b    *leveldb.Batch
 	size int
 }
 
-func (b *ldbBatch) Put(key, value []byte) error {
+// Put inserts the given value into the batch for later committing.
+func (b *leveldbBatch) Put(key, value []byte) error {
 	b.b.Put(key, value)
 	b.size += len(value)
 	return nil
 }
 
-func (b *ldbBatch) Delete(key []byte) error {
+// Delete inserts the a key removal into the batch for later committing.
+func (b *leveldbBatch) Delete(key []byte) error {
 	b.b.Delete(key)
 	b.size += 1
 	return nil
 }
 
-func (b *ldbBatch) Write() error {
-	return b.db.Write(b.b, nil)
-}
-
-func (b *ldbBatch) ValueSize() int {
+// ValueSize retrieves the amount of data queued up for writing.
+func (b *leveldbBatch) ValueSize() int {
 	return b.size
 }
 
-func (b *ldbBatch) Reset() {
+// Write flushes any accumulated data to disk.
+func (b *leveldbBatch) Write() error {
+	return b.db.Write(b.b, nil)
+}
+
+// Reset resets the batch for reuse.
+func (b *leveldbBatch) Reset() {
 	b.b.Reset()
 	b.size = 0
 }

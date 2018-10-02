@@ -102,9 +102,11 @@ type Config struct {
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
-	TrieCleanCache     int
-	TrieDirtyCache     int
-	TrieTimeout        time.Duration
+	DatabaseFreezer    string
+
+	TrieCleanCache int
+	TrieDirtyCache int
+	TrieTimeout    time.Duration
 
 	// Mining-related options
 	Etherbase      common.Address `toml:",omitempty"`
