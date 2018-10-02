@@ -21,7 +21,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 var (
@@ -44,7 +44,7 @@ func NewAPI(swap *Swap) *API {
 }
 
 //Get the balance for this node with a specific peer
-func (swapapi *API) BalanceWithPeer(ctx context.Context, peer discover.NodeID) (balance *big.Int, err error) {
+func (swapapi *API) BalanceWithPeer(ctx context.Context, peer enode.ID) (balance *big.Int, err error) {
 	balance = swapapi.swap.peers[peer]
 	if balance == nil {
 		err = ErrNoSuchPeerAccounting

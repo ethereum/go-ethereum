@@ -1,3 +1,19 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package swarm
 
 import (
@@ -14,7 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -121,7 +137,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 
 	//every node has a map to all nodes it had interactions
 	//each entry in the map is a map of the other node with all the balances
-	balancesMap := make(map[discover.NodeID]map[discover.NodeID]*big.Int)
+	balancesMap := make(map[enode.ID]map[enode.ID]*big.Int)
 
 	//iterate all nodes
 	for _, node := range sim.NodeIDs() {
@@ -133,7 +149,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 		swarm := item.(*Swarm)
 
 		//submap for each node is a map of all nodes with the balance for that node
-		subBalances := make(map[discover.NodeID]*big.Int)
+		subBalances := make(map[enode.ID]*big.Int)
 
 		//iterate all nodes again...
 		//get all balances with other peers for every node
@@ -295,7 +311,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		}
 	})
 
-	balancesMap := make(map[discover.NodeID]map[discover.NodeID]*big.Int)
+	balancesMap := make(map[enode.ID]map[enode.ID]*big.Int)
 
 	for _, node := range sim.NodeIDs() {
 		item, ok := sim.NodeItem(node, bucketKeySwarm)
@@ -305,7 +321,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		}
 		swarm := item.(*Swarm)
 
-		subBalances := make(map[discover.NodeID]*big.Int)
+		subBalances := make(map[enode.ID]*big.Int)
 
 		for _, n := range sim.NodeIDs() {
 			if node == n {

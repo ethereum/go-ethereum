@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -40,7 +40,7 @@ const (
 //For a better understanding, please read the Swap network paper "Generalized Swap swear and swindle games"
 type Protocol struct {
 	peersMu sync.RWMutex
-	peers   map[discover.NodeID]*Peer
+	peers   map[enode.ID]*Peer
 }
 
 //This is the peer representing a participant in this protocol
@@ -51,7 +51,7 @@ type Peer struct {
 //Create a new protocol instance
 func NewProtocol() *Protocol {
 	proto := &Protocol{
-		peers: make(map[discover.NodeID]*Peer),
+		peers: make(map[enode.ID]*Peer),
 	}
 	return proto
 }
@@ -140,7 +140,7 @@ func (s *Swap) NodeInfo() interface{} {
 	return nil
 }
 
-func (s *Swap) PeerInfo(id discover.NodeID) interface{} {
+func (s *Swap) PeerInfo(id enode.ID) interface{} {
 	return nil
 }
 
@@ -148,7 +148,7 @@ func (s *Swap) PeerInfo(id discover.NodeID) interface{} {
 func (proto *Protocol) Close() {
 }
 
-func (proto *Protocol) getPeer(peerId discover.NodeID) *Peer {
+func (proto *Protocol) getPeer(peerId enode.ID) *Peer {
 	proto.peersMu.RLock()
 	defer proto.peersMu.RUnlock()
 

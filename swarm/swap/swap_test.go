@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -42,7 +41,6 @@ var (
 	p2pPort       = 30100
 	ipcpath       = ".swarm.ipc"
 	datadirPrefix = ".data_"
-	stackW        = &sync.WaitGroup{}
 	loglevel      = flag.Int("loglevel", 2, "verbosity of logs")
 )
 

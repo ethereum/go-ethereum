@@ -19,15 +19,15 @@ package swap
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 type ChequeManager struct {
 	stateStore        state.Store
-	serialPerNode     map[discover.NodeID]uint64
-	openDebitCheques  map[discover.NodeID][]*Cheque
-	openCreditCheques map[discover.NodeID][]*Cheque
+	serialPerNode     map[enode.ID]uint64
+	openDebitCheques  map[enode.ID][]*Cheque
+	openCreditCheques map[enode.ID][]*Cheque
 }
 
 type Cheque struct {
@@ -35,20 +35,20 @@ type Cheque struct {
 	timeout      uint64
 	amount       *big.Int
 	sumCumulated *big.Int
-	beneficiary  discover.NodeID //this should probably be common.Address?
+	beneficiary  enode.ID //this should probably be common.Address?
 }
 
 func NewChequeManager(stateStore state.Store) *ChequeManager {
 	return &ChequeManager{
 		stateStore: stateStore,
 		//TODO: restore from state store
-		serialPerNode:     make(map[discover.NodeID]uint64),
-		openDebitCheques:  make(map[discover.NodeID][]*Cheque),
-		openCreditCheques: make(map[discover.NodeID][]*Cheque),
+		serialPerNode:     make(map[enode.ID]uint64),
+		openDebitCheques:  make(map[enode.ID][]*Cheque),
+		openCreditCheques: make(map[enode.ID][]*Cheque),
 	}
 }
 
-func (mgr *ChequeManager) CreateCheque(beneficiary discover.NodeID, amount *big.Int) *Cheque {
+func (mgr *ChequeManager) CreateCheque(beneficiary enode.ID, amount *big.Int) *Cheque {
 	mgr.serialPerNode[beneficiary]++
 	cheque := &Cheque{
 		serial:      mgr.serialPerNode[beneficiary],

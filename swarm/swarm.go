@@ -178,12 +178,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
 		return nil, err
 	}
-	if config.SwapEnabled {
-		self.swap, err = swap.New(stateStore)
-		if err != nil {
-			return nil, err
-		}
-	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
 		DoSync:          config.SyncEnabled,
