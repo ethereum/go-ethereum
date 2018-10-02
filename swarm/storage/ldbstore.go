@@ -248,7 +248,7 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
-	log.Trace("collectGarbage", "ratio", ratio)
+	log.Trace("collectGarbage", "ratio", ratio, "entrycnt", s.entryCnt)
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
@@ -258,7 +258,7 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	garbage := []*gcItem{}
 	gcnt := 0
 
-	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < maxGCitems) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
+	for ok := it.Seek([]byte{keyIndex}); ok && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
 		itkey := it.Key()
 
 		if (itkey == nil) || (itkey[0] != keyIndex) {
@@ -290,7 +290,11 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
 
+	if gcnt > maxGCitems {
+		gcnt = maxGCitems
+	}
 	cutoff := int(float32(gcnt) * ratio)
+
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(cutoff))
 
 	for i := 0; i < cutoff; i++ {
@@ -727,6 +731,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
+	log.Trace("tryaccessidx", "addr", fmt.Sprintf("%x", ikey[1:]), "indexdata", index, "data", idata)
 	return true
 }
 
