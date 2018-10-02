@@ -341,127 +341,6 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 }
 
-// TestLDBStoreCollectGarbageOrdered checks if the most recently added chunks according to capacity are left after garbage collection
-func TestLDBStoreCollectGarbageOrdered(t *testing.T) {
-	gcThreshold := int(maxGCitems * gcArrayFreeRatio)
-	capacity := maxGCitems * 2
-	chunkCount := capacity * 2
-	hasher := MakeHashFunc(DefaultHash)()
-	writeBatchTolerance := 128 // according to log ldb seems to write in batches of 6
-
-	// four byte value incremented sequentially as chunk data (one chunk has 1024 values)
-	var byteValue uint32 = 0
-
-	// lru buffer
-	cursor := 0
-	buf := make([][ch.DefaultSize]byte, capacity)
-
-	// record keeping
-	chunkSaveCount := gcThreshold - writeBatchTolerance
-	madeChunks := make([]Chunk, chunkSaveCount)
-	madeAddrs := make([]Address, chunkSaveCount)
-	matchAddrs := make([]Address, chunkSaveCount)
-
-	// needed for hashing (all chunks are full chunks here)
-	meta := make([]byte, 8)
-	binary.LittleEndian.PutUint64(meta, uint64(ch.DefaultSize))
-
-	// the store
-	store, cleanup := newLDBStore(t)
-	store.setCapacity(uint64(capacity))
-	defer cleanup()
-
-	log.Info("gc ordered test", "gcthreshold", gcThreshold, "savecount", chunkSaveCount, "cap", capacity, "count", chunkCount)
-	for i := 0; i < chunkCount; i++ {
-		hasher.ResetWithLength(meta)
-
-		// write (same) sequential data to buffer and hasher
-		for j := 0; j < ch.DefaultSize; j += 4 { // uint32 intervals
-			byteValueByte := [4]byte{}
-			binary.LittleEndian.PutUint32(byteValueByte[:], byteValue)
-			copy(buf[cursor][j:], byteValueByte[:])
-			hasher.Write(byteValueByte[:])
-			byteValue++
-		}
-
-		// create and put chunk
-		newChunk := NewChunk(hasher.Sum(nil), buf[cursor][:])
-		_, err := mput(store, 1, func(n int64) Chunk { return newChunk })
-		if err != nil {
-			t.Fatalf("store put fail: %v", err)
-		}
-
-		log.Trace("putting", "address", newChunk.Address(), "i", i)
-
-		// add to record keeping if it's among the last chunkSaveCount chunks
-		if i > chunkCount-chunkSaveCount {
-			madeChunks[cursor] = newChunk
-			madeAddrs[cursor] = madeChunks[cursor].Address()
-			matchAddrs[cursor] = madeChunks[cursor].Address()
-
-			// get the chunk at least gcThreshold times. That should put the chunk access count comfortable above the limit of any previously added chunks (and give time to flush the db batch writes, too)
-			for i := 0; i < gcThreshold; i++ {
-				log.Trace("accessing", "address", madeChunks[cursor].Address())
-				store.Get(context.TODO(), madeChunks[cursor].Address())
-			}
-
-			cursor++
-
-			// wrap cursor on capacity.
-			//cursor %= capacity
-
-		}
-
-	}
-
-	log.Info("chunks put, sir", "cursor", cursor, "capacity", capacity, "lastvalue", byteValue, "count", len(madeAddrs))
-
-	// madeAddrs should now contain only the last added chunks.
-	var matches uint64
-	var seq uint64
-	err := mget(store, madeAddrs, func(h Address, retrievedChunk Chunk) error {
-		oldMatch := matches
-		seq++
-
-		// matchedAddr originally equal to madeAddr
-		// when an element is found, remove it
-		for i, matchedAddr := range matchAddrs {
-			if bytes.Equal(matchedAddr, h) {
-				matchAddrs[i] = matchAddrs[len(matchAddrs)-1]
-
-				// last one needs special treatment
-				if len(matchAddrs) == 1 {
-					matchAddrs = []Address{}
-				} else {
-					matchAddrs = matchAddrs[:len(matchAddrs)-1]
-				}
-
-				matches++
-				log.Debug("found match", "addr", h, "match", matches, "seq", seq, "left", len(matchAddrs))
-				break
-			}
-		}
-
-		// we don't seem to reach this, which suggests retrieve fails are handled further up...?
-		if oldMatch == matches {
-			log.Warn("no match", "addr", h, "left", len(matchAddrs))
-			return fmt.Errorf("not found (%d): %x", matches, h)
-		}
-
-		return nil
-	})
-
-	// check the retrieve errors
-	if err != nil {
-		t.Fatalf("matches %d/%d, retrieve fail: %v", matches, chunkSaveCount, err)
-	}
-
-	// if all elements are found the array should be empty
-	if len(matchAddrs) > 0 {
-		t.Fatalf("expected 0 chunks in match array, have %d", len(matchAddrs))
-	}
-}
-
 // TestLDBStoreAddRemove tests that we can put and then delete a given chunk
 func TestLDBStoreAddRemove(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
@@ -507,8 +386,10 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	capacity := 11
-	surplus := 4
+	//capacity := 11
+	//surplus := 4
+	capacity := 10000
+	surplus := 10000
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
@@ -545,7 +426,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	cleanup()
 
 	ldb, cleanup = newLDBStore(t)
-	capacity = 10
+	//capacity = 10000
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
