@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !windows
-
 package main
 
 import (
@@ -26,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,6 +39,9 @@ import (
 // 5. imports the exported datastore
 // 6. fetches the uploaded random file from the second node
 func TestCLISwarmExportImport(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	cluster := newTestCluster(t, 1)
 
 	// generate random 10mb file

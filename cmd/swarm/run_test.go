@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -40,6 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 )
+
+var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	// Run the app if we've been exec'd as "swarm-test" in runSwarm.
