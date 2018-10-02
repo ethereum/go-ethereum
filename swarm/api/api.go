@@ -404,7 +404,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			return a.Get(ctx, decrypt, adr, entry.Path)
 		}
 
-		// we need to do some extra work if this is a Feed manifest
+		// we need to do some extra work if this is a Swarm feed manifest
 		if entry.ContentType == FeedContentType {
 			if entry.Feed == nil {
 				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode Feed in manifest")
@@ -957,7 +957,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	return addr, manifestEntryMap, nil
 }
 
-// FeedsLookup finds Swarm Feeds Updates at specific points in time, or the latest update
+// FeedsLookup finds Swarm feeds updates at specific points in time, or the latest update
 func (a *API) FeedsLookup(ctx context.Context, query *feeds.Query) ([]byte, error) {
 	_, err := a.feeds.Lookup(ctx, query)
 	if err != nil {
@@ -971,17 +971,17 @@ func (a *API) FeedsLookup(ctx context.Context, query *feeds.Query) ([]byte, erro
 	return data, nil
 }
 
-// FeedsNewRequest creates a Request object to update a specific Feed
+// FeedsNewRequest creates a Request object to update a specific feed
 func (a *API) FeedsNewRequest(ctx context.Context, feed *feeds.Feed) (*feeds.Request, error) {
 	return a.feeds.NewRequest(ctx, feed)
 }
 
-// FeedsUpdate publishes a new update on the given Feed
+// FeedsUpdate publishes a new update on the given feed
 func (a *API) FeedsUpdate(ctx context.Context, request *feeds.Request) (storage.Address, error) {
 	return a.feeds.Update(ctx, request)
 }
 
-// FeedsHashSize returned the size of the digest produced by Swarm Feeds' hashing function
+// FeedsHashSize returned the size of the digest produced by Swarm feeds' hashing function
 func (a *API) FeedsHashSize() int {
 	return a.feeds.HashSize
 }
@@ -992,7 +992,7 @@ var ErrCannotLoadFeedManifest = errors.New("Cannot load feed manifest")
 // ErrNotAFeedManifest is returned when the address provided returned something other than a valid manifest
 var ErrNotAFeedManifest = errors.New("Not a feed manifest")
 
-// ResolveFeedManifest retrieves the Feed manifest for the given address, and returns the referenced Feed.
+// ResolveFeedManifest retrieves the Swarm feed manifest for the given address, and returns the referenced Feed.
 func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feeds.Feed, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
@@ -1007,15 +1007,15 @@ func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*f
 	return entry.Feed, nil
 }
 
-// ErrCannotResolveFeedURI is returned when the ENS resolver is not able to translate a name to a Feed
+// ErrCannotResolveFeedURI is returned when the ENS resolver is not able to translate a name to a Swarm feed
 var ErrCannotResolveFeedURI = errors.New("Cannot resolve Feed URI")
 
 // ErrCannotResolveFeed is returned when values provided are not enough or invalid to recreate a
-// Feed out of them.
+// feed out of them.
 var ErrCannotResolveFeed = errors.New("Cannot resolve Feed")
 
-// ResolveFeed attempts to extract Feed information out of the manifest, if provided
-// If not, it attempts to extract the Feed out of a set of key-value pairs
+// ResolveFeed attempts to extract feed information out of the manifest, if provided
+// If not, it attempts to extract the feed out of a set of key-value pairs
 func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feeds.Values) (*feeds.Feed, error) {
 	var feed *feeds.Feed
 	var err error
@@ -1029,7 +1029,7 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feeds.Values) (*
 			}
 		}
 
-		// get the Feed from the manifest
+		// get the Swarm feed from the manifest
 		feed, err = a.ResolveFeedManifest(ctx, manifestAddr)
 		if err != nil {
 			return nil, err

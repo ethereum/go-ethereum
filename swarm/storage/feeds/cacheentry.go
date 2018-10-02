@@ -30,7 +30,7 @@ const (
 	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
-// cacheEntry caches the last known update of a specific Feed.
+// cacheEntry caches the last known update of a specific Swarm feed.
 type cacheEntry struct {
 	Update
 	*bytes.Reader
@@ -42,7 +42,7 @@ func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
 	return int64(len(r.Update.data)), nil
 }
 
-//returns the Feed's topic
+//returns the feed's topic
 func (r *cacheEntry) Topic() Topic {
 	return r.Feed.Topic
 }

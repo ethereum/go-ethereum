@@ -355,8 +355,8 @@ func init() {
 					Action:             feedCreateManifest,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
-					Usage:              "creates and publishes a new Feed manifest",
-					Description: `creates and publishes a new Feed manifest pointing to a specified user's updates about a particular topic.
+					Usage:              "creates and publishes a new feed manifest",
+					Description: `creates and publishes a new feed manifest pointing to a specified user's updates about a particular topic.
 					The feed topic can be built in the following ways:
 					* use --topic to set the topic to an arbitrary binary hex string.
 					* use --name to set the topic to a human-readable name.
@@ -392,8 +392,8 @@ func init() {
 					Action:             feedInfo,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "info",
-					Usage:              "obtains information about an existing Swarm Feed",
-					Description: `obtains information about an existing Swarm Feed
+					Usage:              "obtains information about an existing Swarm feed",
+					Description: `obtains information about an existing Swarm feed
 					The topic can be specified directly with the --topic flag as an hex string
 					If no topic is specified, the default topic (zero) will be used
 					The --name flag can be used to specify subtopics with a specific name.

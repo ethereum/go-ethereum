@@ -518,7 +518,7 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// the key to the manifest will be passed back to the client
-		// the client can access the Feed  directly through its Feed member
+		// the client can access the feed  directly through its Feed member
 		// the manifest key can be set as content in the resolver of the ENS name
 		outdata, err := json.Marshal(m)
 		if err != nil {
@@ -531,7 +531,7 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleGetFeed retrieves Swarm Feeds updates:
+// HandleGetFeed retrieves Swarm feeds updates:
 // bzz-feed://<manifest address or ENS name> - get latest feed update, given a manifest address
 // - or -
 // specify user + topic (optional), subtopic name (optional) directly, without manifest:

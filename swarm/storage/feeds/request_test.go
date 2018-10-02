@@ -47,7 +47,7 @@ func areEqualJSON(s1, s2 string) (bool, error) {
 }
 
 // TestEncodingDecodingUpdateRequests ensures that requests are serialized properly
-// while also checking cryptographically that only the owner of a Feed can update it.
+// while also checking cryptographically that only the owner of a feed can update it.
 func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	charlie := newCharlieSigner() //Charlie
@@ -136,7 +136,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 	}
 
-	// Now imagine Bob wants to create an update of his own about the same Feed,
+	// Now imagine Bob wants to create an update of his own about the same feed,
 	// signing a message with his private key
 	if err := request.Sign(bob); err != nil {
 		t.Fatalf("Error signing: %s", err)
@@ -228,7 +228,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	var recovered Request
 	recovered.fromChunk(chunk.Address(), chunk.Data())
 	if !reflect.DeepEqual(recovered, r) {
-		t.Fatal("Expected recovered Request update to equal the original one")
+		t.Fatal("Expected recovered feed update request to equal the original one")
 	}
 }
 
@@ -248,7 +248,7 @@ func TestReverse(t *testing.T) {
 	// signer containing private key
 	signer := newAliceSigner()
 
-	// set up rpc and create Feeds handler
+	// set up rpc and create feeds handler
 	_, _, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)

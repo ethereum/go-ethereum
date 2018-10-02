@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Feed represents a particular user's stream of updates on a Topic
+// Feed represents a particular user's stream of updates on a topic
 type Feed struct {
 	Topic Topic          `json:"topic"`
 	User  common.Address `json:"user"`
@@ -48,10 +48,10 @@ func (f *Feed) mapKey() uint64 {
 	return *(*uint64)(unsafe.Pointer(&hash[0]))
 }
 
-// binaryPut serializes this Feed instance into the provided slice
+// binaryPut serializes this feed instance into the provided slice
 func (f *Feed) binaryPut(serializedData []byte) error {
 	if len(serializedData) != feedLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize Feed. Expected %d, got %d", feedLength, len(serializedData))
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize feed. Expected %d, got %d", feedLength, len(serializedData))
 	}
 	var cursor int
 	copy(serializedData[cursor:cursor+TopicLength], f.Topic[:TopicLength])
@@ -71,7 +71,7 @@ func (f *Feed) binaryLength() int {
 // binaryGet restores the current instance from the information contained in the passed slice
 func (f *Feed) binaryGet(serializedData []byte) error {
 	if len(serializedData) != feedLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read Feed. Expected %d, got %d", feedLength, len(serializedData))
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read feed. Expected %d, got %d", feedLength, len(serializedData))
 	}
 
 	var cursor int
@@ -84,7 +84,7 @@ func (f *Feed) binaryGet(serializedData []byte) error {
 	return nil
 }
 
-// Hex serializes the Feed to a hex string
+// Hex serializes the feed to a hex string
 func (f *Feed) Hex() string {
 	serializedData := make([]byte, feedLength)
 	f.binaryPut(serializedData)

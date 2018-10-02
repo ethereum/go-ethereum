@@ -165,7 +165,7 @@ func TestBzzFeedMultihash(t *testing.T) {
 	}
 }
 
-// Test Swarm Feeds using the raw update methods
+// Test Swarm feeds using the raw update methods
 func TestBzzFeed(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
 	signer, _ := newTestSigner()
@@ -305,7 +305,7 @@ func TestBzzFeed(t *testing.T) {
 	srv.CurrentTime++
 	log.Info("update 2")
 
-	// 1.- get metadata about this Feed
+	// 1.- get metadata about this feed
 	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s/", srv.URL, correctManifestAddrHex)
 	resp, err = http.Get(testBzzResUrl + "?meta=1")
 	if err != nil {

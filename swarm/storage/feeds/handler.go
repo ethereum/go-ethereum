@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Handler is the API for Feeds
+// Handler is the API for feeds
 // It enables creating, updating, syncing and retrieving feed updates and their data
 package feeds
 
@@ -57,7 +57,7 @@ func init() {
 	}
 }
 
-// NewHandler creates a new Swarm Feeds API
+// NewHandler creates a new Swarm feeds API
 func NewHandler(params *HandlerParams) *Handler {
 	fh := &Handler{
 		cache: make(map[uint64]*cacheEntry),
@@ -74,7 +74,7 @@ func NewHandler(params *HandlerParams) *Handler {
 	return fh
 }
 
-// SetStore sets the store backend for the Swarm Feeds API
+// SetStore sets the store backend for the Swarm feeds API
 func (h *Handler) SetStore(store *storage.NetStore) {
 	h.chunkStore = store
 }
@@ -110,7 +110,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	return true
 }
 
-// GetContent retrieves the data payload of the last synced update of the Feed
+// GetContent retrieves the data payload of the last synced update of the feed
 func (h *Handler) GetContent(feed *Feed) (storage.Address, []byte, error) {
 	if feed == nil {
 		return nil, nil, NewError(ErrInvalidValue, "feed is nil")
@@ -240,7 +240,7 @@ func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 }
 
 // Update publishes a feed update
-// Note that a Feed update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature.
+// Note that a feed update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature.
 // This results in a max payload of `maxUpdateDataLength` (check update.go for more details)
 // An error will be returned if the total length of the chunk payload will exceed this limit.
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
@@ -286,7 +286,7 @@ func (h *Handler) get(feed *Feed) *cacheEntry {
 	return feedUpdate
 }
 
-// Sets the feed update cache value for the given Feed
+// Sets the feed update cache value for the given feed
 func (h *Handler) set(feed *Feed, feedUpdate *cacheEntry) {
 	mapKey := feed.mapKey()
 	h.cacheLock.Lock()

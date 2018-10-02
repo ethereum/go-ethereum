@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
 )
 
-// Request represents a request to sign or signed Feed Update message
+// Request represents a request to sign or signed feed update message
 type Request struct {
 	Update     // actual content that will be put on the chunk, less signature
 	Signature  *Signature

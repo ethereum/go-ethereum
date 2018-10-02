@@ -145,7 +145,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// make sure the retrieved Feed is the same
+	// make sure the retrieved feed is the same
 	if request.Feed != feed {
 		t.Fatalf("Expected feed to be: %s, got %s", feed, request.Feed)
 	}

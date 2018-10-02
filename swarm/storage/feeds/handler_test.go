@@ -89,11 +89,11 @@ func TestFeedsHandler(t *testing.T) {
 	}
 	defer teardownTest()
 
-	// create a new Feed
+	// create a new feed
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	topic, _ := NewTopic("Mess with Swarm Feeds code and see what ghost catches you", nil)
+	topic, _ := NewTopic("Mess with Swarm feeds code and see what ghost catches you", nil)
 	feed := Feed{
 		Topic: topic,
 		User:  signer.Address(),
@@ -266,7 +266,7 @@ func TestSparseUpdates(t *testing.T) {
 	defer teardownTest()
 	defer os.RemoveAll(datadir)
 
-	// create a new Feed
+	// create a new feed
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	topic, _ := NewTopic("Very slow updates", nil)
@@ -348,7 +348,7 @@ func TestValidator(t *testing.T) {
 	}
 	defer teardownTest()
 
-	// create new Feed
+	// create new feed
 	topic, _ := NewTopic(subtopicName, nil)
 	feed := Feed{
 		Topic: topic,
@@ -382,7 +382,7 @@ func TestValidator(t *testing.T) {
 }
 
 // tests that the content address validator correctly checks the data
-// tests that Feed update chunks are passed through content address validator
+// tests that feed update chunks are passed through content address validator
 // there is some redundancy in this test as it also tests content addressed chunks,
 // which should be evaluated as invalid chunks by this validator
 func TestValidatorInStore(t *testing.T) {
@@ -409,7 +409,7 @@ func TestValidatorInStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// set up Swarm Feeds handler and add is as a validator to the localstore
+	// set up Swarm feeds handler and add is as a validator to the localstore
 	fhParams := &HandlerParams{}
 	fh := NewHandler(fhParams)
 	store.Validators = append(store.Validators, fh)
@@ -463,7 +463,7 @@ func TestValidatorInStore(t *testing.T) {
 	}
 }
 
-// create rpc and Feeds Handler
+// create rpc and feeds Handler
 func setupTest(timeProvider timestampProvider, signer Signer) (fh *TestHandler, datadir string, teardown func(), err error) {
 
 	var fsClean func()

@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Package lookup defines Feed lookup algorithms and provides tools to place updates
+Package lookup defines feed lookup algorithms and provides tools to place updates
 so they can be found
 */
 package lookup

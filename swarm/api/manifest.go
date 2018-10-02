@@ -80,7 +80,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	return addr, err
 }
 
-// Manifest hack for supporting Feeds from the bzz: scheme
+// Manifest hack for supporting Swarm feeds from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
 func (a *API) NewFeedManifest(ctx context.Context, feed *feeds.Feed) (storage.Address, error) {
 	var manifest Manifest

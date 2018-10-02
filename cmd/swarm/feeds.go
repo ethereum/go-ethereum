@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Command feed allows the user to create and update signed Swarm Feeds
+// Command feed allows the user to create and update signed Swarm feeds
 package main
 
 import (

@@ -604,9 +604,9 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 // ErrNoFeedUpdatesFound is returned when Swarm cannot find updates of the given feed
 var ErrNoFeedUpdatesFound = errors.New("No updates found for this feed")
 
-// CreateFeedWithManifest creates a Feed Manifest, initializing it with the provided
+// CreateFeedWithManifest creates a feed manifest, initializing it with the provided
 // data
-// Returns the resulting Feed Manifest address that you can use to include in an ENS Resolver (setContent)
+// Returns the resulting feed manifest address that you can use to include in an ENS Resolver (setContent)
 // or reference future updates (Client.UpdateFeed)
 func (c *Client) CreateFeedWithManifest(request *feeds.Request) (string, error) {
 	responseStream, err := c.updateFeed(request, true)
@@ -669,7 +669,7 @@ func (c *Client) QueryFeed(query *feeds.Query, manifestAddressOrDomain string) (
 // queryFeed returns a byte stream with the raw content of the feed update
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-// meta set to true will instruct the node return Feed metainformation instead
+// meta set to true will instruct the node return feed metainformation instead
 func (c *Client) queryFeed(query *feeds.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
@@ -706,7 +706,7 @@ func (c *Client) queryFeed(query *feeds.Query, manifestAddressOrDomain string, m
 	return res.Body, nil
 }
 
-// GetFeedRequest returns a structure that describes the referenced Feed status
+// GetFeedRequest returns a structure that describes the referenced feed status
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
 func (c *Client) GetFeedRequest(query *feeds.Query, manifestAddressOrDomain string) (*feeds.Request, error) {
