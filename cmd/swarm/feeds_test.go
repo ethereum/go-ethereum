@@ -101,13 +101,13 @@ func TestCLIFeedUpdate(t *testing.T) {
 	}
 
 	// Feed configures whose updates we will be looking up.
-	feed := feeds.Feed{
+	fd := feeds.Feed{
 		Topic: topic,
 		User:  address,
 	}
 
 	// Build a query to get the latest update
-	query := feeds.NewQueryLatest(&feed, lookup.NoClue)
+	query := feeds.NewQueryLatest(&fd, lookup.NoClue)
 
 	// retrieve content!
 	reader, err := client.QueryFeed(query, "")
@@ -146,8 +146,8 @@ func TestCLIFeedUpdate(t *testing.T) {
 	}
 
 	// make sure the retrieved feed is the same
-	if request.Feed != feed {
-		t.Fatalf("Expected feed to be: %s, got %s", feed, request.Feed)
+	if request.Feed != fd {
+		t.Fatalf("Expected feed to be: %s, got %s", fd, request.Feed)
 	}
 
 	// test publishing a manifest

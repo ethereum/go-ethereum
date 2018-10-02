@@ -256,7 +256,7 @@ func TestReverse(t *testing.T) {
 	defer teardownTest()
 
 	topic, _ := NewTopic("Cervantes quotes", nil)
-	feed := Feed{
+	fd := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -264,7 +264,7 @@ func TestReverse(t *testing.T) {
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
 	request := new(Request)
-	request.Feed = feed
+	request.Feed = fd
 	request.Epoch = epoch
 	request.data = data
 

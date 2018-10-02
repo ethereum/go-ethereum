@@ -508,12 +508,12 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 
 	// now try retrieving feed updates without a manifest
 
-	feed := &feeds.Feed{
+	fd := &feeds.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
 
-	lookupParams := feeds.NewQueryLatest(feed, lookup.NoClue)
+	lookupParams := feeds.NewQueryLatest(fd, lookup.NoClue)
 	reader, err = client.QueryFeed(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving feed updates: %s", err)

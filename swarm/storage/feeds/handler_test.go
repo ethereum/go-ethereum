@@ -94,7 +94,7 @@ func TestFeedsHandler(t *testing.T) {
 	defer cancel()
 
 	topic, _ := NewTopic("Mess with Swarm feeds code and see what ghost catches you", nil)
-	feed := Feed{
+	fd := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -107,7 +107,7 @@ func TestFeedsHandler(t *testing.T) {
 		"clyde",  // t=4285
 	}
 
-	request := NewFirstRequest(feed.Topic) // this timestamps the update at t = 4200 (start time)
+	request := NewFirstRequest(fd.Topic) // this timestamps the update at t = 4200 (start time)
 	chunkAddress := make(map[string]storage.Address)
 	data := []byte(updates[0])
 	request.SetData(data)
@@ -270,7 +270,7 @@ func TestSparseUpdates(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	topic, _ := NewTopic("Very slow updates", nil)
-	feed := Feed{
+	fd := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -280,7 +280,7 @@ func TestSparseUpdates(t *testing.T) {
 	var epoch lookup.Epoch
 	var lastUpdateTime uint64
 	for T := uint64(0); T < today; T += 5 * Year {
-		request := NewFirstRequest(feed.Topic)
+		request := NewFirstRequest(fd.Topic)
 		request.Epoch = lookup.GetNextEpoch(epoch, T)
 		request.data = generateData(T) // this generates some data that depends on T, so we can check later
 		request.Sign(signer)
@@ -295,14 +295,14 @@ func TestSparseUpdates(t *testing.T) {
 		lastUpdateTime = T
 	}
 
-	query := NewQuery(&feed, today, lookup.NoClue)
+	query := NewQuery(&fd, today, lookup.NoClue)
 
 	_, err = rh.Lookup(ctx, query)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, content, err := rh.GetContent(&feed)
+	_, content, err := rh.GetContent(&fd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestSparseUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, content, err = rh.GetContent(&feed)
+	_, content, err = rh.GetContent(&fd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,11 +350,11 @@ func TestValidator(t *testing.T) {
 
 	// create new feed
 	topic, _ := NewTopic(subtopicName, nil)
-	feed := Feed{
+	fd := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
-	mr := NewFirstRequest(feed.Topic)
+	mr := NewFirstRequest(fd.Topic)
 
 	// chunk with address
 	data := []byte("foo")
@@ -420,7 +420,7 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 
 	topic, _ := NewTopic("xyzzy", nil)
-	feed := Feed{
+	fd := Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
@@ -430,7 +430,7 @@ func TestValidatorInStore(t *testing.T) {
 		Epoch: lookup.Epoch{Time: 42,
 			Level: 1,
 		},
-		Feed: feed,
+		Feed: fd,
 	}
 
 	updateAddr := id.Addr()
