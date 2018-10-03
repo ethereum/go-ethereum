@@ -25,14 +25,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -361,12 +361,12 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 }
 
-func newTestSigner() (*feeds.GenericSigner, error) {
+func newTestSigner() (*feed.GenericSigner, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {
 		return nil, err
 	}
-	return feeds.NewGenericSigner(privKey), nil
+	return feed.NewGenericSigner(privKey), nil
 }
 
 // test the transparent resolving of multihash feed updates with bzz:// scheme
@@ -394,9 +394,9 @@ func TestClientCreateFeedMultihash(t *testing.T) {
 	mh := multihash.ToMultihash(s)
 
 	// our feed topic
-	topic, _ := feeds.NewTopic("foo.eth", nil)
+	topic, _ := feed.NewTopic("foo.eth", nil)
 
-	createRequest := feeds.NewFirstRequest(topic)
+	createRequest := feed.NewFirstRequest(topic)
 
 	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
@@ -448,8 +448,8 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
 
 	// our feed topic name
-	topic, _ := feeds.NewTopic("El Quijote", nil)
-	createRequest := feeds.NewFirstRequest(topic)
+	topic, _ := feed.NewTopic("El Quijote", nil)
+	createRequest := feed.NewFirstRequest(topic)
 
 	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
@@ -508,12 +508,12 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 
 	// now try retrieving feed updates without a manifest
 
-	fd := &feeds.Feed{
+	fd := &feed.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
 
-	lookupParams := feeds.NewQueryLatest(fd, lookup.NoClue)
+	lookupParams := feed.NewQueryLatest(fd, lookup.NoClue)
 	reader, err = client.QueryFeed(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving feed updates: %s", err)

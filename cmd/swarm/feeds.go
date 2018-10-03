@@ -27,15 +27,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func NewGenericSigner(ctx *cli.Context) feeds.Signer {
-	return feeds.NewGenericSigner(getPrivKey(ctx))
+func NewGenericSigner(ctx *cli.Context) feed.Signer {
+	return feed.NewGenericSigner(getPrivKey(ctx))
 }
 
-func getTopic(ctx *cli.Context) (topic feeds.Topic) {
+func getTopic(ctx *cli.Context) (topic feed.Topic) {
 	var name = ctx.String(SwarmFeedNameFlag.Name)
 	var relatedTopic = ctx.String(SwarmFeedTopicFlag.Name)
 	var relatedTopicBytes []byte
@@ -48,7 +48,7 @@ func getTopic(ctx *cli.Context) (topic feeds.Topic) {
 		}
 	}
 
-	topic, err = feeds.NewTopic(name, relatedTopicBytes)
+	topic, err = feed.NewTopic(name, relatedTopicBytes)
 	if err != nil {
 		utils.Fatalf("Error parsing topic: %s", err)
 	}
@@ -65,7 +65,7 @@ func feedCreateManifest(ctx *cli.Context) {
 		client = swarm.NewClient(bzzapi)
 	)
 
-	newFeedUpdateRequest := feeds.NewFirstRequest(getTopic(ctx))
+	newFeedUpdateRequest := feed.NewFirstRequest(getTopic(ctx))
 	newFeedUpdateRequest.Feed.User = feedGetUser(ctx)
 
 	manifestAddress, err := client.CreateFeedWithManifest(newFeedUpdateRequest)
@@ -100,11 +100,11 @@ func feedUpdate(ctx *cli.Context) {
 		return
 	}
 
-	var updateRequest *feeds.Request
-	var query *feeds.Query
+	var updateRequest *feed.Request
+	var query *feed.Query
 
 	if manifestAddressOrDomain == "" {
-		query = new(feeds.Query)
+		query = new(feed.Query)
 		query.User = signer.Address()
 		query.Topic = getTopic(ctx)
 
@@ -139,9 +139,9 @@ func feedInfo(ctx *cli.Context) {
 		manifestAddressOrDomain = ctx.String(SwarmFeedManifestFlag.Name)
 	)
 
-	var query *feeds.Query
+	var query *feed.Query
 	if manifestAddressOrDomain == "" {
-		query = new(feeds.Query)
+		query = new(feed.Query)
 		query.Topic = getTopic(ctx)
 		query.User = feedGetUser(ctx)
 	}

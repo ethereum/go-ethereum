@@ -40,4 +40,4 @@ Request: Feed Update with signature
 			Epoch: time slot where the update is stored
 
 */
-package feeds
+package feed

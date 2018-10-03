@@ -45,8 +45,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	opentracing "github.com/opentracing/opentracing-go"
 )
@@ -236,18 +236,18 @@ on top of the FileStore
 it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	feeds     *feeds.Handler
+	feed      *feed.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedsHandler *feeds.Handler, pk *ecdsa.PrivateKey) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
-		feeds:     feedsHandler,
+		feed:      feedHandler,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -409,7 +409,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			if entry.Feed == nil {
 				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode Feed in manifest")
 			}
-			_, err := a.feeds.Lookup(ctx, feeds.NewQueryLatest(entry.Feed, lookup.NoClue))
+			_, err := a.feed.Lookup(ctx, feed.NewQueryLatest(entry.Feed, lookup.NoClue))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -417,7 +417,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 				return reader, mimeType, status, nil, err
 			}
 			// get the data of the update
-			_, rsrcData, err := a.feeds.GetContent(entry.Feed)
+			_, rsrcData, err := a.feed.GetContent(entry.Feed)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -958,13 +958,13 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 }
 
 // FeedsLookup finds Swarm feeds updates at specific points in time, or the latest update
-func (a *API) FeedsLookup(ctx context.Context, query *feeds.Query) ([]byte, error) {
-	_, err := a.feeds.Lookup(ctx, query)
+func (a *API) FeedsLookup(ctx context.Context, query *feed.Query) ([]byte, error) {
+	_, err := a.feed.Lookup(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	var data []byte
-	_, data, err = a.feeds.GetContent(&query.Feed)
+	_, data, err = a.feed.GetContent(&query.Feed)
 	if err != nil {
 		return nil, err
 	}
@@ -972,18 +972,18 @@ func (a *API) FeedsLookup(ctx context.Context, query *feeds.Query) ([]byte, erro
 }
 
 // FeedsNewRequest creates a Request object to update a specific feed
-func (a *API) FeedsNewRequest(ctx context.Context, feed *feeds.Feed) (*feeds.Request, error) {
-	return a.feeds.NewRequest(ctx, feed)
+func (a *API) FeedsNewRequest(ctx context.Context, feed *feed.Feed) (*feed.Request, error) {
+	return a.feed.NewRequest(ctx, feed)
 }
 
 // FeedsUpdate publishes a new update on the given feed
-func (a *API) FeedsUpdate(ctx context.Context, request *feeds.Request) (storage.Address, error) {
-	return a.feeds.Update(ctx, request)
+func (a *API) FeedsUpdate(ctx context.Context, request *feed.Request) (storage.Address, error) {
+	return a.feed.Update(ctx, request)
 }
 
 // FeedsHashSize returned the size of the digest produced by Swarm feeds' hashing function
 func (a *API) FeedsHashSize() int {
-	return a.feeds.HashSize
+	return a.feed.HashSize
 }
 
 // ErrCannotLoadFeedManifest is returned when looking up a feeds manifest fails
@@ -993,7 +993,7 @@ var ErrCannotLoadFeedManifest = errors.New("Cannot load feed manifest")
 var ErrNotAFeedManifest = errors.New("Not a feed manifest")
 
 // ResolveFeedManifest retrieves the Swarm feed manifest for the given address, and returns the referenced Feed.
-func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feeds.Feed, error) {
+func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feed.Feed, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
 		return nil, ErrCannotLoadFeedManifest
@@ -1016,8 +1016,8 @@ var ErrCannotResolveFeed = errors.New("Cannot resolve Feed")
 
 // ResolveFeed attempts to extract feed information out of the manifest, if provided
 // If not, it attempts to extract the feed out of a set of key-value pairs
-func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feeds.Values) (*feeds.Feed, error) {
-	var feed *feeds.Feed
+func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*feed.Feed, error) {
+	var fd *feed.Feed
 	var err error
 	if uri.Addr != "" {
 		// resolve the content key.
@@ -1030,20 +1030,20 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feeds.Values) (*
 		}
 
 		// get the Swarm feed from the manifest
-		feed, err = a.ResolveFeedManifest(ctx, manifestAddr)
+		fd, err = a.ResolveFeedManifest(ctx, manifestAddr)
 		if err != nil {
 			return nil, err
 		}
-		log.Debug("handle.get.feed: resolved", "manifestkey", manifestAddr, "feed", feed.Hex())
+		log.Debug("handle.get.feed: resolved", "manifestkey", manifestAddr, "feed", fd.Hex())
 	} else {
-		var v feeds.Feed
-		if err := v.FromValues(values); err != nil {
+		var f feed.Feed
+		if err := f.FromValues(values); err != nil {
 			return nil, ErrCannotResolveFeed
 
 		}
-		feed = &v
+		fd = &f
 	}
-	return feed, nil
+	return fd, nil
 }
 
 // MimeOctetStream default value of http Content-Type header

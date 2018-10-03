@@ -16,7 +16,7 @@
 
 // Handler is the API for feeds
 // It enables creating, updating, syncing and retrieving feed updates and their data
-package feeds
+package feed
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"

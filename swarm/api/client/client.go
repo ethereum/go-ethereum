@@ -35,7 +35,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
 
 var (
@@ -608,7 +608,7 @@ var ErrNoFeedUpdatesFound = errors.New("No updates found for this feed")
 // data
 // Returns the resulting feed manifest address that you can use to include in an ENS Resolver (setContent)
 // or reference future updates (Client.UpdateFeed)
-func (c *Client) CreateFeedWithManifest(request *feeds.Request) (string, error) {
+func (c *Client) CreateFeedWithManifest(request *feed.Request) (string, error) {
 	responseStream, err := c.updateFeed(request, true)
 	if err != nil {
 		return "", err
@@ -628,12 +628,12 @@ func (c *Client) CreateFeedWithManifest(request *feeds.Request) (string, error) 
 }
 
 // UpdateFeed allows you to set a new version of your content
-func (c *Client) UpdateFeed(request *feeds.Request) error {
+func (c *Client) UpdateFeed(request *feed.Request) error {
 	_, err := c.updateFeed(request, false)
 	return err
 }
 
-func (c *Client) updateFeed(request *feeds.Request, createManifest bool) (io.ReadCloser, error) {
+func (c *Client) updateFeed(request *feed.Request, createManifest bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
@@ -662,7 +662,7 @@ func (c *Client) updateFeed(request *feeds.Request, createManifest bool) (io.Rea
 // QueryFeed returns a byte stream with the raw content of the feed update
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) QueryFeed(query *feeds.Query, manifestAddressOrDomain string) (io.ReadCloser, error) {
+func (c *Client) QueryFeed(query *feed.Query, manifestAddressOrDomain string) (io.ReadCloser, error) {
 	return c.queryFeed(query, manifestAddressOrDomain, false)
 }
 
@@ -670,7 +670,7 @@ func (c *Client) QueryFeed(query *feeds.Query, manifestAddressOrDomain string) (
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
 // meta set to true will instruct the node return feed metainformation instead
-func (c *Client) queryFeed(query *feeds.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
+func (c *Client) queryFeed(query *feed.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
@@ -709,7 +709,7 @@ func (c *Client) queryFeed(query *feeds.Query, manifestAddressOrDomain string, m
 // GetFeedRequest returns a structure that describes the referenced feed status
 // manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetFeedRequest(query *feeds.Query, manifestAddressOrDomain string) (*feeds.Request, error) {
+func (c *Client) GetFeedRequest(query *feed.Query, manifestAddressOrDomain string) (*feed.Request, error) {
 
 	responseStream, err := c.queryFeed(query, manifestAddressOrDomain, true)
 	if err != nil {
@@ -722,7 +722,7 @@ func (c *Client) GetFeedRequest(query *feeds.Query, manifestAddressOrDomain stri
 		return nil, err
 	}
 
-	var metadata feeds.Request
+	var metadata feed.Request
 	if err := metadata.UnmarshalJSON(body); err != nil {
 		return nil, err
 	}

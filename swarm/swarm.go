@@ -49,8 +49,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
@@ -186,10 +186,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
 
-	var feedsHandler *feeds.Handler
-	fhParams := &feeds.HandlerParams{}
+	var feedsHandler *feed.Handler
+	fhParams := &feed.HandlerParams{}
 
-	feedsHandler = feeds.NewHandler(fhParams)
+	feedsHandler = feed.NewHandler(fhParams)
 	feedsHandler.SetStore(self.netStore)
 
 	lstore.Validators = []storage.ChunkValidator{

@@ -40,7 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/feeds"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 
 	"github.com/rs/cors"
 )
@@ -458,7 +458,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles feed manifest creation and feed updates
-// The POST request admits a JSON structure as defined in the feeds package: `feeds.updateRequestJSON`
+// The POST request admits a JSON structure as defined in the feeds package: `feed.updateRequestJSON`
 // The requests can be to a) create a feed manifest, b) update a feed or c) both a+b: create a feed manifest and publish a first update
 func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
@@ -466,14 +466,14 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.feed", "ruid", ruid)
 	var err error
 
-	// Creation and update must send feeds.updateRequestJSON JSON structure
+	// Creation and update must send feed.updateRequestJSON JSON structure
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	feed, err := s.api.ResolveFeed(r.Context(), uri, r.URL.Query())
+	fd, err := s.api.ResolveFeed(r.Context(), uri, r.URL.Query())
 	if err != nil { // couldn't parse query string or retrieve manifest
 		getFail.Inc(1)
 		httpStatus := http.StatusBadRequest
@@ -484,8 +484,8 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updateRequest feeds.Request
-	updateRequest.Feed = *feed
+	var updateRequest feed.Request
+	updateRequest.Feed = *fd
 	query := r.URL.Query()
 
 	if err := updateRequest.FromValues(query, body); err != nil { // decodes request from query parameters
@@ -552,7 +552,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.feed", "ruid", ruid)
 	var err error
 
-	feed, err := s.api.ResolveFeed(r.Context(), uri, r.URL.Query())
+	fd, err := s.api.ResolveFeed(r.Context(), uri, r.URL.Query())
 	if err != nil { // couldn't parse query string or retrieve manifest
 		getFail.Inc(1)
 		httpStatus := http.StatusBadRequest
@@ -565,10 +565,10 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 
 	// determine if the query specifies period and version or it is a metadata query
 	if r.URL.Query().Get("meta") == "1" {
-		unsignedUpdateRequest, err := s.api.FeedsNewRequest(r.Context(), feed)
+		unsignedUpdateRequest, err := s.api.FeedsNewRequest(r.Context(), fd)
 		if err != nil {
 			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("cannot retrieve feed metadata for feed=%s: %s", feed.Hex(), err), http.StatusNotFound)
+			RespondError(w, r, fmt.Sprintf("cannot retrieve feed metadata for feed=%s: %s", fd.Hex(), err), http.StatusNotFound)
 			return
 		}
 		rawResponse, err := unsignedUpdateRequest.MarshalJSON()
@@ -582,7 +582,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupParams := &feeds.Query{Feed: *feed}
+	lookupParams := &feed.Query{Feed: *fd}
 	if err = lookupParams.FromValues(r.URL.Query()); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid feed update request:%s", err), http.StatusBadRequest)
 		return
@@ -598,7 +598,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// All ok, serve the retrieved update
-	log.Debug("Found update", "feed", feed.Hex(), "ruid", ruid)
+	log.Debug("Found update", "feed", fd.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", api.MimeOctetStream)
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }
@@ -606,7 +606,7 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcErr, ok := err.(*feeds.Error)
+	rsrcErr, ok := err.(*feed.Error)
 	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}

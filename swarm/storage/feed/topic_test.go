@@ -1,4 +1,4 @@
-package feeds
+package feed
 
 import (
 	"testing"
