@@ -94,7 +94,7 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	}
 	var analysis bitvec
 	// Do we have a contract hash already?
-	if c.CodeHash != emptyCodeHash {
+	if c.CodeHash != (common.Hash{}) {
 		var exist bool
 		// Does parent context have the analysis?
 		analysis, exist = c.jumpdests[c.CodeHash]

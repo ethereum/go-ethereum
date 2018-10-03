@@ -358,7 +358,7 @@ type codeAndHash struct {
 }
 
 func (c *codeAndHash) Hash() common.Hash {
-	if c.hash == emptyCodeHash {
+	if c.hash == (common.Hash{}) {
 		c.hash = crypto.Keccak256Hash(c.code)
 	}
 	return c.hash
