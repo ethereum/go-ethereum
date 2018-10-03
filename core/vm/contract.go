@@ -53,7 +53,7 @@ type Contract struct {
 	analysis  bitvec       // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
-	CodeHash *common.Hash
+	CodeHash common.Hash
 	CodeAddr *common.Address
 	Input    []byte
 
@@ -94,15 +94,15 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	}
 	var analysis bitvec
 	// Do we have a contract hash already?
-	if c.CodeHash != nil {
+	if c.CodeHash != emptyCodeHash {
 		var exist bool
 		// Does parent context have the analysis?
-		analysis, exist = c.jumpdests[*c.CodeHash]
+		analysis, exist = c.jumpdests[c.CodeHash]
 		if !exist {
 			// Do the analysis
 			analysis = codeBitmap(c.Code)
 			// Save in parent context
-			c.jumpdests[*c.CodeHash] = analysis
+			c.jumpdests[c.CodeHash] = analysis
 		}
 		return analysis.codeSegment(udest)
 	}
@@ -173,13 +173,13 @@ func (c *Contract) Value() *big.Int {
 // object
 func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []byte) {
 	c.Code = code
-	c.CodeHash = &hash
+	c.CodeHash = hash
 	c.CodeAddr = addr
 }
 
 // SetCodeOptionalHash can be used to provide code, but it's optional to provide hash.
 // In case hash is not provided, the jumpdest analysis will not be saved to the parent context
-func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash codeAndHash) {
+func (c *Contract) SetCodeOptionalHash(addr *common.Address, codeAndHash *codeAndHash) {
 	c.Code = codeAndHash.code
 	c.CodeHash = codeAndHash.hash
 	c.CodeAddr = addr
