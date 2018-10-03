@@ -313,15 +313,14 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
-					} else {
-						evt := &simulations.Event{
-							Type: EventTypeChunkArrived,
-							Node: sim.Net.GetNode(id),
-							Data: chunk.String(),
-						}
-						sim.Net.Events().Send(evt)
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
+					evt := &simulations.Event{
+						Type: EventTypeChunkArrived,
+						Node: sim.Net.GetNode(id),
+						Data: chunk.String(),
+					}
+					sim.Net.Events().Send(evt)
+					log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 				}
 			}
 			return nil
@@ -515,9 +514,8 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
-					} else {
-						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
+					log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 				}
 			}
 			return nil

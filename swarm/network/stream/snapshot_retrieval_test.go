@@ -220,9 +220,8 @@ func runFileRetrievalTest(nodeCount int) error {
 						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
-					} else {
-						log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 					}
+					log.Debug(fmt.Sprintf("File with root hash %x successfully retrieved", hash))
 				}
 			}
 			return nil
@@ -312,9 +311,8 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
-					} else {
-						log.Debug(fmt.Sprintf("Chunk with root hash %x successfully retrieved", hash))
 					}
+					log.Debug(fmt.Sprintf("Chunk with root hash %x successfully retrieved", hash))
 				}
 			}
 			// all nodes and files found, exit loop and return without error
