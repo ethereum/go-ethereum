@@ -537,14 +537,6 @@ pv(1) tool to get a progress bar:
 
     pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
 				},
-				{
-					Action:             dbClean,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "clean",
-					Usage:              "remove corrupt entries from a local chunk database",
-					ArgsUsage:          "<chunkdb>",
-					Description:        "Remove corrupt entries from a local chunk database",
-				},
 			},
 		},
 
