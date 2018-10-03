@@ -163,36 +163,6 @@ func (dpo *DefaultPriceOracle) GetPriceForMsg(event *p2p.PeerEvent) (*big.Int, E
 	return nil, false
 }
 
-//This swap implementation works by listening to message events on the p2p server.
-//It then handles the event received, filtering for messages and evaluating
-//if it needs accounting
-func (s *Swap) registerForEvents(srv *p2p.Server) {
-	go func() {
-		events := make(chan *p2p.PeerEvent)
-		sub := srv.SubscribeEvents(events)
-		defer sub.Unsubscribe()
-
-		for {
-			select {
-			case event := <-events:
-				go s.handleMsgEvent(event)
-			case err := <-sub.Err():
-				log.Error(err.Error())
-				return
-			}
-		}
-	}()
-}
-
-//Handle the message.
-//Determine if it needs accounting, and if yes, account for it
-func (s *Swap) handleMsgEvent(event *p2p.PeerEvent) {
-	if !s.priceOracle.IsAccountedMsg(event) {
-		return
-	}
-	s.accountMsgForPeer(event)
-}
-
 //Do the accounting
 //Depending on the charging type of the message (set in the PriceTag),
 //it will charge the sender or receiver

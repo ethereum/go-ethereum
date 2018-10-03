@@ -141,9 +141,20 @@ type Spec struct {
 	// each message must have a single unique data type
 	Messages []interface{}
 
+	Services map[string]ProtocolService
+
 	initOnce sync.Once
 	codes    map[reflect.Type]uint64
 	types    map[uint64]reflect.Type
+}
+
+type ProtocolService interface {
+	AddServiceData(data interface{})
+	IsSupported(key interface{})
+}
+
+func (s *Spec) RegisterProtocolService(key string, service ProtocolService) {
+	s.Services[key] = service
 }
 
 func (s *Spec) init() {

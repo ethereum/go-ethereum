@@ -81,7 +81,6 @@ type RedeemChequeMsg struct {
 // SECTION: node.Service interface
 /////////////////////////////////////////////////////////////////////
 func (s *Swap) Start(srv *p2p.Server) error {
-	s.registerForEvents(srv)
 	log.Debug("Started swap")
 	return nil
 }
