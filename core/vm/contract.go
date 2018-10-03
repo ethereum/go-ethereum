@@ -50,6 +50,7 @@ type Contract struct {
 	self          ContractRef
 
 	jumpdests destinations // Aggregated result of JUMPDEST analysis.
+	analysis  bitvec       // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash *common.Hash
@@ -105,10 +106,14 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 		}
 		return analysis.codeSegment(udest)
 	}
-	//Don't have the hash, most likely a piece of initcode not already in state trie
-	analysis = codeBitmap(c.Code)
-	// Don't bother saving this
-	return analysis.codeSegment(udest)
+	// We don't have the code hash, most likely a piece of initcode not already
+	// in state trie. In that case, we do an analysis, and save it locally, so
+	// we don't have to recalculate it for every JUMP instruction in the execution
+	// However, we don't save it within the parent context
+	if c.analysis == nil {
+		c.analysis = codeBitmap(c.Code)
+	}
+	return c.analysis.codeSegment(udest)
 }
 
 // AsDelegate sets the contract to be a delegate call and returns the current
