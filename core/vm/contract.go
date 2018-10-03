@@ -49,8 +49,8 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
-	jumpdests destinations // Aggregated result of JUMPDEST analysis.
-	analysis  bitvec       // Locally cached result of JUMPDEST analysis
+	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
+	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
 	Code     []byte
 	CodeHash common.Hash
@@ -69,7 +69,7 @@ func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uin
 		// Reuse JUMPDEST analysis from parent context if available.
 		c.jumpdests = parent.jumpdests
 	} else {
-		c.jumpdests = make(destinations)
+		c.jumpdests = make(map[common.Hash]bitvec)
 	}
 
 	// Gas should be a pointer so it can safely be reduced through the run

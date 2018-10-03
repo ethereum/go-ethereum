@@ -16,14 +16,6 @@
 
 package vm
 
-import (
-	"github.com/ethereum/go-ethereum/common"
-)
-
-// destinations stores one bitmap per contract (keyed by hash of code).
-// The bitmaps mark code and data-sections for a piece of contract code
-type destinations map[common.Hash]bitvec
-
 // bitvec is a bit vector which maps bytes in a program.
 // An unset bit means the byte is an opcode, a set bit means
 // it's data (i.e. argument of PUSHxx).
