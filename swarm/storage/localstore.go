@@ -185,6 +185,7 @@ func (ls *LocalStore) Close() {
 	ls.DbStore.Close()
 }
 
+// Migrate checks the datastore schema vs the runtime schema, and runs migrations if they don't match
 func (ls *LocalStore) Migrate() error {
 	schema, err := ls.DbStore.GetSchema()
 	if err != nil {
@@ -200,6 +201,7 @@ func (ls *LocalStore) Migrate() error {
 			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
 
 			cleanupFunc := func(c *chunk) bool {
+				// if one of the ls.Validators passes, it means a chunk is of particular type and it is valid
 				valid := false
 				for _, v := range ls.Validators {
 					if valid = v.Validate(c.Address(), c.Data()); valid {

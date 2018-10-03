@@ -731,6 +731,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
+// GetSchema is returning the current named schema of the datastore as read from LevelDB
 func (s *LDBStore) GetSchema() (string, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -746,6 +747,7 @@ func (s *LDBStore) GetSchema() (string, error) {
 	return string(data), nil
 }
 
+// PutSchema is saving a named schema to the LevelDB datastore
 func (s *LDBStore) PutSchema(schema string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
