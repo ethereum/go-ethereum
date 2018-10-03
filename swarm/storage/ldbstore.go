@@ -61,7 +61,7 @@ var (
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
 	keySchema      = []byte{8}
-	keyAccessIdx   = []byte{9} // access to chunk data index, used by garbage collection in ascending order from first entry
+	keyGCIdx       = []byte{9} // access to chunk data index, used by garbage collection in ascending order from first entry
 )
 
 var (
@@ -226,12 +226,19 @@ func getDataKey(idx uint64, po uint8) []byte {
 	return key
 }
 
-func getAccessIdxKey(idx *dpaDBIndex) []byte {
-	key := make([]byte, 17)
-	key[0] = keyAccessIdx[0]
+func getGCIdxKey(index *dpaDBIndex) []byte {
+	key := make([]byte, 9)
+	key[0] = keyGCIdx[0]
 	binary.BigEndian.PutUint64(key[1:], index.Access)
-	binary.BigEndian.PutUint64(key[9:], index.Idx)
 	return key
+}
+
+func getGCIdxValue(index *dpaDBIndex, po uint8, addr Address) []byte {
+	val := make([]byte, 41) // po = 1, index.Index = 8, Address = 32
+	val[0] = po
+	binary.BigEndian.PutUint64(val[1:], index.Idx)
+	copy(val[9:], addr)
+	return val
 }
 
 func encodeIndex(index *dpaDBIndex) []byte {
@@ -266,7 +273,9 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	garbage := []*gcItem{}
 	gcnt := 0
+	//maxGcnt :=
 
+	//for ok := it.Seek([]byte{keyGCIdx}); ok && (gcnt < maxGcnt)
 	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < maxGCitems) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
 		itkey := it.Key()
 
@@ -542,17 +551,20 @@ func (s *LDBStore) Delete(addr Address) {
 	ikey := getIndexKey(addr)
 
 	var indx dpaDBIndex
-	s.tryAccessIdx(ikey, &indx)
+	proximity := s.po(addr)
+	s.tryAccessIdx(ikey, proximity, &indx)
 
-	s.delete(indx.Idx, ikey, s.po(addr))
+	s.delete(&indx, ikey, proximity)
 }
 
-func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
+func (s *LDBStore) delete(idx *dpaDBIndex, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
-	batch.Delete(getDataKey(idx, po))
+	accessIdxKey := getAccessIdxKey(idx.Index, idx.Access)
+	batch.Delete(accessIdxKey)
+	batch.Delete(getDataKey(idx.Inde.Indexx, po))
 	s.entryCnt--
 	dbEntryCount.Dec(1)
 	cntKey := make([]byte, 2)
@@ -612,8 +624,9 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	s.batch.Put(ikey, idata)
 
 	// add the access-chunkindex index for garbage collection
-	accessIdx := getAccessIdxKey(&index)
-	s.batch.Put(accessIdx, nil)
+	gcIdxKey := getGCIdxKey(&index)
+	gcIdxData := getGCIdxData(&index, po, chunk.Address)
+	s.batch.Put(gcIdxKey, gcIdxData)
 	s.lock.Unlock()
 
 	select {
@@ -630,6 +643,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 }
 
 // force putting into db, does not check access index
+// NOTE chunks put directly through this method will currently NOT be handled by garbage collection
 func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
 	dkey := getDataKey(s.dataIdx, po)
@@ -725,17 +739,22 @@ func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
 }
 
 // try to find index; if found, update access cnt and return true
-func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
+func (s *LDBStore) tryAccessIdx(ikey []byte, po uint8, index *dpaDBIndex) bool {
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		return false
 	}
 	decodeIndex(idata, index)
+	oldGCIdxKey := getAccessIdxKey(&index)
 	s.batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
 	s.accessCnt++
 	index.Access = s.accessCnt
 	idata = encodeIndex(index)
 	s.batch.Put(ikey, idata)
+	newGCIdxKey := getGCIdxKey(&index)
+	newGCIdxData := getGCIdxData(&index, po, ikey)
+	s.batch.Delete(oldGCIdxKey)
+	s.batch.Put(newGCIdxKey, newGCIdxData)
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
@@ -781,7 +800,8 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 	if s.closed {
 		return nil, ErrDBClosed
 	}
-	if s.tryAccessIdx(getIndexKey(addr), &indx) {
+	proximity := s.po(addr)
+	if s.tryAccessIdx(getIndexKey(addr), proximity, &indx) {
 		var data []byte
 		if s.getDataFunc != nil {
 			// if getDataFunc is defined, use it to retrieve the chunk data
@@ -792,13 +812,12 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 			}
 		} else {
 			// default DbStore functionality to retrieve chunk data
-			proximity := s.po(addr)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
 			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
-				s.delete(indx.Idx, getIndexKey(addr), s.po(addr))
+				s.delete(&indx, getIndexKey(addr), s.po(addr))
 				return
 			}
 		}
