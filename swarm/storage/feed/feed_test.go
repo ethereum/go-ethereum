@@ -13,36 +13,24 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package mru
+package feed
 
 import (
-	"bytes"
-	"context"
-	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"testing"
 )
 
-const (
-	hasherCount            = 8
-	resourceHashAlgorithm  = storage.SHA3Hash
-	defaultRetrieveTimeout = 100 * time.Millisecond
-)
-
-// cacheEntry caches resource data and the metadata of its root chunk.
-type cacheEntry struct {
-	ResourceUpdate
-	*bytes.Reader
-	lastKey storage.Address
+func getTestFeed() *Feed {
+	topic, _ := NewTopic("world news report, every hour", nil)
+	return &Feed{
+		Topic: topic,
+		User:  newCharlieSigner().Address(),
+	}
 }
 
-// implements storage.LazySectionReader
-func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
-	return int64(len(r.ResourceUpdate.data)), nil
+func TestFeedSerializerDeserializer(t *testing.T) {
+	testBinarySerializerRecovery(t, getTestFeed(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c")
 }
 
-//returns the resource's topic
-func (r *cacheEntry) Topic() Topic {
-	return r.View.Topic
+func TestFeedSerializerLengthCheck(t *testing.T) {
+	testBinarySerializerLengthCheck(t, getTestFeed())
 }

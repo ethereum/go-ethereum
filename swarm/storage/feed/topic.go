@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feed
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ import (
 // TopicLength establishes the max length of a topic string
 const TopicLength = storage.AddressLength
 
-// Topic represents what a resource talks about
+// Topic represents what a feed is about
 type Topic [TopicLength]byte
 
 // ErrTopicTooLong is returned when creating a topic with a name/related content too long
@@ -74,7 +74,7 @@ func (t *Topic) FromHex(hex string) error {
 	return nil
 }
 
-// Name will try to extract the resource name out of the topic
+// Name will try to extract the topic name out of the Topic
 func (t *Topic) Name(relatedContent []byte) string {
 	nameBytes := *t
 	if relatedContent != nil {

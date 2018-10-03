@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
 
 type Data struct {

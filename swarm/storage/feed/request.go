@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feed
 
 import (
 	"bytes"
@@ -24,15 +24,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
 
-// Request represents an update and/or resource create message
+// Request represents a request to sign or signed feed update message
 type Request struct {
-	ResourceUpdate // actual content that will be put on the chunk, less signature
-	Signature      *Signature
-	idAddr         storage.Address // cached chunk address for the update (not serialized, for internal use)
-	binaryData     []byte          // cached serialized data (does not get serialized again!, for efficiency/internal use)
+	Update     // actual content that will be put on the chunk, less signature
+	Signature  *Signature
+	idAddr     storage.Address // cached chunk address for the update (not serialized, for internal use)
+	binaryData []byte          // cached serialized data (does not get serialized again!, for efficiency/internal use)
 }
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
@@ -44,11 +44,11 @@ type updateRequestJSON struct {
 }
 
 // Request layout
-// resourceUpdate bytes
+// Update bytes
 // SignatureLength bytes
 const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
 
-// NewFirstRequest returns a ready to sign request to publish a first update
+// NewFirstRequest returns a ready to sign request to publish a first feed update
 func NewFirstRequest(topic Topic) *Request {
 
 	request := new(Request)
@@ -56,13 +56,13 @@ func NewFirstRequest(topic Topic) *Request {
 	// get the current time
 	now := TimestampProvider.Now().Time
 	request.Epoch = lookup.GetFirstEpoch(now)
-	request.View.Topic = topic
+	request.Feed.Topic = topic
 	request.Header.Version = ProtocolVersion
 
 	return request
 }
 
-// SetData stores the payload data the resource will be updated with
+// SetData stores the payload data the feed update will be updated with
 func (r *Request) SetData(data []byte) {
 	r.data = data
 	r.Signature = nil
@@ -73,7 +73,7 @@ func (r *Request) IsUpdate() bool {
 	return r.Signature != nil
 }
 
-// Verify checks that signatures are valid and that the signer owns the resource to be updated
+// Verify checks that signatures are valid
 func (r *Request) Verify() (err error) {
 	if len(r.data) == 0 {
 		return NewError(ErrInvalidValue, "Update does not contain data")
@@ -88,7 +88,7 @@ func (r *Request) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	r.View.User, err = getUserAddr(digest, *r.Signature)
+	r.Feed.User, err = getUserAddr(digest, *r.Signature)
 	if err != nil {
 		return err
 	}
@@ -103,9 +103,9 @@ func (r *Request) Verify() (err error) {
 	return nil
 }
 
-// Sign executes the signature to validate the resource
+// Sign executes the signature to validate the update message
 func (r *Request) Sign(signer Signer) error {
-	r.View.User = signer.Address()
+	r.Feed.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {
@@ -133,16 +133,16 @@ func (r *Request) Sign(signer Signer) error {
 	return nil
 }
 
-// GetDigest creates the resource update digest used in signatures
+// GetDigest creates the feed update digest used in signatures
 // the serialized payload is cached in .binaryData
 func (r *Request) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
-	dataLength := r.ResourceUpdate.binaryLength()
+	dataLength := r.Update.binaryLength()
 	if r.binaryData == nil {
 		r.binaryData = make([]byte, dataLength+signatureLength)
-		if err := r.ResourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
+		if err := r.Update.binaryPut(r.binaryData[:dataLength]); err != nil {
 			return result, err
 		}
 	}
@@ -161,10 +161,10 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
-	resourceUpdateLength := r.ResourceUpdate.binaryLength()
+	updateLength := r.Update.binaryLength()
 
 	// signature is the last item in the chunk data
-	copy(r.binaryData[resourceUpdateLength:], r.Signature[:])
+	copy(r.binaryData[updateLength:], r.Signature[:])
 
 	chunk := storage.NewChunk(r.idAddr, r.binaryData)
 	return chunk, nil
@@ -174,14 +174,14 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see Request definition
 
-	//deserialize the resource update portion
-	if err := r.ResourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
+	//deserialize the feed update portion
+	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}
 
 	// Extract the signature
 	var signature *Signature
-	cursor := r.ResourceUpdate.binaryLength()
+	cursor := r.Update.binaryLength()
 	sigdata := chunkdata[cursor : cursor+signatureLength]
 	if len(sigdata) > 0 {
 		signature = &Signature{}
@@ -209,7 +209,7 @@ func (r *Request) FromValues(values Values, data []byte) error {
 		r.Signature = new(Signature)
 		copy(r.Signature[:], signatureBytes)
 	}
-	err = r.ResourceUpdate.FromValues(values, data)
+	err = r.Update.FromValues(values, data)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (r *Request) AppendValues(values Values) []byte {
 	if r.Signature != nil {
 		values.Set("signature", hexutil.Encode(r.Signature[:]))
 	}
-	return r.ResourceUpdate.AppendValues(values)
+	return r.Update.AppendValues(values)
 }
 
 // fromJSON takes an update request JSON and populates an UpdateRequest

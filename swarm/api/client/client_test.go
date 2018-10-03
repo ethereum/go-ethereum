@@ -25,14 +25,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -361,20 +361,20 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 }
 
-func newTestSigner() (*mru.GenericSigner, error) {
+func newTestSigner() (*feed.GenericSigner, error) {
 	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	if err != nil {
 		return nil, err
 	}
-	return mru.NewGenericSigner(privKey), nil
+	return feed.NewGenericSigner(privKey), nil
 }
 
-// test the transparent resolving of multihash resource types with bzz:// scheme
+// test the transparent resolving of multihash feed updates with bzz:// scheme
 //
-// first upload data, and store the multihash to the resulting manifest in a resource update
+// first upload data, and store the multihash to the resulting manifest in a feed update
 // retrieving the update with the multihash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
-func TestClientCreateResourceMultihash(t *testing.T) {
+func TestClientCreateFeedMultihash(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
@@ -393,36 +393,36 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	s := common.FromHex(swarmHash)
 	mh := multihash.ToMultihash(s)
 
-	// our mutable resource topic
-	topic, _ := mru.NewTopic("foo.eth", nil)
+	// our feed topic
+	topic, _ := feed.NewTopic("foo.eth", nil)
 
-	createRequest := mru.NewFirstRequest(topic)
+	createRequest := feed.NewFirstRequest(topic)
 
 	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
-	resourceManifestHash, err := client.CreateResource(createRequest)
+	feedManifestHash, err := client.CreateFeedWithManifest(createRequest)
 
 	if err != nil {
-		t.Fatalf("Error creating resource: %s", err)
+		t.Fatalf("Error creating feed manifest: %s", err)
 	}
 
-	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
-	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
+	if feedManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestHash)
 	}
 
-	// Check we get a not found error when trying to get the resource with a made-up manifest
-	_, err = client.GetResource(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-	if err != ErrNoResourceUpdatesFound {
-		t.Fatalf("Expected to receive ErrNoResourceUpdatesFound error. Got: %s", err)
+	// Check we get a not found error when trying to get feed updates with a made-up manifest
+	_, err = client.QueryFeed(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	if err != ErrNoFeedUpdatesFound {
+		t.Fatalf("Expected to receive ErrNoFeedUpdatesFound error. Got: %s", err)
 	}
 
-	reader, err := client.GetResource(nil, correctManifestAddrHex)
+	reader, err := client.QueryFeed(nil, correctManifestAddrHex)
 	if err != nil {
-		t.Fatalf("Error retrieving resource: %s", err)
+		t.Fatalf("Error retrieving feed updates: %s", err)
 	}
 	defer reader.Close()
 	gotData, err := ioutil.ReadAll(reader)
@@ -435,8 +435,8 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 
 }
 
-// TestClientCreateUpdateResource will check that mutable resources can be created and updated via the HTTP client.
-func TestClientCreateUpdateResource(t *testing.T) {
+// TestClientCreateUpdateFeed will check that feeds can be created and updated via the HTTP client.
+func TestClientCreateUpdateFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
@@ -444,28 +444,28 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	client := NewClient(srv.URL)
 	defer srv.Close()
 
-	// set raw data for the resource
+	// set raw data for the feed update
 	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
 
-	// our mutable resource name
-	topic, _ := mru.NewTopic("El Quijote", nil)
-	createRequest := mru.NewFirstRequest(topic)
+	// our feed topic name
+	topic, _ := feed.NewTopic("El Quijote", nil)
+	createRequest := feed.NewFirstRequest(topic)
 
 	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
-	resourceManifestHash, err := client.CreateResource(createRequest)
+	feedManifestHash, err := client.CreateFeedWithManifest(createRequest)
 
-	correctManifestAddrHex := "fcb8e75f53e480e197c083ad1976d265674d0ce776f2bf359c09c413fb5230b8"
-	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	correctManifestAddrHex := "0e9b645ebc3da167b1d56399adc3276f7a08229301b72a03336be0e7d4b71882"
+	if feedManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestHash)
 	}
 
-	reader, err := client.GetResource(nil, correctManifestAddrHex)
+	reader, err := client.QueryFeed(nil, correctManifestAddrHex)
 	if err != nil {
-		t.Fatalf("Error retrieving resource: %s", err)
+		t.Fatalf("Error retrieving feed updates: %s", err)
 	}
 	defer reader.Close()
 	gotData, err := ioutil.ReadAll(reader)
@@ -479,7 +479,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// define different data
 	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
 
-	updateRequest, err := client.GetResourceMetadata(nil, correctManifestAddrHex)
+	updateRequest, err := client.GetFeedRequest(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving update request template: %s", err)
 	}
@@ -489,13 +489,13 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
-	if err = client.UpdateResource(updateRequest); err != nil {
-		t.Fatalf("Error updating resource: %s", err)
+	if err = client.UpdateFeed(updateRequest); err != nil {
+		t.Fatalf("Error updating feed: %s", err)
 	}
 
-	reader, err = client.GetResource(nil, correctManifestAddrHex)
+	reader, err = client.QueryFeed(nil, correctManifestAddrHex)
 	if err != nil {
-		t.Fatalf("Error retrieving resource: %s", err)
+		t.Fatalf("Error retrieving feed updates: %s", err)
 	}
 	defer reader.Close()
 	gotData, err = ioutil.ReadAll(reader)
@@ -506,17 +506,17 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Expected: %v, got %v", databytes, gotData)
 	}
 
-	// now try retrieving resource without a manifest
+	// now try retrieving feed updates without a manifest
 
-	view := &mru.View{
+	fd := &feed.Feed{
 		Topic: topic,
 		User:  signer.Address(),
 	}
 
-	lookupParams := mru.NewQueryLatest(view, lookup.NoClue)
-	reader, err = client.GetResource(lookupParams, "")
+	lookupParams := feed.NewQueryLatest(fd, lookup.NoClue)
+	reader, err = client.QueryFeed(lookupParams, "")
 	if err != nil {
-		t.Fatalf("Error retrieving resource: %s", err)
+		t.Fatalf("Error retrieving feed updates: %s", err)
 	}
 	defer reader.Close()
 	gotData, err = ioutil.ReadAll(reader)

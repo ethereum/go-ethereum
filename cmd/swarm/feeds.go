@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Command resource allows the user to create and update signed mutable resource updates
+// Command feed allows the user to create and update signed Swarm feeds
 package main
 
 import (
@@ -27,17 +27,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func NewGenericSigner(ctx *cli.Context) mru.Signer {
-	return mru.NewGenericSigner(getPrivKey(ctx))
+func NewGenericSigner(ctx *cli.Context) feed.Signer {
+	return feed.NewGenericSigner(getPrivKey(ctx))
 }
 
-func getTopic(ctx *cli.Context) (topic mru.Topic) {
-	var name = ctx.String(SwarmResourceNameFlag.Name)
-	var relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+func getTopic(ctx *cli.Context) (topic feed.Topic) {
+	var name = ctx.String(SwarmFeedNameFlag.Name)
+	var relatedTopic = ctx.String(SwarmFeedTopicFlag.Name)
 	var relatedTopicBytes []byte
 	var err error
 
@@ -48,42 +48,42 @@ func getTopic(ctx *cli.Context) (topic mru.Topic) {
 		}
 	}
 
-	topic, err = mru.NewTopic(name, relatedTopicBytes)
+	topic, err = feed.NewTopic(name, relatedTopicBytes)
 	if err != nil {
 		utils.Fatalf("Error parsing topic: %s", err)
 	}
 	return topic
 }
 
-// swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
-// swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
-// swarm resource info <Manifest Address or ENS domain>
+// swarm feed create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
+// swarm feed update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
+// swarm feed info <Manifest Address or ENS domain>
 
-func resourceCreate(ctx *cli.Context) {
+func feedCreateManifest(ctx *cli.Context) {
 	var (
 		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client = swarm.NewClient(bzzapi)
 	)
 
-	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
-	newResourceRequest.View.User = resourceGetUser(ctx)
+	newFeedUpdateRequest := feed.NewFirstRequest(getTopic(ctx))
+	newFeedUpdateRequest.Feed.User = feedGetUser(ctx)
 
-	manifestAddress, err := client.CreateResource(newResourceRequest)
+	manifestAddress, err := client.CreateFeedWithManifest(newFeedUpdateRequest)
 	if err != nil {
-		utils.Fatalf("Error creating resource: %s", err.Error())
+		utils.Fatalf("Error creating feed manifest: %s", err.Error())
 		return
 	}
 	fmt.Println(manifestAddress) // output manifest address to the user in a single line (useful for other commands to pick up)
 
 }
 
-func resourceUpdate(ctx *cli.Context) {
+func feedUpdate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
 		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client                  = swarm.NewClient(bzzapi)
-		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
+		manifestAddressOrDomain = ctx.String(SwarmFeedManifestFlag.Name)
 	)
 
 	if len(args) < 1 {
@@ -100,20 +100,20 @@ func resourceUpdate(ctx *cli.Context) {
 		return
 	}
 
-	var updateRequest *mru.Request
-	var query *mru.Query
+	var updateRequest *feed.Request
+	var query *feed.Query
 
 	if manifestAddressOrDomain == "" {
-		query = new(mru.Query)
+		query = new(feed.Query)
 		query.User = signer.Address()
 		query.Topic = getTopic(ctx)
 
 	}
 
-	// Retrieve resource status and metadata out of the manifest
-	updateRequest, err = client.GetResourceMetadata(query, manifestAddressOrDomain)
+	// Retrieve a feed update request
+	updateRequest, err = client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
-		utils.Fatalf("Error retrieving resource status: %s", err.Error())
+		utils.Fatalf("Error retrieving feed status: %s", err.Error())
 	}
 
 	// set the new data
@@ -121,34 +121,34 @@ func resourceUpdate(ctx *cli.Context) {
 
 	// sign update
 	if err = updateRequest.Sign(signer); err != nil {
-		utils.Fatalf("Error signing resource update: %s", err.Error())
+		utils.Fatalf("Error signing feed update: %s", err.Error())
 	}
 
 	// post update
-	err = client.UpdateResource(updateRequest)
+	err = client.UpdateFeed(updateRequest)
 	if err != nil {
-		utils.Fatalf("Error updating resource: %s", err.Error())
+		utils.Fatalf("Error updating feed: %s", err.Error())
 		return
 	}
 }
 
-func resourceInfo(ctx *cli.Context) {
+func feedInfo(ctx *cli.Context) {
 	var (
 		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client                  = swarm.NewClient(bzzapi)
-		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
+		manifestAddressOrDomain = ctx.String(SwarmFeedManifestFlag.Name)
 	)
 
-	var query *mru.Query
+	var query *feed.Query
 	if manifestAddressOrDomain == "" {
-		query = new(mru.Query)
+		query = new(feed.Query)
 		query.Topic = getTopic(ctx)
-		query.User = resourceGetUser(ctx)
+		query.User = feedGetUser(ctx)
 	}
 
-	metadata, err := client.GetResourceMetadata(query, manifestAddressOrDomain)
+	metadata, err := client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
-		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
+		utils.Fatalf("Error retrieving feed metadata: %s", err.Error())
 		return
 	}
 	encodedMetadata, err := metadata.MarshalJSON()
@@ -158,8 +158,8 @@ func resourceInfo(ctx *cli.Context) {
 	fmt.Println(string(encodedMetadata))
 }
 
-func resourceGetUser(ctx *cli.Context) common.Address {
-	var user = ctx.String(SwarmResourceUserFlag.Name)
+func feedGetUser(ctx *cli.Context) common.Address {
+	var user = ctx.String(SwarmFeedUserFlag.Name)
 	if user != "" {
 		return common.HexToAddress(user)
 	}

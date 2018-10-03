@@ -27,6 +27,6 @@ swarm/services                  @zelig
 swarm/state                     @justelad
 swarm/storage/encryption        @gbalint @zelig @nagydani
 swarm/storage/mock              @janos
-swarm/storage/mru               @nolash
+swarm/storage/feed              @nolash @jpeletier
 swarm/testutil                  @lmars
 whisper/                        @gballet @gluk256

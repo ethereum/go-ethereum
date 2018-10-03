@@ -35,7 +35,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
 
 var (
@@ -601,16 +601,15 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 	return string(data), nil
 }
 
-// ErrNoResourceUpdatesFound is returned when Swarm cannot find updates of the given resource
-var ErrNoResourceUpdatesFound = errors.New("No updates found for this resource")
+// ErrNoFeedUpdatesFound is returned when Swarm cannot find updates of the given feed
+var ErrNoFeedUpdatesFound = errors.New("No updates found for this feed")
 
-// CreateResource creates a Mutable Resource with the given name and frequency, initializing it with the provided
-// data. Data is interpreted as multihash or not depending on the multihash parameter.
-// startTime=0 means "now"
-// Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
-// or reference future updates (Client.UpdateResource)
-func (c *Client) CreateResource(request *mru.Request) (string, error) {
-	responseStream, err := c.updateResource(request, true)
+// CreateFeedWithManifest creates a feed manifest, initializing it with the provided
+// data
+// Returns the resulting feed manifest address that you can use to include in an ENS Resolver (setContent)
+// or reference future updates (Client.UpdateFeed)
+func (c *Client) CreateFeedWithManifest(request *feed.Request) (string, error) {
+	responseStream, err := c.updateFeed(request, true)
 	if err != nil {
 		return "", err
 	}
@@ -628,18 +627,18 @@ func (c *Client) CreateResource(request *mru.Request) (string, error) {
 	return manifestAddress, nil
 }
 
-// UpdateResource allows you to set a new version of your content
-func (c *Client) UpdateResource(request *mru.Request) error {
-	_, err := c.updateResource(request, false)
+// UpdateFeed allows you to set a new version of your content
+func (c *Client) UpdateFeed(request *feed.Request) error {
+	_, err := c.updateFeed(request, false)
 	return err
 }
 
-func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.ReadCloser, error) {
+func (c *Client) updateFeed(request *feed.Request, createManifest bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
-	URL.Path = "/bzz-resource:/"
+	URL.Path = "/bzz-feed:/"
 	values := URL.Query()
 	body := request.AppendValues(values)
 	if createManifest {
@@ -660,23 +659,23 @@ func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.R
 	return res.Body, nil
 }
 
-// GetResource returns a byte stream with the raw content of the resource
-// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// QueryFeed returns a byte stream with the raw content of the feed update
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResource(query *mru.Query, manifestAddressOrDomain string) (io.ReadCloser, error) {
-	return c.getResource(query, manifestAddressOrDomain, false)
+func (c *Client) QueryFeed(query *feed.Query, manifestAddressOrDomain string) (io.ReadCloser, error) {
+	return c.queryFeed(query, manifestAddressOrDomain, false)
 }
 
-// getResource returns a byte stream with the raw content of the resource
-// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// queryFeed returns a byte stream with the raw content of the feed update
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-// meta set to true will instruct the node return resource metainformation instead
-func (c *Client) getResource(query *mru.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
+// meta set to true will instruct the node return feed metainformation instead
+func (c *Client) queryFeed(query *feed.Query, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
-	URL.Path = "/bzz-resource:/" + manifestAddressOrDomain
+	URL.Path = "/bzz-feed:/" + manifestAddressOrDomain
 	values := URL.Query()
 	if query != nil {
 		query.AppendValues(values) //adds query parameters
@@ -692,7 +691,7 @@ func (c *Client) getResource(query *mru.Query, manifestAddressOrDomain string, m
 
 	if res.StatusCode != http.StatusOK {
 		if res.StatusCode == http.StatusNotFound {
-			return nil, ErrNoResourceUpdatesFound
+			return nil, ErrNoFeedUpdatesFound
 		}
 		errorMessageBytes, err := ioutil.ReadAll(res.Body)
 		var errorMessage string
@@ -701,18 +700,18 @@ func (c *Client) getResource(query *mru.Query, manifestAddressOrDomain string, m
 		} else {
 			errorMessage = string(errorMessageBytes)
 		}
-		return nil, fmt.Errorf("Error retrieving resource: %s", errorMessage)
+		return nil, fmt.Errorf("Error retrieving feed updates: %s", errorMessage)
 	}
 
 	return res.Body, nil
 }
 
-// GetResourceMetadata returns a structure that describes the Mutable Resource
-// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// GetFeedRequest returns a structure that describes the referenced feed status
+// manifestAddressOrDomain is the address you obtained in CreateFeedWithManifest or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResourceMetadata(query *mru.Query, manifestAddressOrDomain string) (*mru.Request, error) {
+func (c *Client) GetFeedRequest(query *feed.Query, manifestAddressOrDomain string) (*feed.Request, error) {
 
-	responseStream, err := c.getResource(query, manifestAddressOrDomain, true)
+	responseStream, err := c.queryFeed(query, manifestAddressOrDomain, true)
 	if err != nil {
 		return nil, err
 	}
@@ -723,7 +722,7 @@ func (c *Client) GetResourceMetadata(query *mru.Query, manifestAddressOrDomain s
 		return nil, err
 	}
 
-	var metadata mru.Request
+	var metadata feed.Request
 	if err := metadata.UnmarshalJSON(body); err != nil {
 		return nil, err
 	}

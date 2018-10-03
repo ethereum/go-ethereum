@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
 
 type TestServer interface {
@@ -48,14 +48,14 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	}
 	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
-	// mutable resources test setup
-	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
+	// Swarm feeds test setup
+	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rhparams := &mru.HandlerParams{}
-	rh, err := mru.NewTestHandler(resourceDir, rhparams)
+	rhparams := &feed.HandlerParams{}
+	rh, err := feed.NewTestHandler(feedsDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +71,11 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 			srv.Close()
 			rh.Close()
 			os.RemoveAll(dir)
-			os.RemoveAll(resourceDir)
+			os.RemoveAll(feedsDir)
 		},
 		CurrentTime: 42,
 	}
-	mru.TimestampProvider = tss
+	feed.TimestampProvider = tss
 	return tss
 }
 
@@ -92,6 +92,6 @@ func (t *TestSwarmServer) Close() {
 	t.cleanup()
 }
 
-func (t *TestSwarmServer) Now() mru.Timestamp {
-	return mru.Timestamp{Time: t.CurrentTime}
+func (t *TestSwarmServer) Now() feed.Timestamp {
+	return feed.Timestamp{Time: t.CurrentTime}
 }
