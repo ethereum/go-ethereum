@@ -61,6 +61,7 @@ var (
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
 	keySchema      = []byte{8}
+	keyAccessIdx   = []byte{9} // access to chunk data index, used by garbage collection in ascending order from first entry
 )
 
 var (
@@ -222,6 +223,14 @@ func getDataKey(idx uint64, po uint8) []byte {
 	key[1] = po
 	binary.BigEndian.PutUint64(key[2:], idx)
 
+	return key
+}
+
+func getAccessIdxKey(idx *dpaDBIndex) []byte {
+	key := make([]byte, 17)
+	key[0] = keyAccessIdx[0]
+	binary.BigEndian.PutUint64(key[1:], index.Access)
+	binary.BigEndian.PutUint64(key[9:], index.Idx)
 	return key
 }
 
@@ -602,6 +611,9 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	idata = encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 
+	// add the access-chunkindex index for garbage collection
+	accessIdx := getAccessIdxKey(&index)
+	s.batch.Put(accessIdx, nil)
 	s.lock.Unlock()
 
 	select {
@@ -811,16 +823,6 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(addr Address) (data []by
 		}
 		return data, err
 	}
-}
-
-func (s *LDBStore) updateAccessCnt(addr Address) {
-
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	var index dpaDBIndex
-	s.tryAccessIdx(getIndexKey(addr), &index) // result_chn == nil, only update access cnt
-
 }
 
 func (s *LDBStore) setCapacity(c uint64) {
