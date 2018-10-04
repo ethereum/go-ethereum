@@ -162,15 +162,15 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 // Progress retrieves the progress of the client syncing with the simulated backend
 // Since there is no delay in synchronisation, we can assume that the simulated backend
 // knows the current state of the chain.
-func (d *SimulatedBackend) Progress() ethereum.SyncProgress {
+func (d *SimulatedBackend) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, error) {
 	current := d.blockchain.CurrentBlock().NumberU64()
-	return ethereum.SyncProgress{
+	return &ethereum.SyncProgress{
 		StartingBlock: uint64(0),
 		CurrentBlock:  current,
 		HighestBlock:  current,
 		PulledStates:  current,
 		KnownStates:   current,
-	}
+	}, nil
 }
 
 // TransactionReceipt returns the receipt of a transaction.
