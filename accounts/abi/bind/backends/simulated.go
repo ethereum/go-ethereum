@@ -159,7 +159,7 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 	return val[:], nil
 }
 
-// Progress retrieves the progress of the client syncing with the simulated backend
+// SyncProgress retrieves the progress of the client syncing with the simulated backend
 // Since there is no delay in synchronisation, we can assume that the simulated backend
 // knows the current state of the chain.
 func (d *SimulatedBackend) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, error) {
