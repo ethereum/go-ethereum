@@ -391,6 +391,15 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 	return api.TraceBlock(ctx, blob, config)
 }
 
+// TraceBadBlock returns the structured logs created during the execution of a block
+// within the blockchain 'badblocks' cache
+func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, index int, config *TraceConfig) ([]*txTraceResult, error) {
+	if blocks := api.eth.blockchain.BadBlocks(); index < len(blocks) {
+		return api.traceBlock(ctx, blocks[index], config)
+	}
+	return nil, fmt.Errorf("index out of range")
+}
+
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
