@@ -575,9 +575,6 @@ func (s *LDBStore) delete(idx *dpaDBIndex, idxKey []byte, po uint8) {
 	gcIdxKey := getGCIdxKey(idx)
 	batch.Delete(gcIdxKey)
 	batch.Delete(getDataKey(idx.Idx, po))
-	if s.entryCnt == 0 {
-		panic("")
-	}
 	s.entryCnt--
 	dbEntryCount.Dec(1)
 	cntKey := make([]byte, 2)

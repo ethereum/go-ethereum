@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -296,11 +298,30 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	}
 }
 
+func TestLDBStoreCollectGarbage(t *testing.T) {
+
+	cap := maxGCItems / 2
+	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+
+	cap = maxGCItems * 2
+	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+}
+
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
 // retrieve only some of them, because garbage collection must have cleared some of them
-func TestLDBStoreCollectGarbage(t *testing.T) {
-	capacity := 500
-	n := 2000
+func testLDBStoreCollectGarbage(t *testing.T) {
+
+	params := strings.Split(t.Name(), "/")
+	capacity, err := strconv.Atoi(params[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := strconv.Atoi(params[3])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
@@ -384,11 +405,17 @@ func TestLDBStoreAddRemove(t *testing.T) {
 }
 
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
-func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	//capacity := 11
-	//surplus := 4
-	capacity := 10000
-	surplus := 10000
+func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
+
+	params := strings.Split(t.Name(), "/")
+	capacity, err := strconv.Atoi(params[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	surplus, err := strconv.Atoi(params[3])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
@@ -425,8 +452,6 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	cleanup()
 
 	ldb, cleanup = newLDBStore(t)
-	//capacity = 10
-	capacity = 10000
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
