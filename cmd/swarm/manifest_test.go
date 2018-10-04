@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -30,12 +31,20 @@ import (
 // TestManifestChange tests manifest add, update and remove
 // cli commands without encryption.
 func TestManifestChange(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	testManifestChange(t, false)
 }
 
 // TestManifestChange tests manifest add, update and remove
 // cli commands with encryption enabled.
 func TestManifestChangeEncrypted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	testManifestChange(t, true)
 }
 
@@ -400,6 +409,10 @@ func testManifestChange(t *testing.T, encrypt bool) {
 // TestNestedDefaultEntryUpdate tests if the default entry is updated
 // if the file in nested manifest used for it is also updated.
 func TestNestedDefaultEntryUpdate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	testNestedDefaultEntryUpdate(t, false)
 }
 
@@ -407,6 +420,10 @@ func TestNestedDefaultEntryUpdate(t *testing.T) {
 // of encrypted upload is updated if the file in nested manifest
 // used for it is also updated.
 func TestNestedDefaultEntryUpdateEncrypted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	testNestedDefaultEntryUpdate(t, true)
 }
 
