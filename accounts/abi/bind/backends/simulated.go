@@ -46,6 +46,7 @@ import (
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
 var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+var errBlockDoesNotExist = errors.New("block does not exist in blockchain")
 var errGasEstimationFailed = errors.New("gas required exceeds allowance or always failing transaction")
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
@@ -168,6 +169,16 @@ func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common
 func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	transaction, _, blockNumber, _ := rawdb.ReadTransaction(b.database, txHash)
 	return transaction, blockNumber != 0, nil
+}
+
+// BlockByNumber retrieves a block from the database by number, caching it
+// (associated with its hash) if found.
+func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+	block := b.blockchain.GetBlockByNumber(number.Uint64())
+	if block == nil {
+		return nil, errBlockDoesNotExist
+	}
+	return block, nil
 }
 
 // HeaderByNumber returns a block header from the current canonical chain. If number is
