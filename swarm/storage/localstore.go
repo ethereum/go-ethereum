@@ -83,6 +83,22 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 	return localStore, nil
 }
 
+// isValid returns true if chunk passes any of the LocalStore Validators.
+// isValid also returns true if LocalStore has no Validators.
+func (ls *LocalStore) isValid(chunk Chunk) bool {
+	// by default chunks are valid. if we have 0 validators, then all chunks are valid.
+	valid := true
+
+	// ls.Validators contains a list of one validator per chunk type.
+	// if one validator succeeds, then the chunk is valid
+	for _, v := range ls.Validators {
+		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
+			break
+		}
+	}
+	return valid
+}
+
 // Put is responsible for doing validation and storage of the chunk
 // by using configured ChunkValidators, MemStore and LDBStore.
 // If the chunk is not valid, its GetErrored function will
@@ -96,15 +112,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
-	valid := true
-	// ls.Validators contains a list of one validator per chunk type.
-	// if one validator succeeds, then the chunk is valid
-	for _, v := range ls.Validators {
-		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
-			break
-		}
-	}
-	if !valid {
+	if !ls.isValid(chunk) {
 		return ErrChunkInvalid
 	}
 
@@ -200,18 +208,10 @@ func (ls *LocalStore) Migrate() error {
 		if schema == "" {
 			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
 
-			cleanupFunc := func(c *chunk) bool {
-				// if one of the ls.Validators passes, it means a chunk is of particular type and it is valid
-				valid := false
-				for _, v := range ls.Validators {
-					if valid = v.Validate(c.Address(), c.Data()); valid {
-						break
-					}
-				}
-				return valid
-			}
-
-			ls.DbStore.Cleanup(cleanupFunc)
+			// delete chunks that are not valid, i.e. chunks that do not pass any of the ls.Validators
+			ls.DbStore.Cleanup(func(c *chunk) bool {
+				return !ls.isValid(c)
+			})
 
 			err := ls.DbStore.PutSchema(DbSchemaPurity)
 			if err != nil {
