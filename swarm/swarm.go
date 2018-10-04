@@ -202,6 +202,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, err
 	}
 
+	err = lstore.Migrate()
+	if err != nil {
+		return nil, err
+	}
+
 	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
