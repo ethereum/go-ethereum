@@ -266,7 +266,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
 	}
-	stats.enode = enode
+	stats.enode = string(enode)
 
 	return stats, nil
 }
