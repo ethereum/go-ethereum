@@ -368,14 +368,14 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					opts := new(bind.CallOpts)
 					candidates, err := validator.GetCandidates(opts)
 					if err != nil {
-						utils.Fatalf("Can't get list of candidates: %v", err)
+						utils.Fatalf("Can't get list of masternode candidates: %v", err)
 					}
 
 					var ms []clique.Masternode
 					for _, candidate := range candidates {
 						v, err := validator.GetCandidateCap(opts, candidate)
 						if err != nil {
-							log.Warn("Can't get cap of a candidate. Will ignore him", "address", candidate, "error", err)
+							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
 						}
 						ms = append(ms, clique.Masternode{Address: candidate, Stake: v.Int64()})
 					}
@@ -383,12 +383,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					sort.Slice(ms, func(i, j int) bool {
 						return ms[i].Stake > ms[j].Stake
 					})
-					// update masternodes
-					err = ethereum.UpdateMasternodes(ms)
-					if err != nil {
-						utils.Fatalf("Can't update masternodes: %v", err)
+					log.Info("Ordered list of masternode candidates", "candidates", ms)
+					if len(ms) == 0 {
+						log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+					} else {
+						// update masternodes
+						log.Info("Updating new set of masternodes")
+						err = ethereum.UpdateMasternodes(ms)
+						if err != nil {
+							utils.Fatalf("Can't update masternodes: %v", err)
+						}
+						log.Info("Masternodes are ready for the next epoch")
 					}
-					log.Info("Masternodes are ready for the next epoch")
 				}
 			}
 		}()
