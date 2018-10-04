@@ -18,6 +18,7 @@ package netutil
 
 import (
 	"fmt"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -105,5 +106,33 @@ func runIPTrackerTest(t *testing.T, evs []iptrackTestEvent) {
 				t.Errorf("op %d: wrong prediction %s, want %s", i, pred, ev.ip)
 			}
 		}
+	}
+}
+
+// This checks that old statements and contacts are GCed even if Predict* isn't called.
+func TestIPTrackerForceGC(t *testing.T) {
+	var (
+		clock  mclock.Simulated
+		window = 10 * time.Second
+		rate   = 50 * time.Millisecond
+		max    = int(window/rate) + 1
+		it     = NewIPTracker(window, window, 3)
+	)
+	it.clock = &clock
+
+	for i := 0; i < 5*max; i++ {
+		e1 := make([]byte, 4)
+		e2 := make([]byte, 4)
+		mrand.Read(e1)
+		mrand.Read(e2)
+		it.AddStatement(string(e1), string(e2))
+		it.AddContact(string(e1))
+		clock.Run(rate)
+	}
+	if len(it.contact) > 2*max {
+		t.Errorf("contacts not GCed, have %d", len(it.contact))
+	}
+	if len(it.statements) > 2*max {
+		t.Errorf("statements not GCed, have %d", len(it.statements))
 	}
 }

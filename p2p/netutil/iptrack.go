@@ -25,12 +25,14 @@ import (
 // IPTracker predicts the external endpoint, i.e. IP address and port, of the local host
 // based on statements made by other hosts.
 type IPTracker struct {
-	window        time.Duration
-	contactWindow time.Duration
-	minStatements int
-	clock         mclock.Clock
-	statements    map[string]ipStatement
-	contact       map[string]mclock.AbsTime
+	window          time.Duration
+	contactWindow   time.Duration
+	minStatements   int
+	clock           mclock.Clock
+	statements      map[string]ipStatement
+	contact         map[string]mclock.AbsTime
+	lastStatementGC mclock.AbsTime
+	lastContactGC   mclock.AbsTime
 }
 
 type ipStatement struct {
@@ -90,16 +92,25 @@ func (it *IPTracker) PredictEndpoint() string {
 
 // AddStatement records that a certain host thinks our external endpoint is the one given.
 func (it *IPTracker) AddStatement(host, endpoint string) {
-	it.statements[host] = ipStatement{endpoint, it.clock.Now()}
+	now := it.clock.Now()
+	it.statements[host] = ipStatement{endpoint, now}
+	if time.Duration(now-it.lastStatementGC) >= it.window {
+		it.gcStatements(now)
+	}
 }
 
 // AddContact records that a packet containing our endpoint information has been sent to a
 // certain host.
 func (it *IPTracker) AddContact(host string) {
-	it.contact[host] = it.clock.Now()
+	now := it.clock.Now()
+	it.contact[host] = now
+	if time.Duration(now-it.lastContactGC) >= it.contactWindow {
+		it.gcContact(now)
+	}
 }
 
 func (it *IPTracker) gcStatements(now mclock.AbsTime) {
+	it.lastStatementGC = now
 	cutoff := now.Add(-it.window)
 	for host, s := range it.statements {
 		if s.time < cutoff {
@@ -109,6 +120,7 @@ func (it *IPTracker) gcStatements(now mclock.AbsTime) {
 }
 
 func (it *IPTracker) gcContact(now mclock.AbsTime) {
+	it.lastContactGC = now
 	cutoff := now.Add(-it.contactWindow)
 	for host, ct := range it.contact {
 		if ct < cutoff {
