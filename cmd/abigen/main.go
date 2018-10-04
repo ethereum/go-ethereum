@@ -165,6 +165,5 @@ func contractsFromStdin() (map[string]*compiler.Contract, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return compiler.ParseCombinedJSON(bytes, "", "", "", "")
 }
