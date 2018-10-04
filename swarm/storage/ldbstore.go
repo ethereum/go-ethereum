@@ -45,7 +45,7 @@ import (
 
 const (
 	gcArrayFreeRatio = 0.1
-	maxGCitems       = 5000 // max number of items to be gc'd per call to collectGarbage()
+	maxGCItems       = 5000 // max number of items to be gc'd per call to collectGarbage()
 )
 
 var (
@@ -61,7 +61,7 @@ var (
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
 	keySchema      = []byte{8}
-	keyGCIdx       = []byte{9} // access to chunk data index, used by garbage collection in ascending order from first entry
+	keyGCIdx       = byte(9) // access to chunk data index, used by garbage collection in ascending order from first entry
 )
 
 var (
@@ -69,7 +69,7 @@ var (
 )
 
 type gcItem struct {
-	idx    uint64
+	idx    *dpaDBIndex
 	value  uint64
 	idxKey []byte
 	po     uint8
@@ -228,7 +228,7 @@ func getDataKey(idx uint64, po uint8) []byte {
 
 func getGCIdxKey(index *dpaDBIndex) []byte {
 	key := make([]byte, 9)
-	key[0] = keyGCIdx[0]
+	key[0] = keyGCIdx
 	binary.BigEndian.PutUint64(key[1:], index.Access)
 	return key
 }
@@ -239,6 +239,16 @@ func getGCIdxValue(index *dpaDBIndex, po uint8, addr Address) []byte {
 	binary.BigEndian.PutUint64(val[1:], index.Idx)
 	copy(val[9:], addr)
 	return val
+}
+
+func parseGCIdxEntry(accessCnt []byte, val []byte) (index *dpaDBIndex, po uint8, addr Address) {
+	index = &dpaDBIndex{
+		Idx:    binary.BigEndian.Uint64(val[1:]),
+		Access: binary.BigEndian.Uint64(accessCnt),
+	}
+	po = val[0]
+	addr = val[9:]
+	return
 }
 
 func encodeIndex(index *dpaDBIndex) []byte {
@@ -272,32 +282,32 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	defer it.Release()
 
 	garbage := []*gcItem{}
-	gcnt := 0
-	//maxGcnt :=
+	var gcnt uint64
+	var maxGcnt uint64
+	if s.entryCnt >= maxGCItems {
+		maxGcnt = maxGCItems * gcArrayFreeRatio
+	} else {
+		maxGcnt = uint64(float64(s.entryCnt) * gcArrayFreeRatio)
+	}
 
-	//for ok := it.Seek([]byte{keyGCIdx}); ok && (gcnt < maxGcnt)
-	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < maxGCitems) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
+	for ok := it.Seek([]byte{keyGCIdx}); ok && (gcnt < maxGcnt); ok = it.Next() {
 		itkey := it.Key()
 
-		if (itkey == nil) || (itkey[0] != keyIndex) {
+		if (itkey == nil) || (itkey[0] != keyGCIdx) {
 			break
 		}
 
-		// it.Key() contents change on next call to it.Next(), so we must copy it
-		key := make([]byte, len(it.Key()))
-		copy(key, it.Key())
-
 		val := it.Value()
+		index, po, hash := parseGCIdxEntry(itkey[1:], val)
+		keyIdx := make([]byte, 33)
+		keyIdx[0] = keyIndex
+		copy(keyIdx[1:], hash)
 
-		var index dpaDBIndex
-
-		hash := key[1:]
-		decodeIndex(val, &index)
-		po := s.po(hash)
+		log.Trace("parse gc", "index", index, "po", po, "hash", hash)
 
 		gci := &gcItem{
-			idxKey: key,
-			idx:    index.Idx,
+			idxKey: keyIdx,
+			idx:    index,
 			value:  index.Access, // the smaller, the more likely to be gc'd. see sort comparator below.
 			po:     po,
 		}
@@ -308,8 +318,8 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
 
-	cutoff := int(float32(gcnt) * ratio)
-	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(cutoff))
+	cutoff := int(float32(gcnt)) //* ratio)
+	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(maxGcnt))
 
 	for i := 0; i < cutoff; i++ {
 		s.delete(garbage[i].idx, garbage[i].idxKey, garbage[i].po)
@@ -492,7 +502,7 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 		// if chunk is to be removed
 		if f(c) {
 			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
-			s.delete(index.Idx, getIndexKey(key[1:]), po)
+			s.delete(&index, getIndexKey(key[1:]), po)
 			removed++
 			errorsFound++
 		}
@@ -562,9 +572,12 @@ func (s *LDBStore) delete(idx *dpaDBIndex, idxKey []byte, po uint8) {
 
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
-	accessIdxKey := getAccessIdxKey(idx.Index, idx.Access)
-	batch.Delete(accessIdxKey)
-	batch.Delete(getDataKey(idx.Inde.Indexx, po))
+	gcIdxKey := getGCIdxKey(idx)
+	batch.Delete(gcIdxKey)
+	batch.Delete(getDataKey(idx.Idx, po))
+	if s.entryCnt == 0 {
+		panic("")
+	}
 	s.entryCnt--
 	dbEntryCount.Dec(1)
 	cntKey := make([]byte, 2)
@@ -625,7 +638,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 
 	// add the access-chunkindex index for garbage collection
 	gcIdxKey := getGCIdxKey(&index)
-	gcIdxData := getGCIdxData(&index, po, chunk.Address)
+	gcIdxData := getGCIdxValue(&index, po, chunk.Address())
 	s.batch.Put(gcIdxKey, gcIdxData)
 	s.lock.Unlock()
 
@@ -745,14 +758,14 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, po uint8, index *dpaDBIndex) bool {
 		return false
 	}
 	decodeIndex(idata, index)
-	oldGCIdxKey := getAccessIdxKey(&index)
+	oldGCIdxKey := getGCIdxKey(index)
 	s.batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
 	s.accessCnt++
 	index.Access = s.accessCnt
 	idata = encodeIndex(index)
 	s.batch.Put(ikey, idata)
-	newGCIdxKey := getGCIdxKey(&index)
-	newGCIdxData := getGCIdxData(&index, po, ikey)
+	newGCIdxKey := getGCIdxKey(index)
+	newGCIdxData := getGCIdxValue(index, po, ikey)
 	s.batch.Delete(oldGCIdxKey)
 	s.batch.Put(newGCIdxKey, newGCIdxData)
 	select {

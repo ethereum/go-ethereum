@@ -385,8 +385,10 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	capacity := 11
-	surplus := 4
+	//capacity := 11
+	//surplus := 4
+	capacity := 10000
+	surplus := 10000
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
@@ -423,7 +425,8 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	cleanup()
 
 	ldb, cleanup = newLDBStore(t)
-	capacity = 10
+	//capacity = 10
+	capacity = 10000
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
