@@ -92,16 +92,14 @@ func (c *Contract) validJumpdest(dest *big.Int) bool {
 	if OpCode(c.Code[udest]) != JUMPDEST {
 		return false
 	}
-	var analysis bitvec
 	// Do we have a contract hash already?
 	if c.CodeHash != (common.Hash{}) {
-		var exist bool
 		// Does parent context have the analysis?
-		analysis, exist = c.jumpdests[c.CodeHash]
+		analysis, exist := c.jumpdests[c.CodeHash]
 		if !exist {
-			// Do the analysis
+			// Do the analysis and save in parent context
+			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
-			// Save in parent context
 			c.jumpdests[c.CodeHash] = analysis
 		}
 		return analysis.codeSegment(udest)
