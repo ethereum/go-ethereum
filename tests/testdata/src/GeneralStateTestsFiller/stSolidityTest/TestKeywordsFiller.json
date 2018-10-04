@@ -1,0 +1,103 @@
+{
+    "TestKeywords" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "100000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "storage" : {
+                            "0x" : "0x01"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "100000",
+                "//comment1": "contract main",
+                "//comment2": "{",
+                "//comment3": "    bool returnValue;",
+                "//comment4": "    function run() returns (bool)",
+                "//comment5": "    {",
+                "//comment6": "       returnValue = testKeywords();",
+                "//comment7": "       return returnValue;",
+                "//comment8": "    }",
+                "//comment9": "",
+                "//comment10": "    function testKeywords() returns (bool res)",
+                "//comment11": "    {",
+                "//comment12": "        //some simple checks for the if statemnt",
+                "//comment13": "        //if, else, while, for, break, continue, return",
+                "//comment14": "        int i = 0;",
+                "//comment15": "        res = false;",
+                "//comment16": "",
+                "//comment17": "        if (i == 0)",
+                "//comment18": "        {",
+                "//comment19": "            if( i <= -25)",
+                "//comment20": "            {",
+                "//comment21": "                return false;",
+                "//comment22": "            }",
+                "//comment23": "            else",
+                "//comment24": "            {",
+                "//comment25": "                while(i < 10)",
+                "//comment26": "                    i++;",
+                "//comment27": "",
+                "//comment28": "                if (i == 10)",
+                "//comment29": "                {",
+                "//comment30": "                    for(var j=10; j>0; j--)",
+                "//comment31": "                    {",
+                "//comment32": "                        i--;",
+                "//comment33": "                    }",
+                "//comment34": "                }",
+                "//comment35": "            }",
+                "//comment36": "        }",
+                "//comment37": "",
+                "//comment38": "        if (i == 0)",
+                "//comment39": "            return true;",
+                "//comment40": "",
+                "//comment41": "        return false;",
+                "//comment42": "    }",
+                "//comment43": "}",
+                "code" : "0x7c01000000000000000000000000000000000000000000000000000000006000350463380e439681146037578063c040622614604757005b603d6084565b8060005260206000f35b604d6057565b8060005260206000f35b6000605f6084565b600060006101000a81548160ff0219169083021790555060ff60016000540416905090565b6000808160011560cd575b600a82121560a157600190910190608f565b81600a1460ac5760c9565b50600a5b60008160ff16111560c85760019182900391900360b0565b5b60d5565b6000925060ed565b8160001460e05760e8565b6001925060ed565b600092505b50509056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "350000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

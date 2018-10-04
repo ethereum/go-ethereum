@@ -1,0 +1,63 @@
+{
+    "static_LoopCallsDepthThenRevert3" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+	     {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                        "7db299e0885c85039f56fa504a13dd8ce8a56aa7" : {
+                            "shouldnotexist" : "1"
+                        },
+                        "cd6807039caffddbd1c28a749ec91bef15f448e5" : {
+                            "shouldnotexist" : "1"
+                        }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "100000000000000000000000000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "a000000000000000000000000000000000000000" : {
+                "balance" : "10",
+		"code" : "create in init code on depth = 1023. account would be created",
+                "code" : "{ (JUMPI 61 (EQ (CALLDATALOAD 0) 1022)) (MSTORE 0 (+ (CALLDATALOAD 0) 1)) (STATICCALL (GAS) 0xa000000000000000000000000000000000000000 0 32 0 0) (JUMPI 81 (LT (CALLDATALOAD 0) 1050)) (JUMPDEST) (MSTORE 0 0x600060006002f0) (CREATE 3 25 7) (JUMPDEST)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "0x7ffffffffffffff0"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "a000000000000000000000000000000000000000",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

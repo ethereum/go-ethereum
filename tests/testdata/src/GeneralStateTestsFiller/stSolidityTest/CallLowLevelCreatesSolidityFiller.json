@@ -1,0 +1,88 @@
+{
+    "CallLowLevelCreatesSolidity" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "100000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "nonce" : "1",
+                        "storage" : {
+                            "0x" : "0xe1",
+                            "0x01" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "100000",
+                "//comment1": "contract subcaller",
+                "//comment2": "{",
+                "//comment3": "  function init(address a)",
+                "//comment4": "  {",
+                "//comment5": "    main(a).setdata(225);",
+                "//comment6": "  }",
+                "//comment7": "}",
+                "//comment8": "",
+                "//comment9": "contract main",
+                "//comment10": "{",
+                "//comment11": "   uint data;",
+                "//comment12": "   address msgsender;",
+                "//comment13": "   function run() returns (uint)",
+                "//comment14": "   {",
+                "//comment15": "       data = 1;",
+                "//comment16": "      msgsender = 0x095e7baea6a6c7c4c2dfeb977efac326af552d87;",
+                "//comment17": "       subcaller a = new subcaller();",
+                "//comment18": "       a.init(msgsender);",
+                "//comment19": "       return data;",
+                "//comment20": "   }",
+                "//comment21": "   ",
+                "//comment22": "   function setdata(uint _data)",
+                "//comment23": "   {",
+                "//comment24": "       data = _data;",
+                "//comment25": "   }",
+                "//comment26": "}",
+                "code" : "0x60003560e060020a9004806330debb4214610021578063c04062261461003257005b61002c6004356100c7565b60006000f35b61003a610044565b8060005260206000f35b60006000600160008190555073095e7baea6a6c7c4c2dfeb977efac326af552d87600181905550606a6100d2600039606a60006000f0905080600160a060020a03166319ab453c600060008260e060020a026000526004600154600160a060020a03168152602001600060008660325a03f16100bc57005b505060005491505090565b80600081905550505600605e80600c6000396000f30060003560e060020a9004806319ab453c14601557005b601e6004356024565b60006000f35b80600160a060020a03166330debb42600060008260e060020a02600052600460e18152602001600060008660325a03f1605957005b50505056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "350000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

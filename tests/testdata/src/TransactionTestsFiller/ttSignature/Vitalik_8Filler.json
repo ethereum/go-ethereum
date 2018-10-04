@@ -1,0 +1,27 @@
+{
+    "Vitalik_8" : {
+		  "expect" : [
+            {
+                "network" : ["EIP158", "Byzantium", "Constantinople"],
+                "result" : "valid",
+					 "sender" : "f1f571dc362a0e5b2696b8e775f8491d3e50de35"
+            },
+            {
+                "network" : ["Frontier", "Homestead", "EIP150"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "0x023e38",
+            "gasPrice" : "0x04a817c806",
+            "nonce" : "0x06",
+            "to" : "3535353535353535353535353535353535353535",
+            "value" : "0xd8",
+            "v" : "0x25",
+            "r" : "0x6455bf8ea6e7463a1046a0b52804526e119b4bf5136279614e0b1e8e296a4e2f",
+            "s" : "0x6455bf8ea6e7463a1046a0b52804526e119b4bf5136279614e0b1e8e296a4e2d"
+        }
+    }
+}

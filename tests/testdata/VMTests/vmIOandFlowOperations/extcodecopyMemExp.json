@@ -1,0 +1,37 @@
+{
+    "extcodecopyMemExp" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/VMTestsFiller/vmIOandFlowOperations/extcodecopyMemExpFiller.json",
+            "sourceHash" : "d8a55a720f1380ecbb3685ff40a9c3b75b0b3235235ad3fac1f6e97b2ecb0a6e"
+        },
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x0100",
+            "currentGasLimit" : "0x01f4153d80",
+            "currentNumber" : "0x00",
+            "currentTimestamp" : "0x01"
+        },
+        "exec" : {
+            "address" : "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "caller" : "0xcd1722f3947def4cf144679da39c4c32bdc35681",
+            "code" : "0x60ff60ff630fffffff630fffffff3c",
+            "data" : "0x",
+            "gas" : "0x01f4153d80",
+            "gasPrice" : "0x01",
+            "origin" : "0xcd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "0x0de0b6b3a7640000"
+        },
+        "pre" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x152d02c7e14af6800000",
+                "code" : "0x60ff60ff630fffffff630fffffff3c",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

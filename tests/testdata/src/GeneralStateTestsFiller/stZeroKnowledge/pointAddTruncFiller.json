@@ -1,0 +1,237 @@
+{
+    "pointAddTrunc" : {
+        "env" : {
+            "currentCoinbase" : "68795C4AA09D6f4Ed3E5DeDDf8c2AD3049A601da",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "4012015",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead", "EIP150", "EIP158"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x00",
+                            "0x02" : "0x00"
+			}
+		    }
+                }
+            },
+            {
+                "indexes" : {
+                    "data" : [0],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+	                    "0x01" : "0x01",
+	                    "0x02" : "0x02"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [1],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x00",
+                            "0x02" : "0x00"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [2],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd2",
+                            "0x02" : "0x16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [5,6],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x00",
+                            "0x01" : "0x00",
+                            "0x02" : "0x00"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [3],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd2",
+                            "0x02" : "0x16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [4],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x00",
+                            "0x02" : "0x00"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [7],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd2",
+                            "0x02" : "0x16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [8],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd2",
+                            "0x02" : "0x16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba"
+			}
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : [9],
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+			    "0x00" : "0x01",
+                            "0x01" : "0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd2",
+                            "0x02" : "0x16da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba"
+			}
+		    }
+                }
+            }
+        ],
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "",
+                "code" : "{(MSTORE 0 (CALLDATALOAD 0)) (MSTORE 32 (CALLDATALOAD 32)) (MSTORE 64 (CALLDATALOAD 64)) (MSTORE 96 (CALLDATALOAD 96)) [[0]](CALLCODE 500000 6 0 0 64 200 64)  [[1]] (MLOAD 200)  [[2]] (MLOAD 232) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+	    "data" : [
+		"(1,2) + (1,2)",
+		"(0,0) + (0,0)",
+		"(x,x) + (invalid)",
+		"(x,x) + (0,0)",
+		"(0,0) + (x,x)",
+		"(invalid) + (x,x)",
+		"(invalid) + (invalid)",
+		"(x,x) + (x,x)",
+		"(x,x) + (y,y)",
+		"(x,x) + (1,2)"
+	    ],
+            "data" : [
+                "0x0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		"0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+		"0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba0f25919bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba",
+		"0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+		"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba",
+		"0x0f25919bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba",
+		"0x0f25919bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba0f25919bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba",
+		"0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba",
+		"0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba1de49a4b0233273bba8146af82042d004f2085ec982397db0d97da17204cc2860217327ffc463919bef80cc166d09c6172639d8589799928761bcd9f22c903d4",
+		"0x0f25929bcb43d5a57391564615c9e70a992b10eafa4db109709649cf48c50dd216da2f5cb6be7a0aa72c440c53c9bbdfec6c36c7d515536431b3a865468acbba00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"
+
+            ],
+            "gasLimit" : [
+                "1000000", "90000", "110000", "200000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "1",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

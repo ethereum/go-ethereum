@@ -1,0 +1,41 @@
+{
+    "expPowerOf256Of256_4": {
+        "env" : {
+        "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+        "currentNumber" : "0",
+        "currentGasLimit" : "10000000",
+        "currentDifficulty" : "256",
+        "currentTimestamp" : "1",
+        "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "expect" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "storage" : {
+                    "0x03" : "0xe6540ce46eaf70da9d644015a661e0e245b13f307cb3885514ff7f0000000001",
+                    "0x04" : "0x6526b38b05a6325b80e1c84ab41dc934fd70f33f1bd0eab3d1f61a4707fc00ff",
+                    "0x05" : "0xe959516cd27e5d8fd487b72db2989b3ec2ba9fb7ead41554526fe5a3040400ff",
+                    "0x06" : "0xe7498a48c6ce2530bbe814ee3440c8c44fffab7ad8a277aa6aff810000000001",
+                    "0x07" : "0x2dffa3e901e5a392d15b79f4193d2168147d2aa7c55870b46c3a905d03fc0101",
+                    "0x08" : "0xe16ea721c96539edb4f7fb82de0dad8cccb1e7a6966a6777635f6fb908040101"
+                }
+            }
+        },
+        "pre" : {
+        "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+            "balance" : "1000000000000000000",
+            "nonce" : "0",
+            "code" : "{ [[ 0 ]] (EXP 256 (EXP 256 4)) [[ 1 ]] (EXP 256 (EXP 255 4)) [[ 2 ]] (EXP 256 (EXP 257 4)) [[ 3 ]] (EXP 255 (EXP 256 4)) [[ 4 ]] (EXP 255 (EXP 255 4)) [[ 5 ]] (EXP 255 (EXP 257 4)) [[ 6 ]] (EXP 257 (EXP 256 4)) [[ 7 ]] (EXP 257 (EXP 255 4)) [[ 8 ]] (EXP 257 (EXP 257 4)) }",
+            "storage": {}
+        }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "1000000"
+        }
+    }
+}

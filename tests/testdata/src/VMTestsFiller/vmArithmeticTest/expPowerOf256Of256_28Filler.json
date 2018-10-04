@@ -1,0 +1,41 @@
+{
+    "expPowerOf256Of256_28": {
+        "env" : {
+        "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+        "currentNumber" : "0",
+        "currentGasLimit" : "10000000",
+        "currentDifficulty" : "256",
+        "currentTimestamp" : "1",
+        "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "expect" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "storage" : {
+                    "0x03" : "0x14ff7f0000000000000000000000000000000000000000000000000000000001",
+                    "0x04" : "0xffd368e44b3f85cb81ae394c9809ca9fa2db46a83d7880a912ab6d4a87e400ff",
+                    "0x05" : "0x0981ad53c19b15a94bcf0bf20235dd0da9df25f46ae635029fe2062e6c1c00ff",
+                    "0x06" : "0x6aff810000000000000000000000000000000000000000000000000000000001",
+                    "0x07" : "0x19df06ffa28250867006726405fbc05d43dc2f9d2f025006db089bd46be40101",
+                    "0x08" : "0x243fffe3a4f2982f45055c08f379648ab886da8027a7401117a8e0b8881c0101"
+                }
+            }
+        },
+        "pre" : {
+        "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+            "balance" : "1000000000000000000",
+            "nonce" : "0",
+            "code" : "{ [[ 0 ]] (EXP 256 (EXP 256 28)) [[ 1 ]] (EXP 256 (EXP 255 28)) [[ 2 ]] (EXP 256 (EXP 257 28)) [[ 3 ]] (EXP 255 (EXP 256 28)) [[ 4 ]] (EXP 255 (EXP 255 28)) [[ 5 ]] (EXP 255 (EXP 257 28)) [[ 6 ]] (EXP 257 (EXP 256 28)) [[ 7 ]] (EXP 257 (EXP 255 28)) [[ 8 ]] (EXP 257 (EXP 257 28)) }",
+            "storage": {}
+        }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f2947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "1000000"
+        }
+    }
+}

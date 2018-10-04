@@ -1,0 +1,33 @@
+{
+        "sealEngine": "NoProof",
+        "params": {
+            "accountStartNonce": "0x00",
+            "maximumExtraDataSize": "0x0400",
+            "tieBreakingGas": false,
+            "minGasLimit": "125000",
+            "gasLimitBoundDivisor": "0x0400",
+            "minimumDifficulty": "0x020000",
+            "difficultyBoundDivisor": "0x0800",
+            "durationLimit": "0x08",
+            "blockReward": "0x14D1120D7B160000",
+            "registrar": "5e70c0bbcd5636e0f9f9316e9f8633feb64d4050",
+            "networkID" : "0x25"
+        },
+        "genesis": {
+            "nonce": "0x000000000000002a",
+            "difficulty": "0x2000",
+            "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "author": "0x0000000000000000000000000000000000000000",
+            "timestamp": "0x00",
+            "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "extraData": "0x",
+            "gasLimit": "0x2fefd8"
+        },
+        "accounts": {
+            "0000000000000000000000000000000000000001": { "wei": "1", "precompiled": { "name": "ecrecover", "linear": { "base": 3000, "word": 0 } } },
+            "0000000000000000000000000000000000000002": { "wei": "1", "precompiled": { "name": "sha256", "linear": { "base": 60, "word": 12 } } },
+            "0000000000000000000000000000000000000003": { "wei": "1", "precompiled": { "name": "ripemd160", "linear": { "base": 600, "word": 120 } } },
+            "0000000000000000000000000000000000000004": { "wei": "1", "precompiled": { "name": "identity", "linear": { "base": 15, "word": 3 } } },
+            "[ADDRESS]": { "wei": "100000000000000000000" }
+        }
+}

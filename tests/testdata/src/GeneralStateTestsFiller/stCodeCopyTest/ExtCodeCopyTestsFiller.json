@@ -1,0 +1,96 @@
+{
+    "ExtCodeCopyTests" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "2675000",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+		    "aaaf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		            "0x02" : "0x00",
+			    "0x03" : "0x00",
+    			    "0x04" : "0x00",
+    			    "0x05" : "0x11120000000000000000000000000000000000000000000000000000000000",
+			    "0x06" : "0x11121314151617181920212223242526272829303132000000000000000000"
+		        }
+		    },
+		    "bbbf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "shouldnotexist" : "1"
+		    },
+		    "cccf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "balance" : "0"
+		    },
+		    "dddf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "nonce" : "1"
+		    }
+ 
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "aaaf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "7000",
+                "code" : "{ (EXTCODECOPY 0xbbbf5374fce5edbc8e2a8697c15331677e6ebf0b 1 10 2) [[2]] (MLOAD 0) (EXTCODECOPY 0xcccf5374fce5edbc8e2a8697c15331677e6ebf0b 1 10 2) [[3]] (MLOAD 0) (EXTCODECOPY 0xdddf5374fce5edbc8e2a8697c15331677e6ebf0b 1 10 2) [[4]] (MLOAD 0) (EXTCODECOPY 0xeeef5374fce5edbc8e2a8697c15331677e6ebf0b 1 10 2) [[5]] (MLOAD 0) (EXTCODECOPY 0xeeef5374fce5edbc8e2a8697c15331677e6ebf0b 1 10 200) [[6]] (MLOAD 0)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "cccf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "dddf5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "",
+                "nonce" : "1",
+                "storage" : {
+                }
+            },
+	    "eeef5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+                "code" : "0x1122334455667788991011121314151617181920212223242526272829303132",
+                "nonce" : "1",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "400000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "aaaf5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

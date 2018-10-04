@@ -1,0 +1,128 @@
+{
+    "static_CallAndCallcodeConsumeMoreGasThenTransactionHas" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : 0,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+		            "0x00" : "0x00",
+		            "0x08" : "0x00",
+		            "0x09" : "0x00",
+		            "0x0a" : "0x00"
+		        }
+		    },
+		    "1000000000000000000000000000000000000103" : {
+                            "code" : "0x6012600055",
+                            "nonce" : "0x00",
+                            "storage" : {
+                            }
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+			"storage" : {
+		            "0x00" : "0x12",
+		            "0x08" : "0x08aa2f",
+		            "0x09" : "0x01",
+		            "0x0a" : "0x01"
+		        }
+		    },
+		    "2000000000000000000000000000000000000103" : {
+                            "code" : "0x6012600052",
+                            "nonce" : "0x00",
+                            "storage" : {
+                            }
+                    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "1000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "{  [[ 0 ]] (CALL (GAS) (CALLDATALOAD 0) (CALLVALUE) 0 0 0 0) [[ 1 ]] (GAS) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "By new EIP150 rules this transaction would be executed even if call consumes more gas then transaction has.",
+		"code" : "Staticcall goes oog and eats 600k gas",
+		"code" : "{ (SSTORE 8 (GAS)) (SSTORE 9 (STATICCALL 600000 0x1000000000000000000000000000000000000103 0 0 0 0)) (SSTORE 10 (CALLCODE 600000 0x1000000000000000000000000000000000000103 0 0 0 0 0)) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000103" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "should be 12 in the post state",
+		"code" : "{ (SSTORE 0 0x12) } ",
+		"storage": {
+		}
+            },
+	    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "By new EIP150 rules this transaction would be executed even if call consumes more gas then transaction has.",
+		"code" : "Staticcall goes oog and eats 600k gas",
+		"code" : "{ (SSTORE 8 (GAS)) (SSTORE 9 (STATICCALL 600000 0x2000000000000000000000000000000000000103 0 0 0 0)) (SSTORE 10 (CALLCODE 600000 0x1000000000000000000000000000000000000103 0 0 0 0 0)) }",
+		"storage": {
+		}
+            },
+	    "2000000000000000000000000000000000000103" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 0 0x12) } ",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x000000000000000000000000b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		"0x000000000000000000000000c94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+            ],
+            "gasLimit" : [
+                "600000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

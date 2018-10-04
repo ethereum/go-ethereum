@@ -64,7 +64,6 @@ const (
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
 	triesInMemory       = 128
-	masterNodeLimit     = 150
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	BlockChainVersion = 3
@@ -1648,8 +1647,8 @@ func (bc *BlockChain) UpdateM1() error {
 		})
 		// update masternodes
 		log.Info("Updating new set of masternodes")
-		if len(ms) > masterNodeLimit {
-			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:masterNodeLimit])
+		if len(ms) > common.MaxMasternodes {
+			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms[:common.MaxMasternodes])
 		} else {
 			err = engine.UpdateMasternodes(bc, bc.CurrentHeader(), ms)
 		}

@@ -1,0 +1,24 @@
+{
+    "ZeroSigTransaction3" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttSignature/ZeroSigTransaction3Filler.json",
+            "sourceHash" : "020b3857dba926960801734798733a4973e594398227b7fc59613fec6f19f34c"
+        },
+        "rlp" : "0xdf030182c73894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a80028080"
+    }
+}

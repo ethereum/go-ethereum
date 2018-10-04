@@ -1,0 +1,61 @@
+{
+    "CREATE_Bounds3" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "1000000000000000000000000000000000000000" : {
+                        "balance" : "100"
+                    },
+                    "13136008b64ff592819b2fa6d43f2835c452020e" : {
+                        "shouldnotexist" : "1"
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "1000000000000000000000000000000000000000" : {
+                "balance" : "100",
+                "code" : "{  (MSTORE 0 0x6001600155601080600c6000396000f3006000355415600957005b6020356000 )  (MSTORE8 32 0x35) (MSTORE8 33 0x55) (CREATE 1 0 0xffffffffffffffff) (CREATE 1 0 0xffffffffffffffffffffffffffffffff) (CREATE 1 0 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) (CREATE 1 0xfffffff 0) (CREATE 1 0xffffffff 0) (CREATE 1 0xffffffffffffffff 0) (CREATE 1 0xffffffffffffffffffffffffffffffff 0) (CREATE 1 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 0) (CREATE 1 0xfffffff 0xfffffff) (CREATE 1 0xffffffff 0xffffffff) (CREATE 1 0xffffffffffffffff 0xffffffffffffffff) (CREATE 1 0xffffffffffffffffffffffffffffffff 0xffffffffffffffffffffffffffffffff) (CREATE 1 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xfffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "150000", "1000000", "250000000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

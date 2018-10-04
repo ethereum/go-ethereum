@@ -1,0 +1,22 @@
+{
+    "TransactionWithSvalue1" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "valid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "21000",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "11",
+            "v" : "27",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0x01"
+        }
+    }
+}

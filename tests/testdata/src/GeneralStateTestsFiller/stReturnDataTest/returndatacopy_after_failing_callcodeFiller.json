@@ -1,0 +1,67 @@
+{
+    "returndatacopy_after_failing_callcode" : {
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "0x0a00000000",
+            "currentNumber" : "0x01",
+            "currentTimestamp" : "0x03e8",
+            "previousHash" : "0x5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "pre" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance": "0x10000000",
+                "code": "",
+                "nonce": "0x00",
+                "storage": {}
+            },
+            "0x1000000000000000000000000000000000000001": {
+                "balance" : "0x00",
+                "code": "{  (CALLCODE 0 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b 0 0 0 0 0) (RETURNDATACOPY 0x0 0x0 32) (SSTORE 0 (MLOAD 0))}",
+                "nonce" : "0x00",
+                "storage" : {
+                    "0x00" : "0xffffffffffff"
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x6400000000",
+                "code" : "0xfd",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        },
+        "expect": [
+            {   
+                "indexes" : { 
+                   "data" : -1, 
+                   "gas" : -1, 
+                   "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : { 
+                    "0x1000000000000000000000000000000000000001" : { 
+                        "storage" : { 
+                          "0x00" : "0xffffffffffff"
+                        }
+                    }
+                }
+            }
+        ],
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "0x0a00000000"
+            ],
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "secretKey" : "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "0x1000000000000000000000000000000000000001",
+            "value" : [
+                "0x00"
+            ]
+        }
+    }
+}

@@ -1,0 +1,85 @@
+{
+    "static_CallGoesOOGOnSecondLevel2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+			    "0x00" : "0x00",
+			    "0x01" : "0x00"
+		        }
+		    } 
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "OOG Call transaction has less gas then in example above",
+		"code" : "{ (MSTORE 0 (CALLDATALOAD 0)) [[ 0 ]] (STATICCALL 600000 0x1000000000000000000000000000000000000113 0 32 0 0) [[ 1 ]] (GAS) } ",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000113" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 8 (GAS)) (MSTORE 9 (STATICCALL 600000 (CALLDATALOAD 0) 0 0 0 0)) } ",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000114" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (SSTORE 1 1) }",
+		"storage": {
+		}
+            },
+	    "2000000000000000000000000000000000000114" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{  (def 'i 0x80) (for {} (< @i 50000) [i](+ @i 1) (EXTCODESIZE 1))  }",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x0000000000000000000000001000000000000000000000000000000000000114",
+		"0x0000000000000000000000002000000000000000000000000000000000000114"
+            ],
+            "gasLimit" : [
+                "160000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

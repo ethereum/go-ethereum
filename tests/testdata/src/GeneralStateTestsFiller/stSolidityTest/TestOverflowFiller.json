@@ -1,0 +1,85 @@
+{
+    "TestOverflow" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "storage" : {
+                            "0x" : "0x01"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "100000",
+                "//comment1" : "contract main",
+                "//comment2" : "{",
+                "//comment3" : "    bool returnValue;",
+                "//comment4" : "    function run() returns (bool)",
+                "//comment5" : "    {",
+                "//comment6" : "       returnValue = testOverflow();",
+                "//comment7" : "       return returnValue;",
+                "//comment8" : "    }",
+                "//comment9" : "",
+                "//comment10" : "    function testOverflow() returns (bool res)",
+                "//comment11" : "    {",
+                "//comment12" : "        res = true;",
+                "//comment13" : "        uint256 a = 115792089237316195423570985008687907853269984665640564039457584007913129639935;",
+                "//comment14" : "        if (a + 1 != 0)",
+                "//comment15" : "            return false;",
+                "//comment16" : "",
+                "//comment17" : "        uint32 b = 4294967295;",
+                "//comment18" : "        if (b + 1 != 0)",
+                "//comment19" : "            return false;",
+                "//comment20" : "",
+                "//comment21" : "        uint64 c = 18446744073709551615;",
+                "//comment22" : "        if (c + 1 != 0)",
+                "//comment23" : "            return false;",
+                "//comment24" : "    }",
+                "//comment25" : "}",
+                "code" : "0x6000357c0100000000000000000000000000000000000000000000000000000000900480638040cac41461003a578063c04062261461004c57005b610042610099565b8060005260206000f35b61005461005e565b8060005260206000f35b6000610068610099565b600060006101000a81548160ff02191690830217905550600060009054906101000a900460ff169050610096565b90565b60006000600060006001935083507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff925060006001840114156100db576100e4565b6000935061013b565b63ffffffff915060006001830163ffffffff1614156101025761010b565b6000935061013b565b67ffffffffffffffff905060006001820167ffffffffffffffff1614156101315761013a565b6000935061013b565b5b5050509056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "50000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "35000000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

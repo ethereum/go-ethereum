@@ -1,0 +1,21 @@
+{
+    "RSsecp256k1" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "invalid"
+            }
+        ],
+	"transaction" : {
+            "data" : "0x",
+            "gasLimit" : "21000",
+            "gasPrice" : "1",
+            "nonce" : "3",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "10",
+            "v" : "28",
+            "r" : "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+            "s" : "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"
+        }
+    }
+}
