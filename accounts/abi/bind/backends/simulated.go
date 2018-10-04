@@ -188,6 +188,9 @@ func (b *SimulatedBackend) TransactionByHash(ctx context.Context, txHash common.
 // BlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
+	if number == nil {
+		return b.blockchain.CurrentBlock(), nil
+	}
 	block := b.blockchain.GetBlockByNumber(number.Uint64())
 	if block == nil {
 		return nil, errBlockDoesNotExist
