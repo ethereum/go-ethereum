@@ -282,7 +282,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 				return penSigners, nil
 			}
-
 			return []common.Address{}, nil
 		}
 
