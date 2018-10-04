@@ -50,7 +50,6 @@ const (
 )
 
 var (
-	dbNilID          = ID{}           // Special node ID to use as a nil element.
 	dbNodeExpiration = 24 * time.Hour // Time after which an unseen node should be dropped.
 	dbCleanupCycle   = time.Hour      // Time period for running the expiration task.
 	dbVersion        = 7
