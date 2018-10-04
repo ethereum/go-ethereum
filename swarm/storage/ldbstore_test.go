@@ -312,7 +312,6 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
 // retrieve only some of them, because garbage collection must have cleared some of them
 func testLDBStoreCollectGarbage(t *testing.T) {
-
 	params := strings.Split(t.Name(), "/")
 	capacity, err := strconv.Atoi(params[2])
 	if err != nil {
@@ -482,4 +481,48 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 			t.Fatal("expected to get the same data back, but got smth else")
 		}
 	}
+}
+
+// TestLDBStoreCollectGarbageAccessUnlikeIndex tests garbage collection where accesscount differs from indexcount
+func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
+
+	capacity := maxGCItems
+	n := capacity - 1
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	// set first added capacity/2 chunks to highest accesscount
+	for i := 0; i < capacity/2; i++ {
+		ldb.Get(context.TODO(), chunks[i].Address())
+	}
+	_, err = mputRandomChunks(ldb, 2, int64(ch.DefaultSize))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// wait for garbage collection to kick in on the responsible actor
+	time.Sleep(1 * time.Second)
+
+	var missing int
+	for _, ch := range chunks[:capacity/2] {
+		ret, err := ldb.Get(context.Background(), ch.Address())
+		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
+			t.Fatalf("fail find chunk %s: %v", ch.Address(), err)
+		}
+
+		if !bytes.Equal(ret.Data(), ch.Data()) {
+			t.Fatal("expected to get the same data back, but got smth else")
+		}
+		log.Trace("got back chunk", "chunk", ret)
+	}
+
+	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 }

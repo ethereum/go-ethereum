@@ -170,6 +170,13 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	return s, nil
 }
 
+func (s *LDBStore) getGCCount() uint64 {
+	if s.entryCnt >= maxGCItems {
+		return maxGCItems * gcArrayFreeRatio
+	}
+	return uint64(float64(s.entryCnt) * gcArrayFreeRatio)
+}
+
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
@@ -283,12 +290,7 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	garbage := []*gcItem{}
 	var gcnt uint64
-	var maxGcnt uint64
-	if s.entryCnt >= maxGCItems {
-		maxGcnt = maxGCItems * gcArrayFreeRatio
-	} else {
-		maxGcnt = uint64(float64(s.entryCnt) * gcArrayFreeRatio)
-	}
+	maxGcnt := s.getGCCount()
 
 	for ok := it.Seek([]byte{keyGCIdx}); ok && (gcnt < maxGcnt); ok = it.Next() {
 		itkey := it.Key()
