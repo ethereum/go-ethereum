@@ -213,6 +213,7 @@ type Posv struct {
 
 	HookReward  func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 	HookPrepare func(header *types.Header, signers []common.Address) error
+	HookPenalty func(chain consensus.ChainReader, signers []common.Address, blockNumberEpoc uint64) ([]common.Address, error)
 }
 
 // New creates a Posv proof-of-stake-voting consensus engine with the initial
@@ -637,7 +638,70 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.Extra = header.Extra[:extraVanity]
 
 	if number%c.config.Epoch == 0 {
-		for _, signer := range snap.signers() {
+		signers := snap.signers()
+
+		if c.HookPenalty != nil {
+			penSigners, _ := c.HookPenalty(chain, signers, number)
+
+			if len(penSigners) > 0 {
+				// Keep remove penalty signer out of signer list.
+				for i, signer := range signers {
+					for _, penSigner := range penSigners {
+						if signer == penSigner {
+							signers = append(signers[:i], signers[i+1:]...)
+						}
+					}
+				}
+
+				var penBytes []byte
+				for _, penSigner := range penSigners {
+					log.Error("penSigner", "penSigner", penSigner.String())
+					// Convert number to byte.
+					penByte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", penSigner)), common.AddressLength)
+					penBytes = append(penBytes, penByte...)
+				}
+				if len(penBytes) > 0 {
+					header.Penalties = penBytes
+				}
+			}
+		}
+
+		// Prevent penaltied signer in 4 epocs ago jump into signer list.
+		var preventSigners []common.Address
+		for i := 1; i <= 4; i++ {
+			checkEpoc := uint64(i) * c.config.Epoch
+			if number > checkEpoc {
+				prevEpoc := number - checkEpoc
+				log.Error("prevEpoc", "prevEpoc", prevEpoc, "checkEpoc", checkEpoc, "number", number)
+				prevHeader := chain.GetHeaderByNumber(prevEpoc)
+				prevEpocBlock := chain.GetBlock(prevHeader.Hash(), prevEpoc)
+				penalties := prevEpocBlock.Penalties()
+				if penalties != nil {
+					prevSigners := make([]common.Address, len(penalties)/common.AddressLength)
+					if len(prevSigners) > 0 {
+						for _, signer := range prevSigners {
+							for _, prevSigner := range prevSigners {
+								if signer == prevSigner {
+									log.Error("preventSigner", "preventSigner", signer.String())
+									preventSigners = append(preventSigners, signer)
+								}
+							}
+						}
+					}
+				}
+				if len(preventSigners) > 0 {
+					for i, signer := range signers {
+						for _, preventSigner := range preventSigners {
+							if signer == preventSigner {
+								signers = append(signers[:i], signers[i+1:]...)
+							}
+						}
+					}
+				}
+			}
+		}
+
+		for _, signer := range signers {
 			header.Extra = append(header.Extra, signer[:]...)
 		}
 	}

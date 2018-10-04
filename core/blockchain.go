@@ -690,7 +690,7 @@ func (bc *BlockChain) procFutureBlocks() {
 
 		// Insert one by one as chain insertion needs contiguous ancestry between blocks
 		for i := range blocks {
-			bc.InsertChain(blocks[i : i+1])
+			bc.InsertChain(blocks[i: i+1])
 		}
 	}
 }
@@ -699,9 +699,9 @@ func (bc *BlockChain) procFutureBlocks() {
 type WriteStatus byte
 
 const (
-	NonStatTy WriteStatus = iota
-	CanonStatTy
-	SideStatTy
+	NonStatTy   WriteStatus = iota
+	CanonStatTy 
+	SideStatTy  
 )
 
 // Rollback is designed to remove a chain of links from the database that aren't
@@ -1243,7 +1243,7 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		var (
 			end = chain[index]
-			txs = countTransactions(chain[st.lastIndex : index+1])
+			txs = countTransactions(chain[st.lastIndex: index+1])
 		)
 		context := []interface{}{
 			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
