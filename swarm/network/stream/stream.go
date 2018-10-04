@@ -61,6 +61,8 @@ type Registry struct {
 	intervalsStore state.Store
 	doRetrieve     bool
 	maxPeerServers int
+	balanceMgr     protocols.BalanceManager
+	priceOracle    protocols.PriceOracle
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -73,7 +75,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balanceMgr protocols.BalanceManager) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -179,6 +181,9 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 			}
 		}()
 	}
+
+	streamer.balanceMgr = balanceMgr
+	streamer.priceOracle = streamer.createPriceOracle()
 
 	return streamer
 }
@@ -448,7 +453,7 @@ func (r *Registry) updateSyncing() {
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, Spec)
+	peer := protocols.NewPeer(p, rw, r.GetSpec())
 	bp := network.NewBzzPeer(peer)
 	np := network.NewPeer(bp, r.delivery.kad)
 	r.delivery.kad.On(np)
@@ -672,32 +677,109 @@ func (c *clientParams) clientCreated() {
 	close(c.clientCreatedC)
 }
 
-// Spec is the spec of the streamer protocol
-var Spec = &protocols.Spec{
-	Name:       "stream",
-	Version:    7,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		UnsubscribeMsg{},
-		OfferedHashesMsg{},
-		WantedHashesMsg{},
-		TakeoverProofMsg{},
-		SubscribeMsg{},
-		RetrieveRequestMsg{},
-		ChunkDeliveryMsgRetrieval{},
-		SubscribeErrorMsg{},
-		RequestSubscriptionMsg{},
-		QuitMsg{},
-		ChunkDeliveryMsgSyncing{},
-	},
+func (r *Registry) GetSpec() *protocols.Spec {
+
+	// Spec is the spec of the streamer protocol
+	var spec = &protocols.Spec{
+		Name:       "stream",
+		Version:    7,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			UnsubscribeMsg{},
+			OfferedHashesMsg{},
+			WantedHashesMsg{},
+			TakeoverProofMsg{},
+			SubscribeMsg{},
+			RetrieveRequestMsg{},
+			ChunkDeliveryMsgRetrieval{},
+			SubscribeErrorMsg{},
+			RequestSubscriptionMsg{},
+			QuitMsg{},
+			ChunkDeliveryMsgSyncing{},
+		},
+		Hook: protocols.NewAccountingHook(r.balanceMgr, r.priceOracle),
+	}
+	return spec
+}
+
+//An accountable message needs some meta information attached to it
+//in order to evaluate the correct price
+type priceTag struct {
+	price     uint64
+	sizeBased bool
+	direction protocols.EntryDirection
+}
+type StreamerPriceOracle struct {
+	priceMatrix map[uint64]*priceTag
+	registry    *Registry
+}
+
+func (spo *StreamerPriceOracle) Accountable(msg interface{}) bool {
+	code, ok := spo.registry.GetSpec().GetCode(msg)
+	if !ok {
+		return false
+	}
+	if _, ok = spo.priceMatrix[code]; ok {
+		return true
+	}
+	return false
+}
+
+func (spo *StreamerPriceOracle) Price(size uint32, msg interface{}) (direction protocols.EntryDirection, price uint64) {
+	code, ok := spo.registry.GetSpec().GetCode(msg)
+	if !ok {
+		panic("Attempting to get message code for an expected message type, but code not found")
+	}
+
+	tag := spo.priceMatrix[code]
+	price = tag.price
+	if tag.sizeBased {
+		price = price * uint64(size)
+	}
+	direction = tag.direction
+	return
+}
+
+func (r *Registry) createPriceOracle() protocols.PriceOracle {
+
+	po := &StreamerPriceOracle{
+		registry: r,
+	}
+	po.priceMatrix = make(map[uint64]*priceTag)
+
+	deliveryCode, ok := r.GetSpec().GetCode(ChunkDeliveryMsgRetrieval{})
+	if !ok {
+		panic("Attempting to get message code for an expected message type, but code not found")
+	}
+	tag := &priceTag{
+		price:     uint64(100),
+		sizeBased: true,
+		direction: protocols.ChargeReceiver,
+	}
+	po.priceMatrix[deliveryCode] = tag
+
+	retrieveReqCode, ok := r.GetSpec().GetCode(RetrieveRequestMsg{})
+	if !ok {
+		panic("Attempting to get message code for an expected message type, but code not found")
+	}
+	tag = &priceTag{
+		price:     uint64(10),
+		sizeBased: false,
+		direction: protocols.ChargeSender,
+	}
+	po.priceMatrix[retrieveReqCode] = tag
+
+	return po
+
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
+	spec := r.GetSpec()
 	return []p2p.Protocol{
 		{
-			Name:    Spec.Name,
-			Version: Spec.Version,
-			Length:  Spec.Length(),
+			Name:    spec.Name,
+			Version: spec.Version,
+			Length:  spec.Length(),
 			Run:     r.runProtocol,
 			// NodeInfo: ,
 			// PeerInfo: ,

@@ -18,9 +18,10 @@ package swarm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
+	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -103,13 +104,24 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 
 	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		//wait for kademlia to be healthy
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
+		}
+
 		nodeIDs := sim.UpNodeIDs()
 		shuffle(len(nodeIDs), func(i, j int) {
 			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 		})
 		//upload a file for every node
 		for _, id := range nodeIDs {
-			key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
+			item, ok := sim.NodeItem(id, bucketKeySwarm)
+			if !ok {
+				log.Error("No swarm")
+				return errors.New("No swarm")
+			}
+			swarm := item.(*Swarm)
+			key, data, err := uploadFile(swarm)
 			if err != nil {
 				return err
 			}
@@ -121,89 +133,89 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			})
 		}
 
-		//wait for kademlia to be healthy
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			return err
-		}
-
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 		for {
 			if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
-				return nil
+				break
 			}
 		}
-	})
+		//every node has a map to all nodes it had interactions
+		//each entry in the map is a map of the other node with all the balances
+		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
-	//every node has a map to all nodes it had interactions
-	//each entry in the map is a map of the other node with all the balances
-	balancesMap := make(map[enode.ID]map[enode.ID]*big.Int)
-
-	//iterate all nodes
-	for _, node := range sim.NodeIDs() {
-		item, ok := sim.NodeItem(node, bucketKeySwarm)
-		if !ok {
-			log.Error("No swarm")
-			return
-		}
-		swarm := item.(*Swarm)
-
-		//submap for each node is a map of all nodes with the balance for that node
-		subBalances := make(map[enode.ID]*big.Int)
-
-		//iterate all nodes again...
-		//get all balances with other peers for every node
-		for _, n := range sim.NodeIDs() {
-			if node == n {
-				continue
+		//iterate all nodes
+		for _, node := range sim.NodeIDs() {
+			item, ok := sim.NodeItem(node, bucketKeySwarm)
+			if !ok {
+				log.Error("No swarm")
+				return errors.New("No swarm")
 			}
+			swarm := item.(*Swarm)
 
-			//get the peer's balance with this node
-			balance := swarm.swap.GetPeerBalance(n)
-			if balance != nil {
-				subBalances[n] = balance
-				log.Debug(fmt.Sprintf("Balance of node %s to node %s: %s", node.TerminalString(), n.TerminalString(), swarm.swap.GetPeerBalance(n).String()))
-			} else {
-				log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+			//submap for each node is a map of all nodes with the balance for that node
+			subBalances := make(map[enode.ID]int64)
+
+			//iterate all nodes again...
+			//get all balances with other peers for every node
+			for _, n := range sim.NodeIDs() {
+				if node == n {
+					continue
+				}
+
+				//get the peer's balance with this node
+				balance, err := swarm.swap.GetPeerBalance(n)
+				if err == nil {
+					subBalances[n] = balance
+					log.Debug(fmt.Sprintf("Balance of node %s to node %s: %d", node.TerminalString(), n.TerminalString(), balance))
+				} else {
+					log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+				}
+			}
+			//update the map for this node
+			balancesMap[node] = subBalances
+		}
+
+		//print all the balances if requested
+		if *printStats {
+			for k, v := range balancesMap {
+				fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
+				for kk, vv := range v {
+					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
+				}
 			}
 		}
-		//update the map for this node
-		balancesMap[node] = subBalances
-	}
 
-	//print all the balances if requested
-	if *printStats {
-		for k, v := range balancesMap {
-			fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
-			for kk, vv := range v {
-				fmt.Println(fmt.Sprintf(".........with node %s: balance %s", kk.TerminalString(), vv.String()))
-			}
-		}
-	}
+		//now iterate the whole map
+		//and check that every node k has the same
+		//balance with a peer as that peer with the node,
+		//but in inverted signs
 
-	//now iterate the whole map
-	//and check that every node k has the same
-	//balance with a peer as that peer with the node,
-	//but in inverted signs
-
-	//iterate the map
-	for k, mapForK := range balancesMap {
-		//iterate the submap
-		for n, balanceKwithN := range mapForK {
-			//iterate the main map again
-			for subK, mapForSubK := range balancesMap {
-				//if the node and the peer are the same...
-				if n == subK {
-					log.Trace(fmt.Sprintf("balance of %s with %s: %s", k.TerminalString(), n.TerminalString(), balanceKwithN))
-					log.Trace(fmt.Sprintf("balance of %s with %s: %s", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-					//...check that they have the same balance in Abs terms and that it is not 0
-					if balanceKwithN.CmpAbs(mapForSubK[k]) != 0 && balanceKwithN.Cmp(big.NewInt(0)) != 0 {
-						log.Error("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not")
+		//iterate the map
+		success := true
+		for k, mapForK := range balancesMap {
+			//iterate the submap
+			for n, balanceKwithN := range mapForK {
+				//iterate the main map again
+				for subK, mapForSubK := range balancesMap {
+					//if the node and the peer are the same...
+					if n == subK {
+						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+						//...check that they have the same balance in Abs terms and that it is not 0
+						if math.Abs(float64(balanceKwithN)) != math.Abs(float64(mapForSubK[k])) && balanceKwithN != 0 {
+							log.Error(fmt.Sprintf("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not: %d, %d", balanceKwithN, mapForSubK[k]))
+							success = false
+						}
 					}
 				}
 			}
 		}
-	}
+		if success {
+			return nil
+		}
+		return errors.New("some conditions could not be met")
+	})
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
@@ -309,60 +321,62 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 				return nil
 			}
 		}
-	})
 
-	balancesMap := make(map[enode.ID]map[enode.ID]*big.Int)
+		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
-	for _, node := range sim.NodeIDs() {
-		item, ok := sim.NodeItem(node, bucketKeySwarm)
-		if !ok {
-			log.Error("No swarm")
-			return
-		}
-		swarm := item.(*Swarm)
-
-		subBalances := make(map[enode.ID]*big.Int)
-
-		for _, n := range sim.NodeIDs() {
-			if node == n {
-				continue
+		for _, node := range sim.NodeIDs() {
+			item, ok := sim.NodeItem(node, bucketKeySwarm)
+			if !ok {
+				log.Error("No swarm")
+				return errors.New("no swarm")
 			}
-			balance := swarm.swap.GetPeerBalance(n)
-			if balance != nil {
-				subBalances[n] = balance
-				log.Debug(fmt.Sprintf("Balance of node %s to node %s: %s", node.TerminalString(), n.TerminalString(), swarm.swap.GetPeerBalance(n).String()))
-			} else {
-				log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+			swarm := item.(*Swarm)
+
+			subBalances := make(map[enode.ID]int64)
+
+			for _, n := range sim.NodeIDs() {
+				if node == n {
+					continue
+				}
+				balance, err := swarm.swap.GetPeerBalance(n)
+				if err == nil {
+					subBalances[n] = balance
+					log.Debug(fmt.Sprintf("Balance of node %s to node %s: %d", node.TerminalString(), n.TerminalString(), balance))
+				} else {
+					log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+				}
+			}
+			balancesMap[node] = subBalances
+		}
+
+		if *printStats {
+			for k, v := range balancesMap {
+				fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
+				for kk, vv := range v {
+					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
+				}
 			}
 		}
-		balancesMap[node] = subBalances
-	}
 
-	if *printStats {
-		for k, v := range balancesMap {
-			fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
-			for kk, vv := range v {
-				fmt.Println(fmt.Sprintf(".........with node %s: balance %s", kk.TerminalString(), vv.String()))
-			}
-		}
-	}
-
-	/*
-		Assuming that in this case, balances should be symmetric too	I
-	*/
-	for k, mapForK := range balancesMap {
-		for n, balanceKwithN := range mapForK {
-			for subK, mapForSubK := range balancesMap {
-				if n == subK {
-					log.Trace(fmt.Sprintf("balance of %s with %s: %s", k.TerminalString(), n.TerminalString(), balanceKwithN))
-					log.Trace(fmt.Sprintf("balance of %s with %s: %s", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-					if balanceKwithN.CmpAbs(mapForSubK[k]) != 0 && balanceKwithN.Cmp(big.NewInt(0)) != 0 {
-						log.Error("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not")
+		/*
+			Assuming that in this case, balances should be symmetric too	I
+		*/
+		for k, mapForK := range balancesMap {
+			for n, balanceKwithN := range mapForK {
+				for subK, mapForSubK := range balancesMap {
+					if n == subK {
+						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+						if math.Abs(float64(balanceKwithN)) != math.Abs(float64(mapForSubK[k])) && balanceKwithN != 0 {
+							log.Error("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not")
+						}
 					}
 				}
 			}
 		}
-	}
+
+		return nil
+	})
 
 	if result.Error != nil {
 		t.Fatal(result.Error)

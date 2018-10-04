@@ -163,12 +163,10 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
-
 	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 		DoSync:          true,
 		SyncUpdateDelay: 3 * time.Second,
-	})
-
+	}, nil)
 	bucket.Store(bucketKeyRegistry, r)
 
 	cleanup = func() {
@@ -358,7 +356,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			delivery := NewDelivery(kad, netStore)
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
-			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), nil)
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), nil, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())

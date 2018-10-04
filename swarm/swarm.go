@@ -174,6 +174,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	delivery := stream.NewDelivery(to, self.netStore)
 	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
+	if config.SwapEnabled {
+		self.swap = swap.New(stateStore)
+	}
+
 	var nodeID enode.ID
 	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
 		return nil, err
@@ -184,7 +188,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		DoRetrieve:      true,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
-	})
+	}, self.swap)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
@@ -207,11 +211,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
-
-	if config.SwapEnabled {
-		self.swap = swap.New(stateStore)
-	}
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore, self.streamer.GetSpec(), self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)

@@ -18,10 +18,11 @@ package swap
 
 import (
 	"context"
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/big"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	colorable "github.com/mattn/go-colorable"
@@ -43,6 +45,29 @@ var (
 	datadirPrefix = ".data_"
 	loglevel      = flag.Int("loglevel", 2, "verbosity of logs")
 )
+
+type testPriceOracle struct{}
+
+func (tpo *testPriceOracle) Accountable(msg interface{}) bool {
+	_, ok := testSpec.GetCode(msg)
+	return ok
+}
+
+func (tpo *testPriceOracle) Price(size uint32, msg interface{}) (protocols.EntryDirection, uint64) {
+	switch msg := msg.(type) {
+	case *testExceedsPayAtMsg:
+		return msg.Price(size)
+	case *testExceedsDropAtMsg:
+		return msg.Price(size)
+	case *testCheapMsg:
+		return msg.Price(size)
+	case *testSizeBasedMsg:
+		return msg.Price(size)
+	case *testChargeRecvMsg:
+		return msg.Price(size)
+	}
+	return false, 0
+}
 
 var testSpec = &protocols.Spec{
 	Name:       "swapTestSpec",
@@ -79,36 +104,34 @@ func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
 type testExceedsPayAtMsg struct{}
 type testExceedsDropAtMsg struct{}
 type testCheapMsg struct{}
-type testSizeBasedMsg struct{}
+type testSizeBasedMsg struct {
+	Data []byte
+}
 type testChargeRecvMsg struct{}
 
 //this message is just one unit more expensive than the payment threshold
-func (tmsg *testExceedsPayAtMsg) Price() *big.Int {
-	diff := &big.Int{}
-	diff = diff.Abs(payAt)
-	return diff.Add(diff, big.NewInt(1))
+func (tmsg *testExceedsPayAtMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
+	return protocols.ChargeSender, uint64(math.Abs(float64(payAt)) + float64(1))
 }
 
 //this message is just one unit more expensive than the disconnect threshold
-func (tmsg *testExceedsDropAtMsg) Price() *big.Int {
-	diff := &big.Int{}
-	diff = diff.Abs(dropAt)
-	return diff.Add(diff, big.NewInt(1))
+func (tmsg *testExceedsDropAtMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
+	return protocols.ChargeSender, uint64(math.Abs(float64(dropAt)) + float64(1))
 }
 
 //a message with an arbitrary cost
-func (tmsg *testCheapMsg) Price() *big.Int {
-	return big.NewInt(100)
+func (tmsg *testCheapMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
+	return protocols.ChargeSender, uint64(10)
 }
 
 //a message which needs to be charged based on price
-func (tmsg *testSizeBasedMsg) Price() *big.Int {
-	return big.NewInt(222)
+func (tmsg *testSizeBasedMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
+	return protocols.ChargeSender, uint64(size) * uint64(100)
 }
 
 //a message which needs to be charged based on price
-func (tmsg *testChargeRecvMsg) Price() *big.Int {
-	return big.NewInt(999)
+func (tmsg *testChargeRecvMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
+	return protocols.ChargeReceiver, uint64(999)
 }
 
 func init() {
@@ -120,8 +143,8 @@ func init() {
 
 //check that the disconnect threshold is below the payment threshold
 func TestLimits(t *testing.T) {
-	if dropAt.Cmp(payAt) > -1 {
-		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %s, payAt: %s", dropAt.String(), payAt.String()))
+	if dropAt >= payAt {
+		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %d, payAt: %d", dropAt, payAt))
 	}
 }
 
@@ -136,32 +159,18 @@ func TestExceedsPayAt(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
+	msg := &testExceedsPayAtMsg{}
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	testPeer.Send(ctx, msg)
 
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	peerID := adapters.RandomNodeConfig().ID
-
-	code, ok := testSpec.GetCode(&testExceedsPayAtMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
+	_, price := msg.Price(0)
+	if swap.balances[testPeer.ID()] != int64(0-price) {
+		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
 	}
 
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peerID,
-		MsgCode:  &code,
-		MsgSize:  new(uint32),
-		Error:    "",
-	}
-
-	swap.handleMsgEvent(event)
-
-	//check that a cheque is present
-	cheques := swap.chequeManager.openDebitCheques[peerID]
+	//check that a cheque has been created
+	cheques := swap.chequeManager.openDebitCheques[testPeer.ID()]
 	if cheques == nil {
 		t.Fatal("Expected cheques for this peer to be present, but are nil")
 	}
@@ -171,9 +180,8 @@ func TestExceedsPayAt(t *testing.T) {
 	if cheques[0].serial != 1 {
 		t.Fatal(fmt.Sprintf("Expected the serial to be one (first message but is: %d", cheques[0].serial))
 	}
-	absPayAt := big.NewInt(0)
-	if cheques[0].amount.Cmp(absPayAt.Abs(payAt)) != 0 {
-		t.Fatal(fmt.Sprintf("Expected the serial to be one (first message but is: %d", cheques[0].serial))
+	if float64(cheques[0].amount) != float64(math.Abs(float64(payAt))) {
+		t.Fatal(fmt.Sprintf("Expected cheques amount to be equal to payAt limit, but it is: %d", cheques[0].amount))
 	}
 }
 
@@ -185,79 +193,37 @@ func TestExceedsDropAt(t *testing.T) {
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
+	msg := &testExceedsDropAtMsg{}
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	err := testPeer.Send(ctx, msg)
 
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	//peerID := adapters.RandomNodeConfig().ID
-	peer := newDummyPeer()
-	swap.protocol.setPeer(peer.Peer)
-
-	code, ok := testSpec.GetCode(&testExceedsDropAtMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
+	_, price := msg.Price(0)
+	if swap.balances[testPeer.ID()] != int64(0-price) {
+		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
 	}
 
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peer.ID(),
-		MsgCode:  &code,
-		MsgSize:  new(uint32),
-		Error:    "",
-	}
-
-	swap.handleMsgEvent(event)
-	if event.Error != ErrInsufficientFunds.Error() {
-		t.Fatal("Excpected this test to fail with insufficient funds, but it did not")
+	if err != ErrInsufficientFunds {
+		t.Fatal("Expected this test to fail with insufficient funds, but it did not")
 	}
 }
 
 //send a message with cost,
 //then check that the balance has the expected amount
 func TestSendCheapMessage(t *testing.T) {
-	fmt.Println("send")
+	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
-
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	//peerID := adapters.RandomNodeConfig().ID
-	peer := newDummyPeer()
-	swap.protocol.setPeer(peer.Peer)
-	//set an arbitrary test balance value
-	testBalance := big.NewInt(1234567890)
-	swap.peers[peer.ID()] = testBalance
-
-	code, ok := testSpec.GetCode(&testCheapMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
-	}
-
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peer.ID(),
-		MsgCode:  &code,
-		MsgSize:  new(uint32),
-		Error:    "",
-	}
-
-	swap.handleMsgEvent(event)
-
-	peerBalance := swap.peers[peer.ID()]
 	msg := &testCheapMsg{}
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	testPeer.Send(ctx, msg)
 
 	//check the new balance
-	if peerBalance.Cmp(testBalance.Sub(testBalance, msg.Price())) != 0 {
-		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
-			testBalance.Sub(testBalance, msg.Price()).String(), peerBalance.String()))
+	_, price := msg.Price(0)
+	if swap.balances[testPeer.ID()] != int64(0-price) {
+		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
 	}
 }
 
@@ -268,48 +234,45 @@ func TestSendCheapMessage(t *testing.T) {
 //then create a different SwapPeer instance with same peerID,
 //which will try to load a balance from the stateStore
 func TestRestoreBalanceFromStateStore(t *testing.T) {
+	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
+	msg := &testCheapMsg{}
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	testPeer.Send(ctx, msg)
 
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	//peerID := adapters.RandomNodeConfig().ID
-	peer := newDummyPeer()
-	swap.protocol.setPeer(peer.Peer)
-	//create a reference an arbitrary balance
-	testBalance := big.NewInt(1234567890)
-	//assign the same value to the peer
-	swap.peers[peer.ID()] = big.NewInt(1234567890)
-
-	code, ok := testSpec.GetCode(&testCheapMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
+	//check the new balance
+	_, price := msg.Price(0)
+	expectedBalance := int64(0 - price)
+	if swap.balances[testPeer.ID()] != expectedBalance {
+		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
 	}
 
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peer.ID(),
-		MsgCode:  &code,
-		MsgSize:  new(uint32),
-		Error:    "",
+	var tmpBalance int64
+	swap.stateStore.Get(testPeer.ID().String(), &tmpBalance)
+	//compare the balances
+	if expectedBalance != tmpBalance {
+		t.Fatal(fmt.Sprintf("Unexpected balance value in stateStore after sending cheap message test - stateStore should have saved it. Expected balance: %d, balance is: %d",
+			expectedBalance, tmpBalance))
 	}
 
-	swap.handleMsgEvent(event)
+	swap.stateStore.Close()
+	swap.stateStore = nil
 
-	peerBalance := swap.peers[peer.ID()]
-	expectedBalance := &big.Int{}
-	swap.stateStore.Get(peer.ID().String(), expectedBalance)
+	stateStore, err := state.NewDBStore(testDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var newBalance int64
+	stateStore.Get(testPeer.ID().String(), &newBalance)
 
 	//compare the balances
-	expectedBalance.Sub(testBalance, (&testCheapMsg{}).Price())
-	if peerBalance.Cmp(expectedBalance) != 0 {
-		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
-			expectedBalance.String(), peerBalance.String()))
+	if expectedBalance != newBalance {
+		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %d, balance is: %d",
+			expectedBalance, newBalance))
 	}
 }
 
@@ -317,49 +280,32 @@ func TestRestoreBalanceFromStateStore(t *testing.T) {
 //then check that the balance has the expected amount
 //the message is charged size based
 func TestSendSizeBasedMsg(t *testing.T) {
+	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
-
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	peer := newDummyPeer()
-	swap.protocol.setPeer(peer.Peer)
-	//set an arbitrary test balance value
-	testBalance := big.NewInt(1234567890)
-	swap.peers[peer.ID()] = testBalance
-
-	code, ok := testSpec.GetCode(&testSizeBasedMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
-	}
-
-	size := new(uint32)
-	*size = 500
-
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peer.ID(),
-		MsgCode:  &code,
-		MsgSize:  size,
-		Error:    "",
-	}
-
-	swap.handleMsgEvent(event)
-
-	peerBalance := swap.peers[peer.ID()]
 	msg := &testSizeBasedMsg{}
-	expectedBalance := &big.Int{}
-	expectedBalance.Mul(msg.Price(), big.NewInt(int64(*size)))
+	msg.Data = make([]byte, 16)
+	rand.Read(msg.Data)
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	testPeer.Send(ctx, msg)
 
 	//check the new balance
-	if peerBalance.Cmp(testBalance.Sub(testBalance, expectedBalance)) != 0 {
-		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
-			expectedBalance.String(), peerBalance.String()))
+	r, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	size := uint32(len(r))
+	_, price := msg.Price(size)
+	expectedBalance := int64(0 - price)
+	expectedPrice := uint64(size * 100)
+	if price != expectedPrice {
+		t.Fatalf("Expected price to be %d, but is %d", expectedPrice, price)
+	}
+	if swap.balances[testPeer.ID()] != expectedBalance {
+		t.Fatalf("Expected balance to be %d, but is %d", expectedBalance, swap.balances[testPeer.ID()])
 	}
 }
 
@@ -368,45 +314,19 @@ func TestSendSizeBasedMsg(t *testing.T) {
 //it means that the balance is changed in positive,
 //instead of negative as with all other tests
 func TestChargeAsReceiver(t *testing.T) {
+	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
-	swap.priceOracle = setupPriceMatrix()
-
-	node := createAndStartSvcNode(swap, t)
-	defer node.Stop()
-	defer os.RemoveAll(node.DataDir())
-
-	//peerID := adapters.RandomNodeConfig().ID
-	peer := newDummyPeer()
-	swap.protocol.setPeer(peer.Peer)
-	//set an arbitrary test balance value
-	testBalance := big.NewInt(1234567890)
-	swap.peers[peer.ID()] = testBalance
-
-	code, ok := testSpec.GetCode(&testChargeRecvMsg{})
-	if !ok {
-		t.Fatal("test message not found in spec")
-	}
-
-	event := &p2p.PeerEvent{
-		Type:     p2p.PeerEventTypeMsgSend,
-		Protocol: testSpec.Name,
-		Peer:     peer.ID(),
-		MsgCode:  &code,
-		MsgSize:  new(uint32),
-		Error:    "",
-	}
-
-	swap.handleMsgEvent(event)
-
-	peerBalance := swap.peers[peer.ID()]
 	msg := &testChargeRecvMsg{}
+	ctx := context.Background()
+	testPeer := newDummyPeer()
+	testPeer.Send(ctx, msg)
 
 	//check the new balance
-	if peerBalance.Cmp(testBalance.Add(testBalance, msg.Price())) != 0 {
-		t.Fatal(fmt.Sprintf("Unexpected balance value after sending cheap message test. Expected balance: %s, balance is: %s",
-			testBalance.Add(testBalance, msg.Price()).String(), peerBalance.String()))
+	_, price := msg.Price(0)
+	if swap.balances[testPeer.ID()] != int64(price) {
+		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
 	}
 }
 
@@ -422,42 +342,8 @@ func createTestSwap(t *testing.T) (*Swap, string) {
 		t.Fatal(err2)
 	}
 	swap := New(stateStore)
+	testSpec.Hook = protocols.NewAccountingHook(swap, &testPriceOracle{})
 	return swap, dir
-}
-
-func setupPriceMatrix() PriceOracle {
-
-	priceOracle := &DefaultPriceOracle{}
-	priceOracle.priceMatrix = make(map[string]map[uint64]*PriceTag)
-	priceOracle.priceMatrix[testSpec.Name] = make(map[uint64]*PriceTag)
-	protoMatrix := priceOracle.priceMatrix[testSpec.Name]
-	protoMatrix[0] = &PriceTag{
-		Direction: ChargeSender,
-		Price:     (&testExceedsPayAtMsg{}).Price(),
-	}
-
-	protoMatrix[1] = &PriceTag{
-		Direction: ChargeSender,
-		Price:     (&testExceedsDropAtMsg{}).Price(),
-	}
-
-	protoMatrix[2] = &PriceTag{
-		Direction: ChargeSender,
-		Price:     (&testCheapMsg{}).Price(),
-	}
-
-	protoMatrix[3] = &PriceTag{
-		Direction: ChargeSender,
-		Price:     (&testSizeBasedMsg{}).Price(),
-		SizeBased: true,
-	}
-
-	protoMatrix[4] = &PriceTag{
-		Direction: ChargeReceiver,
-		Price:     (&testChargeRecvMsg{}).Price(),
-	}
-
-	return priceOracle
 }
 
 //dummy message handler (needed or we will have a panic in the accounting)
@@ -506,14 +392,14 @@ func TestSwapRPC(t *testing.T) {
 	}
 	defer os.RemoveAll(stack.DataDir())
 
-	var balance *big.Int
+	var balance int64
 	err = rpcclient.Call(&balance, "swap_balance")
 	if err != nil {
 		t.Fatal("servicenode RPC failed", "err", err)
 	}
 	log.Debug("servicenode balance", "balance", balance)
 
-	if balance.Cmp(big.NewInt(0)) != 0 {
+	if balance != 0 {
 		t.Fatal("Expected balance to be 0 but it is not")
 	}
 
@@ -524,19 +410,17 @@ func TestSwapRPC(t *testing.T) {
 
 	fake1 := int64(234)
 	fake2 := int64(-100)
-	fakeBalance1 := big.NewInt(fake1)
-	fakeBalance2 := big.NewInt(fake2)
 
-	swap.peers[id1] = fakeBalance1
-	swap.peers[id2] = fakeBalance2
+	swap.balances[id1] = fake1
+	swap.balances[id2] = fake2
 
 	err = rpcclient.Call(&balance, "swap_balanceWithPeer", id1)
 	if err != nil {
 		t.Fatal("servicenode RPC failed", "err", err)
 	}
 	log.Debug("balance1", "balance-1", balance)
-	if balance.Cmp(fakeBalance1) != 0 {
-		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to fake balance %s, but it is not", balance.String(), fakeBalance1.String()))
+	if balance != fake1 {
+		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake1))
 	}
 
 	err = rpcclient.Call(&balance, "swap_balanceWithPeer", id2)
@@ -544,8 +428,8 @@ func TestSwapRPC(t *testing.T) {
 		t.Fatal("servicenode RPC failed", "err", err)
 	}
 	log.Debug("balance2", "balance-2", balance)
-	if balance.Cmp(fakeBalance2) != 0 {
-		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to fake balance %s, but it is not", balance.String(), fakeBalance2.String()))
+	if balance != fake2 {
+		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake2))
 	}
 
 	err = rpcclient.Call(&balance, "swap_balance")
@@ -554,9 +438,9 @@ func TestSwapRPC(t *testing.T) {
 	}
 	log.Debug("balance", "balance", balance)
 
-	fakeSum := big.NewInt(fake1 + fake2)
-	if balance.Cmp(fakeSum) != 0 {
-		t.Fatal(fmt.Sprintf("Expected balance %s to be equal to sum %s, but it is not", balance.String(), fakeSum.String()))
+	fakeSum := fake1 + fake2
+	if balance != fakeSum {
+		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to sum %d, but it is not", balance, fakeSum))
 	}
 }
 

@@ -20,25 +20,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
+	"math"
+	"strconv"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 const (
 	defaultMaxMsgSize = 1024 * 1024
+	OracleID          = "swap"
 	swapProtocolName  = "swap"
 	swapVersion       = 1
 )
 
 var (
-	payAt  = big.NewInt(-4096 * 10000) // threshold that triggers payment {request} (bytes)
-	dropAt = big.NewInt(-4096 * 12000) // threshold that triggers disconnect (bytes)
+	payAt  = int64(-4096 * 10000) // threshold that triggers payment {request} (bytes)
+	dropAt = int64(-4096 * 12000) // threshold that triggers disconnect (bytes)
 
 	ErrNotAccountedMsg   = errors.New("Message does not need accounting")
 	ErrInsufficientFunds = errors.New("Insufficient funds")
@@ -49,252 +50,116 @@ var (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	priceOracle   PriceOracle           //the price oracle facilitates message pricing to the swap instance
-	chequeManager *ChequeManager        //cheque manager keeps track of issued cheques
-	stateStore    state.Store           //stateStore is needed in order to keep balances across sessions
-	lock          sync.RWMutex          //lock the balances
-	peers         map[enode.ID]*big.Int //map of balances for each peer
-	protocol      *Protocol             //reference to the cheque exchange protocol
-}
-
-//PriceOracle is responsible to maintain the price matrix for accounted messages,
-//to get its price and to evaluate if a message is accountable or not
-type PriceOracle interface {
-	IsAccountedMsg(event *p2p.PeerEvent) bool
-	GetPriceForMsg(event *p2p.PeerEvent) (*big.Int, EntryDirection)
-}
-
-//This defines if a price will be debited or credited to an account
-type EntryDirection bool
-
-//For some messages the sender pays (e.g. RetrieveRequestMsg),
-//for others the receiver (ChunkDeliveryMsg)
-const (
-	ChargeSender   EntryDirection = true
-	ChargeReceiver EntryDirection = false
-)
-
-//An accountable message needs some meta information attached to it
-//in order to evaluate the correct price
-type PriceTag struct {
-	Price     *big.Int
-	SizeBased bool
-	Direction EntryDirection
-}
-
-//The default price oracle
-type DefaultPriceOracle struct {
-	priceMatrix map[string]map[uint64]*PriceTag
-}
-
-//Load a default price matrix
-func (dpo *DefaultPriceOracle) LoadPriceMatrix() {
-	dpo.priceMatrix = dpo.loadDefaultPriceMatrix()
-}
-
-//Set up a default price matrix
-//This statically builds the price matrix according to previous knowledge
-//of which messages need accounting
-//The matrix can be queried by
-// * the protocol string, returns a sub-map
-// * the sub-map by the message code, which returns the PriceTag
-func (dpo *DefaultPriceOracle) loadDefaultPriceMatrix() map[string]map[uint64]*PriceTag {
-	//setup matrix
-	priceMatrix := make(map[string]map[uint64]*PriceTag)
-
-	//define accounted messages from the stream protocol
-	streamProtocol := stream.Spec.Name
-	priceMatrix[streamProtocol] = make(map[uint64]*PriceTag)
-
-	//get indexes of accounted messages in order to populate the map
-	retrieveRequestMsgIndex, ok := stream.Spec.GetCode(stream.RetrieveRequestMsg{})
-	if !ok {
-		log.Crit("setting up price matrix failed; expected message code not found in Spec!")
-		return nil
-	}
-	deliveryMsgIndex, ok := stream.Spec.GetCode(stream.RetrieveRequestMsg{})
-	if !ok {
-		log.Crit("setting up price matrix failed; expected message code not found in Spec!")
-		return nil
-	}
-
-	//assign the price tag to the message
-	priceMatrix[streamProtocol][uint64(retrieveRequestMsgIndex)] = &PriceTag{
-		Price:     big.NewInt(10),
-		SizeBased: false,
-		Direction: ChargeSender,
-	}
-
-	priceMatrix[streamProtocol][uint64(deliveryMsgIndex)] = &PriceTag{
-		Price:     big.NewInt(100),
-		SizeBased: true,
-		Direction: ChargeReceiver,
-	}
-
-	return priceMatrix
-
-}
-
-//Check if a message needs accounting
-func (dpo *DefaultPriceOracle) IsAccountedMsg(event *p2p.PeerEvent) bool {
-	var protoPriceMap map[uint64]*PriceTag
-	var ok bool
-	if protoPriceMap, ok = dpo.priceMatrix[event.Protocol]; !ok {
-		return false
-	}
-	if _, ok = protoPriceMap[*event.MsgCode]; !ok {
-		return false
-	}
-	return true
-}
-
-//Get the actual price of a message
-//If the message is size-based, it returns the calculated price
-func (dpo *DefaultPriceOracle) GetPriceForMsg(event *p2p.PeerEvent) (*big.Int, EntryDirection) {
-	if dpo.IsAccountedMsg(event) {
-		priceTag := dpo.priceMatrix[event.Protocol][*event.MsgCode]
-		price := &big.Int{}
-		price.Set(priceTag.Price)
-		if priceTag.SizeBased {
-			price.Mul(priceTag.Price, big.NewInt(int64(*event.MsgSize)))
-		}
-		return price, priceTag.Direction
-	}
-	return nil, false
-}
-
-//Do the accounting
-//Depending on the charging type of the message (set in the PriceTag),
-//it will charge the sender or receiver
-func (s *Swap) accountMsgForPeer(event *p2p.PeerEvent) {
-	price, direction := s.priceOracle.GetPriceForMsg(event)
-	if price == nil {
-		//TODO what to do in this case? Should not happen
-		panic("Price is nil; this should have been accounted for but somehow it failed")
-	}
-
-	if chargeLocal := (direction == ChargeSender) == (event.Type == p2p.PeerEventTypeMsgSend); chargeLocal {
-		//debit local node and credit remote
-		s.chargeLocal(event, price)
-	} else {
-		//credit local node and debit remote
-		s.chargeRemote(event, price)
-	}
-}
-
-//Debit us and credit remote
-func (s *Swap) chargeLocal(event *p2p.PeerEvent, amount *big.Int) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	//local node is being credited (in its favor), so its balance increases
-	if s.peers[event.Peer] == nil {
-		s.peers[event.Peer] = &big.Int{}
-		s.stateStore.Get(event.Peer.String(), s.peers[event.Peer])
-	}
-	peerBalance := s.peers[event.Peer]
-	peerBalance.Sub(peerBalance, amount)
-	//local node is being debited (in favor of remote peer), so its balance decreases
-	//TODO: save to store here? init store?
-	s.stateStore.Put(event.Peer.String(), peerBalance)
-	//(balance *Int) Cmp(payAt)
-	// -1 if balance <  payAt
-	//  0 if balance == payAt
-	// +1 if balance >  payAt
-	if peerBalance.Cmp(payAt) == -1 {
-		ctx := context.TODO()
-		err := s.issueCheque(ctx, event.Peer)
-		if err != nil {
-			//TODO: special error handling, as at this point the accounting has been done
-			//but the cheque could not be sent?
-			log.Warn("Payment threshold exceeded, but error sending cheque!", "err", err)
-		}
-	}
-	if peerBalance.Cmp(dropAt) == -1 {
-		peer := s.protocol.getPeer(event.Peer)
-		if peer != nil {
-			peer.Drop(ErrInsufficientFunds)
-			//this little hack allows for tests to verify that this error occurred
-			event.Error = ErrInsufficientFunds.Error()
-		}
-	}
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", event.Peer.String(), peerBalance.String()))
+	chequeManager *ChequeManager     //cheque manager keeps track of issued cheques
+	stateStore    state.Store        //stateStore is needed in order to keep balances across sessions
+	lock          sync.RWMutex       //lock the balances
+	balances      map[enode.ID]int64 //map of balances for each peer
+	protocol      *Protocol          //reference to the cheque exchange protocol
 }
 
 //Credit us and debit remote
-func (s *Swap) chargeRemote(event *p2p.PeerEvent, amount *big.Int) {
+func (s *Swap) Credit(peer *protocols.Peer, amount uint64) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	//local node is being credited (in its favor), so its balance increases
-	if s.peers[event.Peer] == nil {
-		s.peers[event.Peer] = &big.Int{}
+
+	peerBalance := s.balances[peer.ID()]
+	if _, ok := s.balances[peer.ID()]; !ok {
+		s.stateStore.Get(peer.ID().String(), &peerBalance)
+		s.balances[peer.ID()] = peerBalance
 	}
-	peerBalance := s.peers[event.Peer]
-	peerBalance.Add(peerBalance, amount)
-	//local node is being credited(in favor of local peer), so its balance increases
-	//TODO: save to store here? init store?
-	s.stateStore.Put(event.Peer.String(), peerBalance)
-	//(balance *Int) Cmp(payAt)
-	// -1 if balance <  payAt
-	//  0 if balance == payAt
-	// +1 if balance >  payAt
-	if peerBalance.Cmp(payAt) == -1 {
+	//local node is being credited(in favor of local node), so the balance increases
+	s.balances[peer.ID()] += int64(amount)
+	peerBalance = s.balances[peer.ID()]
+	s.stateStore.Put(peer.ID().String(), &peerBalance)
+
+	if float64(peerBalance) > math.Abs(float64(payAt)) {
 		ctx := context.TODO()
-		err := s.issueCheque(ctx, event.Peer)
+		err := s.wantCheque(ctx, peer.ID())
 		if err != nil {
 			//TODO: special error handling, as at this point the accounting has been done
 			//but the cheque could not be sent?
 			log.Warn("Payment threshold exceeded, but error sending cheque!", "err", err)
 		}
 	}
-	if peerBalance.Cmp(dropAt) == -1 {
-		peer := s.protocol.getPeer(event.Peer)
-		if peer != nil {
-			//this little hack allows for tests to verify that this error occurred
-			peer.Drop(ErrInsufficientFunds)
+	if float64(peerBalance) > math.Abs(float64(dropAt)) {
+		return ErrInsufficientFunds
+	}
+	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
+	return err
+}
+
+//Debit us and credit remote
+func (s *Swap) Debit(peer *protocols.Peer, amount uint64) (err error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	peerBalance := s.balances[peer.ID()]
+	if _, ok := s.balances[peer.ID()]; !ok {
+		s.stateStore.Get(peer.ID().String(), &peerBalance)
+		s.balances[peer.ID()] = peerBalance
+	}
+	//local node is being debited (in favor of remote peer), so its balance decreases
+	s.balances[peer.ID()] -= int64(amount)
+	peerBalance = s.balances[peer.ID()]
+	s.stateStore.Put(peer.ID().String(), &peerBalance)
+	if peerBalance < payAt {
+		ctx := context.TODO()
+		err := s.issueCheque(ctx, peer.ID())
+		if err != nil {
+			//TODO: special error handling, as at this point the accounting has been done
+			//but the cheque could not be sent?
+			log.Warn("Payment threshold exceeded, but error sending cheque!", "err", err)
 		}
 	}
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", event.Peer.String(), peerBalance.String()))
+	if peerBalance < dropAt {
+		return ErrInsufficientFunds
+	}
+	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
+	return nil
 }
 
 //get a peer's balance
-func (swap *Swap) GetPeerBalance(peer enode.ID) *big.Int {
+func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	swap.lock.RLock()
 	defer swap.lock.RUnlock()
-	if p, ok := swap.peers[peer]; ok {
-		return p
+	if p, ok := swap.balances[peer]; ok {
+		return p, nil
 	}
-	return nil
+	return 0, errors.New("Peer not found")
 }
 
 //Issue a cheque for the remote peer. Happens if we are indebted with the peer
 //and crossed the payment threshold
 func (s *Swap) issueCheque(ctx context.Context, id enode.ID) error {
-	amount := &big.Int{}
-	cheque := s.chequeManager.CreateCheque(id, amount.Abs(payAt))
-	msg := IssueChequeMsg{
+	cheque := s.chequeManager.CreateCheque(id, int64(math.Abs(float64(payAt))))
+	_ = IssueChequeMsg{
 		Cheque: cheque,
 	}
-	//TODO: This should now be via the actual SwapProtocol
 	p := s.protocol.getPeer(id)
 	if p == nil {
 		return fmt.Errorf("wanting to send to non-connected peer!")
 	}
-	return p.Send(ctx, msg)
+	return nil
+	//TODO: Don't actually send any cheques yet
+	//return p.Send(ctx, msg)
+}
+
+//Issue a cheque for the remote peer. Happens if we are indebted with the peer
+//and crossed the payment threshold
+func (s *Swap) wantCheque(ctx context.Context, id enode.ID) error {
+	//TODO: Don't actually initially any real message exchange yet
+	//return p.Send(ctx, msg)
+	return nil
 }
 
 // New - swap constructor
 func New(stateStore state.Store) (swap *Swap) {
 
-	priceOracle := &DefaultPriceOracle{}
-
 	swap = &Swap{
 		chequeManager: NewChequeManager(stateStore),
 		stateStore:    stateStore,
-		peers:         make(map[enode.ID]*big.Int),
-		priceOracle:   priceOracle,
+		balances:      make(map[enode.ID]int64),
 		protocol:      NewProtocol(),
 	}
-	priceOracle.LoadPriceMatrix()
-
 	return
 }

@@ -122,6 +122,11 @@ type WrappedMsg struct {
 	Payload []byte
 }
 
+type Hook interface {
+	Send(*Peer, uint32, interface{}) error
+	Receive(*Peer, uint32, interface{}) error
+}
+
 // Spec is a protocol specification including its name and version as well as
 // the types of messages which are exchanged
 type Spec struct {
@@ -141,20 +146,11 @@ type Spec struct {
 	// each message must have a single unique data type
 	Messages []interface{}
 
-	Services map[string]ProtocolService
+	Hook Hook
 
 	initOnce sync.Once
 	codes    map[reflect.Type]uint64
 	types    map[uint64]reflect.Type
-}
-
-type ProtocolService interface {
-	AddServiceData(data interface{})
-	IsSupported(key interface{})
-}
-
-func (s *Spec) RegisterProtocolService(key string, service ProtocolService) {
-	s.Services[key] = service
 }
 
 func (s *Spec) init() {
@@ -289,6 +285,15 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
+
+	if p.spec.Hook != nil {
+		err := p.spec.Hook.Send(p, wmsg.Size, msg)
+		if err != nil {
+			p.Drop(err)
+			return err
+		}
+	}
+
 	return p2p.Send(p.rw, code, wmsg)
 }
 
@@ -345,6 +350,13 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 	}
 	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
+	}
+
+	if p.spec.Hook != nil {
+		err := p.spec.Hook.Receive(p, wmsg.Size, val)
+		if err != nil {
+			return err
+		}
 	}
 
 	// call the registered handler callbacks

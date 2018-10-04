@@ -84,7 +84,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {

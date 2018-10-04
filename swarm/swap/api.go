@@ -19,7 +19,6 @@ package swap
 import (
 	"context"
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -44,9 +43,10 @@ func NewAPI(swap *Swap) *API {
 }
 
 //Get the balance for this node with a specific peer
-func (swapapi *API) BalanceWithPeer(ctx context.Context, peer enode.ID) (balance *big.Int, err error) {
-	balance = swapapi.swap.peers[peer]
-	if balance == nil {
+func (swapapi *API) BalanceWithPeer(ctx context.Context, peer enode.ID) (balance int64, err error) {
+	var ok bool
+	balance, ok = swapapi.swap.balances[peer]
+	if !ok {
 		err = ErrNoSuchPeerAccounting
 	}
 	return
@@ -56,10 +56,10 @@ func (swapapi *API) BalanceWithPeer(ctx context.Context, peer enode.ID) (balance
 //Iterates over all peers this node is having accounted interaction
 //and just adds up balances.
 //It assumes that if a disfavorable balance is represented as a negative value
-func (swapapi *API) Balance(ctx context.Context) (balance *big.Int, err error) {
-	balance = big.NewInt(0)
-	for _, peerBalance := range swapapi.swap.peers {
-		balance.Add(balance, peerBalance)
+func (swapapi *API) Balance(ctx context.Context) (balance int64, err error) {
+	balance = 0
+	for _, peerBalance := range swapapi.swap.balances {
+		balance += peerBalance
 	}
 	return
 }

@@ -17,8 +17,6 @@
 package swap
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -33,8 +31,8 @@ type ChequeManager struct {
 type Cheque struct {
 	serial       uint64
 	timeout      uint64
-	amount       *big.Int
-	sumCumulated *big.Int
+	amount       int64
+	sumCumulated int64
 	beneficiary  enode.ID //this should probably be common.Address?
 }
 
@@ -48,7 +46,7 @@ func NewChequeManager(stateStore state.Store) *ChequeManager {
 	}
 }
 
-func (mgr *ChequeManager) CreateCheque(beneficiary enode.ID, amount *big.Int) *Cheque {
+func (mgr *ChequeManager) CreateCheque(beneficiary enode.ID, amount int64) *Cheque {
 	mgr.serialPerNode[beneficiary]++
 	cheque := &Cheque{
 		serial:      mgr.serialPerNode[beneficiary],
