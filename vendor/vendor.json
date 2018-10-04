@@ -764,6 +764,12 @@
 			"path": "gopkg.in/urfave/cli.v1",
 			"revision": "cfb38830724cc34fedffe9a2a29fb54fa9169cd1",
 			"revisionTime": "2017-08-11T01:42:03Z"
+		},
+		{
+			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
+			"path": "golang.org/x/sys/cpu",
+			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
+			"revisionTime": "2018-08-08T08:17:46Z"
 		}
 	],
 	"rootPath": "github.com/ethereum/go-ethereum"
