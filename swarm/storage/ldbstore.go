@@ -37,7 +37,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -61,6 +60,7 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
+	keySchema      = []byte{8}
 )
 
 var (
@@ -418,8 +418,8 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	}
 }
 
-func (s *LDBStore) Cleanup() {
-	//Iterates over the database and checks that there are no chunks bigger than 4kb
+//Cleanup iterates over the database and deletes chunks if they pass the `f` condition
+func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 	var errorsFound, removed, total int
 
 	it := s.db.NewIterator()
@@ -471,7 +471,8 @@ func (s *LDBStore) Cleanup() {
 		cs := int64(binary.LittleEndian.Uint64(c.sdata[:8]))
 		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 
-		if len(c.sdata) > ch.DefaultSize+8 {
+		// if chunk is to be removed
+		if f(c) {
 			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
 			s.delete(index.Idx, getIndexKey(key[1:]), po)
 			removed++
@@ -728,6 +729,30 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	default:
 	}
 	return true
+}
+
+// GetSchema is returning the current named schema of the datastore as read from LevelDB
+func (s *LDBStore) GetSchema() (string, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	data, err := s.db.Get(keySchema)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+// PutSchema is saving a named schema to the LevelDB datastore
+func (s *LDBStore) PutSchema(schema string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.db.Put(keySchema, []byte(schema))
 }
 
 func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {

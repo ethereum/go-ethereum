@@ -1,21 +1,21 @@
-package mru
+package feed
 
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
 
 func getTestID() *ID {
 	return &ID{
-		View:  *getTestView(),
+		Feed:  *getTestFeed(),
 		Epoch: lookup.GetFirstEpoch(1000),
 	}
 }
 
 func TestIDAddr(t *testing.T) {
-	ul := getTestID()
-	updateAddr := ul.Addr()
+	id := getTestID()
+	updateAddr := id.Addr()
 	compareByteSliceToExpectedHex(t, "updateAddr", updateAddr, "0x8b24583ec293e085f4c78aaee66d1bc5abfb8b4233304d14a349afa57af2a783")
 }
 

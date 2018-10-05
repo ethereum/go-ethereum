@@ -176,8 +176,12 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
-		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkID = uint64(id)
+		id, err := strconv.ParseUint(networkid, 10, 64)
+		if err != nil {
+			utils.Fatalf("invalid cli flag %s: %v", SwarmNetworkIdFlag.Name, err)
+		}
+		if id != 0 {
+			currentConfig.NetworkID = id
 		}
 	}
 
@@ -270,8 +274,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
-		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkID = uint64(id)
+		id, err := strconv.ParseUint(networkid, 10, 64)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_NETWORK_ID, err)
+		}
+		if id != 0 {
+			currentConfig.NetworkID = id
 		}
 	}
 
@@ -289,27 +297,34 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if swapenable := os.Getenv(SWARM_ENV_SWAP_ENABLE); swapenable != "" {
-		if swap, err := strconv.ParseBool(swapenable); err != nil {
-			currentConfig.SwapEnabled = swap
+		swap, err := strconv.ParseBool(swapenable)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SWAP_ENABLE, err)
 		}
+		currentConfig.SwapEnabled = swap
 	}
 
 	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
-		if sync, err := strconv.ParseBool(syncdisable); err != nil {
-			currentConfig.SyncEnabled = !sync
+		sync, err := strconv.ParseBool(syncdisable)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_DISABLE, err)
 		}
+		currentConfig.SyncEnabled = !sync
 	}
 
 	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
-		if skipCheck, err := strconv.ParseBool(v); err != nil {
+		skipCheck, err := strconv.ParseBool(v)
+		if err != nil {
 			currentConfig.DeliverySkipCheck = skipCheck
 		}
 	}
 
 	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
-		if d, err := time.ParseDuration(v); err != nil {
-			currentConfig.SyncUpdateDelay = d
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_UPDATE_DELAY, err)
 		}
+		currentConfig.SyncUpdateDelay = d
 	}
 
 	if max := os.Getenv(SWARM_ENV_MAX_STREAM_PEER_SERVERS); max != "" {
@@ -321,9 +336,11 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
-		if lightnode, err := strconv.ParseBool(lne); err != nil {
-			currentConfig.LightNodeEnabled = lightnode
+		lightnode, err := strconv.ParseBool(lne)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_LIGHT_NODE_ENABLE, err)
 		}
+		currentConfig.LightNodeEnabled = lightnode
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {

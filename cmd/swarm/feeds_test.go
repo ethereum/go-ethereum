@@ -26,11 +26,11 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,12 +38,12 @@ import (
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 )
 
-func TestCLIResourceUpdate(t *testing.T) {
+func TestCLIFeedUpdate(t *testing.T) {
 
 	srv := testutil.NewTestSwarmServer(t, func(api *api.API) testutil.TestServer {
 		return swarmhttp.NewServer(api, "")
 	}, nil)
-	log.Info("starting 1 node cluster")
+	log.Info("starting a test swarm server")
 	defer srv.Close()
 
 	// create a private key file for signing
@@ -65,7 +65,7 @@ func TestCLIResourceUpdate(t *testing.T) {
 	}
 
 	// compose a topic. We'll be doing quotes about Miguel de Cervantes
-	var topic mru.Topic
+	var topic feed.Topic
 	subject := []byte("Miguel de Cervantes")
 	copy(topic[:], subject[:])
 	name := "quotes"
@@ -77,13 +77,13 @@ func TestCLIResourceUpdate(t *testing.T) {
 	flags := []string{
 		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
-		"resource", "update",
+		"feed", "update",
 		"--topic", topic.Hex(),
 		"--name", name,
 		hexData}
 
 	// create an update and expect an exit without errors
-	log.Info(fmt.Sprintf("updating a resource with 'swarm resource update'"))
+	log.Info(fmt.Sprintf("updating a feed with 'swarm feed update'"))
 	cmd := runSwarm(t, flags...)
 	cmd.ExpectExit()
 
@@ -95,22 +95,22 @@ func TestCLIResourceUpdate(t *testing.T) {
 
 	// build the same topic as before, this time
 	// we use NewTopic to create a topic automatically.
-	topic, err = mru.NewTopic(name, subject)
+	topic, err = feed.NewTopic(name, subject)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// View configures whose updates we will be looking up.
-	view := mru.View{
+	// Feed configures whose updates we will be looking up.
+	fd := feed.Feed{
 		Topic: topic,
 		User:  address,
 	}
 
 	// Build a query to get the latest update
-	query := mru.NewQueryLatest(&view, lookup.NoClue)
+	query := feed.NewQueryLatest(&fd, lookup.NoClue)
 
 	// retrieve content!
-	reader, err := client.GetResource(query, "")
+	reader, err := client.QueryFeed(query, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,45 +128,45 @@ func TestCLIResourceUpdate(t *testing.T) {
 	// Now retrieve info for the next update
 	flags = []string{
 		"--bzzapi", srv.URL,
-		"resource", "info",
+		"feed", "info",
 		"--topic", topic.Hex(),
 		"--user", address.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("getting resource info with 'swarm resource info'"))
+	log.Info(fmt.Sprintf("getting feed info with 'swarm feed info'"))
 	cmd = runSwarm(t, flags...)
 	_, matches := cmd.ExpectRegexp(`.*`) // regex hack to extract stdout
 	cmd.ExpectExit()
 
 	// verify we can deserialize the result as a valid JSON
-	var request mru.Request
+	var request feed.Request
 	err = json.Unmarshal([]byte(matches[0]), &request)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// make sure the retrieved view is the same
-	if request.View != view {
-		t.Fatalf("Expected view to be: %s, got %s", view, request.View)
+	// make sure the retrieved feed is the same
+	if request.Feed != fd {
+		t.Fatalf("Expected feed to be: %s, got %s", fd, request.Feed)
 	}
 
 	// test publishing a manifest
 	flags = []string{
 		"--bzzapi", srv.URL,
 		"--bzzaccount", pkfile.Name(),
-		"resource", "create",
+		"feed", "create",
 		"--topic", topic.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("Publishing manifest with 'swarm resource create'"))
+	log.Info(fmt.Sprintf("Publishing manifest with 'swarm feed create'"))
 	cmd = runSwarm(t, flags...)
 	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
 	cmd.ExpectExit()
 
-	manifestAddress := matches[0] // read the received resource manifest
+	manifestAddress := matches[0] // read the received feed manifest
 
 	// now attempt to lookup the latest update using a manifest instead
-	reader, err = client.GetResource(nil, manifestAddress)
+	reader, err = client.QueryFeed(nil, manifestAddress)
 	if err != nil {
 		t.Fatal(err)
 	}

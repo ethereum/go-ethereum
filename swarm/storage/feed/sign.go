@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feed
 
 import (
 	"crypto/ecdsa"
@@ -28,7 +28,7 @@ const signatureLength = 65
 // Signature is an alias for a static byte array with the size of a signature
 type Signature [signatureLength]byte
 
-// Signer signs Mutable Resource update payloads
+// Signer signs feed update payloads
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
 	Address() common.Address
@@ -65,7 +65,7 @@ func (s *GenericSigner) Address() common.Address {
 	return s.address
 }
 
-// getUserAddr extracts the address of the resource update signer
+// getUserAddr extracts the address of the feed update signer
 func getUserAddr(digest common.Hash, signature Signature) (common.Address, error) {
 	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	if err != nil {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feed
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ const (
 	ErrCnt
 )
 
-// Error is a the typed error object used for Mutable Resources
+// Error is a the typed error object used for Swarm feeds
 type Error struct {
 	code int
 	err  string
@@ -47,12 +47,12 @@ func (e *Error) Error() string {
 }
 
 // Code returns the error code
-// Error codes are enumerated in the error.go file within the mru package
+// Error codes are enumerated in the error.go file within the feeds package
 func (e *Error) Code() int {
 	return e.code
 }
 
-// NewError creates a new Mutable Resource Error object with the specified code and custom error message
+// NewError creates a new Swarm feeds Error object with the specified code and custom error message
 func NewError(code int, s string) error {
 	if code < 0 || code >= ErrCnt {
 		panic("no such error code!")

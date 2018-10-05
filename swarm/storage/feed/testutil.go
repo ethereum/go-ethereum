@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package mru
+package feed
 
 import (
 	"context"
@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	testDbDirName = "mru"
+	testDbDirName = "feeds"
 )
 
 type TestHandler struct {
@@ -52,20 +52,20 @@ func newFakeNetFetcher(context.Context, storage.Address, *sync.Map) storage.NetF
 // NewTestHandler creates Handler object to be used for testing purposes.
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
-	rh := NewHandler(params)
+	fh := NewHandler(params)
 	localstoreparams := storage.NewDefaultLocalStoreParams()
 	localstoreparams.Init(path)
 	localStore, err := storage.NewLocalStore(localstoreparams, nil)
 	if err != nil {
 		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
-	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHashAlgorithm)))
-	localStore.Validators = append(localStore.Validators, rh)
+	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)))
+	localStore.Validators = append(localStore.Validators, fh)
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
 		return nil, err
 	}
 	netStore.NewNetFetcherFunc = newFakeNetFetcher
-	rh.SetStore(netStore)
-	return &TestHandler{rh}, nil
+	fh.SetStore(netStore)
+	return &TestHandler{fh}, nil
 }
