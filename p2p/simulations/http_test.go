@@ -179,7 +179,7 @@ func (t *testService) RunDum(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 	// close the dumReady channel so that other protocols can run
 	close(peer.dumReady)
-	
+
 	// block until the peer is dropped
 	for {
 		_, err := rw.ReadMsg()
