@@ -287,7 +287,6 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	it := s.db.NewIterator()
 	defer it.Release()
 
-	garbage := []*gcItem{}
 	var gcnt uint64
 	maxGcnt := s.getGCCount()
 
@@ -306,19 +305,8 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 		log.Trace("parse gc", "index", index, "po", po, "hash", hash)
 
-		gci := &gcItem{
-			idxKey: keyIdx,
-			idx:    index,
-			value:  index.Access, // the smaller, the more likely to be gc'd. see sort comparator below.
-			po:     po,
-		}
-
-		garbage = append(garbage, gci)
+		s.delete(index, keyIdx, po)
 		gcnt++
-	}
-
-	for _, garbageItem := range garbage {
-		s.delete(garbageItem.idx, garbageItem.idxKey, garbageItem.po)
 	}
 }
 
