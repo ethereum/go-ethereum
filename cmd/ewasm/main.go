@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// ewasm executes eWASM modules.
+// ewasm executes ewasm modules.
 package main
 
 import (
@@ -44,9 +44,9 @@ var (
 var runCommand = cli.Command{
 	Action:      runCmd,
 	Name:        "run",
-	Usage:       "run and arbitrary eWASM module",
+	Usage:       "run and arbitrary ewasm module",
 	ArgsUsage:   "<module name> <input> <gas>",
-	Description: `The run command runs an arbitrary eWASM module.`,
+	Description: `The run command runs an arbitrary ewasm module.`,
 }
 
 func runCmd(ctx *cli.Context) error {

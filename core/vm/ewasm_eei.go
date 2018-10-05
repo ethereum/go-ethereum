@@ -15,7 +15,7 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // This file lists the EEI functions, so that they can be bound to any
-// eWASM-compatible module, as well as the types of these functions
+// ewasm-compatible module, as well as the types of these functions
 
 package vm
 
