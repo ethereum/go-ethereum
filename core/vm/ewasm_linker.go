@@ -83,7 +83,7 @@ func ModuleResolver(interpreter *InterpreterEWASM, name string) (*wasm.Module, e
 		return debugModule, nil
 	}
 
-	if name != "env" && name != "ethereum" {
+	if name != "ethereum" {
 		return nil, fmt.Errorf("Unknown module name: %s", name)
 	}
 
