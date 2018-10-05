@@ -191,7 +191,7 @@ func (b *SimulatedBackend) BlockByNumber(ctx context.Context, number *big.Int) (
 	if number == nil {
 		return b.blockchain.CurrentBlock(), nil
 	}
-	block := b.blockchain.GetBlockByNumber(number.Uint64())
+	block := b.blockchain.GetBlockByNumber(uint64(number.Int64()))
 	if block == nil {
 		return nil, errBlockDoesNotExist
 	}
