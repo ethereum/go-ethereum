@@ -482,9 +482,9 @@ func (self *worker) commitNewWork() {
 			L:
 				select {
 				case newBlock := <-self.chainHeadCh:
+					self.chainHeadCh <- newBlock
 					if newBlock.Block.NumberU64() > parent.NumberU64() {
 						log.Info("New block has came already. Skip this turn", "new block", newBlock.Block.NumberU64(), "current block", parent.NumberU64())
-						self.chainHeadCh <- newBlock
 						return
 					}
 				case <-time.After(time.Duration(gap) * time.Second):
