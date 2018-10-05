@@ -8,6 +8,12 @@ This is a fork from the official golang implementation of the Ethereum protocol.
 Follow the instructions on the [Wiki](https://github.com/SphinxCoinDev/go-spx/wiki/2.-Setup) pages
 
 
+<br><br><br><br><br>
+
+
+
+
+***
 
 ## The following is from the official Go-Ethereum page:
 
