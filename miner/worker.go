@@ -37,8 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/jimlawless/whereami"
-	"github.com/natefinch/lumberjack"
-	l "log"
 )
 
 const (
@@ -184,14 +182,6 @@ type worker struct {
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, recommit time.Duration, gasFloor, gasCeil uint64, isLocalBlock func(*types.Block) bool) *worker {
-	l.SetOutput(&lumberjack.Logger{
-		Filename:   "../miner.log",
-		MaxSize:    500,
-		MaxBackups: 3,
-		MaxAge:     28,
-		Compress:   true,
-	})
-
 	worker := &worker{
 		config:             config,
 		engine:             engine,
@@ -706,7 +696,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 
 	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, vm.Config{})
 
-	l.Printf("Txn (%x) executed with receipt: %v @ %s\n\n", tx.Hash(), receipt, whereami.WhereAmI())
+	log.Info("Txn executed", "receipt", tx.Hash(), "location", whereami.WhereAmI())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -755,15 +745,15 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			break
 		}
-		l.Printf("Worker has access to sufficient gas pool of %v\n\n", w.current.gasPool.Gas())
+		log.Info("Worker has access to sufficient gas pool", "gasPool", w.current.gasPool.Gas())
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
-			l.Println("Worker found no more txns\n")
+			log.Info("Worker found no more txns")
 			break
 		}
 
-		l.Printf("Next txn to commit: %x\n\n", tx.Hash())
+		log.Info("Next txn to commit", "hash", tx.Hash())
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
@@ -779,7 +769,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		}
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
-		l.Printf("Executing txn: %x\n\n", tx.Hash())
+		log.Info("Executing txn", "hash", tx.Hash())
 
 		logs, err := w.commitTransaction(tx, coinbase)
 		switch err {
@@ -930,7 +920,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
-	l.Printf("Worker found (%v) pending txns from pool: %v @ %s\n\n", len(pending), pending, whereami.WhereAmI())
+	log.Info("Worker found new pending txns from pool", "num_txns", len(pending), "txns", pending, "location", whereami.WhereAmI())
 
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
@@ -950,20 +940,20 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	if len(localTxs) > 0 {
-		l.Printf("Worker found (%v) local transactions: %v @ %s\n\n", len(localTxs), localTxs, whereami.WhereAmI())
+		log.Info("Worker found local transactions", "num_txns", len(localTxs), "txns", localTxs, "location", whereami.WhereAmI())
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-		l.Printf("Worker sorted local txns by price and nonce: %v @ %s\n\n", txs, whereami.WhereAmI())
+		log.Info("Worker sorted local txns by price and nonce", "txns", txs, "location", whereami.WhereAmI())
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
-			l.Printf("Worker committing local txns: %s", whereami.WhereAmI())
+			log.Info("Worker committing local txns", "location", whereami.WhereAmI())
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
-		l.Printf("Worker found (%v) remote transactions: %v @ %s\n\n", len(remoteTxs), remoteTxs, whereami.WhereAmI())
+		log.Info("Worker found remote transactions", "num_txns", len(remoteTxs), "txns", remoteTxs, "location", whereami.WhereAmI())
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-		l.Printf("Worker sorted remote txns by price and nonce: %v @ %s\n\n", txs, whereami.WhereAmI())
+		log.Info("Worker sorted remote txns by price and nonce", "txns", txs, "location", whereami.WhereAmI())
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
-			l.Printf("Worker comitting remote local txns: %s", whereami.WhereAmI())
+			log.Info("Worker comitting remote local txns", "location", whereami.WhereAmI())
 			return
 		}
 	}
