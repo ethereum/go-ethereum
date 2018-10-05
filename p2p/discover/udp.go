@@ -23,12 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -175,7 +175,7 @@ type udp struct {
 	localNode   *enode.LocalNode
 	db          *enode.DB
 	tab         *Table
-	nat         nat.Interface
+	wg          sync.WaitGroup
 
 	addpending chan *pending
 	gotreply   chan reply
@@ -262,6 +262,7 @@ func newUDP(c conn, ln *enode.LocalNode, cfg Config) (*Table, *udp, error) {
 	}
 	udp.tab = tab
 
+	udp.wg.Add(2)
 	go udp.loop()
 	go udp.readLoop(cfg.Unhandled)
 	return udp.tab, udp, nil
@@ -274,7 +275,7 @@ func (t *udp) self() *enode.Node {
 func (t *udp) close() {
 	close(t.closing)
 	t.conn.Close()
-	// TODO: wait for the loops to end.
+	t.wg.Wait()
 }
 
 func (t *udp) ourEndpoint() rpcEndpoint {
@@ -379,6 +380,8 @@ func (t *udp) handleReply(from enode.ID, ptype byte, req packet) bool {
 // loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
 func (t *udp) loop() {
+	defer t.wg.Done()
+
 	var (
 		plist        = list.New()
 		timeout      = time.NewTimer(0)
@@ -540,10 +543,11 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (packet, 
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *udp) readLoop(unhandled chan<- ReadPacket) {
-	defer t.conn.Close()
+	defer t.wg.Done()
 	if unhandled != nil {
 		defer close(unhandled)
 	}
+
 	// Discovery packets are defined to be no larger than 1280 bytes.
 	// Packets larger than this size will be cut at the end and treated
 	// as invalid because their hash won't match.

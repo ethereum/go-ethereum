@@ -180,6 +180,10 @@ func (tab *Table) ReadRandomNodes(buf []*enode.Node) (n int) {
 
 // Close terminates the network listener and flushes the node database.
 func (tab *Table) Close() {
+	if tab.net != nil {
+		tab.net.close()
+	}
+
 	select {
 	case <-tab.closed:
 		// already closed.
@@ -337,8 +341,8 @@ func (tab *Table) loop() {
 		revalidate     = time.NewTimer(tab.nextRevalidateTime())
 		refresh        = time.NewTicker(refreshInterval)
 		copyNodes      = time.NewTicker(copyNodesInterval)
-		revalidateDone = make(chan struct{})
 		refreshDone    = make(chan struct{})           // where doRefresh reports completion
+		revalidateDone chan struct{}                   // where doRevalidate reports completion
 		waiting        = []chan struct{}{tab.initDone} // holds waiting callers while doRefresh runs
 	)
 	defer refresh.Stop()
@@ -369,9 +373,11 @@ loop:
 			}
 			waiting, refreshDone = nil, nil
 		case <-revalidate.C:
+			revalidateDone = make(chan struct{})
 			go tab.doRevalidate(revalidateDone)
 		case <-revalidateDone:
 			revalidate.Reset(tab.nextRevalidateTime())
+			revalidateDone = nil
 		case <-copyNodes.C:
 			go tab.copyLiveNodes()
 		case <-tab.closeReq:
@@ -379,14 +385,14 @@ loop:
 		}
 	}
 
-	if tab.net != nil {
-		tab.net.close()
-	}
 	if refreshDone != nil {
 		<-refreshDone
 	}
 	for _, ch := range waiting {
 		close(ch)
+	}
+	if revalidateDone != nil {
+		<-revalidateDone
 	}
 	close(tab.closed)
 }
