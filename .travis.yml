@@ -14,7 +14,7 @@ jobs:
         - go run build/ci.go lint
 
   - stage: Build and test
-    go: 1.9.x
+    go: '1.11'
     script:
     - sudo modprobe fuse
     - sudo chmod 666 /dev/fuse
