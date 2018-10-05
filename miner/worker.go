@@ -695,7 +695,6 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	snap := w.current.state.Snapshot()
 
 	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, vm.Config{})
-
 	log.Info("Txn executed", "receipt", tx.Hash(), "location", whereami.WhereAmI())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
@@ -752,7 +751,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			log.Info("Worker found no more txns")
 			break
 		}
-
 		log.Info("Next txn to commit", "hash", tx.Hash())
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
