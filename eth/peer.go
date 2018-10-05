@@ -141,6 +141,15 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
+func (p *peer) SendSpecialTransactions(tx *types.Transaction) error {
+	p.knownTxs.Add(tx.Hash())
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, TxMsg, types.Transactions{tx})
+	} else {
+		return p2p.Send(p.rw, TxMsg, types.Transactions{tx})
+	}
+}
+
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
@@ -159,7 +168,7 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
 	if p.pairRw != nil {
-		log.Trace("p2p SendNewBlock with pairRw", "p", p, "number", block.NumberU64())
+		log.Trace("p2p Send New Block with pairRw", "p", p, "number", block.NumberU64())
 		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
 	} else {
 		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
