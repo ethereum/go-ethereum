@@ -17,9 +17,8 @@
 package tests
 
 import (
-	"testing"
-
 	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
@@ -51,7 +50,6 @@ var (
 		ByzantiumBlock:      big.NewInt(1700000),
 		ConstantinopleBlock: nil,
 	}
-
 )
 
 func TestDifficulty(t *testing.T) {
