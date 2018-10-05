@@ -140,7 +140,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	}
 
 	if chainConfig.IsEWASM(ctx.BlockNumber) {
-		// to be implemented by EVM-C and Wagon PRs.
+		// to be implemented by EVM-C.
 		// if vmConfig.EWASMInterpreter != "" {
 		//  extIntOpts := strings.Split(vmConfig.EWASMInterpreter, ":")
 		//  path := extIntOpts[0]
@@ -150,9 +150,8 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		//  }
 		//  evm.interpreters = append(evm.interpreters, NewEVMVCInterpreter(evm, vmConfig, options))
 		// } else {
-			evm.interpreters = append(evm.interpreters, NewEWASMInterpreter(evm, vmConfig))
+		evm.interpreters = append(evm.interpreters, NewEWASMInterpreter(evm, vmConfig))
 		// }
-		panic("No supported ewasm interpreter yet.")
 	}
 
 	// vmConfig.EVMInterpreter will be used by EVM-C, it won't be checked here

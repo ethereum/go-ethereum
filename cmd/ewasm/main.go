@@ -85,7 +85,7 @@ func runCmd(ctx *cli.Context) error {
 			contract := coreVM.NewContract(coreVM.AccountRef(callerAddr), coreVM.AccountRef(contractAddr), big.NewInt(100), gas)
 			contract.Code = code
 
-			evm := coreVM.NewEVM(coreVM.Context{}, statedb, &params.ChainConfig{}, coreVM.Config{EnableWagon: true})
+			evm := coreVM.NewEVM(coreVM.Context{}, statedb, &params.ChainConfig{}, coreVM.Config{})
 			// &ewasm.Contract{
 			// 	StateDB:  statedb,
 			// 	Gas:      100,
