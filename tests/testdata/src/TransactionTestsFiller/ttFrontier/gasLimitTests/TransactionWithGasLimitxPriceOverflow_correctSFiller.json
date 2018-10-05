@@ -1,0 +1,22 @@
+{
+    "TransactionWithGasLimitxPriceOverflow_correctS" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "valid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            "gasPrice" : "100000000000000000",
+            "nonce" : "0",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "0",
+            "v" : "27",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0x1fffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+        }
+    }
+}

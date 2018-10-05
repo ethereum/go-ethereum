@@ -1,0 +1,97 @@
+{
+    "static_InternlCallStoreClearsOOG" : {
+        "env" : {
+            "currentCoinbase" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "1000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                    "0000000000000000000000000000000000000000" : {
+                        "balance" : "0",
+                        "storage" : {
+                            "0x" : "0x0c",
+                            "0x01" : "0x0c",
+                            "0x02" : "0x0c",
+                            "0x03" : "0x0c",
+                            "0x04" : "0x0c",
+                            "0x05" : "0x0c",
+                            "0x06" : "0x0c",
+                            "0x07" : "0x0c",
+                            "0x08" : "0x0c",
+                            "0x09" : "0x0c"
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "nonce" : "1"
+                    },
+                    "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "20",
+                        "storage" : {
+                            "0x01" : "0x00"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "0000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "{(SSTORE 0 0)(SSTORE 1 0)(SSTORE 2 0)(SSTORE 3 0)(SSTORE 4 0)(SSTORE 5 0)(SSTORE 6 0)(SSTORE 7 0)(SSTORE 8 0)(SSTORE 9 0)}",
+                "nonce" : "0",
+                "storage" : {
+                    "0x00" : "0x0c",
+                    "0x01" : "0x0c",
+                    "0x02" : "0x0c",
+                    "0x03" : "0x0c",
+                    "0x04" : "0x0c",
+                    "0x05" : "0x0c",
+                    "0x06" : "0x0c",
+                    "0x07" : "0x0c",
+                    "0x08" : "0x0c",
+                    "0x09" : "0x0c"
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "c94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "//" : "gas = 19 going OOG, gas = 20 fine",
+                "balance" : "10",
+                "code" : "{ [[ 1 ]] (STATICCALL 40000 0 0 0 0 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "160000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "c94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "10"
+            ]
+        }
+    }
+}

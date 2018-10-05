@@ -1,0 +1,24 @@
+{
+    "RLPAddressWrongSize" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttWrongRLP/RLPAddressWrongSizeCopier.json",
+            "sourceHash" : "9021ca05a45f82a611e3e4a6a5cb0c0187b387a39c87d10f9643c3d916eb0004"
+        },
+        "rlp" : "0xf866830ffdc50183adc05390fce5edbc8e2a8697c15331677e6ebf0b870ffdc5fffdc12c801ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

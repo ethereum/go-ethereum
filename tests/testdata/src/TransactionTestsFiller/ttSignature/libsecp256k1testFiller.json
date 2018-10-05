@@ -1,0 +1,21 @@
+{
+    "libsecp256k1test": {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "valid"
+            }
+        ],
+        "transaction": {
+            "nonce": "0",
+            "gasPrice": "0x09184e72a000",
+            "gasLimit": "0xf388",
+            "to": "",
+            "data": "0x",
+            "r": "44",
+            "s": "4",
+            "v": "27",
+            "value": "0"
+        }
+    }
+}

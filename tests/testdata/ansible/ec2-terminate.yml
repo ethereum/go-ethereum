@@ -1,0 +1,10 @@
+---
+- name: Terminate all ec2 instances 
+  hosts: security_group_client-tests
+  remote_user: ubuntu # private key defined via ansible.cfg 
+  gather_facts: false
+  roles:
+      - ec2
+
+  tasks:
+      - include: roles/ec2/tasks/terminate.yml

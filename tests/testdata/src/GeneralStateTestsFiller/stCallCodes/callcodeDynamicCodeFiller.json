@@ -1,0 +1,100 @@
+{
+    "callcodeDynamicCode" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "1000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead", "EIP150", "EIP150"],
+                "result" : {
+                    "ffe4ebd2a68c02d9dcb0a17283d13346beb2d8b6" : {
+                        "balance" : "0x01"
+                    },
+                    "13136008b64ff592819b2fa6d43f2835c452020e" : {
+                        "balance" : "0x00",
+                        "storage" : {
+                            "0x00" : "0x01",
+                            "0x0a" : "0xffe4ebd2a68c02d9dcb0a17283d13346beb2d8b6",
+                            "0x0b" : "0x01",
+                            "0x14" : "0x13136008b64ff592819b2fa6d43f2835c452020e"
+                        }
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : "EIP158",
+                "result" : {
+                    "568a95f77b047bece6aa68843d2019332c46a585" : {
+                        "balance" : "0x01"
+                    },
+                    "13136008b64ff592819b2fa6d43f2835c452020e" : {
+                        "balance" : "0x00",
+                        "storage" : {
+                            "0x00" : "0",
+                            "0x0a" : "0x568a95f77b047bece6aa68843d2019332c46a585",
+                            "0x0b" : "0x01",
+                            "0x14" : "0"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "1000000000000000000000000000000000000000" : {
+                "balance" : "10000",
+                "//comment1" : "{ (MSTORE 0 0x600160005533601455) (RETURN 23 9) }",
+                "//comment2" : "{ (MSTORE 0 0x6860016000553360145560005260096017f3) [[ 10 ]] (CREATE 1 14 18) [[ 11 ]] (CALLCODE 100000 0xffe4ebd2a68c02d9dcb0a17283d13346beb2d8b6 0 0 64 0 64 ) }",	
+                "//comment3" : "0x716860016000553360145560005260096017f36000526012600e6001f0600a55604060006040600060007313136008b64ff592819b2fa6d43f2835c452020e620186a0f2600b55",
+                "//comment4" : "            0x0102030405060708091011121314151617181920212223242526272829303132             0x0102030405060708091011121314151617181920212223242526272829303132",
+                "code" : "{ (MSTORE 0 0x716860016000553360145560005260096017f36000526012600e6001f0600a55) (MSTORE 32 0x6040600060406000600073ffe4ebd2a68c02d9dcb0a17283d13346beb2d8b662)     (MSTORE 64 0x0186a0f2600b5500000000000000000000000000000000000000000000000000) (CREATE 1 0 96) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000001" : {
+                "balance" : "1000",
+                "code" : "{ (MSTORE 0 0x6001600055) (CREATE 1 27 5) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "10000000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "453081"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                ""
+            ]
+        }
+    }
+}

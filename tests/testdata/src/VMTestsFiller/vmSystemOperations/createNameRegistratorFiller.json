@@ -1,0 +1,36 @@
+{
+    "createNameRegistrator": {
+        "env" : {
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+            "currentNumber" : "0",
+            "currentGasLimit" : "1000000",
+            "currentDifficulty" : "256",
+            "currentTimestamp" : "1",
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "expect" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "storage" : {
+                    "0x" : "0x945304eb96065b2a98b57a48a06ae28d285a71b5"
+                }
+            }
+        },
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "100000000000000000000000",
+                "nonce" : "0",
+                "code" : "{ (MSTORE 0 0x601080600c6000396000f3006000355415600957005b60203560003555) [[ 0 ]] (CREATE 23 3 29) }",
+                "storage": {}
+            }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "1000000000000000000",
+            "data" : "",
+            "gasPrice" : "100000000000000",
+            "gas" : "100000"
+        }
+    }
+}

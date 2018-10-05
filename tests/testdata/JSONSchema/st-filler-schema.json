@@ -1,0 +1,268 @@
+{
+    "definitions": {
+        "EmptyString": {
+            "type": "string",
+            "pattern": "^$"
+        },
+        "HexData": {
+            "description": "Hex data. see https://github.com/ethereum/wiki/wiki/JSON-RPC#hex-value-encoding",
+            "pattern": "^0x([0-9a-fA-F][0-9a-fA-F])*$",
+            "type": "string"
+        },
+        "HexQuantity": {
+            "description": "Hex quantity. see https://github.com/ethereum/wiki/wiki/JSON-RPC#hex-value-encoding",
+            "pattern": "(^0x0$)|(^0x[1-9a-fA-F][0-9a-fA-F]*$)",
+            "type": "string"
+        },
+        "ConfusedHexType": {
+            "anyOf": [
+                { "$ref": "#/definitions/HexData" },
+                { "$ref": "#/definitions/HexQuantity" }
+            ]
+        },
+        "HexDataOrEmpty": {
+          "oneOf": [
+              { "$ref": "#/definitions/HexData" },
+              { "$ref": "#/definitions/EmptyString" }
+          ]
+        },
+        "HexNoPrefix" : {
+            "pattern": "^([0-9a-fA-F][0-9a-fA-F])+$",
+            "type": "string"
+        },
+        "HexMaybePrefix": {
+            "oneOf": [
+                { "$ref": "#/definitions/HexNoPrefix" },
+                { "$ref": "#/definitions/HexData" }
+            ]
+        },
+        "HexMaybePrefixOrEmpty": {
+          "oneOf": [
+              { "$ref": "#/definitions/HexMaybePrefix" },
+              {  "$ref": "#/definitions/EmptyString" }
+          ]
+        },
+        "IntegerString": {
+            "pattern": "^[0-9]+$",
+            "type": "string"
+        },
+        "IntegerOrEmpty": {
+            "oneOf": [
+                { "$ref": "#/definitions/IntegerString" },
+                { "$ref": "#/definitions/EmptyString" }
+            ]
+        },
+        "IntegerOrNumber": {
+            "oneOf": [
+                { "$ref": "#/definitions/IntegerString" },
+                { "type": "number" }
+            ]
+        },
+        "IntegerOrNumberOrConfusedHex": {
+            "oneOf": [
+              { "$ref": "#/definitions/IntegerOrNumber" },
+              { "$ref": "#/definitions/ConfusedHexType" }
+            ]
+        },
+        "IntegerOrEmptyOrHexQuantity": {
+            "oneOf": [
+                { "$ref": "#/definitions/IntegerOrEmpty" },
+                { "$ref": "#/definitions/HexQuantity" }
+            ]
+        },
+        "IntegerOrHexQuantity": {
+            "oneOf": [
+                { "$ref": "#/definitions/IntegerString" },
+                { "$ref": "#/definitions/HexQuantity" }
+            ]
+        },
+        "IntegerOrConfusedHex": {
+            "anyOf": [
+              { "$ref": "#/definitions/IntegerString" },
+              { "$ref": "#/definitions/ConfusedHexType" }
+            ]
+        },
+        "IntegerOrEmptyOrConfusedHex": {
+            "oneOf": [
+                { "$ref": "#/definitions/IntegerOrEmpty" },
+                { "$ref": "#/definitions/ConfusedHexType" }
+            ]
+        },
+        "PreStateAccount": {
+            "type": "object",
+            "additionalproperties": true,
+            "properties": {
+                "balance": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "code": { "type": "string" },
+                "nonce": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "storage": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "patternProperties": {
+                        "^0x[0-9a-f]+": {
+                            "description": "storage key with 0x prefix, just the prefix `0x` is null and thus not permitted, a hex quantity is permitted. for the storage value, only hex data is permitted.",
+                            "$ref": "#/definitions/HexData"
+                        }
+                    }
+                }
+            },
+            "required": [
+                "balance",
+                "code",
+                "nonce"
+            ]
+        },
+        "TxSigR": {
+            "oneOf": [
+                { "enum" : [ "0" ] }
+            ]
+        },
+        "TxSigS": {
+            "oneOf": [
+                { "enum" : [ "0" ] }
+            ]
+        },
+        "TxSigV": {
+            "description": "a value of 0 is an invalid chainId, but used in a test case",
+            "oneOf": [
+                { "enum" : [ "0", "1" ] }
+            ]
+        },
+        "HexLen40": {
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "type": "string"
+        },
+        "HexNoPrefixLen40": {
+            "pattern": "^[0-9a-fA-F]{40}$",
+            "type": "string"
+        },
+        "AddressMaybePrefixOrEmpty" : {
+            "oneOf": [
+                { "$ref": "#/definitions/HexLen40" },
+                { "$ref": "#/definitions/HexNoPrefixLen40" },
+                { "$ref": "#/definitions/EmptyString" }
+            ]
+        },
+        "Transaction": {
+            "type": "object",
+            "additionalProperties": true,
+            "not": {
+              "required": ["r, s, v"]
+            },
+            "properties": {
+                "data": {
+                    "items": { "$ref": "#/definitions/HexDataOrEmpty" },
+                    "type": "array"
+                },
+                "gasLimit": {
+                    "items": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                    "type": "array"
+                },
+                "gasPrice": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "nonce": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "secretKey": { "$ref": "#/definitions/HexMaybePrefix" },
+                "to": { "$ref": "#/definitions/AddressMaybePrefixOrEmpty"},
+                "value": {
+                    "items": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "data",
+                "gasLimit",
+                "gasPrice",
+                "nonce",
+                "secretKey",
+                "to",
+                "value"
+            ]
+        },
+        "NullSenderTransaction": {
+            "type": "object",
+            "additionalProperties": true,
+            "not": {
+              "required": ["secretKey"]
+            },
+            "properties": {
+                "data": {
+                    "items": { "$ref": "#/definitions/HexMaybePrefixOrEmpty" },
+                    "type": "array"
+                },
+                "gasLimit": {
+                    "items": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                    "type": "array"
+                },
+                "gasPrice": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "nonce": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                "r": { "$ref": "#/definitions/TxSigR" },
+                "s": { "$ref": "#/definitions/TxSigS" },
+                "to": { "$ref": "#/definitions/AddressMaybePrefixOrEmpty"},
+                "v": { "$ref": "#/definitions/TxSigV" },
+                "value": {
+                    "items": { "$ref": "#/definitions/IntegerOrEmptyOrConfusedHex" },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "data",
+                "gasLimit",
+                "gasPrice",
+                "nonce",
+                "r",
+                "s",
+                "v",
+                "to",
+                "value"
+            ]
+        }
+    },
+    "patternProperties": {
+        "^.*$": {
+            "properties": {
+                "env": {
+                    "additionalproperties": false,
+                    "properties": {
+                        "currentCoinbase": { "$ref": "#/definitions/HexMaybePrefix" },
+                        "currentDifficulty": { "$ref": "#/definitions/IntegerOrConfusedHex" },
+                        "currentGasLimit": { "$ref": "#/definitions/IntegerOrConfusedHex" },
+                        "currentNumber": { "$ref": "#/definitions/IntegerOrConfusedHex" },
+                        "currentTimestamp":  { "$ref": "#/definitions/IntegerOrNumberOrConfusedHex" },
+                        "previousHash": { "$ref": "#/definitions/HexMaybePrefix" }
+                    },
+                    "required": [
+                        "currentCoinbase",
+                        "currentDifficulty",
+                        "currentGasLimit",
+                        "currentNumber",
+                        "currentTimestamp",
+                        "previousHash"
+                    ],
+                    "type": "object"
+                },
+                "expect": {},
+                "pre": {
+                    "additionalProperties": false,
+                    "patternProperties": {
+                        "^[0-9a-fA-F]{40}": {
+                            "description": "filler prestate addresses without 0x prefix",
+                            "$ref": "#/definitions/PreStateAccount"
+                        },
+                        "^0x[0-9a-fA-F]{40}": {
+                            "description": "filler prestate addresses with 0x prefix",
+                            "$ref": "#/definitions/PreStateAccount"
+                        }
+                    },
+                    "type": "object"
+                },
+                "transaction": {
+                    "oneOf": [
+                        { "$ref": "#/definitions/Transaction" },
+                        { "$ref": "#/definitions/NullSenderTransaction" }
+                    ]
+                }
+            },
+            "type": "object"
+        }
+    },
+    "type": "object"
+}

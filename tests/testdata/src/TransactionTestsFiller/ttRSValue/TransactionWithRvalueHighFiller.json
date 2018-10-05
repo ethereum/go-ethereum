@@ -1,0 +1,22 @@
+{
+    "TransactionWithRvalueHigh" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "",
+            "gasLimit" : "21000",
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "11",
+            "v" : "27",
+            "r" : "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
+            "s" : "0x8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+        }
+    }
+}

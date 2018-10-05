@@ -1,0 +1,51 @@
+{
+    "log0_logMemsizeZero" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/VMTestsFiller/vmLogTest/log0_logMemsizeZeroFiller.json",
+            "sourceHash" : "1e535d801ef966b9105db25aaa1864d5ccde5fbb42a901b1acb0070f06280fb7"
+        },
+        "callcreates" : [
+        ],
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x0100",
+            "currentGasLimit" : "0x0f4240",
+            "currentNumber" : "0x00",
+            "currentTimestamp" : "0x01"
+        },
+        "exec" : {
+            "address" : "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "caller" : "0xcd1722f3947def4cf144679da39c4c32bdc35681",
+            "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd60005260006001a0",
+            "data" : "0x",
+            "gas" : "0x0186a0",
+            "gasPrice" : "0x5af3107a4000",
+            "origin" : "0xcd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "0x0de0b6b3a7640000"
+        },
+        "gas" : "0x018517",
+        "logs" : "0xea63b4dbbdbca1bd985580a0c3b6f35a4955d4d4cf0b4d903003cdfc4c40ba1c",
+        "out" : "0x",
+        "post" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x152d02c7e14af6800000",
+                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd60005260006001a0",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        },
+        "pre" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x152d02c7e14af6800000",
+                "code" : "0x7faabbffffffffffffffffffffffffffffffffffffffffffffffffffffffffccdd60005260006001a0",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,36 @@
+{
+    "Vitalik_12" : {
+        "Byzantium" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "Constantinople" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "EIP150" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "EIP158" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "Frontier" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "Homestead" : {
+            "hash" : "db38325f4c7a9917a611fd09694492c23b0ec357a68ab5cbf905fc9757b9919a",
+            "sender" : "874b54a8bd152966d63f706bae1ffeb0411921e5"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttSignature/Vitalik_12Filler.json",
+            "sourceHash" : "346c099c58b0b4a20f69e9ac7c527bf9f078527c8727eab657bdf753c7a7ee07"
+        },
+        "rlp" : "0xf8610e80830493e080809560f2ff61000080610011600039610011565b6000f31ca0a310f4d0b26207db76ba4e1e6e7cf1857ee3aa8559bcbc399a6b09bfea2d30b4a06dff38c645a1486651a717ddf3daccb4fd9a630871ecea0758ddfcf2774f9bc6"
+    }
+}

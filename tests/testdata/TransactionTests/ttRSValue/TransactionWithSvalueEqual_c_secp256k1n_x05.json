@@ -1,0 +1,36 @@
+{
+    "TransactionWithSvalueEqual_c_secp256k1n_x05" : {
+        "Byzantium" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "Constantinople" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "EIP150" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "EIP158" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "Frontier" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "Homestead" : {
+            "hash" : "598c2fd732a2a602924a91a5108c1b690c5dee2ecd0b1d3733f0faae92cee470",
+            "sender" : "b284109d8e781949638d995c19f8feba0268191c"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttRSValue/TransactionWithSvalueEqual_c_secp256k1n_x05Filler.json",
+            "sourceHash" : "c3780a17c7aea6aca4dace186d6bc3abba5807247463edfd359b459fe0f0907d"
+        },
+        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a07fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"
+    }
+}

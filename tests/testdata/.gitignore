@@ -1,0 +1,7 @@
+venv/
+docs/_build/
+*~
+*.sw?
+.vagrant/
+*.pem
+src/GenStateTestAsBcTemp/

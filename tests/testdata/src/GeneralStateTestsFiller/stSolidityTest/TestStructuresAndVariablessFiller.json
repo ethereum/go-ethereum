@@ -1,0 +1,108 @@
+{
+    "TestStructuresAndVariabless" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "storage" : {
+                            "0x" : "0x01",
+                            "0x01" : "0xff",
+                            "0x02" : "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+                            "0x03" : "0xff",
+                            "0x04" : "0x676c6f62616c2064617461203332206c656e67746820737472696e6700000000",
+                            "0x05b8ccbb9d4d8fb16ea74ce3c29a41f1b461fbdaff4714a0d9a8eb05499746bc" : "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "100000",
+                "//comment1" : "contract main",
+                "//comment2" : "{",
+                "//comment3" : "    struct StructTest",
+                "//comment4" : "    {",
+                "//comment5" : "        address addr;",
+                "//comment6" : "        int amount;",
+                "//comment7" : "        bytes32 str;",
+                "//comment8" : "        mapping (uint => address) funders;",
+                "//comment9" : "    }",
+                "//comment10" : "",
+                "//comment11" : "    bool returnValue;",
+                "//comment12" : "    int globalValue;",
+                "//comment13" : "    StructTest globalData;",
+                "//comment14" : "    function run() returns (bool)",
+                "//comment15" : "    {",
+                "//comment16" : "        globalValue = 255;",
+                "//comment17" : "        globalData.addr = 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b;",
+                "//comment18" : "        globalData.amount = 255;",
+                "//comment19" : "        globalData.str = 'global data 32 length string';",
+                "//comment20" : "        globalData.funders[0] = 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b;",
+                "//comment21" : "        returnValue = testStructuresAndVariabless();",
+                "//comment22" : "        return returnValue;",
+                "//comment23" : "    }",
+                "//comment24" : "",
+                "//comment25" : "    function testStructuresAndVariabless() returns (bool res)",
+                "//comment26" : "    {",
+                "//comment27" : "        res = true;",
+                "//comment28" : "        if (globalValue != 255)",
+                "//comment29" : "            return false;",
+                "//comment30" : "",
+                "//comment31" : "        if (globalValue != globalData.amount)",
+                "//comment32" : "            return false;",
+                "//comment33" : "",
+                "//comment34" : "        if (globalData.addr != 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b)",
+                "//comment35" : "            return false;",
+                "//comment36" : "",
+                "//comment37" : "        if (globalData.str != 'global data 32 length string')",
+                "//comment38" : "            return false;",
+                "//comment39" : "",
+                "//comment40" : "        if (globalData.funders[0] != 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b)",
+                "//comment41" : "            return false;",
+                "//comment42" : "    }",
+                "//comment43" : "}",
+                "code" : "0x7c010000000000000000000000000000000000000000000000000000000060003504632a9afb838114610039578063c04062261461004b57005b61004161005d565b8060005260206000f35b61005361016c565b8060005260206000f35b600160ff8154141561006e57610076565b506000610169565b60015460035414156100875761008f565b506000610169565b73a94f5374fce5edbc8e2a8697c15331677e6ebf0b73ffffffffffffffffffffffffffffffffffffffff60016002540481161614156100cd576100d5565b506000610169565b7f676c6f62616c2064617461203332206c656e67746820737472696e670000000060045414156101045761010c565b506000610169565b6005600080815260200190815260200160002060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673a94f5374fce5edbc8e2a8697c15331677e6ebf0b141561016057610168565b506000610169565b5b90565b600060ff806001555073a94f5374fce5edbc8e2a8697c15331677e6ebf0b6002805473ffffffffffffffffffffffffffffffffffffffff1916821790555060ff80600355507f676c6f62616c2064617461203332206c656e67746820737472696e6700000000806004555073a94f5374fce5edbc8e2a8697c15331677e6ebf0b6005600080815260200190815260200160002060006101000a81548173ffffffffffffffffffffffffffffffffffffffff0219169083021790555061022f61005d565b600060006101000a81548160ff0219169083021790555060ff6001600054041690509056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "350000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "100"
+            ]
+        }
+    }
+}

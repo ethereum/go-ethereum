@@ -1,0 +1,92 @@
+{
+    "static_CheckOpcodes" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		       "nonce" : "1"
+		    },
+		    "1000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x01" : "0x01"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "1000000000000000000000000000000000000000" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "check ORIGIN, CALLER, ADDRESS, CALLVALUE inside staticcall",
+		"code" : "{ [[1]] (STATICCALL 100000 (CALLDATALOAD 0) 0 0 0 0) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000000 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 0 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000002" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "check ORIGIN, CALLER, ADDRESS, CALLVALUE inside staticcall",
+		"code" : "{ (STATICCALL 100000 0x1000000000000000000000000000000000000003 0 0 0 0) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000003" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000002 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 0 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+	    "data" : [
+		"0 - staticcall -> check",
+		"1 - staticcall -> staticcall -> check"
+	    ],
+            "data" : [
+		"0x0000000000000000000000001000000000000000000000000000000000000001",
+		"0x0000000000000000000000001000000000000000000000000000000000000002"
+            ],
+            "gasLimit" : [
+                "50000", "335000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "0", "100"
+            ]
+        }
+    }
+}

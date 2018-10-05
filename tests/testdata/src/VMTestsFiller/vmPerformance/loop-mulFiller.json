@@ -1,0 +1,29 @@
+{
+    "loop-mul": {
+        "env" : {
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+            "currentNumber" : "9999",
+            "currentGasLimit" : "100000000000",
+            "currentDifficulty" : "20000",
+            "currentTimestamp" : "1",
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "100000000000000000000000",
+                "nonce" : "0",
+                "code" : "0x606060405260e060020a6000350463eb8ac9218114601c575b6002565b3460025760646004356024356000675851f42d4c957f2d6714057b7ef767814f82805b600086146076575050938102840180820285018082029560001995909501949190603f565b60408051918252519081900360200190f35b50949594505050505056",
+                "storage": {}
+            }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "0",
+            "data" : "0xeb8ac9215eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed0000000000000000000000000000000000000000000000000000000000100000",
+            "gasPrice" : "100000000000000",
+            "gas" : "1000000000000"
+        }
+    }
+}

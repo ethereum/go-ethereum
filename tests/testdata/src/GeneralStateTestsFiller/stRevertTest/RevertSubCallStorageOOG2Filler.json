@@ -1,0 +1,93 @@
+{
+    "RevertSubCallStorageOOG2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 0,
+                    "value" : 0
+                },
+                "network" : ["ALL"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "balance" : "1",
+		        "nonce" : "0",
+		        "storage" : {
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 1,
+                    "value" : 0
+                },
+                "network" : ["ALL"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "balance" : "1",
+		        "nonce" : "0",
+		        "storage" : {
+			   "0x00" : "0x0d",
+                           "0x01" : "0x0e"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "a000000000000000000000000000000000000000" : {
+                "balance" : "1",
+                "code" : "contract A {",
+                "code" : "  int s;",
+                "code" : "  int s2;",
+                "code" : "  function run() returns (bool){",
+                "code" : "    stor();",
+                "code" : "    s = 13;",
+                "code" : "    s2 = 14;",
+                "code" : "  }",
+                "code" : "  function stor() {",
+                "code" : "    s = 12;",
+                "code" : "  }",
+                "code" : "}",
+		"code" : "0x60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063b28175c4146046578063c0406226146052575b6000565b3460005760506076565b005b34600057605c6081565b604051808215151515815260200191505060405180910390f35b600c6000819055505b565b600060896076565b600d600081905550600e6001819055505b905600a165627a7a72305820b7c6987c21e63fed8a74d899557744a3be8d3fda191ce0f56cf261d6b860f6b40029",
+                "nonce" : "",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+	    "data" : "contract A calls itself. In the sub-call, storage is modified, the calls returns successfully. After that, storage is modified again and then an exception occurs.  0xc0406226 == sha(run())",
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "66500", "181000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "a000000000000000000000000000000000000000",
+            "value" : [
+                "0", "1"
+            ]
+        }
+    }
+}

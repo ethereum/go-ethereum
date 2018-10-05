@@ -1,0 +1,31 @@
+{
+	"probabilities" : 
+	{
+		"//comment" : "spawn undefined bytecodes in code",
+		"useUndefinedOpCodes" : false,
+
+		"//comment" : "spawn correct opcodes (with correct argument stack and reasonable arguments)",
+		"smartCodeProbability" : 99,
+
+		"//comment" : "probability of generating a random address instead of defined from list",
+		"randomAddressProbability" : 3,
+
+		"//comment" : "probability of code being empty (empty code mean empty account)",
+		"emptyCodeProbability" : 2,
+
+		"//comment" : "probability of generating an empty address for transaction creation",
+		"emptyAddressProbability" : 15,
+
+		"//comment" : "probability of generating a precompiled address for calls",
+		"precompiledAddressProbability" : 5,
+
+		"//comment" : "probability of generating a precompiled address for calls",
+		"byzPrecompiledAddressProbability" : 10,
+
+		"//comment" : "probability of generating a precompiled address as tx destination",
+		"precompiledDestProbability" : 2,
+
+		"//comment" : "probability of calling to the tx sending account",
+		"sendingAddressProbability" : 3	
+	}
+}

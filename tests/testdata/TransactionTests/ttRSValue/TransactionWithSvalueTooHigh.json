@@ -1,0 +1,24 @@
+{
+    "TransactionWithSvalueTooHigh" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttRSValue/TransactionWithSvalueTooHighFiller.json",
+            "sourceHash" : "7d1ff96097a264a9ceda1dbac46ed375d08ef695650ee24d717af055f3878bf9"
+        },
+        "rlp" : "0xf85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870b801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"
+    }
+}

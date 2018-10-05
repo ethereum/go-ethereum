@@ -1,0 +1,96 @@
+{
+    "Transaction64Rule_d64e0" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150", "EIP158"],
+                "result" : {
+		    "1000000000000000000000000000000000000118" : {
+		        "storage" : {
+		            "0x01" : "0x0c"
+		        }
+		    },
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		            "0x00" : "0x021f34",
+		            "0x02" : "0x018016"
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+		    "1000000000000000000000000000000000000118" : {
+		        "storage" : {
+		            "0x01" : "0"
+		        }
+		    },
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+		            "0x00" : "0",
+		            "0x02" : "0"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "check gas spent on suicide known contract on EIP150",
+		"code" : "{ [[0]] (GAS) (CALL 160000 0x1000000000000000000000000000000000000118 0 0 0 0 0) [[2]] (GAS) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000118" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ [[1]] 12 }",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "160062"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

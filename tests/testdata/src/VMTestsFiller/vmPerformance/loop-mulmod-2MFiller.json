@@ -1,0 +1,30 @@
+{
+    "loop-mulmod-2M": {
+        "//" : "loop-mul.sol: MulPerformanceTester.testMulMod(..., ..., 2^256-1, 2000000)",
+        "env" : {
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6",
+            "currentNumber" : "9999",
+            "currentGasLimit" : "100000000000",
+            "currentDifficulty" : "20000",
+            "currentTimestamp" : "1",
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba"
+        },
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "100000000000000000000000",
+                "nonce" : "0",
+                "code" : "0x606060405263ffffffff60e060020a60003504166315d4232781146022575b6000565b346000576038600435602435604435606435604a565b60408051918252519081900360200190f35b600084815b838110156064578486830991505b600101604f565b8192505b50509493505050505600a165627a7a723058200b2f52fbc8327bac47da1762338f70ad17310de956a58bbbca8ee58378f357900029",
+                "storage": {}
+            }
+        },
+        "exec" : {
+            "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
+            "value" : "0",
+            "data" : "0x15d423278edad8b55b1586805ea8c245d8c16b06a5102b791fc6eb60693731c0677bf5011c68db1c179cd35ab3fc60c63704aa7fcbea40f19782b1611aaba86726a7686cffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000001e8480",
+            "gasPrice" : "100000000000000",
+            "gas" : "1000000000000"
+        }
+    }
+}

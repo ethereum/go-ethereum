@@ -1,0 +1,30 @@
+{
+    "V_equals37" : {
+        "Byzantium" : {
+            "hash" : "4782cb5edcaeda1f0aef204b161214f124cefade9e146245183abbb9ca01bca5",
+            "sender" : "2ea991808ba979ba103147edfd72304ebd95c028"
+        },
+        "Constantinople" : {
+            "hash" : "4782cb5edcaeda1f0aef204b161214f124cefade9e146245183abbb9ca01bca5",
+            "sender" : "2ea991808ba979ba103147edfd72304ebd95c028"
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+            "hash" : "4782cb5edcaeda1f0aef204b161214f124cefade9e146245183abbb9ca01bca5",
+            "sender" : "2ea991808ba979ba103147edfd72304ebd95c028"
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttVValue/V_equals37Filler.json",
+            "sourceHash" : "89ef69312d4c0b4e3742da501263d23d2a64f180258ac93940997ac6a17b9b19"
+        },
+        "rlp" : "0xf865808698852840a46f82d6d894095e7baea6a6c7c4c2dfeb977efac326af552d87808025a098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa01887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

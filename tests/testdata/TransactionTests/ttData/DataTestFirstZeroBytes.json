@@ -1,0 +1,36 @@
+{
+    "DataTestFirstZeroBytes" : {
+        "Byzantium" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "Constantinople" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "EIP150" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "EIP158" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "Frontier" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "Homestead" : {
+            "hash" : "95f3e2568d38c188fb288570b588402ff37b8d0330eafc414df637d8003eea0d",
+            "sender" : "67719a47cf3e3fe77b89c994d85395ad0f899d86"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttData/DataTestFirstZeroBytesFiller.json",
+            "sourceHash" : "5946f24c5093ef8ed40a9c70797fda38e58953860662898194d41a66331fd81c"
+        },
+        "rlp" : "0xf87c80018261a894095e7baea6a6c7c4c2dfeb977efac326af552d870a9d00000000000000000000000000010000000000000000000000000000001ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a01fffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    }
+}

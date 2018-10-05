@@ -1,0 +1,68 @@
+{
+    "static_PostToReturn1" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                        "storage" : {
+			   "0x01" : "0x01",
+			   "0x02" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000",
+                "code" : "{ (MSTORE 0 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) (MSTORE 32 0xaaffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa ) [[1]](STATICCALL 30000 0x945304eb96065b2a98b57a48a06ae28d285a71b5 0 64 0 0 ) [[2]] (MLOAD 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
+                "balance" : "23",
+                "code" : "0x603760005360026000f3",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "300000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "100000"
+            ]
+        }
+    }
+}

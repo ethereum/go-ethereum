@@ -1,0 +1,119 @@
+{
+    "CREATE_AcreateB_BSuicide_BStore" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP158"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+			    "0x00" : "0x01",
+		            "0x01" : "0x0c"
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead", "EIP150"],
+                "result" : {
+		    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		        "storage" : {
+			    "0x00" : "0x01",
+		            "0x01" : "0x0c"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "1000000000000000000000000000000000000000" : {
+                "balance" : "1",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+		"code" : "pragma solidity ^0.4.0;  Better Make it with LLL",
+                "code" : "contract CSuicide",
+                "code" : "{",
+                "code" : "    uint v;",
+                "code" : "    function killitself()",
+                "code" : "    {",
+                "code" : "        suicide(0x11);",
+                "code" : "    }",
+                "code" : "    ",
+                "code" : "    function storesmth()",
+                "code" : "    {",
+                "code" : "        v = 12;",
+                "code" : "    }",
+		"code" : "    ",
+                "code" : "    function getsmth() returns(uint)",
+                "code" : "    {",
+                "code" : "        return v;",
+                "code" : "    }",
+                "code" : "}",
+                "code" : "",
+                "code" : "contract CreateTest {",
+                "code" : "    uint res;",
+		"code" : "    uint resV;",
+                "code" : "    function run()",
+                "code" : "    {",
+                "code" : "        CSuicide a = new CSuicide();",
+                "code" : "        a.killitself();",
+                "code" : "        a.storesmth();",
+		"code" : "        resV = a.getsmth();",
+                "code" : "        res = 1;",
+                "code" : "    }",
+                "code" : "}",
+		"code" : "",
+                "code" : "0x60606040526000357c010000000000000000000000000000000000000000000000000000000090048063c04062261461003c57610037565b610002565b346100025761004e6004805050610050565b005b600060405160c9806101d3833901809050604051809103906000f080156100025790508073ffffffffffffffffffffffffffffffffffffffff166369bda7aa604051817c0100000000000000000000000000000000000000000000000000000000028152600401809050600060405180830381600087803b156100025760325a03f115610002575050508073ffffffffffffffffffffffffffffffffffffffff16633ac6dff3604051817c0100000000000000000000000000000000000000000000000000000000028152600401809050600060405180830381600087803b156100025760325a03f115610002575050508073ffffffffffffffffffffffffffffffffffffffff16636f118b2b600060405160200152604051817c0100000000000000000000000000000000000000000000000000000000028152600401809050602060405180830381600087803b156100025760325a03f115610002575050506040518051906020015060016000508190555060016000600050819055505b5056606060405260b98060106000396000f360606040526000357c0100000000000000000000000000000000000000000000000000000000900480633ac6dff314604d57806369bda7aa14605e5780636f118b2b14606f576049565b6002565b34600257605c60048050506094565b005b34600257606d600480505060a2565b005b34600257607e600480505060a8565b6040518082815260200191505060405180910390f35b600c6000600050819055505b565b6011ff5b565b6000600060005054905060b6565b9056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+	    "data" : "run()",
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "600000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}
