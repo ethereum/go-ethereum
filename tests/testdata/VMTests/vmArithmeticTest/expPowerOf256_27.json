@@ -1,0 +1,54 @@
+{
+    "expPowerOf256_27" : {
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "source" : "src/VMTestsFiller/vmArithmeticTest/expPowerOf256_27Filler.json",
+            "sourceHash" : "15f8c1655a2cf4350b9701ab6324da8472b3b0faf350cd832b89e3a46b544141"
+        },
+        "callcreates" : [
+        ],
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x0100",
+            "currentGasLimit" : "0x0f4240",
+            "currentNumber" : "0x00",
+            "currentTimestamp" : "0x01"
+        },
+        "exec" : {
+            "address" : "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "caller" : "0xcd1722f2947def4cf144679da39c4c32bdc35681",
+            "code" : "0x601b6101000a600055601b60ff0a600155601b6101010a600255",
+            "data" : "0x",
+            "gas" : "0x0186a0",
+            "gasPrice" : "0x5af3107a4000",
+            "origin" : "0xcd1722f2947def4cf144679da39c4c32bdc35681",
+            "value" : "0x0de0b6b3a7640000"
+        },
+        "gas" : "0x9be9",
+        "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        "out" : "0x",
+        "post" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x601b6101000a600055601b60ff0a600155601b6101010a600255",
+                "nonce" : "0x00",
+                "storage" : {
+                    "0x00" : "0x01000000000000000000000000000000000000000000000000000000",
+                    "0x01" : "0xe653d6571cdebb270b53c9d44c40bcd425165d5af1157d6ba11aff",
+                    "0x02" : "0x011c6ab2cdebf906306b38bbf7d6c52648e2d6bc63859e996e5f1b01"
+                }
+            }
+        },
+        "pre" : {
+            "0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x601b6101000a600055601b60ff0a600155601b6101010a600255",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

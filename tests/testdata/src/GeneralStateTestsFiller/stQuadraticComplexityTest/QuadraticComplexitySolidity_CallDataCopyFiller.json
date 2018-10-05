@@ -1,0 +1,88 @@
+{
+    "QuadraticComplexitySolidity_CallDataCopy" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "350000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "250000000",
+                        "code" : "0x",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "code" : "0x60003560e060020a9004806361a4770614601557005b601e6004356024565b60006000f35b60008160008190555073b94f5374fce5edbc8e2a8697c15331677e6ebf0b90505b600082131560bf5780600160a060020a03166000600060007f6a7573740000000000000000000000000000000000000000000000000000000081526004017f63616c6c000000000000000000000000000000000000000000000000000000008152602001600060008560155a03f150506001820391506045565b505056",
+                        "nonce" : "0x01",
+                        "storage" : {
+                        }
+                    },
+                    "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "code" : "0x61c3506000600037",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "//comment1" : "contract caller",
+                "//comment2" : "{",
+                "//comment3" : "    int value;",
+                "//comment4" : "    function run(int count)",
+                "//comment5" : "    {",
+                "//comment6" : "        value = count;",
+                "//comment7" : "        address a = 0xb94f5374fce5edbc8e2a8697c15331677e6ebf0b;",
+                "//comment8" : "        while(count > 0)",
+                "//comment9" : "        {",
+                "//comment10" : "            a.call('just', 'call');",
+                "//comment11" : "            count = count - 1;",
+                "//comment12" : "        }",
+                "//comment13" : "    }",
+                "//comment14" : "}",
+                "balance" : "500000000",
+                "code" : "0x60003560e060020a9004806361a4770614601557005b601e6004356024565b60006000f35b60008160008190555073b94f5374fce5edbc8e2a8697c15331677e6ebf0b90505b600082131560bf5780600160a060020a03166000600060007f6a7573740000000000000000000000000000000000000000000000000000000081526004017f63616c6c000000000000000000000000000000000000000000000000000000008152602001600060008560155a03f150506001820391506045565b505056",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "5000000",
+                "code" : "{ (CALLDATACOPY 0 0 50000) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x61a47706000000000000000000000000000000000000000000000000000000000000c350"
+            ],
+            "gasLimit" : [
+               "150000", "250000000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

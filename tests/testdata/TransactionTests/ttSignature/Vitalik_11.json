@@ -1,0 +1,30 @@
+{
+    "Vitalik_11" : {
+        "Byzantium" : {
+            "hash" : "f39c7dac06a9f3abf09faf5e30439a349d3717611b3ed337cd52b0d192bc72da",
+            "sender" : "3c24d7329e92f84f08556ceb6df1cdb0104ca49f"
+        },
+        "Constantinople" : {
+            "hash" : "f39c7dac06a9f3abf09faf5e30439a349d3717611b3ed337cd52b0d192bc72da",
+            "sender" : "3c24d7329e92f84f08556ceb6df1cdb0104ca49f"
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+            "hash" : "f39c7dac06a9f3abf09faf5e30439a349d3717611b3ed337cd52b0d192bc72da",
+            "sender" : "3c24d7329e92f84f08556ceb6df1cdb0104ca49f"
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttSignature/Vitalik_11Filler.json",
+            "sourceHash" : "0db29caff5c0b001857755f9d4926f87317fc866b53997dd6152a1574d2a424b"
+        },
+        "rlp" : "0xf867098504a817c809830334509435353535353535353535353535353535353535358202d98025a052f8f61201b2b11a78d6e866abc9c3db2ae8631fa656bfe5cb53668255367afba052f8f61201b2b11a78d6e866abc9c3db2ae8631fa656bfe5cb53668255367afb"
+    }
+}

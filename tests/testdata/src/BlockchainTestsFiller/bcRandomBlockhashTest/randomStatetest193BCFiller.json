@@ -1,0 +1,109 @@
+{
+    "randomStatetest193BC" : {
+        "blocks" : [
+            {
+                "blockHeaderPremine" : {
+                    "difficulty" : "0x020000",
+                    "gasLimit" : "0x7fffffffffffffff",
+                    "timestamp" : "0x03e8",
+                    "updatePoW" : "1"
+                },
+                "transactions" : [
+                    {
+                        "data" : "0x7f00000000000000000000000000000000000000000000000000000000000000017f000000000000000000000000000000000000000000000000000000000000c350417fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000c3507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff407f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b5ff6b4290991352",
+                        "gasLimit" : "0x7fc71814",
+                        "gasPrice" : "0x01",
+                        "nonce" : "0x00",
+                        "r" : "0x9949ed3ae7ebe35260962232903179206324d51e32c0c5b7cc6905084ff88b0b",
+                        "s" : "0x446f532f90219ba4881e984fdafe7fee14704fb2565928045f320f82965d775f",
+                        "to" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+                        "v" : "0x1c",
+                        "value" : "0x78221579"
+                    }
+                ],
+                "uncleHeaders" : [
+                ]
+            }
+        ],
+        "expect" : [
+	    {
+		    "network" : ["Frontier", "Homestead"],
+		    "result" : {
+			    "0x945304eb96065b2a98b57a48a06ae28d285a71b5" : {
+				"balance" : "0x45639182bd164d5d",
+				"code" : "0x6000355415600957005b60203560003555",
+				"nonce" : "0x00",
+				"storage" : {
+				}
+			    },
+			    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+				"balance" : "0x0de0b6b32f41b2d1",
+				"code" : "",
+				"nonce" : "0x01",
+				"storage" : {
+				}
+			    }
+		    }
+	    },
+	    {
+		    "network" : ["EIP150", "EIP158"],
+		    "result" : {
+			    "0x945304eb96065b2a98b57a48a06ae28d285a71b5" : {
+				"balance" : "5000000002015516449",
+				"code" : "0x6000355415600957005b60203560003555",
+				"nonce" : "0x00",
+				"storage" : {
+				}
+			    },
+			    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+				"balance" : "999999997984483597",
+				"code" : "",
+				"nonce" : "0x01",
+				"storage" : {
+				}
+			    }
+		    }
+	    }
+        ],
+        "genesisBlockHeader" : {
+            "bloom" : "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "coinbase" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
+            "difficulty" : "131072",
+            "extraData" : "0x42",
+            "gasLimit" : "0x7fffffffffffffff",
+            "gasUsed" : "0",
+            "mixHash" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "nonce" : "0x0102030405060708",
+            "number" : "0",
+            "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "receiptTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "stateRoot" : "0xf99eb1626cfa6db435c0836235942d7ccaa935f1ae247d3f1c21e495685f903a",
+            "timestamp" : "0x03b6",
+            "transactionsTrie" : "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "uncleHash" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+        },
+        "pre" : {
+            "0x095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0x00",
+                "code" : "0x7f00000000000000000000000000000000000000000000000000000000000000017f000000000000000000000000000000000000000000000000000000000000c350417fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000000000000000000000000000000000000000c3507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff407f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b5ff6b4290991352",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0x945304eb96065b2a98b57a48a06ae28d285a71b5" : {
+                "balance" : "0x2e",
+                "code" : "0x6000355415600957005b60203560003555",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        }
+    }
+}

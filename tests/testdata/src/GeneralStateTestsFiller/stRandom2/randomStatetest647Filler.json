@@ -1,0 +1,61 @@
+{
+    "randomStatetest647" : {
+        "_info" : {
+            "comment" : "Malicious bytecode found by fuzztest tool: returndatacopy(0,-1)"
+        },
+	"env":{
+		"currentCoinbase":"0xd94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		"currentDifficulty":"0x20000",
+		"currentGasLimit":"0x42fe8c95373ea1",
+		"currentNumber":"0x01",
+		"currentTimestamp":"0x03e8",
+		"previousHash":"0xb9cdadfa4eb6b43788795e580e7cb36b4c85348412173e7bb3b9e7e954f7949f"
+	},
+	"expect" : [
+		{
+		        "indexes" : {
+		            "data" : -1,
+		            "gas" : -1,
+		            "value" : -1
+		        },
+		        "network" : ["Byzantium"],
+		        "result" : {
+		        	"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b":{
+					"balance":"994213071"
+				}
+		        }
+   		}
+	],
+	"pre":{
+		"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b":{
+			"balance":"1000000000",
+			"code":"",
+			"nonce":"0x00",
+			"storage":{
+			}
+		},
+		"0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b":{
+			"balance":"0x00",
+			"code":"0x6001600160000360003e00",
+			"nonce":"0x07",
+			"storage":{
+			}
+		}
+	},
+	"transaction":{
+		"data":[
+			""
+		],
+		"gasLimit":[
+			"0x584d31"
+		],
+		"gasPrice":"0x01",
+		"nonce":"0x00",
+		"secretKey":"0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+		"to":"0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+		"value":[
+			"0x00"
+		]
+	}
+  }
+}

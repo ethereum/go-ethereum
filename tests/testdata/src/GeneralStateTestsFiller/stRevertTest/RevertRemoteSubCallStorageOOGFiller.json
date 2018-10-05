@@ -1,0 +1,119 @@
+{
+    "RevertRemoteSubCallStorageOOG" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 0,
+                    "value" : -1
+                },
+                "network" : ["Frontier"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "balance" : "1",
+		        "nonce" : "1",
+		        "storage" : {
+			    "0x01" : "0x0d"
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 2,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "balance" : "1",
+		        "nonce" : "0",
+		        "storage" : {
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["ALL"],
+                "result" : {
+		    "a000000000000000000000000000000000000000" : {
+		        "balance" : "1",
+		        "nonce" : "1",
+		        "storage" : {
+			   "0x00" : "0x0c",
+                           "0x01" : "0x0d"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "a000000000000000000000000000000000000000" : {
+                "balance" : "1",
+		"code" : "contract B ",
+		"code" : "{",
+		"code" : "    function callback(address x)",
+		"code" : "    {",
+		"code" : "      x.call(bytes4(sha3('stor()')));  ",
+		"code" : "    }",
+		"code" : "}",
+		"code" : "",
+		"code" : "contract A {",
+		"code" : "  int s;",
+		"code" : "  int s2;",
+		"code" : "  function run() returns (bool){",
+		"code" : "    B caller = new B();",
+		"code" : "    caller.callback(this);",
+		"code" : "    s2 = 13;",
+		"code" : "    return true;",
+		"code" : "  }",
+		"code" : "  function stor() {",
+		"code" : "    s = 12;",
+		"code" : "  }",
+		"code" : "}",
+		"code" : "0x60606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063b28175c414610049578063c040622614610058575b610000565b346100005761005661007f565b005b346100005761006561008a565b604051808215151515815260200191505060405180910390f35b600c6000819055505b565b6000600060405161016f80610163833901809050604051809103906000f080156100005790508073ffffffffffffffffffffffffffffffffffffffff166373027f6d306040518263ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001915050600060405180830381600087803b156100005760325a03f11561000057505050600d600181905550600191505b50905600606060405234610000575b610156806100196000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806373027f6d1461003e575b610000565b346100005761006f600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610071565b005b8073ffffffffffffffffffffffffffffffffffffffff1660405180807f73746f7228290000000000000000000000000000000000000000000000000000815250600601905060405180910390207c010000000000000000000000000000000000000000000000000000000090046040518163ffffffff167c01000000000000000000000000000000000000000000000000000000000281526004018090506000604051808303816000876161da5a03f192505050505b505600a165627a7a72305820db9c9d1f37fd36768131a0bf9687f465e15b0503452e603be6b6f07b70d72e260029a165627a7a72305820f8ff2f7feef24d01a1cc070e67db9e15ac34810c8e5d1c7f34f3c38148eeae900029",
+                "nonce" : "",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+	    "data" : "contract A calls itself. In the sub-call, storage is modified, the calls returns successfully. After that, storage is modified again and then an exception occurs.  0xc0406226 == sha(run())",
+            "data" : [
+                "0xc0406226"
+            ],
+            "gasLimit" : [
+                "148000", "181000", "145000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "a000000000000000000000000000000000000000",
+            "value" : [
+                "0"
+            ]
+        }
+    }
+}

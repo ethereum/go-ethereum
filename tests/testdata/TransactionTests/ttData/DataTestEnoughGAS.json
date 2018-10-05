@@ -1,0 +1,36 @@
+{
+    "DataTestEnoughGAS" : {
+        "Byzantium" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "Constantinople" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "EIP150" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "EIP158" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "Frontier" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "Homestead" : {
+            "hash" : "ba6950e1a9e03da3dc5a43587cb3eb538ed53f15acc9f5a3876417fe10935be6",
+            "sender" : "1e42dc399dc122b1172fa3c3d9a9a0adabf7d026"
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttData/DataTestEnoughGASFiller.json",
+            "sourceHash" : "86d28a784a679b982a407cd34a0b50904db70a5fab82984b82e7395f72453ae2"
+        },
+        "rlp" : "0xf86d80018259d894095e7baea6a6c7c4c2dfeb977efac326af552d870a8e0358ac39584bc98a7c979f984b031ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a01fffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+    }
+}

@@ -1,0 +1,97 @@
+{
+    "CrashingTransaction" : {
+        "_info" : {
+            "comment" : "https://ropsten.etherscan.io/tx/0x8ec445380649f6c75a042a438ea9256c2fab2a6a3437904c9e5a712fcbf8a54a"
+        },
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "4712388",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : { "data" : -1, "gas" : -1, "value" : -1 },
+                "network" : ["Frontier"],
+                "result" : {
+		        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		            "nonce" : "0x0cc7"
+		        },
+		        "0xecbf9aa676d9e0bbba7e517d1350c1b64f8c6779" : {
+		            "balance" : "0x01",
+		            "code" : "0x60606040526008565b00",
+		            "nonce" : "143"
+		        }
+                }
+            },
+	    {
+                "indexes" : { "data" : -1, "gas" : -1, "value" : -1 },
+                "network" : ["Homestead"],
+                "result" : {
+		        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		            "nonce" : "0x0cc7"
+		        },
+		        "0xecbf9aa676d9e0bbba7e517d1350c1b64f8c6779" : {
+		            "balance" : "0x01",
+		            "code" : "0x60606040526008565b00",
+		            "nonce" : "142"
+		        }
+                }
+            },
+	    {
+                "indexes" : { "data" : -1, "gas" : -1, "value" : -1 },
+                "network" : ["EIP150"],
+                "result" : {
+		        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		            "nonce" : "0x0cc7"
+		        },
+		        "0xecbf9aa676d9e0bbba7e517d1350c1b64f8c6779" : {
+		            "balance" : "0x01",
+		            "code" : "0x60606040526008565b00",
+		            "nonce" : "123"
+		        }
+                }
+            },
+	    {
+                "indexes" : { "data" : -1, "gas" : -1, "value" : -1 },
+                "network" : ["EIP158", "Byzantium"],
+                "result" : {
+		        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		            "nonce" : "0x0cc7"
+		        },
+		        "0xecbf9aa676d9e0bbba7e517d1350c1b64f8c6779" : {
+		            "balance" : "0x01",
+		            "code" : "0x60606040526008565b00",
+		            "nonce" : "0x7c"
+		        }
+                }
+            }
+        ],
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000000000",
+                "code" : "",
+                "nonce" : "3270",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x60606040525b5b61c3505a1115602c576040516034806039833901809050604051809103906000f0506006565b5b600a80606d6000396000f360606040525b3373ffffffffffffffffffffffffffffffffffffffff16ff5b600a80602a6000396000f360606040526008565b0060606040526008565b00"
+            ],
+            "gasLimit" : [
+                "4657786"
+            ],
+            "gasPrice" : "2",
+            "nonce" : "3270",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

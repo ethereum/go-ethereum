@@ -1,0 +1,22 @@
+{
+    "AddressMoreThan20PrefixedBy0" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "0x12",
+            "gasLimit" : "21000",
+            "gasPrice" : "123",
+            "nonce" : "54",
+            "to" : "0x0000000000000000095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "11",
+            "v" : "27",
+            "r" : "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+            "s" : "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804"
+        }
+    }
+}

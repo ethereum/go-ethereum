@@ -1,0 +1,107 @@
+{
+    "randomStatetest647" : {
+        "_info" : {
+            "comment" : "Malicious bytecode found by fuzztest tool: returndatacopy(0,-1)",
+            "filledwith" : "cpp-1.3.0+commit.c5d2b48b.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/GeneralStateTestsFiller/stRandom2/randomStatetest647Filler.json",
+            "sourceHash" : "d95911fa38d1d58c1e2946f36fd4de7c0efa717ca33418a9c69c580bb82b2d83"
+        },
+        "env" : {
+            "currentCoinbase" : "0xd94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "0x42fe8c95373ea1",
+            "currentNumber" : "0x01",
+            "currentTimestamp" : "0x03e8",
+            "previousHash" : "0xb9cdadfa4eb6b43788795e580e7cb36b4c85348412173e7bb3b9e7e954f7949f"
+        },
+        "post" : {
+            "Byzantium" : [
+                {
+                    "hash" : "0x608b059b4f2e5517a3f633e9376b656d476e66063c86d71072491d518eea8e84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "EIP150" : [
+                {
+                    "hash" : "0x608b059b4f2e5517a3f633e9376b656d476e66063c86d71072491d518eea8e84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "EIP158" : [
+                {
+                    "hash" : "0x608b059b4f2e5517a3f633e9376b656d476e66063c86d71072491d518eea8e84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "Frontier" : [
+                {
+                    "hash" : "0x608b059b4f2e5517a3f633e9376b656d476e66063c86d71072491d518eea8e84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "Homestead" : [
+                {
+                    "hash" : "0x608b059b4f2e5517a3f633e9376b656d476e66063c86d71072491d518eea8e84",
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ]
+        },
+        "pre" : {
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x3b9aca00",
+                "code" : "",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x00",
+                "code" : "0x6001600160000360003e00",
+                "nonce" : "0x07",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "0x584d31"
+            ],
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "secretKey" : "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "0xc94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : [
+                "0x00"
+            ]
+        }
+    }
+}

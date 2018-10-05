@@ -1,0 +1,21 @@
+{
+    "invalidSignature" : {
+	"expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "invalid"
+            }
+        ],
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "1000000",
+            "gasPrice" : "0",
+            "nonce" : "0",
+            "r" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "s" : "0xbadf00d70ec28c94a3b55ec771bcbc70778d6ee0b51ca7ea9514594c861b1884",
+            "v": "27",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : "100000"
+        }
+     }
+}

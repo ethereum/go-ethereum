@@ -1,0 +1,24 @@
+{
+    "RightVRSTestF0000000c" : {
+        "Byzantium" : {
+        },
+        "Constantinople" : {
+        },
+        "EIP150" : {
+        },
+        "EIP158" : {
+        },
+        "Frontier" : {
+        },
+        "Homestead" : {
+        },
+        "_info" : {
+            "comment" : "",
+            "filledwith" : "cpp-1.3.0+commit.1829957d.Linux.g++",
+            "lllcversion" : "Version: 0.4.18-develop.2017.10.11+commit.81f9f86c.Linux.g++",
+            "source" : "src/TransactionTestsFiller/ttRSValue/RightVRSTestF0000000cFiller.json",
+            "sourceHash" : "bb713f4b3df3b71f0cd03783e31afbea4ad954576aad4c8173abd5a0bca0675e"
+        },
+        "rlp" : "0xf861030182c73894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8082f030a098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa01887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+    }
+}

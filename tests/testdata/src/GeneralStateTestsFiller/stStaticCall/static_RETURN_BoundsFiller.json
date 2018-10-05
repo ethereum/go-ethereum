@@ -1,0 +1,188 @@
+{
+    "static_RETURN_Bounds" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+                    "1000000000000000000000000000000000000000" : {
+                        "balance" : "1",
+                        "storage" : {
+                            "0x01" : "0x01",
+                            "0x02" : "0x01",
+                            "0x03" : "0x01",
+                            "0x04" : "0x01",
+                            "0x05" : "0x01",
+                            "0x06" : "0x01",
+                            "0x07" : "0x01",
+                            "0x08" : "0x01",
+                            "0x09" : "0x01",
+                            "0x0a" : "0x01",
+                            "0x0b" : "0x01",
+                            "0x0c" : "0x01",
+                            "0x0d" : "0x01",
+                            "0x0e" : "0x01",
+                            "0x0f" : "0x01",
+                            "0x10" : "0x01"
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "1000000000000000000000000000000000000000" : {
+                "balance" : "0",
+                "code" : "{ [[1]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000001 0 0 0 0) [[2]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000002 0 0 0 0) [[3]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000003 0 0 0 0) [[4]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000004 0 0 0 0) [[5]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000005 0 0 0 0) [[6]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[7]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[8]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[9]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[10]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[11]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[12]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[13]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[14]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[15]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0) [[16]] (STATICCALL 0x7ffffffffffffff 0x1000000000000000000000000000000000000006 0 0 0 0)}",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000001" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000002" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xfffffff 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000003" : {
+                "balance" : "0",
+                "code" : "{  (RETURN 0xffffffff 0)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000004" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xffffffffffffffff 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000005" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xfffffffffffffffffffffffffff 0) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000006" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 0)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000007" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0 0xfffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000008" : {
+                "balance" : "0",
+                "code" : "{  (RETURN 0 0xffffffff)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000009" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0 0xffffffffffffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000010" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0 0xfffffffffffffffffffffffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000011" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000012" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xfffffff 0xfffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000013" : {
+                "balance" : "0",
+                "code" : "{  (RETURN 0xffffffff 0xffffffff)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000014" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xffffffffffffffff 0xffffffffffffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000015" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xfffffffffffffffffffffffffff 0xfffffffffffffffffffffffffff) }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "1000000000000000000000000000000000000016" : {
+                "balance" : "0",
+                "code" : "{ (RETURN 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)  }",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "15000000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

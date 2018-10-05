@@ -1,0 +1,107 @@
+{
+    "stackLimitPush31_1023" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x20000",
+            "currentGasLimit" : "42949672960",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : "Frontier",
+                "result" : {
+                    "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                        "balance" : "0x0de0b6b3a764000a",
+                        "code" : "0x6103fd6000525b7e0102030405060708090a0102030405060708090a0102030405060708090a0160016000510360005260005160065700",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "0xf599",
+                        "code" : "0x",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "0x63ffff0a5d",
+                        "code" : "0x",
+                        "nonce" : "0x01",
+                        "storage" : {
+                        }
+                    }
+                }
+            },
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Homestead", "EIP150", "EIP158"],
+                "result" : {
+                    "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                        "balance" : "0x0de0b6b3a764000a",
+                        "code" : "0x6103fd6000525b7e0102030405060708090a0102030405060708090a0102030405060708090a0160016000510360005260005160065700",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "0xf599",
+                        "code" : "0x",
+                        "nonce" : "0x00",
+                        "storage" : {
+                        }
+                    },
+                    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                        "balance" : "0x63ffff0a5d",
+                        "code" : "0x",
+                        "nonce" : "0x01",
+                        "storage" : {
+                        }
+                    }
+                }
+            }
+        ],
+        "pre" : {
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
+                "balance" : "1000000000000000000",
+                "code" : "(asm 1021 0x00 MSTORE JUMPDEST 0x0102030405060708090a0102030405060708090a0102030405060708090a01 0x01 0x00 MLOAD SUB 0x00 MSTORE 0x00 MLOAD 0x06 JUMPI STOP )",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "429496729600",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                ""
+            ],
+            "gasLimit" : [
+                "100000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
+            "value" : [
+                "10"
+            ]
+        }
+    }
+}

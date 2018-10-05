@@ -1,0 +1,159 @@
+{
+    "RecursiveCreateContracts" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "100000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["Frontier", "Homestead"],
+                "result" : {
+                    "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                        "balance" : "300000"
+                    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP150"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                            "balance" : "0x314dc6448d9338c15b0a00000001",
+                            "nonce" : "0x01",
+                            "storage" : {
+                                "0x00" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+                                "0x01" : "0x0304"
+                            }
+                        },
+                        "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                            "balance" : "293976"
+                        },
+                        "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                            "nonce" : "0x01"
+                        },
+                        "d2571607e241ecf590ed94b12d87c94babe36db6" : {
+                            "nonce" : "0x00",
+                            "storage" : {
+                                "0x00" : "0x0303"
+                            }
+                        }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : -1,
+                    "gas" : -1,
+                    "value" : -1
+                },
+                "network" : ["EIP158"],
+                "result" : {
+                    "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                            "balance" : "0x314dc6448d9338c15b0a00000001",
+                            "nonce" : "0x01",
+                            "storage" : {
+                                "0x00" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+                                "0x01" : "0x0304"
+                            }
+                        },
+                        "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                            "balance" : "0x047c5d"
+                        },
+                        "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                            "nonce" : "0x01"
+                        },
+                        "d2571607e241ecf590ed94b12d87c94babe36db6" : {
+                            "nonce" : "0x01",
+                            "storage" : {
+                                "0x00" : "0x0303"
+                            }
+                        }
+                }
+            }
+        ],
+        "pre" : {
+            "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "1000000000000000000000000000000000",
+                "//comment1" : "contract recursiveCreate1",
+                "//comment2" : "{",
+                "//comment3" : "    uint depp;",
+                "//comment4" : "    function recursiveCreate1(address a, uint depth)",
+                "//comment5" : "    {",
+                "//comment6" : "        depth = depth - 1;",
+                "//comment7" : "depp = depth;",
+                "//comment8" : "        if(depth > 0)",
+                "//comment9" : "            main(a).create2(depth);",
+                "//comment10" : "    }",
+                "//comment11" : "}",
+                "//comment12" : "",
+                "//comment13" : "contract recursiveCreate2",
+                "//comment14" : "{",
+                "//comment15" : "    uint depp;",
+                "//comment16" : "    function recursiveCreate2(address a, uint depth)",
+                "//comment17" : "    {",
+                "//comment18" : "        depth = depth - 1;",
+                "//comment19" : "depp = depth;",
+                "//comment20" : "        if(depth > 0)",
+                "//comment21" : "            recursiveCreate1 rec1 = new recursiveCreate1(a, depth);",
+                "//comment22" : "    }",
+                "//comment23" : "}",
+                "//comment24" : "",
+                "//comment25" : "contract main",
+                "//comment26" : "{",
+                "//comment27" : "    address maincontract;",
+                "//comment28" : "    uint depp;",
+                "//comment29" : "    function run(uint depth)",
+                "//comment30" : "    {",
+                "//comment31" : "        maincontract = 0x095e7baea6a6c7c4c2dfeb977efac326af552d87;",
+                "//comment32" : "        depp = depth;",
+                "//comment33" : "        recursiveCreate1 rec1 = new recursiveCreate1(maincontract, depth);",
+                "//comment34" : "    }",
+                "//comment35" : "",
+                "//comment36" : "    function create2(uint depth)",
+                "//comment37" : "    {",
+                "//comment38" : "        recursiveCreate2 rec2 = new recursiveCreate2(maincontract, depth);",
+                "//comment39" : "        address(rec2).send(2);",
+                "//comment40" : "    }",
+                "//comment41" : "}",
+                "code" : "0x60003560e060020a90048063820b13f614610021578063a444f5e91461003257005b61002c600435610093565b60006000f35b61003d600435610043565b60006000f35b600073095e7baea6a6c7c4c2dfeb977efac326af552d8760008190555081600181905550606b6101ad600039606b600054600160a060020a0316815260200182815260200160006000f090505050565b600060c86100e560003960c8600054600160a060020a0316815260200182815260200160006000f0905080600160a060020a0316600060026000600060006000848787f16100dd57005b50505050505600604060c860043960045160245160006001820391508160008190555060008211602657604c565b606b605d600039606b83600160a060020a0316815260200182815260200160006000f090505b505050600180605c6000396000f300006040606b6004396004516024516001810390508060008190555060008111602457605b565b81600160a060020a031663820b13f6600060008260e060020a026000526004858152602001600060008660325a03f1605857005b50505b5050600180606a6000396000f300006040606b6004396004516024516001810390508060008190555060008111602457605b565b81600160a060020a031663820b13f6600060008260e060020a026000526004858152602001600060008660325a03f1605857005b50505b5050600180606a6000396000f30000",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "5000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0xa444f5e90000000000000000000000000000000000000000000000000000000000000304"
+            ],
+            "gasLimit" : [
+                "300000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "1"
+            ]
+        }
+    }
+}

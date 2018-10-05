@@ -1,0 +1,164 @@
+{
+    "static_CheckOpcodes2" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "10000000",
+            "currentNumber" : "1",
+            "currentTimestamp" : "1000",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "expect" : [
+            {
+                "indexes" : {
+                    "data" : [0, 2, 3, 4],
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		       "nonce" : "1"
+		    },
+		    "1000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x01" : "0x01"
+		        }
+		    }
+                }
+            },
+	    {
+                "indexes" : {
+                    "data" : 1,
+                    "gas" : 1,
+                    "value" : -1
+                },
+                "network" : ["Byzantium"],
+                "result" : {
+		    "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+		       "nonce" : "1"
+		    },
+		    "1000000000000000000000000000000000000000" : {
+		        "storage" : {
+		            "0x01" : "0x00"
+		        }
+		    }
+                }
+            }
+        ],
+        "pre" :
+        {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "1000000000000",
+                "code" : "",
+                "nonce" : "0",
+                "storage" : {
+                }
+            },
+	    "1000000000000000000000000000000000000000" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "check ORIGIN, CALLER, ADDRESS, CALLVALUE inside staticcall",
+		"code" : "{ [[1]] (STATICCALL 100000 (CALLDATALOAD 0) 0 0 0 0) }",
+		"storage": {
+		}
+            },
+	    "1000000000000000000000000000000000000001" : {
+                "balance" : "10",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 0 (CALL 100000 0xa100000000000000000000000000000000000001 0 0 0 0 0))  (if (= 1 (MLOAD 0)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "2000000000000000000000000000000000000001" : {
+                "balance" : "10",
+		"nonce" : "0",
+		"code" : "{(MSTORE 0 0) (MSTORE 0 (CALL 100000 0xa200000000000000000000000000000000000001 1 0 0 0 0)) (MSTORE 1 1) (MSTORE 2 1) }",
+		"storage": {
+		}
+            },
+	    "3000000000000000000000000000000000000001" : {
+                "balance" : "10",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 0 (CALLCODE 100000 0xa300000000000000000000000000000000000001 0 0 0 0 0)) (if (= 1 (MLOAD 0)) (MSTORE 1 1) (SSTORE 1 2)) }",
+		"storage": {
+		}
+            },
+	    "4000000000000000000000000000000000000001" : {
+                "balance" : "10",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 0 (CALLCODE 100000 0xa400000000000000000000000000000000000001 1 0 0 0 0)) (if (= 1 (MLOAD 0)) (MSTORE 1 1) (SSTORE 1 2)) }",
+		"storage": {
+		}
+            },
+	    "5000000000000000000000000000000000000001" : {
+                "balance" : "10",
+		"nonce" : "0",
+		"code" : "{ (MSTORE 0 (DELEGATECALL 100000 0xa500000000000000000000000000000000000001 0 0 0 0)) (if (= 1 (MLOAD 0)) (MSTORE 1 1) (SSTORE 1 2)) }",
+		"storage": {
+		}
+            },
+	    "a100000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000001 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0xa100000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 0 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "a200000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x2000000000000000000000000000000000000001 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0xa200000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 1 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "a300000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x3000000000000000000000000000000000000001 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x3000000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 0 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "a400000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x4000000000000000000000000000000000000001 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x4000000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 1 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            },
+	    "a500000000000000000000000000000000000001" : {
+                "balance" : "0",
+		"nonce" : "0",
+		"code" : "{ (if (= 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b (ORIGIN)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x1000000000000000000000000000000000000000 (CALLER)) (MSTORE 1 1) (SSTORE 1 2) ) (if (= 0x5000000000000000000000000000000000000001 (ADDRESS)) (MSTORE 1 1) (SSTORE 1 2) )   (if (= 0 (CALLVALUE)) (MSTORE 1 1) (SSTORE 1 2) ) }",
+		"storage": {
+		}
+            }
+        },
+        "transaction" : {
+	    "data" : [
+		"10 - staticcall -> call -> check",
+		"20 - staticcall -> call with value (oogs here because call has value) -> check",
+		"30 - staticcall -> callcode -> check",
+		"40 - staticcall -> callcode with value -> check",
+		"50 - staticcall -> delegatecall -> check"
+	    ],
+            "data" : [
+		"0x0000000000000000000000001000000000000000000000000000000000000001",
+		"0x0000000000000000000000002000000000000000000000000000000000000001",
+		"0x0000000000000000000000003000000000000000000000000000000000000001",
+		"0x0000000000000000000000004000000000000000000000000000000000000001",
+		"0x0000000000000000000000005000000000000000000000000000000000000001"
+            ],
+            "gasLimit" : [
+                "50000", "335000"
+            ],
+            "gasPrice" : "1",
+            "nonce" : "0",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "1000000000000000000000000000000000000000",
+            "value" : [
+                "0", "100"
+            ]
+        }
+    }
+}

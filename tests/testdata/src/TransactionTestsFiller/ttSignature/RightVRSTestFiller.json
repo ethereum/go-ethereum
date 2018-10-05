@@ -1,0 +1,22 @@
+{
+    "RightVRSTest" : {
+	     "expect" : [
+            {
+                "network" : ["ALL"],
+                "result" : "valid"
+            }
+        ],
+        "transaction" :
+        {
+            "data" : "0x",
+            "gasLimit" : "21000",
+            "gasPrice" : "1",
+            "nonce" : "3",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "10",
+            "v" : "28",
+            "r" : "0x98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a",
+            "s" : "0x1887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3"
+        }
+    }
+}

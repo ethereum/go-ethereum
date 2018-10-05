@@ -1,0 +1,21 @@
+language: python
+python: 
+  - "2.7"
+node_js: 
+  - "8"
+sudo: false
+install: "npm install jsonschema"
+script:
+# won't fail, but print problems
+- find . -name "*.json" -not -name "*Filler.json" -exec echo {} \; -exec python -mjson.tool {} /dev/null \; 2>&1 | grep -v -B 1 "^\./" | cat
+# will fail, if linting fails
+- find . -name "*.json" -not -name "*Filler.json" -print0 | xargs -I file -n1 -0 python -mjson.tool file /dev/null 
+
+# run schema tests against GeneralStateTests
+- echo "Linting state tests"
+- echo -e "$(find GeneralStateTests -name '*.json')" | node JSONSchema/validate.js JSONSchema/st-schema.json
+- echo -e "$(find src/GeneralStateTestsFiller -name '*.json')" | node JSONSchema/validate.js JSONSchema/st-filler-schema.json
+
+# run schema tests against BlockchainTests
+- echo "Linting blockchain tests"
+- echo -e "$(find BlockchainTests -name '*.json')" | node JSONSchema/validate.js JSONSchema/bc-schema.json
