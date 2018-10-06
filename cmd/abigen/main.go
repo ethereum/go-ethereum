@@ -115,16 +115,12 @@ func main() {
 		var err error
 		if *abiFlag == "-" {
 			abi, err = ioutil.ReadAll(os.Stdin)
-			if err != nil {
-				fmt.Printf("Failed to read input ABI from stdin: %v\n", err)
-				os.Exit(-1)
-			}
 		} else {
 			abi, err = ioutil.ReadFile(*abiFlag)
-			if err != nil {
-				fmt.Printf("Failed to read input ABI: %v\n", err)
-				os.Exit(-1)
-			}
+		}
+		if err != nil {
+			fmt.Printf("Failed to read input ABI: %v\n", err)
+			os.Exit(-1)
 		}
 		abis = append(abis, string(abi))
 
