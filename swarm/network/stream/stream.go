@@ -63,6 +63,7 @@ type Registry struct {
 	maxPeerServers int
 	balanceMgr     protocols.BalanceManager
 	priceOracle    protocols.PriceOracle
+	spec           *protocols.Spec
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -82,6 +83,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
+
 	streamer := &Registry{
 		addr:           localID,
 		skipCheck:      options.SkipCheck,
@@ -92,7 +94,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		intervalsStore: intervalsStore,
 		doRetrieve:     options.DoRetrieve,
 		maxPeerServers: options.MaxPeerServers,
+		balanceMgr:     balanceMgr,
 	}
+	streamer.setupSpec()
+
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
@@ -182,10 +187,13 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		}()
 	}
 
-	streamer.balanceMgr = balanceMgr
-	streamer.priceOracle = streamer.createPriceOracle()
-
 	return streamer
+}
+
+func (r *Registry) setupSpec() {
+	r.createSpec()
+	r.createPriceOracle()
+	r.spec.Hook = protocols.NewAccountingHook(r.balanceMgr, r.priceOracle)
 }
 
 // RegisterClient registers an incoming streamer constructor
@@ -453,7 +461,7 @@ func (r *Registry) updateSyncing() {
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, r.GetSpec())
+	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
 	np := network.NewPeer(bp, r.delivery.kad)
 	r.delivery.kad.On(np)
@@ -678,6 +686,10 @@ func (c *clientParams) clientCreated() {
 }
 
 func (r *Registry) GetSpec() *protocols.Spec {
+	return r.spec
+}
+
+func (r *Registry) createSpec() {
 
 	// Spec is the spec of the streamer protocol
 	var spec = &protocols.Spec{
@@ -697,9 +709,8 @@ func (r *Registry) GetSpec() *protocols.Spec {
 			QuitMsg{},
 			ChunkDeliveryMsgSyncing{},
 		},
-		Hook: protocols.NewAccountingHook(r.balanceMgr, r.priceOracle),
 	}
-	return spec
+	r.spec = spec
 }
 
 //An accountable message needs some meta information attached to it
@@ -715,7 +726,7 @@ type StreamerPriceOracle struct {
 }
 
 func (spo *StreamerPriceOracle) Accountable(msg interface{}) bool {
-	code, ok := spo.registry.GetSpec().GetCode(msg)
+	code, ok := spo.registry.spec.GetCode(msg)
 	if !ok {
 		return false
 	}
@@ -726,7 +737,7 @@ func (spo *StreamerPriceOracle) Accountable(msg interface{}) bool {
 }
 
 func (spo *StreamerPriceOracle) Price(size uint32, msg interface{}) (direction protocols.EntryDirection, price uint64) {
-	code, ok := spo.registry.GetSpec().GetCode(msg)
+	code, ok := spo.registry.spec.GetCode(msg)
 	if !ok {
 		panic("Attempting to get message code for an expected message type, but code not found")
 	}
@@ -740,14 +751,14 @@ func (spo *StreamerPriceOracle) Price(size uint32, msg interface{}) (direction p
 	return
 }
 
-func (r *Registry) createPriceOracle() protocols.PriceOracle {
+func (r *Registry) createPriceOracle() {
 
 	po := &StreamerPriceOracle{
 		registry: r,
 	}
 	po.priceMatrix = make(map[uint64]*priceTag)
 
-	deliveryCode, ok := r.GetSpec().GetCode(ChunkDeliveryMsgRetrieval{})
+	deliveryCode, ok := r.spec.GetCode(ChunkDeliveryMsgRetrieval{})
 	if !ok {
 		panic("Attempting to get message code for an expected message type, but code not found")
 	}
@@ -758,7 +769,7 @@ func (r *Registry) createPriceOracle() protocols.PriceOracle {
 	}
 	po.priceMatrix[deliveryCode] = tag
 
-	retrieveReqCode, ok := r.GetSpec().GetCode(RetrieveRequestMsg{})
+	retrieveReqCode, ok := r.spec.GetCode(RetrieveRequestMsg{})
 	if !ok {
 		panic("Attempting to get message code for an expected message type, but code not found")
 	}
@@ -768,13 +779,11 @@ func (r *Registry) createPriceOracle() protocols.PriceOracle {
 		direction: protocols.ChargeSender,
 	}
 	po.priceMatrix[retrieveReqCode] = tag
-
-	return po
-
+	r.priceOracle = po
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
-	spec := r.GetSpec()
+	spec := r.spec
 	return []p2p.Protocol{
 		{
 			Name:    spec.Name,

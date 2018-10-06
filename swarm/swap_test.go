@@ -231,6 +231,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
+			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
 
 			dir, err := ioutil.TempDir("", "swap-network-test-node")
 			if err != nil {
