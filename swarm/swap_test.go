@@ -54,7 +54,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			config := api.NewConfig()
 			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
 
-			dir, err := ioutil.TempDir("", "swap-network-test-node")
+			dir, err := ioutil.TempDir("", "swap-network-test-node"+config.Port)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -233,7 +233,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 			config := api.NewConfig()
 			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
 
-			dir, err := ioutil.TempDir("", "swap-network-test-node")
+			dir, err := ioutil.TempDir("", "swap-network-test-node"+config.Port)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -290,6 +290,10 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 	pseudoRandomBitMask := strconv.FormatInt(pseudoRandomNum, 2)
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
+		}
+
 		nodeIDs := sim.UpNodeIDs()
 		shuffle(len(nodeIDs), func(i, j int) {
 			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
@@ -309,10 +313,6 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 					nodeID: id,
 				})
 			}
-		}
-
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
@@ -362,6 +362,8 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		/*
 			Assuming that in this case, balances should be symmetric too	I
 		*/
+
+		success := true
 		for k, mapForK := range balancesMap {
 			for n, balanceKwithN := range mapForK {
 				for subK, mapForSubK := range balancesMap {
@@ -370,13 +372,18 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
 						if math.Abs(float64(balanceKwithN)) != math.Abs(float64(mapForSubK[k])) && balanceKwithN != 0 {
 							log.Error("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not")
+							success = false
 						}
 					}
 				}
 			}
 		}
 
-		return nil
+		if success {
+			return nil
+		}
+
+		return errors.New("some conditions could not be met")
 	})
 
 	if result.Error != nil {

@@ -51,7 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
