@@ -259,8 +259,10 @@ func importChain(ctx *cli.Context) error {
 	}
 	fmt.Println(ioStats)
 
-	fmt.Printf("Trie cache misses:  %d\n", trie.CacheMisses())
-	fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
+	fmt.Printf("State storage cache misses:  %d\n", state.StorageTrieMisses())
+	fmt.Printf("State storage cache unloads: %d\n", state.StorageTrieUnloads())
+	fmt.Printf("Global trie cache misses:  %d\n", trie.CacheMisses())
+	fmt.Printf("Global trie cache unloads: %d\n\n", trie.CacheUnloads())
 
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
