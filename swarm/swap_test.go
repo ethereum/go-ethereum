@@ -319,7 +319,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		// or until the timeout is reached.
 		for {
 			if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
-				return nil
+				break
 			}
 		}
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
@@ -193,7 +194,9 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 func (r *Registry) setupSpec() {
 	r.createSpec()
 	r.createPriceOracle()
-	r.spec.Hook = protocols.NewAccountingHook(r.balanceMgr, r.priceOracle)
+	if !reflect.ValueOf(r.balanceMgr).IsNil() {
+		r.spec.Hook = protocols.NewAccountingHook(r.balanceMgr, r.priceOracle)
+	}
 }
 
 // RegisterClient registers an incoming streamer constructor

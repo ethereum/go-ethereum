@@ -16,6 +16,10 @@
 
 package protocols
 
+import (
+	"sync"
+)
+
 type PriceOracle interface {
 	Price(uint32, interface{}) (EntryDirection, uint64)
 	Accountable(interface{}) bool
@@ -38,6 +42,7 @@ const (
 type AccountingHook struct {
 	BalanceManager
 	PriceOracle
+	lock sync.RWMutex //lock the balances
 }
 
 func NewAccountingHook(mgr BalanceManager, po PriceOracle) *AccountingHook {
@@ -49,6 +54,8 @@ func NewAccountingHook(mgr BalanceManager, po PriceOracle) *AccountingHook {
 }
 
 func (ah *AccountingHook) Send(peer *Peer, size uint32, msg interface{}) error {
+	ah.lock.Lock()
+	defer ah.lock.Unlock()
 	var err error
 	if !ah.PriceOracle.Accountable(msg) {
 		return nil
@@ -63,6 +70,8 @@ func (ah *AccountingHook) Send(peer *Peer, size uint32, msg interface{}) error {
 }
 
 func (ah *AccountingHook) Receive(peer *Peer, size uint32, msg interface{}) error {
+	ah.lock.Lock()
+	defer ah.lock.Unlock()
 	var err error
 	if !ah.PriceOracle.Accountable(msg) {
 		return nil
