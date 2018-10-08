@@ -918,7 +918,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
-	log.Info("Worker found new pending txns from pool", "num_txns", len(pending), "txns", pending, "location", whereami.WhereAmI())
+	log.Info("Worker found new pending txns from pending queue set by tx pool", "num_txns", len(pending), "txns", pending, "location", whereami.WhereAmI())
 
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)

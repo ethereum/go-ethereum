@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -335,7 +336,9 @@ type TransactionsByPriceAndNonce struct {
 func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
 	// Initialize a price based heap with the head transactions
 	heads := make(TxByPrice, 0, len(txs))
+	log.Info("======> Sorting the txns from pool by initializing a heap and iteratively deleting from heap, causing next best txn price to bubble up")
 	for from, accTxs := range txs {
+		log.Info("======> Txn with next best price/nonce", "nextBestTxn", accTxs[0])
 		heads = append(heads, accTxs[0])
 		// Ensure the sender address is from the signer
 		acc, _ := Sender(signer, accTxs[0])
@@ -345,6 +348,7 @@ func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transa
 		}
 	}
 	heap.Init(&heads)
+	log.Info("======> Returning sorted txn heap", "heap", heads)
 
 	// Assemble and return the transaction set
 	return &TransactionsByPriceAndNonce{

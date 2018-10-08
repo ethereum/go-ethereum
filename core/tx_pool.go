@@ -661,14 +661,17 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 	// If the transaction is replacing an already pending one, do directly
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
+		log.Info("======> Pool detected txn nonce already in txn list", "nonce", tx.Nonce())
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
 		if !inserted {
+			log.Info("======> Older txn with shared nonce has higher gas price, accepted over new txn", "oldHash", old.Hash(), "oldGasPrice", old.GasPrice(), "txnGasPrice", tx.GasPrice())
 			pendingDiscardCounter.Inc(1)
 			return false, ErrReplaceUnderpriced
 		}
 		// New transaction is better, replace old one
 		if old != nil {
+			log.Info("======> New txn with shared nonce has higher gas price, overwriting old txn", "oldHash", old.Hash())
 			pool.all.Remove(old.Hash())
 			pool.priced.Removed()
 			pendingReplaceCounter.Inc(1)
@@ -750,9 +753,11 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
+		log.Info("======> Pool intitializing new txn list in pending queue under address", "address", addr)
 	}
 	list := pool.pending[addr]
 
+	log.Info("=====> Pool attempting to promote txn with hash", "hash", hash)
 	inserted, old := list.Add(tx, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
@@ -777,6 +782,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
+	log.Info("======> Pool promoted next txn for execution, incrementing nonce at address", "addr", addr, "nonce", pool.pendingState.GetNonce(addr))
 
 	return true
 }
@@ -971,7 +977,9 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 		}
 		// Gather all executable transactions and promote them
 		log.Info("Pool promoting txns ready for execution")
+		log.Info("=====> Pool calling list.Ready() to grab all txns with nonce greater than current pool state under this address", "address", addr)
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
+			log.Info("=====> Pool retrieved txns with nonce greater than currentState.nonce, sorted in sequentially increasing order", "list", list.Ready(pool.pendingState.GetNonce(addr), "current nonce", pool.pendingState.GetNonce(addr)))
 			hash := tx.Hash()
 			if pool.promoteTx(addr, hash, tx) {
 				log.Trace("Promoting queued transaction", "hash", hash)
@@ -996,6 +1004,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	}
 	// Notify subsystem for new promoted transactions.
 	if len(promoted) > 0 {
+		log.Info("======> New promoted txns", "promoted", promoted)
 		go pool.txFeed.Send(NewTxsEvent{promoted})
 	}
 	// If the pending limit is overflown, start equalizing allowances
@@ -1004,6 +1013,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 		pending += uint64(list.Len())
 	}
 	if pending > pool.config.GlobalSlots {
+		log.Info("======> Pending exceeds pool size limit", "pending", pending, "limit", pool.config.GlobalSlots)
 		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
 		spammers := prque.New(nil)
@@ -1015,6 +1025,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 		}
 		// Gradually drop transactions from offenders
 		offenders := []common.Address{}
+		log.Info("======> Found accounts with too many transactions, dropping their transactions", "spammers", spammers)
 		for pending > pool.config.GlobalSlots && !spammers.Empty() {
 			// Retrieve the next offender if not local address
 			offender, _ := spammers.Pop()
@@ -1031,6 +1042,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 						list := pool.pending[offenders[i]]
 						for _, tx := range list.Cap(list.Len() - 1) {
 							// Drop the transaction from the global pools too
+							log.Info("=======> Dropping transaction from pool", "hash", tx.Hash(), "offender", offenders[i])
 							hash := tx.Hash()
 							pool.all.Remove(hash)
 							pool.priced.Removed()
@@ -1038,6 +1050,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 							// Update the account nonce to the dropped transaction
 							if nonce := tx.Nonce(); pool.pendingState.GetNonce(offenders[i]) > nonce {
 								pool.pendingState.SetNonce(offenders[i], nonce)
+								log.Info("=======> Setting offender's nonce to the pool's nonce state", "nonce", nonce)
 							}
 							log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 						}
@@ -1060,6 +1073,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 						// Update the account nonce to the dropped transaction
 						if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
 							pool.pendingState.SetNonce(addr, nonce)
+							log.Info("=======> Setting offender's nonce to the pool's nonce state", "nonce", nonce)
 						}
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}
