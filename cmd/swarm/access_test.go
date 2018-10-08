@@ -54,9 +54,8 @@ var DefaultCurve = crypto.S256()
 // is then fetched through 2nd node. since the tested code is not key-aware - we can just
 // fetch from the 2nd node using HTTP BasicAuth
 func TestAccessPassword(t *testing.T) {
-	cluster := newTestCluster(t, 1)
-	defer cluster.Shutdown()
-	proxyNode := cluster.Nodes[0]
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
 
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
@@ -64,7 +63,7 @@ func TestAccessPassword(t *testing.T) {
 	// upload the file with 'swarm up' and expect a hash
 	up := runSwarm(t,
 		"--bzzapi",
-		proxyNode.URL, //it doesn't matter through which node we upload content
+		srv.URL, //it doesn't matter through which node we upload content
 		"up",
 		"--encrypt",
 		dataFilename)
@@ -138,7 +137,7 @@ func TestAccessPassword(t *testing.T) {
 	if a.Publisher != "" {
 		t.Fatal("should be empty")
 	}
-	client := swarm.NewClient(cluster.Nodes[0].URL)
+	client := swarm.NewClient(srv.URL)
 
 	hash, err := client.UploadManifest(&m, false)
 	if err != nil {
@@ -147,7 +146,7 @@ func TestAccessPassword(t *testing.T) {
 
 	httpClient := &http.Client{}
 
-	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
+	url := srv.URL + "/" + "bzz:/" + hash
 	response, err := httpClient.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +188,7 @@ func TestAccessPassword(t *testing.T) {
 	//download file with 'swarm down' with wrong password
 	up = runSwarm(t,
 		"--bzzapi",
-		proxyNode.URL,
+		srv.URL,
 		"down",
 		"bzz:/"+hash,
 		tmp,
