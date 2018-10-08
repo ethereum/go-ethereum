@@ -34,4 +34,6 @@ var (
 	ErrNonceTooHigh = errors.New("nonce too high")
 
 	ErrNotPoSV = errors.New("Posv not found in config")
+
+	ErrNotFoundM1 = errors.New("list M1 not found ")
 )

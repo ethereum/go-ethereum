@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -211,36 +212,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook will process when preparing block.
 		c.HookPrepare = func(header *types.Header, signers []common.Address) error {
-			client, err := eth.blockchain.GetClient()
-			if err != nil {
-				log.Error("Fail to connect IPC client for penalty.", "error", err)
-			}
 			number := header.Number.Int64()
-			// Check m2 exists on chaindb.
-			// Get secrets and opening at epoc block checkpoint.
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
-				var candidates []int64
-				lenSigners := int64(len(signers))
-
-				if lenSigners > 0 {
-					for _, addr := range signers {
-						random, err := contracts.GetRandomizeFromContract(client, addr)
-						if err != nil {
-							log.Error("Fail to get random m2 from contract.", "error", err)
-						}
-						candidates = append(candidates, random)
-					}
-
-					// Get randomize m2 list.
-					m2, err := contracts.GenM2FromRandomize(candidates, lenSigners)
-					if err != nil {
-						log.Error("Can not get m2 from randomize SC", "error", err)
-					}
-					if len(m2) > 0 {
-						header.Validators = contracts.BuildValidatorFromM2(m2)
-						log.Debug("New set Validators", "m2", m2, "number", header.Number.Uint64())
-					}
+				validators, err := GetValidators(eth.blockchain, signers)
+				if err != nil {
+					return err
 				}
+				header.Validators = validators
 			}
 			return nil
 		}
@@ -328,6 +306,19 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 			}
 
+			return nil
+		}
+		c.VerifyValidators = func(header *types.Header, signers []common.Address) error {
+			number := header.Number.Int64()
+			if number > 0 && number%common.EpocBlockRandomize == 0 {
+				validators, err := GetValidators(eth.blockchain, signers)
+				if err != nil {
+					return err
+				}
+				if !bytes.Equal(header.Validators, validators) {
+					return posv.ErrInvalidCheckpointValidators
+				}
+			}
 			return nil
 		}
 	}
@@ -605,4 +596,38 @@ func (s *Ethereum) Stop() error {
 	close(s.shutdownChan)
 
 	return nil
+}
+
+func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
+	if bc.Config().Posv == nil {
+		return nil, core.ErrNotPoSV
+	}
+	client, err := bc.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	// Check m2 exists on chaindb.
+	// Get secrets and opening at epoc block checkpoint.
+
+	var candidates []int64
+	if err != nil {
+		return nil, err
+	}
+	lenSigners := int64(len(masternodes))
+	if lenSigners > 0 {
+		for _, addr := range masternodes {
+			random, err := contracts.GetRandomizeFromContract(client, addr)
+			if err != nil {
+				return nil, err
+			}
+			candidates = append(candidates, random)
+		}
+		// Get randomize m2 list.
+		m2, err := contracts.GenM2FromRandomize(candidates, lenSigners)
+		if err != nil {
+			return nil, err
+		}
+		return contracts.BuildValidatorFromM2(m2), nil
+	}
+	return nil, core.ErrNotFoundM1
 }
