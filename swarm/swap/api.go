@@ -32,9 +32,21 @@ type API struct {
 	swap *Swap
 }
 
-//TODO: define metrics
 //Get metrics about swap for this node
-type SwapMetrics struct {
+//The current metrics are for accounted message types only
+//(i.e. BytesTransferred is amount of bytes sent but only for a
+//accounted message types)
+type Metrics struct {
+	BalanceCredited uint64
+	BalanceDebited  uint64
+	BytesCredited   uint64
+	BytesDebited    uint64
+	MsgCredited     uint64
+	MsgDebited      uint64
+	ChequesIssued   uint64
+	ChequesReceived uint64
+	PeerDrops       uint64
+	SelfDrops       uint64
 }
 
 //Create a new API instance
@@ -55,7 +67,7 @@ func (swapapi *API) BalanceWithPeer(ctx context.Context, peer enode.ID) (balance
 //Get the overall balance of the node
 //Iterates over all peers this node is having accounted interaction
 //and just adds up balances.
-//It assumes that if a disfavorable balance is represented as a negative value
+//It assumes that a disfavorable balance is represented as a negative value
 func (swapapi *API) Balance(ctx context.Context) (balance int64, err error) {
 	balance = 0
 	for _, peerBalance := range swapapi.swap.balances {
@@ -65,6 +77,32 @@ func (swapapi *API) Balance(ctx context.Context) (balance int64, err error) {
 }
 
 //Just return the Swap metrics
-func (swapapi *API) GetSwapMetrics() (*SwapMetrics, error) {
-	return nil, nil
+func (swapapi *API) GetSwapMetricsForPeer(ctx context.Context, peer enode.ID) (*Metrics, error) {
+	var ok bool
+	var metrics *Metrics
+	metrics, ok = swapapi.swap.metrics[peer]
+	if !ok {
+		return nil, ErrNoSuchPeerAccounting
+	}
+	return metrics, nil
+}
+
+//Just return the Swap metrics
+func (swapapi *API) GetSwapMetrics(ctx context.Context, peer enode.ID) (*Metrics, error) {
+	var metrics *Metrics
+
+	for _, m := range swapapi.swap.metrics {
+		metrics.BalanceCredited += m.BalanceCredited
+		metrics.BalanceDebited += m.BalanceDebited
+		metrics.BytesCredited += m.BytesCredited
+		metrics.BytesDebited += m.BytesDebited
+		metrics.ChequesIssued += m.ChequesIssued
+		metrics.ChequesReceived += m.ChequesReceived
+		metrics.MsgCredited += m.MsgCredited
+		metrics.MsgDebited += m.MsgDebited
+		metrics.PeerDrops += m.PeerDrops
+		metrics.SelfDrops += m.SelfDrops
+	}
+
+	return metrics, nil
 }

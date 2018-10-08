@@ -156,10 +156,12 @@ func TestRepeatedBookings(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
+	//size is irrelevant for this test
+	size := uint32(0)
 	amount := mrand.Intn(100)
 	cnt := 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Credit(testPeer.Peer.Peer, uint64(amount))
+		swap.Credit(testPeer.Peer.Peer, uint64(amount), size)
 	}
 	expectedBalance := int64(cnt * amount)
 	realBalance := swap.balances[testPeer.ID()]
@@ -171,7 +173,7 @@ func TestRepeatedBookings(t *testing.T) {
 	amount = mrand.Intn(100)
 	cnt = 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Debit(testPeer2.Peer.Peer, uint64(amount))
+		swap.Debit(testPeer2.Peer.Peer, uint64(amount), size)
 	}
 	expectedBalance = int64(0 - (cnt * amount))
 	realBalance = swap.balances[testPeer2.ID()]
@@ -183,9 +185,9 @@ func TestRepeatedBookings(t *testing.T) {
 	amount1 := mrand.Intn(100)
 	amount2 := mrand.Intn(100)
 	amount3 := mrand.Intn(100)
-	swap.Credit(testPeer2.Peer.Peer, uint64(amount1))
-	swap.Credit(testPeer2.Peer.Peer, uint64(amount2))
-	swap.Debit(testPeer2.Peer.Peer, uint64(amount3))
+	swap.Credit(testPeer2.Peer.Peer, uint64(amount1), size)
+	swap.Credit(testPeer2.Peer.Peer, uint64(amount2), size)
+	swap.Debit(testPeer2.Peer.Peer, uint64(amount3), size)
 
 	expectedBalance = expectedBalance + int64(amount1+amount2-amount3)
 	realBalance = swap.balances[testPeer2.ID()]

@@ -27,9 +27,9 @@ type PriceOracle interface {
 
 type BalanceManager interface {
 	//Credit is crediting the peer, charging local node
-	Credit(peer *Peer, amount uint64) error
+	Credit(peer *Peer, amount uint64, size uint32) error
 	//Debit is crediting the local node, charging the remote peer
-	Debit(peer *Peer, amount uint64) error
+	Debit(peer *Peer, amount uint64, size uint32) error
 }
 
 type EntryDirection bool
@@ -62,9 +62,9 @@ func (ah *AccountingHook) Send(peer *Peer, size uint32, msg interface{}) error {
 	}
 	direction, price := ah.PriceOracle.Price(size, msg)
 	if direction == ChargeSender {
-		err = ah.BalanceManager.Debit(peer, price)
+		err = ah.BalanceManager.Debit(peer, price, size)
 	} else {
-		err = ah.BalanceManager.Credit(peer, price)
+		err = ah.BalanceManager.Credit(peer, price, size)
 	}
 	return err
 }
@@ -78,9 +78,9 @@ func (ah *AccountingHook) Receive(peer *Peer, size uint32, msg interface{}) erro
 	}
 	direction, price := ah.PriceOracle.Price(size, msg)
 	if direction == ChargeReceiver {
-		err = ah.BalanceManager.Debit(peer, price)
+		err = ah.BalanceManager.Debit(peer, price, size)
 	} else {
-		err = ah.BalanceManager.Credit(peer, price)
+		err = ah.BalanceManager.Credit(peer, price, size)
 	}
 	return err
 }

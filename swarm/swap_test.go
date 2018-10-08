@@ -166,12 +166,28 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 
 				//get the peer's balance with this node
 				balance, err := swarm.swap.GetPeerBalance(n)
-				fmt.Println(balance)
 				if err == nil {
 					subBalances[n] = balance
 					log.Debug(fmt.Sprintf("Balance of node %s to node %s: %d", node.TerminalString(), n.TerminalString(), balance))
 				} else {
 					log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
+				}
+				metrics, err := swarm.swap.GetPeerMetrics(n)
+				if err == nil && *printStats {
+					fmt.Println(fmt.Sprintf("**********  Metrics for node %s with node %s: *************", node.TerminalString(), n.TerminalString()))
+					fmt.Println(fmt.Sprintf("Total units credited: %d", metrics.BalanceCredited))
+					fmt.Println(fmt.Sprintf("Total units debited: %d", metrics.BalanceDebited))
+					fmt.Println(fmt.Sprintf("Total bytes credited: %d", metrics.BytesCredited))
+					fmt.Println(fmt.Sprintf("Total bytes debited: %d", metrics.BytesDebited))
+					fmt.Println(fmt.Sprintf("Cheques issued: %d", metrics.ChequesIssued))
+					fmt.Println(fmt.Sprintf("Cheques received: %d", metrics.ChequesReceived))
+					fmt.Println(fmt.Sprintf("Number of messages credited: %d", metrics.MsgCredited))
+					fmt.Println(fmt.Sprintf("Number of messages debited: %d", metrics.MsgDebited))
+					fmt.Println(fmt.Sprintf("Peers dropped: %d", metrics.PeerDrops))
+					fmt.Println(fmt.Sprintf("Number of times node dropped itself: %d", metrics.SelfDrops))
+				} else {
+					//not all peers have metrics with every node, so probably can be ignored
+					log.Debug("Error getting metrics", "err", err)
 				}
 			}
 			//update the map for this node
