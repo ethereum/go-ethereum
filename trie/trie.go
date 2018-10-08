@@ -151,18 +151,26 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 			return nil, n, false, nil
 		}
 		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
-		if err == nil && didResolve {
+		if err == nil && (didResolve || n.canUnload(t.cachegen, t.cachelimit/2)) {
+			// Subtrie expanded or generation old enough to reset
 			n = n.copy()
 			n.Val = newnode
 			n.flags.gen = t.cachegen
+
+			// Fake a resolution so all nodes towards the root are refreshed
+			didResolve = true
 		}
 		return value, n, didResolve, err
 	case *fullNode:
 		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
-		if err == nil && didResolve {
+		if err == nil && (didResolve || n.canUnload(t.cachegen, t.cachelimit/2)) {
+			// Subtrie expanded or generation old enough to reset
 			n = n.copy()
 			n.flags.gen = t.cachegen
 			n.Children[key[pos]] = newnode
+
+			// Fake a resolution so all nodes towards the root are refreshed
+			didResolve = true
 		}
 		return value, n, didResolve, err
 	case hashNode:

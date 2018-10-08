@@ -339,21 +339,28 @@ func TestCacheUnload(t *testing.T) {
 	root, _ := trie.Commit(nil)
 	trie.db.Commit(root, true)
 
-	// Commit the trie repeatedly and access key1.
-	// The branch containing it is loaded from DB exactly two times:
-	// in the 0th and 6th iteration.
+	// Commit the trie repeatedly and update key1. The branch containing it is
+	// loaded from DB once, in the 0th iteration. We attempt to load key2 before
+	// and after cache-generation numer of iterations. In both cases it should
+	// reach out to disk.
 	db := &countingDB{Database: trie.db.diskdb, gets: make(map[string]int)}
 	trie, _ = New(root, NewDatabase(db))
 	trie.SetCacheLimit(5)
-	for i := 0; i < 12; i++ {
-		getString(trie, key1)
+
+	getString(trie, key2)
+	for i := 0; i < 6; i++ {
+		updateString(trie, key1, fmt.Sprintf("this is the branch of key1, update #%d", i))
 		trie.Commit(nil)
 	}
+	getString(trie, key2)
+
 	// Check that it got loaded two times.
-	for dbkey, count := range db.gets {
-		if count != 2 {
-			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
-		}
+	loads := make(map[int]int)
+	for _, count := range db.gets {
+		loads[count]++
+	}
+	if len(loads) != 2 || loads[1] != 3 || loads[2] != 1 {
+		t.Fatalf("Mismatching number of database loads: want map[1:3 2:1], have %v", loads)
 	}
 }
 
