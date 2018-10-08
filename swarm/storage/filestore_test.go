@@ -25,7 +25,7 @@ import (
 	"testing"
 )
 
-const testDataSize = 0x1000000
+const testDataSize = 0x0001000
 
 func TestFileStorerandom(t *testing.T) {
 	testFileStoreRandom(false, t)
