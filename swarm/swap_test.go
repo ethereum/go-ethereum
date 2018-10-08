@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/rand"
 	"os"
 	"strconv"
@@ -140,6 +139,8 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 				break
 			}
 		}
+
+		time.Sleep(5 * time.Second)
 		//every node has a map to all nodes it had interactions
 		//each entry in the map is a map of the other node with all the balances
 		balancesMap := make(map[enode.ID]map[enode.ID]int64)
@@ -165,6 +166,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 
 				//get the peer's balance with this node
 				balance, err := swarm.swap.GetPeerBalance(n)
+				fmt.Println(balance)
 				if err == nil {
 					subBalances[n] = balance
 					log.Debug(fmt.Sprintf("Balance of node %s to node %s: %d", node.TerminalString(), n.TerminalString(), balance))
@@ -203,8 +205,8 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
 						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
 						//...check that they have the same balance in Abs terms and that it is not 0
-						if math.Abs(float64(balanceKwithN)) != math.Abs(float64(mapForSubK[k])) && balanceKwithN != 0 {
-							log.Error(fmt.Sprintf("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not: %d, %d", balanceKwithN, mapForSubK[k]))
+						if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+							log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
 							success = false
 						}
 					}
@@ -278,10 +280,10 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//this is actually quite a big maxFileSize, which results
-	//in the test running for nearly 2 minutes
-	//maybe for the test, we could reduce it
-	const maxFileSize = 1024 * 1024 * 4 //1024 bytes * 1024 * 4 = 4MB
+	//NOTE: maxFileSize is 4 kB, this in order to provide faster tests
+	//it would be interesting to run these tests with bigger files
+	//(to see how drop limits are affected etc.)
+	const maxFileSize = 1024 * 4 //1024 bytes * 4 = 4kB
 	const minfileSize = 1024
 
 	//pseudo random algo to define if a node will upload or not
@@ -322,6 +324,8 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 				break
 			}
 		}
+
+		time.Sleep(5 * time.Second)
 
 		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
@@ -370,8 +374,8 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 					if n == subK {
 						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
 						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-						if math.Abs(float64(balanceKwithN)) != math.Abs(float64(mapForSubK[k])) && balanceKwithN != 0 {
-							log.Error("Expected balances to be |abs| = 0 AND balance1 != 0, but they are not")
+						if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+							log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
 							success = false
 						}
 					}

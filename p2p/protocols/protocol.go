@@ -353,6 +353,9 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 	}
 
 	if p.spec.Hook != nil {
+		if wmsg.Size != uint32(len(wmsg.Payload)) {
+			log.Warn("Advertised message size and payload length don't match")
+		}
 		err := p.spec.Hook.Receive(p, wmsg.Size, val)
 		if err != nil {
 			return err

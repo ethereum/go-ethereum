@@ -32,14 +32,13 @@ import (
 
 const (
 	defaultMaxMsgSize = 1024 * 1024
-	OracleID          = "swap"
 	swapProtocolName  = "swap"
 	swapVersion       = 1
 )
 
 var (
-	payAt  = int64(-4096 * 10000) // threshold that triggers payment {request} (bytes)
-	dropAt = int64(-4096 * 12000) // threshold that triggers disconnect (bytes)
+	payAt  = int64(-4096 * 10000000) // threshold that triggers payment {request} (bytes)
+	dropAt = int64(-4096 * 12000000) // threshold that triggers disconnect (bytes)
 
 	ErrNotAccountedMsg   = errors.New("Message does not need accounting")
 	ErrInsufficientFunds = errors.New("Insufficient funds")

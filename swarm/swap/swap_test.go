@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	mrand "math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -145,6 +146,52 @@ func init() {
 func TestLimits(t *testing.T) {
 	if dropAt >= payAt {
 		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %d, payAt: %d", dropAt, payAt))
+	}
+}
+
+//check that the disconnect threshold is below the payment threshold
+func TestRepeatedBookings(t *testing.T) {
+	//create a test swap account
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	testPeer := newDummyPeer()
+	amount := mrand.Intn(100)
+	cnt := 1 + mrand.Intn(10)
+	for i := 0; i < cnt; i++ {
+		swap.Credit(testPeer.Peer.Peer, uint64(amount))
+	}
+	expectedBalance := int64(cnt * amount)
+	realBalance := swap.balances[testPeer.ID()]
+	if expectedBalance != realBalance {
+		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
+	}
+
+	testPeer2 := newDummyPeer()
+	amount = mrand.Intn(100)
+	cnt = 1 + mrand.Intn(10)
+	for i := 0; i < cnt; i++ {
+		swap.Debit(testPeer2.Peer.Peer, uint64(amount))
+	}
+	expectedBalance = int64(0 - (cnt * amount))
+	realBalance = swap.balances[testPeer2.ID()]
+	if expectedBalance != realBalance {
+		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
+	}
+
+	//mixed debits and credits
+	amount1 := mrand.Intn(100)
+	amount2 := mrand.Intn(100)
+	amount3 := mrand.Intn(100)
+	swap.Credit(testPeer2.Peer.Peer, uint64(amount1))
+	swap.Credit(testPeer2.Peer.Peer, uint64(amount2))
+	swap.Debit(testPeer2.Peer.Peer, uint64(amount3))
+
+	expectedBalance = expectedBalance + int64(amount1+amount2-amount3)
+	realBalance = swap.balances[testPeer2.ID()]
+
+	if expectedBalance != realBalance {
+		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
 	}
 }
 
