@@ -65,7 +65,6 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 		// test expects n events, if we begin sending event immediately some events
 		// will probably be dropped since the subscription ID might not be send to
 		// the client.
-		time.Sleep(5 * time.Second)
 		for i := 0; i < n; i++ {
 			if err := notifier.Notify(subscription.ID, val+i); err != nil {
 				return
@@ -287,32 +286,26 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	timeout := time.After(30 * time.Second)
 	subids := make(map[string]string, 2*len(namespaces))
 	count := make(map[string]int, 2*len(namespaces))
-
-	for {
-		done := true
-		for id := range count {
-			if count, found := count[id]; !found || count < (2*n) {
+	allReceived := func() bool {
+		done := len(count) == len(namespaces)
+		for _, c := range count {
+			if c < n {
 				done = false
 			}
 		}
+		return done
+	}
 
-		if done && len(count) == len(namespaces) {
-			break
-		}
-
+	for !allReceived() {
 		select {
-		case err := <-errors:
-			t.Fatal(err)
 		case suc := <-successes: // subscription created
 			subids[namespaces[int(suc.Id.(float64))]] = suc.Result.(string)
+		case notification := <-notifications:
+			count[notification.Params.Subscription]++
+		case err := <-errors:
+			t.Fatal(err)
 		case failure := <-failures:
 			t.Errorf("received error: %v", failure.Error)
-		case notification := <-notifications:
-			if cnt, found := count[notification.Params.Subscription]; found {
-				count[notification.Params.Subscription] = cnt + 1
-			} else {
-				count[notification.Params.Subscription] = 1
-			}
 		case <-timeout:
 			for _, namespace := range namespaces {
 				subid, found := subids[namespace]
