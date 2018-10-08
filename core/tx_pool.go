@@ -33,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+
+	"github.com/jimlawless/whereami"
 )
 
 const (
@@ -566,15 +568,19 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	log.Info("Pool beginning standard validation using local heuristics", "location", whereami.WhereAmI())
+
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {
 		return ErrOversizedData
 	}
+	log.Info("Txn passed size limit of 32KB")
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
 		return ErrNegativeValue
 	}
+	log.Info("Txn passed non-negative check")
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
@@ -584,20 +590,24 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
+	log.Info("Txn signed properly")
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
+	log.Info("Txn gas price is above our pool's acceptable gas price", "tx_gasprice", tx.GasPrice(), "pool_gasprice", pool.gasPrice)
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
+	log.Info("Txn correctly ordered by nonce")
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
+	log.Info("Sender has sufficient balance to cover txn cost", "sender_balance", pool.currentState.GetBalance(from), "txn_cost", tx.Cost())
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 	if err != nil {
 		return err
@@ -605,6 +615,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
+	log.Info("Txn gas used is under max intrinsic gas threshold", "txn_gas", tx.Gas(), "intrinsic_gas", intrGas)
 	return nil
 }
 
@@ -624,11 +635,13 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, fmt.Errorf("known transaction: %x", hash)
 	}
 	// If the transaction fails basic validation, discard it
+	log.Info("Pool found incoming txn, queueing new txn", "hash", hash, "location", whereami.WhereAmI())
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxCounter.Inc(1)
 		return false, err
 	}
+	log.Info("New txn passed all basic standard validation heuristics", "location", whereami.WhereAmI())
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
@@ -648,14 +661,17 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 	// If the transaction is replacing an already pending one, do directly
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
+		log.Info("======> Pool detected txn nonce already in txn list", "nonce", tx.Nonce())
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
 		if !inserted {
+			log.Info("======> Older txn with shared nonce has higher gas price, accepted over new txn", "oldHash", old.Hash(), "oldGasPrice", old.GasPrice(), "txnGasPrice", tx.GasPrice())
 			pendingDiscardCounter.Inc(1)
 			return false, ErrReplaceUnderpriced
 		}
 		// New transaction is better, replace old one
 		if old != nil {
+			log.Info("======> New txn with shared nonce has higher gas price, overwriting old txn", "oldHash", old.Hash())
 			pool.all.Remove(old.Hash())
 			pool.priced.Removed()
 			pendingReplaceCounter.Inc(1)
@@ -737,9 +753,11 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
+		log.Info("======> Pool intitializing new txn list in pending queue under address", "address", addr)
 	}
 	list := pool.pending[addr]
 
+	log.Info("=====> Pool attempting to promote txn with hash", "hash", hash)
 	inserted, old := list.Add(tx, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
@@ -764,6 +782,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
+	log.Info("======> Pool promoted next txn for execution, incrementing nonce at address", "addr", addr, "nonce", pool.pendingState.GetNonce(addr))
 
 	return true
 }
@@ -937,12 +956,15 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 			continue // Just in case someone calls with a non existing account
 		}
 		// Drop all transactions that are deemed too old (low nonce)
+		log.Info("Pool dropping old queued txns")
 		for _, tx := range list.Forward(pool.currentState.GetNonce(addr)) {
 			hash := tx.Hash()
 			log.Trace("Removed old queued transaction", "hash", hash)
 			pool.all.Remove(hash)
 			pool.priced.Removed()
+			log.Info("Pool dropped old txn", "hash", hash)
 		}
+		log.Info("Pool dropping unpayabe txns (low balance/no gas)")
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
@@ -951,12 +973,17 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 			pool.all.Remove(hash)
 			pool.priced.Removed()
 			queuedNofundsCounter.Inc(1)
+			log.Info("Pool dropped unpayable txn", "hash", hash)
 		}
 		// Gather all executable transactions and promote them
+		log.Info("Pool promoting txns ready for execution")
+		log.Info("=====> Pool calling list.Ready() to grab all txns with nonce greater than current pool state under this address", "address", addr)
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
+			log.Info("=====> Pool retrieved txns with nonce greater than currentState.nonce, sorted in sequentially increasing order", "list", list.Ready(pool.pendingState.GetNonce(addr), "current nonce", pool.pendingState.GetNonce(addr)))
 			hash := tx.Hash()
 			if pool.promoteTx(addr, hash, tx) {
 				log.Trace("Promoting queued transaction", "hash", hash)
+				log.Info("Pool promoting queued txn", "hash", hash)
 				promoted = append(promoted, tx)
 			}
 		}
@@ -977,6 +1004,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	}
 	// Notify subsystem for new promoted transactions.
 	if len(promoted) > 0 {
+		log.Info("======> New promoted txns", "promoted", promoted)
 		go pool.txFeed.Send(NewTxsEvent{promoted})
 	}
 	// If the pending limit is overflown, start equalizing allowances
@@ -985,6 +1013,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 		pending += uint64(list.Len())
 	}
 	if pending > pool.config.GlobalSlots {
+		log.Info("======> Pending exceeds pool size limit", "pending", pending, "limit", pool.config.GlobalSlots)
 		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
 		spammers := prque.New(nil)
@@ -996,6 +1025,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 		}
 		// Gradually drop transactions from offenders
 		offenders := []common.Address{}
+		log.Info("======> Found accounts with too many transactions, dropping their transactions", "spammers", spammers)
 		for pending > pool.config.GlobalSlots && !spammers.Empty() {
 			// Retrieve the next offender if not local address
 			offender, _ := spammers.Pop()
@@ -1012,6 +1042,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 						list := pool.pending[offenders[i]]
 						for _, tx := range list.Cap(list.Len() - 1) {
 							// Drop the transaction from the global pools too
+							log.Info("=======> Dropping transaction from pool", "hash", tx.Hash(), "offender", offenders[i])
 							hash := tx.Hash()
 							pool.all.Remove(hash)
 							pool.priced.Removed()
@@ -1019,6 +1050,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 							// Update the account nonce to the dropped transaction
 							if nonce := tx.Nonce(); pool.pendingState.GetNonce(offenders[i]) > nonce {
 								pool.pendingState.SetNonce(offenders[i], nonce)
+								log.Info("=======> Setting offender's nonce to the pool's nonce state", "nonce", nonce)
 							}
 							log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 						}
@@ -1041,6 +1073,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 						// Update the account nonce to the dropped transaction
 						if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
 							pool.pendingState.SetNonce(addr, nonce)
+							log.Info("=======> Setting offender's nonce to the pool's nonce state", "nonce", nonce)
 						}
 						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
 					}

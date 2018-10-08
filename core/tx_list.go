@@ -186,6 +186,7 @@ func (m *txSortedMap) Ready(start uint64) types.Transactions {
 		ready = append(ready, m.items[next])
 		delete(m.items, next)
 		heap.Pop(m.index)
+		log.Info("=====> Txn List adding txn with sequentially valid nonce that is greater than current pool nonce", "txn", m.items[next])
 	}
 	m.cache = nil
 

@@ -35,6 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+
+	"github.com/jimlawless/whereami"
 )
 
 const (
@@ -693,6 +695,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	snap := w.current.state.Snapshot()
 
 	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, vm.Config{})
+	log.Info("Txn executed", "receipt", tx.Hash(), "location", whereami.WhereAmI())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
@@ -741,11 +744,14 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			break
 		}
+		log.Info("Worker has access to sufficient gas pool", "gasPool", w.current.gasPool.Gas())
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {
+			log.Info("Worker found no more txns")
 			break
 		}
+		log.Info("Next txn to commit", "hash", tx.Hash())
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
@@ -761,6 +767,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		}
 		// Start executing the transaction
 		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
+		log.Info("Executing txn", "hash", tx.Hash())
 
 		logs, err := w.commitTransaction(tx, coinbase)
 		switch err {
@@ -911,6 +918,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	// Fill the block with all available pending transactions.
 	pending, err := w.eth.TxPool().Pending()
+	log.Info("Worker found new pending txns from pending queue set by tx pool", "num_txns", len(pending), "txns", pending, "location", whereami.WhereAmI())
+
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
@@ -929,14 +938,20 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 	}
 	if len(localTxs) > 0 {
+		log.Info("Worker found local transactions", "num_txns", len(localTxs), "txns", localTxs, "location", whereami.WhereAmI())
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
+		log.Info("Worker sorted local txns by price and nonce", "txns", txs, "location", whereami.WhereAmI())
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
+			log.Info("Worker committing local txns", "location", whereami.WhereAmI())
 			return
 		}
 	}
 	if len(remoteTxs) > 0 {
+		log.Info("Worker found remote transactions", "num_txns", len(remoteTxs), "txns", remoteTxs, "location", whereami.WhereAmI())
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
+		log.Info("Worker sorted remote txns by price and nonce", "txns", txs, "location", whereami.WhereAmI())
 		if w.commitTransactions(txs, w.coinbase, interrupt) {
+			log.Info("Worker comitting remote local txns", "location", whereami.WhereAmI())
 			return
 		}
 	}
