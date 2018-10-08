@@ -205,6 +205,25 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	return json.tx, json.BlockNumber == nil, nil
 }
 
+// TransactionExtraInfoByHash returns the transaction's extra info with the given hash.
+func (ec *Client) TransactionExtraInfoByHash(ctx context.Context, hash common.Hash) (blockHash *common.Hash, from *common.Address, err error) {
+	var json *rpcTransaction
+
+	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
+	if err != nil {
+		return nil, nil, err
+	} else if json == nil {
+		return nil, nil, ethereum.NotFound
+	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
+		return nil, nil, fmt.Errorf("server returned transaction without signature")
+	}
+	if json.From != nil && json.BlockHash != nil {
+		setSenderFromServer(json.tx, *json.From, *json.BlockHash)
+	}
+
+	return json.BlockHash, json.From, nil
+}
+
 // TransactionSender returns the sender address of the given transaction. The transaction
 // must be known to the remote node and included in the blockchain at the given block and
 // index. The sender is the one derived by the protocol at the time of inclusion.
