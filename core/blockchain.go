@@ -49,7 +49,9 @@ import (
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	ErrNoGenesis              = errors.New("Genesis not found in chain")
+	errGenesisStateIncomplete = errors.New("genesis state is incomplete")
+	errMissingBlock           = errors.New("missing block")
 )
 
 const (
@@ -437,8 +439,18 @@ func (bc *BlockChain) repair(head **types.Block) error {
 			log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
 			return nil
 		}
-		// Otherwise rewind one block and recheck state availability there
-		(*head) = bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		// Abort if the genesis block's state is still incomplete.
+		if (*head).NumberU64() == 0 {
+			log.Info("The state of genesis block is incomplete")
+			return errGenesisStateIncomplete
+		}
+		// Rewind one block and recheck state availability there
+		block := bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		if block == nil {
+			log.Info("Rewound to a missing block", "number", (*head).NumberU64()-1)
+			return errMissingBlock
+		}
+		*head = block
 	}
 }
 
