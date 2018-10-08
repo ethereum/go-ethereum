@@ -35,7 +35,7 @@ func TestUpdateLengthCheck(t *testing.T) {
 	testBinarySerializerLengthCheck(t, getTestFeedUpdate())
 	// Test fail if update is too big
 	update := getTestFeedUpdate()
-	update.data = make([]byte, maxUpdateDataLength+100)
+	update.data = make([]byte, MaxUpdateDataLength+100)
 	serialized := make([]byte, update.binaryLength())
 	if err := update.binaryPut(serialized); err == nil {
 		t.Fatal("Expected update.binaryPut to fail since update is too big")

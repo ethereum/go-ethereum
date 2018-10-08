@@ -42,7 +42,9 @@ type Update struct {
 }
 
 const minimumUpdateDataLength = idLength + headerLength + 1
-const maxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
+
+//MaxUpdateDataLength indicates the maximum payload size for a feed update
+const MaxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
 
 // binaryPut serializes the feed update information into the given slice
 func (r *Update) binaryPut(serializedData []byte) error {
@@ -51,8 +53,8 @@ func (r *Update) binaryPut(serializedData []byte) error {
 		return NewError(ErrInvalidValue, "a feed update must contain data")
 	}
 
-	if datalength > maxUpdateDataLength {
-		return NewErrorf(ErrInvalidValue, "feed update data is too big (length=%d). Max length=%d", datalength, maxUpdateDataLength)
+	if datalength > MaxUpdateDataLength {
+		return NewErrorf(ErrInvalidValue, "feed update data is too big (length=%d). Max length=%d", datalength, MaxUpdateDataLength)
 	}
 
 	if len(serializedData) != r.binaryLength() {
