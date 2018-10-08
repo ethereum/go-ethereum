@@ -101,6 +101,48 @@ func newTester() *downloadTester {
 	return tester
 }
 
+// makeLongChain creates a chain of n blocks starting at and including parent.
+// the returned hash chain is ordered head->parent. The chain contains no transactions,
+// and only one uncle every 500 blocks
+func (dl *downloadTester) makeLongChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash, map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]types.Receipts) {
+	// Generate the block chain
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), dl.peerDb, n, func(i int, block *core.BlockGen) {
+		block.SetCoinbase(common.Address{seed})
+
+		// If a heavy chain is requested, delay blocks to raise difficulty
+		if heavy {
+			block.OffsetTime(-1)
+		}
+		// If the block number is a multiple of 500, add a bonus uncle to the block
+		if i > 0 && i%500 == 0 {
+			block.AddUncle(&types.Header{
+				ParentHash: block.PrevBlock(i - 1).Hash(),
+				Number:     big.NewInt(block.Number().Int64() - 1),
+			})
+		}
+	})
+	// Convert the block-chain into a hash-chain and header/block maps
+	hashes := make([]common.Hash, n+1)
+	hashes[len(hashes)-1] = parent.Hash()
+
+	headerm := make(map[common.Hash]*types.Header, n+1)
+	headerm[parent.Hash()] = parent.Header()
+
+	blockm := make(map[common.Hash]*types.Block, n+1)
+	blockm[parent.Hash()] = parent
+
+	receiptm := make(map[common.Hash]types.Receipts, n+1)
+	receiptm[parent.Hash()] = parentReceipts
+
+	for i, b := range blocks {
+		hashes[len(hashes)-i-2] = b.Hash()
+		headerm[b.Hash()] = b.Header()
+		blockm[b.Hash()] = b
+		receiptm[b.Hash()] = receipts[i]
+	}
+	return hashes, headerm, blockm, receiptm
+}
+
 // makeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent. In addition, every 3rd block
 // contains a transaction and every 5th an uncle to allow testing correct block
@@ -157,17 +199,17 @@ func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, paren
 // h2[:f] are different but have a common suffix of length n-f.
 func (dl *downloadTester) makeChainFork(n, f int, parent *types.Block, parentReceipts types.Receipts, balanced bool) ([]common.Hash, []common.Hash, map[common.Hash]*types.Header, map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]*types.Block, map[common.Hash]types.Receipts, map[common.Hash]types.Receipts) {
 	// Create the common suffix
-	hashes, headers, blocks, receipts := dl.makeChain(n-f, 0, parent, parentReceipts, false)
+	hashes, headers, blocks, receipts := dl.makeLongChain(n-f, 0, parent, parentReceipts, false)
 
 	// Create the forks, making the second heavier if non balanced forks were requested
-	hashes1, headers1, blocks1, receipts1 := dl.makeChain(f, 1, blocks[hashes[0]], receipts[hashes[0]], false)
+	hashes1, headers1, blocks1, receipts1 := dl.makeLongChain(f, 1, blocks[hashes[0]], receipts[hashes[0]], false)
 	hashes1 = append(hashes1, hashes[1:]...)
 
 	heavy := false
 	if !balanced {
 		heavy = true
 	}
-	hashes2, headers2, blocks2, receipts2 := dl.makeChain(f, 2, blocks[hashes[0]], receipts[hashes[0]], heavy)
+	hashes2, headers2, blocks2, receipts2 := dl.makeLongChain(f, 2, blocks[hashes[0]], receipts[hashes[0]], heavy)
 	hashes2 = append(hashes2, hashes[1:]...)
 
 	for hash, header := range headers {
@@ -700,7 +742,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 
 	// Create a long block chain to download and the tester
 	targetBlocks := 8 * blockCacheItems
-	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
+	hashes, headers, blocks, receipts := tester.makeLongChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
 
@@ -1006,7 +1048,7 @@ func testMultiSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 	// Create various peers with various parts of the chain
 	targetPeers := 8
 	targetBlocks := targetPeers*blockCacheItems - 15
-	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
+	hashes, headers, blocks, receipts := tester.makeLongChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	for i := 0; i < targetPeers; i++ {
 		id := fmt.Sprintf("peer #%d", i)
@@ -1358,7 +1400,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 func TestSyncProgress62(t *testing.T)      { testSyncProgress(t, 62, FullSync) }
 func TestSyncProgress63Full(t *testing.T)  { testSyncProgress(t, 63, FullSync) }
 func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }
-func TestSyncProgress64Full(t *testing.T)  { testSyncProgress(t, 64, FullSync) }
+func TestSyncProgrefss64Full(t *testing.T) { testSyncProgress(t, 64, FullSync) }
 func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
 func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
 
