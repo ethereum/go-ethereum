@@ -690,10 +690,27 @@ func getBlockCoinbase(p *exec.Process, in *InterpreterEWASM, resultOffset int32)
 	p.WriteAt(in.evm.Coinbase.Bytes(), int64(resultOffset))
 }
 
+func sentinel(in *InterpreterEWASM, input []byte) ([]byte, error) {
+	savedContract := in.contract
+	savedVM := in.vm
+	defer func() {
+		in.contract = savedContract
+		in.vm = savedVM
+	}()
+	in.contract = in.meteringContract
+	in.vm = in.meteringVM
+	meteredCode, err := in.meteringVM.ExecCode(0)
+	return meteredCode.([]byte), err
+}
+
 func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffset uint32, length uint32, resultOffset uint32) int32 {
 	in.gasAccounting(GasCostCreate)
 	savedVM := in.vm
 	savedContract := in.contract
+	defer func() {
+		in.vm = savedVM
+		in.contract = savedContract
+	}()
 	in.terminationType = TerminateInvalid
 
 	if int(codeOffset)+int(length) > len(in.vm.Memory()) {
@@ -713,21 +730,24 @@ func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffse
 	gas := in.contract.Gas - in.contract.Gas/64
 	in.gasAccounting(gas)
 
-	_, addr, gasLeft, _ := in.evm.Create(in.contract, input, gas, big.NewInt(0).SetBytes(value))
+	/* Meter the contract code if metering is enabled */
+	if in.metering {
+		/* It seems that hera doesn't handle errors */
+		input, _ = sentinel(in, input)
+	}
 
-	in.vm = savedVM
-	in.contract = savedContract
+	_, addr, gasLeft, _ := in.evm.Create(in.contract, input, gas, big.NewInt(0).SetBytes(value))
 
 	switch in.terminationType {
 	case TerminateFinish:
-		in.contract.Gas += gasLeft
+		savedContract.Gas += gasLeft
 		p.WriteAt(addr.Bytes(), int64(resultOffset))
 		return EEICallSuccess
 	case TerminateRevert:
-		in.contract.Gas += gas
+		savedContract.Gas += gas
 		return ErrEEICallRevert
 	default:
-		in.contract.Gas += gasLeft
+		savedContract.Gas += gasLeft
 		return ErrEEICallFailure
 	}
 }

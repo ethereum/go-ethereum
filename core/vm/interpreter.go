@@ -41,7 +41,7 @@ type Config struct {
 	JumpTable [256]operation
 
 	// Type of the EWASM interpreter
-	EWASMInterpreter string
+	EWASMInterpreter map[string]string
 	// Type of the EVM interpreter
 	EVMInterpreter string
 }
@@ -66,6 +66,10 @@ type Interpreter interface {
 	// }
 	// ```
 	CanRun([]byte) bool
+	// Hook to be called once a newly created contract's init code
+	// has been called and is going to be stored. This let the
+	// interpreter post-process the bytecode before it is persisted.
+	PostContractCreation([]byte) []byte
 }
 
 // EVMInterpreter represents an EVM interpreter
@@ -270,4 +274,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 // run by the current interpreter.
 func (in *EVMInterpreter) CanRun(code []byte) bool {
 	return true
+}
+
+// PostContractCreation doesn't need to do anything in the case
+// of EVM1 bytecode, but it could turn out useful when extending
+// the tracer.
+func (in *EVMInterpreter) PostContractCreation(code []byte) []byte {
+	return code
 }

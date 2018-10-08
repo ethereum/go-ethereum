@@ -24,7 +24,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/go-interpreter/wagon/wasm"
 
@@ -58,13 +61,44 @@ type InterpreterEWASM struct {
 	terminationType terminationType
 
 	staticMode bool
+
+	metering bool
+
+	meteringContract *Contract
+	meteringVM       *exec.VM
 }
 
 // NewEWASMInterpreter creates a new wagon-based ewasm interpreter. It
 // currently takes a *vm.EVM pointer as a proxy to the client's internal
 // state; this will be fixed in subsequent updates.
 func NewEWASMInterpreter(evm *EVM, cfg Config) Interpreter {
-	return &InterpreterEWASM{StateDB: evm.StateDB, evm: evm, gasTable: evm.chainConfig.GasTable(evm.BlockNumber)}
+	metering := cfg.EWASMInterpreter["metering"] == "true"
+
+	var meteringVM *exec.VM
+	var meteringContract *Contract
+	if metering {
+		meteringContractAddress := common.HexToAddress("0x000000000000000000000000000000000000000a")
+		meteringContract = NewContract(nil, AccountRef(meteringContractAddress), &big.Int{}, 0)
+		meteringCode := evm.StateDB.GetCode(meteringContractAddress)
+		meteringContract.SetCallCode(&meteringContractAddress, crypto.Keccak256Hash(meteringCode), meteringCode)
+
+		module, err := wasm.ReadModule(bytes.NewReader(evm.StateDB.GetCode(meteringContractAddress)), nil)
+		if err != nil {
+			panic(fmt.Sprintf("Error loading the metering contract: %v", err))
+		}
+		meteringVM, err = exec.NewVM(module)
+		if err != nil {
+			panic(fmt.Sprintf("Error allocating metering contract: %v", err))
+		}
+	}
+	return &InterpreterEWASM{
+		StateDB:          evm.StateDB,
+		evm:              evm,
+		gasTable:         evm.chainConfig.GasTable(evm.BlockNumber),
+		meteringVM:       meteringVM,
+		meteringContract: meteringContract,
+		metering:         metering,
+	}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -144,4 +178,15 @@ func (in *InterpreterEWASM) CanRun(file []byte) bool {
 	}
 
 	return true
+}
+
+// PostContractCreation meters the contract once its init code has
+// been run.
+func (in *InterpreterEWASM) PostContractCreation(code []byte) []byte {
+	if in.metering {
+		// hera currently seems to ignore the error code
+		metered, _ := sentinel(in, code)
+		return metered
+	}
+	return code
 }

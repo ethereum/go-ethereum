@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -148,10 +149,20 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 		rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 	}
+
+	ewasmOptions := make(map[string]string)
+	for _, option := range strings.Split(config.EWASMInterpreter, ",") {
+		opt := strings.Split(option, ":")
+		if len(opt) != 2 || len(opt[0]) == 0 {
+			panic(fmt.Sprintf("Invalid ewasm option: expected a format of name:value, got: %s", option))
+		}
+		ewasmOptions[opt[0]] = opt[1]
+	}
+
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
-			EWASMInterpreter:        config.EWASMInterpreter,
+			EWASMInterpreter:        ewasmOptions,
 			EVMInterpreter:          config.EVMInterpreter,
 		}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
