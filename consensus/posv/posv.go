@@ -211,7 +211,8 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookReward  func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookPrepare func(header *types.Header, signers []common.Address) error
 }
 
 // New creates a Posv proof-of-stake-voting consensus engine with the initial
@@ -654,6 +655,12 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
+
+	if c.HookPrepare != nil {
+		signers := snap.signers()
+		c.HookPrepare(header, signers)
+	}
+
 	return nil
 }
 
