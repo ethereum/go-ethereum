@@ -45,7 +45,8 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       go: 1.11.x
       env:
@@ -63,7 +64,8 @@ matrix:
         - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
 
     # This builder does the Linux Azure uploads
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       sudo: required
       go: 1.11.x
@@ -96,7 +98,8 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       services:
         - docker
@@ -123,7 +126,8 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       addons:
         apt:
@@ -160,7 +164,8 @@ matrix:
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - os: osx
+    - if: type = push
+      os: osx
       go: 1.11.x
       env:
         - azure-osx
@@ -188,7 +193,8 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - os: linux
+    - if: type = cron
+      os: linux
       dist: trusty
       go: 1.11.x
       env:
@@ -197,10 +203,3 @@ matrix:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
-    on_success: change
-    on_failure: always
