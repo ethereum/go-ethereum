@@ -427,8 +427,7 @@ func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) err
 		Path:        GetURI(r.Context()).Path,
 		ContentType: r.Header.Get("Content-Type"),
 		Mode:        0644,
-		Size:        r.ContentLength,
-		ModTime:     time.Now(),
+		Size:        r.ContentLength
 	})
 	if err != nil {
 		return err
