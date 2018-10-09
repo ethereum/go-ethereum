@@ -209,7 +209,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return
 				}
 				if eth.etherbase != m2 {
-					// firstly, look into txPool
+					// firstly, look into pending txPool
 					pendingMap, err := eth.txPool.Pending()
 					if err != nil {
 						log.Error("Fail to get txPool pending", "err", err)
