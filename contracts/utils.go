@@ -579,10 +579,12 @@ func GetM1M2FromCheckpointBlock(checkpointBlock *types.Block) (map[common.Addres
 	validators := ExtractValidatorsFromBytes(checkpointBlock.Header().Validators)
 
 	if len(validators) < len(masternodes) {
-		return nil, errors.New("Len(m2) is less than len(m1)")
+		return nil, errors.New("len(m2) is less than len(m1)")
 	}
-	for i, m1 := range masternodes {
-		m1m2[m1] = masternodes[validators[i]]
+	if len(masternodes) > 0 {
+		for i, m1 := range masternodes {
+			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
+		}
 	}
 	return m1m2, nil
 }
