@@ -209,9 +209,28 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return
 				}
 				if eth.etherbase != m2 {
-					//wait until signTx from m2 comes into txPool
+					// firstly, look into txPool
+					pendingMap, err := eth.txPool.Pending()
+					if err != nil {
+						log.Error("Fail to get txPool pending", "err", err)
+						//reset pendingMap
+						pendingMap = map[common.Address]types.Transactions{}
+					}
+					txsSentFromM2 := pendingMap[m2]
+					if len(txsSentFromM2) > 0 {
+						for _, tx := range txsSentFromM2 {
+							if tx.To().String() == common.BlockSigners {
+								if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+									log.Error("Fail to create tx sign for imported block", "error", err)
+									return
+								}
+								return
+							}
+						}
+					}
+					//then wait until signTx from m2 comes into txPool
 					txCh := make(chan core.TxPreEvent, txChanSize)
-					eth.txPool.SubscribeTxPreEvent(txCh)
+					subEvent := eth.txPool.SubscribeTxPreEvent(txCh)
 				G:
 					select {
 					case event := <-txCh:
@@ -221,12 +240,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 								log.Error("Fail to create tx sign for imported block", "error", err)
 								return
 							}
+							return
 						}
 					//timeout 10s
 					case <-time.After(time.Duration(10) * time.Second):
 						break G
 					}
-					close(txCh)
+					subEvent.Unsubscribe()
 				} else if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 					log.Error("Fail to create tx sign for imported block", "error", err)
 					return
