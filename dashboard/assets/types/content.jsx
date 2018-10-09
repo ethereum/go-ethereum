@@ -51,21 +51,37 @@ export type TxPool = {
 };
 
 export type Network = {
-	peerBundles: {[string]: PeerBundle},
+	peers: Peers,
+};
+
+export type Peers = {
+	bundles:          {[string]: PeerBundle},
+	removedKnownIP:   Array<string>,
+	removedKnownID:   Array<string>,
+	removedUnknownIP: Array<string>,
 };
 
 export type PeerBundle = {
-	location: GeoLocation,
-	peers:    {[string]: Peer},
+	location:     GeoLocation,
+	knownPeers:   {[string]: KnownPeer},
+	unknownPeers: Array<UnknownPeer>,
 };
 
-export type Peer = {
-	connected:    Array<Date>,
-	handshake:    Array<Date>,
-	disconnected: Array<Date>,
+export type KnownPeer = {
+	active:   boolean,
+	sessions: Array<PeerSession>
+};
+
+export type PeerSession = {
+	connected:    Date,
+	disconnected: Date,
 	ingress:      ChartEntries,
 	egress:       ChartEntries,
-	defaultID:    string,
+};
+
+export type UnknownPeer = {
+	connected:    Date,
+	disconnected: Date,
 };
 
 export type GeoLocation = {

@@ -23,11 +23,13 @@ import TableHead from '@material-ui/core/TableHead';
 import TableBody from '@material-ui/core/TableBody';
 import TableRow from '@material-ui/core/TableRow';
 import TableCell from '@material-ui/core/TableCell';
-import type {Network as NetworkType, PeerBundle, Peer} from '../types/content';
+import type {Network as NetworkType, Peers} from '../types/content';
 
 // inserter is a state updater function for the main component, which handles the peers.
-export const inserter = (update: {[string]: PeerBundle}, prev: {[string]: PeerBundle}) => {
-	Object.keys(update).forEach((ip) => {
+export const inserter = (update: Peers, prev: Peers) => {
+	console.log(update);
+	return prev;
+	Object.keys(update.bundles).forEach((ip) => {
 		if (!update[ip]) {
 			return;
 		}
@@ -118,7 +120,7 @@ class Network extends Component<Props, State> {
 					</TableRow>
 				</TableHead>
 				<TableBody>
-					{Object.entries(this.props.content.peerBundles).map(([ip, bundle]) => { console.log(ip, bundle); return (
+					{Object.entries(this.props.content.peers).map(([ip, bundle]) => { console.log(ip, bundle); return (
 						<TableRow key={ip}>
 							<TableCell>{ip}</TableCell>
 							<TableCell>

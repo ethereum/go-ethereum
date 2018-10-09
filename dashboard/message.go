@@ -18,6 +18,7 @@ package dashboard
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/log"
 	"time"
 )
 
@@ -27,7 +28,6 @@ type Message struct {
 	Chain   *ChainMessage   `json:"chain,omitempty"`
 	TxPool  *TxPoolMessage  `json:"txpool,omitempty"`
 	Network *NetworkMessage `json:"network,omitempty"`
-	Peers   *PeersMessage   `json:"peers,omitempty"`
 	System  *SystemMessage  `json:"system,omitempty"`
 	Logs    *LogsMessage    `json:"logs,omitempty"`
 }
@@ -58,7 +58,208 @@ type TxPoolMessage struct {
 
 // NetworkMessage contains information about the peers organized based on the IP address.
 type NetworkMessage struct {
-	/* TODO (kurkomisi) */
+	Peers *PeersMessage `json:"peers,omitempty"`
+}
+
+type PeersMessage struct {
+	Bundles          map[string]*PeerBundle `json:"bundles,omitempty"`
+	RemovedKnownIP   []string               `json:"removedKnownIP,omitempty"`
+	RemovedKnownID   []string               `json:"removedKnownID,omitempty"`
+	RemovedUnknownIP []string               `json:"removedUnknownIP,omitempty"`
+}
+
+func NewPeersMessage() *PeersMessage {
+	return &PeersMessage{
+		Bundles: make(map[string]*PeerBundle),
+	}
+}
+
+func (m *PeersMessage) hasBundle(ip string) bool {
+	_, ok := m.Bundles[ip]
+	return ok
+}
+
+func (m *PeersMessage) hasKnownPeer(ip, id string) bool {
+	if m.hasBundle(ip) {
+		return m.Bundles[ip].has(id)
+	}
+	return false
+}
+
+func (m *PeersMessage) initBundle(ip string) bool {
+	if !m.hasBundle(ip) {
+		m.Bundles[ip] = &PeerBundle{
+			KnownPeers: make(map[string]*KnownPeer),
+		}
+		return true
+	}
+	return false
+}
+
+func (m *PeersMessage) initKnownPeer(ip, id string) (bundle, peer bool) {
+	return m.initBundle(ip), m.Bundles[ip].initKnownPeer(id)
+}
+
+func (m *PeersMessage) getOrInitBundle(ip string) *PeerBundle {
+	m.initBundle(ip)
+	return m.Bundles[ip]
+}
+
+func (m *PeersMessage) getOrInitKnownPeer(ip, id string) *KnownPeer {
+	return m.getOrInitBundle(ip).getOrInitKnownPeer(id)
+}
+
+func (m *PeersMessage) removeKnownPeer(ip, id string) {
+	if b, ok := m.Bundles[ip]; ok {
+		b.removeKnownPeer(id)
+		if len(b.KnownPeers) < 1 && len(b.UnknownPeers) < 1 {
+			delete(m.Bundles, ip)
+		}
+	}
+}
+
+func (m *PeersMessage) removeUnknownPeer(ip string) {
+	if b, ok := m.Bundles[ip]; ok {
+		if len(b.UnknownPeers) > 0 {
+			b.UnknownPeers = b.UnknownPeers[1:]
+		}
+		if len(b.KnownPeers) < 1 && len(b.UnknownPeers) < 1 {
+			delete(m.Bundles, ip)
+		}
+	}
+}
+
+func (m *PeersMessage) clear() {
+	for _, bundle := range m.Bundles {
+		bundle.Location = nil
+		for _, peer := range bundle.KnownPeers {
+			peer.clear()
+		}
+		bundle.UnknownPeers = bundle.UnknownPeers[:0]
+	}
+	m.RemovedKnownIP = m.RemovedKnownIP[:0]
+	m.RemovedKnownID = m.RemovedKnownID[:0]
+	m.RemovedUnknownIP = m.RemovedUnknownIP[:0]
+}
+
+type PeerBundle struct {
+	Location     *GeoLocation          `json:"location,omitempty"` // Geographical location based on IP
+	KnownPeers   map[string]*KnownPeer `json:"knownPeers,omitempty"`
+	UnknownPeers []*UnknownPeer        `json:"unknownPeers,omitempty"`
+}
+
+func (b *PeerBundle) has(id string) bool {
+	_, ok := b.KnownPeers[id]
+	return ok
+}
+
+func (b *PeerBundle) initKnownPeer(id string) bool {
+	if !b.has(id) {
+		b.KnownPeers[id] = new(KnownPeer)
+		return true
+	}
+	return false
+}
+
+func (b *PeerBundle) getOrInitKnownPeer(id string) *KnownPeer {
+	b.initKnownPeer(id)
+	return b.KnownPeers[id]
+}
+
+func (b *PeerBundle) removeKnownPeer(id string) bool {
+	if b.has(id) {
+		b.KnownPeers[id].clear()
+		delete(b.KnownPeers, id)
+		return true
+	}
+	return false
+}
+
+type KnownPeer struct {
+	Active      bool           `json:"active"`
+	Sessions    []*PeerSession `json:"sessions,omitempty"`
+	sampleCount int
+}
+
+func (peer *KnownPeer) append(session *PeerSession) {
+	if session == nil {
+		return
+	}
+	ingress, egress := session.Ingress, session.Egress
+	// Truncate the traffic arrays if they have more samples than the limit.
+	if first := len(ingress) - sampleLimit; first > 0 {
+		ingress = ingress[first:]
+	}
+	// If the length of the ingress and the egress arrays are different,
+	// cut the first part of the longer one. i.e. make sure they have the
+	// same length.
+	if first := len(ingress) - len(egress); first > 0 {
+		ingress = ingress[first:]
+	} else if first < 0 {
+		egress = egress[-first:]
+	}
+	if len(peer.Sessions) < 1 {
+		// If this is the first session.
+		peer.Sessions = append(peer.Sessions, session)
+		peer.sampleCount = len(ingress)
+		return
+	}
+	// Cut the old samples from the beginning if the
+	// count with the new samples exceeds the limit.
+	for l := sampleLimit + len(ingress) - peer.sampleCount; l > 0; l-- {
+		for len(peer.Sessions) > 0 && len(peer.Sessions[0].Ingress) < 1 {
+			peer.Sessions = peer.Sessions[1:]
+		}
+		if len(peer.Sessions) < 1 {
+			// This can only happen, when the sample count is greater than the
+			// sample limit. Theoretically impossible.
+			log.Warn("Empty session array with sample count greater than 0")
+			return
+		}
+		first := peer.Sessions[0]
+		first.Ingress = first.Ingress[1:]
+		first.Egress = first.Egress[1:]
+		peer.sampleCount--
+	}
+	peer.sampleCount += len(ingress)
+	if session.Connected != nil {
+		peer.Sessions = append(peer.Sessions, session)
+		return
+	}
+	last := peer.Sessions[len(peer.Sessions)-1]
+	last.Disconnected = session.Disconnected
+	last.Ingress = append(last.Ingress, ingress...)
+	last.Egress = append(last.Egress, egress...)
+}
+
+func (peer *KnownPeer) upgrade(p *KnownPeer) {
+	peer.Active = p.Active
+	for _, session := range p.Sessions {
+		peer.append(session)
+	}
+}
+
+func (peer *KnownPeer) clear() {
+	for _, s := range peer.Sessions {
+		s.Connected = nil
+		s.Disconnected = nil
+		s.Ingress = nil
+		s.Egress = nil
+	}
+	peer.Sessions = peer.Sessions[:0]
+	peer.sampleCount = 0
+}
+
+type PeerSession struct {
+	Connected    *time.Time   `json:"connected,omitempty"`
+	Disconnected *time.Time   `json:"disconnected,omitempty"`
+	Ingress      ChartEntries `json:"ingress,omitempty"`
+	Egress       ChartEntries `json:"egress,omitempty"`
+}
+
+type UnknownPeer struct {
+	Connected    time.Time `json:"connected"`
+	Disconnected time.Time `json:"disconnected"`
 }
 
 // SystemMessage contains the metered system data samples.
