@@ -81,6 +81,10 @@ func (alwaysDenyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputR
 func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
+func (alwaysDenyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
+}
+
 func (alwaysDenyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	return core.SignTxResponse{Transaction: request.Transaction, Approved: false, Password: ""}, nil
 }
@@ -250,6 +254,11 @@ func (d *dummyUI) ShowInfo(message string) {
 func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.calls = append(d.calls, "OnApprovedTx")
 }
+
+func (d *dummyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
+}
+
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
@@ -524,6 +533,10 @@ func (d *dontCallMe) OnInputRequired(info core.UserInputRequest) (core.UserInput
 }
 
 func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {
+}
+
+func (d *dontCallMe) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
 }
 
 func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
