@@ -27,9 +27,8 @@ import (
 )
 
 type NotificationTestService struct {
-	mu           sync.Mutex
-	unsubscribed bool
-
+	mu                      sync.Mutex
+	unsubscribed            chan string
 	gotHangSubscriptionReq  chan struct{}
 	unblockHangSubscription chan struct{}
 }
@@ -38,16 +37,10 @@ func (s *NotificationTestService) Echo(i int) int {
 	return i
 }
 
-func (s *NotificationTestService) wasUnsubCallbackCalled() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.unsubscribed
-}
-
 func (s *NotificationTestService) Unsubscribe(subid string) {
-	s.mu.Lock()
-	s.unsubscribed = true
-	s.mu.Unlock()
+	if s.unsubscribed != nil {
+		s.unsubscribed <- subid
+	}
 }
 
 func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val int) (*Subscription, error) {
@@ -73,13 +66,10 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 
 		select {
 		case <-notifier.Closed():
-			s.mu.Lock()
-			s.unsubscribed = true
-			s.mu.Unlock()
 		case <-subscription.Err():
-			s.mu.Lock()
-			s.unsubscribed = true
-			s.mu.Unlock()
+		}
+		if s.unsubscribed != nil {
+			s.unsubscribed <- string(subscription.ID)
 		}
 	}()
 
@@ -106,7 +96,7 @@ func (s *NotificationTestService) HangSubscription(ctx context.Context, val int)
 
 func TestNotifications(t *testing.T) {
 	server := NewServer()
-	service := &NotificationTestService{}
+	service := &NotificationTestService{unsubscribed: make(chan string)}
 
 	if err := server.RegisterName("eth", service); err != nil {
 		t.Fatalf("unable to register test service %v", err)
@@ -156,10 +146,10 @@ func TestNotifications(t *testing.T) {
 	}
 
 	clientConn.Close() // causes notification unsubscribe callback to be called
-	time.Sleep(1 * time.Second)
-
-	if !service.wasUnsubCallbackCalled() {
-		t.Error("unsubscribe callback not called after closing connection")
+	select {
+	case <-service.unsubscribed:
+	case <-time.After(1 * time.Second):
+		t.Fatal("Unsubscribe not called after one second")
 	}
 }
 
