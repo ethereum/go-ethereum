@@ -24,10 +24,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/go-interpreter/wagon/wasm"
 
@@ -78,11 +76,9 @@ func NewEWASMInterpreter(evm *EVM, cfg Config) Interpreter {
 	var meteringContract *Contract
 	if metering {
 		meteringContractAddress := common.HexToAddress("0x000000000000000000000000000000000000000a")
-		meteringContract = NewContract(nil, AccountRef(meteringContractAddress), &big.Int{}, 0)
 		meteringCode := evm.StateDB.GetCode(meteringContractAddress)
-		meteringContract.SetCallCode(&meteringContractAddress, crypto.Keccak256Hash(meteringCode), meteringCode)
 
-		module, err := wasm.ReadModule(bytes.NewReader(evm.StateDB.GetCode(meteringContractAddress)), nil)
+		module, err := wasm.ReadModule(bytes.NewReader(meteringCode), nil)
 		if err != nil {
 			panic(fmt.Sprintf("Error loading the metering contract: %v", err))
 		}

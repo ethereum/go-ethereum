@@ -151,12 +151,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	ewasmOptions := make(map[string]string)
-	for _, option := range strings.Split(config.EWASMInterpreter, ",") {
-		opt := strings.Split(option, ":")
-		if len(opt) != 2 || len(opt[0]) == 0 {
-			panic(fmt.Sprintf("Invalid ewasm option: expected a format of name:value, got: %s", option))
+	if len(config.EWASMInterpreter) > 0 {
+		for _, option := range strings.Split(config.EWASMInterpreter, ",") {
+			opt := strings.Split(option, ":")
+			if len(opt) != 2 || len(opt[0]) == 0 {
+				panic(fmt.Sprintf("Invalid ewasm option: expected a format of name:value, got: %s", option))
+			}
+			ewasmOptions[opt[0]] = opt[1]
 		}
-		ewasmOptions[opt[0]] = opt[1]
 	}
 
 	var (

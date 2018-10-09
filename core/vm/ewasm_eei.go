@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/go-interpreter/wagon/exec"
 	"github.com/go-interpreter/wagon/wasm"
 )
@@ -697,7 +698,11 @@ func sentinel(in *InterpreterEWASM, input []byte) ([]byte, error) {
 		in.contract = savedContract
 		in.vm = savedVM
 	}()
+	meteringContractAddress := common.HexToAddress("0x000000000000000000000000000000000000000a")
+	meteringCode := in.StateDB.GetCode(meteringContractAddress)
+	in.contract = NewContract(in.contract, AccountRef(meteringContractAddress), &big.Int{}, 0)
 	in.contract = in.meteringContract
+	in.contract.SetCallCode(&meteringContractAddress, crypto.Keccak256Hash(meteringCode), meteringCode)
 	in.vm = in.meteringVM
 	meteredCode, err := in.meteringVM.ExecCode(0)
 	return meteredCode.([]byte), err
