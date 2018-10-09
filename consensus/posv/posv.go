@@ -414,6 +414,17 @@ func (c *Posv) GetMasternodes(chain consensus.ChainReader, header *types.Header)
 
 func (c *Posv) GetPeriod() uint64 { return c.config.Period }
 
+func WhoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) {
+	if header.Number.Uint64() == 0 {
+		return common.Address{}, errors.New("Don't take block 0")
+	}
+	m, err := ecrecover(header, snap.sigcache)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return m, nil
+}
+
 func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (int, int, bool, error) {
 	if len(masternodes) == 0 {
 		return -1, -1, true, nil
@@ -423,7 +434,7 @@ func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header
 	var err error
 	preIndex := -1
 	if header.Number.Uint64() != 0 {
-		pre, err = ecrecover(header, snap.sigcache)
+		pre, err = WhoIsCreator(snap, header)
 		if err != nil {
 			return 0, 0, false, err
 		}
