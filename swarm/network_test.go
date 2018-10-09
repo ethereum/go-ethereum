@@ -151,13 +151,13 @@ func TestSwarmNetwork(t *testing.T) {
 			name: "dec_inc_node_count",
 			steps: []testSwarmNetworkStep{
 				{
-					nodeCount: 5,
-				},
-				{
 					nodeCount: 3,
 				},
 				{
-					nodeCount: 10,
+					nodeCount: 1,
+				},
+				{
+					nodeCount: 5,
 				},
 			},
 			options: &testSwarmNetworkOptions{

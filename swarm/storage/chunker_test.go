@@ -232,7 +232,8 @@ func TestDataAppend(t *testing.T) {
 func TestRandomData(t *testing.T) {
 	// This test can validate files up to a relatively short length, as tree chunker slows down drastically.
 	// Validation of longer files is done by TestLocalStoreAndRetrieve in swarm package.
-	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 524288, 524288 + 1, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4097}
+	//sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 524288, 524288 + 1, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4097}
+	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4097, 8191, 8192, 12288, 12289, 524288}
 	tester := &chunkerTester{t: t}
 
 	for _, s := range sizes {

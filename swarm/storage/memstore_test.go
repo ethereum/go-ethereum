@@ -111,7 +111,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 		},
 		{
-			n:         201,
+			n:         101,
 			chunkSize: 4096,
 		},
 		{
@@ -119,11 +119,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 		},
 		{
-			n:         3100,
-			chunkSize: 4096,
-		},
-		{
-			n:         100,
+			n:         1100,
 			chunkSize: 4096,
 		},
 	}

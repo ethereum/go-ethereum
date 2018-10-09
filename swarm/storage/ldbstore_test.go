@@ -111,12 +111,12 @@ func TestDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, false, t)
 }
 
-func TestDbStoreRandom_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, false, t)
+func TestDbStoreRandom_1k(t *testing.T) {
+	testDbStoreRandom(1000, 0, false, t)
 }
 
-func TestDbStoreCorrect_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, false, t)
+func TestDbStoreCorrect_1k(t *testing.T) {
+	testDbStoreCorrect(1000, 4096, false, t)
 }
 
 func TestMockDbStoreRandom_1(t *testing.T) {
@@ -127,12 +127,12 @@ func TestMockDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, true, t)
 }
 
-func TestMockDbStoreRandom_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, true, t)
+func TestMockDbStoreRandom_1k(t *testing.T) {
+	testDbStoreRandom(1000, 0, true, t)
 }
 
-func TestMockDbStoreCorrect_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, true, t)
+func TestMockDbStoreCorrect_1k(t *testing.T) {
+	testDbStoreCorrect(1000, 4096, true, t)
 }
 
 func testDbStoreNotFound(t *testing.T, mock bool) {
