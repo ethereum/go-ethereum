@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -230,12 +230,7 @@ func generateRandomFile() (string, error) {
 	//generate a random file size between minFileSize and maxFileSize
 	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
 	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
-	b := make([]byte, fileSize*1024)
-	_, err := crand.Read(b)
-	if err != nil {
-		log.Error("Error generating random file.", "err", err)
-		return "", err
-	}
+	b := testutil.RandomBytes(1, fileSize*1024)
 	return string(b), nil
 }
 

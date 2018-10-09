@@ -20,49 +20,37 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func TestCLIFeedUpdate(t *testing.T) {
 
-	srv := testutil.NewTestSwarmServer(t, func(api *api.API) testutil.TestServer {
+	srv := swarmhttp.NewTestSwarmServer(t, func(api *api.API) swarmhttp.TestServer {
 		return swarmhttp.NewServer(api, "")
 	}, nil)
 	log.Info("starting a test swarm server")
 	defer srv.Close()
 
 	// create a private key file for signing
-	pkfile, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pkfile.Close()
-	defer os.Remove(pkfile.Name())
 
 	privkeyHex := "0000000000000000000000000000000000000000000000000000000000001979"
 	privKey, _ := crypto.HexToECDSA(privkeyHex)
 	address := crypto.PubkeyToAddress(privKey.PublicKey)
 
-	// save the private key to a file
-	_, err = io.WriteString(pkfile, privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pkFileName := testutil.TempFileWithContent(t, privkeyHex)
+	defer os.Remove(pkFileName)
 
 	// compose a topic. We'll be doing quotes about Miguel de Cervantes
 	var topic feed.Topic
@@ -76,7 +64,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 
 	flags := []string{
 		"--bzzapi", srv.URL,
-		"--bzzaccount", pkfile.Name(),
+		"--bzzaccount", pkFileName,
 		"feed", "update",
 		"--topic", topic.Hex(),
 		"--name", name,
@@ -89,13 +77,10 @@ func TestCLIFeedUpdate(t *testing.T) {
 
 	// now try to get the update using the client
 	client := swarm.NewClient(srv.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// build the same topic as before, this time
 	// we use NewTopic to create a topic automatically.
-	topic, err = feed.NewTopic(name, subject)
+	topic, err := feed.NewTopic(name, subject)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +138,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 	// test publishing a manifest
 	flags = []string{
 		"--bzzapi", srv.URL,
-		"--bzzaccount", pkfile.Name(),
+		"--bzzaccount", pkFileName,
 		"feed", "create",
 		"--topic", topic.Hex(),
 	}

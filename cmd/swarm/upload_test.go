@@ -32,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/mattn/go-colorable"
 )
@@ -77,33 +78,22 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
+	tmpFileName := testutil.TempFileWithContent(t, data)
+	defer os.Remove(tmpFileName)
 
 	// write data to file
-	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	hashRegexp := `[a-f\d]{64}`
 	flags := []string{
 		"--bzzapi", cluster.Nodes[0].URL,
 		"up",
-		tmp.Name()}
+		tmpFileName}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
 			"--encrypt",
-			tmp.Name()}
+			tmpFileName}
 	}
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
@@ -203,7 +193,6 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	}
 	defer os.RemoveAll(tmpUploadDir)
 	// create tmp files
-	data := "notsorandomdata"
 	for _, path := range []string{"tmp1", "tmp2"} {
 		if err := ioutil.WriteFile(filepath.Join(tmpUploadDir, path), bytes.NewBufferString(data).Bytes(), 0644); err != nil {
 			t.Fatal(err)
@@ -298,7 +287,7 @@ func TestCLISwarmUpDefaultPath(t *testing.T) {
 }
 
 func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
