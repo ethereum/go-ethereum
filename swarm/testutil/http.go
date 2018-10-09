@@ -18,55 +18,80 @@ package testutil
 
 import (
 	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
-	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
 
-func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
+type TestServer interface {
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
+
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeparams := &storage.StoreParams{
-		ChunkDbPath:   dir,
-		DbCapacity:    5000000,
-		CacheCapacity: 5000,
-		Radius:        0,
-	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams)
+	storeparams := storage.NewDefaultLocalStoreParams()
+	storeparams.DbCapacity = 5000000
+	storeparams.CacheCapacity = 5000
+	storeparams.Init(dir)
+	localStore, err := storage.NewLocalStore(storeparams, nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
-	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	dpa := &storage.DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
+	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
+
+	// Swarm feeds test setup
+	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
+	if err != nil {
+		t.Fatal(err)
 	}
-	dpa.Start()
-	a := api.NewApi(dpa, nil)
-	srv := httptest.NewServer(httpapi.NewServer(a))
-	return &TestSwarmServer{
-		Server: srv,
-		Dpa:    dpa,
-		dir:    dir,
+
+	rhparams := &feed.HandlerParams{}
+	rh, err := feed.NewTestHandler(feedsDir, rhparams)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	a := api.NewAPI(fileStore, resolver, rh.Handler, nil)
+	srv := httptest.NewServer(serverFunc(a))
+	tss := &TestSwarmServer{
+		Server:    srv,
+		FileStore: fileStore,
+		dir:       dir,
+		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
+		cleanup: func() {
+			srv.Close()
+			rh.Close()
+			os.RemoveAll(dir)
+			os.RemoveAll(feedsDir)
+		},
+		CurrentTime: 42,
+	}
+	feed.TimestampProvider = tss
+	return tss
 }
 
 type TestSwarmServer struct {
 	*httptest.Server
-
-	Dpa *storage.DPA
-	dir string
+	Hasher      storage.SwarmHash
+	FileStore   *storage.FileStore
+	dir         string
+	cleanup     func()
+	CurrentTime uint64
 }
 
 func (t *TestSwarmServer) Close() {
-	t.Server.Close()
-	t.Dpa.Stop()
-	os.RemoveAll(t.dir)
+	t.cleanup()
+}
+
+func (t *TestSwarmServer) Now() feed.Timestamp {
+	return feed.Timestamp{Time: t.CurrentTime}
 }

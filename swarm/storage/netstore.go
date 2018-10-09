@@ -17,120 +17,281 @@
 package storage
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
-	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/log"
+	lru "github.com/hashicorp/golang-lru"
 )
 
-/*
-NetStore is a cloud storage access abstaction layer for swarm
-it contains the shared logic of network served chunk store/retrieval requests
-both local (coming from DPA api) and remote (coming from peers via bzz protocol)
-it implements the ChunkStore interface and embeds LocalStore
+type (
+	NewNetFetcherFunc func(ctx context.Context, addr Address, peers *sync.Map) NetFetcher
+)
 
-It is called by the bzz protocol instances via Depo (the store/retrieve request handler)
-a protocol instance is running on each peer, so this is heavily parallelised.
-NetStore falls back to a backend (CloudStorage interface)
-implemented by bzz/network/forwarder. forwarder or IPFS or IPΞS
-*/
+type NetFetcher interface {
+	Request(ctx context.Context, hopCount uint8)
+	Offer(ctx context.Context, source *enode.ID)
+}
+
+// NetStore is an extension of local storage
+// it implements the ChunkStore interface
+// on request it initiates remote cloud retrieval using a fetcher
+// fetchers are unique to a chunk and are stored in fetchers LRU memory cache
+// fetchFuncFactory is a factory object to create a fetch function for a specific chunk address
 type NetStore struct {
-	hashfunc   SwarmHasher
-	localStore *LocalStore
-	cloud      CloudStore
+	mu                sync.Mutex
+	store             SyncChunkStore
+	fetchers          *lru.Cache
+	NewNetFetcherFunc NewNetFetcherFunc
+	closeC            chan struct{}
 }
 
-// backend engine for cloud store
-// It can be aggregate dispatching to several parallel implementations:
-// bzz/network/forwarder. forwarder or IPFS or IPΞS
-type CloudStore interface {
-	Store(*Chunk)
-	Deliver(*Chunk)
-	Retrieve(*Chunk)
-}
+var fetcherTimeout = 2 * time.Minute // timeout to cancel the fetcher even if requests are coming in
 
-type StoreParams struct {
-	ChunkDbPath   string
-	DbCapacity    uint64
-	CacheCapacity uint
-	Radius        int
-}
-
-//create params with default values
-func NewDefaultStoreParams() (self *StoreParams) {
-	return &StoreParams{
-		DbCapacity:    defaultDbCapacity,
-		CacheCapacity: defaultCacheCapacity,
-		Radius:        defaultRadius,
+// NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
+// constructor function that can create a fetch function for a specific chunk address.
+func NewNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
+	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
+	if err != nil {
+		return nil, err
 	}
-}
-
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
-func (self *StoreParams) Init(path string) {
-	self.ChunkDbPath = filepath.Join(path, "chunks")
-}
-
-// netstore contructor, takes path argument that is used to initialise dbStore,
-// the persistent (disk) storage component of LocalStore
-// the second argument is the hive, the connection/logistics manager for the node
-func NewNetStore(hash SwarmHasher, lstore *LocalStore, cloud CloudStore, params *StoreParams) *NetStore {
 	return &NetStore{
-		hashfunc:   hash,
-		localStore: lstore,
-		cloud:      cloud,
+		store:             store,
+		fetchers:          fetchers,
+		NewNetFetcherFunc: nnf,
+		closeC:            make(chan struct{}),
+	}, nil
+}
+
+// Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
+// the fetchers cache
+func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// put to the chunk to the store, there should be no error
+	err := n.store.Put(ctx, ch)
+	if err != nil {
+		return err
+	}
+
+	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
+	// (this delivers the chunk to requestors via the fetcher)
+	if f := n.getFetcher(ch.Address()); f != nil {
+		f.deliver(ctx, ch)
+	}
+	return nil
+}
+
+// Get retrieves the chunk from the NetStore DPA synchronously.
+// It calls NetStore.get, and if the chunk is not in local Storage
+// it calls fetch with the request, which blocks until the chunk
+// arrived or context is done
+func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
+	chunk, fetch, err := n.get(rctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if chunk != nil {
+		return chunk, nil
+	}
+	return fetch(rctx)
+}
+
+func (n *NetStore) BinIndex(po uint8) uint64 {
+	return n.store.BinIndex(po)
+}
+
+func (n *NetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return n.store.Iterator(from, to, po, f)
+}
+
+// FetchFunc returns nil if the store contains the given address. Otherwise it returns a wait function,
+// which returns after the chunk is available or the context is done
+func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Context) error {
+	chunk, fetch, _ := n.get(ctx, ref)
+	if chunk != nil {
+		return nil
+	}
+	return func(ctx context.Context) error {
+		_, err := fetch(ctx)
+		return err
 	}
 }
 
-var (
-	// timeout interval before retrieval is timed out
-	searchTimeout = 3 * time.Second
-)
-
-// store logic common to local and network chunk store requests
-// ~ unsafe put in localdb no check if exists no extra copy no hash validation
-// the chunk is forced to propagate (Cloud.Store) even if locally found!
-// caller needs to make sure if that is wanted
-func (self *NetStore) Put(entry *Chunk) {
-	self.localStore.Put(entry)
-
-	// handle deliveries
-	if entry.Req != nil {
-		log.Trace(fmt.Sprintf("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log()))
-		// closing C signals to other routines (local requests)
-		// that the chunk is has been retrieved
-		close(entry.Req.C)
-		// deliver the chunk to requesters upstream
-		go self.cloud.Deliver(entry)
-	} else {
-		log.Trace(fmt.Sprintf("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log()))
-		// handle propagating store requests
-		// go self.cloud.Store(entry)
-		go self.cloud.Store(entry)
-	}
+// Close chunk store
+func (n *NetStore) Close() {
+	close(n.closeC)
+	n.store.Close()
+	// TODO: loop through fetchers to cancel them
 }
 
-// retrieve logic common for local and network chunk retrieval requests
-func (self *NetStore) Get(key Key) (*Chunk, error) {
-	var err error
-	chunk, err := self.localStore.Get(key)
-	if err == nil {
-		if chunk.Req == nil {
-			log.Trace(fmt.Sprintf("NetStore.Get: %v found locally", key))
-		} else {
-			log.Trace(fmt.Sprintf("NetStore.Get: %v hit on an existing request", key))
-			// no need to launch again
+// get attempts at retrieving the chunk from LocalStore
+// If it is not found then using getOrCreateFetcher:
+//     1. Either there is already a fetcher to retrieve it
+//     2. A new fetcher is created and saved in the fetchers cache
+// From here on, all Get will hit on this fetcher until the chunk is delivered
+// or all fetcher contexts are done.
+// It returns a chunk, a fetcher function and an error
+// If chunk is nil, the returned fetch function needs to be called with a context to return the chunk.
+func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	chunk, err := n.store.Get(ctx, ref)
+	if err != nil {
+		if err != ErrChunkNotFound {
+			log.Debug("Received error from LocalStore other than ErrNotFound", "err", err)
 		}
-		return chunk, err
+		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
+		// if it doesn't exist yet
+		f := n.getOrCreateFetcher(ref)
+		// If the caller needs the chunk, it has to use the returned fetch function to get it
+		return nil, f.Fetch, nil
 	}
-	// no data and no request status
-	log.Trace(fmt.Sprintf("NetStore.Get: %v not found locally. open new request", key))
-	chunk = NewChunk(key, newRequestStatus(key))
-	self.localStore.memStore.Put(chunk)
-	go self.cloud.Retrieve(chunk)
-	return chunk, nil
+
+	return chunk, nil, nil
 }
 
-// Close netstore
-func (self *NetStore) Close() {}
+// getOrCreateFetcher attempts at retrieving an existing fetchers
+// if none exists, creates one and saves it in the fetchers cache
+// caller must hold the lock
+func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
+	if f := n.getFetcher(ref); f != nil {
+		return f
+	}
+
+	// no fetcher for the given address, we have to create a new one
+	key := hex.EncodeToString(ref)
+	// create the context during which fetching is kept alive
+	ctx, cancel := context.WithTimeout(context.Background(), fetcherTimeout)
+	// destroy is called when all requests finish
+	destroy := func() {
+		// remove fetcher from fetchers
+		n.fetchers.Remove(key)
+		// stop fetcher by cancelling context called when
+		// all requests cancelled/timedout or chunk is delivered
+		cancel()
+	}
+	// peers always stores all the peers which have an active request for the chunk. It is shared
+	// between fetcher and the NewFetchFunc function. It is needed by the NewFetchFunc because
+	// the peers which requested the chunk should not be requested to deliver it.
+	peers := &sync.Map{}
+
+	fetcher := newFetcher(ref, n.NewNetFetcherFunc(ctx, ref, peers), destroy, peers, n.closeC)
+	n.fetchers.Add(key, fetcher)
+
+	return fetcher
+}
+
+// getFetcher retrieves the fetcher for the given address from the fetchers cache if it exists,
+// otherwise it returns nil
+func (n *NetStore) getFetcher(ref Address) *fetcher {
+	key := hex.EncodeToString(ref)
+	f, ok := n.fetchers.Get(key)
+	if ok {
+		return f.(*fetcher)
+	}
+	return nil
+}
+
+// RequestsCacheLen returns the current number of outgoing requests stored in the cache
+func (n *NetStore) RequestsCacheLen() int {
+	return n.fetchers.Len()
+}
+
+// One fetcher object is responsible to fetch one chunk for one address, and keep track of all the
+// peers who have requested it and did not receive it yet.
+type fetcher struct {
+	addr        Address       // address of chunk
+	chunk       Chunk         // fetcher can set the chunk on the fetcher
+	deliveredC  chan struct{} // chan signalling chunk delivery to requests
+	cancelledC  chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
+	netFetcher  NetFetcher    // remote fetch function to be called with a request source taken from the context
+	cancel      func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
+	peers       *sync.Map     // the peers which asked for the chunk
+	requestCnt  int32         // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
+	deliverOnce *sync.Once    // guarantees that we only close deliveredC once
+}
+
+// newFetcher creates a new fetcher object for the fiven addr. fetch is the function which actually
+// does the retrieval (in non-test cases this is coming from the network package). cancel function is
+// called either
+//     1. when the chunk has been fetched all peers have been either notified or their context has been done
+//     2. the chunk has not been fetched but all context from all the requests has been done
+// The peers map stores all the peers which have requested chunk.
+func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map, closeC chan struct{}) *fetcher {
+	cancelOnce := &sync.Once{} // cancel should only be called once
+	return &fetcher{
+		addr:        addr,
+		deliveredC:  make(chan struct{}),
+		deliverOnce: &sync.Once{},
+		cancelledC:  closeC,
+		netFetcher:  nf,
+		cancel: func() {
+			cancelOnce.Do(func() {
+				cancel()
+			})
+		},
+		peers: peers,
+	}
+}
+
+// Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
+// locally.
+func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
+	atomic.AddInt32(&f.requestCnt, 1)
+	defer func() {
+		// if all the requests are done the fetcher can be cancelled
+		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
+			f.cancel()
+		}
+	}()
+
+	// The peer asking for the chunk. Store in the shared peers map, but delete after the request
+	// has been delivered
+	peer := rctx.Value("peer")
+	if peer != nil {
+		f.peers.Store(peer, time.Now())
+		defer f.peers.Delete(peer)
+	}
+
+	// If there is a source in the context then it is an offer, otherwise a request
+	sourceIF := rctx.Value("source")
+
+	hopCount, _ := rctx.Value("hopcount").(uint8)
+
+	if sourceIF != nil {
+		var source enode.ID
+		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
+			return nil, err
+		}
+		f.netFetcher.Offer(rctx, &source)
+	} else {
+		f.netFetcher.Request(rctx, hopCount)
+	}
+
+	// wait until either the chunk is delivered or the context is done
+	select {
+	case <-rctx.Done():
+		return nil, rctx.Err()
+	case <-f.deliveredC:
+		return f.chunk, nil
+	case <-f.cancelledC:
+		return nil, fmt.Errorf("fetcher cancelled")
+	}
+}
+
+// deliver is called by NetStore.Put to notify all pending requests
+func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
+	f.deliverOnce.Do(func() {
+		f.chunk = ch
+		// closing the deliveredC channel will terminate ongoing requests
+		close(f.deliveredC)
+	})
+}

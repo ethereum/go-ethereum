@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -89,19 +89,19 @@ func (api *PublicWhisperAPI) SetMaxMessageSize(ctx context.Context, size uint32)
 	return true, api.w.SetMaxMessageSize(size)
 }
 
-// SetMinPow sets the minimum PoW for a message before it is accepted.
+// SetMinPoW sets the minimum PoW for a message before it is accepted.
 func (api *PublicWhisperAPI) SetMinPoW(ctx context.Context, pow float64) (bool, error) {
 	return true, api.w.SetMinimumPoW(pow)
 }
 
 // MarkTrustedPeer marks a peer trusted. , which will allow it to send historic (expired) messages.
 // Note: This function is not adding new nodes, the node needs to exists as a peer.
-func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, enode string) (bool, error) {
-	n, err := discover.ParseNode(enode)
+func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, url string) (bool, error) {
+	n, err := enode.ParseV4(url)
 	if err != nil {
 		return false, err
 	}
-	return true, api.w.AllowP2PMessagesFromPeer(n.ID[:])
+	return true, api.w.AllowP2PMessagesFromPeer(n.ID().Bytes())
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
@@ -142,7 +142,7 @@ func (api *PublicWhisperAPI) GetPublicKey(ctx context.Context, id string) (hexut
 	return crypto.FromECDSAPub(&key.PublicKey), nil
 }
 
-// GetPublicKey returns the private key associated with the given key. The key is the hex
+// GetPrivateKey returns the private key associated with the given key. The key is the hex
 // encoded representation of a key in the form specified in section 4.3.6 of ANSI X9.62.
 func (api *PublicWhisperAPI) GetPrivateKey(ctx context.Context, id string) (hexutil.Bytes, error) {
 	key, err := api.w.GetPrivateKey(id)
@@ -252,8 +252,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// Set asymmetric key that is used to encrypt the message
 	if pubKeyGiven {
-		params.Dst = crypto.ToECDSAPub(req.PublicKey)
-		if !ValidatePublicKey(params.Dst) {
+		if params.Dst, err = crypto.UnmarshalPubkey(req.PublicKey); err != nil {
 			return false, ErrInvalidPublicKey
 		}
 	}
@@ -271,11 +270,11 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
-		n, err := discover.ParseNode(req.TargetPeer)
+		n, err := enode.ParseV4(req.TargetPeer)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		return true, api.w.SendP2PMessage(n.ID[:], env)
+		return true, api.w.SendP2PMessage(n.ID().Bytes(), env)
 	}
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
@@ -329,8 +328,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	}
 
 	if len(crit.Sig) > 0 {
-		filter.Src = crypto.ToECDSAPub(crit.Sig)
-		if !ValidatePublicKey(filter.Src) {
+		if filter.Src, err = crypto.UnmarshalPubkey(crit.Sig); err != nil {
 			return nil, ErrInvalidSigningPubKey
 		}
 	}
@@ -513,8 +511,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	}
 
 	if len(req.Sig) > 0 {
-		src = crypto.ToECDSAPub(req.Sig)
-		if !ValidatePublicKey(src) {
+		if src, err = crypto.UnmarshalPubkey(req.Sig); err != nil {
 			return "", ErrInvalidSigningPubKey
 		}
 	}

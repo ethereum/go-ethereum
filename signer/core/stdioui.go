@@ -111,3 +111,11 @@ func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
 		log.Info("Error calling 'OnSignerStartup'", "exc", err.Error(), "info", info)
 	}
 }
+func (ui *StdIOUI) OnInputRequired(info UserInputRequest) (UserInputResponse, error) {
+	var result UserInputResponse
+	err := ui.dispatch("OnInputRequired", info, &result)
+	if err != nil {
+		log.Info("Error calling 'OnInputRequired'", "exc", err.Error(), "info", info)
+	}
+	return result, err
+}

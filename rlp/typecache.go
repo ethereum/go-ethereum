@@ -76,7 +76,7 @@ func cachedTypeInfo1(typ reflect.Type, tags tags) (*typeinfo, error) {
 		// another goroutine got the write lock first
 		return info, nil
 	}
-	// put a dummmy value into the cache before generating.
+	// put a dummy value into the cache before generating.
 	// if the generator tries to lookup itself, it will get
 	// the dummy value and won't call itself recursively.
 	typeCache[key] = new(typeinfo)

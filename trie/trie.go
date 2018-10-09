@@ -65,9 +65,8 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	db           *Database
-	root         node
-	originalRoot common.Hash
+	db   *Database
+	root node
 
 	// Cache generation values.
 	// cachegen increases by one with each commit operation.
@@ -98,10 +97,9 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		panic("trie.New called without a database")
 	}
 	trie := &Trie{
-		db:           db,
-		originalRoot: root,
+		db: db,
 	}
-	if (root != common.Hash{}) && root != emptyRoot {
+	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
 		if err != nil {
 			return nil, err
@@ -356,7 +354,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// value that is left in n or -2 if n contains at least two
 		// values.
 		pos := -1
-		for i, cld := range n.Children {
+		for i, cld := range &n.Children {
 			if cld != nil {
 				if pos == -1 {
 					pos = i
@@ -433,12 +431,10 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	cacheMissCounter.Inc(1)
 
 	hash := common.BytesToHash(n)
-
-	enc, err := t.db.Node(hash)
-	if err != nil || enc == nil {
-		return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
+	if node := t.db.node(hash, t.cachegen); node != nil {
+		return node, nil
 	}
-	return mustDecodeNode(n, enc, t.cachegen), nil
+	return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 }
 
 // Root returns the root hash of the trie.

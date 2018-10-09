@@ -19,12 +19,16 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"runtime"
+	godebug "runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -68,6 +72,7 @@ var (
 		utils.EthashDatasetDirFlag,
 		utils.EthashDatasetsInMemoryFlag,
 		utils.EthashDatasetsOnDiskFlag,
+		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -78,8 +83,6 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-		utils.FastSyncFlag,
-		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
@@ -92,11 +95,21 @@ var (
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
-		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
-		utils.TargetGasLimitFlag,
+		utils.MinerThreadsFlag,
+		utils.MinerLegacyThreadsFlag,
+		utils.MinerNotifyFlag,
+		utils.MinerGasTargetFlag,
+		utils.MinerLegacyGasTargetFlag,
+		utils.MinerGasLimitFlag,
+		utils.MinerGasPriceFlag,
+		utils.MinerLegacyGasPriceFlag,
+		utils.MinerEtherbaseFlag,
+		utils.MinerLegacyEtherbaseFlag,
+		utils.MinerExtraDataFlag,
+		utils.MinerLegacyExtraDataFlag,
+		utils.MinerRecommitIntervalFlag,
+		utils.MinerNoVerfiyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
@@ -117,7 +130,8 @@ var (
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
-		utils.ExtraDataFlag,
+		utils.EWASMInterpreterFlag,
+		utils.EVMInterpreterFlag,
 		configFileFlag,
 	}
 
@@ -139,6 +153,16 @@ var (
 		utils.WhisperEnabledFlag,
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
+		utils.WhisperRestrictConnectionBetweenLightClientsFlag,
+	}
+
+	metricsFlags = []cli.Flag{
+		utils.MetricsEnableInfluxDBFlag,
+		utils.MetricsInfluxDBEndpointFlag,
+		utils.MetricsInfluxDBDatabaseFlag,
+		utils.MetricsInfluxDBUsernameFlag,
+		utils.MetricsInfluxDBPasswordFlag,
+		utils.MetricsInfluxDBHostTagFlag,
 	}
 )
 
@@ -182,16 +206,40 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, whisperFlags...)
+	app.Flags = append(app.Flags, metricsFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx); err != nil {
+
+		logdir := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
 		}
+		// Cap the cache allowance and tune the garbage collector
+		var mem gosigar.Mem
+		if err := mem.Get(); err == nil {
+			allowance := int(mem.Total / 1024 / 1024 / 3)
+			if cache := ctx.GlobalInt(utils.CacheFlag.Name); cache > allowance {
+				log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+				ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(allowance))
+			}
+		}
+		// Ensure Go's GC ignores the database cache for trigger percentage
+		cache := ctx.GlobalInt(utils.CacheFlag.Name)
+		gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
+
+		log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+		godebug.SetGCPercent(int(gogc))
+
+		// Start metrics export if enabled
+		utils.SetupMetrics(ctx)
+
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
-		utils.SetupNetwork(ctx)
 		return nil
 	}
 
@@ -213,6 +261,9 @@ func main() {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
+	if args := ctx.Args(); len(args) > 0 {
+		return fmt.Errorf("invalid command: %q", args[0])
+	}
 	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()
@@ -267,11 +318,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
+				derivationPath := accounts.DefaultBaseDerivationPath
 				if event.Wallet.URL().Scheme == "ledger" {
-					event.Wallet.SelfDerive(accounts.DefaultLedgerBaseDerivationPath, stateReader)
-				} else {
-					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+					derivationPath = accounts.DefaultLedgerBaseDerivationPath
 				}
+				event.Wallet.SelfDerive(derivationPath, stateReader)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())
@@ -282,25 +333,25 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
-		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("Ethereum service not running: %v", err)
 		}
-		// Use a reduced number of threads if requested
-		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
-			type threaded interface {
-				SetThreads(threads int)
-			}
-			if th, ok := ethereum.Engine().(threaded); ok {
-				th.SetThreads(threads)
-			}
-		}
 		// Set the gas price to the limits from the CLI and start mining
-		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-		if err := ethereum.StartMining(true); err != nil {
+		gasprice := utils.GlobalBig(ctx, utils.MinerLegacyGasPriceFlag.Name)
+		if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
+			gasprice = utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+		}
+		ethereum.TxPool().SetGasPrice(gasprice)
+
+		threads := ctx.GlobalInt(utils.MinerLegacyThreadsFlag.Name)
+		if ctx.GlobalIsSet(utils.MinerThreadsFlag.Name) {
+			threads = ctx.GlobalInt(utils.MinerThreadsFlag.Name)
+		}
+		if err := ethereum.StartMining(threads); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

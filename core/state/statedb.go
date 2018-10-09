@@ -169,9 +169,20 @@ func (self *StateDB) Preimages() map[common.Hash][]byte {
 	return self.preimages
 }
 
+// AddRefund adds gas to the refund counter
 func (self *StateDB) AddRefund(gas uint64) {
 	self.journal.append(refundChange{prev: self.refund})
 	self.refund += gas
+}
+
+// SubRefund removes gas from the refund counter.
+// This method will panic if the refund counter goes below zero
+func (self *StateDB) SubRefund(gas uint64) {
+	self.journal.append(refundChange{prev: self.refund})
+	if gas > self.refund {
+		panic("Refund counter below zero")
+	}
+	self.refund -= gas
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -236,10 +247,20 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
-func (self *StateDB) GetState(addr common.Address, bhash common.Hash) common.Hash {
+// GetState retrieves a value from the given account's storage trie.
+func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetState(self.db, bhash)
+		return stateObject.GetState(self.db, hash)
+	}
+	return common.Hash{}
+}
+
+// GetCommittedState retrieves a value from the given account's committed storage trie.
+func (self *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetCommittedState(self.db, hash)
 	}
 	return common.Hash{}
 }
@@ -358,7 +379,7 @@ func (self *StateDB) deleteStateObject(stateObject *stateObject) {
 	self.setError(self.trie.TryDelete(addr[:]))
 }
 
-// Retrieve a state object given my the address. Returns nil if not found.
+// Retrieve a state object given by the address. Returns nil if not found.
 func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
 	// Prefer 'live' objects.
 	if obj := self.stateObjects[addr]; obj != nil {
@@ -435,19 +456,14 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	if so == nil {
 		return
 	}
-
-	// When iterating over the storage check the cache first
-	for h, value := range so.cachedStorage {
-		cb(h, value)
-	}
-
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
-		// ignore cached values
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if _, ok := so.cachedStorage[key]; !ok {
-			cb(key, common.BytesToHash(it.Value))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			cb(key, value)
+			continue
 		}
+		cb(key, common.BytesToHash(it.Value))
 	}
 }
 
@@ -489,10 +505,13 @@ func (self *StateDB) Copy() *StateDB {
 			state.stateObjectsDirty[addr] = struct{}{}
 		}
 	}
-
 	for hash, logs := range self.logs {
-		state.logs[hash] = make([]*types.Log, len(logs))
-		copy(state.logs[hash], logs)
+		cpy := make([]*types.Log, len(logs))
+		for i, l := range logs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		state.logs[hash] = cpy
 	}
 	for hash, preimage := range self.preimages {
 		state.preimages[hash] = preimage
@@ -572,27 +591,6 @@ func (self *StateDB) Prepare(thash, bhash common.Hash, ti int) {
 	self.txIndex = ti
 }
 
-// DeleteSuicides flags the suicided objects for deletion so that it
-// won't be referenced again when called / queried up on.
-//
-// DeleteSuicides should not be used for consensus related updates
-// under any circumstances.
-func (s *StateDB) DeleteSuicides() {
-	// Reset refund so that any used-gas calculations can use this method.
-	s.clearJournalAndRefund()
-
-	for addr := range s.stateObjectsDirty {
-		stateObject := s.stateObjects[addr]
-
-		// If the object has been removed by a suicide
-		// flag the object as deleted.
-		if stateObject.suicided {
-			stateObject.deleted = true
-		}
-		delete(s.stateObjectsDirty, addr)
-	}
-}
-
 func (s *StateDB) clearJournalAndRefund() {
 	s.journal = newJournal()
 	s.validRevisions = s.validRevisions[:0]
@@ -617,7 +615,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().Insert(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
+				s.db.TrieDB().InsertBlob(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
 				stateObject.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.

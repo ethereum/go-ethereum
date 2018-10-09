@@ -19,7 +19,7 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Protocol represents a P2P subprotocol implementation.
@@ -35,7 +35,7 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
-	// Run is called in a new groutine when the protocol has been
+	// Run is called in a new goroutine when the protocol has been
 	// negotiated with a peer. It should read and write messages from
 	// rw. The Payload for each message must be fully consumed.
 	//
@@ -51,7 +51,7 @@ type Protocol struct {
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
-	PeerInfo func(id discover.NodeID) interface{}
+	PeerInfo func(id enode.ID) interface{}
 }
 
 func (p Protocol) cap() Cap {

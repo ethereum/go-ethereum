@@ -6,19 +6,19 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.9.x
+      go: 1.10.x
       script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage $TEST_PACKAGES
+      - sudo modprobe fuse
+      - sudo chmod 666 /dev/fuse
+      - sudo chown root:$USER /etc/fuse.conf
+      - go run build/ci.go install
+      - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.10.x
+      go: 1.11.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -27,19 +27,16 @@ matrix:
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: osx
-      go: 1.10.x
+      go: 1.11.x
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - brew update
-        - brew install caskroom/cask/brew-cask
-        - brew cask install osxfuse
         - go run build/ci.go install
         - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: 1.10.x
+      go: 1.11.x
       env:
         - lint
       git:
@@ -48,9 +45,10 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
-      go: 1.10.x
+      go: 1.11.x
       env:
         - ubuntu-ppa
       git:
@@ -66,10 +64,11 @@ matrix:
         - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
 
     # This builder does the Linux Azure uploads
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       sudo: required
-      go: 1.10.x
+      go: 1.11.x
       env:
         - azure-linux
       git:
@@ -99,11 +98,12 @@ matrix:
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
-    - os: linux
+    - if: type = push
+      os: linux
       dist: trusty
       services:
         - docker
-      go: 1.10.x
+      go: 1.11.x
       env:
         - azure-linux-mips
       git:
@@ -126,8 +126,9 @@ matrix:
         - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Android Maven and Azure uploads
-    - os: linux
-      dist: precise # Needed for the android tools
+    - if: type = push
+      os: linux
+      dist: trusty
       addons:
         apt:
           packages:
@@ -147,24 +148,25 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.10.1.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.11.1.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip -o android-ndk-r15c.zip
-        - unzip -q android-ndk-r15c.zip && rm android-ndk-r15c.zip
-        - mv android-ndk-r15c $HOME
-        - export ANDROID_NDK=$HOME/android-ndk-r15c
+        - curl https://dl.google.com/android/repository/android-ndk-r17b-linux-x86_64.zip -o android-ndk-r17b.zip
+        - unzip -q android-ndk-r17b.zip && rm android-ndk-r17b.zip
+        - mv android-ndk-r17b $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r17b
 
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
-    - os: osx
-      go: 1.10.x
+    - if: type = push
+      os: osx
+      go: 1.11.x
       env:
         - azure-osx
         - azure-ios
@@ -191,19 +193,13 @@ matrix:
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
-    - os: linux
+    - if: type = cron
+      os: linux
       dist: trusty
-      go: 1.10.x
+      go: 1.11.x
       env:
         - azure-purge
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
-    on_success: change
-    on_failure: always

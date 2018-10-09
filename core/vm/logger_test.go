@@ -41,11 +41,6 @@ func (d *dummyContractRef) SetBalance(*big.Int)        {}
 func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
-type dummyStateDB struct {
-	NoopStateDB
-	ref *dummyContractRef
-}
-
 func TestStoreCapture(t *testing.T) {
 	var (
 		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
