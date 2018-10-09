@@ -17,8 +17,7 @@
 // disk storage layer for the package bzz
 // DbStore implements the ChunkStore interface and is used by the FileStore as
 // persistent storage of chunks
-// it implements purging based on access count allowing for external control of
-// max capacity
+// it implements purging based on access count allowing for external control of // max capacity
 
 package storage
 
@@ -43,8 +42,9 @@ import (
 )
 
 const (
-	gcArrayFreeRatio = 0.1
-	maxGCItems       = 5000 // max number of items to be gc'd per call to collectGarbage()
+	defaultGCRatio    = 10
+	defaultMaxGCRound = 10000
+	defaultMaxGCBatch = 5000
 )
 
 var (
@@ -89,6 +89,17 @@ func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
 	}
 }
 
+type garbage struct {
+	maxRound int      // maximum number of chunks to delete in one garbage collection round
+	maxBatch int      // maximum number of chunks to delete in one db request batch
+	ratio    int      // 1/x ratio to calculate the number of chunks to gc on a low capacity db
+	count    int      // number of chunks deleted in running round
+	target   int      // number of chunks to delete in running round
+	batch    *dbBatch // the delete batch
+
+	wg sync.WaitGroup // set to wait when a gc round is active
+}
+
 type LDBStore struct {
 	db *LDBDatabase
 
@@ -102,12 +113,12 @@ type LDBStore struct {
 	hashfunc SwarmHasher
 	po       func(Address) uint8
 
-	batchC   chan bool
 	batchesC chan struct{}
 	closed   bool
 	batch    *dbBatch
 	lock     sync.RWMutex
 	quit     chan struct{}
+	gc       *garbage
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
@@ -166,14 +177,38 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	data, _ = s.db.Get(keyDataIdx)
 	s.dataIdx = BytesToU64(data)
 
+	// set up garbage collection
+	s.gc = &garbage{
+		maxBatch: defaultMaxGCBatch,
+		maxRound: defaultMaxGCRound,
+		ratio:    defaultGCRatio,
+		batch:    newBatch(),
+	}
+
 	return s, nil
 }
 
-func (s *LDBStore) getGCCount() uint64 {
-	if s.entryCnt >= maxGCItems {
-		return maxGCItems * gcArrayFreeRatio
+// initialize and set values for processing of gc round
+func (s *LDBStore) startGC(c int) {
+
+	s.gc.count = 0
+	// calculate the target number of deletions
+	if c >= s.gc.maxRound {
+		s.gc.target = s.gc.maxRound
+	} else {
+		s.gc.target = c / s.gc.ratio
 	}
-	return uint64(float64(s.entryCnt) * gcArrayFreeRatio)
+	log.Debug("startgc", "requested", c, "target", s.gc.target)
+}
+
+// commit deletions to db
+func (s *LDBStore) runGC() error {
+	err := s.db.Write(s.gc.batch.Batch)
+	if err != nil {
+		return err
+	}
+	s.gc.batch.Reset()
+	return nil
 }
 
 // NewMockDbStore creates a new instance of DbStore with
@@ -279,35 +314,55 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 	return NewChunk(addr, data[32:]), nil
 }
 
-func (s *LDBStore) collectGarbage(ratio float32) {
-	log.Trace("collectGarbage", "ratio", ratio)
+func (s *LDBStore) collectGarbage() {
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
+
+	s.gc.wg.Add(1)
+	defer s.gc.wg.Done()
 
 	it := s.db.NewIterator()
 	defer it.Release()
 
-	var gcnt uint64
-	maxGcnt := s.getGCCount()
+	s.startGC(int(s.entryCnt))
+	log.Trace("collectGarbage", "count", s.gc.target, "entryCnt", s.entryCnt)
 
-	for ok := it.Seek([]byte{keyGCIdx}); ok && (gcnt < maxGcnt); ok = it.Next() {
-		itkey := it.Key()
+	var totalDeleted int
+	ok := it.Seek([]byte{keyGCIdx})
+	for s.gc.count < s.gc.target {
+		var singleIterationCount int
+		for ; ok && (singleIterationCount < s.gc.maxBatch); ok = it.Next() {
+			itkey := it.Key()
 
-		if (itkey == nil) || (itkey[0] != keyGCIdx) {
-			break
+			if (itkey == nil) || (itkey[0] != keyGCIdx) {
+				break
+			}
+
+			val := it.Value()
+			index, po, hash := parseGCIdxEntry(itkey[1:], val)
+			keyIdx := make([]byte, 33)
+			keyIdx[0] = keyIndex
+			copy(keyIdx[1:], hash)
+
+			log.Trace("parse gc", "index", index, "po", po, "hash", hash)
+
+			s.delete(s.gc.batch.Batch, index, keyIdx, po)
+			singleIterationCount++
+			s.gc.count++
+			if s.gc.count > s.gc.maxRound {
+				break
+			}
 		}
-
-		val := it.Value()
-		index, po, hash := parseGCIdxEntry(itkey[1:], val)
-		keyIdx := make([]byte, 33)
-		keyIdx[0] = keyIndex
-		copy(keyIdx[1:], hash)
-
-		log.Trace("parse gc", "index", index, "po", po, "hash", hash)
-
-		s.delete(index, keyIdx, po)
-		gcnt++
+		err := s.runGC()
+		if err != nil {
+			log.Error("gc fail: %v", err)
+		}
+		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 	}
+	log.Debug("garbage collect done", "c", s.gc.count)
+
+	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(totalDeleted))
+
 }
 
 // Export writes all chunks from the store to a tar archive, returning the
@@ -486,7 +541,7 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 		// if chunk is to be removed
 		if f(c) {
 			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
-			s.delete(&index, getIndexKey(key[1:]), po)
+			s.deleteNow(&index, getIndexKey(key[1:]), po)
 			removed++
 			errorsFound++
 		}
@@ -548,13 +603,18 @@ func (s *LDBStore) Delete(addr Address) {
 	proximity := s.po(addr)
 	s.tryAccessIdx(ikey, proximity, &indx)
 
-	s.delete(&indx, ikey, proximity)
+	s.deleteNow(&indx, ikey, proximity)
 }
 
-func (s *LDBStore) delete(idx *dpaDBIndex, idxKey []byte, po uint8) {
+func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) {
+	batch := new(leveldb.Batch)
+	s.delete(batch, idx, idxKey, po)
+	s.db.Write(batch)
+}
+
+func (s *LDBStore) delete(batch *leveldb.Batch, idx *dpaDBIndex, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
-	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	gcIdxKey := getGCIdxKey(idx)
 	batch.Delete(gcIdxKey)
@@ -566,7 +626,6 @@ func (s *LDBStore) delete(idx *dpaDBIndex, idxKey []byte, po uint8) {
 	cntKey[1] = po
 	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
 	batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
-	s.db.Write(batch)
 }
 
 func (s *LDBStore) BinIndex(po uint8) uint64 {
@@ -686,12 +745,12 @@ func (s *LDBStore) writeCurrentBatch() error {
 	b.err = s.writeBatch(b, e, d, a)
 	close(b.c)
 	for e > s.capacity {
-		log.Trace("for >", "e", e, "s.capacity", s.capacity)
+		log.Debug("for >", "e", e, "s.capacity", s.capacity)
 		// Collect garbage in a separate goroutine
 		// to be able to interrupt this loop by s.quit.
 		done := make(chan struct{})
 		go func() {
-			s.collectGarbage(gcArrayFreeRatio)
+			s.collectGarbage()
 			log.Trace("collectGarbage closing done")
 			close(done)
 		}()
@@ -811,7 +870,7 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
-				s.delete(&indx, getIndexKey(addr), s.po(addr))
+				s.deleteNow(&indx, getIndexKey(addr), s.po(addr))
 				return
 			}
 		}
@@ -844,17 +903,8 @@ func (s *LDBStore) setCapacity(c uint64) {
 
 	s.capacity = c
 
-	if s.entryCnt > c {
-		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
-		if ratio < gcArrayFreeRatio {
-			ratio = gcArrayFreeRatio
-		}
-		if ratio > 1 {
-			ratio = 1
-		}
-		for s.entryCnt > c {
-			s.collectGarbage(ratio)
-		}
+	for s.entryCnt > c {
+		s.collectGarbage()
 	}
 }
 

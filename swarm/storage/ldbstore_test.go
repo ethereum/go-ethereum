@@ -300,11 +300,16 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 
 func TestLDBStoreCollectGarbage(t *testing.T) {
 
-	cap := maxGCItems / 2
+	var cap int
+
+	cap = defaultMaxGCRound
+	//t.Run(fmt.Sprintf("A/%d/%d", cap, cap*2+1), testLDBStoreCollectGarbage)
+
+	cap = defaultMaxGCRound / 2
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 
-	cap = maxGCItems * 2
+	cap = defaultMaxGCRound * 2
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 }
@@ -333,7 +338,7 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	// wait for garbage collection to kick in on the responsible actor
-	time.Sleep(1 * time.Second)
+	ldb.gc.wg.Wait()
 
 	var missing int
 	for _, ch := range chunks {
@@ -486,7 +491,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbageAccessUnlikeIndex tests garbage collection where accesscount differs from indexcount
 func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 
-	capacity := maxGCItems
+	capacity := defaultMaxGCRound * 2
 	n := capacity - 1
 
 	ldb, cleanup := newLDBStore(t)
@@ -501,7 +506,10 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 
 	// set first added capacity/2 chunks to highest accesscount
 	for i := 0; i < capacity/2; i++ {
-		ldb.Get(context.TODO(), chunks[i].Address())
+		_, err := ldb.Get(context.TODO(), chunks[i].Address())
+		if err != nil {
+			t.Fatalf("fail add chunk #%d - %s: %v", i, chunks[i].Address(), err)
+		}
 	}
 	_, err = mputRandomChunks(ldb, 2, int64(ch.DefaultSize))
 	if err != nil {
@@ -509,13 +517,13 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	}
 
 	// wait for garbage collection to kick in on the responsible actor
-	time.Sleep(1 * time.Second)
+	ldb.gc.wg.Wait()
 
 	var missing int
-	for _, ch := range chunks[:capacity/2] {
+	for i, ch := range chunks[2 : capacity/2] {
 		ret, err := ldb.Get(context.Background(), ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
-			t.Fatalf("fail find chunk %s: %v", ch.Address(), err)
+			t.Fatalf("fail find chunk #%d - %s: %v", i, ch.Address(), err)
 		}
 
 		if !bytes.Equal(ret.Data(), ch.Data()) {
