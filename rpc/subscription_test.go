@@ -226,18 +226,19 @@ func waitForMessages(t *testing.T, in *json.Decoder, successes chan<- jsonSucces
 // for multiple different namespaces.
 func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	var (
-		namespaces             = []string{"eth", "shh", "bzz"}
+		namespaces        = []string{"eth", "shh", "bzz"}
+		service           = NotificationTestService{}
+		subCount          = len(namespaces) * 2
+		notificationCount = 3
+
 		server                 = NewServer()
-		service                = NotificationTestService{}
 		clientConn, serverConn = net.Pipe()
-
-		out           = json.NewEncoder(clientConn)
-		in            = json.NewDecoder(clientConn)
-		successes     = make(chan jsonSuccessResponse)
-		failures      = make(chan jsonErrResponse)
-		notifications = make(chan jsonNotification)
-
-		errors = make(chan error, 10)
+		out                    = json.NewEncoder(clientConn)
+		in                     = json.NewDecoder(clientConn)
+		successes              = make(chan jsonSuccessResponse)
+		failures               = make(chan jsonErrResponse)
+		notifications          = make(chan jsonNotification)
+		errors                 = make(chan error, 10)
 	)
 
 	// setup and start server
@@ -254,13 +255,12 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	go waitForMessages(t, in, successes, failures, notifications, errors)
 
 	// create subscriptions one by one
-	n := 3
 	for i, namespace := range namespaces {
 		request := map[string]interface{}{
 			"id":      i,
 			"method":  fmt.Sprintf("%s_subscribe", namespace),
 			"version": "2.0",
-			"params":  []interface{}{"someSubscription", n, i},
+			"params":  []interface{}{"someSubscription", notificationCount, i},
 		}
 
 		if err := out.Encode(&request); err != nil {
@@ -275,7 +275,7 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 			"id":      i,
 			"method":  fmt.Sprintf("%s_subscribe", namespace),
 			"version": "2.0",
-			"params":  []interface{}{"someSubscription", n, i},
+			"params":  []interface{}{"someSubscription", notificationCount, i},
 		})
 	}
 
@@ -284,12 +284,12 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	}
 
 	timeout := time.After(30 * time.Second)
-	subids := make(map[string]string, 2*len(namespaces))
-	count := make(map[string]int, 2*len(namespaces))
+	subids := make(map[string]string, subCount)
+	count := make(map[string]int, subCount)
 	allReceived := func() bool {
-		done := len(count) == len(namespaces)
+		done := len(count) == subCount
 		for _, c := range count {
-			if c < n {
+			if c < notificationCount {
 				done = false
 			}
 		}
@@ -310,14 +310,14 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 			for _, namespace := range namespaces {
 				subid, found := subids[namespace]
 				if !found {
-					t.Errorf("Subscription for '%s' not created", namespace)
+					t.Errorf("subscription for %q not created", namespace)
 					continue
 				}
-				if count, found := count[subid]; !found || count < n {
-					t.Errorf("Didn't receive all notifications (%d<%d) in time for namespace '%s'", count, n, namespace)
+				if count, found := count[subid]; !found || count < notificationCount {
+					t.Errorf("didn't receive all notifications (%d<%d) in time for namespace %q", count, notificationCount, namespace)
 				}
 			}
-			return
+			t.Fatal("timed out")
 		}
 	}
 }
