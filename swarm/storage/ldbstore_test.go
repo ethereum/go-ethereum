@@ -19,6 +19,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -279,7 +280,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for _, ch := range chunks {
-		ret, err := ldb.Get(context.TODO(), ch.Address())
+		ret, err := ldb.get(ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -338,11 +339,13 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	// wait for garbage collection to kick in on the responsible actor
-	ldb.gc.wg.Wait()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	waitGc(ctx, ldb)
 
 	var missing int
 	for _, ch := range chunks {
-		ret, err := ldb.Get(context.Background(), ch.Address())
+		ret, err := ldb.get(ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
@@ -439,7 +442,13 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// delete all chunks
 	for i := 0; i < n; i++ {
-		ldb.Delete(chunks[i].Address())
+		ikey := getIndexKey(chunks[i].Address())
+
+		var indx dpaDBIndex
+		proximity := ldb.po(chunks[i].Address())
+		ldb.tryAccessIdx(ikey, proximity, &indx)
+
+		ldb.deleteNow(&indx, ikey, proximity)
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
@@ -466,11 +475,13 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	}
 
 	// wait for garbage collection
-	time.Sleep(1 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	waitGc(ctx, ldb)
 
 	// expect first surplus chunks to be missing, because they have the smallest access value
 	for i := 0; i < surplus; i++ {
-		_, err := ldb.Get(context.TODO(), chunks[i].Address())
+		_, err := ldb.get(chunks[i].Address())
 		if err == nil {
 			t.Fatal("expected surplus chunk to be missing, but got no error")
 		}
@@ -478,7 +489,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// expect last chunks to be present, as they have the largest access value
 	for i := surplus; i < surplus+capacity; i++ {
-		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
+		ret, err := ldb.get(chunks[i].Address())
 		if err != nil {
 			t.Fatalf("chunk %v: expected no error, but got %s", i, err)
 		}
@@ -506,7 +517,7 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 
 	// set first added capacity/2 chunks to highest accesscount
 	for i := 0; i < capacity/2; i++ {
-		_, err := ldb.Get(context.TODO(), chunks[i].Address())
+		_, err := ldb.get(chunks[i].Address())
 		if err != nil {
 			t.Fatalf("fail add chunk #%d - %s: %v", i, chunks[i].Address(), err)
 		}
@@ -517,11 +528,13 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	}
 
 	// wait for garbage collection to kick in on the responsible actor
-	ldb.gc.wg.Wait()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	waitGc(ctx, ldb)
 
 	var missing int
 	for i, ch := range chunks[2 : capacity/2] {
-		ret, err := ldb.Get(context.Background(), ch.Address())
+		ret, err := ldb.get(ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			t.Fatalf("fail find chunk #%d - %s: %v", i, ch.Address(), err)
 		}
@@ -533,4 +546,19 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	}
 
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+}
+
+func waitGc(ctx context.Context, ldb *LDBStore) error {
+	ticker := time.Tick(time.Millisecond * 100)
+	for {
+		select {
+
+		case <-ctx.Done():
+			return errors.New("timeout")
+		case <-ticker:
+			if !ldb.gc.running {
+				return nil
+			}
+		}
+	}
 }
