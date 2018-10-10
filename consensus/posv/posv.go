@@ -652,22 +652,14 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 						}
 					}
 				}
-
-				var penBytes []byte
 				log.Debug("Penalty Info", "signers", penSigners, "number", number)
 				for _, penSigner := range penSigners {
-					// Convert number to byte.
-					penByte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", penSigner)), common.AddressLength)
-					penBytes = append(penBytes, penByte...)
-				}
-				if len(penBytes) > 0 {
-					header.Penalties = penBytes
+					header.Penalties = append(header.Penalties, penSigner[:]...)
 				}
 			}
 		}
 
 		// Prevent penaltied signer in 4 epocs ago jump into signer list.
-		var preventSigners []common.Address
 		for i := 1; i <= 4; i++ {
 			checkEpoc := uint64(i) * c.config.Epoch
 			if number > checkEpoc {
@@ -676,22 +668,13 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 				prevEpocBlock := chain.GetBlock(prevHeader.Hash(), prevEpoc)
 				penalties := prevEpocBlock.Penalties()
 				if penalties != nil {
-					prevSigners := make([]common.Address, len(penalties)/common.AddressLength)
+					prevSigners := ExtractPenaltiesFromBytes(penalties)
 					if len(prevSigners) > 0 {
-						for _, signer := range prevSigners {
-							for _, prevSigner := range prevSigners {
-								if signer == prevSigner {
-									preventSigners = append(preventSigners, signer)
+						for i, signer := range signers {
+							for _, preventSigner := range prevSigners {
+								if signer == preventSigner {
+									signers = append(signers[:i], signers[i+1:]...)
 								}
-							}
-						}
-					}
-				}
-				if len(preventSigners) > 0 {
-					for i, signer := range signers {
-						for _, preventSigner := range preventSigners {
-							if signer == preventSigner {
-								signers = append(signers[:i], signers[i+1:]...)
 							}
 						}
 					}
@@ -911,4 +894,13 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
 	}
 	return masternodes
+}
+
+// Extract validators from byte array.
+func ExtractPenaltiesFromBytes(bytePenalties []byte) []common.Address {
+	penalties := make([]common.Address, len(bytePenalties)/common.AddressLength)
+	for i := 0; i < len(penalties); i++ {
+		copy(penalties[i][:], bytePenalties[i*common.AddressLength:])
+	}
+	return penalties
 }
