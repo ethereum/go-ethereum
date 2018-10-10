@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,16 +25,16 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+	"github.com/mattn/go-colorable"
 )
-
-var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	log.PrintOrigins(true)
@@ -45,18 +44,31 @@ func init() {
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	testCLISwarmUp(false, t)
 }
 func TestCLISwarmUpRecursive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	testCLISwarmUpRecursive(false, t)
 }
 
 // TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUpEncrypted(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	testCLISwarmUp(true, t)
 }
 func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	testCLISwarmUpRecursive(true, t)
 }
 
@@ -271,5 +283,89 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not list files at: %v", files)
 		}
+	}
+}
+
+// TestCLISwarmUpDefaultPath tests swarm recursive upload with relative and absolute
+// default paths and with encryption.
+func TestCLISwarmUpDefaultPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+	testCLISwarmUpDefaultPath(false, false, t)
+	testCLISwarmUpDefaultPath(false, true, t)
+	testCLISwarmUpDefaultPath(true, false, t)
+	testCLISwarmUpDefaultPath(true, true, t)
+}
+
+func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+
+	err = ioutil.WriteFile(filepath.Join(tmp, "index.html"), []byte("<h1>Test</h1>"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ioutil.WriteFile(filepath.Join(tmp, "robots.txt"), []byte("Disallow: /"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defaultPath := "index.html"
+	if absDefaultPath {
+		defaultPath = filepath.Join(tmp, defaultPath)
+	}
+
+	args := []string{
+		"--bzzapi",
+		srv.URL,
+		"--recursive",
+		"--defaultpath",
+		defaultPath,
+		"up",
+		tmp,
+	}
+	if toEncrypt {
+		args = append(args, "--encrypt")
+	}
+
+	up := runSwarm(t, args...)
+	hashRegexp := `[a-f\d]{64,128}`
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+
+	client := swarm.NewClient(srv.URL)
+
+	m, isEncrypted, err := client.DownloadManifest(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if toEncrypt != isEncrypted {
+		t.Error("downloaded manifest is not encrypted")
+	}
+
+	var found bool
+	var entriesCount int
+	for _, e := range m.Entries {
+		entriesCount++
+		if e.Path == "" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Error("manifest default entry was not found")
+	}
+
+	if entriesCount != 3 {
+		t.Errorf("manifest contains %v entries, expected %v", entriesCount, 3)
 	}
 }

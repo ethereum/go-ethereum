@@ -27,14 +27,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	ManifestType        = "application/bzz-manifest+json"
-	ResourceContentType = "application/bzz-resource"
+	ManifestType    = "application/bzz-manifest+json"
+	FeedContentType = "application/bzz-feed"
 
 	manifestSizeLimit = 5 * 1024 * 1024
 )
@@ -46,13 +48,15 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash        string    `json:"hash,omitempty"`
-	Path        string    `json:"path,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
-	Mode        int64     `json:"mode,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ModTime     time.Time `json:"mod_time,omitempty"`
-	Status      int       `json:"status,omitempty"`
+	Hash        string       `json:"hash,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	ContentType string       `json:"contentType,omitempty"`
+	Mode        int64        `json:"mode,omitempty"`
+	Size        int64        `json:"size,omitempty"`
+	ModTime     time.Time    `json:"mod_time,omitempty"`
+	Status      int          `json:"status,omitempty"`
+	Access      *AccessEntry `json:"access,omitempty"`
+	Feed        *feed.Feed   `json:"feed,omitempty"`
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -68,26 +72,33 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	if err != nil {
 		return nil, err
 	}
-	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait(ctx)
-	return key, err
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
+	return addr, err
 }
 
-// Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
+// Manifest hack for supporting Swarm feeds from the bzz: scheme
 // see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(ctx context.Context, resourceAddr string) (storage.Address, error) {
+func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
-		Hash:        resourceAddr,
-		ContentType: ResourceContentType,
+		Feed:        feed,
+		ContentType: FeedContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
-	return key, err
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
+	return addr, err
 }
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
@@ -98,23 +109,33 @@ type ManifestWriter struct {
 }
 
 func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
 	return &ManifestWriter{a, trie, quitC}, nil
 }
 
-// AddEntry stores the given data and adds the resulting key to the manifest
-func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (storage.Address, error) {
-	key, _, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
-	if err != nil {
-		return nil, err
-	}
+// AddEntry stores the given data and adds the resulting address to the manifest
+func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (addr storage.Address, err error) {
 	entry := newManifestTrieEntry(e, nil)
-	entry.Hash = key.Hex()
+	if data != nil {
+		var wait func(context.Context) error
+		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		if err != nil {
+			return nil, err
+		}
+		err = wait(ctx)
+		if err != nil {
+			return nil, err
+		}
+		entry.Hash = addr.Hex()
+	}
+	if entry.Hash == "" {
+		return addr, errors.New("missing entry hash")
+	}
 	m.trie.addEntry(entry, m.quitC)
-	return key, nil
+	return addr, nil
 }
 
 // RemoveEntry removes the given path from the manifest
@@ -123,7 +144,7 @@ func (m *ManifestWriter) RemoveEntry(path string) error {
 	return nil
 }
 
-// Store stores the manifest, returning the resulting storage key
+// Store stores the manifest, returning the resulting storage address
 func (m *ManifestWriter) Store() (storage.Address, error) {
 	return m.trie.ref, m.trie.recalcAndStore()
 }
@@ -136,8 +157,8 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, decrypt DecryptFunc, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -159,7 +180,7 @@ func (m *ManifestWalker) Walk(walkFn WalkFn) error {
 }
 
 func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) error {
-	for _, entry := range trie.entries {
+	for _, entry := range &trie.entries {
 		if entry == nil {
 			continue
 		}
@@ -189,6 +210,7 @@ type manifestTrie struct {
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
+	decrypt   DecryptFunc
 }
 
 func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
@@ -204,75 +226,90 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
-	log.Trace("manifest lookup", "key", hash)
+func loadManifest(ctx context.Context, fileStore *storage.FileStore, addr storage.Address, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+	log.Trace("manifest lookup", "addr", addr)
 	// retrieve manifest via FileStore
-	manifestReader, isEncrypted := fileStore.Retrieve(ctx, hash)
-	log.Trace("reader retrieved", "key", hash)
-	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
+	manifestReader, isEncrypted := fileStore.Retrieve(ctx, addr)
+	log.Trace("reader retrieved", "addr", addr)
+	return readManifest(manifestReader, addr, fileStore, isEncrypted, quitC, decrypt)
 }
 
-func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
-		log.Trace("manifest not found", "key", hash)
+		log.Trace("manifest not found", "addr", addr)
 		err = fmt.Errorf("Manifest not Found")
 		return
 	}
 	if size > manifestSizeLimit {
-		log.Warn("manifest exceeds size limit", "key", hash, "size", size, "limit", manifestSizeLimit)
+		log.Warn("manifest exceeds size limit", "addr", addr, "size", size, "limit", manifestSizeLimit)
 		err = fmt.Errorf("Manifest size of %v bytes exceeds the %v byte limit", size, manifestSizeLimit)
 		return
 	}
 	manifestData := make([]byte, size)
 	read, err := mr.Read(manifestData)
 	if int64(read) < size {
-		log.Trace("manifest not found", "key", hash)
+		log.Trace("manifest not found", "addr", addr)
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: read %v, expect %v", read, size)
 		}
 		return
 	}
 
-	log.Debug("manifest retrieved", "key", hash)
+	log.Debug("manifest retrieved", "addr", addr)
 	var man struct {
 		Entries []*manifestTrieEntry `json:"entries"`
 	}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
-		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
-		log.Trace("malformed manifest", "key", hash)
+		err = fmt.Errorf("Manifest %v is malformed: %v", addr.Log(), err)
+		log.Trace("malformed manifest", "addr", addr)
 		return
 	}
 
-	log.Trace("manifest entries", "key", hash, "len", len(man.Entries))
+	log.Trace("manifest entries", "addr", addr, "len", len(man.Entries))
 
 	trie = &manifestTrie{
 		fileStore: fileStore,
 		encrypted: isEncrypted,
+		decrypt:   decrypt,
 	}
 	for _, entry := range man.Entries {
-		trie.addEntry(entry, quitC)
+		err = trie.addEntry(entry, quitC)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
 
-func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
+func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) error {
 	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
+
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(entry.Path) == 0 {
 		mt.entries[256] = entry
-		return
+		return nil
 	}
 
 	b := entry.Path[0]
 	oldentry := mt.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		mt.entries[b] = entry
-		return
+		return nil
 	}
 
 	cpl := 0
@@ -282,12 +319,12 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 
 	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
 		if mt.loadSubTrie(oldentry, quitC) != nil {
-			return
+			return nil
 		}
 		entry.Path = entry.Path[cpl:]
 		oldentry.subtrie.addEntry(entry, quitC)
 		oldentry.Hash = ""
-		return
+		return nil
 	}
 
 	commonPrefix := entry.Path[:cpl]
@@ -305,10 +342,11 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		Path:        commonPrefix,
 		ContentType: ManifestType,
 	}, subtrie)
+	return nil
 }
 
 func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
-	for _, e := range mt.entries {
+	for _, e := range &mt.entries {
 		if e != nil {
 			cnt++
 			entry = e
@@ -362,7 +400,7 @@ func (mt *manifestTrie) recalcAndStore() error {
 	buffer.WriteString(`{"entries":[`)
 
 	list := &Manifest{}
-	for _, entry := range mt.entries {
+	for _, entry := range &mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
 				err := entry.subtrie.recalcAndStore()
@@ -383,19 +421,30 @@ func (mt *manifestTrie) recalcAndStore() error {
 
 	sr := bytes.NewReader(manifest)
 	ctx := context.TODO()
-	key, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
+	addr, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
 	if err2 != nil {
 		return err2
 	}
 	err2 = wait(ctx)
-	mt.ref = key
+	mt.ref = addr
 	return err2
 }
 
 func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
+
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC)
+		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC, mt.decrypt)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return

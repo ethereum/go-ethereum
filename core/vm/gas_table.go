@@ -117,24 +117,69 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 
 func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
-		y, x = stack.Back(1), stack.Back(0)
-		val  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
+		y, x    = stack.Back(1), stack.Back(0)
+		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
-	// This checks for 3 scenario's and calculates gas accordingly
-	// 1. From a zero-value address to a non-zero value         (NEW VALUE)
-	// 2. From a non-zero value address to a zero-value address (DELETE)
-	// 3. From a non-zero to a non-zero                         (CHANGE)
-	if val == (common.Hash{}) && y.Sign() != 0 {
-		// 0 => non 0
-		return params.SstoreSetGas, nil
-	} else if val != (common.Hash{}) && y.Sign() == 0 {
-		// non 0 => 0
-		evm.StateDB.AddRefund(params.SstoreRefundGas)
-		return params.SstoreClearGas, nil
-	} else {
-		// non 0 => non 0 (or 0 => 0)
-		return params.SstoreResetGas, nil
+	// The legacy gas metering only takes into consideration the current state
+	if !evm.chainRules.IsConstantinople {
+		// This checks for 3 scenario's and calculates gas accordingly:
+		//
+		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
+		// 2. From a non-zero value address to a zero-value address (DELETE)
+		// 3. From a non-zero to a non-zero                         (CHANGE)
+		switch {
+		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
+			return params.SstoreSetGas, nil
+		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
+			evm.StateDB.AddRefund(params.SstoreRefundGas)
+			return params.SstoreClearGas, nil
+		default: // non 0 => non 0 (or 0 => 0)
+			return params.SstoreResetGas, nil
+		}
 	}
+	// The new gas metering is based on net gas costs (EIP-1283):
+	//
+	// 1. If current value equals new value (this is a no-op), 200 gas is deducted.
+	// 2. If current value does not equal new value
+	//   2.1. If original value equals current value (this storage slot has not been changed by the current execution context)
+	//     2.1.1. If original value is 0, 20000 gas is deducted.
+	// 	   2.1.2. Otherwise, 5000 gas is deducted. If new value is 0, add 15000 gas to refund counter.
+	// 	2.2. If original value does not equal current value (this storage slot is dirty), 200 gas is deducted. Apply both of the following clauses.
+	// 	  2.2.1. If original value is not 0
+	//       2.2.1.1. If current value is 0 (also means that new value is not 0), remove 15000 gas from refund counter. We can prove that refund counter will never go below 0.
+	//       2.2.1.2. If new value is 0 (also means that current value is not 0), add 15000 gas to refund counter.
+	// 	  2.2.2. If original value equals new value (this storage slot is reset)
+	//       2.2.2.1. If original value is 0, add 19800 gas to refund counter.
+	// 	     2.2.2.2. Otherwise, add 4800 gas to refund counter.
+	value := common.BigToHash(y)
+	if current == value { // noop (1)
+		return params.NetSstoreNoopGas, nil
+	}
+	original := evm.StateDB.GetCommittedState(contract.Address(), common.BigToHash(x))
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return params.NetSstoreInitGas, nil
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
+		}
+		return params.NetSstoreCleanGas, nil // write existing slot (2.1.2)
+	}
+	if original != (common.Hash{}) {
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			evm.StateDB.SubRefund(params.NetSstoreClearRefund)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
+		}
+	}
+	if original == value {
+		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			evm.StateDB.AddRefund(params.NetSstoreResetClearRefund)
+		} else { // reset to original existing slot (2.2.2.2)
+			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
+		}
+	}
+	return params.NetSstoreDirtyGas, nil
 }
 
 func makeGasLog(n uint64) gasFunc {
@@ -302,6 +347,17 @@ func gasCreate2(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 	if gas, overflow = math.SafeAdd(gas, params.Create2Gas); overflow {
 		return 0, errGasUintOverflow
 	}
+	wordGas, overflow := bigUint64(stack.Back(2))
+	if overflow {
+		return 0, errGasUintOverflow
+	}
+	if wordGas, overflow = math.SafeMul(toWordSize(wordGas), params.Sha3WordGas); overflow {
+		return 0, errGasUintOverflow
+	}
+	if gas, overflow = math.SafeAdd(gas, wordGas); overflow {
+		return 0, errGasUintOverflow
+	}
+
 	return gas, nil
 }
 

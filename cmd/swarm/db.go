@@ -93,21 +93,6 @@ func dbImport(ctx *cli.Context) {
 	log.Info(fmt.Sprintf("successfully imported %d chunks", count))
 }
 
-func dbClean(ctx *cli.Context) {
-	args := ctx.Args()
-	if len(args) != 2 {
-		utils.Fatalf("invalid arguments, please specify <chunkdb> (path to a local chunk database) and the base key")
-	}
-
-	store, err := openLDBStore(args[0], common.Hex2Bytes(args[1]))
-	if err != nil {
-		utils.Fatalf("error opening local chunk database: %s", err)
-	}
-	defer store.Close()
-
-	store.Cleanup()
-}
-
 func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return nil, fmt.Errorf("invalid chunkdb path: %s", err)

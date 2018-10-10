@@ -18,8 +18,10 @@ package vm
 
 import (
 	"fmt"
+	"hash"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -39,6 +41,11 @@ type Config struct {
 	// may be left uninitialised and will be set to the default
 	// table.
 	JumpTable [256]operation
+
+	// Type of the EWASM interpreter
+	EWASMInterpreter string
+	// Type of the EVM interpreter
+	EVMInterpreter string
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -48,7 +55,7 @@ type Config struct {
 type Interpreter interface {
 	// Run loops and evaluates the contract's code with the given input data and returns
 	// the return byte-slice and an error if one occurred.
-	Run(contract *Contract, input []byte) ([]byte, error)
+	Run(contract *Contract, input []byte, static bool) ([]byte, error)
 	// CanRun tells if the contract, passed as an argument, can be
 	// run by the current interpreter. This is meant so that the
 	// caller can do something like:
@@ -61,10 +68,14 @@ type Interpreter interface {
 	// }
 	// ```
 	CanRun([]byte) bool
-	// IsReadOnly reports if the interpreter is in read only mode.
-	IsReadOnly() bool
-	// SetReadOnly sets (or unsets) read only mode in the interpreter.
-	SetReadOnly(bool)
+}
+
+// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
 }
 
 // EVMInterpreter represents an EVM interpreter
@@ -72,7 +83,11 @@ type EVMInterpreter struct {
 	evm      *EVM
 	cfg      Config
 	gasTable params.GasTable
-	intPool  *intPool
+
+	intPool *intPool
+
+	hasher    keccakState // Keccak256 hasher instance shared across opcodes
+	hasherBuf common.Hash // Keccak256 hasher result array shared aross opcodes
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
@@ -125,7 +140,7 @@ func (in *EVMInterpreter) enforceRestrictions(op OpCode, operation operation, st
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // errExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	if in.intPool == nil {
 		in.intPool = poolOfIntPools.get()
 		defer func() {
@@ -137,6 +152,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
+
+	// Make sure the readOnly is only set if we aren't in readOnly yet.
+	// This makes also sure that the readOnly flag isn't removed for child calls.
+	if readOnly && !in.readOnly {
+		in.readOnly = true
+		defer func() { in.readOnly = false }()
+	}
 
 	// Reset the previous call's return data. It's unimportant to preserve the old buffer
 	// as every returning call will return new data anyway.
@@ -262,14 +284,4 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte) (ret []byte, err
 // run by the current interpreter.
 func (in *EVMInterpreter) CanRun(code []byte) bool {
 	return true
-}
-
-// IsReadOnly reports if the interpreter is in read only mode.
-func (in *EVMInterpreter) IsReadOnly() bool {
-	return in.readOnly
-}
-
-// SetReadOnly sets (or unsets) read only mode in the interpreter.
-func (in *EVMInterpreter) SetReadOnly(ro bool) {
-	in.readOnly = ro
 }

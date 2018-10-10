@@ -92,7 +92,7 @@ func listMounts(cliContext *cli.Context) {
 	mf := []fuse.MountInfo{}
 	err = client.CallContext(ctx, &mf, "swarmfs_listmounts")
 	if err != nil {
-		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
+		utils.Fatalf("encountered an error calling the RPC endpoint while listing mounts: %v", err)
 	}
 	if len(mf) == 0 {
 		fmt.Print("Could not found any swarmfs mounts. Please make sure you've specified the correct RPC endpoint\n")

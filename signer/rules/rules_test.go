@@ -74,7 +74,15 @@ func mixAddr(a string) (*common.MixedcaseAddress, error) {
 
 type alwaysDenyUI struct{}
 
+func (alwaysDenyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
+	return core.UserInputResponse{}, nil
+}
+
 func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
+}
+
+func (alwaysDenyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
 }
 
 func (alwaysDenyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
@@ -200,6 +208,11 @@ type dummyUI struct {
 	calls []string
 }
 
+func (d *dummyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
+	d.calls = append(d.calls, "OnInputRequired")
+	return core.UserInputResponse{}, nil
+}
+
 func (d *dummyUI) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	d.calls = append(d.calls, "ApproveTx")
 	return core.SignTxResponse{}, core.ErrRequestDenied
@@ -241,6 +254,11 @@ func (d *dummyUI) ShowInfo(message string) {
 func (d *dummyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.calls = append(d.calls, "OnApprovedTx")
 }
+
+func (d *dummyUI) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
+}
+
 func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 }
 
@@ -509,7 +527,16 @@ type dontCallMe struct {
 	t *testing.T
 }
 
+func (d *dontCallMe) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.UserInputResponse{}, nil
+}
+
 func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {
+}
+
+func (d *dontCallMe) OnMasterPassword(request *core.PasswordRequest) (core.PasswordResponse, error) {
+	return core.PasswordResponse{}, nil
 }
 
 func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {

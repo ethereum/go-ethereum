@@ -28,10 +28,13 @@ package priorityqueue
 import (
 	"context"
 	"errors"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
-	errContention  = errors.New("queue contention")
+	ErrContention = errors.New("contention")
+
 	errBadPriority = errors.New("bad priority")
 
 	wakey = struct{}{}
@@ -39,7 +42,7 @@ var (
 
 // PriorityQueue is the basic structure
 type PriorityQueue struct {
-	queues []chan interface{}
+	Queues []chan interface{}
 	wakeup chan struct{}
 }
 
@@ -50,27 +53,29 @@ func New(n int, l int) *PriorityQueue {
 		queues[i] = make(chan interface{}, l)
 	}
 	return &PriorityQueue{
-		queues: queues,
+		Queues: queues,
 		wakeup: make(chan struct{}, 1),
 	}
 }
 
 // Run is a forever loop popping items from the queues
 func (pq *PriorityQueue) Run(ctx context.Context, f func(interface{})) {
-	top := len(pq.queues) - 1
+	top := len(pq.Queues) - 1
 	p := top
 READ:
 	for {
-		q := pq.queues[p]
+		q := pq.Queues[p]
 		select {
 		case <-ctx.Done():
 			return
 		case x := <-q:
+			log.Trace("priority.queue f(x)", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 			f(x)
 			p = top
 		default:
 			if p > 0 {
 				p--
+				log.Trace("priority.queue p > 0", "p", p)
 				continue READ
 			}
 			p = top
@@ -78,6 +83,7 @@ READ:
 			case <-ctx.Done():
 				return
 			case <-pq.wakeup:
+				log.Trace("priority.queue wakeup", "p", p)
 			}
 		}
 	}
@@ -85,23 +91,15 @@ READ:
 
 // Push pushes an item to the appropriate queue specified in the priority argument
 // if context is given it waits until either the item is pushed or the Context aborts
-// otherwise returns errContention if the queue is full
-func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
-	if p < 0 || p >= len(pq.queues) {
+func (pq *PriorityQueue) Push(x interface{}, p int) error {
+	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
-	if ctx == nil {
-		select {
-		case pq.queues[p] <- x:
-		default:
-			return errContention
-		}
-	} else {
-		select {
-		case pq.queues[p] <- x:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	log.Trace("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
+	select {
+	case pq.Queues[p] <- x:
+	default:
+		return ErrContention
 	}
 	select {
 	case pq.wakeup <- wakey:

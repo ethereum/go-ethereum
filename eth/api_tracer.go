@@ -119,12 +119,15 @@ func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.Block
 	if to == nil {
 		return nil, fmt.Errorf("end block #%d not found", end)
 	}
+	if from.Number().Cmp(to.Number()) >= 0 {
+		return nil, fmt.Errorf("end block (#%d) needs to come after start block (#%d)", end, start)
+	}
 	return api.traceChain(ctx, from, to, config)
 }
 
 // traceChain configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
-// per transaction, dependent on the requestd tracer.
+// per transaction, dependent on the requested tracer.
 func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Block, config *TraceConfig) (*rpc.Subscription, error) {
 	// Tracing a chain is a **long** operation, only do with subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -291,13 +294,15 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
-			// Reference the trie twice, once for us, once for the trancer
+			// Reference the trie twice, once for us, once for the tracer
 			database.TrieDB().Reference(root, common.Hash{})
 			if number >= origin {
 				database.TrieDB().Reference(root, common.Hash{})
 			}
 			// Dereference all past tries we ourselves are done working with
-			database.TrieDB().Dereference(proot)
+			if proot != (common.Hash{}) {
+				database.TrieDB().Dereference(proot)
+			}
 			proot = root
 
 			// TODO(karalabe): Do we need the preimages? Won't they accumulate too much?
@@ -384,6 +389,15 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 		return nil, fmt.Errorf("could not read file: %v", err)
 	}
 	return api.TraceBlock(ctx, blob, config)
+}
+
+// TraceBadBlock returns the structured logs created during the execution of a block
+// within the blockchain 'badblocks' cache
+func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, index int, config *TraceConfig) ([]*txTraceResult, error) {
+	if blocks := api.eth.blockchain.BadBlocks(); index < len(blocks) {
+		return api.traceBlock(ctx, blocks[index], config)
+	}
+	return nil, fmt.Errorf("index out of range")
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and
@@ -526,7 +540,9 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 		database.TrieDB().Reference(root, common.Hash{})
-		database.TrieDB().Dereference(proot)
+		if proot != (common.Hash{}) {
+			database.TrieDB().Dereference(proot)
+		}
 		proot = root
 	}
 	nodes, imgs := database.TrieDB().Size()

@@ -185,6 +185,7 @@ func TestTransactionJSON(t *testing.T) {
 	}
 	signer := NewEIP155Signer(common.Big1)
 
+	transactions := make([]*Transaction, 0, 50)
 	for i := uint64(0); i < 25; i++ {
 		var tx *Transaction
 		switch i % 2 {
@@ -193,20 +194,25 @@ func TestTransactionJSON(t *testing.T) {
 		case 1:
 			tx = NewContractCreation(i, common.Big0, 1, common.Big2, []byte("abcdef"))
 		}
+		transactions = append(transactions, tx)
 
-		tx, err := SignTx(tx, signer, key)
+		signedTx, err := SignTx(tx, signer, key)
 		if err != nil {
 			t.Fatalf("could not sign transaction: %v", err)
 		}
 
+		transactions = append(transactions, signedTx)
+	}
+
+	for _, tx := range transactions {
 		data, err := json.Marshal(tx)
 		if err != nil {
-			t.Errorf("json.Marshal failed: %v", err)
+			t.Fatalf("json.Marshal failed: %v", err)
 		}
 
 		var parsedTx *Transaction
 		if err := json.Unmarshal(data, &parsedTx); err != nil {
-			t.Errorf("json.Unmarshal failed: %v", err)
+			t.Fatalf("json.Unmarshal failed: %v", err)
 		}
 
 		// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S

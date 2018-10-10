@@ -48,7 +48,7 @@ func main() {
 		cli.StringFlag{
 			Name:        "cluster-endpoint",
 			Value:       "testing",
-			Usage:       "cluster to point to (open, or testing)",
+			Usage:       "cluster to point to (local, open or testing)",
 			Destination: &cluster,
 		},
 		cli.IntFlag{
@@ -76,8 +76,8 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:        "filesize",
-			Value:       1,
-			Usage:       "file size for generated random file in MB",
+			Value:       1024,
+			Usage:       "file size for generated random file in KB",
 			Destination: &filesize,
 		},
 	}
