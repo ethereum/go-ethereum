@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -68,6 +67,14 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 		"addr", addr.String(), "data", common.Bytes2Hex(data), "content-type", contentType)
 	b, e := l.api.SignData(ctx, contentType, addr, data)
 	l.log.Info("SignData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+	return b, e
+}
+
+func (l *AuditLogger) SignStructuredData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
+	l.log.Info("SignStructuredData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", data)
+	b, e := l.api.SignStructuredData(ctx, addr, TypedData{})
+	l.log.Info("SignStructuredData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
 	return b, e
 }
 

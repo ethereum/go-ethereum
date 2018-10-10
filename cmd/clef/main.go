@@ -327,9 +327,10 @@ func initialize(c *cli.Context) error {
 		// If using the stdioui, we can't do the 'confirm'-flow
 		fmt.Fprintf(logOutput, legalWarning)
 	} else {
-		if !confirm(legalWarning) {
-			return fmt.Errorf("aborted by user")
-		}
+		// Temporarily disabled while in development
+		//if !confirm(legalWarning) {
+		//	return fmt.Errorf("aborted by user")
+		//}
 	}
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(logOutput, log.TerminalFormat(true))))
@@ -552,14 +553,15 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var password string
 	// If ui is not nil, get the password from ui.
 	if ui != nil {
-		resp, err := ui.OnInputRequired(core.UserInputRequest{
-			Title:      "Master Password",
-			Prompt:     "Please enter the password to decrypt the master seed",
-			IsPassword: true})
-		if err != nil {
-			return nil, err
-		}
-		password = resp.Text
+		// Temporarily disabled while in development
+		//resp, err := ui.OnInputRequired(core.UserInputRequest{
+		//	Title:      "Master Password",
+		//	Prompt:     "Please enter the password to decrypt the master seed",
+		//	IsPassword: true})
+		//if err != nil {
+		//	return nil, err
+		//}
+		//password = resp.Text
 	} else {
 		password = getPassPhrase("Decrypt master seed of clef", false)
 	}

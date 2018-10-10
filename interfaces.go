@@ -209,3 +209,8 @@ type GasEstimator interface {
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
 }
+
+// TypedData is the standard for EIP-712 signed data.
+type TypedData struct {
+	Hash *common.Hash		`json:"hash"`
+}
