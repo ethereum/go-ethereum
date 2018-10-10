@@ -244,23 +244,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return nil
 		}
 		// Hook penalty.
-		c.HookPenalty = func(chain consensus.ChainReader, signers []common.Address, blockNumberEpoc uint64) ([]common.Address, error) {
+		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
 				log.Error("Fail to connect IPC client for blockSigner", "error", err)
 			}
 			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
-			var penSigners []common.Address
 			if prevEpoc > 0 {
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
-				prevSigners := c.GetMasternodes(chain, prevHeader)
-				for _, signer := range signers {
-					for _, prevSigner := range prevSigners {
-						if signer == prevSigner {
-							penSigners = append(penSigners, signer)
-						}
-					}
-				}
+				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
 					blockSignerAddr := common.HexToAddress(common.BlockSigners)
 					// Loop for each block to check missing sign.
@@ -282,9 +274,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 				}
+				return penSigners, nil
 			}
 
-			return penSigners, nil
+			return []common.Address{}, nil
 		}
 
 		// Hook reward for posv validator.

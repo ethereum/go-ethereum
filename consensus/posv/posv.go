@@ -212,8 +212,8 @@ type Posv struct {
 	lock   sync.RWMutex    // Protects the signer fields
 
 	HookReward  func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookPenalty func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPrepare func(header *types.Header, signers []common.Address) error
-	HookPenalty func(chain consensus.ChainReader, signers []common.Address, blockNumberEpoc uint64) ([]common.Address, error)
 }
 
 // New creates a Posv proof-of-stake-voting consensus engine with the initial
@@ -641,7 +641,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		signers := snap.signers()
 
 		if c.HookPenalty != nil {
-			penSigners, _ := c.HookPenalty(chain, signers, number)
+			penSigners, _ := c.HookPenalty(chain, number)
 
 			if len(penSigners) > 0 {
 				// Keep remove penalty signer out of signer list.
@@ -654,8 +654,8 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 				}
 
 				var penBytes []byte
+				log.Debug("Penalty Info", "signers", penSigners, "number", number)
 				for _, penSigner := range penSigners {
-					log.Error("penSigner", "penSigner", penSigner.String())
 					// Convert number to byte.
 					penByte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", penSigner)), common.AddressLength)
 					penBytes = append(penBytes, penByte...)
@@ -672,7 +672,6 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 			checkEpoc := uint64(i) * c.config.Epoch
 			if number > checkEpoc {
 				prevEpoc := number - checkEpoc
-				log.Error("prevEpoc", "prevEpoc", prevEpoc, "checkEpoc", checkEpoc, "number", number)
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				prevEpocBlock := chain.GetBlock(prevHeader.Hash(), prevEpoc)
 				penalties := prevEpocBlock.Penalties()
@@ -682,7 +681,6 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 						for _, signer := range prevSigners {
 							for _, prevSigner := range prevSigners {
 								if signer == prevSigner {
-									log.Error("preventSigner", "preventSigner", signer.String())
 									preventSigners = append(preventSigners, signer)
 								}
 							}
