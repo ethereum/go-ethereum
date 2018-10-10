@@ -17,7 +17,7 @@
 package adapters
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -158,7 +159,6 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	}
 	defer func() {
 		if err != nil {
-			log.Error("node failed to start", "err", err)
 			n.Stop()
 		}
 	}()
@@ -175,57 +175,77 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 		return fmt.Errorf("error generating node config: %s", err)
 	}
 
-	// use a pipe for stderr so we can both copy the node's stderr to
-	// os.Stderr and read the WebSocket address from the logs
-	stderrR, stderrW := io.Pipe()
-	stderr := io.MultiWriter(os.Stderr, stderrW)
+	// start the one-shot server that waits for startup information
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	statusURL, statusC := n.waitForStartupJSON(ctx)
 
 	// start the node
 	cmd := n.newCmd()
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("_P2P_NODE_CONFIG=%s", confData))
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(),
+		"_P2P_STATUS_URL="+statusURL,
+		"_P2P_NODE_CONFIG="+string(confData),
+	)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting node: %s", err)
 	}
 	n.Cmd = cmd
 
 	// read the WebSocket address from the stderr logs
-	var wsAddr string
-	wsAddrC := make(chan string)
-	go func() {
-		s := bufio.NewScanner(stderrR)
-		for s.Scan() {
-			if strings.Contains(s.Text(), "WebSocket endpoint opened") {
-				wsAddrC <- wsAddrPattern.FindString(s.Text())
-			}
-		}
-	}()
-	select {
-	case wsAddr = <-wsAddrC:
-		if wsAddr == "" {
-			return errors.New("failed to read WebSocket address from stderr")
-		}
-	case <-time.After(10 * time.Second):
-		return errors.New("timed out waiting for WebSocket address on stderr")
+	status := <-statusC
+	if status.Err != "" {
+		return errors.New(status.Err)
 	}
-
-	// create the RPC client and load the node info
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := rpc.DialWebsocket(ctx, wsAddr, "")
+	client, err := rpc.DialWebsocket(ctx, status.WSEndpoint, "http://localhost")
 	if err != nil {
-		return fmt.Errorf("error dialing rpc websocket: %s", err)
+		return fmt.Errorf("can't connect to RPC server: %v", err)
 	}
-	var info p2p.NodeInfo
-	if err := client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
-		return fmt.Errorf("error getting node info: %s", err)
-	}
-	n.client = client
-	n.wsAddr = wsAddr
-	n.Info = &info
 
+	// node ready :)
+	n.client = client
+	n.wsAddr = status.WSEndpoint
+	n.Info = status.NodeInfo
 	return nil
+}
+
+// waitForStartupJSON runs a one-shot HTTP server to receive a startup report.
+func (n *ExecNode) waitForStartupJSON(ctx context.Context) (string, chan nodeStartupJSON) {
+	var (
+		ch       = make(chan nodeStartupJSON, 1)
+		ip       = ExternalIP()
+		quitOnce sync.Once
+		srv      http.Server
+	)
+	l, err := net.Listen("tcp", ip.String()+":0")
+	if err != nil {
+		ch <- nodeStartupJSON{Err: err.Error()}
+		return "", ch
+	}
+	quit := func(status nodeStartupJSON) {
+		quitOnce.Do(func() {
+			l.Close()
+			ch <- status
+		})
+	}
+	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var status nodeStartupJSON
+		if err := json.NewDecoder(r.Body).Decode(&status); err != nil {
+			status.Err = fmt.Sprintf("can't decode startup report: %v", err)
+		}
+		quit(status)
+	})
+	// Run the HTTP server, but don't wait forever and shut it down
+	// if the context is canceled.
+	go srv.Serve(l)
+	go func() {
+		<-ctx.Done()
+		quit(nodeStartupJSON{Err: "didn't get startup report"})
+	}()
+
+	url := "http://" + l.Addr().String()
+	return url, ch
 }
 
 // execCommand returns a command which runs the node locally by exec'ing
@@ -355,18 +375,54 @@ func execP2PNode() {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
+	statusURL := os.Getenv("_P2P_STATUS_URL")
+	if statusURL == "" {
+		log.Crit("missing _P2P_STATUS_URL")
+	}
 
+	// Start the node and gather startup report.
+	var status nodeStartupJSON
+	stack, stackErr := startExecNodeStack()
+	if stackErr != nil {
+		status.Err = stackErr.Error()
+	} else {
+		status.WSEndpoint = "ws://" + stack.WSEndpoint()
+		status.NodeInfo = stack.Server().NodeInfo()
+	}
+
+	// Send status to the host.
+	statusJSON, _ := json.Marshal(status)
+	if _, err := http.Post(statusURL, "application/json", bytes.NewReader(statusJSON)); err != nil {
+		log.Crit("Can't post startup info", "url", statusURL, "err", err)
+	}
+	if stackErr != nil {
+		os.Exit(1)
+	}
+
+	// Stop the stack if we get a SIGTERM signal.
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		log.Info("Received SIGTERM, shutting down...")
+		stack.Stop()
+	}()
+	stack.Wait() // Wait for the stack to exit.
+}
+
+func startExecNodeStack() (*node.Node, error) {
 	// read the services from argv
 	serviceNames := strings.Split(os.Args[1], ",")
 
 	// decode the config
 	confEnv := os.Getenv("_P2P_NODE_CONFIG")
 	if confEnv == "" {
-		log.Crit("missing _P2P_NODE_CONFIG")
+		return nil, fmt.Errorf("missing _P2P_NODE_CONFIG")
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
-		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
+		return nil, fmt.Errorf("error decoding _P2P_NODE_CONFIG: %v", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
@@ -381,7 +437,7 @@ func execP2PNode() {
 	// initialize the devp2p stack
 	stack, err := node.New(&conf.Stack)
 	if err != nil {
-		log.Crit("error creating node stack", "err", err)
+		return nil, fmt.Errorf("error creating node stack: %v", err)
 	}
 
 	// register the services, collecting them into a map so we can wrap
@@ -390,7 +446,7 @@ func execP2PNode() {
 	for _, name := range serviceNames {
 		serviceFunc, exists := serviceFuncs[name]
 		if !exists {
-			log.Crit("unknown node service", "name", name)
+			return nil, fmt.Errorf("unknown node service %q", err)
 		}
 		constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
 			ctx := &ServiceContext{
@@ -409,34 +465,30 @@ func execP2PNode() {
 			return service, nil
 		}
 		if err := stack.Register(constructor); err != nil {
-			log.Crit("error starting service", "name", name, "err", err)
+			return stack, fmt.Errorf("error registering service %q: %v", name, err)
 		}
 	}
 
 	// register the snapshot service
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return &snapshotService{services}, nil
-	}); err != nil {
-		log.Crit("error starting snapshot service", "err", err)
+	})
+	if err != nil {
+		return stack, fmt.Errorf("error starting snapshot service: %v", err)
 	}
 
 	// start the stack
-	if err := stack.Start(); err != nil {
-		log.Crit("error stating node stack", "err", err)
+	if err = stack.Start(); err != nil {
+		err = fmt.Errorf("error starting stack: %v", err)
 	}
+	return stack, err
+}
 
-	// stop the stack if we get a SIGTERM signal
-	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, syscall.SIGTERM)
-		defer signal.Stop(sigc)
-		<-sigc
-		log.Info("Received SIGTERM, shutting down...")
-		stack.Stop()
-	}()
-
-	// wait for the stack to exit
-	stack.Wait()
+// nodeStartupJSON is sent to the simulation host after startup.
+type nodeStartupJSON struct {
+	Err        string
+	WSEndpoint string
+	NodeInfo   *p2p.NodeInfo
 }
 
 // snapshotService is a node.Service which wraps a list of services and
