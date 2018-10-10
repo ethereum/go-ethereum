@@ -228,12 +228,12 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 }
 
 func TestRequestFromPeers(t *testing.T) {
-	dummyPeerId := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
 	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerId, "dummy", nil), nil, nil)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: false,
@@ -254,18 +254,18 @@ func TestRequestFromPeers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *id != dummyPeerId {
+	if *id != dummyPeerID {
 		t.Fatalf("Expected an id, got %v", id)
 	}
 }
 
 func TestRequestFromPeersWithLightNode(t *testing.T) {
-	dummyPeerId := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
 	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerId, "dummy", nil), nil, nil)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: true,
