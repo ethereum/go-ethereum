@@ -250,7 +250,6 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 // Stop stops the node with the given ID
 func (net *Network) Stop(id enode.ID) error {
 	net.lock.Lock()
-	defer net.lock.Unlock()
 	node := net.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -258,12 +257,17 @@ func (net *Network) Stop(id enode.ID) error {
 	if !node.Up {
 		return fmt.Errorf("node %v already down", id)
 	}
-	if err := node.Stop(); err != nil {
+	node.Up = false
+	net.lock.Unlock()
+
+	err := node.Stop()
+	if err != nil {
+		net.lock.Lock()
+		node.Up = true
+		net.lock.Unlock()
 		return err
 	}
-	node.Up = false
-	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
-
+	log.Info("Stopped node", "id", id, "err", err)
 	net.events.Send(ControlEvent(node))
 	return nil
 }
