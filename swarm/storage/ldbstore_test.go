@@ -304,15 +304,14 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	var cap int
 
 	cap = defaultMaxGCRound
-	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*2+1), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("A/%d/%d/%d", cap, cap*2, 10000), testLDBStoreCollectGarbage)
 
 	cap = defaultMaxGCRound / 2
-	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
-	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
-
+	t.Run(fmt.Sprintf("A/%d/%d/%d", cap, cap*4, 15000), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d/%d", cap, cap*4, 15000), testLDBStoreRemoveThenCollectGarbage)
 	cap = defaultMaxGCRound * 2
-	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
-	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+	t.Run(fmt.Sprintf("A/%d/%d/%d", cap, cap*4, 60000), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d/%d", cap, cap*4, 60000), testLDBStoreRemoveThenCollectGarbage)
 }
 
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
@@ -327,24 +326,43 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectMissing, err := strconv.Atoi(params[4])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+	ldb.startGC(capacity)
+	roundTarget := ldb.gc.target
 
-	// wait for garbage collection to kick in on the responsible actor
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	waitGc(ctx, ldb)
+	var allChunks []Chunk
+	remaining := n
+	for remaining > 0 {
+		var putCount int
+		if remaining < roundTarget {
+			putCount = remaining
+		} else {
+			putCount = roundTarget
+		}
+		remaining -= putCount
+		chunks, err := mputRandomChunks(ldb, putCount, int64(ch.DefaultSize))
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		allChunks = append(allChunks, chunks...)
+		log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n)
+
+		// wait for garbage collection to kick in on the responsible actor
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		waitGc(ctx, ldb)
+	}
 
 	var missing int
-	for _, ch := range chunks {
+	for _, ch := range allChunks {
 		ret, err := ldb.Get(context.TODO(), ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
@@ -361,8 +379,8 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 		log.Trace("got back chunk", "chunk", ret)
 	}
 
-	if missing < n-capacity {
-		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", n-capacity, missing)
+	if missing < expectMissing {
+		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", expectMissing, missing)
 	}
 
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
@@ -418,7 +436,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	surplus, err := strconv.Atoi(params[3])
+	n, err := strconv.Atoi(params[3])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,8 +444,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 
-	n := capacity
-
+	surplus := n - capacity
 	chunks := []Chunk{}
 	for i := 0; i < n+surplus; i++ {
 		c := GenerateRandomChunk(ch.DefaultSize)
@@ -440,8 +457,11 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	}
 
 	// delete all chunks
+	deletes := 0
 	for i := 0; i < n; i++ {
-		ldb.Delete(chunks[i].Address()) //&indx, ikey, proximity)
+		if ldb.Delete(chunks[i].Address()) == nil {
+			deletes++
+		}
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
@@ -450,7 +470,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 		t.Fatalf("ldb.entrCnt expected 0 got %v", ldb.entryCnt)
 	}
 
-	expAccessCnt := uint64(n * 2)
+	expAccessCnt := uint64(n + deletes)
 	if ldb.accessCnt != expAccessCnt {
 		t.Fatalf("ldb.accessCnt expected %v got %v", expAccessCnt, ldb.accessCnt)
 	}
@@ -461,27 +481,42 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	n = capacity + surplus
+	ldb.startGC(capacity)
+	roundTarget := ldb.gc.target
 
-	for i := 0; i < n; i++ {
-		ldb.Put(context.TODO(), chunks[i])
+	remaining := n
+	var puts int
+	for remaining > 0 {
+		var putCount int
+		if remaining < roundTarget {
+			putCount = remaining
+		} else {
+			putCount = roundTarget
+		}
+		remaining -= putCount
+		for putCount > 0 {
+			ldb.Put(context.TODO(), chunks[puts])
+			log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n, "puts", puts, "remaining", remaining)
+			puts++
+			putCount--
+		}
+
+		// wait for garbage collection to kick in on the responsible actor
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		waitGc(ctx, ldb)
 	}
-
-	// wait for garbage collection
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	waitGc(ctx, ldb)
 
 	// expect first surplus chunks to be missing, because they have the smallest access value
 	for i := 0; i < surplus; i++ {
 		_, err := ldb.Get(context.TODO(), chunks[i].Address())
 		if err == nil {
-			t.Fatal("expected surplus chunk to be missing, but got no error")
+			t.Fatalf("expected surplus chunk %d to be missing, but got no error", i)
 		}
 	}
 
 	// expect last chunks to be present, as they have the largest access value
-	for i := surplus; i < surplus+capacity; i++ {
+	for i := surplus + 1; i < n; i++ {
 		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
 		if err != nil {
 			t.Fatalf("chunk %v: expected no error, but got %s", i, err)

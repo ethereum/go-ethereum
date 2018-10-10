@@ -113,7 +113,6 @@ type LDBStore struct {
 	po       func(Address) uint8
 
 	batchesC chan struct{}
-	garbageC chan struct{}
 	closed   bool
 	batch    *dbBatch
 	lock     sync.RWMutex
@@ -150,7 +149,6 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s.quit = make(chan struct{})
 
 	s.batchesC = make(chan struct{}, 1)
-	s.garbageC = make(chan struct{}, 1)
 	go s.writeBatches()
 	s.batch = newBatch()
 	// associate encodeData with default functionality
@@ -306,13 +304,13 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 	return NewChunk(addr, data[32:]), nil
 }
 
-func (s *LDBStore) collectGarbage() {
+func (s *LDBStore) collectGarbage() error {
 
 	// the running param prevents duplicate gc from starting when one is already running
 	s.lock.Lock()
 	if s.gc.running {
 		s.lock.Unlock()
-		return
+		return nil
 	}
 	s.gc.running = true
 	defer func() {
@@ -324,45 +322,61 @@ func (s *LDBStore) collectGarbage() {
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
-	it := s.db.NewIterator()
-	defer it.Release()
-
+	// calculate the amount of chunks to collect and reset counter
 	s.startGC(int(s.entryCnt))
-	log.Debug("collectGarbage", "count", s.gc.target, "entryCnt", s.entryCnt)
+	log.Debug("collectGarbage", "target", s.gc.target, "entryCnt", s.entryCnt)
 
 	var totalDeleted int
-	ok := it.Seek([]byte{keyGCIdx})
 	for s.gc.count < s.gc.target {
+		it := s.db.NewIterator()
+		ok := it.Seek([]byte{keyGCIdx})
 		var singleIterationCount int
+
+		// every batch needs a lock so we avoid entries changing accessidx in the meantime
 		s.lock.Lock()
 		for ; ok && (singleIterationCount < s.gc.maxBatch); ok = it.Next() {
-			itkey := it.Key()
 
+			// quit if no more access index keys
+			itkey := it.Key()
 			if (itkey == nil) || (itkey[0] != keyGCIdx) {
 				break
 			}
 
+			// get chunk data entry from access index
 			val := it.Value()
 			index, po, hash := parseGCIdxEntry(itkey[1:], val)
 			keyIdx := make([]byte, 33)
 			keyIdx[0] = keyIndex
 			copy(keyIdx[1:], hash)
 
+			// add delete operation to batch
 			s.delete(s.gc.batch.Batch, index, keyIdx, po)
 			singleIterationCount++
 			s.gc.count++
-			if s.gc.count > s.gc.maxRound {
+
+			// break if target is not on max garbage batch boundary
+			if s.gc.count >= s.gc.target {
 				break
 			}
 		}
+
+		// commit batch changes
+		s.gc.batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+		l := s.gc.batch.Len()
+		if err := s.db.Write(s.gc.batch.Batch); err != nil {
+			s.lock.Unlock()
+			it.Release()
+			return fmt.Errorf("unable to write batch: %v", err)
+		}
+		log.Trace(fmt.Sprintf("batch write (%d entries)", l))
 		s.lock.Unlock()
-		s.garbageC <- struct{}{}
+		it.Release()
 		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 	}
 	log.Debug("garbage collect done", "c", s.gc.count)
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(totalDeleted))
-
+	return nil
 }
 
 // Export writes all chunks from the store to a tar archive, returning the
@@ -593,17 +607,20 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
-func (s *LDBStore) Delete(addr Address) {
+func (s *LDBStore) Delete(addr Address) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	ikey := getIndexKey(addr)
 
 	var indx dpaDBIndex
 	proximity := s.po(addr)
-	s.tryAccessIdx(ikey, proximity, &indx)
-
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	if !s.tryAccessIdx(ikey, proximity, &indx) {
+		return fmt.Errorf("noent")
+	}
 
 	s.deleteNow(&indx, ikey, proximity)
+	return nil
 }
 
 func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) {
@@ -612,6 +629,7 @@ func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) {
 	s.db.Write(batch)
 }
 
+// NOTE: decrements entrycount regardless if the chunk exists upon deletion. Risk of wrap to max uint64
 func (s *LDBStore) delete(batch *leveldb.Batch, idx *dpaDBIndex, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
@@ -719,31 +737,20 @@ func (s *LDBStore) writeBatches() {
 			log.Debug("DbStore: quit batch write loop")
 			return
 		case <-s.batchesC:
-			err := s.writeCurrentBatch(false)
+			err := s.writeCurrentBatch()
 			if err != nil {
 				log.Debug("DbStore: quit batch write loop", "err", err.Error())
 				return
 			}
-		case <-s.garbageC:
-			err := s.writeCurrentBatch(true)
-			if err != nil {
-				log.Debug("DbStore: quit batch garbage write loop", "err", err.Error())
-				return
-			}
-
 		}
 	}
 
 }
 
-func (s *LDBStore) writeCurrentBatch(garbage bool) error {
+func (s *LDBStore) writeCurrentBatch() error {
 	s.lock.Lock()
 	var b *dbBatch
-	if garbage {
-		b = s.gc.batch
-	} else {
-		b = s.batch
-	}
+	b = s.batch
 	l := b.Len()
 	if l == 0 {
 		s.lock.Unlock()
@@ -752,15 +759,11 @@ func (s *LDBStore) writeCurrentBatch(garbage bool) error {
 	e := s.entryCnt
 	d := s.dataIdx
 	a := s.accessCnt
-	if garbage {
-		s.gc.batch = newBatch()
-	} else {
-		s.batch = newBatch()
-	}
+	s.batch = newBatch()
 	b.err = s.writeBatch(b, e, d, a)
 	close(b.c)
 	s.lock.Unlock()
-	if e > s.capacity && !garbage {
+	if e > s.capacity {
 		go s.collectGarbage()
 	}
 	return nil
@@ -768,13 +771,7 @@ func (s *LDBStore) writeCurrentBatch(garbage bool) error {
 
 // must be called non concurrently
 func (s *LDBStore) writeBatch(b *dbBatch, entryCnt, dataIdx, accessCnt uint64) error {
-	ub := U64ToBytes(entryCnt)
-	if len(ub) != 8 || len(keyEntryCnt) != 1 {
-		e := fmt.Errorf("ub fail: %d -> %v . %d", entryCnt, ub, len(keyEntryCnt))
-		log.Error("key", "e", e)
-		return e
-	}
-	b.Put(keyEntryCnt, ub)
+	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
 	l := b.Len()
@@ -800,8 +797,6 @@ func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
 
 // try to find index; if found, update access cnt and return true
 func (s *LDBStore) tryAccessIdx(ikey []byte, po uint8, index *dpaDBIndex) bool {
-	//s.axxLock.Lock()
-	//defer s.axxLock.Unlock()
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		return false
@@ -923,7 +918,7 @@ func (s *LDBStore) Close() {
 	s.closed = true
 	s.lock.Unlock()
 	// force writing out current batch
-	s.writeCurrentBatch(false)
+	s.writeCurrentBatch()
 	close(s.batchesC)
 	s.db.Close()
 }
