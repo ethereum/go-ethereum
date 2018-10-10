@@ -17,7 +17,8 @@
 // disk storage layer for the package bzz
 // DbStore implements the ChunkStore interface and is used by the FileStore as
 // persistent storage of chunks
-// it implements purging based on access count allowing for external control of // max capacity
+// it implements purging based on access count allowing for external control of
+// max capacity
 
 package storage
 
@@ -45,6 +46,10 @@ const (
 	defaultGCRatio    = 10
 	defaultMaxGCRound = 10000
 	defaultMaxGCBatch = 5000
+
+	wEntryCnt  = 1 << 0
+	wIndexCnt  = 1 << 1
+	wAccessCnt = 1 << 2
 )
 
 var (
@@ -116,9 +121,8 @@ type LDBStore struct {
 	closed   bool
 	batch    *dbBatch
 	lock     sync.RWMutex
-	//axxLock  sync.RWMutex
-	quit chan struct{}
-	gc   *garbage
+	quit     chan struct{}
+	gc       *garbage
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
@@ -360,15 +364,7 @@ func (s *LDBStore) collectGarbage() error {
 			}
 		}
 
-		// commit batch changes
-		s.gc.batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
-		l := s.gc.batch.Len()
-		if err := s.db.Write(s.gc.batch.Batch); err != nil {
-			s.lock.Unlock()
-			it.Release()
-			return fmt.Errorf("unable to write batch: %v", err)
-		}
-		log.Trace(fmt.Sprintf("batch write (%d entries)", l))
+		s.writeBatch(s.gc.batch, wEntryCnt)
 		s.lock.Unlock()
 		it.Release()
 		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
@@ -607,36 +603,36 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
+// Delete is thread safe and removes a chunk and updates indices. Increments accesscnt
 func (s *LDBStore) Delete(addr Address) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	ikey := getIndexKey(addr)
 
-	var indx dpaDBIndex
+	var idx dpaDBIndex
 	proximity := s.po(addr)
-	if !s.tryAccessIdx(ikey, proximity, &indx) {
+	if !s.tryAccessIdx(ikey, proximity, &idx) {
 		return fmt.Errorf("noent")
 	}
-
-	s.deleteNow(&indx, ikey, proximity)
-	return nil
+	return s.deleteNow(&idx, ikey, proximity)
 }
 
-func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) {
+func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) error {
 	batch := new(leveldb.Batch)
 	s.delete(batch, idx, idxKey, po)
-	s.db.Write(batch)
+	return s.db.Write(batch)
 }
 
 // NOTE: decrements entrycount regardless if the chunk exists upon deletion. Risk of wrap to max uint64
 func (s *LDBStore) delete(batch *leveldb.Batch, idx *dpaDBIndex, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
-	batch.Delete(idxKey)
 	gcIdxKey := getGCIdxKey(idx)
 	batch.Delete(gcIdxKey)
-	batch.Delete(getDataKey(idx.Idx, po))
+	dataKey := getDataKey(idx.Idx, po)
+	batch.Delete(dataKey)
+	batch.Delete(idxKey)
 	s.entryCnt--
 	dbEntryCount.Dec(1)
 	cntKey := make([]byte, 2)
@@ -668,11 +664,12 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Address())
 
-	s.lock.Lock()
 	ikey := getIndexKey(chunk.Address())
 	var index dpaDBIndex
 
 	po := s.po(chunk.Address())
+
+	s.lock.Lock()
 
 	if s.closed {
 		s.lock.Unlock()
@@ -685,7 +682,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	if err != nil {
 		s.doPut(chunk, &index, po)
 	} else {
-		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Address)
+		log.Debug("ldbstore.put: chunk already exists, only update access", "key", chunk.Address(), "po", po)
 		decodeIndex(idata, &index)
 	}
 	index.Access = s.accessCnt
@@ -749,31 +746,32 @@ func (s *LDBStore) writeBatches() {
 
 func (s *LDBStore) writeCurrentBatch() error {
 	s.lock.Lock()
-	var b *dbBatch
-	b = s.batch
+	defer s.lock.Unlock()
+	b := s.batch
 	l := b.Len()
 	if l == 0 {
-		s.lock.Unlock()
 		return nil
 	}
-	e := s.entryCnt
-	d := s.dataIdx
-	a := s.accessCnt
 	s.batch = newBatch()
-	b.err = s.writeBatch(b, e, d, a)
+	b.err = s.writeBatch(b, wEntryCnt|wAccessCnt|wIndexCnt)
 	close(b.c)
-	s.lock.Unlock()
-	if e > s.capacity {
+	if s.entryCnt >= s.capacity {
 		go s.collectGarbage()
 	}
 	return nil
 }
 
 // must be called non concurrently
-func (s *LDBStore) writeBatch(b *dbBatch, entryCnt, dataIdx, accessCnt uint64) error {
-	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
-	b.Put(keyDataIdx, U64ToBytes(dataIdx))
-	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
+func (s *LDBStore) writeBatch(b *dbBatch, wFlag uint8) error {
+	if wFlag&wEntryCnt > 0 {
+		b.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+	}
+	if wFlag&wIndexCnt > 0 {
+		b.Put(keyDataIdx, U64ToBytes(s.dataIdx))
+	}
+	if wFlag&wAccessCnt > 0 {
+		b.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
+	}
 	l := b.Len()
 	if err := s.db.Write(b.Batch); err != nil {
 		return fmt.Errorf("unable to write batch: %v", err)
