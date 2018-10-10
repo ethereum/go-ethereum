@@ -421,13 +421,22 @@ func (self *worker) commitNewWork() {
 		// check if we are right after parent's coinbase in the list
 		// only go with Clique
 		if self.config.Clique != nil {
+			// get masternodes set from latest checkpoint
+			lastCheckpointNumber := parent.NumberU64() - (parent.NumberU64() % self.config.Clique.Epoch)
+			preCheckpointHeader := self.chain.GetHeaderByNumber(lastCheckpointNumber)
+			extraVanity := clique.GetExtraVanity()
+			extraSeal := clique.GetExtraSeal()
+			masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
+			for i := 0; i < len(masternodes); i++ {
+				copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
+			}
 			c := self.engine.(*clique.Clique)
 			snap, err := c.GetSnapshot(self.chain, parent.Header())
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
-			ok, err := clique.YourTurn(snap, parent.Header(), self.coinbase)
+			ok, err := clique.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
