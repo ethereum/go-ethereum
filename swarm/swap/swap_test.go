@@ -22,29 +22,22 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math"
 	mrand "math/rand"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	colorable "github.com/mattn/go-colorable"
 )
 
 var (
-	p2pPort       = 30100
-	ipcpath       = ".swarm.ipc"
-	datadirPrefix = ".data_"
-	loglevel      = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
 type testPriceOracle struct{}
@@ -56,10 +49,6 @@ func (tpo *testPriceOracle) Accountable(msg interface{}) bool {
 
 func (tpo *testPriceOracle) Price(size uint32, msg interface{}) (protocols.EntryDirection, uint64) {
 	switch msg := msg.(type) {
-	case *testExceedsPayAtMsg:
-		return msg.Price(size)
-	case *testExceedsDropAtMsg:
-		return msg.Price(size)
 	case *testCheapMsg:
 		return msg.Price(size)
 	case *testSizeBasedMsg:
@@ -67,7 +56,7 @@ func (tpo *testPriceOracle) Price(size uint32, msg interface{}) (protocols.Entry
 	case *testChargeRecvMsg:
 		return msg.Price(size)
 	}
-	return false, 0
+	return protocols.ChargeNone, 0
 }
 
 var testSpec = &protocols.Spec{
@@ -75,8 +64,6 @@ var testSpec = &protocols.Spec{
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
-		testExceedsPayAtMsg{},
-		testExceedsDropAtMsg{},
 		testCheapMsg{},
 		testSizeBasedMsg{},
 		testChargeRecvMsg{},
@@ -102,23 +89,11 @@ func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
 }
 
 //define a couple of messages for tests
-type testExceedsPayAtMsg struct{}
-type testExceedsDropAtMsg struct{}
 type testCheapMsg struct{}
 type testSizeBasedMsg struct {
 	Data []byte
 }
 type testChargeRecvMsg struct{}
-
-//this message is just one unit more expensive than the payment threshold
-func (tmsg *testExceedsPayAtMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
-	return protocols.ChargeSender, uint64(math.Abs(float64(payAt)) + float64(1))
-}
-
-//this message is just one unit more expensive than the disconnect threshold
-func (tmsg *testExceedsDropAtMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
-	return protocols.ChargeSender, uint64(math.Abs(float64(dropAt)) + float64(1))
-}
 
 //a message with an arbitrary cost
 func (tmsg *testCheapMsg) Price(size uint32) (protocols.EntryDirection, uint64) {
@@ -143,25 +118,16 @@ func init() {
 }
 
 //check that the disconnect threshold is below the payment threshold
-func TestLimits(t *testing.T) {
-	if dropAt >= payAt {
-		t.Fatal(fmt.Sprintf("dropAt limit is not lower than payAt limit, dropAt: %d, payAt: %d", dropAt, payAt))
-	}
-}
-
-//check that the disconnect threshold is below the payment threshold
 func TestRepeatedBookings(t *testing.T) {
 	//create a test swap account
 	swap, testDir := createTestSwap(t)
 	defer os.RemoveAll(testDir)
 
 	testPeer := newDummyPeer()
-	//size is irrelevant for this test
-	size := uint32(0)
 	amount := mrand.Intn(100)
 	cnt := 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Credit(testPeer.Peer.Peer, uint64(amount), size)
+		swap.Credit(testPeer.Peer, uint64(amount))
 	}
 	expectedBalance := int64(cnt * amount)
 	realBalance := swap.balances[testPeer.ID()]
@@ -173,7 +139,7 @@ func TestRepeatedBookings(t *testing.T) {
 	amount = mrand.Intn(100)
 	cnt = 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Debit(testPeer2.Peer.Peer, uint64(amount), size)
+		swap.Debit(testPeer2.Peer, uint64(amount))
 	}
 	expectedBalance = int64(0 - (cnt * amount))
 	realBalance = swap.balances[testPeer2.ID()]
@@ -185,75 +151,15 @@ func TestRepeatedBookings(t *testing.T) {
 	amount1 := mrand.Intn(100)
 	amount2 := mrand.Intn(100)
 	amount3 := mrand.Intn(100)
-	swap.Credit(testPeer2.Peer.Peer, uint64(amount1), size)
-	swap.Credit(testPeer2.Peer.Peer, uint64(amount2), size)
-	swap.Debit(testPeer2.Peer.Peer, uint64(amount3), size)
+	swap.Credit(testPeer2.Peer, uint64(amount1))
+	swap.Credit(testPeer2.Peer, uint64(amount2))
+	swap.Debit(testPeer2.Peer, uint64(amount3))
 
 	expectedBalance = expectedBalance + int64(amount1+amount2-amount3)
 	realBalance = swap.balances[testPeer2.ID()]
 
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
-	}
-}
-
-//unit test for exceeds pay limit
-//when the payment threshold is reached, a cheque will be issued
-//this test checks that a cheque is present if a message is sent
-//which exceeds the payment threshold
-//(note: the details of cheque handling will need to be fleshed out
-//in future iterations, current implementation is very primitive)
-func TestExceedsPayAt(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
-	defer os.RemoveAll(testDir)
-
-	msg := &testExceedsPayAtMsg{}
-	ctx := context.Background()
-	testPeer := newDummyPeer()
-	testPeer.Send(ctx, msg)
-
-	_, price := msg.Price(0)
-	if swap.balances[testPeer.ID()] != int64(0-price) {
-		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
-	}
-
-	//check that a cheque has been created
-	cheques := swap.chequeManager.openDebitCheques[testPeer.ID()]
-	if cheques == nil {
-		t.Fatal("Expected cheques for this peer to be present, but are nil")
-	}
-	if len(cheques) == 0 {
-		t.Fatal("Expected a cheque to have arrived, but len is zero")
-	}
-	if cheques[0].serial != 1 {
-		t.Fatal(fmt.Sprintf("Expected the serial to be one (first message but is: %d", cheques[0].serial))
-	}
-	if float64(cheques[0].amount) != float64(math.Abs(float64(payAt))) {
-		t.Fatal(fmt.Sprintf("Expected cheques amount to be equal to payAt limit, but it is: %d", cheques[0].amount))
-	}
-}
-
-//unit test for exceeds drop limit
-//tests that a message is being sent which crosses the drop limit
-//in that case, we should receive a InsufficientFunds error
-func TestExceedsDropAt(t *testing.T) {
-	//create a test swap account
-	swap, testDir := createTestSwap(t)
-	defer os.RemoveAll(testDir)
-
-	msg := &testExceedsDropAtMsg{}
-	ctx := context.Background()
-	testPeer := newDummyPeer()
-	err := testPeer.Send(ctx, msg)
-
-	_, price := msg.Price(0)
-	if swap.balances[testPeer.ID()] != int64(0-price) {
-		t.Fatalf("Expected balance to be %d, but is %d", price, swap.balances[testPeer.ID()])
-	}
-
-	if err != ErrInsufficientFunds {
-		t.Fatal("Expected this test to fail with insufficient funds, but it did not")
 	}
 }
 
@@ -400,106 +306,12 @@ func dummyMsgHandler(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
-func createAndStartSvcNode(swap *Swap, t *testing.T) *node.Node {
-	stack, err := newServiceNode(p2pPort, 0, 0)
-	if err != nil {
-		t.Fatal("Create servicenode #1 fail", "err", err)
-	}
-
-	swapsvc := func(ctx *node.ServiceContext) (node.Service, error) {
-		return swap, nil
-	}
-
-	err = stack.Register(swapsvc)
-	if err != nil {
-		t.Fatal("Register service in servicenode #1 fail", "err", err)
-	}
-
-	// start the nodes
-	err = stack.Start()
-	if err != nil {
-		t.Fatal("servicenode #1 start failed", "err", err)
-	}
-
-	return stack
-}
-
-//tests some basic things over RPC
-func TestSwapRPC(t *testing.T) {
-
-	swap, testDir := createTestSwap(t)
-	defer os.RemoveAll(testDir)
-
-	stack := createAndStartSvcNode(swap, t)
-	defer stack.Stop()
-	defer os.RemoveAll(stack.DataDir())
-
-	// connect to the servicenode RPCs
-	rpcclient, err := rpc.Dial(filepath.Join(stack.DataDir(), ipcpath))
-	if err != nil {
-		t.Fatal("connect to servicenode IPC fail", "err", err)
-	}
-	defer os.RemoveAll(stack.DataDir())
-
-	var balance int64
-	err = rpcclient.Call(&balance, "swap_balance")
-	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
-	}
-	log.Debug("servicenode balance", "balance", balance)
-
-	if balance != 0 {
-		t.Fatal("Expected balance to be 0 but it is not")
-	}
-
-	dummyPeer1 := newDummyPeer()
-	dummyPeer2 := newDummyPeer()
-	id1 := dummyPeer1.ID()
-	id2 := dummyPeer2.ID()
-
-	fake1 := int64(234)
-	fake2 := int64(-100)
-
-	swap.balances[id1] = fake1
-	swap.balances[id2] = fake2
-
-	err = rpcclient.Call(&balance, "swap_balanceWithPeer", id1)
-	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
-	}
-	log.Debug("balance1", "balance-1", balance)
-	if balance != fake1 {
-		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake1))
-	}
-
-	err = rpcclient.Call(&balance, "swap_balanceWithPeer", id2)
-	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
-	}
-	log.Debug("balance2", "balance-2", balance)
-	if balance != fake2 {
-		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to fake balance %d, but it is not", balance, fake2))
-	}
-
-	err = rpcclient.Call(&balance, "swap_balance")
-	if err != nil {
-		t.Fatal("servicenode RPC failed", "err", err)
-	}
-	log.Debug("balance", "balance", balance)
-
-	fakeSum := fake1 + fake2
-	if balance != fakeSum {
-		t.Fatal(fmt.Sprintf("Expected balance %d to be equal to sum %d, but it is not", balance, fakeSum))
-	}
-}
-
 type dummyPeer struct {
-	*Peer
+	*protocols.Peer
 	testFunc func(error)
 }
 
 func (dp *dummyPeer) Drop(err error) {
-	fmt.Println("DD")
 	dp.testFunc(err)
 }
 
@@ -508,34 +320,7 @@ func newDummyPeer() *dummyPeer {
 	id := adapters.RandomNodeConfig().ID
 	protoPeer := protocols.NewPeer(p2p.NewPeer(id, "testPeer", nil), &dummyRW{}, testSpec)
 	dummy := &dummyPeer{
-		Peer: NewPeer(protoPeer),
+		Peer: protoPeer,
 	}
 	return dummy
-}
-
-//creates a p2p.Service node stub
-func newServiceNode(port int, httpport int, wsport int, modules ...string) (*node.Node, error) {
-	cfg := &node.DefaultConfig
-	cfg.P2P.ListenAddr = fmt.Sprintf(":%d", port)
-	cfg.P2P.EnableMsgEvents = true
-	cfg.P2P.NoDiscovery = true
-	cfg.IPCPath = ipcpath
-	cfg.DataDir = fmt.Sprintf("%s%d", datadirPrefix, port)
-	if httpport > 0 {
-		cfg.HTTPHost = node.DefaultHTTPHost
-		cfg.HTTPPort = httpport
-	}
-	if wsport > 0 {
-		cfg.WSHost = node.DefaultWSHost
-		cfg.WSPort = wsport
-		cfg.WSOrigins = []string{"*"}
-		for i := 0; i < len(modules); i++ {
-			cfg.WSModules = append(cfg.WSModules, modules[i])
-		}
-	}
-	stack, err := node.New(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("ServiceNode create fail: %v", err)
-	}
-	return stack, nil
 }

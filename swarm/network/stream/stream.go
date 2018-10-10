@@ -728,24 +728,18 @@ type StreamerPriceOracle struct {
 	registry    *Registry
 }
 
-func (spo *StreamerPriceOracle) Accountable(msg interface{}) bool {
-	code, ok := spo.registry.spec.GetCode(msg)
-	if !ok {
-		return false
-	}
-	if _, ok = spo.priceMatrix[code]; ok {
-		return true
-	}
-	return false
-}
-
 func (spo *StreamerPriceOracle) Price(size uint32, msg interface{}) (direction protocols.EntryDirection, price uint64) {
 	code, ok := spo.registry.spec.GetCode(msg)
+	direction = protocols.ChargeNone
 	if !ok {
-		panic("Attempting to get message code for an expected message type, but code not found")
+		//this could be handled more severely (panic) but let's be gentle?
+		return
 	}
 
-	tag := spo.priceMatrix[code]
+	tag, ok := spo.priceMatrix[code]
+	if !ok {
+		return
+	}
 	price = tag.price
 	if tag.sizeBased {
 		price = price * uint64(size)

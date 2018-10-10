@@ -18,25 +18,41 @@ package protocols
 
 import (
 	"sync"
+
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+var (
+	//NOTE: these metrics just define the interfaces and are currently *NOT persisted* over sessions
+	mBalanceCredit   = metrics.NewRegisteredCounterForced("account.balance.credit", nil)
+	mBalanceDebit    = metrics.NewRegisteredCounterForced("account.balance.debit", nil)
+	mBytesCredit     = metrics.NewRegisteredCounterForced("account.bytes.credit", nil)
+	mBytesDebit      = metrics.NewRegisteredCounterForced("account.bytes.debit", nil)
+	mMsgCredit       = metrics.NewRegisteredCounterForced("account.msg.credit", nil)
+	mMsgDebit        = metrics.NewRegisteredCounterForced("account.msg.debit", nil)
+	mPeerDrops       = metrics.NewRegisteredCounterForced("account.peerdrops", nil)
+	mSelfDrops       = metrics.NewRegisteredCounterForced("account.selfdrops", nil)
+	mChequesIssued   = metrics.NewRegisteredCounterForced("account.cheques.issued", nil)
+	mChequesReceived = metrics.NewRegisteredCounterForced("account.cheques.received", nil)
 )
 
 type PriceOracle interface {
 	Price(uint32, interface{}) (EntryDirection, uint64)
-	Accountable(interface{}) bool
 }
 
 type BalanceManager interface {
 	//Credit is crediting the peer, charging local node
-	Credit(peer *Peer, amount uint64, size uint32) error
+	Credit(peer *Peer, amount uint64) error
 	//Debit is crediting the local node, charging the remote peer
-	Debit(peer *Peer, amount uint64, size uint32) error
+	Debit(peer *Peer, amount uint64) error
 }
 
-type EntryDirection bool
+type EntryDirection uint
 
 const (
-	ChargeSender   EntryDirection = true
-	ChargeReceiver EntryDirection = false
+	ChargeSender   EntryDirection = 1
+	ChargeReceiver EntryDirection = 2
+	ChargeNone     EntryDirection = 3
 )
 
 type AccountingHook struct {
@@ -57,14 +73,15 @@ func (ah *AccountingHook) Send(peer *Peer, size uint32, msg interface{}) error {
 	ah.lock.Lock()
 	defer ah.lock.Unlock()
 	var err error
-	if !ah.PriceOracle.Accountable(msg) {
-		return nil
-	}
 	direction, price := ah.PriceOracle.Price(size, msg)
 	if direction == ChargeSender {
-		err = ah.BalanceManager.Debit(peer, price, size)
-	} else {
-		err = ah.BalanceManager.Credit(peer, price, size)
+		err = ah.BalanceManager.Debit(peer, price)
+		ah.debitMetrics(price, size, err)
+	} else if direction == ChargeReceiver {
+		err = ah.BalanceManager.Credit(peer, price)
+		ah.creditMetrics(price, size, err)
+	} else if direction == ChargeNone {
+		return nil
 	}
 	return err
 }
@@ -73,14 +90,33 @@ func (ah *AccountingHook) Receive(peer *Peer, size uint32, msg interface{}) erro
 	ah.lock.Lock()
 	defer ah.lock.Unlock()
 	var err error
-	if !ah.PriceOracle.Accountable(msg) {
-		return nil
-	}
 	direction, price := ah.PriceOracle.Price(size, msg)
 	if direction == ChargeReceiver {
-		err = ah.BalanceManager.Debit(peer, price, size)
-	} else {
-		err = ah.BalanceManager.Credit(peer, price, size)
+		err = ah.BalanceManager.Debit(peer, price)
+		ah.debitMetrics(price, size, err)
+	} else if direction == ChargeSender {
+		err = ah.BalanceManager.Credit(peer, price)
+		ah.creditMetrics(price, size, err)
+	} else if direction == ChargeNone {
+		return nil
 	}
 	return err
+}
+
+func (ah *AccountingHook) debitMetrics(price uint64, size uint32, err error) {
+	mBalanceDebit.Inc(int64(price))
+	mBytesDebit.Inc(int64(size))
+	mMsgDebit.Inc(1)
+	if err != nil {
+		mSelfDrops.Inc(1)
+	}
+}
+
+func (ah *AccountingHook) creditMetrics(price uint64, size uint32, err error) {
+	mBalanceCredit.Inc(int64(price))
+	mBytesCredit.Inc(int64(size))
+	mMsgCredit.Inc(1)
+	if err != nil {
+		mPeerDrops.Inc(1)
+	}
 }

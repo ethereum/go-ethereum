@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -172,23 +173,6 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 				} else {
 					log.Debug(fmt.Sprintf("Node %s has no balance with node %s", node.TerminalString(), n.TerminalString()))
 				}
-				metrics, err := swarm.swap.GetPeerMetrics(n)
-				if err == nil && *printStats {
-					fmt.Println(fmt.Sprintf("**********  Metrics for node %s with node %s: *************", node.TerminalString(), n.TerminalString()))
-					fmt.Println(fmt.Sprintf("Total units credited: %d", metrics.BalanceCredited))
-					fmt.Println(fmt.Sprintf("Total units debited: %d", metrics.BalanceDebited))
-					fmt.Println(fmt.Sprintf("Total bytes credited: %d", metrics.BytesCredited))
-					fmt.Println(fmt.Sprintf("Total bytes debited: %d", metrics.BytesDebited))
-					fmt.Println(fmt.Sprintf("Cheques issued: %d", metrics.ChequesIssued))
-					fmt.Println(fmt.Sprintf("Cheques received: %d", metrics.ChequesReceived))
-					fmt.Println(fmt.Sprintf("Number of messages credited: %d", metrics.MsgCredited))
-					fmt.Println(fmt.Sprintf("Number of messages debited: %d", metrics.MsgDebited))
-					fmt.Println(fmt.Sprintf("Peers dropped: %d", metrics.PeerDrops))
-					fmt.Println(fmt.Sprintf("Number of times node dropped itself: %d", metrics.SelfDrops))
-				} else {
-					//not all peers have metrics with every node, so probably can be ignored
-					log.Debug("Error getting metrics", "err", err)
-				}
 			}
 			//update the map for this node
 			balancesMap[node] = subBalances
@@ -202,6 +186,17 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
 				}
 			}
+			//NOTE: this are currently metrics over ALL nodes, not per node
+			fmt.Println(fmt.Sprintf("Total units credited: %d", metrics.Get("account.balance.credit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Total units debited: %d", metrics.Get("account.balance.debit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Total bytes credited: %d", metrics.Get("account.bytes.credit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Total bytes debited: %d", metrics.Get("account.bytes.debit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Cheques issued: %d", metrics.Get("account.cheques.issued").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Cheques received: %d", metrics.Get("account.cheques.received").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Number of messages credited: %d", metrics.Get("account.msg.credit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Number of messages debited: %d", metrics.Get("account.msg.debit").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Peers dropped: %d", metrics.Get("account.peerdrops").(metrics.Counter).Count()))
+			fmt.Println(fmt.Sprintf("Number of times node dropped itself: %d", metrics.Get("account.selfdrops").(metrics.Counter).Count()))
 		}
 
 		//now iterate the whole map
