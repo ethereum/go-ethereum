@@ -39,6 +39,7 @@ const (
 
 var OpenFileLimit = 64
 
+// LDBDatabase wraps LevelDB and some other useful information such as LevelDB database specific meters
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
@@ -101,6 +102,7 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	return db.db.Put(key, value, nil)
 }
 
+// Has returns true if the database contains the given key.
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
 	return db.db.Has(key, nil)
 }
@@ -119,6 +121,7 @@ func (db *LDBDatabase) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// NewIterator creates an iterator which iterates over the database's key/value pairs in key order
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
@@ -128,6 +131,7 @@ func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
+// Close stops the metrics collection and closes underlying LevelDB database
 func (db *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
@@ -149,6 +153,7 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
+// LDB returns the underlying LevelDB database instance
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
@@ -346,6 +351,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
+// NewBatch creates a new write Batch
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
@@ -364,7 +370,7 @@ func (b *ldbBatch) Put(key, value []byte) error {
 
 func (b *ldbBatch) Delete(key []byte) error {
 	b.b.Delete(key)
-	b.size += 1
+	b.size++
 	return nil
 }
 
