@@ -565,7 +565,6 @@ pv(1) tool to get a progress bar:
 		utils.NATFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
-		utils.PasswordFileFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,
@@ -722,11 +721,8 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 		log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
 		return key
 	}
-	// Otherwise try getting it from the keystore.
-	am := stack.AccountManager()
-	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-
-	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+	utils.Fatalf(SWARM_ERR_NO_BZZACCOUNT)
+	return nil
 }
 
 // getPrivKey returns the private key of the specified bzzaccount

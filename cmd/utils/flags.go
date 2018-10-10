@@ -20,16 +20,13 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -379,17 +376,15 @@ var (
 		Usage: "Disable remote sealing verification",
 	}
 	// Account settings
-	UnlockedAccountFlag = cli.StringFlag{
-		Name:  "unlock",
-		Usage: "Comma separated list of accounts to unlock",
-		Value: "",
-	}
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
 		Usage: "Password file to use for non-interactive password input",
+	}
+	ExternalSignerFlag = cli.StringFlag{
+		Name:  "signer",
+		Usage: "External signer (url or path to ipc file)",
 		Value: "",
 	}
-
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
@@ -836,32 +831,21 @@ func makeDatabaseHandles() int {
 
 // MakeAddress converts an account specified directly as a hex encoded string or
 // a key index in the key store to an internal account representation.
-func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error) {
+func MakeAddress(account string) (accounts.Account, error) {
 	// If the specified account is a valid address, return it
-	if common.IsHexAddress(account) {
-		return accounts.Account{Address: common.HexToAddress(account)}, nil
+	ma, err := common.NewMixedcaseAddressFromString(account)
+	if err != nil {
+		return accounts.Account{}, fmt.Errorf("Not valid hex address (%v): %v", account, err)
 	}
-	// Otherwise try to interpret the account as a keystore index
-	index, err := strconv.Atoi(account)
-	if err != nil || index < 0 {
-		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
+	if !ma.ValidChecksum() {
+		return accounts.Account{}, fmt.Errorf("Invalid checksum on address %v", account)
 	}
-	log.Warn("-------------------------------------------------------------------")
-	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
-	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
-	log.Warn("-------------------------------------------------------------------")
-
-	accs := ks.Accounts()
-	if len(accs) <= index {
-		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
-	}
-	return accs[index], nil
+	return accounts.Account{Address: common.HexToAddress(account)}, nil
 }
 
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
+func setEtherbase(ctx *cli.Context, cfg *eth.Config) {
 	// Extract the current etherbase, new flag overriding legacy one
 	var etherbase string
 	if ctx.GlobalIsSet(MinerLegacyEtherbaseFlag.Name) {
@@ -872,30 +856,12 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 	}
 	// Convert the etherbase into an address and configure it
 	if etherbase != "" {
-		account, err := MakeAddress(ks, etherbase)
+		account, err := MakeAddress(etherbase)
 		if err != nil {
 			Fatalf("Invalid miner etherbase: %v", err)
 		}
 		cfg.Etherbase = account.Address
 	}
-}
-
-// MakePasswordList reads password lines from the file specified by the global --password flag.
-func MakePasswordList(ctx *cli.Context) []string {
-	path := ctx.GlobalString(PasswordFileFlag.Name)
-	if path == "" {
-		return nil
-	}
-	text, err := ioutil.ReadFile(path)
-	if err != nil {
-		Fatalf("Failed to read password file: %v", err)
-	}
-	lines := strings.Split(string(text), "\n")
-	// Sanitise DOS line endings.
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], "\r")
-	}
-	return lines
 }
 
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
@@ -1128,8 +1094,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	setEtherbase(ctx, ks, cfg)
+	setEtherbase(ctx, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
@@ -1223,24 +1188,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 1337
 		}
 		// Create new developer account or reuse existing one
-		var (
-			developer accounts.Account
-			err       error
-		)
-		if accs := ks.Accounts(); len(accs) > 0 {
-			developer = ks.Accounts()[0]
-		} else {
-			developer, err = ks.NewAccount("")
-			if err != nil {
-				Fatalf("Failed to create developer account: %v", err)
-			}
-		}
-		if err := ks.Unlock(developer, ""); err != nil {
-			Fatalf("Failed to unlock developer account: %v", err)
-		}
-		log.Info("Using developer account", "address", developer.Address)
-
-		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
+		// TODO @holiman
+		Fatalf("Failed to create developer account: not implemented")
+		//cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) && !ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
 			cfg.MinerGasPrice = big.NewInt(1)
 		}
@@ -1267,7 +1217,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg)
+			fullNode, err := eth.New(ctx, cfg, stack.ExternalSignerAPI())
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

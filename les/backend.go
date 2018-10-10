@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -69,7 +68,7 @@ type LightEthereum struct {
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
-	accountManager *accounts.Manager
+	externalSigner *ethapi.ExternalSignerClient
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -101,7 +100,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		eventMux:       ctx.EventMux,
 		peers:          peers,
 		reqDist:        newRequestDistributor(peers, quitSync),
-		accountManager: ctx.AccountManager,
 		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
