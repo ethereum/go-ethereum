@@ -151,8 +151,7 @@ func (n *ExecNode) Client() (*rpc.Client, error) {
 }
 
 // Start exec's the node passing the ID and service as command line arguments
-// and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
-// variable
+// and the node config encoded as JSON in an environment variable.
 func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	if n.Cmd != nil {
 		return errors.New("already started")
@@ -185,8 +184,8 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(),
-		"_P2P_STATUS_URL="+statusURL,
-		"_P2P_NODE_CONFIG="+string(confData),
+		envStatusURL+"="+statusURL,
+		envNodeConfig+"="+string(confData),
 	)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting node: %s", err)
@@ -370,14 +369,14 @@ func ExternalIP() net.IP {
 
 // execP2PNode starts a devp2p node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
-// and the node config from the _P2P_NODE_CONFIG environment variable
+// and the node config from an environment variable.
 func execP2PNode() {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
-	statusURL := os.Getenv("_P2P_STATUS_URL")
+	statusURL := os.Getenv(envStatusURL)
 	if statusURL == "" {
-		log.Crit("missing _P2P_STATUS_URL")
+		log.Crit("missing " + envStatusURL)
 	}
 
 	// Start the node and gather startup report.
@@ -416,13 +415,13 @@ func startExecNodeStack() (*node.Node, error) {
 	serviceNames := strings.Split(os.Args[1], ",")
 
 	// decode the config
-	confEnv := os.Getenv("_P2P_NODE_CONFIG")
+	confEnv := os.Getenv(envNodeConfig)
 	if confEnv == "" {
-		return nil, fmt.Errorf("missing _P2P_NODE_CONFIG")
+		return nil, fmt.Errorf("missing " + envNodeConfig)
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
-		return nil, fmt.Errorf("error decoding _P2P_NODE_CONFIG: %v", err)
+		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
@@ -483,6 +482,11 @@ func startExecNodeStack() (*node.Node, error) {
 	}
 	return stack, err
 }
+
+const (
+	envStatusURL  = "_P2P_STATUS_URL"
+	envNodeConfig = "_P2P_NODE_CONFIG"
+)
 
 // nodeStartupJSON is sent to the simulation host after startup.
 type nodeStartupJSON struct {

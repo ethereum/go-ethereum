@@ -121,18 +121,13 @@ type DockerNode struct {
 	ExecNode
 }
 
-// dockerCommand returns a command which exec's the binary in a Docker
-// container.
-//
-// It uses a shell so that we can pass the _P2P_NODE_CONFIG environment
-// variable to the container using the --env flag.
+// dockerCommand returns a command which exec's the binary in a Docker container.
 func (n *DockerNode) dockerCommand() *exec.Cmd {
 	return exec.Command(
-		"sh", "-c",
-		fmt.Sprintf(
-			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
-			dockerImage, strings.Join(n.Config.Node.Services, ","), n.ID.String(),
-		),
+		"docker", "run", "--interactive", "--env", envStatusURL, "--env", envNodeConfig,
+		dockerImage, "/bin/p2p-node",
+		strings.Join(n.Config.Node.Services, ","),
+		n.ID.String(),
 	)
 }
 
