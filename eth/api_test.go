@@ -19,7 +19,9 @@ package eth
 import (
 	"reflect"
 	"testing"
+        "math/big"
 
+        "github.com/ethereum/go-ethereum/crypto"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -27,6 +29,51 @@ import (
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
+
+func TestAccountRange(t *testing.T) {
+        state, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+        expectedPreimages := make(map[common.Hash]interface{})
+
+        // create some accounts
+        for i := 0; i < 256; i++ {
+                address := common.Address{byte(i)}
+                obj := state.GetOrNewStateObject(address)
+                expectedPreimages[crypto.Keccak256Hash(address.Bytes())] = true
+                obj.AddBalance(big.NewInt(22))
+                obj.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
+
+                //root = state.Commit(false)
+        }
+
+        root, err := state.Commit(false)
+        if err != nil {
+                t.Fatalf("%s", err)
+        }
+
+        state.Finalise(false)
+
+        trie, err := state.Database().OpenTrie(root)
+        if err != nil {
+                t.Fatalf("%s", err)
+        }
+
+        zeroHash := crypto.Keccak256Hash(common.Hash{}.Bytes())
+        result, err := accountRange(trie, &zeroHash, 256)
+        if err != nil {
+                t.Fatalf("%s", err)
+        }
+
+        if len(result.Preimages) != 99 {
+                t.Fatalf("maximum number of results returned should be 99, returned %d", len(result.Preimages))
+        }
+
+        for _, v := range result.Preimages {
+                if _, ok := expectedPreimages[v]; !ok {
+                        t.Fatalf("expected to find preimage %s in result", v.String())
+                }
+        }
+
+}
 
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.

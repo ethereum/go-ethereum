@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -332,6 +333,70 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 		}
 	}
 	return results, nil
+}
+
+type AccountRangeResult struct {
+	Preimages []common.Hash               `json:"preimages"`
+	Next      common.Hash                 `json:"nextKey"`
+}
+
+func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+	it := trie.NewIterator(st.NodeIterator(start[:]))
+	result := AccountRangeResult{Preimages: []common.Hash{}, Next: common.Hash{}}
+	zeros := make([]byte, common.HashLength)
+
+	if bytes.Equal(start.Bytes()[:], zeros) {
+		start = nil
+	}
+
+	if maxResults > 100 {
+		maxResults = 100
+	}
+
+	// dont return the first account preimage
+	if !it.Next() && start != &(common.Hash{}) {
+		return result, nil
+	}
+
+	for i := 0; i < maxResults-1 && it.Next(); i++ {
+		result.Preimages = append(result.Preimages, common.BytesToHash(it.Key))
+	}
+
+	if it.Next() {
+		result.Next = common.BytesToHash(it.Key)
+	}
+
+	return result, nil
+}
+
+//enumerate and return account preimages in the state at the current block
+func (api *PrivateDebugAPI) AccountRange(ctx context.Context, startAddr *common.Hash, maxResults int) (AccountRangeResult, error) {
+	var statedb *state.StateDB = nil
+	var err error = nil
+	var block = api.eth.blockchain.CurrentBlock()
+
+	if len(block.Transactions()) == 0 {
+		parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if parent == nil {
+			return AccountRangeResult{}, fmt.Errorf("parent %x not found", block.ParentHash())
+		}
+		statedb, err = api.computeStateDB(parent, defaultTraceReexec)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	} else {
+		_, _, statedb, err = api.computeTxEnv(block.Hash(), len(block.Transactions())-1, 0)
+		if err != nil {
+			return AccountRangeResult{}, err
+		}
+	}
+
+	trie, err := statedb.Database().OpenTrie(block.Header().Root)
+	if err != nil {
+		return AccountRangeResult{}, err
+	}
+
+	return accountRange(trie, startAddr, maxResults)
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
