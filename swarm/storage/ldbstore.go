@@ -603,28 +603,35 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
-// Delete is thread safe and removes a chunk and updates indices. Increments accesscnt
+// Delete is removes a chunk and updates indices.
+// Is thread safe
 func (s *LDBStore) Delete(addr Address) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	ikey := getIndexKey(addr)
 
-	var idx dpaDBIndex
-	proximity := s.po(addr)
-	if !s.tryAccessIdx(ikey, proximity, &idx) {
-		return fmt.Errorf("noent")
+	idata, err := s.db.Get(ikey)
+	if err != nil {
+		return err
 	}
+
+	var idx dpaDBIndex
+	decodeIndex(idata, &idx)
+	proximity := s.po(addr)
 	return s.deleteNow(&idx, ikey, proximity)
 }
 
+// executes one delete operation immediately
+// see *LDBStore.delete
 func (s *LDBStore) deleteNow(idx *dpaDBIndex, idxKey []byte, po uint8) error {
 	batch := new(leveldb.Batch)
 	s.delete(batch, idx, idxKey, po)
 	return s.db.Write(batch)
 }
 
-// NOTE: decrements entrycount regardless if the chunk exists upon deletion. Risk of wrap to max uint64
+// adds a delete chunk operation to the provided batch
+// if called directly, decrements entrycount regardless if the chunk exists upon deletion. Risk of wrap to max uint64
 func (s *LDBStore) delete(batch *leveldb.Batch, idx *dpaDBIndex, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
@@ -660,6 +667,9 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
+// Put adds a chunk to the database, adding indices and incrementing global counters.
+// If it already exists, it merely increments the access count of the existing entry.
+// Is thread safe
 func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Address())
@@ -709,8 +719,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	}
 }
 
-// force putting into db, does not check access index
-// NOTE chunks put directly through this method will currently NOT be handled by garbage collection
+// force putting into db, does not check or update necessary indices
 func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
 	dkey := getDataKey(s.dataIdx, po)
@@ -841,6 +850,9 @@ func (s *LDBStore) PutSchema(schema string) error {
 	return s.db.Put(keySchema, []byte(schema))
 }
 
+// Get retrieves the chunk matching the provided key from the database.
+// If the chunk entry does not exist, it returns an error
+// Updates access count and is thread safe
 func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
@@ -850,6 +862,7 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 	return s.get(addr)
 }
 
+// TODO: To conform with other private methods of this object indices should not be updated
 func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 	var indx dpaDBIndex
 	if s.closed {

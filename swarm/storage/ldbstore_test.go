@@ -300,7 +300,6 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 }
 
 func TestLDBStoreCollectGarbage(t *testing.T) {
-
 	cap := defaultMaxGCRound / 2
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
@@ -471,17 +470,8 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	// (only count the ones actually deleted, the rest will have been gc'd)
 	deletes := 0
 	for i := 0; i < n; i++ {
-		ikey := getIndexKey(chunks[i].Address())
-		idata, err := ldb.db.Get(ikey)
-		if err == nil {
+		if ldb.Delete(chunks[i].Address()) == nil {
 			deletes++
-			po := ldb.po(chunks[i].Address())
-			var idx dpaDBIndex
-			decodeIndex(idata, &idx)
-			err := ldb.deleteNow(&idx, ikey, po)
-			if err != nil {
-				t.Fatal(err)
-			}
 		}
 	}
 
