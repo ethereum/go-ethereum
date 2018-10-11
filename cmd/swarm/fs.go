@@ -30,6 +30,43 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var fsCommand = cli.Command{
+	Name:               "fs",
+	CustomHelpTemplate: helpTemplate,
+	Usage:              "perform FUSE operations",
+	ArgsUsage:          "fs COMMAND",
+	Description:        "Performs FUSE operations by mounting/unmounting/listing mount points. This assumes you already have a Swarm node running locally. For all operation you must reference the correct path to bzzd.ipc in order to communicate with the node",
+	Subcommands: []cli.Command{
+		{
+			Action:             mount,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "mount",
+			Flags:              []cli.Flag{utils.IPCPathFlag},
+			Usage:              "mount a swarm hash to a mount point",
+			ArgsUsage:          "swarm fs mount --ipcpath <path to bzzd.ipc> <manifest hash> <mount point>",
+			Description:        "Mounts a Swarm manifest hash to a given mount point. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+		{
+			Action:             unmount,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "unmount",
+			Flags:              []cli.Flag{utils.IPCPathFlag},
+			Usage:              "unmount a swarmfs mount",
+			ArgsUsage:          "swarm fs unmount --ipcpath <path to bzzd.ipc> <mount point>",
+			Description:        "Unmounts a swarmfs mount residing at <mount point>. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+		{
+			Action:             listMounts,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "list",
+			Flags:              []cli.Flag{utils.IPCPathFlag},
+			Usage:              "list swarmfs mounts",
+			ArgsUsage:          "swarm fs list --ipcpath <path to bzzd.ipc>",
+			Description:        "Lists all mounted swarmfs volumes. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+	},
+}
+
 func mount(cliContext *cli.Context) {
 	args := cliContext.Args()
 	if len(args) < 2 {

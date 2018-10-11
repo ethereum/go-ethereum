@@ -29,6 +29,48 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var dbCommand = cli.Command{
+	Name:               "db",
+	CustomHelpTemplate: helpTemplate,
+	Usage:              "manage the local chunk database",
+	ArgsUsage:          "db COMMAND",
+	Description:        "Manage the local chunk database",
+	Subcommands: []cli.Command{
+		{
+			Action:             dbExport,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "export",
+			Usage:              "export a local chunk database as a tar archive (use - to send to stdout)",
+			ArgsUsage:          "<chunkdb> <file>",
+			Description: `
+Export a local chunk database as a tar archive (use - to send to stdout).
+
+    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+
+The export may be quite large, consider piping the output through the Unix
+pv(1) tool to get a progress bar:
+
+    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks - | pv > chunks.tar
+`,
+		},
+		{
+			Action:             dbImport,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "import",
+			Usage:              "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
+			ArgsUsage:          "<chunkdb> <file>",
+			Description: `Import chunks from a tar archive into a local chunk database (use - to read from stdin).
+
+    swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+
+The import may be quite large, consider piping the input through the Unix
+pv(1) tool to get a progress bar:
+
+    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
+		},
+	},
+}
+
 func dbExport(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 3 {

@@ -27,6 +27,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var hashCommand = cli.Command{
+	Action:             hash,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "hash",
+	Usage:              "print the swarm hash of a file or directory",
+	ArgsUsage:          "<file>",
+	Description:        "Prints the swarm hash of file or directory",
+}
+
 func hash(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {

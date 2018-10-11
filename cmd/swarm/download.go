@@ -28,6 +28,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var downloadCommand = cli.Command{
+	Action:      download,
+	Name:        "down",
+	Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
+	Usage:       "downloads a swarm manifest or a file inside a manifest",
+	ArgsUsage:   " <uri> [<dir>]",
+	Description: `Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.`,
+}
+
 func download(ctx *cli.Context) {
 	log.Debug("downloading content using swarm down")
 	args := ctx.Args()
