@@ -23,59 +23,86 @@ import TableHead from '@material-ui/core/TableHead';
 import TableBody from '@material-ui/core/TableBody';
 import TableRow from '@material-ui/core/TableRow';
 import TableCell from '@material-ui/core/TableCell';
-import type {Network as NetworkType, Peers} from '../types/content';
+import type {Network as NetworkType, PeerEvent} from '../types/content';
 
 // inserter is a state updater function for the main component, which handles the peers.
-export const inserter = (update: Peers, prev: Peers) => {
-	console.log(update);
-	return prev;
-	Object.keys(update.bundles).forEach((ip) => {
-		if (!update[ip]) {
-			return;
-		}
-		if (!prev[ip]) {
-			prev[ip] = update[ip];
-			return;
-		}
-		if (update[ip].location) {
-			prev[ip].location = update[ip].location;
-		}
-		if (!update[ip].peers) {
-			return;
-		}
-		Object.entries(update[ip].peers).forEach(([id, u]) => {
-			if (!prev[ip].peers[id]) {
-				prev[ip].peers[id] = u;
+export const inserter = (sampleLimit: number) => (update: NetworkType, prev: NetworkType) => {
+	if (update.peers && update.peers.bundles) {
+		prev.peers = update.peers;
+	}
+	if (Array.isArray(update.diff)) {
+		update.diff.forEach((event: PeerEvent) => {
+			if (event.removeIP) {
+				if (event.removeID && prev.peers.bundles[event.removeIP]) {
+					delete prev.peers.bundles[event.removeIP].knownPeers[event.removeID];
+				}
+				delete prev.peers.bundles[event.removeIP];
 				return;
 			}
-			const p: Peer = prev[ip].peers[id];
-			if (u.connected) {
-				if (!Array.isArray(p.connected)) {
-					p.connected = [];
-				}
-				p.connected = [...p.connected, ...u.connected];
+			if (!event.ip) {
+				console.error('Peer event without IP', event);
+				return;
 			}
-			if (u.disconnected) {
-				if (!Array.isArray(p.disconnected)) {
-					p.disconnected = [];
-				}
-				p.disconnected = [...p.disconnected, ...u.disconnected];
+			if (!prev.peers.bundles[event.ip]) {
+				prev.peers.bundles[event.ip] = {
+					location:     {},
+					knownPeers:   {},
+					unknownPeers: [],
+				};
 			}
-			if (Array.isArray(u.ingress)) {
-				if (!Array.isArray(p.ingress)) {
-					p.ingress = [];
-				}
-				p.ingress = [...p.ingress, ...u.ingress].slice(-200);
+			const bundle = prev.peers.bundles[event.ip];
+			if (event.location) {
+				bundle.location = event.location;
 			}
-			if (Array.isArray(u.egress)) {
-				if (!Array.isArray(p.egress)) {
-					p.egress = [];
-				}
-				p.egress = [...p.egress, ...u.egress].slice(-200);
+			if (!event.id) {
+				bundle.unknownPeers.push({
+					connected:    event.connected,
+					disconnected: event.disconnected,
+				});
+				return;
 			}
-			prev[ip].peers[id] = p;
+			if (!bundle.knownPeers[event.id]) {
+				bundle.knownPeers[event.id] = {
+					connected:    [],
+					disconnected: [],
+					ingress:      [],
+					egress:       [],
+				};
+			}
+			const peer = bundle.knownPeers[event.id];
+			if (event.connected) {
+				peer.connected.push(event.connected);
+			}
+			if (event.disconnected) {
+				peer.disconnected.push(event.disconnected);
+			}
+			if (Array.isArray(event.ingress) && Array.isArray(event.egress)) {
+				if (event.ingress.length !== event.egress.length) {
+					console.error('Different traffic sample length', event);
+					return;
+				}
+				if (peer.ingress.length > 0) {
+					if (peer.ingress[peer.ingress.length - 1].value < event.ingress[0].value) {
+						event.ingress[0].value -= peer.ingress[peer.ingress.length - 1].value;
+						event.egress[0].value -= peer.egress[peer.egress.length - 1].value;
+					}
+				}
+				for (let i = 1; i < event.ingress.length; i++) {
+					event.ingress[i].value -= event.ingress[i - 1].value;
+					event.egress[i].value -= event.egress[i - 1].value;
+				}
+				peer.ingress.splice(peer.ingress.length, 0, ...event.ingress);
+				peer.egress.splice(peer.egress.length, 0, ...event.egress);
+				if (peer.ingress.length > sampleLimit) {
+					peer.ingress.splice(0, peer.ingress.length - sampleLimit);
+				}
+				if (peer.egress.length > sampleLimit) {
+					peer.egress.splice(0, peer.egress.length - sampleLimit);
+				}
+				// console.log(event.ingress, prev.peers.bundles[event.ip].knownPeers[event.id].ingress);
+			}
 		});
-	});
+	}
 	return prev;
 };
 
@@ -112,7 +139,8 @@ class Network extends Component<Props, State> {
 					<TableRow>
 						<TableCell>IP</TableCell>
 						<TableCell>Location</TableCell>
-						<TableCell>Peer ID</TableCell>
+						<TableCell>Unknown</TableCell>
+						<TableCell>Node ID</TableCell>
 						<TableCell>Ingress</TableCell>
 						<TableCell>Egress</TableCell>
 						<TableCell>Connected</TableCell>
@@ -120,7 +148,7 @@ class Network extends Component<Props, State> {
 					</TableRow>
 				</TableHead>
 				<TableBody>
-					{Object.entries(this.props.content.peers).map(([ip, bundle]) => { console.log(ip, bundle); return (
+					{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => (
 						<TableRow key={ip}>
 							<TableCell>{ip}</TableCell>
 							<TableCell>
@@ -130,22 +158,25 @@ class Network extends Component<Props, State> {
 								})() : ''}
 							</TableCell>
 							<TableCell>
-								{bundle.peers && Object.keys(bundle.peers).map(id => id.substring(0, 10)).join(' ')}
+								{bundle.unknownPeers && Object.values(bundle.unknownPeers).map(peer => peer.connected && peer.disconnected && `${this.formatTime(peer.connected)}~${this.formatTime(peer.disconnected)}`).join(', ')}
 							</TableCell>
 							<TableCell>
-								{bundle.peers && Object.values(bundle.peers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
+								{bundle.knownPeers && Object.keys(bundle.knownPeers).map(id => id.substring(0, 10)).join(' ')}
 							</TableCell>
 							<TableCell>
-								{bundle.peers && Object.values(bundle.peers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
+								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{bundle.peers && Object.values(bundle.peers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
 							</TableCell>
 							<TableCell>
-								{bundle.peers && Object.values(bundle.peers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
+							</TableCell>
+							<TableCell>
+								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
 							</TableCell>
 						</TableRow>
-					)})}
+					))}
 				</TableBody>
 			</Table>
 		);

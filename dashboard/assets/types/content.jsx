@@ -52,13 +52,23 @@ export type TxPool = {
 
 export type Network = {
 	peers: Peers,
+	diff:  Array<PeerEvent>
+};
+
+export type PeerEvent = {
+	ip:           string,
+	id:           string,
+	removeIP:     string,
+	removeID:     string,
+	location:     GeoLocation,
+	connected:    Date,
+	disconnected: Date,
+	ingress:      ChartEntries,
+	egress:       ChartEntries,
 };
 
 export type Peers = {
-	bundles:          {[string]: PeerBundle},
-	removedKnownIP:   Array<string>,
-	removedKnownID:   Array<string>,
-	removedUnknownIP: Array<string>,
+	bundles: {[string]: PeerBundle},
 };
 
 export type PeerBundle = {
@@ -68,15 +78,10 @@ export type PeerBundle = {
 };
 
 export type KnownPeer = {
-	active:   boolean,
-	sessions: Array<PeerSession>
-};
-
-export type PeerSession = {
-	connected:    Date,
-	disconnected: Date,
-	ingress:      ChartEntries,
-	egress:       ChartEntries,
+	connected:    Array<Date>,
+	disconnected: Array<Date>,
+	ingress:      Array<ChartEntries>,
+	egress:       Array<ChartEntries>,
 };
 
 export type UnknownPeer = {

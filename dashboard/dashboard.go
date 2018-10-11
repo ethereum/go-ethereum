@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	sampleLimit = 3 // Maximum number of data samples
+	sampleLimit = 200 // Maximum number of data samples
 )
 
 // Dashboard contains the dashboard internals.

@@ -91,11 +91,9 @@ const defaultContent: () => Content = () => ({
 	txpool:  {},
 	network: {
 		peers: {
-			bundles:          {},
-			removedKnownIP:   [],
-			removedKnownID:   [],
-			removedUnknownIP: [],
+			bundles: {},
 		},
+		diff: [],
 	},
 	system: {
 		activeMemory:   [],
@@ -127,10 +125,8 @@ const updaters = {
 	home:    null,
 	chain:   null,
 	txpool:  null,
-	network: {
-		peers: peerInserter,
-	},
-	system: {
+	network: peerInserter(200),
+	system:  {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),
 		networkIngress: appender(200),

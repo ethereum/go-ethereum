@@ -86,9 +86,9 @@ func (db *GeoDB) Lookup(ip net.IP) *GeoDBInfo {
 	return result
 }
 
+// Location retrieves the geographical location of the given IP address.
 func (db *GeoDB) Location (ip string) *GeoLocation {
 	location := db.Lookup(net.ParseIP(ip))
-	//location := new(GeoDBInfo)
 	return &GeoLocation{
 		Country:   location.Country.Names.English,
 		City:      location.City.Names.English,
