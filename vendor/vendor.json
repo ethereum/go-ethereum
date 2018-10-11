@@ -129,12 +129,6 @@
 			"revisionTime": "2017-01-17T22:23:42Z"
 		},
 		{
-			"checksumSHA1": "O8hj2TjWxwLgPDVJeEwvuQFm664=",
-			"path": "github.com/go-interpreter/wagon",
-			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
-			"revisionTime": "2018-08-07T20:59:56Z"
-		},
-		{
 			"checksumSHA1": "zMJhaMOsF8AoZD1nF/geiD0EEiU=",
 			"path": "github.com/go-interpreter/wagon/disasm",
 			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
