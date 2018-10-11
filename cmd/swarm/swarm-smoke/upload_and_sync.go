@@ -86,7 +86,6 @@ func cliUploadAndSync(c *cli.Context) error {
 
 	wg := sync.WaitGroup{}
 	for _, endpoint := range endpoints {
-		endpoint := endpoint
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
