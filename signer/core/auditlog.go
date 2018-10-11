@@ -70,10 +70,10 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 	return b, e
 }
 
-func (l *AuditLogger) SignStructuredData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
+func (l *AuditLogger) SignStructuredData(ctx context.Context, data TypedData) (hexutil.Bytes, error) {
 	l.log.Info("SignStructuredData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.String(), "data", data)
-	b, e := l.api.SignStructuredData(ctx, addr, TypedData{})
+		"addr", "data", data)
+	b, e := l.api.SignStructuredData(ctx, TypedData{})
 	l.log.Info("SignStructuredData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
 	return b, e
 }
