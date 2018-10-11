@@ -63,18 +63,6 @@ using the devp2p node stack rather than executing `main()`.
 The nodes listen for devp2p connections and WebSocket RPC clients on random
 localhost ports.
 
-### DockerAdapter
-
-The `DockerAdapter` is similar to the `ExecAdapter` but executes `docker run`
-to run the node in a Docker container using a Docker image containing the
-simulation binary at `/bin/p2p-node`.
-
-The Docker image is built using `docker build` when the adapter is initialised,
-meaning no prior setup is necessary other than having a working Docker client.
-
-Each node listens on the external IP of the container and the default p2p and
-RPC ports (`30303` and `8546` respectively).
-
 ## Network
 
 A simulation network is created with an ID and default service (which is used

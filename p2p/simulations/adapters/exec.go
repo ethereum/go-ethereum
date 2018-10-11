@@ -44,12 +44,14 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// ExecAdapter is a NodeAdapter which runs simulation nodes by executing the
-// current binary as a child process.
-//
-// An init hook is used so that the child process executes the node services
-// (rather than whataver the main() function would normally do), see the
-// execP2PNode function for more information.
+func init() {
+	// Register a reexec function to start a simulation node when the current binary is
+	// executed as "p2p-node" (rather than whataver the main() function would normally do).
+	reexec.Register("p2p-node", execP2PNode)
+}
+
+// ExecAdapter is a NodeAdapter which runs simulation nodes by executing the current binary
+// as a child process.
 type ExecAdapter struct {
 	// BaseDir is the directory under which the data directories for each
 	// simulation node are created.
@@ -213,11 +215,10 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 func (n *ExecNode) waitForStartupJSON(ctx context.Context) (string, chan nodeStartupJSON) {
 	var (
 		ch       = make(chan nodeStartupJSON, 1)
-		ip       = ExternalIP()
 		quitOnce sync.Once
 		srv      http.Server
 	)
-	l, err := net.Listen("tcp", ip.String()+":0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		ch <- nodeStartupJSON{Err: err.Error()}
 		return "", ch
@@ -337,12 +338,6 @@ func (n *ExecNode) Snapshots() (map[string][]byte, error) {
 	return snapshots, n.client.Call(&snapshots, "simulation_snapshot")
 }
 
-func init() {
-	// register a reexec function to start a devp2p node when the current
-	// binary is executed as "p2p-node"
-	reexec.Register("p2p-node", execP2PNode)
-}
-
 // execNodeConfig is used to serialize the node configuration so it can be
 // passed to the child process as a JSON encoded environment variable
 type execNodeConfig struct {
@@ -352,22 +347,7 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
-// ExternalIP gets an external IP address so that Enode URL is usable
-func ExternalIP() net.IP {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		log.Crit("error getting IP address", "err", err)
-	}
-	for _, addr := range addrs {
-		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() && !ip.IP.IsLinkLocalUnicast() {
-			return ip.IP
-		}
-	}
-	log.Warn("unable to determine explicit IP address, falling back to loopback")
-	return net.IP{127, 0, 0, 1}
-}
-
-// execP2PNode starts a devp2p node when the current binary is executed with
+// execP2PNode starts a simulation node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
 // and the node config from an environment variable.
 func execP2PNode() {
@@ -425,13 +405,6 @@ func startExecNodeStack() (*node.Node, error) {
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
-
-	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
-		conf.Stack.P2P.ListenAddr = ExternalIP().String() + conf.Stack.P2P.ListenAddr
-	}
-	if conf.Stack.WSHost == "0.0.0.0" {
-		conf.Stack.WSHost = ExternalIP().String()
-	}
 
 	// initialize the devp2p stack
 	stack, err := node.New(&conf.Stack)
