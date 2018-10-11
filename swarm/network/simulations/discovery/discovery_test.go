@@ -125,22 +125,6 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
-	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
-	adapter, err := adapters.NewDockerAdapter()
-	if err != nil {
-		if err == adapters.ErrLinuxOnly {
-			t.Skip(err)
-		} else {
-			t.Fatal(err)
-		}
-	}
-	testDiscoverySimulation(t, nodes, conns, adapter)
-}
-
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
 }
@@ -545,8 +529,7 @@ func triggerChecks(trigger chan enode.ID, net *simulations.Network, id enode.ID)
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	node := enode.NewV4(&ctx.Config.PrivateKey.PublicKey, adapters.ExternalIP(), int(ctx.Config.Port), int(ctx.Config.Port))
-	addr := network.NewAddr(node)
+	addr := network.NewAddr(ctx.Config.Node())
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

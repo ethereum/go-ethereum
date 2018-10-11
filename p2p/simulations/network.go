@@ -116,7 +116,7 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 		Node:   adapterNode,
 		Config: conf,
 	}
-	log.Trace(fmt.Sprintf("node %v created", conf.ID))
+	log.Trace("Node created", "id", conf.ID)
 	net.nodeMap[conf.ID] = len(net.Nodes)
 	net.Nodes = append(net.Nodes, node)
 
@@ -167,6 +167,7 @@ func (net *Network) Start(id enode.ID) error {
 func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte) error {
 	net.lock.Lock()
 	defer net.lock.Unlock()
+
 	node := net.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -174,13 +175,13 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 	if node.Up {
 		return fmt.Errorf("node %v already up", id)
 	}
-	log.Trace(fmt.Sprintf("starting node %v: %v using %v", id, node.Up, net.nodeAdapter.Name()))
+	log.Trace("Starting node", "id", id, "adapter", net.nodeAdapter.Name())
 	if err := node.Start(snapshots); err != nil {
-		log.Warn(fmt.Sprintf("start up failed: %v", err))
+		log.Warn("Node startup failed", "id", id, "err", err)
 		return err
 	}
 	node.Up = true
-	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
+	log.Info("Started node", "id", id)
 
 	net.events.Send(NewEvent(node))
 
@@ -209,7 +210,6 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 		defer net.lock.Unlock()
 		node := net.getNode(id)
 		if node == nil {
-			log.Error("Can not find node for id", "id", id)
 			return
 		}
 		node.Up = false
@@ -240,7 +240,7 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 
 		case err := <-sub.Err():
 			if err != nil {
-				log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+				log.Error("Error in peer event subscription", "id", id, "err", err)
 			}
 			return
 		}
@@ -250,7 +250,6 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 // Stop stops the node with the given ID
 func (net *Network) Stop(id enode.ID) error {
 	net.lock.Lock()
-	defer net.lock.Unlock()
 	node := net.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -258,12 +257,17 @@ func (net *Network) Stop(id enode.ID) error {
 	if !node.Up {
 		return fmt.Errorf("node %v already down", id)
 	}
-	if err := node.Stop(); err != nil {
+	node.Up = false
+	net.lock.Unlock()
+
+	err := node.Stop()
+	if err != nil {
+		net.lock.Lock()
+		node.Up = true
+		net.lock.Unlock()
 		return err
 	}
-	node.Up = false
-	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
-
+	log.Info("Stopped node", "id", id, "err", err)
 	net.events.Send(ControlEvent(node))
 	return nil
 }
@@ -271,7 +275,7 @@ func (net *Network) Stop(id enode.ID) error {
 // Connect connects two nodes together by calling the "admin_addPeer" RPC
 // method on the "one" node so that it connects to the "other" node
 func (net *Network) Connect(oneID, otherID enode.ID) error {
-	log.Debug(fmt.Sprintf("connecting %s to %s", oneID, otherID))
+	log.Debug("Connecting nodes with addPeer", "id", oneID, "other", otherID)
 	conn, err := net.InitConn(oneID, otherID)
 	if err != nil {
 		return err
@@ -481,10 +485,10 @@ func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 
 	err = conn.nodesUp()
 	if err != nil {
-		log.Trace(fmt.Sprintf("nodes not up: %v", err))
+		log.Trace("Nodes not up", "err", err)
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
-	log.Debug("InitConn - connection initiated")
+	log.Debug("Connection initiated", "id", oneID, "other", otherID)
 	conn.initiated = time.Now()
 	return conn, nil
 }
@@ -492,9 +496,9 @@ func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 // Shutdown stops all nodes in the network and closes the quit channel
 func (net *Network) Shutdown() {
 	for _, node := range net.Nodes {
-		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
+		log.Debug("Stopping node", "id", node.ID())
 		if err := node.Stop(); err != nil {
-			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().TerminalString()), "err", err)
+			log.Warn("Can't stop node", "id", node.ID(), "err", err)
 		}
 	}
 	close(net.quitc)
@@ -708,18 +712,18 @@ func (net *Network) Subscribe(events chan *Event) {
 }
 
 func (net *Network) executeControlEvent(event *Event) {
-	log.Trace("execute control event", "type", event.Type, "event", event)
+	log.Trace("Executing control event", "type", event.Type, "event", event)
 	switch event.Type {
 	case EventTypeNode:
 		if err := net.executeNodeEvent(event); err != nil {
-			log.Error("error executing node event", "event", event, "err", err)
+			log.Error("Error executing node event", "event", event, "err", err)
 		}
 	case EventTypeConn:
 		if err := net.executeConnEvent(event); err != nil {
-			log.Error("error executing conn event", "event", event, "err", err)
+			log.Error("Error executing conn event", "event", event, "err", err)
 		}
 	case EventTypeMsg:
-		log.Warn("ignoring control msg event")
+		log.Warn("Ignoring control msg event")
 	}
 }
 
