@@ -32,7 +32,7 @@ type TypedData ethereum.TypedData
 //
 // If the format "\x19\x46" ‖ domainSeparator ‖ hashStruct(message)` is not respected,
 // an error is returned
-func (api *SignerAPI) SignStructuredData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
+func (api *SignerAPI) SignStructuredData(ctx context.Context, data TypedData) (hexutil.Bytes, error) {
 	fmt.Println("data", data)
 	fmt.Println("data.Hash", data.Hash)
 	return common.Hex2Bytes("0xdeadbeef"), nil
