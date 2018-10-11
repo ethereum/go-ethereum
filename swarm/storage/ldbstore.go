@@ -322,13 +322,14 @@ func (s *LDBStore) collectGarbage() error {
 		s.gc.running = false
 		s.lock.Unlock()
 	}()
+	entryCnt := s.entryCnt
 	s.lock.Unlock()
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
 	// calculate the amount of chunks to collect and reset counter
-	s.startGC(int(s.entryCnt))
-	log.Debug("collectGarbage", "target", s.gc.target, "entryCnt", s.entryCnt)
+	s.startGC(int(entryCnt))
+	log.Debug("collectGarbage", "target", s.gc.target, "entryCnt", entryCnt)
 
 	var totalDeleted int
 	for s.gc.count < s.gc.target {
