@@ -329,7 +329,7 @@ func eeiFuncs(in *InterpreterEWASM) []wasm.Function {
 			Body: &wasm.FunctionBody{},
 		},
 		{
-			Sig:  &eeiTypes.Entries[5],
+			Sig:  &eeiTypes.Entries[7],
 			Host: reflect.ValueOf(func(p *exec.Process) int32 { return getReturnDataSize(p, in) }),
 			Body: &wasm.FunctionBody{},
 		},
