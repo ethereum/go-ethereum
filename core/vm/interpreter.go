@@ -43,7 +43,7 @@ type Config struct {
 	JumpTable [256]operation
 
 	// Type of the EWASM interpreter
-	EWASMInterpreter string
+	EWASMInterpreter map[string]string
 	// Type of the EVM interpreter
 	EVMInterpreter string
 }
