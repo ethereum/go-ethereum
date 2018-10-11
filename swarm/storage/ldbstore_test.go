@@ -341,7 +341,7 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 	ldb.startGC(capacity)
 	roundTarget := ldb.gc.target
 
-	// split put counts to gc target count threshold, and wait for gc to finish inbetween
+	// split put counts to gc target count threshold, and wait for gc to finish in between
 	var allChunks []Chunk
 	remaining := n
 	for remaining > 0 {
