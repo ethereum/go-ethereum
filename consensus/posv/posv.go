@@ -109,6 +109,8 @@ var (
 	// ones).
 	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
 
+	errInvalidCheckpointPenalties = errors.New("invalid penalty list on checkpoint block")
+
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
@@ -363,12 +365,30 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	// If the block is a checkpoint block, verify the signer list
 	if number%c.config.Epoch == 0 {
-		signers := make([]byte, len(snap.Signers)*common.AddressLength)
-		for i, signer := range snap.signers() {
-			copy(signers[i*common.AddressLength:], signer[:])
+		penPenalties := []common.Address{}
+		if c.HookPenalty != nil {
+			penPenalties, err = c.HookPenalty(chain, number)
+			if err != nil {
+				return err
+			}
+			for _, address := range penPenalties {
+				log.Debug("Penalty Info", "address", address, "number", number)
+			}
+			bytePenalties := common.ExtractAddressToBytes(penPenalties)
+			if !bytes.Equal(header.Penalties, bytePenalties) {
+				return errInvalidCheckpointPenalties
+			}
 		}
+		signers := snap.signers()
+		signers = common.RemoveItemFromArray(signers, penPenalties)
+		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
+			if number > uint64(i)*c.config.Epoch {
+				signers = RemovePenaltiesFromBlock(chain, signers, number-uint64(i)*c.config.Epoch)
+			}
+		}
+		byteMasterNodes := common.ExtractAddressToBytes(signers)
 		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
+		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], byteMasterNodes) {
 			return errInvalidCheckpointSigners
 		}
 	}
@@ -636,52 +656,28 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:extraVanity]
-
+	signers := snap.signers()
 	if number%c.config.Epoch == 0 {
-		signers := snap.signers()
-
 		if c.HookPenalty != nil {
-			penSigners, _ := c.HookPenalty(chain, number)
-
+			penSigners, err := c.HookPenalty(chain, number)
+			if err != nil {
+				return err
+			}
 			if len(penSigners) > 0 {
 				// Keep remove penalty signer out of signer list.
-				for i, signer := range signers {
-					for _, penSigner := range penSigners {
-						if signer == penSigner {
-							signers = append(signers[:i], signers[i+1:]...)
-						}
-					}
+				signers = common.RemoveItemFromArray(signers, penSigners)
+				for _, address := range penSigners {
+					log.Debug("Penalty Info", "address", address, "number", number)
 				}
-				log.Debug("Penalty Info", "signers", penSigners, "number", number)
-				for _, penSigner := range penSigners {
-					header.Penalties = append(header.Penalties, penSigner[:]...)
-				}
+				header.Penalties = common.ExtractAddressToBytes(penSigners)
 			}
 		}
-
 		// Prevent penaltied signer in 4 epocs ago jump into signer list.
-		for i := 1; i <= 4; i++ {
-			checkEpoc := uint64(i) * c.config.Epoch
-			if number > checkEpoc {
-				prevEpoc := number - checkEpoc
-				prevHeader := chain.GetHeaderByNumber(prevEpoc)
-				prevEpocBlock := chain.GetBlock(prevHeader.Hash(), prevEpoc)
-				penalties := prevEpocBlock.Penalties()
-				if penalties != nil {
-					prevSigners := ExtractPenaltiesFromBytes(penalties)
-					if len(prevSigners) > 0 {
-						for i, signer := range signers {
-							for _, preventSigner := range prevSigners {
-								if signer == preventSigner {
-									signers = append(signers[:i], signers[i+1:]...)
-								}
-							}
-						}
-					}
-				}
+		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
+			if number > uint64(i)*c.config.Epoch {
+				signers = RemovePenaltiesFromBlock(chain, signers, number-uint64(i)*c.config.Epoch)
 			}
 		}
-
 		for _, signer := range signers {
 			header.Extra = append(header.Extra, signer[:]...)
 		}
@@ -700,12 +696,9 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
-
 	if c.HookPrepare != nil {
-		signers := snap.signers()
 		c.HookPrepare(header, signers)
 	}
-
 	return nil
 }
 
@@ -897,10 +890,16 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 }
 
 // Extract validators from byte array.
-func ExtractPenaltiesFromBytes(bytePenalties []byte) []common.Address {
-	penalties := make([]common.Address, len(bytePenalties)/common.AddressLength)
-	for i := 0; i < len(penalties); i++ {
-		copy(penalties[i][:], bytePenalties[i*common.AddressLength:])
+func RemovePenaltiesFromBlock(chain consensus.ChainReader, signers []common.Address, epochNumber uint64) []common.Address {
+	if epochNumber <= 0 {
+		return signers
 	}
-	return penalties
+	header := chain.GetHeaderByNumber(epochNumber)
+	block := chain.GetBlock(header.Hash(), epochNumber)
+	penalties := block.Penalties()
+	if penalties != nil {
+		prevPenalties := common.ExtractAddressFromBytes(penalties)
+		signers = common.RemoveItemFromArray(signers, prevPenalties)
+	}
+	return signers
 }

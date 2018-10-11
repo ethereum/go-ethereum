@@ -238,6 +238,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 					if len(m2) > 0 {
 						header.Validators = contracts.BuildValidatorFromM2(m2)
+						log.Debug("New set Validators", "m2", m2, "number", header.Number.Uint64())
 					}
 				}
 			}
@@ -247,10 +248,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
-				log.Error("Fail to connect IPC client for blockSigner", "error", err)
+				return nil, err
 			}
 			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
-			if prevEpoc > 0 {
+			if prevEpoc >= 0 {
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
@@ -259,7 +260,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					for i := prevEpoc; i <= blockNumberEpoc; i++ {
 						blockHeader := chain.GetHeaderByNumber(i)
 						if len(penSigners) > 0 {
-							signedMasternodes, _ := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
+							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
+							if err != nil {
+								return nil, err
+							}
 							if len(signedMasternodes) > 0 {
 								// Check signer signed?
 								for _, signed := range signedMasternodes {
