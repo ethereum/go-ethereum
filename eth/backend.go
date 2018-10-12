@@ -238,11 +238,52 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 					if len(m2) > 0 {
 						header.Validators = contracts.BuildValidatorFromM2(m2)
+						log.Debug("New set Validators", "m2", m2, "number", header.Number.Uint64())
 					}
 				}
 			}
-
 			return nil
+		}
+		// Hook penalty.
+		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+			client, err := eth.blockchain.GetClient()
+			if err != nil {
+				return nil, err
+			}
+			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
+			if prevEpoc >= 0 {
+				prevHeader := chain.GetHeaderByNumber(prevEpoc)
+				penSigners := c.GetMasternodes(chain, prevHeader)
+				if len(penSigners) > 0 {
+					blockSignerAddr := common.HexToAddress(common.BlockSigners)
+					// Loop for each block to check missing sign.
+					for i := prevEpoc; i <= blockNumberEpoc; i++ {
+						blockHeader := chain.GetHeaderByNumber(i)
+						if len(penSigners) > 0 {
+							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
+							if err != nil {
+								return nil, err
+							}
+							if len(signedMasternodes) > 0 {
+								// Check signer signed?
+								for _, signed := range signedMasternodes {
+									for j, addr := range penSigners {
+										if signed == addr {
+											// Remove it from dupSigners.
+											penSigners = append(penSigners[:j], penSigners[j+1:]...)
+										}
+									}
+								}
+							}
+						} else {
+							break
+						}
+					}
+				}
+				return penSigners, nil
+			}
+
+			return []common.Address{}, nil
 		}
 
 		// Hook reward for posv validator.
