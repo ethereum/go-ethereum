@@ -63,8 +63,8 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", protocol),
 		},
 		{
-			code: StatusMsg, data: statusData{uint32(protocol), 999, td, head.Hash(), genesis.Hash()},
-			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 89)"),
+			code: StatusMsg, data: statusData{uint32(protocol), 89, td, head.Hash(), genesis.Hash()},
+			wantError: errResp(ErrNetworkIdMismatch, "89 (!= 1)"),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(protocol), DefaultConfig.NetworkId, td, head.Hash(), common.Hash{3}},
