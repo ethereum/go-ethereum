@@ -40,9 +40,11 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
-	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
-	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
+	loglevel       = flag.Int("loglevel", 2, "verbosity of logs")
+	longrunning    = flag.Bool("longrunning", false, "do run long-running tests")
+	waitKademlia   = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
+	printStats     = flag.Bool("printstats", false, "print accounting stats to STDOUT")
+	bucketKeySwarm = simulation.BucketKey("swarm")
 )
 
 func init() {
