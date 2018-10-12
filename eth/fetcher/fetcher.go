@@ -674,7 +674,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)
 
-		// Invoke the imported hook if needed
+		// Invoke the testing hook if needed
 		if f.importedHook != nil {
 			f.importedHook(block)
 		}

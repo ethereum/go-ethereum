@@ -272,7 +272,6 @@ func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
 		intNumber, err := strconv.Atoi(string(trimByte))
 		if err != nil {
 			log.Error("Can not convert string to integer", "error", err)
-			return []int64{}
 		}
 		validators = append(validators, int64(intNumber))
 	}
@@ -569,22 +568,26 @@ func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common
 }
 
 // Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointBlock(checkpointBlock *types.Block) (map[common.Address]common.Address, error) {
+func GetM2FromCheckpointBlock(checkpointBlock types.Block) ([]common.Address, error) {
 	if checkpointBlock.Number().Int64()%common.EpocBlockRandomize != 0 {
 		return nil, errors.New("This block is not checkpoint block epoc.")
 	}
-	m1m2 := map[common.Address]common.Address{}
-	// Get signers from this block.
+
+	// Get singers from this block.
 	masternodes := GetMasternodesFromCheckpointHeader(checkpointBlock.Header())
 	validators := ExtractValidatorsFromBytes(checkpointBlock.Header().Validators)
 
-	if len(validators) < len(masternodes) {
-		return nil, errors.New("len(m2) is less than len(m1)")
-	}
-	if len(masternodes) > 0 {
-		for i, m1 := range masternodes {
-			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
+	var m2List []common.Address
+	lenMasternodes := len(masternodes)
+	var valAddr common.Address
+	for validatorIndex := range validators {
+		if validatorIndex < lenMasternodes {
+			valAddr = masternodes[validatorIndex]
+		} else {
+			valAddr = masternodes[validatorIndex-lenMasternodes]
 		}
+		m2List = append(m2List, valAddr)
 	}
-	return m1m2, nil
+
+	return m2List, nil
 }
