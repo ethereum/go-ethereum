@@ -101,7 +101,7 @@ type garbage struct {
 	count    int      // number of chunks deleted in running round
 	target   int      // number of chunks to delete in running round
 	batch    *dbBatch // the delete batch
-	running  bool
+	runC     chan struct{}
 }
 
 type LDBStore struct {
@@ -187,6 +187,8 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 		maxRound: defaultMaxGCRound,
 		ratio:    defaultGCRatio,
 	}
+	s.gc.runC = make(chan struct{}, 1)
+	s.gc.runC <- struct{}{}
 
 	return s, nil
 }
@@ -310,18 +312,13 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 
 func (s *LDBStore) collectGarbage() error {
 
-	// the running param prevents duplicate gc from starting when one is already running
-	s.lock.Lock()
-	if s.gc.running {
-		s.lock.Unlock()
+	// prevent duplicate gc from starting when one is already running
+	// runC contains a struct{} as long as we are NOT running
+	if len(s.gc.runC) == 0 {
 		return nil
 	}
-	s.gc.running = true
-	defer func() {
-		s.lock.Lock()
-		s.gc.running = false
-		s.lock.Unlock()
-	}()
+	<-s.gc.runC
+	s.lock.Lock()
 	entryCnt := s.entryCnt
 	s.lock.Unlock()
 
@@ -370,6 +367,8 @@ func (s *LDBStore) collectGarbage() error {
 		it.Release()
 		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 	}
+
+	s.gc.runC <- struct{}{}
 	log.Debug("garbage collect done", "c", s.gc.count)
 
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(totalDeleted))

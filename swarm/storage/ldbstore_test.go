@@ -19,7 +19,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -586,20 +585,25 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 }
 
-func waitGc(ctx context.Context, ldb *LDBStore) error {
-	ticker := time.Tick(time.Millisecond * 100)
-	for {
-		select {
-
-		case <-ctx.Done():
-			return errors.New("timeout")
-		case <-ticker:
-			ldb.lock.Lock()
-			running := ldb.gc.running
-			ldb.lock.Unlock()
-			if !running {
-				return nil
-			}
-		}
-	}
+func waitGc(ctx context.Context, ldb *LDBStore) {
+	<-ldb.gc.runC
+	ldb.gc.runC <- struct{}{}
 }
+
+//func waitGc(ctx context.Context, ldb *LDBStore) error {
+//	ticker := time.Tick(time.Millisecond * 100)
+//	for {
+//		select {
+//
+//		case <-ctx.Done():
+//			return errors.New("timeout")
+//		case <-ticker:
+//			ldb.lock.Lock()
+//			running := ldb.gc.running
+//			ldb.lock.Unlock()
+//			if !running {
+//				return nil
+//			}
+//		}
+//	}
+//}
