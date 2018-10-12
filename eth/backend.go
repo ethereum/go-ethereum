@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"bytes"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -52,10 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"time"
 )
-
-const NumOfMasternodes = 99
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
@@ -192,28 +190,25 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		c := eth.engine.(*posv.Posv)
 
 		// Hook sends tx sign to smartcontract after inserting block to chain.
-		importedHook := func(block *types.Block) {
+		importedHook := func(block *types.Block) error {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
 				if err == consensus.ErrUnknownAncestor {
 					log.Warn("Block chain forked.", "error", err)
-				} else {
-					log.Error("Fail to get snapshot for sign tx validator.", "error", err)
 				}
-				return
+				return fmt.Errorf("Fail to get snapshot for sign tx validator: %v", err)
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
 				// double validation
 				m2, err := getM2(snap, eth, block)
 				if err != nil {
-					log.Error("Fail to validate M2 condition for imported block", "error", err)
-					return
+					return fmt.Errorf("Fail to validate M2 condition for importing block: %v", err)
 				}
 				if eth.etherbase != m2 {
 					// firstly, look into pending txPool
 					pendingMap, err := eth.txPool.Pending()
 					if err != nil {
-						log.Error("Fail to get txPool pending", "err", err)
+						log.Warn("Fail to get txPool pending", "err", err, "Continue with empty txPool pending.")
 						//reset pendingMap
 						pendingMap = map[common.Address]types.Transactions{}
 					}
@@ -222,10 +217,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						for _, tx := range txsSentFromM2 {
 							if tx.To().String() == common.BlockSigners {
 								if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-									log.Error("Fail to create tx sign for imported block", "error", err)
-									return
+									return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 								}
-								return
+								return nil
 							}
 						}
 					}
@@ -238,10 +232,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						from, err := eth.txPool.GetSender(event.Tx)
 						if (err == nil) && (event.Tx.To().String() == common.BlockSigners) && (from == m2) {
 							if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-								log.Error("Fail to create tx sign for imported block", "error", err)
-								return
+								return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 							}
-							return
+							return nil
 						}
 					//timeout 10s
 					case <-time.After(time.Duration(10) * time.Second):
@@ -249,11 +242,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 					subEvent.Unsubscribe()
 				} else if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-					log.Error("Fail to create tx sign for imported block", "error", err)
-					return
+					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 				}
 				// end of double validation
 			}
+			return nil
 		}
 		eth.protocolManager.fetcher.SetImportedHook(importedHook)
 
@@ -382,6 +375,9 @@ func getM2(snap *posv.Snapshot, eth *Ethereum, block *types.Block) (common.Addre
 	cpNo := no
 	if no%epoch != 0 {
 		cpNo = no - (no % epoch)
+	}
+	if cpNo == 0 {
+		return eth.etherbase, nil
 	}
 	cpBlk := eth.blockchain.GetBlockByNumber(cpNo)
 	m, err := contracts.GetM1M2FromCheckpointBlock(cpBlk)
