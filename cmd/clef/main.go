@@ -161,15 +161,14 @@ Clef that the file is 'safe' to execute.`,
 		Action:    utils.MigrateFlags(addCredential),
 		Name:      "addpw",
 		Usage:     "Store a credential for a keystore file",
-		ArgsUsage: "<address> <password>",
+		ArgsUsage: "<address>",
 		Flags: []cli.Flag{
 			logLevelFlag,
 			configdirFlag,
 			signerSecretFlag,
 		},
 		Description: `
-The addpw command stores a password for a given address (keyfile). If you invoke it with only one parameter, it will 
-remove any stored credential for that address (keyfile)
+The addpw command stores a password for a given address (keyfile).
 `,
 	}
 )
@@ -203,11 +202,35 @@ func init() {
 	app.Commands = []cli.Command{initCommand, attestCommand, addCredentialCommand}
 
 }
+
 func main() {
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// promptPassword retrieves the password entered interactively
+// from the user.
+func promptPassword(prompt string, confirmation bool) string {
+	// Prompt the user for the password
+	if prompt != "" {
+		fmt.Println(prompt)
+	}
+	password, err := console.Stdin.PromptPassword("Password: ")
+	if err != nil {
+		utils.Fatalf("Failed to read password: %v", err)
+	}
+	if confirmation {
+		confirm, err := console.Stdin.PromptPassword("Repeat password: ")
+		if err != nil {
+			utils.Fatalf("Failed to read password confirmation: %v", err)
+		}
+		if password != confirm {
+			utils.Fatalf("Passwords do not match")
+		}
+	}
+	return password
 }
 
 func initializeSecrets(c *cli.Context) error {
@@ -269,6 +292,7 @@ NOTE: This file does not contain your accounts. Those need to be backed up separ
 `)
 	return nil
 }
+
 func attestFile(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
@@ -295,8 +319,12 @@ func attestFile(ctx *cli.Context) error {
 
 func addCredential(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires at leaste one argument.")
+		utils.Fatalf("This command requires at least one argument.")
 	}
+
+	// Prompt user to enter a password
+	password := promptPassword("Enter a password to store with this address.", true)
+
 	if err := initialize(ctx); err != nil {
 		return err
 	}
@@ -312,11 +340,7 @@ func addCredential(ctx *cli.Context) error {
 	// Initialize the encrypted storages
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 	key := ctx.Args().First()
-	value := ""
-	if len(ctx.Args()) > 1 {
-		value = ctx.Args().Get(1)
-	}
-	pwStorage.Put(key, value)
+	pwStorage.Put(key, password)
 	log.Info("Credential store updated", "key", key)
 	return nil
 }
