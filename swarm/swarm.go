@@ -177,8 +177,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
-		DoSync:          config.SyncEnabled,
+		DoSync:          config.SyncEnabled && !config.LightNodeEnabled,
 		DoRetrieve:      true,
+		DoServeRetrieve: !config.LightNodeEnabled,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	})
