@@ -27,27 +27,36 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+//dummy Balance implementation
 type dummyBalance struct {
 	amount int64
 	peer   *Peer
 }
 
+//dummy Prices implementation
 type dummyPrices struct{}
 
+//a dummy message which needs size based accounting
 type perBytesMsg struct {
 	Content string
 }
 
+//a dummy message which is paid for per unit
 type perUnitMsg struct{}
+
+//a dummy message which doesn't need any payment
 type zeroMsg struct{}
 
+//return the price for the defined messages
 func (d *dummyPrices) Price(msg interface{}) *Price {
 	switch msg.(type) {
+	//size based message cost, sender pays
 	case *perBytesMsg:
 		return &Price{
 			PerByte: true,
 			Value:   int64(100),
 		}
+		//unitary cost, receiver pays
 	case *perUnitMsg:
 		return &Price{
 			PerByte: false,
@@ -57,71 +66,173 @@ func (d *dummyPrices) Price(msg interface{}) *Price {
 	return nil
 }
 
+//dummy accounting implementation, only stores values for later check
 func (d *dummyBalance) Add(amount int64, peer *Peer) error {
 	d.amount = amount
 	d.peer = peer
 	return nil
 }
 
+//We need to test that if the hook is not defined, then message infrastructure
+//(send,receive) still works
 func TestNoHook(t *testing.T) {
+	//create a test spec
 	spec := createTestSpec()
+	//a random node
 	id := adapters.RandomNodeConfig().ID
+	//a peer
 	p := p2p.NewPeer(id, "testPeer", nil)
-	peer := NewPeer(p, &dummyRW{}, spec)
+	rw := &dummyRW{}
+	peer := NewPeer(p, rw, spec)
 	ctx := context.TODO()
 	msg := &perBytesMsg{Content: "testBalance"}
+	//send a message
 	peer.Send(ctx, msg)
+	//simulate receiving a message
+	rw.msg = msg
 	peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
 		return nil
 	})
+	//all should just work and not result in any error
 }
 
-func TestSendBalance(t *testing.T) {
+//lowest level unit test
+func TestSend(t *testing.T) {
+	//create instances
 	balance := &dummyBalance{}
 	prices := &dummyPrices{}
-
+	//create the spec
 	spec := createTestSpec()
+	//create the accounting hook for the spec
 	spec.Hook = NewAccounting(balance, prices)
+	//create a peer
+	id := adapters.RandomNodeConfig().ID
+	p := p2p.NewPeer(id, "testPeer", nil)
+	peer := NewPeer(p, &dummyRW{}, spec)
+	msg := &perBytesMsg{Content: "testBalance"}
 
+	size, _ := rlp.EncodeToBytes(msg)
+	spec.Hook.Send(peer, uint32(len(size)), msg)
+	if balance.amount != int64(len(size)*100) {
+		t.Fatalf("Expected balance to be %d but is %d", (len(size) * 100), balance.amount)
+	}
+
+	//send a unitary, receiver pays message
+	msg2 := &perUnitMsg{}
+	spec.Hook.Send(peer, 0, msg2)
+	//check that the balance is actually the expected
+	if balance.amount != int64(-99) {
+		t.Fatalf("Expected balance to be %d but is %d", -99, balance.amount)
+	}
+
+	//set arbitrary balance
+	balance.amount = 77
+	//send a non accounted message, balance should not change
+	msg3 := &zeroMsg{}
+	spec.Hook.Send(peer, 0, msg3)
+	if balance.amount != int64(77) {
+		t.Fatalf("Expected balance to be %d but is %d", 77, balance.amount)
+	}
+}
+
+//lowest level unit test
+func TestReceive(t *testing.T) {
+	//create instances
+	balance := &dummyBalance{}
+	prices := &dummyPrices{}
+	//create the spec
+	spec := createTestSpec()
+	//create the accounting hook for the spec
+	spec.Hook = NewAccounting(balance, prices)
+	//create a peer
+	id := adapters.RandomNodeConfig().ID
+	p := p2p.NewPeer(id, "testPeer", nil)
+	peer := NewPeer(p, &dummyRW{}, spec)
+	msg := &perBytesMsg{Content: "testBalance"}
+
+	size, _ := rlp.EncodeToBytes(msg)
+	spec.Hook.Receive(peer, uint32(len(size)), msg)
+	if balance.amount != int64(len(size)*-100) {
+		t.Fatalf("Expected balance to be %d but is %d", (len(size) * 100), balance.amount)
+	}
+
+	//send a unitary, receiver pays message
+	msg2 := &perUnitMsg{}
+	spec.Hook.Receive(peer, 0, msg2)
+	//check that the balance is actually the expected
+	if balance.amount != int64(99) {
+		t.Fatalf("Expected balance to be %d but is %d", -99, balance.amount)
+	}
+
+	//set arbitrary balance
+	balance.amount = 77
+	//send a non accounted message, balance should not change
+	msg3 := &zeroMsg{}
+	spec.Hook.Receive(peer, 0, msg3)
+	if balance.amount != int64(77) {
+		t.Fatalf("Expected balance to be %d but is %d", 77, balance.amount)
+	}
+}
+
+//Test sending with a peer, higher level
+func TestSendWithPeer(t *testing.T) {
+	//create instances
+	balance := &dummyBalance{}
+	prices := &dummyPrices{}
+	//create the spec
+	spec := createTestSpec()
+	//create the accounting hook for the spec
+	spec.Hook = NewAccounting(balance, prices)
+	//create a peer
 	id := adapters.RandomNodeConfig().ID
 	p := p2p.NewPeer(id, "testPeer", nil)
 	peer := NewPeer(p, &dummyRW{}, spec)
 	ctx := context.TODO()
 	msg := &perBytesMsg{Content: "testBalance"}
 	size, _ := rlp.EncodeToBytes(msg)
+	//send a size based message
 	peer.Send(ctx, msg)
+	//check that the balance is actually the expected
 	if balance.amount != int64((len(size) * 100)) {
-		t.Fatalf("Expected price to be %d but is %d", (len(size) * 100), balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", (len(size) * 100), balance.amount)
 	}
 
+	//send a unitary, receiver pays message
 	msg2 := &perUnitMsg{}
 	peer.Send(ctx, msg2)
+	//check that the balance is actually the expected
 	if balance.amount != int64(-99) {
-		t.Fatalf("Expected price to be %d but is %d", -99, balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", -99, balance.amount)
 	}
 
+	//set arbitrary balance
 	balance.amount = 77
+	//send a non accounted message, balance should not change
 	msg3 := &zeroMsg{}
 	peer.Send(ctx, msg3)
 	if balance.amount != int64(77) {
-		t.Fatalf("Expected price to be %d but is %d", 77, balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", 77, balance.amount)
 	}
 }
 
-func TestReceiveBalance(t *testing.T) {
+//Test receiving with a peer, higher level
+func TestReceiveWithPeer(t *testing.T) {
+	//create instances
 	balance := &dummyBalance{}
 	prices := &dummyPrices{}
-
+	//create the spec
 	spec := createTestSpec()
+	//create the accounting hook for the spec
 	spec.Hook = NewAccounting(balance, prices)
-
+	//create a peer
 	id := adapters.RandomNodeConfig().ID
 	p := p2p.NewPeer(id, "testPeer", nil)
 	rw := &dummyRW{}
 	peer := NewPeer(p, rw, spec)
+
+	//simulate receiving a size based, sender-pays message
 	msg := &perBytesMsg{Content: "testBalance"}
 	size, _ := rlp.EncodeToBytes(msg)
-
 	rw.msg = msg
 	rw.code, _ = spec.GetCode(msg)
 	err := peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
@@ -131,9 +242,10 @@ func TestReceiveBalance(t *testing.T) {
 		t.Fatalf("Expected no error, but got error: %v", err)
 	}
 	if balance.amount != int64((len(size) * (-100))) {
-		t.Fatalf("Expected price to be %d but is %d", (len(size) * (-100)), balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", (len(size) * (-100)), balance.amount)
 	}
 
+	//simulate receiving a size based, sender-pays message
 	msg2 := &perUnitMsg{}
 	rw.msg = msg2
 	rw.code, _ = spec.GetCode(msg2)
@@ -144,23 +256,24 @@ func TestReceiveBalance(t *testing.T) {
 		t.Fatalf("Expected no error, but got error: %v", err)
 	}
 	if balance.amount != int64(99) {
-		t.Fatalf("Expected price to be %d but is %d", 99, balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", 99, balance.amount)
 	}
 
+	//set arbitrary balance an
 	msg3 := &zeroMsg{}
 	rw.msg = msg3
 	rw.code, _ = spec.GetCode(msg3)
 	//need to reset cause no accounting won't overwrite
 	balance.amount = -888
+	//simulate receiving a non accounted message, balance should not change
 	err = peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("Expected no error, but got error: %v", err)
 	}
-
 	if balance.amount != int64(-888) {
-		t.Fatalf("Expected price to be %d but is %d", -888, balance.amount)
+		t.Fatalf("Expected balance to be %d but is %d", -888, balance.amount)
 	}
 }
 
@@ -200,6 +313,7 @@ func (d *dummyRW) getDummyMsg() []byte {
 	return rr
 }
 
+//create a test spec
 func createTestSpec() *Spec {
 	spec := &Spec{
 		Name:       "test",

@@ -43,7 +43,7 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-//check that the disconnect threshold is below the payment threshold
+//Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	//create a test swap account
 	swap, testDir := createTestSwap(t)

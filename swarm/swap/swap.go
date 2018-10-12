@@ -38,15 +38,18 @@ type Swap struct {
 	balances   map[enode.ID]int64 //map of balances for each peer
 }
 
-//Credit us and debit remote
+//Swap implements the protocols.Balance interface
+//Add is the (sole) accounting function
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	//load existing balances from the state store
 	s.loadState(peer)
-
+	//adjust the balance
+	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
-
+	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	s.stateStore.Put(peer.ID().String(), &peerBalance)
 
@@ -54,7 +57,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return err
 }
 
-//get a peer's balance
+//Get a peer's balance
 func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	swap.lock.RLock()
 	defer swap.lock.RUnlock()
@@ -64,9 +67,12 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	return 0, errors.New("Peer not found")
 }
 
+//load balances from the state store (persisted)
 func (s *Swap) loadState(peer *protocols.Peer) {
 	var peerBalance int64
 	peerID := peer.ID()
+	//only load if the current instance doesn't already have this peer's
+	//balance in memory
 	if _, ok := s.balances[peerID]; !ok {
 		s.stateStore.Get(peerID.String(), &peerBalance)
 		s.balances[peerID] = peerBalance
