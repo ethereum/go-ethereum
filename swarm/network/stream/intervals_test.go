@@ -345,8 +345,6 @@ func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*
 
 func (c *testExternalClient) Close() {}
 
-const testExternalServerBatchSize = 10
-
 type testExternalServer struct {
 	t         string
 	keyFunc   func(key []byte, index uint64)
@@ -366,17 +364,11 @@ func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key
 	}
 }
 
+func (s *testExternalServer) SessionIndex() (uint64, error) {
+	return s.sessionAt, nil
+}
+
 func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	if from == 0 && to == 0 {
-		from = s.sessionAt
-		to = s.sessionAt + testExternalServerBatchSize
-	}
-	if to-from > testExternalServerBatchSize {
-		to = from + testExternalServerBatchSize - 1
-	}
-	if from >= s.maxKeys && to > s.maxKeys {
-		return nil, 0, 0, nil, io.EOF
-	}
 	if to > s.maxKeys {
 		to = s.maxKeys
 	}
