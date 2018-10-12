@@ -19,7 +19,6 @@ package protocols
 import (
 	"bytes"
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -28,44 +27,176 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	wouldHaveAccounted = errors.New("ignore this error")
-)
+type dummyBalance struct {
+	amount int64
+	peer   *Peer
+}
 
-type dummy struct {
-	content string
+type dummyPrices struct{}
+
+type perBytesMsg struct {
+	Content string
+}
+
+type perUnitMsg struct{}
+type zeroMsg struct{}
+
+func (d *dummyPrices) Price(msg interface{}) *Price {
+	switch msg.(type) {
+	case *perBytesMsg:
+		return &Price{
+			PerByte: true,
+			Value:   int64(100),
+		}
+	case *perUnitMsg:
+		return &Price{
+			PerByte: false,
+			Value:   int64(-99),
+		}
+	}
+	return nil
+}
+
+func (d *dummyBalance) Add(amount int64, peer *Peer) error {
+	d.amount = amount
+	d.peer = peer
+	return nil
+}
+
+func TestNoHook(t *testing.T) {
+	spec := createTestSpec()
+	id := adapters.RandomNodeConfig().ID
+	p := p2p.NewPeer(id, "testPeer", nil)
+	peer := NewPeer(p, &dummyRW{}, spec)
+	ctx := context.TODO()
+	msg := &perBytesMsg{Content: "testBalance"}
+	peer.Send(ctx, msg)
+	peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
+		return nil
+	})
+}
+
+func TestSendBalance(t *testing.T) {
+	balance := &dummyBalance{}
+	prices := &dummyPrices{}
+
+	spec := createTestSpec()
+	spec.Hook = NewAccounting(balance, prices)
+
+	id := adapters.RandomNodeConfig().ID
+	p := p2p.NewPeer(id, "testPeer", nil)
+	peer := NewPeer(p, &dummyRW{}, spec)
+	ctx := context.TODO()
+	msg := &perBytesMsg{Content: "testBalance"}
+	size, _ := rlp.EncodeToBytes(msg)
+	peer.Send(ctx, msg)
+	if balance.amount != int64((len(size) * 100)) {
+		t.Fatalf("Expected price to be %d but is %d", (len(size) * 100), balance.amount)
+	}
+
+	msg2 := &perUnitMsg{}
+	peer.Send(ctx, msg2)
+	if balance.amount != int64(-99) {
+		t.Fatalf("Expected price to be %d but is %d", -99, balance.amount)
+	}
+
+	balance.amount = 77
+	msg3 := &zeroMsg{}
+	peer.Send(ctx, msg3)
+	if balance.amount != int64(77) {
+		t.Fatalf("Expected price to be %d but is %d", 77, balance.amount)
+	}
+}
+
+func TestReceiveBalance(t *testing.T) {
+	balance := &dummyBalance{}
+	prices := &dummyPrices{}
+
+	spec := createTestSpec()
+	spec.Hook = NewAccounting(balance, prices)
+
+	id := adapters.RandomNodeConfig().ID
+	p := p2p.NewPeer(id, "testPeer", nil)
+	rw := &dummyRW{}
+	peer := NewPeer(p, rw, spec)
+	msg := &perBytesMsg{Content: "testBalance"}
+	size, _ := rlp.EncodeToBytes(msg)
+
+	rw.msg = msg
+	rw.code, _ = spec.GetCode(msg)
+	err := peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, but got error: %v", err)
+	}
+	if balance.amount != int64((len(size) * (-100))) {
+		t.Fatalf("Expected price to be %d but is %d", (len(size) * (-100)), balance.amount)
+	}
+
+	msg2 := &perUnitMsg{}
+	rw.msg = msg2
+	rw.code, _ = spec.GetCode(msg2)
+	err = peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, but got error: %v", err)
+	}
+	if balance.amount != int64(99) {
+		t.Fatalf("Expected price to be %d but is %d", 99, balance.amount)
+	}
+
+	msg3 := &zeroMsg{}
+	rw.msg = msg3
+	rw.code, _ = spec.GetCode(msg3)
+	//need to reset cause no accounting won't overwrite
+	balance.amount = -888
+	err = peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Expected no error, but got error: %v", err)
+	}
+
+	if balance.amount != int64(-888) {
+		t.Fatalf("Expected price to be %d but is %d", -888, balance.amount)
+	}
 }
 
 //dummy implementation of a MsgReadWriter
 //this allows for quick and easy unit tests without
 //having to build up the complete protocol
-type dummyRW struct{}
+type dummyRW struct {
+	msg  interface{}
+	size uint32
+	code uint64
+}
 
 func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
 
 func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	enc := bytes.NewReader(d.getDummyMsg())
 	return p2p.Msg{
-		Code:       0,
-		Size:       5,
-		Payload:    bytes.NewReader(getDummyMsg()),
+		Code:       d.code,
+		Size:       d.size,
+		Payload:    enc,
 		ReceivedAt: time.Now(),
 	}, nil
 }
 
-func getDummyMsg() []byte {
-	msg := &dummy{content: "test"}
-	r, _ := rlp.EncodeToBytes(msg)
-
+func (d *dummyRW) getDummyMsg() []byte {
+	r, _ := rlp.EncodeToBytes(d.msg)
 	var b bytes.Buffer
 	wmsg := WrappedMsg{
 		Context: b.Bytes(),
 		Size:    uint32(len(r)),
 		Payload: r,
 	}
-
 	rr, _ := rlp.EncodeToBytes(wmsg)
+	d.size = uint32(len(rr))
 	return rr
 }
 
@@ -75,54 +206,10 @@ func createTestSpec() *Spec {
 		Version:    42,
 		MaxMsgSize: 10 * 1024,
 		Messages: []interface{}{
-			dummy{},
+			perBytesMsg{},
+			perUnitMsg{},
+			zeroMsg{},
 		},
 	}
 	return spec
-}
-
-type dummyBalanceMgr struct{}
-type dummyPriceOracle struct{}
-
-func (d *dummyPriceOracle) Price(uint32, interface{}) (EntryDirection, uint64) {
-	return ChargeSender, 99
-}
-
-func (d *dummyBalanceMgr) Credit(peer *Peer, amount uint64) error {
-	return wouldHaveAccounted
-}
-
-func (d *dummyBalanceMgr) Debit(peer *Peer, amount uint64) error {
-	return wouldHaveAccounted
-}
-
-// Test that passing a nil hook doesn't affect sending
-func TestProtocolNilHook(t *testing.T) {
-	spec := createTestSpec()
-	id := adapters.RandomNodeConfig().ID
-	p := p2p.NewPeer(id, "testPeer", nil)
-	peer := NewPeer(p, &dummyRW{}, spec)
-
-	peer.Send(context.Background(), dummy{})
-	peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
-		return nil
-	})
-}
-
-func TestProtocolHook(t *testing.T) {
-	spec := createTestSpec()
-	spec.Hook = NewAccountingHook(&dummyBalanceMgr{}, &dummyPriceOracle{})
-	id := adapters.RandomNodeConfig().ID
-	p := p2p.NewPeer(id, "testPeer", nil)
-	peer := NewPeer(p, &dummyRW{}, spec)
-
-	err := peer.Send(context.Background(), dummy{})
-	if err == nil || err != wouldHaveAccounted {
-		t.Fatal("Expected fake accounting to happen, but didn't")
-	}
-
-	err = peer.handleIncoming(nil)
-	if err == nil || err != wouldHaveAccounted {
-		t.Fatal("Expected fake accounting to happen, but didn't")
-	}
 }

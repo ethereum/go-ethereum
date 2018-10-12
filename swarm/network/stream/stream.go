@@ -62,8 +62,8 @@ type Registry struct {
 	intervalsStore state.Store
 	doRetrieve     bool
 	maxPeerServers int
-	balanceMgr     protocols.BalanceManager
-	priceOracle    protocols.PriceOracle
+	balanceMgr     protocols.Balance
+	prices         protocols.Prices
 	spec           *protocols.Spec
 }
 
@@ -77,7 +77,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balanceMgr protocols.BalanceManager) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balanceMgr protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -194,8 +194,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 func (r *Registry) setupSpec() {
 	r.createSpec()
 	r.createPriceOracle()
-	if !reflect.ValueOf(r.balanceMgr).IsNil() {
-		r.spec.Hook = protocols.NewAccountingHook(r.balanceMgr, r.priceOracle)
+	if r.balanceMgr != nil && !reflect.ValueOf(r.balanceMgr).IsNil() {
+		r.spec.Hook = protocols.NewAccounting(r.balanceMgr, r.prices)
 	}
 }
 
@@ -718,65 +718,53 @@ func (r *Registry) createSpec() {
 
 //An accountable message needs some meta information attached to it
 //in order to evaluate the correct price
-type priceTag struct {
-	price     uint64
-	sizeBased bool
-	direction protocols.EntryDirection
-}
-type StreamerPriceOracle struct {
-	priceMatrix map[uint64]*priceTag
+type StreamerPrices struct {
+	priceMatrix map[uint64]*protocols.Price
 	registry    *Registry
 }
 
-func (spo *StreamerPriceOracle) Price(size uint32, msg interface{}) (direction protocols.EntryDirection, price uint64) {
+func (spo *StreamerPrices) Price(msg interface{}) *protocols.Price {
 	code, ok := spo.registry.spec.GetCode(msg)
-	direction = protocols.ChargeNone
 	if !ok {
 		//this could be handled more severely (panic) but let's be gentle?
-		return
+		return nil
 	}
 
-	tag, ok := spo.priceMatrix[code]
+	price, ok := spo.priceMatrix[code]
 	if !ok {
-		return
+		return nil
 	}
-	price = tag.price
-	if tag.sizeBased {
-		price = price * uint64(size)
-	}
-	direction = tag.direction
-	return
+
+	return price
 }
 
 func (r *Registry) createPriceOracle() {
 
-	po := &StreamerPriceOracle{
+	po := &StreamerPrices{
 		registry: r,
 	}
-	po.priceMatrix = make(map[uint64]*priceTag)
+	po.priceMatrix = make(map[uint64]*protocols.Price)
 
 	deliveryCode, ok := r.spec.GetCode(ChunkDeliveryMsgRetrieval{})
 	if !ok {
 		panic("Attempting to get message code for an expected message type, but code not found")
 	}
-	tag := &priceTag{
-		price:     uint64(100),
-		sizeBased: true,
-		direction: protocols.ChargeReceiver,
+	price := &protocols.Price{
+		Value:   int64(-100),
+		PerByte: true,
 	}
-	po.priceMatrix[deliveryCode] = tag
+	po.priceMatrix[deliveryCode] = price
 
 	retrieveReqCode, ok := r.spec.GetCode(RetrieveRequestMsg{})
 	if !ok {
 		panic("Attempting to get message code for an expected message type, but code not found")
 	}
-	tag = &priceTag{
-		price:     uint64(10),
-		sizeBased: false,
-		direction: protocols.ChargeSender,
+	price = &protocols.Price{
+		Value:   int64(10),
+		PerByte: false,
 	}
-	po.priceMatrix[retrieveReqCode] = tag
-	r.priceOracle = po
+	po.priceMatrix[retrieveReqCode] = price
+	r.prices = po
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {

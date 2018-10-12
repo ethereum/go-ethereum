@@ -197,6 +197,139 @@ func TestProtoHandshakeSuccess(t *testing.T) {
 	runProtoHandshake(t, &protoHandshake{42, "420"})
 }
 
+type dummyHook struct {
+	peer  *Peer
+	size  uint32
+	msg   interface{}
+	send  bool
+	err   error
+	waitC chan struct{}
+}
+
+type dummyMsg struct {
+	Content string
+}
+
+func (d *dummyHook) Send(peer *Peer, size uint32, msg interface{}) error {
+	d.peer = peer
+	d.size = size
+	d.msg = msg
+	d.send = true
+	return d.err
+}
+
+func (d *dummyHook) Receive(peer *Peer, size uint32, msg interface{}) error {
+	d.peer = peer
+	d.size = size
+	d.msg = msg
+	d.send = false
+	d.waitC <- struct{}{}
+	return d.err
+}
+
+func TestProtocolHook(t *testing.T) {
+	testHook := &dummyHook{
+		waitC: make(chan struct{}, 1),
+	}
+	spec := &Spec{
+		Name:       "test",
+		Version:    42,
+		MaxMsgSize: 10 * 1024,
+		Messages: []interface{}{
+			dummyMsg{},
+		},
+		Hook: testHook,
+	}
+
+	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		peer := NewPeer(p, rw, spec)
+		ctx := context.TODO()
+		peer.Send(ctx, &dummyMsg{
+			Content: "handshake"})
+
+		handle := func(ctx context.Context, msg interface{}) error {
+			return nil
+		}
+
+		return peer.Run(handle)
+	}
+
+	conf := adapters.RandomNodeConfig()
+	tester := p2ptest.NewProtocolTester(t, conf.ID, 2, runFunc)
+	err := tester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "handshake"},
+				Peer: tester.Nodes[0].ID(),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "handshake" {
+		t.Fatal("Expected msg to be set, but it is not")
+	}
+	if testHook.send != true {
+		t.Fatal("Expected a send message, but it is not")
+	}
+	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[0].ID() {
+		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	}
+	if testHook.size != 11 { //11 is the length of the encoded message
+		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "response"},
+				Peer: tester.Nodes[1].ID(),
+			},
+		},
+	})
+
+	<-testHook.waitC
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "response" {
+		t.Fatal("Expected msg to be set, but it is not")
+	}
+	if testHook.send != false {
+		t.Fatal("Expected a send message, but it is not")
+	}
+	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[1].ID() {
+		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	}
+	if testHook.size != 10 { //11 is the length of the encoded message
+		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
+	}
+
+	testHook.err = fmt.Errorf("dummy error")
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "response"},
+				Peer: tester.Nodes[1].ID(),
+			},
+		},
+	})
+
+	<-testHook.waitC
+
+	time.Sleep(100 * time.Millisecond)
+	err = tester.TestDisconnected(&p2ptest.Disconnect{tester.Nodes[1].ID(), testHook.err})
+	if err != nil {
+		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
+	}
+
+}
+
 func moduleHandshakeExchange(id enode.ID, resp uint) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{

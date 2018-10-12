@@ -17,8 +17,6 @@
 package protocols
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -36,87 +34,87 @@ var (
 	mChequesReceived = metrics.NewRegisteredCounterForced("account.cheques.received", nil)
 )
 
-type PriceOracle interface {
-	Price(uint32, interface{}) (EntryDirection, uint64)
+type Prices interface {
+	Price(interface{}) *Price
 }
 
-type BalanceManager interface {
-	//Credit is crediting the peer, charging local node
-	Credit(peer *Peer, amount uint64) error
-	//Debit is crediting the local node, charging the remote peer
-	Debit(peer *Peer, amount uint64) error
+type Price struct {
+	Value   int64 //Positive if sender pays, negative if receiver pays
+	PerByte bool  //True if the price is per byte or for unit
 }
 
-type EntryDirection uint
-
-const (
-	ChargeSender   EntryDirection = 1
-	ChargeReceiver EntryDirection = 2
-	ChargeNone     EntryDirection = 3
-)
-
-type AccountingHook struct {
-	BalanceManager
-	PriceOracle
-	lock sync.RWMutex //lock the balances
+func (p *Price) ForSender(size uint32) int64 {
+	price := p.Value
+	if p.PerByte {
+		price *= int64(size)
+	}
+	return price
 }
 
-func NewAccountingHook(mgr BalanceManager, po PriceOracle) *AccountingHook {
-	ah := &AccountingHook{
-		PriceOracle:    po,
-		BalanceManager: mgr,
+func (p *Price) ForReceiver(size uint32) int64 {
+	price := p.Value
+	if p.PerByte {
+		price *= int64(size)
+	}
+	return 0 - price
+}
+
+type Balance interface {
+	//Adds amount to the local balance with remote node `peer`;
+	//positive amount = credit local node
+	//negative amount = debit local node
+	Add(amount int64, peer *Peer) error
+}
+
+type Accounting struct {
+	Balance
+	Prices
+}
+
+func NewAccounting(mgr Balance, po Prices) *Accounting {
+	ah := &Accounting{
+		Prices:  po,
+		Balance: mgr,
 	}
 	return ah
 }
 
-func (ah *AccountingHook) Send(peer *Peer, size uint32, msg interface{}) error {
-	ah.lock.Lock()
-	defer ah.lock.Unlock()
-	var err error
-	direction, price := ah.PriceOracle.Price(size, msg)
-	if direction == ChargeSender {
-		err = ah.BalanceManager.Debit(peer, price)
-		ah.debitMetrics(price, size, err)
-	} else if direction == ChargeReceiver {
-		err = ah.BalanceManager.Credit(peer, price)
-		ah.creditMetrics(price, size, err)
-	} else if direction == ChargeNone {
+func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
+	price := ah.Price(msg)
+	if price == nil {
 		return nil
 	}
+	finalPrice := price.ForSender(size)
+	err := ah.Add(finalPrice, peer)
+	ah.doMetrics(finalPrice, size, err)
 	return err
 }
 
-func (ah *AccountingHook) Receive(peer *Peer, size uint32, msg interface{}) error {
-	ah.lock.Lock()
-	defer ah.lock.Unlock()
-	var err error
-	direction, price := ah.PriceOracle.Price(size, msg)
-	if direction == ChargeReceiver {
-		err = ah.BalanceManager.Debit(peer, price)
-		ah.debitMetrics(price, size, err)
-	} else if direction == ChargeSender {
-		err = ah.BalanceManager.Credit(peer, price)
-		ah.creditMetrics(price, size, err)
-	} else if direction == ChargeNone {
+func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
+	price := ah.Price(msg)
+	if price == nil {
 		return nil
 	}
+	finalPrice := price.ForReceiver(size)
+	err := ah.Add(finalPrice, peer)
+	ah.doMetrics(finalPrice, size, err)
 	return err
 }
 
-func (ah *AccountingHook) debitMetrics(price uint64, size uint32, err error) {
-	mBalanceDebit.Inc(int64(price))
-	mBytesDebit.Inc(int64(size))
-	mMsgDebit.Inc(1)
-	if err != nil {
-		mSelfDrops.Inc(1)
-	}
-}
-
-func (ah *AccountingHook) creditMetrics(price uint64, size uint32, err error) {
-	mBalanceCredit.Inc(int64(price))
-	mBytesCredit.Inc(int64(size))
-	mMsgCredit.Inc(1)
-	if err != nil {
-		mPeerDrops.Inc(1)
+func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
+	if price > 0 {
+		mBalanceCredit.Inc(int64(price))
+		mBytesCredit.Inc(int64(size))
+		mMsgCredit.Inc(1)
+		if err != nil {
+			mPeerDrops.Inc(1)
+		}
+	} else {
+		mBalanceDebit.Inc(int64(price))
+		mBytesDebit.Inc(int64(size))
+		mMsgDebit.Inc(1)
+		if err != nil {
+			mSelfDrops.Inc(1)
+		}
 	}
 }

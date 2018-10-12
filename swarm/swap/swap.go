@@ -39,34 +39,19 @@ type Swap struct {
 }
 
 //Credit us and debit remote
-func (s *Swap) Credit(peer *protocols.Peer, amount uint64) (err error) {
+func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	s.loadState(peer)
 
-	s.balances[peer.ID()] += int64(amount)
+	s.balances[peer.ID()] += amount
+
 	peerBalance := s.balances[peer.ID()]
 	s.stateStore.Put(peer.ID().String(), &peerBalance)
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 	return err
-}
-
-//Debit us and credit remote
-func (s *Swap) Debit(peer *protocols.Peer, amount uint64) (err error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.loadState(peer)
-
-	//local node is being debited (in favor of remote peer), so its balance decreases
-	s.balances[peer.ID()] -= int64(amount)
-	peerBalance := s.balances[peer.ID()]
-	s.stateStore.Put(peer.ID().String(), &peerBalance)
-
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
-	return nil
 }
 
 //get a peer's balance
