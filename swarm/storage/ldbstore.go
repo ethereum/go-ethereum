@@ -314,10 +314,12 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 func (s *LDBStore) collectGarbage() error {
 
 	// prevent duplicate gc from starting when one is already running
-	if len(s.gc.runC) == 0 {
+	select {
+	case <-s.gc.runC:
+	default:
 		return nil
 	}
-	<-s.gc.runC
+
 	s.lock.Lock()
 	entryCnt := s.entryCnt
 	s.lock.Unlock()
