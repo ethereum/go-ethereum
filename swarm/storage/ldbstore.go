@@ -95,13 +95,13 @@ func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
 }
 
 type garbage struct {
-	maxRound int      // maximum number of chunks to delete in one garbage collection round
-	maxBatch int      // maximum number of chunks to delete in one db request batch
-	ratio    int      // 1/x ratio to calculate the number of chunks to gc on a low capacity db
-	count    int      // number of chunks deleted in running round
-	target   int      // number of chunks to delete in running round
-	batch    *dbBatch // the delete batch
-	runC     chan struct{}
+	maxRound int           // maximum number of chunks to delete in one garbage collection round
+	maxBatch int           // maximum number of chunks to delete in one db request batch
+	ratio    int           // 1/x ratio to calculate the number of chunks to gc on a low capacity db
+	count    int           // number of chunks deleted in running round
+	target   int           // number of chunks to delete in running round
+	batch    *dbBatch      // the delete batch
+	runC     chan struct{} // struct in chan means gc is NOT running
 }
 
 type LDBStore struct {
@@ -187,6 +187,7 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 		maxRound: defaultMaxGCRound,
 		ratio:    defaultGCRatio,
 	}
+
 	s.gc.runC = make(chan struct{}, 1)
 	s.gc.runC <- struct{}{}
 
@@ -313,7 +314,6 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 func (s *LDBStore) collectGarbage() error {
 
 	// prevent duplicate gc from starting when one is already running
-	// runC contains a struct{} as long as we are NOT running
 	if len(s.gc.runC) == 0 {
 		return nil
 	}
