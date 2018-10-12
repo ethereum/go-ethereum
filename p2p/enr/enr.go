@@ -156,7 +156,7 @@ func (r *Record) Set(e Entry) {
 }
 
 func (r *Record) invalidate() {
-	if r.signature == nil {
+	if r.signature != nil {
 		r.seq++
 	}
 	r.signature = nil
