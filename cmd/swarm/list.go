@@ -27,6 +27,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var listCommand = cli.Command{
+	Action:             list,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "ls",
+	Usage:              "list files and directories contained in a manifest",
+	ArgsUsage:          "<manifest> [<prefix>]",
+	Description:        "Lists files and directories contained in a manifest",
+}
+
 func list(ctx *cli.Context) {
 	args := ctx.Args()
 

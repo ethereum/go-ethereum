@@ -34,8 +34,17 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func upload(ctx *cli.Context) {
+var upCommand = cli.Command{
+	Action:             upload,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "up",
+	Usage:              "uploads a file or directory to swarm using the HTTP API",
+	ArgsUsage:          "<file>",
+	Flags:              []cli.Flag{SwarmEncryptedFlag},
+	Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
+}
 
+func upload(ctx *cli.Context) {
 	args := ctx.Args()
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
