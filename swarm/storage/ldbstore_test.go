@@ -302,10 +302,9 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 // retrieve only some of them, because garbage collection must have partially cleared the store
 // Also tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreCollectGarbage(t *testing.T) {
-	var cap int
 
 	// below max ronud
-	cap = defaultMaxGCRound / 2
+	cap := defaultMaxGCRound / 2
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 
