@@ -119,16 +119,17 @@ func main() {
 	}
 
 	if *runv5 {
-		if _, err := discv5.ListenUDP(nodeKey, conn, realaddr, "", restrictList); err != nil {
+		if _, err := discv5.ListenUDP(nodeKey, conn, "", restrictList); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	} else {
+		db, _ := enode.OpenDB("")
+		ln := enode.NewLocalNode(db, nodeKey)
 		cfg := discover.Config{
-			PrivateKey:   nodeKey,
-			AnnounceAddr: realaddr,
-			NetRestrict:  restrictList,
+			PrivateKey:  nodeKey,
+			NetRestrict: restrictList,
 		}
-		if _, err := discover.ListenUDP(conn, cfg); err != nil {
+		if _, err := discover.ListenUDP(conn, ln, cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}

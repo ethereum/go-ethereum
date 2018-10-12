@@ -142,7 +142,7 @@ func TestTable_IPLimit(t *testing.T) {
 	defer db.Close()
 
 	for i := 0; i < tableIPLimit+1; i++ {
-		n := nodeAtDistance(tab.self.ID(), i, net.IP{172, 0, 1, byte(i)})
+		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
 		tab.add(n)
 	}
 	if tab.len() > tableIPLimit {
@@ -159,7 +159,7 @@ func TestTable_BucketIPLimit(t *testing.T) {
 
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
-		n := nodeAtDistance(tab.self.ID(), d, net.IP{172, 0, 1, byte(i)})
+		n := nodeAtDistance(tab.self().ID(), d, net.IP{172, 0, 1, byte(i)})
 		tab.add(n)
 	}
 	if tab.len() > bucketIPLimit {
@@ -241,7 +241,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
-			tab.stuff([]*node{nodeAtDistance(tab.self.ID(), ld, intIP(ld))})
+			tab.stuff([]*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
 		}
 		gotN := tab.ReadRandomNodes(buf)
 		if gotN != tab.len() {
@@ -509,6 +509,10 @@ type preminedTestnet struct {
 	target    encPubkey
 	targetSha enode.ID // sha3(target)
 	dists     [hashBits + 1][]encPubkey
+}
+
+func (tn *preminedTestnet) self() *enode.Node {
+	return nullNode
 }
 
 func (tn *preminedTestnet) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
