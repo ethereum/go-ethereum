@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"io/ioutil"
@@ -666,39 +665,6 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 func SignDataWithValidator(data []byte) ([]byte, string) {
 	msg := "TODO"
 	return crypto.Keccak256([]byte(msg)), msg
-}
-
-// TypedData represents a request to create a new filter.
-type TypedData ethereum.TypedData
-
-// SignStructuredData signs the given message according to EIP712.
-//
-// https://github.com/ethereum/EIPs/issues/712
-//
-// If the format "\x19\x46" ‖ domainSeparator ‖ hashStruct(message)` is not respected,
-// an error is returned
-func (api *SignerAPI) SignStructuredData(ctx context.Context, data TypedData) (hexutil.Bytes, error) {
-	fmt.Println("data", data)
-	fmt.Println("data.Hash", data.Hash)
-	return common.Hex2Bytes("0xdeadbeef"), nil
-}
-
-// UnmarshalJSON sets *args fields with given data.
-func (args *TypedData) UnmarshalJSON(data []byte) error {
-	type input struct {
-		Hash *common.Hash		`json:"hash"`
-	}
-
-	var raw input
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	if raw.Hash != nil {
-		args.Hash = raw.Hash
-	}
-
-	return nil
 }
 
 // SignDataPlain is a helper function that calculates a hash for the given message that can be
