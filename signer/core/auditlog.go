@@ -73,7 +73,7 @@ func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr com
 func (l *AuditLogger) SignStructuredData(ctx context.Context, data TypedData) (hexutil.Bytes, error) {
 	l.log.Info("SignStructuredData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
 		"addr", "data", data)
-	b, e := l.api.SignStructuredData(ctx, TypedData{})
+	b, e := l.api.SignStructuredData(ctx, data)
 	l.log.Info("SignStructuredData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
 	return b, e
 }
