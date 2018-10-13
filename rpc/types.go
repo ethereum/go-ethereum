@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -134,6 +136,11 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
 	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
 		input = input[1 : len(input)-1]
+	} else {
+		// Integer block number
+		value, err := strconv.Atoi(string(data))
+		*bn = BlockNumber(value)
+		return err
 	}
 
 	switch input {
@@ -162,4 +169,35 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
+}
+
+// BlockNumberOrHash permits JSON deserialization and parsing of a value that
+// can be either a block number or block hash.
+type BlockNumberOrHash string
+
+// UnmarshalJSON parses the supplied JSON fragment as a BlockNumberOrHash.
+func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
+	*bnh = BlockNumberOrHash(data)
+	return nil
+}
+
+// IsHash returns true iff the value is a block hash.
+func (bnh BlockNumberOrHash) IsHash() bool {
+	return bnh[0] == '"' && bnh[len(bnh)-1] == '"' && len(bnh) == 68
+}
+
+// Hash returns the hash value, or nil if the value is not a hash.
+func (bnh BlockNumberOrHash) Hash() *common.Hash {
+	if !bnh.IsHash() {
+		return nil
+	}
+	hash := common.HexToHash(string(bnh[1 : len(bnh)-1]))
+	return &hash
+}
+
+// Number returns the numeric value, or 0 if the value is not numeric.
+func (bnh BlockNumberOrHash) Number() int64 {
+	var bn BlockNumber
+	(&bn).UnmarshalJSON([]byte(bnh))
+	return bn.Int64()
 }

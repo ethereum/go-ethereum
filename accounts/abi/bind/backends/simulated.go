@@ -319,6 +319,21 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	return nil
 }
 
+// getBlockHash returns the block hash of the requested block.
+// `hash` is used if supplied; if not the canonoical block at `number` is looked up.
+// If neither is supplied, the latest canonical block hash is returned.
+func (b *SimulatedBackend) getBlockHash(number *big.Int, hash *common.Hash) (common.Hash, error) {
+	if hash != nil {
+		return *hash, nil
+	} else if number != nil {
+		header := b.blockchain.GetHeaderByNumber(number.Uint64())
+		return header.Hash(), nil
+	} else {
+		header := b.blockchain.CurrentHeader()
+		return header.Hash(), nil
+	}
+}
+
 // FilterLogs executes a log filter operation, blocking during execution and
 // returning all the results in one batch.
 //
@@ -330,13 +345,13 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.Filter
 		filter = filters.NewBlockFilter(&filterBackend{b.database, b.blockchain}, *query.BlockHash, query.Addresses, query.Topics)
 	} else {
 		// Initialize unset filter boundaried to run from genesis to chain head
-		from := int64(0)
-		if query.FromBlock != nil {
-			from = query.FromBlock.Int64()
+		from, err := b.getBlockHash(query.FromBlock, query.FromBlockHash)
+		if err != nil {
+			return nil, err
 		}
-		to := int64(-1)
-		if query.ToBlock != nil {
-			to = query.ToBlock.Int64()
+		to, err := b.getBlockHash(query.ToBlock, query.ToBlockHash)
+		if err != nil {
+			return nil, err
 		}
 		// Construct the range filter
 		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain}, from, to, query.Addresses, query.Topics)

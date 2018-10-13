@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -56,14 +57,14 @@ type Filter struct {
 	topics    [][]common.Hash
 
 	block      common.Hash // Block hash if filtering a single block
-	begin, end int64       // Range interval if filtering multiple blocks
+	begin, end common.Hash // Range interval if filtering multiple blocks
 
 	matcher *bloombits.Matcher
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func NewRangeFilter(backend Backend, begin, end common.Hash, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -114,9 +115,61 @@ func newFilter(backend Backend, addresses []common.Address, topics [][]common.Ha
 	}
 }
 
+// findCommonAncestor returns the highest numbered block that is the ancestor of
+// both `begin` and `end`. `end` must have a block number greater than or equal
+// to `begin`.
+func (f *Filter) findCommonAncestor(ctx context.Context, begin, end *types.Header) (*types.Header, bool, error) {
+	var err error
+	var mainChain bool
+
+	// If end is on the canonical chain, we can rewind efficiently
+	if header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(end.Number.Int64())); err != nil && header.Hash() == end.Hash() {
+		mainChain = true
+		end, err = f.backend.HeaderByNumber(ctx, rpc.BlockNumber(begin.Number.Int64()))
+		if err != nil {
+			return nil, false, err
+		}
+	} else {
+		mainChain = false
+		// Rewind until begin and end are at the same height
+		for end.Number.Cmp(begin.Number) > 0 {
+			end, err = f.backend.HeaderByHash(ctx, end.ParentHash)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+	}
+
+	// Rewind both until they match
+	for begin.Hash() != end.Hash() {
+		begin, err = f.backend.HeaderByHash(ctx, begin.ParentHash)
+		if err != nil {
+			return nil, false, err
+		}
+
+		end, err = f.backend.HeaderByHash(ctx, end.ParentHash)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	return end, mainChain, nil
+}
+
+// logList allows sorting event logs by block number and log index
+type logList []*types.Log
+
+func (l logList) Len() int      { return len(l) }
+func (l logList) Swap(i, j int) { l[i], l[j] = l[j], l[i] }
+func (l logList) Less(i, j int) bool {
+	return l[i].BlockNumber < l[j].BlockNumber || (l[i].BlockNumber == l[j].BlockNumber && l[i].Index < l[j].Index)
+}
+
 // Logs searches the blockchain for matching log entries, returning all from the
 // first block that contains matches, updating the start of the filter accordingly.
 func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
+	var err error
+
 	// If we're doing singleton block filtering, execute and return
 	if f.block != (common.Hash{}) {
 		header, err := f.backend.HeaderByHash(ctx, f.block)
@@ -128,48 +181,78 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		return f.blockLogs(ctx, header)
 	}
+
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number.Uint64()
 
-	if f.begin == -1 {
-		f.begin = int64(head)
-	}
-	end := uint64(f.end)
-	if f.end == -1 {
-		end = head
-	}
-	// Gather all indexed logs, and finish with non indexed ones
-	var (
-		logs []*types.Log
-		err  error
-	)
-	size, sections := f.backend.BloomStatus()
-	if indexed := sections * size; indexed > uint64(f.begin) {
-		if indexed > end {
-			logs, err = f.indexedLogs(ctx, end)
-		} else {
-			logs, err = f.indexedLogs(ctx, indexed-1)
-		}
+	begin := header
+	if f.begin != (common.Hash{}) {
+		begin, err = f.backend.HeaderByHash(ctx, f.begin)
 		if err != nil {
-			return logs, err
+			return nil, err
 		}
 	}
-	rest, err := f.unindexedLogs(ctx, end)
+
+	end := header
+	if f.end != (common.Hash{}) {
+		end, err = f.backend.HeaderByHash(ctx, f.end)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if end.Number.Cmp(begin.Number) < 0 {
+		return nil, nil
+	}
+
+	ancestor, mainChain, err := f.findCommonAncestor(ctx, begin, end)
+	if err != nil {
+		return nil, err
+	}
+
+	// Insert deletions of any reorg-ed logs
+	var logs []*types.Log
+	removed, err := f.unindexedLogs(ctx, ancestor.Hash(), begin.Hash())
+	if err != nil {
+		return nil, err
+	}
+	for _, log := range removed {
+		log.Removed = true
+		logs = append(logs, log)
+	}
+
+	// Gather all indexed logs, and finish with non indexed ones
+	if mainChain {
+		size, sections := f.backend.BloomStatus()
+		if indexed := sections * size; indexed > ancestor.Number.Uint64() {
+			if indexed > end.Number.Uint64() {
+				logs, err = f.indexedLogs(ctx, ancestor.Number.Uint64(), end.Number.Uint64())
+			} else {
+				logs, err = f.indexedLogs(ctx, ancestor.Number.Uint64(), indexed-1)
+			}
+			if err != nil {
+				return logs, err
+			}
+		}
+	}
+	rest, err := f.unindexedLogs(ctx, ancestor.Hash(), end.Hash())
 	logs = append(logs, rest...)
+	sort.Sort(logList(logs))
+
+	f.begin = end.Hash()
 	return logs, err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) indexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
-	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
+	session, err := f.matcher.Start(ctx, begin, end, matches)
 	if err != nil {
 		return nil, err
 	}
@@ -186,18 +269,15 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			// Abort if all matches have been fulfilled
 			if !ok {
 				err := session.Error()
-				if err == nil {
-					f.begin = int64(end) + 1
-				}
 				return logs, err
 			}
-			f.begin = int64(number) + 1
 
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {
 				return logs, err
 			}
+			f.begin = header.Hash()
 			found, err := f.checkMatches(ctx, header)
 			if err != nil {
 				return logs, err
@@ -212,11 +292,11 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 
 // indexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) unindexedLogs(ctx context.Context, begin, end common.Hash) ([]*types.Log, error) {
 	var logs []*types.Log
 
-	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
+	for {
+		header, err := f.backend.HeaderByHash(ctx, end)
 		if header == nil || err != nil {
 			return logs, err
 		}
@@ -225,6 +305,10 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 			return logs, err
 		}
 		logs = append(logs, found...)
+		if begin == end {
+			break
+		}
+		end = header.ParentHash
 	}
 	return logs, nil
 }

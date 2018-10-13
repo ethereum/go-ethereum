@@ -320,6 +320,27 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 	return logsSub.ID, nil
 }
 
+// getBlockHash returns the block hash of the requested block.
+// `hash` is used if supplied; if not the canonoical block at `number` is looked up.
+// If neither is supplied, the latest canonical block hash is returned.
+func (api *PublicFilterAPI) getBlockHash(ctx context.Context, number *big.Int, hash *common.Hash) (common.Hash, error) {
+	if hash != nil {
+		return *hash, nil
+	} else if number != nil {
+		header, err := api.backend.HeaderByNumber(ctx, rpc.BlockNumber(number.Int64()))
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return header.Hash(), nil
+	} else {
+		header, err := api.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		return header.Hash(), nil
+	}
+}
+
 // GetLogs returns logs matching the given argument that are stored within the state.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
@@ -329,14 +350,13 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
-		// Convert the RPC block numbers into internal representations
-		begin := rpc.LatestBlockNumber.Int64()
-		if crit.FromBlock != nil {
-			begin = crit.FromBlock.Int64()
+		begin, err := api.getBlockHash(ctx, crit.FromBlock, crit.FromBlockHash)
+		if err != nil {
+			return nil, err
 		}
-		end := rpc.LatestBlockNumber.Int64()
-		if crit.ToBlock != nil {
-			end = crit.ToBlock.Int64()
+		end, err := api.getBlockHash(ctx, crit.ToBlock, crit.ToBlockHash)
+		if err != nil {
+			return nil, err
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
@@ -384,14 +404,13 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
 	} else {
-		// Convert the RPC block numbers into internal representations
-		begin := rpc.LatestBlockNumber.Int64()
-		if f.crit.FromBlock != nil {
-			begin = f.crit.FromBlock.Int64()
+		begin, err := api.getBlockHash(ctx, f.crit.FromBlock, f.crit.FromBlockHash)
+		if err != nil {
+			return nil, err
 		}
-		end := rpc.LatestBlockNumber.Int64()
-		if f.crit.ToBlock != nil {
-			end = f.crit.ToBlock.Int64()
+		end, err := api.getBlockHash(ctx, f.crit.ToBlock, f.crit.ToBlockHash)
+		if err != nil {
+			return nil, err
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
@@ -459,11 +478,11 @@ func returnLogs(logs []*types.Log) []*types.Log {
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	type input struct {
-		BlockHash *common.Hash     `json:"blockHash"`
-		FromBlock *rpc.BlockNumber `json:"fromBlock"`
-		ToBlock   *rpc.BlockNumber `json:"toBlock"`
-		Addresses interface{}      `json:"address"`
-		Topics    []interface{}    `json:"topics"`
+		BlockHash *common.Hash           `json:"blockHash"`
+		FromBlock *rpc.BlockNumberOrHash `json:"fromBlock"`
+		ToBlock   *rpc.BlockNumberOrHash `json:"toBlock"`
+		Addresses interface{}            `json:"address"`
+		Topics    []interface{}          `json:"topics"`
 	}
 
 	var raw input
@@ -479,11 +498,18 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		args.BlockHash = raw.BlockHash
 	} else {
 		if raw.FromBlock != nil {
-			args.FromBlock = big.NewInt(raw.FromBlock.Int64())
+			if raw.FromBlock.IsHash() {
+				args.FromBlockHash = raw.FromBlock.Hash()
+			} else {
+				args.FromBlock = big.NewInt(int64(raw.FromBlock.Number()))
+			}
 		}
-
 		if raw.ToBlock != nil {
-			args.ToBlock = big.NewInt(raw.ToBlock.Int64())
+			if raw.ToBlock.IsHash() {
+				args.ToBlockHash = raw.ToBlock.Hash()
+			} else {
+				args.ToBlock = big.NewInt(int64(raw.ToBlock.Number()))
+			}
 		}
 	}
 
