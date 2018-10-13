@@ -101,6 +101,15 @@ type Config struct {
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
 
+	// GraphQLHost is the host interface on which to start the GraphQL server. If this
+	// field is empty, no GraphQL API endpoint will be started.
+	GraphQLHost string `toml:",omitempty"`
+
+	// GraphQLPort is the TCP port number on which to start the GraphQL server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	GraphQLPort int `toml:",omitempty"`
+
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
 	// useless for custom HTTP clients.
@@ -206,6 +215,15 @@ func (c *Config) HTTPEndpoint() string {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
+}
+
+// GraphQLEndpoint resolves a GraphQL endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) GraphQLEndpoint() string {
+	if c.GraphQLHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.GraphQLHost, c.GraphQLPort)
 }
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
