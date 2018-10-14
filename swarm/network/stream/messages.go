@@ -76,8 +76,7 @@ type RequestSubscriptionMsg struct {
 
 func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscriptionMsg) (err error) {
 	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr, p.ID(), req.Stream))
-	err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority)
-	if err != nil {
+	if err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority); err != nil {
 		// The error will be sent as a subscribe error message
 		// and will not be returned as it will prevent any new message
 		// exchange between peers over p2p. Instead, error will be returned
