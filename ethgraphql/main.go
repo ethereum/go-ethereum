@@ -153,6 +153,36 @@ func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (HexBytes, 
 	return HexBytes{state.GetState(a.address, common.BytesToHash(args.Slot.Bytes)).Bytes()}, nil
 }
 
+type Log struct {
+	node        *node.Node
+	transaction *Transaction
+	log         *types.Log
+}
+
+func (l *Log) Transaction(ctx context.Context) *Transaction {
+	return l.transaction
+}
+
+func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
+	return &Account{
+		node:        l.node,
+		address:     l.log.Address,
+		blockNumber: args.Number(),
+	}
+}
+
+func (l *Log) Topics(ctx context.Context) []*HexBytes {
+	ret := make([]*HexBytes, 0, len(l.log.Topics))
+	for _, topic := range l.log.Topics {
+		ret = append(ret, &HexBytes{topic.Bytes()})
+	}
+	return ret
+}
+
+func (l *Log) Data(ctx context.Context) HexBytes {
+	return HexBytes{l.log.Data}
+}
+
 type Receipt struct {
 	node        *node.Node
 	transaction *Transaction
@@ -169,6 +199,30 @@ func (r *Receipt) GasUsed(ctx context.Context) int32 {
 
 func (r *Receipt) CumulativeGasUsed(ctx context.Context) int32 {
 	return int32(r.receipt.CumulativeGasUsed)
+}
+
+func (r *Receipt) Contract(ctx context.Context, args BlockNumberArgs) *Account {
+	if r.receipt.ContractAddress == (common.Address{}) {
+		return nil
+	}
+
+	return &Account{
+		node:        r.node,
+		address:     r.receipt.ContractAddress,
+		blockNumber: args.Number(),
+	}
+}
+
+func (r *Receipt) Logs(ctx context.Context) []*Log {
+	ret := make([]*Log, 0, len(r.receipt.Logs))
+	for _, log := range r.receipt.Logs {
+		ret = append(ret, &Log{
+			node:        r.node,
+			transaction: r.transaction,
+			log:         log,
+		})
+	}
+	return ret
 }
 
 type Transaction struct {
@@ -256,15 +310,10 @@ func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, e
 		return nil, nil
 	}
 
-	block := rpc.LatestBlockNumber
-	if args.Block != nil {
-		block = rpc.BlockNumber(*args.Block)
-	}
-
 	return &Account{
 		node:        t.node,
 		address:     *to,
-		blockNumber: block,
+		blockNumber: args.Number(),
 	}, nil
 }
 
@@ -272,11 +321,6 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account,
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return nil, err
-	}
-
-	block := rpc.LatestBlockNumber
-	if args.Block != nil {
-		block = rpc.BlockNumber(*args.Block)
 	}
 
 	var signer types.Signer = types.FrontierSigner{}
@@ -288,7 +332,7 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account,
 	return &Account{
 		node:        t.node,
 		address:     from,
-		blockNumber: block,
+		blockNumber: args.Number(),
 	}, nil
 }
 
@@ -542,21 +586,23 @@ type BlockNumberArgs struct {
 	Block *int32
 }
 
+func (a BlockNumberArgs) Number() rpc.BlockNumber {
+	if a.Block != nil {
+		return rpc.BlockNumber(*a.Block)
+	}
+	return rpc.LatestBlockNumber
+}
+
 func (b *Block) Coinbase(ctx context.Context, args BlockNumberArgs) (*Account, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	blockNumber := rpc.LatestBlockNumber
-	if args.Block != nil {
-		blockNumber = rpc.BlockNumber(*args.Block)
-	}
-
 	return &Account{
 		node:        b.node,
 		address:     block.Coinbase(),
-		blockNumber: blockNumber,
+		blockNumber: args.Number(),
 	}, nil
 }
 
@@ -676,10 +722,19 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             storage(slot: HexBytes!): HexBytes!
         }
 
+        type Log {
+            transaction: Transaction!
+            account(block: Int): Account!
+            topics: [HexBytes]!
+            data: HexBytes!
+        }
+
         type Receipt {
             status: Int!
             gasUsed: Int!
             cumulativeGasUsed: Int!
+            contract(block: Int): Account
+            logs: [Log]!
         }
 
         type Transaction {
