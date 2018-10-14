@@ -53,7 +53,7 @@ type ExternalAPI interface {
 	// SignData - request to sign the given data (plus prefix)
 	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
 	// SignStructuredData - request to sign the given structured data (plus prefix)
-	SignStructuredData(ctx context.Context, data TypedData) (hexutil.Bytes, error)
+	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
 	// EcRecover - recover public key from given message and signature
 	EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
@@ -118,21 +118,21 @@ type SigFormat struct {
 }
 
 var (
-	ApplicationValidator = SigFormat{
-		"application/validator",
+	TextPlain = SigFormat{
+		"text/plain",
 		0x00,
+	}
+	TextValidator = SigFormat{
+		"text/validator",
+		0x01,
+	}
+	DataTyped = SigFormat{
+		"data/typed",
+		0x45,
 	}
 	ApplicationClique = SigFormat{
 		"application/clique",
-		0x01,
-	}
-	DataPlain = SigFormat{
-		"data/plain",
-		0x45,
-	}
-	DataStructured = SigFormat{
-		"data/structured",
-		0x46,
+		0x90,
 	}
 )
 
@@ -551,7 +551,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 // where the V value will be 27 or 28 for legacy reasons.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
 
-	var req, err = api.DetermineSignatureFormat(contentType, data)
+	var req, err = api.determineSignatureFormat(contentType, data)
 	if err != nil {
 		return nil, err
 	}
@@ -584,46 +584,81 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 }
 
 // Determines which signature method should be used based upon the mime type
-func (api *SignerAPI) DetermineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
+func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
 	var req *SignDataRequest
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, err
 	}
 	switch mediaType {
-	case ApplicationClique.Mime:
-		// Clique is the Ethereum PoA standard
-		header := &types.Header{}
-		if err := rlp.DecodeBytes(data, header); err != nil {
-			return nil, err
-		}
-		sighash, err := SignCliqueHeader(header)
-		if err != nil {
-			return nil, err
-		}
-		msg := fmt.Sprintf("Clique block %d [0x%x]", header.Number, header.Hash())
-		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	case ApplicationValidator.Mime:
+	case TextValidator.Mime:
 		// Data with an intended validator
 
-		sighash, msg := SignDataWithValidator(data)
+		sighash, msg := signTextWithValidator(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	case DataPlain.Mime:
+	case TextPlain.Mime:
 		// Sign calculates an Ethereum ECDSA signature for:
-		// keccack256("\x19${byte version}Ethereum Signed Message:\n" + len(message) + message))
+		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 
 		// In the cases where it matters ensure that the charset is handled. The charset
 		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
 		// charset, ok := params["charset"]
 		// As it is now, we accept any charset and just treat it as 'raw'.
 
-		sighash, msg := SignDataPlain(data)
+		sighash, msg := signTextPlain(data)
+		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
+	//case DataTyped.Mime:
+	//	// Typed data according to EIP712:
+	//	//
+	//	// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
+	//	fmt.Println("Did we get here, chief? #1")
+	//	typedData := TypedData{}
+	//	if err := rlp.DecodeBytes(data, typedData); err != nil {
+	//		return nil, err
+	//	}
+	//	fmt.Println("Did we get here, chief? #2")
+	//	sighash, err := signTypedData(context.Background(), typedData)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	msg := fmt.Sprintf("Typed data domain %s", typedData.Domain)
+	//	req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
+	case ApplicationClique.Mime:
+		// Clique is the Ethereum PoA standard
+		header := &types.Header{}
+		if err := rlp.DecodeBytes(data, header); err != nil {
+			return nil, err
+		}
+		sighash, err := signCliqueHeader(header)
+		if err != nil {
+			return nil, err
+		}
+		msg := fmt.Sprintf("Clique block %d [0x%x]", header.Number, header.Hash())
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 	default:
 		return nil, fmt.Errorf("content type '%s' not implemented for signing", contentType)
 	}
 	return req, nil
 
+}
+
+// signTextPlain is a helper function that calculates a hash for the given message that can be
+// safely used to calculate a signature from.
+//
+// The hash is calculated as
+//	keccak256("\x19${byteVersion}Ethereum Signed Message:\n"${message length}${message}).
+//
+// This gives context to the signed message and prevents signing of transactions.
+func signTextPlain(data []byte) ([]byte, string) {
+	msg := fmt.Sprintf("\x19\\x%xEthereum Signed Message:\n%d%s", TextPlain.ByteVersion, len(data), data)
+	return crypto.Keccak256([]byte(msg)), msg
+}
+
+// signTextWithValidator signs the given message which can be further recovered
+// with the given validator.
+func signTextWithValidator(data []byte) ([]byte, string) {
+	msg := "TODO"
+	return crypto.Keccak256([]byte(msg)), msg
 }
 
 // SignCliqueHeader returns the hash which is used as input for the proof-of-authority
@@ -633,7 +668,7 @@ func (api *SignerAPI) DetermineSignatureFormat(contentType string, data hexutil.
 // The method requires the extra data to be at least 65 bytes -- the original implementation
 // in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
-func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
+func signCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	hash := common.Hash{}
 	if len(header.Extra) < 65 {
 		return hash.Bytes(), fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
@@ -660,38 +695,19 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	return hash.Bytes(), nil
 }
 
-// SignDataWithValidator signs the given message which can be further recovered
-// with the given validator.
-func SignDataWithValidator(data []byte) ([]byte, string) {
-	msg := "TODO"
-	return crypto.Keccak256([]byte(msg)), msg
-}
-
-// SignDataPlain is a helper function that calculates a hash for the given message that can be
-// safely used to calculate a signature from.
-//
-// The hash is calculated as
-//	keccak256("\x19${byte version}Ethereum Signed Message:\n"${message length}${message}).
-//
-// This gives context to the signed message and prevents signing of transactions.
-func SignDataPlain(data []byte) ([]byte, string) {
-	msg := fmt.Sprintf("\x19\\x%xEthereum Signed Message:\n%d%s", DataPlain.ByteVersion, len(data), data)
-	return crypto.Keccak256([]byte(msg)), msg
-}
-
 // Determines the content type and then recovers the address associated with the given sig
-func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data, sig hexutil.Bytes) (common.Address, error) {
+func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return common.Address{}, err
 	}
 	switch mediaType {
-	case DataPlain.Mime:
+	case TextPlain.Mime:
 		// Returns the address for the Account that was used to create the signature.
 		//
 		// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 		// the address of:
-		// hash = keccak256("\x19${byte version}Ethereum Signed Message:\n"${message length}${message})
+		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 		// addr = ecrecover(hash, signature)
 		//
 		// Note, the signature must conform to the secp256k1 curve R, S and V values, where
@@ -706,7 +722,7 @@ func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data, s
 			return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 		}
 		sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
-		hash, _ := SignDataPlain(data)
+		hash, _ := signTextPlain(data)
 		rpk, err := crypto.SigToPub(hash, sig)
 		if err != nil {
 			return common.Address{}, err
