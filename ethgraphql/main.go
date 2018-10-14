@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -152,21 +153,190 @@ func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (HexBytes, 
 	return HexBytes{state.GetState(a.address, common.BytesToHash(args.Slot.Bytes)).Bytes()}, nil
 }
 
+type Receipt struct {
+	node        *node.Node
+	transaction *Transaction
+	receipt     *types.Receipt
+}
+
+func (r *Receipt) Status(ctx context.Context) int32 {
+	return int32(r.receipt.Status)
+}
+
+func (r *Receipt) GasUsed(ctx context.Context) int32 {
+	return int32(r.receipt.GasUsed)
+}
+
+func (r *Receipt) CumulativeGasUsed(ctx context.Context) int32 {
+	return int32(r.receipt.CumulativeGasUsed)
+}
+
 type Transaction struct {
-	node *node.Node
-	hash common.Hash
-	tx   *types.Transaction
+	node  *node.Node
+	hash  common.Hash
+	tx    *types.Transaction
+	block *Block
+	index uint64
+}
+
+func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
+	if t.tx == nil {
+		be, err := getBackend(t.node)
+		if err != nil {
+			return nil, err
+		}
+
+		tx, blockHash, _, index := rawdb.ReadTransaction(be.ChainDb(), t.hash)
+		if tx != nil {
+			t.tx = tx
+			t.block = &Block{
+				node: t.node,
+				hash: blockHash,
+			}
+			t.index = index
+		} else {
+			t.tx = be.GetPoolTransaction(t.hash)
+		}
+	}
+	return t.tx, nil
 }
 
 func (tx *Transaction) Hash(ctx context.Context) HexBytes {
 	return HexBytes{tx.hash.Bytes()}
 }
 
+func (t *Transaction) Data(ctx context.Context) (HexBytes, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return HexBytes{}, err
+	}
+	return HexBytes{tx.Data()}, nil
+}
+
+func (t *Transaction) Gas(ctx context.Context) (int32, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return 0, err
+	}
+	return int32(tx.Gas()), nil
+}
+
+func (t *Transaction) GasPrice(ctx context.Context) (BigNum, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return BigNum{}, err
+	}
+	return BigNum{tx.GasPrice()}, nil
+}
+
+func (t *Transaction) Value(ctx context.Context) (BigNum, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return BigNum{}, err
+	}
+	return BigNum{tx.Value()}, nil
+}
+
+func (t *Transaction) Nonce(ctx context.Context) (int32, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return 0, err
+	}
+	return int32(tx.Nonce()), nil
+}
+
+func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+
+	to := tx.To()
+	if to == nil {
+		return nil, nil
+	}
+
+	block := rpc.LatestBlockNumber
+	if args.Block != nil {
+		block = rpc.BlockNumber(*args.Block)
+	}
+
+	return &Account{
+		node:        t.node,
+		address:     *to,
+		blockNumber: block,
+	}, nil
+}
+
+func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+	tx, err := t.resolve(ctx)
+	if err != nil || tx == nil {
+		return nil, err
+	}
+
+	block := rpc.LatestBlockNumber
+	if args.Block != nil {
+		block = rpc.BlockNumber(*args.Block)
+	}
+
+	var signer types.Signer = types.FrontierSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
+	from, _ := types.Sender(signer, tx)
+
+	return &Account{
+		node:        t.node,
+		address:     from,
+		blockNumber: block,
+	}, nil
+}
+
+func (t *Transaction) Block(ctx context.Context) (*Block, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
+	return t.block, nil
+}
+
+func (t *Transaction) Index(ctx context.Context) (*int32, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
+	if t.block == nil {
+		return nil, nil
+	}
+	index := int32(t.index)
+	return &index, nil
+}
+
+func (t *Transaction) Receipt(ctx context.Context) (*Receipt, error) {
+	if _, err := t.resolve(ctx); err != nil {
+		return nil, err
+	}
+
+	if t.block == nil {
+		return nil, nil
+	}
+
+	receipts, err := t.block.resolveReceipts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Receipt{
+		node:        t.node,
+		transaction: t,
+		receipt:     receipts[t.index],
+	}, nil
+}
+
 type Block struct {
-	node  *node.Node
-	num   *rpc.BlockNumber
-	hash  common.Hash
-	block *types.Block
+	node     *node.Node
+	num      *rpc.BlockNumber
+	hash     common.Hash
+	block    *types.Block
+	receipts []*types.Receipt
 }
 
 func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
@@ -185,6 +355,31 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 		b.block, err = be.GetBlock(ctx, b.hash)
 	}
 	return b.block, err
+}
+
+func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
+	if b.receipts == nil {
+		be, err := getBackend(b.node)
+		if err != nil {
+			return nil, err
+		}
+
+		hash := b.hash
+		if hash == (common.Hash{}) {
+			block, err := b.resolve(ctx)
+			if err != nil {
+				return nil, err
+			}
+			hash = block.Hash()
+		}
+
+		receipts, err := be.GetReceipts(ctx, hash)
+		if err != nil {
+			return nil, err
+		}
+		b.receipts = []*types.Receipt(receipts)
+	}
+	return b.receipts, nil
 }
 
 func (b *Block) Number(ctx context.Context) (int32, error) {
@@ -372,11 +567,13 @@ func (b *Block) Transactions(ctx context.Context) ([]*Transaction, error) {
 	}
 
 	ret := make([]*Transaction, 0, len(block.Transactions()))
-	for _, tx := range block.Transactions() {
+	for i, tx := range block.Transactions() {
 		ret = append(ret, &Transaction{
-			node: b.node,
-			hash: tx.Hash(),
-			tx:   tx,
+			node:  b.node,
+			hash:  tx.Hash(),
+			tx:    tx,
+			block: b,
+			index: uint64(i),
 		})
 	}
 	return ret, nil
@@ -388,28 +585,38 @@ type Query struct {
 
 type BlockArgs struct {
 	Number *int32
-	Hash   *string
+	Hash   *HexBytes
 }
 
-func (q *Query) Block(ctx context.Context, args BlockArgs) *Block {
+func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
+	var block *Block
 	if args.Number != nil {
 		num := rpc.BlockNumber(uint64(*args.Number))
-		return &Block{
+		block = &Block{
 			node: q.node,
 			num:  &num,
 		}
 	} else if args.Hash != nil {
-		return &Block{
+		block = &Block{
 			node: q.node,
-			hash: common.HexToHash(*args.Hash),
+			hash: common.BytesToHash(args.Hash.Bytes),
 		}
 	} else {
 		num := rpc.LatestBlockNumber
-		return &Block{
+		block = &Block{
 			node: q.node,
 			num:  &num,
 		}
 	}
+
+	// Resolve the block; if it doesn't exist, return nil.
+	b, err := block.resolve(ctx)
+	if err != nil {
+		return nil, err
+	} else if b == nil {
+		return nil, nil
+	}
+	return block, nil
 }
 
 type AccountArgs struct {
@@ -428,6 +635,26 @@ func (q *Query) Account(ctx context.Context, args AccountArgs) *Account {
 		address:     common.BytesToAddress(args.Address.Bytes),
 		blockNumber: blockNumber,
 	}
+}
+
+type TransactionArgs struct {
+	Hash HexBytes
+}
+
+func (q *Query) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
+	tx := &Transaction{
+		node: q.node,
+		hash: common.BytesToHash(args.Hash.Bytes),
+	}
+
+	// Resolve the transaction; if it doesn't exist, return nil.
+	t, err := tx.resolve(ctx)
+	if err != nil {
+		return nil, err
+	} else if t == nil {
+		return nil, nil
+	}
+	return tx, nil
 }
 
 func NewHandler(n *node.Node) (http.Handler, error) {
@@ -449,8 +676,24 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             storage(slot: HexBytes!): HexBytes!
         }
 
+        type Receipt {
+            status: Int!
+            gasUsed: Int!
+            cumulativeGasUsed: Int!
+        }
+
         type Transaction {
             hash: HexBytes!
+            data: HexBytes!
+            gas: Int!
+            gasPrice: BigNum!
+            value: BigNum!
+            nonce: Int!
+            to(block: Int): Account
+            from(block: Int): Account!
+            block: Block
+            index: Int
+            receipt: Receipt
         }
 
         type Block {
@@ -474,8 +717,9 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Query {
-            block(number: Int, hash: String): Block
-            account(address: HexBytes!, blockNumber: Int): Account
+            block(number: Int, hash: HexBytes): Block
+            account(address: HexBytes!, blockNumber: Int): Account!
+            transaction(hash: HexBytes!): Transaction
         }
     `
 	schema, err := graphql.ParseSchema(s, &q)
