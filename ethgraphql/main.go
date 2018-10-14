@@ -606,6 +606,14 @@ func (b *Block) Coinbase(ctx context.Context, args BlockNumberArgs) (*Account, e
 	}, nil
 }
 
+func (b *Block) TransactionCount(ctx context.Context) (int32, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int32(len(block.Transactions())), nil
+}
+
 func (b *Block) Transactions(ctx context.Context) ([]*Transaction, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
@@ -768,6 +776,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             extra: HexBytes!
             totalDifficulty: BigNum!
             coinbase(block: Int): Account!
+            transactionCount: Int!
             transactions: [Transaction]!
         }
 
