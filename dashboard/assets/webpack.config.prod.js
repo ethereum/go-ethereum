@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// fa-only-woff-loader removes the .eot, .ttf, .svg dependencies of the FontAwesome library,
-// because they produce unused extra blobs.
-module.exports = content => content
-	.replace(/src.*url(?!.*url.*(\.eot)).*(\.eot)[^;]*;/, '')
-	.replace(/url(?!.*url.*(\.eot)).*(\.eot)[^,]*,/, '')
-	.replace(/url(?!.*url.*(\.ttf)).*(\.ttf)[^,]*,/, '')
-	.replace(/,[^,]*url(?!.*url.*(\.svg)).*(\.svg)[^;]*;/, ';');
+const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const merge = require('webpack-merge');
+const common = require('./webpack.config.common.js');
 
+module.exports = merge(common, {
+	mode:         'production',
+	devtool:      'nosources-source-map',
+	optimization: {
+		minimize:     true,
+		namedModules: true, // Module names instead of numbers - resolves the large diff problem.
+		minimizer:    [
+			new UglifyJsPlugin({
+				uglifyOptions: {
+					compress: true,
+					output:   {
+						comments:   false,
+						beautify:   true,
+					},
+					// warnings: true,
+				},
+				sourceMap: true,
+			}),
+		],
+	},
+});

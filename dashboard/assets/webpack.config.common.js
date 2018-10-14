@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,28 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-const webpack = require('webpack');
 const path = require('path');
 
 module.exports = {
+	target: 'web',
+	entry:  {
+		bundle: './index',
+	},
+	output: {
+		filename:          '[name].js',
+		path:              path.resolve(__dirname, ''),
+		sourceMapFilename: '[file].map',
+	},
 	resolve: {
+		modules: [
+			'node_modules',
+			path.resolve(__dirname, 'components'), // import './components/Component' -> import 'Component'
+		],
 		extensions: ['.js', '.jsx'],
 	},
-	entry:  './index',
-	output: {
-		path:     path.resolve(__dirname, ''),
-		filename: 'bundle.js',
-	},
-	plugins: [
-		new webpack.optimize.UglifyJsPlugin({
-			comments: false,
-			mangle:   false,
-			beautify: true,
-		}),
-		new webpack.DefinePlugin({
-			PROD: process.env.NODE_ENV === 'production',
-		}),
-	],
 	module: {
 		rules: [
 			{
@@ -45,27 +42,38 @@ module.exports = {
 					{
 						loader:  'babel-loader',
 						options: {
-							plugins: [ // order: from top to bottom
-								// 'transform-decorators-legacy', // @withStyles, @withTheme
-								'transform-class-properties', // static defaultProps
-								'transform-flow-strip-types',
-							],
 							presets: [ // order: from bottom to top
-								'env',
-								'react',
-								'stage-0',
+								'@babel/env',
+								'@babel/react',
+							],
+							plugins: [ // order: from top to bottom
+								'@babel/proposal-function-bind', // instead of stage 0
+								'@babel/proposal-class-properties', // static defaultProps
+								'@babel/transform-flow-strip-types',
+								'react-hot-loader/babel',
 							],
 						},
 					},
-					// 'eslint-loader', // show errors not only in the editor, but also in the console
+					// 'eslint-loader', // show errors in the console
 				],
 			},
 			{
-				test: /font-awesome\.css$/,
-				use:  [
-					'style-loader',
-					'css-loader',
-					path.resolve(__dirname, './fa-only-woff-loader.js'),
+				test:  /\.css$/,
+				oneOf: [
+					{
+						test: /font-awesome/,
+						use:  [
+							'style-loader',
+							'css-loader',
+							path.resolve(__dirname, './fa-only-woff-loader.js'),
+						],
+					},
+					{
+						use: [
+							'style-loader',
+							'css-loader',
+						],
+					},
 				],
 			},
 			{

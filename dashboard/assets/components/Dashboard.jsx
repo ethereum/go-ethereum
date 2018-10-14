@@ -17,14 +17,15 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
+import {hot} from 'react-hot-loader';
 
-import withStyles from 'material-ui/styles/withStyles';
+import withStyles from '@material-ui/core/styles/withStyles';
 
-import Header from './Header';
-import Body from './Body';
+import Header from 'Header';
+import Body from 'Body';
+import {inserter as logInserter, SAME} from 'Logs';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
-import {inserter as logInserter} from './Logs';
 
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same
@@ -37,7 +38,6 @@ import {inserter as logInserter} from './Logs';
 // of the update.
 const deepUpdate = (updater: Object, update: Object, prev: Object): $Shape<Content> => {
 	if (typeof update === 'undefined') {
-		// TODO (kurkomisi): originally this was deep copy, investigate it.
 		return prev;
 	}
 	if (typeof updater === 'function') {
@@ -103,8 +103,8 @@ const defaultContent: () => Content = () => ({
 		chunks:        [],
 		endTop:        false,
 		endBottom:     true,
-		topChanged:    0,
-		bottomChanged: 0,
+		topChanged:    SAME,
+		bottomChanged: SAME,
 	},
 });
 
@@ -186,8 +186,8 @@ class Dashboard extends Component<Props, State> {
 	// reconnect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
 	reconnect = () => {
-		// PROD is defined by webpack.
-		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${PROD ? window.location.host : 'localhost:8080'}/api`);
+		const host = process.env.NODE_ENV === 'production' ? window.location.host : 'localhost:8080';
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${host}/api`);
 		server.onopen = () => {
 			this.setState({content: defaultContent(), shouldUpdate: {}, server});
 		};
@@ -249,4 +249,4 @@ class Dashboard extends Component<Props, State> {
 	}
 }
 
-export default withStyles(themeStyles)(Dashboard);
+export default hot(module)(withStyles(themeStyles)(Dashboard));
