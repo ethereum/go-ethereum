@@ -90,12 +90,16 @@ func SubscribeMeteredPeerEvent(ch chan<- MeteredPeerEvent) event.Subscription {
 type meteredConn struct {
 	net.Conn // Network connection to wrap with metering
 
-	connected    time.Time     // Connection time of the peer
-	ip           net.IP        // IP address of the peer
-	id           string        // NodeID of the peer
-	metered      bool          // Checks if the peer is metered
-	ingressMeter metrics.Meter // Meter for the read bytes of the peer
-	egressMeter  metrics.Meter // Meter for the written bytes of the peer
+	connected time.Time // Connection time of the peer
+	ip        net.IP    // IP address of the peer
+	id        string    // NodeID of the peer
+
+	// trafficMetered denotes if the peer is registered in the traffic registries.
+	// Its value is true if the metered peer count doesn't reach the limit in the
+	// moment of the peer's connection.
+	trafficMetered bool
+	ingressMeter   metrics.Meter // Meter for the read bytes of the peer
+	egressMeter    metrics.Meter // Meter for the written bytes of the peer
 
 	lock sync.RWMutex // Lock protecting the metered connection's internals
 }
@@ -132,7 +136,7 @@ func (c *meteredConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
 	ingressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.metered {
+	if c.trafficMetered {
 		c.ingressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
@@ -145,7 +149,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
 	egressTrafficMeter.Mark(int64(n))
 	c.lock.RLock()
-	if c.metered {
+	if c.trafficMetered {
 		c.egressMeter.Mark(int64(n))
 	}
 	c.lock.RUnlock()
@@ -156,19 +160,20 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
 func (c *meteredConn) handshakeDone(id enode.ID) {
-	if atomic.LoadInt32(&meteredPeerCount) >= MeteredPeerLimit {
+	if atomic.AddInt32(&meteredPeerCount, 1) >= MeteredPeerLimit {
+		atomic.AddInt32(&meteredPeerCount, -1)
+		c.lock.Lock()
+		c.id, c.trafficMetered = id.String(), false
+		c.lock.Unlock()
 		log.Warn("Metered peer count reached the limit")
-		return
+	} else {
+		key := fmt.Sprintf("%s/%s", c.ip, id)
+		c.lock.Lock()
+		c.id, c.trafficMetered = id.String(), true
+		c.ingressMeter = metrics.NewRegisteredMeter(key, PeerIngressRegistry)
+		c.egressMeter = metrics.NewRegisteredMeter(key, PeerEgressRegistry)
+		c.lock.Unlock()
 	}
-	// Increment the metered peer count
-	atomic.AddInt32(&meteredPeerCount, 1)
-	c.lock.Lock()
-	c.id, c.metered = id.String(), true
-	key := fmt.Sprintf("%s/%s", c.ip, c.id)
-	c.ingressMeter = metrics.NewRegisteredMeter(key, PeerIngressRegistry)
-	c.egressMeter = metrics.NewRegisteredMeter(key, PeerEgressRegistry)
-	c.lock.Unlock()
-
 	meteredPeerFeed.Send(MeteredPeerEvent{
 		Type:    PeerConnected,
 		IP:      c.ip,
@@ -182,12 +187,6 @@ func (c *meteredConn) handshakeDone(id enode.ID) {
 func (c *meteredConn) Close() error {
 	err := c.Conn.Close()
 	c.lock.RLock()
-	if !c.metered {
-		c.lock.RUnlock()
-		return err
-	}
-	// Decrement the metered peer count
-	atomic.AddInt32(&meteredPeerCount, -1)
 	if c.id == "" {
 		// If the peer disconnects before the handshake
 		c.lock.RUnlock()
@@ -198,7 +197,19 @@ func (c *meteredConn) Close() error {
 		})
 		return err
 	}
-	id, ingress, egress := c.id, uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
+	// Decrement the metered peer count
+	atomic.AddInt32(&meteredPeerCount, -1)
+	id := c.id
+	if !c.trafficMetered {
+		c.lock.RUnlock()
+		meteredPeerFeed.Send(MeteredPeerEvent{
+			Type: PeerDisconnected,
+			IP:   c.ip,
+			ID:   id,
+		})
+		return err
+	}
+	ingress, egress := uint64(c.ingressMeter.Count()), uint64(c.egressMeter.Count())
 	c.lock.RUnlock()
 
 	// Unregister the peer from the traffic registries
