@@ -1,7 +1,7 @@
 # Specs
-`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`  
+`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x45" ‖ domainSeparator ‖ hashStruct(message)`  
 - data adheres to 𝕊, a structure defined in the rigorous eip-712
-- `\x01` is needed to comply with EIP-191
+- `\x45` is needed to comply with EIP-191
 - `domainSeparator` and `hashStruct` are defined below
 
 ## A) domainSeparator
