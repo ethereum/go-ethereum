@@ -2,13 +2,13 @@
 
 #### 5.0.0
 
-* The external `account_EcRecover`-method was added again.
-* The external method `accounts_Sign(address, data)` was replaced with `accounts_signData(contentType, address, data)`.     
+* The external `account_EcRecover`-method was reimplemented.
+* The external method `account_sign(address, data)` was replaced with `account_signData(contentType, address, data)`.
 The addition of `contentType` makes it possible to use the method for different types of objects, such as:
   * signing data with an intended validator (not yet implemented)
   * signing clique headers,
   * signing plain personal messages,
-  * signing structured data adhering to [EIP-712](https://eips.ethereum.org/EIPS/eip-712) (not yet implemented)
+* The external method `account_signTypedData` [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md) and makes it possible to sign typed data.
   
 #### 4.0.0
 
