@@ -446,7 +446,7 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	}
 
 	if b.num != nil {
-		b.block, err = be.BlockByNumber(ctx, rpc.BlockNumber(*b.num))
+		b.block, err = be.BlockByNumber(ctx, *b.num)
 	} else {
 		b.block, err = be.GetBlock(ctx, b.hash)
 	}
@@ -719,6 +719,51 @@ func (b *Block) Transactions(ctx context.Context) ([]*Transaction, error) {
 	return ret, nil
 }
 
+type ArrayIndexArgs struct {
+	Index int32
+}
+
+func (b *Block) TransactionAt(ctx context.Context, args ArrayIndexArgs) (*Transaction, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	txes := block.Transactions()
+	if args.Index < 0 || int(args.Index) >= len(txes) {
+		return nil, nil
+	}
+
+	tx := txes[args.Index]
+	return &Transaction{
+		node:  b.node,
+		hash:  tx.Hash(),
+		tx:    tx,
+		block: b,
+		index: uint64(args.Index),
+	}, nil
+}
+
+func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	uncles := block.Uncles()
+	if args.Index < 0 || int(args.Index) >= len(uncles) {
+		return nil, nil
+	}
+
+	uncle := uncles[args.Index]
+	blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
+	return &Block{
+		node: b.node,
+		num:  &blockNumber,
+		hash: uncle.Hash(),
+	}, nil
+}
+
 type Query struct {
 	node *node.Node
 }
@@ -900,8 +945,10 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             totalDifficulty: BigNum!
             ommerCount: Int!
             ommers: [Block]!
+            ommerAt(index: Int!): Block
             ommerHash: Bytes32!
             transactions: [Transaction!]!
+            transactionAt(index: Int!): Transaction
         }
 
         type Query {
