@@ -118,21 +118,21 @@ type SigFormat struct {
 }
 
 var (
-	TextPlain = SigFormat{
-		"text/plain",
-		0x00,
-	}
 	TextValidator = SigFormat{
 		"text/validator",
-		0x01,
+		0x00,
 	}
 	DataTyped = SigFormat{
 		"data/typed",
-		0x45,
+		0x01,
 	}
 	ApplicationClique = SigFormat{
 		"application/clique",
-		0x90,
+		0x02,
+	}
+	TextPlain = SigFormat{
+		"text/plain",
+		0x45,
 	}
 )
 
@@ -607,22 +607,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.
 
 		sighash, msg := signTextPlain(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
-	//case DataTyped.Mime:
-	//	// Typed data according to EIP712:
-	//	//
-	//	// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
-	//	fmt.Println("Did we get here, chief? #1")
-	//	typedData := TypedData{}
-	//	if err := rlp.DecodeBytes(data, typedData); err != nil {
-	//		return nil, err
-	//	}
-	//	fmt.Println("Did we get here, chief? #2")
-	//	sighash, err := signTypedData(context.Background(), typedData)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	msg := fmt.Sprintf("Typed data domain %s", typedData.Domain)
-	//	req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
 		header := &types.Header{}
@@ -661,7 +645,7 @@ func signTextWithValidator(data []byte) ([]byte, string) {
 	return crypto.Keccak256([]byte(msg)), msg
 }
 
-// SignCliqueHeader returns the hash which is used as input for the proof-of-authority
+// signCliqueHeader returns the hash which is used as input for the proof-of-authority
 // signing. It is the hash of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
