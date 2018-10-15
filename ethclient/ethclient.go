@@ -202,15 +202,8 @@ func (ec *Client) TransactionInclusionBlock(ctx context.Context, hash common.Has
 		return 0, err
 	} else if json == nil {
 		return 0, ethereum.NotFound
-	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-		return 0, fmt.Errorf("server returned transaction without signature")
 	}
-	setSenderFromServer(json.tx, json.From, json.BlockHash)
-	blockNumber, err = strconv.ParseUint(*json.BlockNumber, 0, 64)
-	if err != nil {
-		return 0, err
-	}
-	return blockNumber, nil
+	return strconv.ParseUint(*json.BlockNumber, 0, 64)
 }
 
 // TransactionSender returns the sender address of the given transaction. The transaction
