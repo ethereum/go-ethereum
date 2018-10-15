@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"testing"
 
@@ -41,9 +42,40 @@ func (d *dummyContractRef) SetBalance(*big.Int)        {}
 func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
+type dummyStatedb struct {
+}
+
+func (dummyStatedb) CreateAccount(common.Address)                              { panic("implement me") }
+func (dummyStatedb) SubBalance(common.Address, *big.Int)                       { panic("implement me") }
+func (dummyStatedb) AddBalance(common.Address, *big.Int)                       { panic("implement me") }
+func (dummyStatedb) GetBalance(common.Address) *big.Int                        { panic("implement me") }
+func (dummyStatedb) GetNonce(common.Address) uint64                            { panic("implement me") }
+func (dummyStatedb) SetNonce(common.Address, uint64)                           { panic("implement me") }
+func (dummyStatedb) GetCodeHash(common.Address) common.Hash                    { panic("implement me") }
+func (dummyStatedb) GetCode(common.Address) []byte                             { panic("implement me") }
+func (dummyStatedb) SetCode(common.Address, []byte)                            { panic("implement me") }
+func (dummyStatedb) GetCodeSize(common.Address) int                            { panic("implement me") }
+func (dummyStatedb) AddRefund(uint64)                                          { panic("implement me") }
+func (dummyStatedb) SubRefund(uint64)                                          { panic("implement me") }
+func (dummyStatedb) GetRefund() uint64                                         { return 1337 }
+func (dummyStatedb) GetCommittedState(common.Address, common.Hash) common.Hash { panic("implement me") }
+func (dummyStatedb) GetState(common.Address, common.Hash) common.Hash          { panic("implement me") }
+func (dummyStatedb) SetState(common.Address, common.Hash, common.Hash)         { panic("implement me") }
+func (dummyStatedb) Suicide(common.Address) bool                               { panic("implement me") }
+func (dummyStatedb) HasSuicided(common.Address) bool                           { panic("implement me") }
+func (dummyStatedb) Exist(common.Address) bool                                 { panic("implement me") }
+func (dummyStatedb) Empty(common.Address) bool                                 { panic("implement me") }
+func (dummyStatedb) RevertToSnapshot(int)                                      { panic("implement me") }
+func (dummyStatedb) Snapshot() int                                             { panic("implement me") }
+func (dummyStatedb) AddLog(*types.Log)                                         { panic("implement me") }
+func (dummyStatedb) AddPreimage(common.Hash, []byte)                           { panic("implement me") }
+func (dummyStatedb) ForEachStorage(common.Address, func(common.Hash, common.Hash) bool) {
+	panic("implement me")
+}
+
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env      = NewEVM(Context{}, dummyStatedb{}, params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
