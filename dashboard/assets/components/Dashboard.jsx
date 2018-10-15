@@ -24,6 +24,7 @@ import withStyles from '@material-ui/core/styles/withStyles';
 import Header from 'Header';
 import Body from 'Body';
 import {inserter as logInserter, SAME} from 'Logs';
+import {inserter as peerInserter} from 'Network';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
 
@@ -88,8 +89,13 @@ const defaultContent: () => Content = () => ({
 	home:    {},
 	chain:   {},
 	txpool:  {},
-	network: {},
-	system:  {
+	network: {
+		peers: {
+			bundles: {},
+		},
+		diff: [],
+	},
+	system: {
 		activeMemory:   [],
 		virtualMemory:  [],
 		networkIngress: [],
@@ -119,7 +125,7 @@ const updaters = {
 	home:    null,
 	chain:   null,
 	txpool:  null,
-	network: null,
+	network: peerInserter(200),
 	system:  {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),

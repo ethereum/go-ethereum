@@ -20,6 +20,7 @@ import React, {Component} from 'react';
 
 import withStyles from '@material-ui/core/styles/withStyles';
 
+import Network from 'Network';
 import Logs from 'Logs';
 import Footer from 'Footer';
 import {MENU} from '../common';

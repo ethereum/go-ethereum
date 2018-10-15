@@ -34,8 +34,8 @@ type Message struct {
 type ChartEntries []*ChartEntry
 
 type ChartEntry struct {
-	Time  time.Time `json:"time,omitempty"`
-	Value float64   `json:"value,omitempty"`
+	Time  time.Time `json:"time"`
+	Value float64   `json:"value"`
 }
 
 type GeneralMessage struct {
