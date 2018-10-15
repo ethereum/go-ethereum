@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
