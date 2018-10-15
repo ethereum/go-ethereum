@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/les"
@@ -340,18 +341,21 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				if err := stack.Service(&lightEthereum); err != nil {
 					utils.Fatalf("LightEthereum service not running: %v", err)
 				}
-				<-lightEthereum.Downloader().SyncedCh
-				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+				var mux = stack.EventMux()
+				var sub = mux.Subscribe(downloader.DoneEvent{})
+				<-sub.Chan()
+				log.Info("Synchronisation completed, exitting", "countdown", downloader.DoneEvent{})
 				time.Sleep(exitWhenSynced)
 				stack.Stop()
-
 			} else {
 				var ethereum *eth.Ethereum
 				if err := stack.Service(&ethereum); err != nil {
 					utils.Fatalf("Ethereum service not running: %v", err)
 				}
-				<-ethereum.Downloader().SyncedCh
-				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+				var mux = stack.EventMux()
+				var sub = mux.Subscribe(downloader.DoneEvent{})
+				<-sub.Chan()
+				log.Info("Synchronisation completed, exitting", "countdown", downloader.DoneEvent{})
 				time.Sleep(exitWhenSynced)
 				stack.Stop()
 			}

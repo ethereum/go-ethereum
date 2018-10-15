@@ -448,7 +448,6 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 					p.Log().Debug("Synchronisation started")
 					f.pm.synchronise(p)
 					f.syncDone <- p
-					f.SyncedCh <- true
 				}()
 				return nil
 			},
