@@ -1,7 +1,7 @@
 # Specs
-`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x45" ‖ domainSeparator ‖ hashStruct(message)`  
+`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`  
 - data adheres to 𝕊, a structure defined in the rigorous eip-712
-- `\x45` is needed to comply with EIP-191
+- `\x00` is needed to comply with EIP-191
 - `domainSeparator` and `hashStruct` are defined below
 
 ## A) domainSeparator
@@ -25,6 +25,8 @@ Struct named `EIP712Domain` with one or more of the below fields:
 - `name ‖ "(" ‖ member₁ ‖ "," ‖ member₂ ‖ "," ‖ … ‖ memberₙ ")"`
 - each member is written as `type ‖ " " ‖ name`
 - encodings cascade down and are sorted by name
+
+Example: `Mail(Person from,Person to,string contents)Person(string name,address wallet)`
 
 ### ii) encodeData
 - `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
@@ -52,7 +54,7 @@ Struct named `EIP712Domain` with one or more of the below fields:
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "account_signStructuredData",
+  "method": "account_signTypedData",
   "params": [
     "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
     {

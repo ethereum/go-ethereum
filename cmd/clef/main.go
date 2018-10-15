@@ -26,6 +26,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -666,6 +668,8 @@ func testExternalUI(api *core.SignerAPI) {
 	checkErr("SignTransaction", err)
 	_, err = api.SignData(ctx, "text/plain", common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
 	checkErr("SignData", err)
+	_, err = api.SignTypedData(ctx, common.MixedcaseAddress{}, core.TypedData{})
+	checkErr("SignTypedData", err)
 	_, err = api.List(ctx)
 	checkErr("List", err)
 	_, err = api.New(ctx)
