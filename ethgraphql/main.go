@@ -532,7 +532,7 @@ func (b *Block) Difficulty(ctx context.Context) (BigNum, error) {
 	return BigNum{block.Difficulty()}, nil
 }
 
-func (b *Block) Time(ctx context.Context) (BigNum, error) {
+func (b *Block) Timestamp(ctx context.Context) (BigNum, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return BigNum{}, err
@@ -550,7 +550,7 @@ func (b *Block) Nonce(ctx context.Context) (BigNum, error) {
 	return BigNum{i}, nil
 }
 
-func (b *Block) MixDigest(ctx context.Context) (Bytes32, error) {
+func (b *Block) MixHash(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return Bytes32{}, err
@@ -558,15 +558,7 @@ func (b *Block) MixDigest(ctx context.Context) (Bytes32, error) {
 	return Bytes32{block.MixDigest()}, nil
 }
 
-func (b *Block) Root(ctx context.Context) (Bytes32, error) {
-	block, err := b.resolve(ctx)
-	if err != nil {
-		return Bytes32{}, err
-	}
-	return Bytes32{block.Root()}, nil
-}
-
-func (b *Block) TxHash(ctx context.Context) (Bytes32, error) {
+func (b *Block) TransactionsRoot(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return Bytes32{}, err
@@ -574,7 +566,15 @@ func (b *Block) TxHash(ctx context.Context) (Bytes32, error) {
 	return Bytes32{block.TxHash()}, nil
 }
 
-func (b *Block) ReceiptHash(ctx context.Context) (Bytes32, error) {
+func (b *Block) StateRoot(ctx context.Context) (Bytes32, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return Bytes32{}, err
+	}
+	return Bytes32{block.Root()}, nil
+}
+
+func (b *Block) ReceiptsRoot(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return Bytes32{}, err
@@ -582,7 +582,7 @@ func (b *Block) ReceiptHash(ctx context.Context) (Bytes32, error) {
 	return Bytes32{block.ReceiptHash()}, nil
 }
 
-func (b *Block) UncleHash(ctx context.Context) (Bytes32, error) {
+func (b *Block) OmmerHash(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return Bytes32{}, err
@@ -590,12 +590,38 @@ func (b *Block) UncleHash(ctx context.Context) (Bytes32, error) {
 	return Bytes32{block.UncleHash()}, nil
 }
 
-func (b *Block) Extra(ctx context.Context) (HexBytes, error) {
+func (b *Block) Ommers(ctx context.Context) ([]*Block, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]*Block, 0, len(block.Uncles()))
+	for _, uncle := range block.Uncles() {
+		blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
+		ret = append(ret, &Block{
+			node: b.node,
+			num:  &blockNumber,
+			hash: uncle.Hash(),
+		})
+	}
+	return ret, nil
+}
+
+func (b *Block) ExtraData(ctx context.Context) (HexBytes, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return HexBytes{}, err
 	}
 	return HexBytes{block.Extra()}, nil
+}
+
+func (b *Block) LogsBloom(ctx context.Context) (HexBytes, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return HexBytes{}, err
+	}
+	return HexBytes{block.Bloom().Bytes()}, nil
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (BigNum, error) {
@@ -627,7 +653,7 @@ func (a BlockNumberArgs) Number() rpc.BlockNumber {
 	return rpc.LatestBlockNumber
 }
 
-func (b *Block) Coinbase(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+func (b *Block) Miner(ctx context.Context, args BlockNumberArgs) (*Account, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return nil, err
@@ -798,21 +824,23 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         type Block {
             number: Int!
             hash: Bytes32!
+            parent: Block
+            nonce: BigNum!
+            transactionsRoot: Bytes32!
+            transactionCount: Int!
+            stateRoot: Bytes32!
+            receiptsRoot: Bytes32!
+            miner(block: Int): Account!
+            extraData: HexBytes!
             gasLimit: Int!
             gasUsed: Int!
-            parent: Block
+            timestamp: BigNum!
+            logsBloom: HexBytes!
+            mixHash: Bytes32!
             difficulty: BigNum!
-            time: BigNum!
-            nonce: BigNum!
-            mixDigest: Bytes32!
-            root: Bytes32!
-            txHash: Bytes32!
-            receiptHash: Bytes32!
-            uncleHash: Bytes32!
-            extra: HexBytes!
             totalDifficulty: BigNum!
-            coinbase(block: Int): Account!
-            transactionCount: Int!
+            ommers: [Block]!
+            ommerHash: Bytes32!
             transactions: [Transaction]!
         }
 
