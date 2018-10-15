@@ -205,58 +205,20 @@ func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
 	}
 }
 
-func (l *Log) Topics(ctx context.Context) []*Bytes32 {
-	ret := make([]*Bytes32, 0, len(l.log.Topics))
+func (l *Log) Index(ctx context.Context) int32 {
+	return int32(l.log.Index)
+}
+
+func (l *Log) Topics(ctx context.Context) []Bytes32 {
+	ret := make([]Bytes32, 0, len(l.log.Topics))
 	for _, topic := range l.log.Topics {
-		ret = append(ret, &Bytes32{topic})
+		ret = append(ret, Bytes32{topic})
 	}
 	return ret
 }
 
 func (l *Log) Data(ctx context.Context) HexBytes {
 	return HexBytes{l.log.Data}
-}
-
-type Receipt struct {
-	node        *node.Node
-	transaction *Transaction
-	receipt     *types.Receipt
-}
-
-func (r *Receipt) Status(ctx context.Context) int32 {
-	return int32(r.receipt.Status)
-}
-
-func (r *Receipt) GasUsed(ctx context.Context) int32 {
-	return int32(r.receipt.GasUsed)
-}
-
-func (r *Receipt) CumulativeGasUsed(ctx context.Context) int32 {
-	return int32(r.receipt.CumulativeGasUsed)
-}
-
-func (r *Receipt) Contract(ctx context.Context, args BlockNumberArgs) *Account {
-	if r.receipt.ContractAddress == (common.Address{}) {
-		return nil
-	}
-
-	return &Account{
-		node:        r.node,
-		address:     r.receipt.ContractAddress,
-		blockNumber: args.Number(),
-	}
-}
-
-func (r *Receipt) Logs(ctx context.Context) []*Log {
-	ret := make([]*Log, 0, len(r.receipt.Logs))
-	for _, log := range r.receipt.Logs {
-		ret = append(ret, &Log{
-			node:        r.node,
-			transaction: r.transaction,
-			log:         log,
-		})
-	}
-	return ret
 }
 
 type Transaction struct {
@@ -293,7 +255,7 @@ func (tx *Transaction) Hash(ctx context.Context) Bytes32 {
 	return Bytes32{tx.hash}
 }
 
-func (t *Transaction) Data(ctx context.Context) (HexBytes, error) {
+func (t *Transaction) InputData(ctx context.Context) (HexBytes, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return HexBytes{}, err
@@ -388,7 +350,7 @@ func (t *Transaction) Index(ctx context.Context) (*int32, error) {
 	return &index, nil
 }
 
-func (t *Transaction) Receipt(ctx context.Context) (*Receipt, error) {
+func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
 	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
 	}
@@ -402,11 +364,67 @@ func (t *Transaction) Receipt(ctx context.Context) (*Receipt, error) {
 		return nil, err
 	}
 
-	return &Receipt{
+	return receipts[t.index], nil
+}
+
+func (t *Transaction) Status(ctx context.Context) (*int32, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	ret := int32(receipt.Status)
+	return &ret, nil
+}
+
+func (t *Transaction) GasUsed(ctx context.Context) (*int32, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	ret := int32(receipt.GasUsed)
+	return &ret, nil
+}
+
+func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*int32, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	ret := int32(receipt.CumulativeGasUsed)
+	return &ret, nil
+}
+
+func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs) (*Account, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil || receipt.ContractAddress == (common.Address{}) {
+		return nil, err
+	}
+
+	return &Account{
 		node:        t.node,
-		transaction: t,
-		receipt:     receipts[t.index],
+		address:     receipt.ContractAddress,
+		blockNumber: args.Number(),
 	}, nil
+}
+
+func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
+	receipt, err := t.getReceipt(ctx)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	ret := make([]*Log, 0, len(receipt.Logs))
+	for _, log := range receipt.Logs {
+		ret = append(ret, &Log{
+			node:        t.node,
+			transaction: t,
+			log:         log,
+		})
+	}
+	return &ret, nil
 }
 
 type Block struct {
@@ -793,32 +811,30 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Log {
-            transaction: Transaction!
+            index: Int!
             account(block: Int): Account!
-            topics: [Bytes32]!
+            topics: [Bytes32!]!
             data: HexBytes!
-        }
-
-        type Receipt {
-            status: Int!
-            gasUsed: Int!
-            cumulativeGasUsed: Int!
-            contract(block: Int): Account
-            logs: [Log]!
+            transaction: Transaction!
         }
 
         type Transaction {
             hash: Bytes32!
-            data: HexBytes!
-            gas: Int!
-            gasPrice: BigNum!
-            value: BigNum!
             nonce: Int!
-            to(block: Int): Account
-            from(block: Int): Account!
-            block: Block
             index: Int
-            receipt: Receipt
+            from(block: Int): Account!
+            to(block: Int): Account
+            value: BigNum!
+            gasPrice: BigNum!
+            gas: Int!
+            inputData: HexBytes!
+            block: Block
+
+            status: Int
+            gasUsed: Int
+            cumulativeGasUsed: Int
+            createdContract(block: Int): Account
+            logs: [Log!]
         }
 
         type Block {
@@ -841,7 +857,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             totalDifficulty: BigNum!
             ommers: [Block]!
             ommerHash: Bytes32!
-            transactions: [Transaction]!
+            transactions: [Transaction!]!
         }
 
         type Query {
