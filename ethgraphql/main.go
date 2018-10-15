@@ -156,7 +156,7 @@ func (a *Account) Balance(ctx context.Context) (BigNum, error) {
 	return BigNum{state.GetBalance(a.address)}, nil
 }
 
-func (a *Account) Nonce(ctx context.Context) (int32, error) {
+func (a *Account) TransactionCount(ctx context.Context) (int32, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
@@ -787,7 +787,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         type Account {
             address: Address!
             balance: BigNum!
-            nonce: Int!
+            transactionCount: Int!
             code: HexBytes!
             storage(slot: Bytes32!): Bytes32!
         }
