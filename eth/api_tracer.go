@@ -17,11 +17,13 @@
 package eth
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -58,6 +60,13 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+}
+
+// StdTraceConfig holds extra parameters to standard-json trace functions.
+type StdTraceConfig struct {
+	*vm.LogConfig
+	Reexec *uint64
+	TxHash *common.Hash
 }
 
 // txTraceResult is the result of a single transaction trace.
@@ -391,13 +400,37 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 	return api.TraceBlock(ctx, blob, config)
 }
 
-// TraceBadBlock returns the structured logs created during the execution of a block
-// within the blockchain 'badblocks' cache
-func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, index int, config *TraceConfig) ([]*txTraceResult, error) {
-	if blocks := api.eth.blockchain.BadBlocks(); index < len(blocks) {
-		return api.traceBlock(ctx, blocks[index], config)
+// TraceBadBlockByHash returns the structured logs created during the execution of a block
+func (api *PrivateDebugAPI) TraceBadBlock(ctx context.Context, blockHash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
+	blocks := api.eth.blockchain.BadBlocks()
+	for _, block := range blocks {
+		if block.Hash() == blockHash {
+			return api.traceBlock(ctx, block, config)
+		}
 	}
-	return nil, fmt.Errorf("index out of range")
+	return nil, fmt.Errorf("hash not found among bad blocks")
+}
+
+// StandardTraceBadBlockToFile dumps the standard-json logs to files on the local filesystem,
+// and returns a list of files to the caller.
+func (api *PrivateDebugAPI) StandardTraceBadBlockToFile(ctx context.Context, blockHash common.Hash, stdConfig *StdTraceConfig) ([]string, error) {
+	blocks := api.eth.blockchain.BadBlocks()
+	for _, block := range blocks {
+		if block.Hash() == blockHash {
+			return api.standardTraceBlockToFile(ctx, block, stdConfig)
+		}
+	}
+	return nil, fmt.Errorf("hash not found among bad blocks")
+}
+
+// StandardTraceBlockToFile dumps the standard-json logs to files on the local filesystem,
+// and returns a list of files to the caller.
+func (api *PrivateDebugAPI) StandardTraceBlockToFile(ctx context.Context, blockHash common.Hash, stdConfig *StdTraceConfig) ([]string, error) {
+	block := api.eth.blockchain.GetBlockByHash(blockHash)
+	if block == nil {
+		return nil, fmt.Errorf("block #%x not found", blockHash)
+	}
+	return api.standardTraceBlockToFile(ctx, block, stdConfig)
 }
 
 // traceBlock configures a new tracer according to the provided configuration, and
@@ -481,6 +514,92 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	return results, nil
 }
 
+// standardTraceBlockToFile configures a new tracer which uses standard-json output, and
+// traces either a full block or an individual transaction. The return value will be one filename
+// per transaction traced.
+func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block *types.Block, stdConfig *StdTraceConfig) ([]string, error) {
+	// Create the parent state database
+	if err := api.eth.engine.VerifyHeader(api.eth.blockchain, block.Header(), true); err != nil {
+		return nil, err
+	}
+	parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, fmt.Errorf("parent %x not found", block.ParentHash())
+	}
+	var (
+		signer        = types.MakeSigner(api.config, block.Number())
+		done          = false
+		blockPrefix   = fmt.Sprintf("block_0x%x", block.Hash().Bytes()[:4])
+		usedLogConfig = &vm.LogConfig{Debug: true}
+		files         []string
+		reExec_val    = defaultTraceReexec
+		txHash        *common.Hash
+	)
+	if stdConfig != nil {
+		if stdConfig.Reexec != nil {
+			reExec_val = *stdConfig.Reexec
+		}
+		if stdConfig.LogConfig != nil {
+			usedLogConfig.DisableMemory = stdConfig.LogConfig.DisableMemory
+			usedLogConfig.DisableStack = stdConfig.LogConfig.DisableStack
+			usedLogConfig.DisableStorage = stdConfig.LogConfig.DisableStorage
+			usedLogConfig.Limit = stdConfig.LogConfig.Limit
+		}
+		txHash = stdConfig.TxHash
+	}
+	statedb, err := api.computeStateDB(parent, reExec_val)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, tx := range block.Transactions() {
+		var (
+			outfile *os.File
+			err     error
+		)
+		msg, _ := tx.AsMessage(signer)
+		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
+		vmConf := vm.Config{}
+		if txHash == nil || bytes.Equal(txHash.Bytes(), tx.Hash().Bytes()) {
+			prefix := fmt.Sprintf("%v-%d-0x%x-", blockPrefix, i, tx.Hash().Bytes()[:4])
+			// Open a file to dump trace into
+			outfile, err = ioutil.TempFile(os.TempDir(), prefix)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, outfile.Name())
+			vmConf = vm.Config{
+				Debug:                   true,
+				Tracer:                  vm.NewJSONLogger(usedLogConfig, bufio.NewWriter(outfile)),
+				EnablePreimageRecording: true,
+			}
+			if txHash != nil { // Only one tx to trace
+				done = true
+			}
+		}
+		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
+		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+
+		if outfile != nil {
+			outfile.Close()
+			log.Info("Wrote trace", "file", outfile.Name())
+		}
+		if err != nil {
+			return files, err
+		}
+		// Finalize the state so any modifications are written to the trie
+		statedb.Finalise(true)
+
+		if done {
+			break
+		}
+	}
+	if txHash != nil && !done {
+		return nil, fmt.Errorf("transaction hash not found in block")
+	}
+	return files, nil
+}
+
 // computeStateDB retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks are
 // attempted to be reexecuted to generate the desired state.
@@ -506,7 +625,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 	if err != nil {
 		switch err.(type) {
 		case *trie.MissingNodeError:
-			return nil, errors.New("required historical state unavailable")
+			return nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
 		default:
 			return nil, err
 		}
@@ -520,7 +639,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 	for block.NumberU64() < origin {
 		// Print progress logs if long enough time elapsed
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Regenerating historical state", "block", block.NumberU64()+1, "target", origin, "elapsed", time.Since(start))
+			log.Info("Regenerating historical state", "block", block.NumberU64()+1, "target", origin, "remaining", origin-block.NumberU64()-1, "elapsed", time.Since(start))
 			logged = time.Now()
 		}
 		// Retrieve the next block to regenerate and process it
@@ -529,15 +648,15 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		}
 		_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(true)
+		root, err := statedb.Commit(api.eth.blockchain.Config().IsEIP158(block.Number()))
 		if err != nil {
 			return nil, err
 		}
 		if err := statedb.Reset(root); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("state reset after block %d failed: %v", block.NumberU64(), err)
 		}
 		database.TrieDB().Reference(root, common.Hash{})
 		if proot != (common.Hash{}) {
