@@ -63,6 +63,40 @@ func (h *HexBytes) UnmarshalGraphQL(input interface{}) error {
 		}
 		*h = HexBytes{data}
 	default:
+		err = fmt.Errorf("Unexpected type for HexBytes: %v", input)
+	}
+	return err
+}
+
+type Bytes32 struct {
+	common.Hash
+}
+
+func (_ Bytes32) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
+
+func (b *Bytes32) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		*b = Bytes32{common.HexToHash(input)}
+	default:
+		err = fmt.Errorf("Unexpected type for Hash: %v", input)
+	}
+	return err
+}
+
+type Address struct {
+	common.Address
+}
+
+func (h Address) ImplementsGraphQLType(name string) bool { return name == "Address" }
+
+func (h *Address) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		*h = Address{common.HexToAddress(input)}
+	default:
 		err = fmt.Errorf("Unexpected type for Hash: %v", input)
 	}
 	return err
@@ -109,8 +143,8 @@ func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
 	return state, err
 }
 
-func (a *Account) Address(ctx context.Context) (HexBytes, error) {
-	return HexBytes{a.address.Bytes()}, nil
+func (a *Account) Address(ctx context.Context) (Address, error) {
+	return Address{a.address}, nil
 }
 
 func (a *Account) Balance(ctx context.Context) (BigNum, error) {
@@ -141,16 +175,16 @@ func (a *Account) Code(ctx context.Context) (HexBytes, error) {
 }
 
 type StorageSlotArgs struct {
-	Slot HexBytes
+	Slot Bytes32
 }
 
-func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (HexBytes, error) {
+func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (Bytes32, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
 
-	return HexBytes{state.GetState(a.address, common.BytesToHash(args.Slot.Bytes)).Bytes()}, nil
+	return Bytes32{state.GetState(a.address, args.Slot.Hash)}, nil
 }
 
 type Log struct {
@@ -171,10 +205,10 @@ func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
 	}
 }
 
-func (l *Log) Topics(ctx context.Context) []*HexBytes {
-	ret := make([]*HexBytes, 0, len(l.log.Topics))
+func (l *Log) Topics(ctx context.Context) []*Bytes32 {
+	ret := make([]*Bytes32, 0, len(l.log.Topics))
 	for _, topic := range l.log.Topics {
-		ret = append(ret, &HexBytes{topic.Bytes()})
+		ret = append(ret, &Bytes32{topic})
 	}
 	return ret
 }
@@ -255,8 +289,8 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 	return t.tx, nil
 }
 
-func (tx *Transaction) Hash(ctx context.Context) HexBytes {
-	return HexBytes{tx.hash.Bytes()}
+func (tx *Transaction) Hash(ctx context.Context) Bytes32 {
+	return Bytes32{tx.hash}
 }
 
 func (t *Transaction) Data(ctx context.Context) (HexBytes, error) {
@@ -438,15 +472,15 @@ func (b *Block) Number(ctx context.Context) (int32, error) {
 	return int32(*b.num), nil
 }
 
-func (b *Block) Hash(ctx context.Context) (HexBytes, error) {
+func (b *Block) Hash(ctx context.Context) (Bytes32, error) {
 	if b.hash == (common.Hash{}) {
 		block, err := b.resolve(ctx)
 		if err != nil {
-			return HexBytes{}, err
+			return Bytes32{}, err
 		}
 		b.hash = block.Hash()
 	}
-	return HexBytes{b.hash.Bytes()}, nil
+	return Bytes32{b.hash}, nil
 }
 
 func (b *Block) GasLimit(ctx context.Context) (int32, error) {
@@ -516,44 +550,44 @@ func (b *Block) Nonce(ctx context.Context) (BigNum, error) {
 	return BigNum{i}, nil
 }
 
-func (b *Block) MixDigest(ctx context.Context) (HexBytes, error) {
+func (b *Block) MixDigest(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
-	return HexBytes{block.MixDigest().Bytes()}, nil
+	return Bytes32{block.MixDigest()}, nil
 }
 
-func (b *Block) Root(ctx context.Context) (HexBytes, error) {
+func (b *Block) Root(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
-	return HexBytes{block.Root().Bytes()}, nil
+	return Bytes32{block.Root()}, nil
 }
 
-func (b *Block) TxHash(ctx context.Context) (HexBytes, error) {
+func (b *Block) TxHash(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
-	return HexBytes{block.TxHash().Bytes()}, nil
+	return Bytes32{block.TxHash()}, nil
 }
 
-func (b *Block) ReceiptHash(ctx context.Context) (HexBytes, error) {
+func (b *Block) ReceiptHash(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
-	return HexBytes{block.ReceiptHash().Bytes()}, nil
+	return Bytes32{block.ReceiptHash()}, nil
 }
 
-func (b *Block) UncleHash(ctx context.Context) (HexBytes, error) {
+func (b *Block) UncleHash(ctx context.Context) (Bytes32, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return Bytes32{}, err
 	}
-	return HexBytes{block.UncleHash().Bytes()}, nil
+	return Bytes32{block.UncleHash()}, nil
 }
 
 func (b *Block) Extra(ctx context.Context) (HexBytes, error) {
@@ -639,7 +673,7 @@ type Query struct {
 
 type BlockArgs struct {
 	Number *int32
-	Hash   *HexBytes
+	Hash   *Bytes32
 }
 
 func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
@@ -653,7 +687,7 @@ func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 	} else if args.Hash != nil {
 		block = &Block{
 			node: q.node,
-			hash: common.BytesToHash(args.Hash.Bytes),
+			hash: args.Hash.Hash,
 		}
 	} else {
 		num := rpc.LatestBlockNumber
@@ -674,7 +708,7 @@ func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 }
 
 type AccountArgs struct {
-	Address     HexBytes
+	Address     Address
 	BlockNumber *int32
 }
 
@@ -686,19 +720,19 @@ func (q *Query) Account(ctx context.Context, args AccountArgs) *Account {
 
 	return &Account{
 		node:        q.node,
-		address:     common.BytesToAddress(args.Address.Bytes),
+		address:     args.Address.Address,
 		blockNumber: blockNumber,
 	}
 }
 
 type TransactionArgs struct {
-	Hash HexBytes
+	Hash Bytes32
 }
 
 func (q *Query) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
 	tx := &Transaction{
 		node: q.node,
-		hash: common.BytesToHash(args.Hash.Bytes),
+		hash: args.Hash.Hash,
 	}
 
 	// Resolve the transaction; if it doesn't exist, return nil.
@@ -715,6 +749,8 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Query{n}
 
 	s := `
+        scalar Bytes32
+        scalar Address
         scalar HexBytes
         scalar BigNum
 
@@ -723,17 +759,17 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Account {
-            address: HexBytes!
+            address: Address!
             balance: BigNum!
             nonce: Int!
             code: HexBytes!
-            storage(slot: HexBytes!): HexBytes!
+            storage(slot: Bytes32!): Bytes32!
         }
 
         type Log {
             transaction: Transaction!
             account(block: Int): Account!
-            topics: [HexBytes]!
+            topics: [Bytes32]!
             data: HexBytes!
         }
 
@@ -746,7 +782,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Transaction {
-            hash: HexBytes!
+            hash: Bytes32!
             data: HexBytes!
             gas: Int!
             gasPrice: BigNum!
@@ -761,18 +797,18 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
         type Block {
             number: Int!
-            hash: HexBytes!
+            hash: Bytes32!
             gasLimit: Int!
             gasUsed: Int!
             parent: Block
             difficulty: BigNum!
             time: BigNum!
             nonce: BigNum!
-            mixDigest: HexBytes!
-            root: HexBytes!
-            txHash: HexBytes!
-            receiptHash: HexBytes!
-            uncleHash: HexBytes!
+            mixDigest: Bytes32!
+            root: Bytes32!
+            txHash: Bytes32!
+            receiptHash: Bytes32!
+            uncleHash: Bytes32!
             extra: HexBytes!
             totalDifficulty: BigNum!
             coinbase(block: Int): Account!
@@ -781,9 +817,9 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Query {
-            block(number: Int, hash: HexBytes): Block
-            account(address: HexBytes!, blockNumber: Int): Account!
-            transaction(hash: HexBytes!): Transaction
+            block(number: Int, hash: Bytes32): Block
+            account(address: Address!, blockNumber: Int): Account!
+            transaction(hash: Bytes32!): Transaction
         }
     `
 	schema, err := graphql.ParseSchema(s, &q)
