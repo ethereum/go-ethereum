@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -48,12 +49,13 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 }
 
 type btJSON struct {
-	Blocks    []btBlock             `json:"blocks"`
-	Genesis   btHeader              `json:"genesisBlockHeader"`
-	Pre       core.GenesisAlloc     `json:"pre"`
-	Post      core.GenesisAlloc     `json:"postState"`
-	BestBlock common.UnprefixedHash `json:"lastblockhash"`
-	Network   string                `json:"network"`
+	Blocks     []btBlock             `json:"blocks"`
+	Genesis    btHeader              `json:"genesisBlockHeader"`
+	Pre        core.GenesisAlloc     `json:"pre"`
+	Post       core.GenesisAlloc     `json:"postState"`
+	BestBlock  common.UnprefixedHash `json:"lastblockhash"`
+	Network    string                `json:"network"`
+	SealEngine string                `json:"sealEngine"`
 }
 
 type btBlock struct {
@@ -110,8 +112,13 @@ func (t *BlockTest) Run() error {
 	if gblock.Root() != t.json.Genesis.StateRoot {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
-
-	chain, err := core.NewBlockChain(db, nil, config, ethash.NewShared(), vm.Config{}, nil)
+	var engine consensus.Engine
+	if t.json.SealEngine == "NoProof" {
+		engine = ethash.NewFaker()
+	} else {
+		engine = ethash.NewShared()
+	}
+	chain, err := core.NewBlockChain(db, nil, config, engine, vm.Config{}, nil)
 	if err != nil {
 		return err
 	}
