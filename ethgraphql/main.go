@@ -751,6 +751,41 @@ func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 	return block, nil
 }
 
+type BlocksArgs struct {
+	From int32
+	To   *int32
+}
+
+func (q *Query) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
+	be, err := getBackend(q.node)
+	if err != nil {
+		return nil, err
+	}
+
+	from := rpc.BlockNumber(args.From)
+
+	var to rpc.BlockNumber
+	if args.To != nil {
+		to = rpc.BlockNumber(*args.To)
+	} else {
+		to = rpc.BlockNumber(be.CurrentBlock().Number().Int64())
+	}
+
+	if to < from {
+		return []*Block{}, nil
+	}
+
+	ret := make([]*Block, 0, to-from+1)
+	for i := from; i <= to; i++ {
+		num := i
+		ret = append(ret, &Block{
+			node: q.node,
+			num:  &num,
+		})
+	}
+	return ret, nil
+}
+
 type AccountArgs struct {
 	Address     Address
 	BlockNumber *int32
@@ -861,8 +896,9 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Query {
-            block(number: Int, hash: Bytes32): Block
             account(address: Address!, blockNumber: Int): Account!
+            block(number: Int, hash: Bytes32): Block
+            blocks(from: Int!, to: Int): [Block!]!
             transaction(hash: Bytes32!): Transaction
         }
     `
