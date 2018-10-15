@@ -608,6 +608,14 @@ func (b *Block) OmmerHash(ctx context.Context) (Bytes32, error) {
 	return Bytes32{block.UncleHash()}, nil
 }
 
+func (b *Block) OmmerCount(ctx context.Context) (int32, error) {
+	block, err := b.resolve(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int32(len(block.Uncles())), nil
+}
+
 func (b *Block) Ommers(ctx context.Context) ([]*Block, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
@@ -890,6 +898,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             mixHash: Bytes32!
             difficulty: BigNum!
             totalDifficulty: BigNum!
+            ommerCount: Int!
             ommers: [Block]!
             ommerHash: Bytes32!
             transactions: [Transaction!]!
