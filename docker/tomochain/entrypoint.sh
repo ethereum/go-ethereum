@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 
 # vars from docker env
 # - IDENTITY (default to empty)
