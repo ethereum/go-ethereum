@@ -142,6 +142,8 @@ fi
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
 
+set -x
+
 exec tomo $params \
   --verbosity $VERBOSITY \
   --datadir $DATA_DIR \
