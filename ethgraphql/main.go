@@ -66,23 +66,6 @@ func (b *Bytes32) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-type Address struct {
-	common.Address
-}
-
-func (h Address) ImplementsGraphQLType(name string) bool { return name == "Address" }
-
-func (h *Address) UnmarshalGraphQL(input interface{}) error {
-	var err error
-	switch input := input.(type) {
-	case string:
-		*h = Address{common.HexToAddress(input)}
-	default:
-		err = fmt.Errorf("Unexpected type for Hash: %v", input)
-	}
-	return err
-}
-
 type Account struct {
 	node        *node.Node
 	address     common.Address
@@ -99,8 +82,8 @@ func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
 	return state, err
 }
 
-func (a *Account) Address(ctx context.Context) (Address, error) {
-	return Address{a.address}, nil
+func (a *Account) Address(ctx context.Context) (common.Address, error) {
+	return a.address, nil
 }
 
 func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
@@ -796,7 +779,7 @@ func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error
 }
 
 type AccountArgs struct {
-	Address     Address
+	Address     common.Address
 	BlockNumber *int32
 }
 
@@ -808,7 +791,7 @@ func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
 
 	return &Account{
 		node:        r.node,
-		address:     args.Address.Address,
+		address:     args.Address,
 		blockNumber: blockNumber,
 	}
 }
@@ -848,8 +831,8 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 }
 
 type CallData struct {
-	From     *Address
-	To       *Address
+	From     *common.Address
+	To       *common.Address
 	Gas      *hexutil.Uint64
 	GasPrice *hexutil.Big
 	Value    *hexutil.Big
