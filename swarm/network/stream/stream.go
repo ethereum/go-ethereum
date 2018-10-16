@@ -66,9 +66,9 @@ type Registry struct {
 // RegistryOptions holds optional values for NewRegistry constructor.
 type RegistryOptions struct {
 	SkipCheck       bool
-	DoSync          bool
-	DoRetrieve      bool
-	DoServeRetrieve bool
+	DoSync          bool // Sets if the server syncs with peers. Default is true, set to false by lightnode or nosync flags.
+	DoRetrieve      bool // Sets if the server issues Retrieve requests. Default is true.
+	DoServeRetrieve bool // Sets if the server serves Retrieve requests. Default is true, set to false by lightnode flag.
 	SyncUpdateDelay time.Duration
 	MaxPeerServers  int // The limit of servers for each peer in registry
 }

@@ -1,3 +1,18 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 package stream
 
 import (
@@ -6,6 +21,8 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
+// This test checks the default behavior of the server, that is
+// when it is serving Retrieve requests.
 func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 	registryOptions := &RegistryOptions{
 		DoServeRetrieve: true,
@@ -42,6 +59,8 @@ func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 	}
 }
 
+// This test checks the Lightnode behavior of server, when serving Retrieve
+// requests are disabled
 func TestLigthnodeRetrieveRequestWithoutRetrieve(t *testing.T) {
 	registryOptions := &RegistryOptions{
 		DoServeRetrieve: false,
@@ -83,6 +102,8 @@ func TestLigthnodeRetrieveRequestWithoutRetrieve(t *testing.T) {
 	}
 }
 
+// This test checks the default behavior of the server, that is
+// when syncing is enabled.
 func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
 		DoSync: true,
@@ -125,6 +146,8 @@ func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 	}
 }
 
+// This test checks the Lightnode behavior of the server, that is
+// when syncing is disabled.
 func TestLigthnodeRequestSubscriptionWithoutSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
 		DoSync: false,
