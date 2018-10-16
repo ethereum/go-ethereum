@@ -1022,6 +1022,15 @@ func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*price), err
 }
 
+func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(be.ProtocolVersion()), nil
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -1135,6 +1144,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             estimateGas(data: CallData!, blockNumber: Long): Long!
             logs(filter: FilterCriteria!): [Log!]!
             gasPrice: BigInt!
+            protocolVersion: Int!
         }
 
         type Mutation {
