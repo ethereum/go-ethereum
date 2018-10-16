@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -41,7 +42,7 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
-func getBackend(n *node.Node) (ethapi.Backend, error) {
+func getBackend(n *node.Node) (*eth.EthAPIBackend, error) {
 	var ethereum *eth.Ethereum
 	if err := n.Service(&ethereum); err != nil {
 		return nil, err
@@ -682,6 +683,72 @@ func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error
 	}, nil
 }
 
+type BlockFilterCriteria struct {
+	Addresses *[]common.Address // restricts matches to events created by specific contracts
+
+	// The Topic list restricts matches to particular event topics. Each event has a list
+	// of topics. Topics matches a prefix of that list. An empty element slice matches any
+	// topic. Non-empty elements represent an alternative that matches any of the
+	// contained topics.
+	//
+	// Examples:
+	// {} or nil          matches any topic list
+	// {{A}}              matches topic A in first position
+	// {{}, {B}}          matches any topic in first position, B in second position
+	// {{A}, {B}}         matches topic A in first position, B in second position
+	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
+	Topics *[][]common.Hash
+}
+
+func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]*Log, error) {
+	logs, err := filter.Logs(ctx)
+	if err != nil || logs == nil {
+		return nil, err
+	}
+
+	ret := make([]*Log, 0, len(logs))
+	for _, log := range logs {
+		ret = append(ret, &Log{
+			node:        node,
+			transaction: &Transaction{hash: log.TxHash},
+			log:         log,
+		})
+	}
+	return ret, nil
+}
+
+func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteria }) ([]*Log, error) {
+	be, err := getBackend(b.node)
+	if err != nil {
+		return nil, err
+	}
+
+	var addresses []common.Address
+	if args.Filter.Addresses != nil {
+		addresses = *args.Filter.Addresses
+	}
+
+	var topics [][]common.Hash
+	if args.Filter.Topics != nil {
+		topics = *args.Filter.Topics
+	}
+
+	hash := b.hash
+	if hash == (common.Hash{}) {
+		block, err := b.resolve(ctx)
+		if err != nil {
+			return nil, err
+		}
+		hash = block.Hash()
+	}
+
+	// Construct the range filter
+	filter := filters.NewBlockFilter(be, hash, addresses, topics)
+
+	// Run the filter and return all the logs
+	return runFilter(ctx, b.node, filter)
+}
+
 type Resolver struct {
 	node *node.Node
 }
@@ -880,6 +947,57 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	return hexutil.Uint64(gas), err
 }
 
+type FilterCriteria struct {
+	FromBlock *hexutil.Uint64   // beginning of the queried range, nil means genesis block
+	ToBlock   *hexutil.Uint64   // end of the range, nil means latest block
+	Addresses *[]common.Address // restricts matches to events created by specific contracts
+
+	// The Topic list restricts matches to particular event topics. Each event has a list
+	// of topics. Topics matches a prefix of that list. An empty element slice matches any
+	// topic. Non-empty elements represent an alternative that matches any of the
+	// contained topics.
+	//
+	// Examples:
+	// {} or nil          matches any topic list
+	// {{A}}              matches topic A in first position
+	// {{}, {B}}          matches any topic in first position, B in second position
+	// {{A}, {B}}         matches topic A in first position, B in second position
+	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
+	Topics *[][]common.Hash
+}
+
+func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria }) ([]*Log, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the RPC block numbers into internal representations
+	begin := rpc.LatestBlockNumber.Int64()
+	if args.Filter.FromBlock != nil {
+		begin = int64(*args.Filter.FromBlock)
+	}
+	end := rpc.LatestBlockNumber.Int64()
+	if args.Filter.ToBlock != nil {
+		end = int64(*args.Filter.ToBlock)
+	}
+
+	var addresses []common.Address
+	if args.Filter.Addresses != nil {
+		addresses = *args.Filter.Addresses
+	}
+
+	var topics [][]common.Hash
+	if args.Filter.Topics != nil {
+		topics = *args.Filter.Topics
+	}
+
+	// Construct the range filter
+	filter := filters.NewRangeFilter(filters.Backend(be), begin, end, addresses, topics)
+
+	return runFilter(ctx, r.node, filter)
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -930,6 +1048,11 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             logs: [Log!]
         }
 
+        input BlockFilterCriteria {
+            addresses: [Address!]
+            topics: [[Bytes32!]!]
+        }
+
         type Block {
             number: Long!
             hash: Bytes32!
@@ -954,6 +1077,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             ommerHash: Bytes32!
             transactions: [Transaction!]!
             transactionAt(index: Int!): Transaction
+            logs(filter: BlockFilterCriteria!): [Log!]!
         }
 
         input CallData {
@@ -971,6 +1095,13 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             status: Long!
         }
 
+        input FilterCriteria {
+            fromBlock: Long
+            toBlock: Long
+            addresses: [Address!]
+            topics: [[Bytes32!]!]
+        }
+
         type Query {
             account(address: Address!, blockNumber: Long): Account!
             block(number: Long, hash: Bytes32): Block
@@ -978,6 +1109,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             transaction(hash: Bytes32!): Transaction
             call(data: CallData!, blockNumber: Long): CallResult
             estimateGas(data: CallData!, blockNumber: Long): Long!
+            logs(filter: FilterCriteria!): [Log!]!
         }
 
         type Mutation {
