@@ -97,11 +97,7 @@ func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
 	return hexutil.Bytes(state.GetCode(a.address)), nil
 }
 
-type StorageSlotArgs struct {
-	Slot common.Hash
-}
-
-func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (common.Hash, error) {
+func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) (common.Hash, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
 		return common.Hash{}, err
@@ -652,11 +648,7 @@ func (b *Block) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	return &ret, nil
 }
 
-type ArrayIndexArgs struct {
-	Index int32
-}
-
-func (b *Block) TransactionAt(ctx context.Context, args ArrayIndexArgs) (*Transaction, error) {
+func (b *Block) TransactionAt(ctx context.Context, args struct{ Index int32 }) (*Transaction, error) {
 	block, err := b.resolve(ctx)
 	if err != nil || block == nil {
 		return nil, err
@@ -677,7 +669,7 @@ func (b *Block) TransactionAt(ctx context.Context, args ArrayIndexArgs) (*Transa
 	}, nil
 }
 
-func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error) {
+func (b *Block) OmmerAt(ctx context.Context, args struct{ Index int32 }) (*Block, error) {
 	block, err := b.resolve(ctx)
 	if err != nil || block == nil {
 		return nil, err
@@ -768,12 +760,10 @@ type Resolver struct {
 	node *node.Node
 }
 
-type BlockArgs struct {
+func (r *Resolver) Block(ctx context.Context, args struct {
 	Number *hexutil.Uint64
 	Hash   *common.Hash
-}
-
-func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
+}) (*Block, error) {
 	var block *Block
 	if args.Number != nil {
 		num := rpc.BlockNumber(uint64(*args.Number))
@@ -804,12 +794,10 @@ func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 	return block, nil
 }
 
-type BlocksArgs struct {
+func (r *Resolver) Blocks(ctx context.Context, args struct {
 	From hexutil.Uint64
 	To   *hexutil.Uint64
-}
-
-func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
+}) ([]*Block, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
 		return nil, err
@@ -839,12 +827,10 @@ func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error
 	return ret, nil
 }
 
-type AccountArgs struct {
+func (r *Resolver) Account(ctx context.Context, args struct {
 	Address     common.Address
 	BlockNumber *hexutil.Uint64
-}
-
-func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
+}) *Account {
 	blockNumber := rpc.LatestBlockNumber
 	if args.BlockNumber != nil {
 		blockNumber = rpc.BlockNumber(*args.BlockNumber)
@@ -857,11 +843,7 @@ func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
 	}
 }
 
-type TransactionArgs struct {
-	Hash common.Hash
-}
-
-func (r *Resolver) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
+func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Hash }) (*Transaction, error) {
 	tx := &Transaction{
 		node: r.node,
 		hash: args.Hash,
