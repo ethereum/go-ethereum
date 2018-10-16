@@ -204,6 +204,27 @@ func (b *Big) String() string {
 	return EncodeBig(b.ToInt())
 }
 
+func (b Big) ImplementsGraphQLType(name string) bool { return name == "BigInt" }
+
+func (b *Big) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		return b.UnmarshalText([]byte(input))
+	case int32:
+		var num big.Int
+		num.SetInt64(int64(input))
+		*b = Big(num)
+	default:
+		err = fmt.Errorf("Unexpected type for BigInt: %v", input)
+	}
+	return err
+}
+
+func (b Big) MarshalJSON() ([]byte, error) {
+	return strconv.AppendQuote(nil, (*big.Int)(&b).Text(10)), nil
+}
+
 // Uint64 marshals/unmarshals as a JSON string with 0x prefix.
 // The zero value marshals as "0x0".
 type Uint64 uint64

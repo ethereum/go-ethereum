@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -84,31 +83,6 @@ func (h *Address) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-type BigNum struct {
-	*big.Int
-}
-
-func (bn BigNum) ImplementsGraphQLType(name string) bool { return name == "BigNum" }
-
-func (bn *BigNum) UnmarshalGraphQL(input interface{}) error {
-	var err error
-	switch input := input.(type) {
-	case string:
-		i := big.NewInt(0)
-		i.SetString(input, 10)
-		*bn = BigNum{i}
-	case int32:
-		*bn = BigNum{big.NewInt(int64(input))}
-	default:
-		err = fmt.Errorf("Unexpected type for Hash: %v", input)
-	}
-	return err
-}
-
-func (bn BigNum) MarshalJSON() ([]byte, error) {
-	return strconv.AppendQuote(nil, bn.Text(10)), nil
-}
-
 type Account struct {
 	node        *node.Node
 	address     common.Address
@@ -129,13 +103,13 @@ func (a *Account) Address(ctx context.Context) (Address, error) {
 	return Address{a.address}, nil
 }
 
-func (a *Account) Balance(ctx context.Context) (BigNum, error) {
+func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
 
-	return BigNum{state.GetBalance(a.address)}, nil
+	return hexutil.Big(*state.GetBalance(a.address)), nil
 }
 
 func (a *Account) TransactionCount(ctx context.Context) (int32, error) {
@@ -253,20 +227,20 @@ func (t *Transaction) Gas(ctx context.Context) (int32, error) {
 	return int32(tx.Gas()), nil
 }
 
-func (t *Transaction) GasPrice(ctx context.Context) (BigNum, error) {
+func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
-	return BigNum{tx.GasPrice()}, nil
+	return hexutil.Big(*tx.GasPrice()), nil
 }
 
-func (t *Transaction) Value(ctx context.Context) (BigNum, error) {
+func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
-	return BigNum{tx.Value()}, nil
+	return hexutil.Big(*tx.Value()), nil
 }
 
 func (t *Transaction) Nonce(ctx context.Context) (int32, error) {
@@ -524,30 +498,30 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	return nil, nil
 }
 
-func (b *Block) Difficulty(ctx context.Context) (BigNum, error) {
+func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
-	return BigNum{block.Difficulty()}, nil
+	return hexutil.Big(*block.Difficulty()), nil
 }
 
-func (b *Block) Timestamp(ctx context.Context) (BigNum, error) {
+func (b *Block) Timestamp(ctx context.Context) (hexutil.Big, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
-	return BigNum{block.Time()}, nil
+	return hexutil.Big(*block.Time()), nil
 }
 
-func (b *Block) Nonce(ctx context.Context) (BigNum, error) {
+func (b *Block) Nonce(ctx context.Context) (hexutil.Big, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
 	i := new(big.Int)
 	i.SetUint64(block.Nonce())
-	return BigNum{i}, nil
+	return hexutil.Big(*i), nil
 }
 
 func (b *Block) MixHash(ctx context.Context) (Bytes32, error) {
@@ -632,22 +606,22 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	return hexutil.Bytes(block.Bloom().Bytes()), nil
 }
 
-func (b *Block) TotalDifficulty(ctx context.Context) (BigNum, error) {
+func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 	h := b.hash
 	if h == (common.Hash{}) {
 		block, err := b.resolve(ctx)
 		if err != nil {
-			return BigNum{}, err
+			return hexutil.Big{}, err
 		}
 		h = block.Hash()
 	}
 
 	be, err := getBackend(b.node)
 	if err != nil {
-		return BigNum{}, err
+		return hexutil.Big{}, err
 	}
 
-	return BigNum{be.GetTd(h)}, nil
+	return hexutil.Big(*be.GetTd(h)), nil
 }
 
 type BlockNumberArgs struct {
@@ -877,8 +851,8 @@ type CallData struct {
 	From        *Address
 	To          *Address
 	Gas         *int32
-	GasPrice    *BigNum
-	Value       *BigNum
+	GasPrice    *hexutil.Big
+	Value       *hexutil.Big
 	Data        *hexutil.Bytes
 	BlockNumber *int32
 }
@@ -914,10 +888,10 @@ func convertCallData(data CallData) (ethapi.CallArgs, rpc.BlockNumber) {
 		callArgs.Gas = hexutil.Uint64(*data.Gas)
 	}
 	if data.GasPrice != nil {
-		callArgs.GasPrice = hexutil.Big(*data.GasPrice.Int)
+		callArgs.GasPrice = *data.GasPrice
 	}
 	if data.Value != nil {
-		callArgs.Value = hexutil.Big(*data.Value.Int)
+		callArgs.Value = *data.Value
 	}
 	if data.Data != nil {
 		callArgs.Data = *data.Data
@@ -970,7 +944,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         scalar Bytes32
         scalar Address
         scalar Bytes
-        scalar BigNum
+        scalar BigInt
 
         schema {
             query: Query
@@ -979,7 +953,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
         type Account {
             address: Address!
-            balance: BigNum!
+            balance: BigInt!
             transactionCount: Int!
             code: Bytes!
             storage(slot: Bytes32!): Bytes32!
@@ -999,8 +973,8 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             index: Int
             from(block: Int): Account!
             to(block: Int): Account
-            value: BigNum!
-            gasPrice: BigNum!
+            value: BigInt!
+            gasPrice: BigInt!
             gas: Int!
             inputData: Bytes!
             block: Block
@@ -1016,7 +990,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             number: Int!
             hash: Bytes32!
             parent: Block
-            nonce: BigNum!
+            nonce: BigInt!
             transactionsRoot: Bytes32!
             transactionCount: Int!
             stateRoot: Bytes32!
@@ -1025,11 +999,11 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             extraData: Bytes!
             gasLimit: Int!
             gasUsed: Int!
-            timestamp: BigNum!
+            timestamp: BigInt!
             logsBloom: Bytes!
             mixHash: Bytes32!
-            difficulty: BigNum!
-            totalDifficulty: BigNum!
+            difficulty: BigInt!
+            totalDifficulty: BigInt!
             ommerCount: Int!
             ommers: [Block]!
             ommerAt(index: Int!): Block
@@ -1042,8 +1016,8 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             from: Address
             to: Address
             gas: Int
-            gasPrice: BigNum
-            value: BigNum
+            gasPrice: BigInt
+            value: BigInt
             data: Bytes
             blockNumber: Int
         }
