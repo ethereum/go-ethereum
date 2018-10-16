@@ -848,13 +848,12 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 }
 
 type CallData struct {
-	From        *Address
-	To          *Address
-	Gas         *int32
-	GasPrice    *hexutil.Big
-	Value       *hexutil.Big
-	Data        *hexutil.Bytes
-	BlockNumber *int32
+	From     *Address
+	To       *Address
+	Gas      *hexutil.Uint64
+	GasPrice *hexutil.Big
+	Value    *hexutil.Big
+	Data     *hexutil.Bytes
 }
 
 type CallResult struct {
@@ -875,45 +874,21 @@ func (c *CallResult) Status() int32 {
 	return c.status
 }
 
-func convertCallData(data CallData) (ethapi.CallArgs, rpc.BlockNumber) {
-	callArgs := ethapi.CallArgs{}
-	if data.From != nil {
-		callArgs.From = data.From.Address
-	}
-	if data.To != nil {
-		addr := data.To.Address
-		callArgs.To = &addr
-	}
-	if data.Gas != nil {
-		callArgs.Gas = hexutil.Uint64(*data.Gas)
-	}
-	if data.GasPrice != nil {
-		callArgs.GasPrice = *data.GasPrice
-	}
-	if data.Value != nil {
-		callArgs.Value = *data.Value
-	}
-	if data.Data != nil {
-		callArgs.Data = *data.Data
-	}
-
-	blockNumber := rpc.LatestBlockNumber
-	if data.BlockNumber != nil {
-		blockNumber = rpc.BlockNumber(*data.BlockNumber)
-	}
-
-	return callArgs, blockNumber
-}
-
-func (r *Resolver) Call(ctx context.Context, args struct{ Data CallData }) (*CallResult, error) {
+func (r *Resolver) Call(ctx context.Context, args struct {
+	Data        ethapi.CallArgs
+	BlockNumber *int32
+}) (*CallResult, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
 		return nil, err
 	}
 
-	callArgs, blockNumber := convertCallData(args.Data)
+	blockNumber := rpc.LatestBlockNumber
+	if args.BlockNumber != nil {
+		blockNumber = rpc.BlockNumber(*args.BlockNumber)
+	}
 
-	result, gas, failed, err := ethapi.DoCall(ctx, be, callArgs, blockNumber, vm.Config{}, 5*time.Second)
+	result, gas, failed, err := ethapi.DoCall(ctx, be, args.Data, blockNumber, vm.Config{}, 5*time.Second)
 	status := int32(1)
 	if failed {
 		status = 0
@@ -925,15 +900,21 @@ func (r *Resolver) Call(ctx context.Context, args struct{ Data CallData }) (*Cal
 	}, err
 }
 
-func (r *Resolver) EstimateGas(ctx context.Context, args struct{ Data CallData }) (int32, error) {
+func (r *Resolver) EstimateGas(ctx context.Context, args struct {
+	Data        ethapi.CallArgs
+	BlockNumber *int32
+}) (int32, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
 		return 0, err
 	}
 
-	callArgs, blockNumber := convertCallData(args.Data)
+	blockNumber := rpc.LatestBlockNumber
+	if args.BlockNumber != nil {
+		blockNumber = rpc.BlockNumber(*args.BlockNumber)
+	}
 
-	gas, err := ethapi.DoEstimateGas(ctx, be, callArgs, blockNumber)
+	gas, err := ethapi.DoEstimateGas(ctx, be, args.Data, blockNumber)
 	return int32(gas), err
 }
 
@@ -945,6 +926,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         scalar Address
         scalar Bytes
         scalar BigInt
+        scalar Long
 
         schema {
             query: Query
@@ -1015,11 +997,10 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         input CallData {
             from: Address
             to: Address
-            gas: Int
+            gas: Long
             gasPrice: BigInt
             value: BigInt
             data: Bytes
-            blockNumber: Int
         }
 
         type CallResult {
@@ -1033,8 +1014,8 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             block(number: Int, hash: Bytes32): Block
             blocks(from: Int!, to: Int): [Block!]!
             transaction(hash: Bytes32!): Transaction
-            call(data: CallData!): CallResult
-            estimateGas(data: CallData!): Int!
+            call(data: CallData!, blockNumber: Int): CallResult
+            estimateGas(data: CallData!, blockNumber: Int): Int!
         }
 
         type Mutation {

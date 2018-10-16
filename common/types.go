@@ -268,6 +268,19 @@ func (a Address) Value() (driver.Value, error) {
 	return a[:], nil
 }
 
+func (a Address) ImplementsGraphQLType(name string) bool { return name == "Address" }
+
+func (a *Address) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		*a = HexToAddress(input)
+	default:
+		err = fmt.Errorf("Unexpected type for Hash: %v", input)
+	}
+	return err
+}
+
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
