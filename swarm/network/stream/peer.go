@@ -131,29 +131,31 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 // Depending on the `syncing` parameter we send different message types
 func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"send.chunk.delivery")
-	defer sp.Finish()
-
 	var msg interface{}
+
+	spanName := "send.chunk.delivery"
 
 	//we send different types of messages if delivery is for syncing or retrievals,
 	//even if handling and content of the message are the same,
 	//because swap accounting decides which messages need accounting based on the message type
 	if syncing {
 		msg = &ChunkDeliveryMsgSyncing{
-			Addr:    chunk.Address(),
-			SData:   chunk.Data(),
-			Syncing: syncing,
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
 		}
+		spanName += ".syncing"
 	} else {
 		msg = &ChunkDeliveryMsgRetrieval{
-			Addr:    chunk.Address(),
-			SData:   chunk.Data(),
-			Syncing: syncing,
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
 		}
+		spanName += ".retrieval"
 	}
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		spanName)
+	defer sp.Finish()
+
 	return p.SendPriority(ctx, msg, priority)
 }
 

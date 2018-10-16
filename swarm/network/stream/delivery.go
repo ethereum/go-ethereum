@@ -192,10 +192,9 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 //Chunk delivery always uses the same message type....
 type ChunkDeliveryMsg struct {
-	Addr    storage.Address
-	SData   []byte // the stored chunk Data (incl size)
-	peer    *Peer  // set in handleChunkDeliveryMsg
-	Syncing bool   // if true, this is a delivery for syncing (no SWAP accounting needed)
+	Addr  storage.Address
+	SData []byte // the stored chunk Data (incl size)
+	peer  *Peer  // set in handleChunkDeliveryMsg
 }
 
 //...but swap accounting needs to disambiguate if it is a delivery for syncing or for retrieval
