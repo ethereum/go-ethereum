@@ -50,27 +50,6 @@ func getBackend(n *node.Node) (ethapi.Backend, error) {
 	return ethereum.APIBackend, nil
 }
 
-type HexBytes struct {
-	hexutil.Bytes
-}
-
-func (h HexBytes) ImplementsGraphQLType(name string) bool { return name == "HexBytes" }
-
-func (h *HexBytes) UnmarshalGraphQL(input interface{}) error {
-	var err error
-	switch input := input.(type) {
-	case string:
-		data, err := hexutil.Decode(input)
-		if err != nil {
-			return err
-		}
-		*h = HexBytes{data}
-	default:
-		err = fmt.Errorf("Unexpected type for HexBytes: %v", input)
-	}
-	return err
-}
-
 type Bytes32 struct {
 	common.Hash
 }
@@ -168,13 +147,13 @@ func (a *Account) TransactionCount(ctx context.Context) (int32, error) {
 	return int32(state.GetNonce(a.address)), nil
 }
 
-func (a *Account) Code(ctx context.Context) (HexBytes, error) {
+func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return hexutil.Bytes{}, err
 	}
 
-	return HexBytes{state.GetCode(a.address)}, nil
+	return hexutil.Bytes(state.GetCode(a.address)), nil
 }
 
 type StorageSlotArgs struct {
@@ -220,8 +199,8 @@ func (l *Log) Topics(ctx context.Context) []Bytes32 {
 	return ret
 }
 
-func (l *Log) Data(ctx context.Context) HexBytes {
-	return HexBytes{l.log.Data}
+func (l *Log) Data(ctx context.Context) hexutil.Bytes {
+	return hexutil.Bytes(l.log.Data)
 }
 
 type Transaction struct {
@@ -258,12 +237,12 @@ func (tx *Transaction) Hash(ctx context.Context) Bytes32 {
 	return Bytes32{tx.hash}
 }
 
-func (t *Transaction) InputData(ctx context.Context) (HexBytes, error) {
+func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
-		return HexBytes{}, err
+		return hexutil.Bytes{}, err
 	}
-	return HexBytes{tx.Data()}, nil
+	return hexutil.Bytes(tx.Data()), nil
 }
 
 func (t *Transaction) Gas(ctx context.Context) (int32, error) {
@@ -637,20 +616,20 @@ func (b *Block) Ommers(ctx context.Context) ([]*Block, error) {
 	return ret, nil
 }
 
-func (b *Block) ExtraData(ctx context.Context) (HexBytes, error) {
+func (b *Block) ExtraData(ctx context.Context) (hexutil.Bytes, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return hexutil.Bytes{}, err
 	}
-	return HexBytes{block.Extra()}, nil
+	return hexutil.Bytes(block.Extra()), nil
 }
 
-func (b *Block) LogsBloom(ctx context.Context) (HexBytes, error) {
+func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return HexBytes{}, err
+		return hexutil.Bytes{}, err
 	}
-	return HexBytes{block.Bloom().Bytes()}, nil
+	return hexutil.Bytes(block.Bloom().Bytes()), nil
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (BigNum, error) {
@@ -880,14 +859,14 @@ func (r *Resolver) Transaction(ctx context.Context, args TransactionArgs) (*Tran
 	return tx, nil
 }
 
-func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data HexBytes }) (Bytes32, error) {
+func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hexutil.Bytes }) (Bytes32, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
 		return Bytes32{}, err
 	}
 
 	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(args.Data.Bytes, tx); err != nil {
+	if err := rlp.DecodeBytes(args.Data, tx); err != nil {
 		return Bytes32{}, err
 	}
 	hash, err := ethapi.SubmitTransaction(ctx, be, tx)
@@ -900,17 +879,17 @@ type CallData struct {
 	Gas         *int32
 	GasPrice    *BigNum
 	Value       *BigNum
-	Data        *HexBytes
+	Data        *hexutil.Bytes
 	BlockNumber *int32
 }
 
 type CallResult struct {
-	data    HexBytes
+	data    hexutil.Bytes
 	gasUsed int32
 	status  int32
 }
 
-func (c *CallResult) Data() HexBytes {
+func (c *CallResult) Data() hexutil.Bytes {
 	return c.data
 }
 
@@ -941,7 +920,7 @@ func convertCallData(data CallData) (ethapi.CallArgs, rpc.BlockNumber) {
 		callArgs.Value = hexutil.Big(*data.Value.Int)
 	}
 	if data.Data != nil {
-		callArgs.Data = data.Data.Bytes
+		callArgs.Data = *data.Data
 	}
 
 	blockNumber := rpc.LatestBlockNumber
@@ -966,7 +945,7 @@ func (r *Resolver) Call(ctx context.Context, args struct{ Data CallData }) (*Cal
 		status = 0
 	}
 	return &CallResult{
-		data:    HexBytes{result},
+		data:    hexutil.Bytes(result),
 		gasUsed: int32(gas),
 		status:  status,
 	}, err
@@ -990,7 +969,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 	s := `
         scalar Bytes32
         scalar Address
-        scalar HexBytes
+        scalar Bytes
         scalar BigNum
 
         schema {
@@ -1002,7 +981,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             address: Address!
             balance: BigNum!
             transactionCount: Int!
-            code: HexBytes!
+            code: Bytes!
             storage(slot: Bytes32!): Bytes32!
         }
 
@@ -1010,7 +989,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             index: Int!
             account(block: Int): Account!
             topics: [Bytes32!]!
-            data: HexBytes!
+            data: Bytes!
             transaction: Transaction!
         }
 
@@ -1023,7 +1002,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             value: BigNum!
             gasPrice: BigNum!
             gas: Int!
-            inputData: HexBytes!
+            inputData: Bytes!
             block: Block
 
             status: Int
@@ -1043,11 +1022,11 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             stateRoot: Bytes32!
             receiptsRoot: Bytes32!
             miner(block: Int): Account!
-            extraData: HexBytes!
+            extraData: Bytes!
             gasLimit: Int!
             gasUsed: Int!
             timestamp: BigNum!
-            logsBloom: HexBytes!
+            logsBloom: Bytes!
             mixHash: Bytes32!
             difficulty: BigNum!
             totalDifficulty: BigNum!
@@ -1065,12 +1044,12 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             gas: Int
             gasPrice: BigNum
             value: BigNum
-            data: HexBytes
+            data: Bytes
             blockNumber: Int
         }
 
         type CallResult {
-            data: HexBytes!
+            data: Bytes!
             gasUsed: Int!
             status: Int!
         }
@@ -1085,7 +1064,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         }
 
         type Mutation {
-            sendRawTransaction(data: HexBytes!): Bytes32!
+            sendRawTransaction(data: Bytes!): Bytes32!
         }
     `
 	schema, err := graphql.ParseSchema(s, &q)

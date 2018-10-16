@@ -72,6 +72,23 @@ func (b Bytes) String() string {
 	return Encode(b)
 }
 
+func (b Bytes) ImplementsGraphQLType(name string) bool { return name == "Bytes" }
+
+func (b *Bytes) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		data, err := Decode(input)
+		if err != nil {
+			return err
+		}
+		*b = data
+	default:
+		err = fmt.Errorf("Unexpected type for Bytes: %v", input)
+	}
+	return err
+}
+
 // UnmarshalFixedJSON decodes the input as a string with 0x prefix. The length of out
 // determines the required input length. This function is commonly used to implement the
 // UnmarshalJSON method for fixed-size types.
