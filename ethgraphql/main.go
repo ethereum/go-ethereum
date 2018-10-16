@@ -23,12 +23,14 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -892,6 +894,96 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data Hex
 	return Bytes32{hash}, err
 }
 
+type CallData struct {
+	From        *Address
+	To          *Address
+	Gas         *int32
+	GasPrice    *BigNum
+	Value       *BigNum
+	Data        *HexBytes
+	BlockNumber *int32
+}
+
+type CallResult struct {
+	data    HexBytes
+	gasUsed int32
+	status  int32
+}
+
+func (c *CallResult) Data() HexBytes {
+	return c.data
+}
+
+func (c *CallResult) GasUsed() int32 {
+	return c.gasUsed
+}
+
+func (c *CallResult) Status() int32 {
+	return c.status
+}
+
+func convertCallData(data CallData) (ethapi.CallArgs, rpc.BlockNumber) {
+	callArgs := ethapi.CallArgs{}
+	if data.From != nil {
+		callArgs.From = data.From.Address
+	}
+	if data.To != nil {
+		addr := data.To.Address
+		callArgs.To = &addr
+	}
+	if data.Gas != nil {
+		callArgs.Gas = hexutil.Uint64(*data.Gas)
+	}
+	if data.GasPrice != nil {
+		callArgs.GasPrice = hexutil.Big(*data.GasPrice.Int)
+	}
+	if data.Value != nil {
+		callArgs.Value = hexutil.Big(*data.Value.Int)
+	}
+	if data.Data != nil {
+		callArgs.Data = data.Data.Bytes
+	}
+
+	blockNumber := rpc.LatestBlockNumber
+	if data.BlockNumber != nil {
+		blockNumber = rpc.BlockNumber(*data.BlockNumber)
+	}
+
+	return callArgs, blockNumber
+}
+
+func (r *Resolver) Call(ctx context.Context, args struct{ Data CallData }) (*CallResult, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return nil, err
+	}
+
+	callArgs, blockNumber := convertCallData(args.Data)
+
+	result, gas, failed, err := ethapi.DoCall(ctx, be, callArgs, blockNumber, vm.Config{}, 5*time.Second)
+	status := int32(1)
+	if failed {
+		status = 0
+	}
+	return &CallResult{
+		data:    HexBytes{result},
+		gasUsed: int32(gas),
+		status:  status,
+	}, err
+}
+
+func (r *Resolver) EstimateGas(ctx context.Context, args struct{ Data CallData }) (int32, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return 0, err
+	}
+
+	callArgs, blockNumber := convertCallData(args.Data)
+
+	gas, err := ethapi.DoEstimateGas(ctx, be, callArgs, blockNumber)
+	return int32(gas), err
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -967,11 +1059,29 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             transactionAt(index: Int!): Transaction
         }
 
+        input CallData {
+            from: Address
+            to: Address
+            gas: Int
+            gasPrice: BigNum
+            value: BigNum
+            data: HexBytes
+            blockNumber: Int
+        }
+
+        type CallResult {
+            data: HexBytes!
+            gasUsed: Int!
+            status: Int!
+        }
+
         type Query {
             account(address: Address!, blockNumber: Int): Account!
             block(number: Int, hash: Bytes32): Block
             blocks(from: Int!, to: Int): [Block!]!
             transaction(hash: Bytes32!): Transaction
+            call(data: CallData!): CallResult
+            estimateGas(data: CallData!): Int!
         }
 
         type Mutation {
