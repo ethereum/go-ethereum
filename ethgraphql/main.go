@@ -19,7 +19,6 @@ package ethgraphql
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"net"
 	"net/http"
 	"time"
@@ -350,6 +349,7 @@ type Block struct {
 	node     *node.Node
 	num      *rpc.BlockNumber
 	hash     common.Hash
+	header   *types.Header
 	block    *types.Block
 	receipts []*types.Receipt
 }
@@ -364,12 +364,24 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 		return nil, err
 	}
 
-	if b.num != nil {
-		b.block, err = be.BlockByNumber(ctx, *b.num)
-	} else {
+	if b.hash != (common.Hash{}) {
 		b.block, err = be.GetBlock(ctx, b.hash)
+	} else {
+		b.block, err = be.BlockByNumber(ctx, *b.num)
+	}
+	if b.block != nil {
+		b.header = b.block.Header()
 	}
 	return b.block, err
+}
+
+func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
+	if b.header == nil {
+		if _, err := b.resolve(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return b.header, nil
 }
 
 func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
@@ -381,11 +393,11 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 
 		hash := b.hash
 		if hash == (common.Hash{}) {
-			block, err := b.resolve(ctx)
+			header, err := b.resolveHeader(ctx)
 			if err != nil {
 				return nil, err
 			}
-			hash = block.Hash()
+			hash = header.Hash()
 		}
 
 		receipts, err := be.GetReceipts(ctx, hash)
@@ -399,11 +411,11 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 
 func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
 	if b.num == nil || *b.num == rpc.LatestBlockNumber {
-		block, err := b.resolve(ctx)
+		header, err := b.resolveHeader(ctx)
 		if err != nil {
 			return 0, err
 		}
-		num := rpc.BlockNumber(block.Number().Uint64())
+		num := rpc.BlockNumber(header.Number.Uint64())
 		b.num = &num
 	}
 	return hexutil.Uint64(*b.num), nil
@@ -411,45 +423,45 @@ func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 	if b.hash == (common.Hash{}) {
-		block, err := b.resolve(ctx)
+		header, err := b.resolveHeader(ctx)
 		if err != nil {
 			return common.Hash{}, err
 		}
-		b.hash = block.Hash()
+		b.hash = header.Hash()
 	}
 	return b.hash, nil
 }
 
 func (b *Block) GasLimit(ctx context.Context) (hexutil.Uint64, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(block.GasLimit()), nil
+	return hexutil.Uint64(header.GasLimit), nil
 }
 
 func (b *Block) GasUsed(ctx context.Context) (hexutil.Uint64, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return hexutil.Uint64(block.GasUsed()), nil
+	return hexutil.Uint64(header.GasUsed), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	// If the block hasn't been fetched, and we'll need it, fetch it.
-	if b.num == nil && b.hash != (common.Hash{}) && b.block == nil {
+	if b.num == nil && b.hash != (common.Hash{}) && b.header == nil {
 		if _, err := b.resolve(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	if b.block != nil && b.block.NumberU64() > 0 {
-		num := rpc.BlockNumber(b.block.NumberU64() - 1)
+	if b.header != nil && b.block.NumberU64() > 0 {
+		num := rpc.BlockNumber(b.header.Number.Uint64() - 1)
 		return &Block{
 			node: b.node,
 			num:  &num,
-			hash: b.block.ParentHash(),
+			hash: b.header.ParentHash,
 		}, nil
 	} else if b.num != nil && *b.num != 0 {
 		num := *b.num - 1
@@ -462,82 +474,81 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 }
 
 func (b *Block) Difficulty(ctx context.Context) (hexutil.Big, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	return hexutil.Big(*block.Difficulty()), nil
+	return hexutil.Big(*header.Difficulty), nil
 }
 
 func (b *Block) Timestamp(ctx context.Context) (hexutil.Big, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return hexutil.Big{}, err
 	}
-	return hexutil.Big(*block.Time()), nil
+	return hexutil.Big(*header.Time), nil
 }
 
-func (b *Block) Nonce(ctx context.Context) (hexutil.Big, error) {
-	block, err := b.resolve(ctx)
+func (b *Block) Nonce(ctx context.Context) (hexutil.Bytes, error) {
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
-		return hexutil.Big{}, err
+		return hexutil.Bytes{}, err
 	}
-	i := new(big.Int)
-	i.SetUint64(block.Nonce())
-	return hexutil.Big(*i), nil
+	return hexutil.Bytes(header.Nonce[:]), nil
 }
 
 func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return block.MixDigest(), nil
+	return header.MixDigest, nil
 }
 
 func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return block.TxHash(), nil
+	return header.TxHash, nil
 }
 
 func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return block.Root(), nil
+	return header.Root, nil
 }
 
 func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return block.ReceiptHash(), nil
+	return header.ReceiptHash, nil
 }
 
 func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return block.UncleHash(), nil
+	return header.UncleHash, nil
 }
 
-func (b *Block) OmmerCount(ctx context.Context) (int32, error) {
+func (b *Block) OmmerCount(ctx context.Context) (*int32, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
-		return 0, err
+	if err != nil || block == nil {
+		return nil, err
 	}
-	return int32(len(block.Uncles())), nil
+	count := int32(len(block.Uncles()))
+	return &count, err
 }
 
-func (b *Block) Ommers(ctx context.Context) ([]*Block, error) {
+func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return nil, err
 	}
 
@@ -545,38 +556,39 @@ func (b *Block) Ommers(ctx context.Context) ([]*Block, error) {
 	for _, uncle := range block.Uncles() {
 		blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 		ret = append(ret, &Block{
-			node: b.node,
-			num:  &blockNumber,
-			hash: uncle.Hash(),
+			node:   b.node,
+			num:    &blockNumber,
+			hash:   uncle.Hash(),
+			header: uncle,
 		})
 	}
-	return ret, nil
+	return &ret, nil
 }
 
 func (b *Block) ExtraData(ctx context.Context) (hexutil.Bytes, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(block.Extra()), nil
+	return hexutil.Bytes(header.Extra), nil
 }
 
 func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
-	block, err := b.resolve(ctx)
+	header, err := b.resolveHeader(ctx)
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	return hexutil.Bytes(block.Bloom().Bytes()), nil
+	return hexutil.Bytes(header.Bloom.Bytes()), nil
 }
 
 func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 	h := b.hash
 	if h == (common.Hash{}) {
-		block, err := b.resolve(ctx)
+		header, err := b.resolveHeader(ctx)
 		if err != nil {
 			return hexutil.Big{}, err
 		}
-		h = block.Hash()
+		h = header.Hash()
 	}
 
 	be, err := getBackend(b.node)
@@ -611,17 +623,18 @@ func (b *Block) Miner(ctx context.Context, args BlockNumberArgs) (*Account, erro
 	}, nil
 }
 
-func (b *Block) TransactionCount(ctx context.Context) (int32, error) {
+func (b *Block) TransactionCount(ctx context.Context) (*int32, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
-		return 0, err
+	if err != nil || block == nil {
+		return nil, err
 	}
-	return int32(len(block.Transactions())), nil
+	count := int32(len(block.Transactions()))
+	return &count, err
 }
 
-func (b *Block) Transactions(ctx context.Context) ([]*Transaction, error) {
+func (b *Block) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return nil, err
 	}
 
@@ -635,7 +648,7 @@ func (b *Block) Transactions(ctx context.Context) ([]*Transaction, error) {
 			index: uint64(i),
 		})
 	}
-	return ret, nil
+	return &ret, nil
 }
 
 type ArrayIndexArgs struct {
@@ -644,7 +657,7 @@ type ArrayIndexArgs struct {
 
 func (b *Block) TransactionAt(ctx context.Context, args ArrayIndexArgs) (*Transaction, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return nil, err
 	}
 
@@ -665,7 +678,7 @@ func (b *Block) TransactionAt(ctx context.Context, args ArrayIndexArgs) (*Transa
 
 func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error) {
 	block, err := b.resolve(ctx)
-	if err != nil {
+	if err != nil || block == nil {
 		return nil, err
 	}
 
@@ -677,9 +690,10 @@ func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error
 	uncle := uncles[args.Index]
 	blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 	return &Block{
-		node: b.node,
-		num:  &blockNumber,
-		hash: uncle.Hash(),
+		node:   b.node,
+		num:    &blockNumber,
+		hash:   uncle.Hash(),
+		header: uncle,
 	}, nil
 }
 
@@ -1057,9 +1071,9 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             number: Long!
             hash: Bytes32!
             parent: Block
-            nonce: BigInt!
+            nonce: Bytes!
             transactionsRoot: Bytes32!
-            transactionCount: Int!
+            transactionCount: Int
             stateRoot: Bytes32!
             receiptsRoot: Bytes32!
             miner(block: Long): Account!
@@ -1071,11 +1085,11 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             mixHash: Bytes32!
             difficulty: BigInt!
             totalDifficulty: BigInt!
-            ommerCount: Int!
-            ommers: [Block]!
+            ommerCount: Int
+            ommers: [Block]
             ommerAt(index: Int!): Block
             ommerHash: Bytes32!
-            transactions: [Transaction!]!
+            transactions: [Transaction!]
             transactionAt(index: Int!): Transaction
             logs(filter: BlockFilterCriteria!): [Log!]!
         }
