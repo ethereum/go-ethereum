@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	graphql "github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
@@ -764,7 +765,7 @@ func (b *Block) OmmerAt(ctx context.Context, args ArrayIndexArgs) (*Block, error
 	}, nil
 }
 
-type Query struct {
+type Resolver struct {
 	node *node.Node
 }
 
@@ -773,23 +774,23 @@ type BlockArgs struct {
 	Hash   *Bytes32
 }
 
-func (q *Query) Block(ctx context.Context, args BlockArgs) (*Block, error) {
+func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 	var block *Block
 	if args.Number != nil {
 		num := rpc.BlockNumber(uint64(*args.Number))
 		block = &Block{
-			node: q.node,
+			node: r.node,
 			num:  &num,
 		}
 	} else if args.Hash != nil {
 		block = &Block{
-			node: q.node,
+			node: r.node,
 			hash: args.Hash.Hash,
 		}
 	} else {
 		num := rpc.LatestBlockNumber
 		block = &Block{
-			node: q.node,
+			node: r.node,
 			num:  &num,
 		}
 	}
@@ -809,8 +810,8 @@ type BlocksArgs struct {
 	To   *int32
 }
 
-func (q *Query) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
-	be, err := getBackend(q.node)
+func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
+	be, err := getBackend(r.node)
 	if err != nil {
 		return nil, err
 	}
@@ -832,7 +833,7 @@ func (q *Query) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
 	for i := from; i <= to; i++ {
 		num := i
 		ret = append(ret, &Block{
-			node: q.node,
+			node: r.node,
 			num:  &num,
 		})
 	}
@@ -844,14 +845,14 @@ type AccountArgs struct {
 	BlockNumber *int32
 }
 
-func (q *Query) Account(ctx context.Context, args AccountArgs) *Account {
+func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
 	blockNumber := rpc.LatestBlockNumber
 	if args.BlockNumber != nil {
 		blockNumber = rpc.BlockNumber(*args.BlockNumber)
 	}
 
 	return &Account{
-		node:        q.node,
+		node:        r.node,
 		address:     args.Address.Address,
 		blockNumber: blockNumber,
 	}
@@ -861,9 +862,9 @@ type TransactionArgs struct {
 	Hash Bytes32
 }
 
-func (q *Query) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
+func (r *Resolver) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
 	tx := &Transaction{
-		node: q.node,
+		node: r.node,
 		hash: args.Hash.Hash,
 	}
 
@@ -877,8 +878,22 @@ func (q *Query) Transaction(ctx context.Context, args TransactionArgs) (*Transac
 	return tx, nil
 }
 
+func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data HexBytes }) (Bytes32, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return Bytes32{}, err
+	}
+
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(args.Data.Bytes, tx); err != nil {
+		return Bytes32{}, err
+	}
+	hash, err := ethapi.SubmitTransaction(ctx, be, tx)
+	return Bytes32{hash}, err
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
-	q := Query{n}
+	q := Resolver{n}
 
 	s := `
         scalar Bytes32
@@ -888,6 +903,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
         schema {
             query: Query
+            mutation: Mutation
         }
 
         type Account {
@@ -956,6 +972,10 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             block(number: Int, hash: Bytes32): Block
             blocks(from: Int!, to: Int): [Block!]!
             transaction(hash: Bytes32!): Transaction
+        }
+
+        type Mutation {
+            sendRawTransaction(data: HexBytes!): Bytes32!
         }
     `
 	schema, err := graphql.ParseSchema(s, &q)
