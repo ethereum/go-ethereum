@@ -481,7 +481,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				SkipCheck: skipCheck,
 				Syncing:   SyncingDisabled,
 				Retrieval: RetrievalEnabled,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
@@ -656,7 +656,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				Syncing:         SyncingDisabled,
 				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
-			})
+			}, nil)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)

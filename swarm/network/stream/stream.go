@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
@@ -87,6 +88,9 @@ type Registry struct {
 	intervalsStore state.Store
 	autoRetrieval  bool //automatically subscribe to retrieve request stream
 	maxPeerServers int
+	balance        protocols.Balance //implements protocols.Balance, for accounting
+	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	spec           *protocols.Spec   //this protocol's spec
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -99,7 +103,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -119,7 +123,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		intervalsStore: intervalsStore,
 		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
+		balance:        balance,
 	}
+	streamer.setupSpec()
+
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 
@@ -226,6 +233,21 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	}
 
 	return streamer
+}
+
+//This is an accounted protocol, therefore we need to provide a pricing Hook to the spec
+//For simulations to be able to run multiple nodes and not override the hook's balance,
+//we need to construct a spec instance per node instance
+func (r *Registry) setupSpec() {
+	//first create the "bare" spec
+	r.createSpec()
+	//now create the pricing object
+	r.createPriceOracle()
+	//if balance is nil, this node has been started without swap support (swapEnabled flag is false)
+	if r.balance != nil && !reflect.ValueOf(r.balance).IsNil() {
+		//swap is enabled, so setup the hook
+		r.spec.Hook = protocols.NewAccounting(r.balance, r.prices)
+	}
 }
 
 // RegisterClient registers an incoming streamer constructor
@@ -492,7 +514,7 @@ func (r *Registry) updateSyncing() {
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	peer := protocols.NewPeer(p, rw, Spec)
+	peer := protocols.NewPeer(p, rw, r.spec)
 	bp := network.NewBzzPeer(peer)
 	np := network.NewPeer(bp, r.delivery.kad)
 	r.delivery.kad.On(np)
@@ -716,32 +738,74 @@ func (c *clientParams) clientCreated() {
 	close(c.clientCreatedC)
 }
 
-// Spec is the spec of the streamer protocol
-var Spec = &protocols.Spec{
-	Name:       "stream",
-	Version:    8,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		UnsubscribeMsg{},
-		OfferedHashesMsg{},
-		WantedHashesMsg{},
-		TakeoverProofMsg{},
-		SubscribeMsg{},
-		RetrieveRequestMsg{},
-		ChunkDeliveryMsgRetrieval{},
-		SubscribeErrorMsg{},
-		RequestSubscriptionMsg{},
-		QuitMsg{},
-		ChunkDeliveryMsgSyncing{},
-	},
+func (r *Registry) GetSpec() *protocols.Spec {
+	return r.spec
+}
+
+func (r *Registry) createSpec() {
+
+	// Spec is the spec of the streamer protocol
+	var spec = &protocols.Spec{
+		Name:       "stream",
+		Version:    7,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			UnsubscribeMsg{},
+			OfferedHashesMsg{},
+			WantedHashesMsg{},
+			TakeoverProofMsg{},
+			SubscribeMsg{},
+			RetrieveRequestMsg{},
+			ChunkDeliveryMsgRetrieval{},
+			SubscribeErrorMsg{},
+			RequestSubscriptionMsg{},
+			QuitMsg{},
+			ChunkDeliveryMsgSyncing{},
+		},
+	}
+	r.spec = spec
+}
+
+//An accountable message needs some meta information attached to it
+//in order to evaluate the correct price
+type StreamerPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+	registry    *Registry
+}
+
+func (spo *StreamerPrices) Price(msg interface{}) *protocols.Price {
+	typ := reflect.TypeOf(msg).Elem()
+	return spo.priceMatrix[typ]
+}
+
+func (r *Registry) createPriceOracle() {
+
+	po := &StreamerPrices{
+		registry: r,
+	}
+	po.priceMatrix = map[reflect.Type]*protocols.Price{
+
+		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): &protocols.Price{
+			Value:   uint64(100),
+			PerByte: true,
+			Payer:   protocols.Receiver,
+		},
+
+		reflect.TypeOf(RetrieveRequestMsg{}): &protocols.Price{
+			Value:   uint64(10),
+			PerByte: false,
+			Payer:   protocols.Sender,
+		},
+	}
+	r.prices = po
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    Spec.Name,
-			Version: Spec.Version,
-			Length:  Spec.Length(),
+			Name:    r.spec.Name,
+			Version: r.spec.Version,
+			Length:  r.spec.Length(),
 			Run:     r.runProtocol,
 			// NodeInfo: ,
 			// PeerInfo: ,

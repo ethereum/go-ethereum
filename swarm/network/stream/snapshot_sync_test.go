@@ -168,7 +168,7 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 		Retrieval:       RetrievalDisabled,
 		Syncing:         SyncingAutoSubscribe,
 		SyncUpdateDelay: 3 * time.Second,
-	})
+	}, nil)
 
 	bucket.Store(bucketKeyRegistry, r)
 
@@ -362,7 +362,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingRegisterOnly,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())

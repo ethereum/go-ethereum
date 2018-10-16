@@ -130,7 +130,7 @@ func retrievalStreamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s no
 		Retrieval:       RetrievalEnabled,
 		Syncing:         SyncingAutoSubscribe,
 		SyncUpdateDelay: 3 * time.Second,
-	})
+	}, nil)
 
 	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 	bucket.Store(bucketKeyFileStore, fileStore)
