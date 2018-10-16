@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -1031,6 +1032,54 @@ func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
 	return int32(be.ProtocolVersion()), nil
 }
 
+type SyncState struct {
+	progress ethereum.SyncProgress
+}
+
+func (s *SyncState) StartingBlock() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.StartingBlock)
+}
+
+func (s *SyncState) CurrentBlock() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.CurrentBlock)
+}
+
+func (s *SyncState) HighestBlock() hexutil.Uint64 {
+	return hexutil.Uint64(s.progress.HighestBlock)
+}
+
+func (s *SyncState) PulledStates() *hexutil.Uint64 {
+	ret := hexutil.Uint64(s.progress.PulledStates)
+	return &ret
+}
+
+func (s *SyncState) KnownStates() *hexutil.Uint64 {
+	ret := hexutil.Uint64(s.progress.KnownStates)
+	return &ret
+}
+
+// Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
+// yet received the latest block headers from its pears. In case it is synchronizing:
+// - startingBlock: block number this node started to synchronise from
+// - currentBlock:  block number this node is currently importing
+// - highestBlock:  block number of the highest block header this node has received from peers
+// - pulledStates:  number of state entries processed until now
+// - knownStates:   number of known state entries that still need to be pulled
+func (r *Resolver) Syncing() (*SyncState, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return nil, err
+	}
+	progress := be.Downloader().Progress()
+
+	// Return not syncing if the synchronisation already completed
+	if progress.CurrentBlock >= progress.HighestBlock {
+		return nil, nil
+	}
+	// Otherwise gather the block sync stats
+	return &SyncState{progress}, nil
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -1135,6 +1184,14 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             topics: [[Bytes32!]!]
         }
 
+        type SyncState{
+            startingBlock: Long!
+            currentBlock: Long!
+            highestBlock: Long!
+            pulledStates: Long
+            knownStates: Long
+        }
+
         type Query {
             account(address: Address!, blockNumber: Long): Account!
             block(number: Long, hash: Bytes32): Block
@@ -1145,6 +1202,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             logs(filter: FilterCriteria!): [Log!]!
             gasPrice: BigInt!
             protocolVersion: Int!
+            syncing: SyncState
         }
 
         type Mutation {
