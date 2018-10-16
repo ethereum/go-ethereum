@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 
 # vars from docker env
 # - IDENTITY (default to empty)
@@ -141,6 +141,8 @@ fi
 
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
+
+set -x
 
 exec tomo $params \
   --verbosity $VERBOSITY \
