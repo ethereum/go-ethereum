@@ -78,13 +78,13 @@ func (a *Account) Balance(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*state.GetBalance(a.address)), nil
 }
 
-func (a *Account) TransactionCount(ctx context.Context) (int32, error) {
+func (a *Account) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	return int32(state.GetNonce(a.address)), nil
+	return hexutil.Uint64(state.GetNonce(a.address)), nil
 }
 
 func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
@@ -181,12 +181,12 @@ func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
 	return hexutil.Bytes(tx.Data()), nil
 }
 
-func (t *Transaction) Gas(ctx context.Context) (int32, error) {
+func (t *Transaction) Gas(ctx context.Context) (hexutil.Uint64, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return 0, err
 	}
-	return int32(tx.Gas()), nil
+	return hexutil.Uint64(tx.Gas()), nil
 }
 
 func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
@@ -205,12 +205,12 @@ func (t *Transaction) Value(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*tx.Value()), nil
 }
 
-func (t *Transaction) Nonce(ctx context.Context) (int32, error) {
+func (t *Transaction) Nonce(ctx context.Context) (hexutil.Uint64, error) {
 	tx, err := t.resolve(ctx)
 	if err != nil || tx == nil {
 		return 0, err
 	}
-	return int32(tx.Nonce()), nil
+	return hexutil.Uint64(tx.Nonce()), nil
 }
 
 func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, error) {
@@ -285,33 +285,33 @@ func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
 	return receipts[t.index], nil
 }
 
-func (t *Transaction) Status(ctx context.Context) (*int32, error) {
+func (t *Transaction) Status(ctx context.Context) (*hexutil.Uint64, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
 
-	ret := int32(receipt.Status)
+	ret := hexutil.Uint64(receipt.Status)
 	return &ret, nil
 }
 
-func (t *Transaction) GasUsed(ctx context.Context) (*int32, error) {
+func (t *Transaction) GasUsed(ctx context.Context) (*hexutil.Uint64, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
 
-	ret := int32(receipt.GasUsed)
+	ret := hexutil.Uint64(receipt.GasUsed)
 	return &ret, nil
 }
 
-func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*int32, error) {
+func (t *Transaction) CumulativeGasUsed(ctx context.Context) (*hexutil.Uint64, error) {
 	receipt, err := t.getReceipt(ctx)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
 
-	ret := int32(receipt.CumulativeGasUsed)
+	ret := hexutil.Uint64(receipt.CumulativeGasUsed)
 	return &ret, nil
 }
 
@@ -396,7 +396,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	return b.receipts, nil
 }
 
-func (b *Block) Number(ctx context.Context) (int32, error) {
+func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
 	if b.num == nil || *b.num == rpc.LatestBlockNumber {
 		block, err := b.resolve(ctx)
 		if err != nil {
@@ -405,7 +405,7 @@ func (b *Block) Number(ctx context.Context) (int32, error) {
 		num := rpc.BlockNumber(block.Number().Uint64())
 		b.num = &num
 	}
-	return int32(*b.num), nil
+	return hexutil.Uint64(*b.num), nil
 }
 
 func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
@@ -419,20 +419,20 @@ func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 	return b.hash, nil
 }
 
-func (b *Block) GasLimit(ctx context.Context) (int32, error) {
+func (b *Block) GasLimit(ctx context.Context) (hexutil.Uint64, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return int32(block.GasLimit()), nil
+	return hexutil.Uint64(block.GasLimit()), nil
 }
 
-func (b *Block) GasUsed(ctx context.Context) (int32, error) {
+func (b *Block) GasUsed(ctx context.Context) (hexutil.Uint64, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return int32(block.GasUsed()), nil
+	return hexutil.Uint64(block.GasUsed()), nil
 }
 
 func (b *Block) Parent(ctx context.Context) (*Block, error) {
@@ -587,7 +587,7 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 }
 
 type BlockNumberArgs struct {
-	Block *int32
+	Block *hexutil.Uint64
 }
 
 func (a BlockNumberArgs) Number() rpc.BlockNumber {
@@ -687,7 +687,7 @@ type Resolver struct {
 }
 
 type BlockArgs struct {
-	Number *int32
+	Number *hexutil.Uint64
 	Hash   *common.Hash
 }
 
@@ -723,8 +723,8 @@ func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 }
 
 type BlocksArgs struct {
-	From int32
-	To   *int32
+	From hexutil.Uint64
+	To   *hexutil.Uint64
 }
 
 func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error) {
@@ -759,7 +759,7 @@ func (r *Resolver) Blocks(ctx context.Context, args BlocksArgs) ([]*Block, error
 
 type AccountArgs struct {
 	Address     common.Address
-	BlockNumber *int32
+	BlockNumber *hexutil.Uint64
 }
 
 func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
@@ -820,25 +820,25 @@ type CallData struct {
 
 type CallResult struct {
 	data    hexutil.Bytes
-	gasUsed int32
-	status  int32
+	gasUsed hexutil.Uint64
+	status  hexutil.Uint64
 }
 
 func (c *CallResult) Data() hexutil.Bytes {
 	return c.data
 }
 
-func (c *CallResult) GasUsed() int32 {
+func (c *CallResult) GasUsed() hexutil.Uint64 {
 	return c.gasUsed
 }
 
-func (c *CallResult) Status() int32 {
+func (c *CallResult) Status() hexutil.Uint64 {
 	return c.status
 }
 
 func (r *Resolver) Call(ctx context.Context, args struct {
 	Data        ethapi.CallArgs
-	BlockNumber *int32
+	BlockNumber *hexutil.Uint64
 }) (*CallResult, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
@@ -851,21 +851,21 @@ func (r *Resolver) Call(ctx context.Context, args struct {
 	}
 
 	result, gas, failed, err := ethapi.DoCall(ctx, be, args.Data, blockNumber, vm.Config{}, 5*time.Second)
-	status := int32(1)
+	status := hexutil.Uint64(1)
 	if failed {
 		status = 0
 	}
 	return &CallResult{
 		data:    hexutil.Bytes(result),
-		gasUsed: int32(gas),
+		gasUsed: hexutil.Uint64(gas),
 		status:  status,
 	}, err
 }
 
 func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	Data        ethapi.CallArgs
-	BlockNumber *int32
-}) (int32, error) {
+	BlockNumber *hexutil.Uint64
+}) (hexutil.Uint64, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
 		return 0, err
@@ -877,7 +877,7 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	}
 
 	gas, err := ethapi.DoEstimateGas(ctx, be, args.Data, blockNumber)
-	return int32(gas), err
+	return hexutil.Uint64(gas), err
 }
 
 func NewHandler(n *node.Node) (http.Handler, error) {
@@ -898,14 +898,14 @@ func NewHandler(n *node.Node) (http.Handler, error) {
         type Account {
             address: Address!
             balance: BigInt!
-            transactionCount: Int!
+            transactionCount: Long!
             code: Bytes!
             storage(slot: Bytes32!): Bytes32!
         }
 
         type Log {
             index: Int!
-            account(block: Int): Account!
+            account(block: Long): Account!
             topics: [Bytes32!]!
             data: Bytes!
             transaction: Transaction!
@@ -913,25 +913,25 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
         type Transaction {
             hash: Bytes32!
-            nonce: Int!
+            nonce: Long!
             index: Int
-            from(block: Int): Account!
-            to(block: Int): Account
+            from(block: Long): Account!
+            to(block: Long): Account
             value: BigInt!
             gasPrice: BigInt!
-            gas: Int!
+            gas: Long!
             inputData: Bytes!
             block: Block
 
-            status: Int
-            gasUsed: Int
-            cumulativeGasUsed: Int
-            createdContract(block: Int): Account
+            status: Long
+            gasUsed: Long
+            cumulativeGasUsed: Long
+            createdContract(block: Long): Account
             logs: [Log!]
         }
 
         type Block {
-            number: Int!
+            number: Long!
             hash: Bytes32!
             parent: Block
             nonce: BigInt!
@@ -939,10 +939,10 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             transactionCount: Int!
             stateRoot: Bytes32!
             receiptsRoot: Bytes32!
-            miner(block: Int): Account!
+            miner(block: Long): Account!
             extraData: Bytes!
-            gasLimit: Int!
-            gasUsed: Int!
+            gasLimit: Long!
+            gasUsed: Long!
             timestamp: BigInt!
             logsBloom: Bytes!
             mixHash: Bytes32!
@@ -967,17 +967,17 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
         type CallResult {
             data: Bytes!
-            gasUsed: Int!
-            status: Int!
+            gasUsed: Long!
+            status: Long!
         }
 
         type Query {
-            account(address: Address!, blockNumber: Int): Account!
-            block(number: Int, hash: Bytes32): Block
-            blocks(from: Int!, to: Int): [Block!]!
+            account(address: Address!, blockNumber: Long): Account!
+            block(number: Long, hash: Bytes32): Block
+            blocks(from: Long!, to: Long): [Block!]!
             transaction(hash: Bytes32!): Transaction
-            call(data: CallData!, blockNumber: Int): CallResult
-            estimateGas(data: CallData!, blockNumber: Int): Int!
+            call(data: CallData!, blockNumber: Long): CallResult
+            estimateGas(data: CallData!, blockNumber: Long): Long!
         }
 
         type Mutation {
