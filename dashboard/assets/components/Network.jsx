@@ -23,6 +23,10 @@ import TableHead from '@material-ui/core/TableHead';
 import TableBody from '@material-ui/core/TableBody';
 import TableRow from '@material-ui/core/TableRow';
 import TableCell from '@material-ui/core/TableCell';
+import AreaChart from 'recharts/es6/chart/AreaChart';
+import Tooltip from 'recharts/es6/component/Tooltip';
+import Area from 'recharts/es6/cartesian/Area';
+import CustomTooltip, {bytePlotter, multiplier} from 'CustomTooltip';
 import type {Network as NetworkType, PeerEvent} from '../types/content';
 
 // inserter is a state updater function for the main component, which handles the peers.
@@ -141,8 +145,7 @@ class Network extends Component<Props, State> {
 						<TableCell>Location</TableCell>
 						<TableCell>Unknown</TableCell>
 						<TableCell>Node ID</TableCell>
-						<TableCell>Ingress</TableCell>
-						<TableCell>Egress</TableCell>
+						<TableCell>Traffic</TableCell>
 						<TableCell>Connected</TableCell>
 						<TableCell>Disconnected</TableCell>
 					</TableRow>
@@ -164,10 +167,28 @@ class Network extends Component<Props, State> {
 								{bundle.knownPeers && Object.keys(bundle.knownPeers).map(id => id.substring(0, 10)).join(' ')}
 							</TableCell>
 							<TableCell>
-								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.ingress && peer.ingress.map(sample => sample.value).join(' ')).join(', ')}
-							</TableCell>
-							<TableCell>
-								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.egress && peer.egress.map(sample => sample.value).join(' ')).join(', ')}
+								{bundle.knownPeers && Object.values(bundle.knownPeers).map(({ingress, egress}) => (
+									<div>
+										<AreaChart
+											width={200} height={50}
+											syncId={'footerSyncId'}
+											data={ingress.map(({value}) => ({ingress: value || 0}))}
+											margin={{top: 5, right: 5, bottom: 0, left: 5}}
+										>
+											<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload')} />} />
+											<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#8884d8' fill='#8884d8' />
+										</AreaChart>
+										<AreaChart
+											width={200} height={50}
+											syncId={'footerSyncId'}
+											data={egress.map(({value}) => ({egress: -value || 0}))}
+											margin={{top: 0, right: 5, bottom: 5, left: 5}}
+										>
+											<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download', multiplier(-1))} />} />
+											<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#82ca9d' fill='#82ca9d' />
+										</AreaChart>
+									</div>
+								))}
 							</TableCell>
 							<TableCell>
 								{bundle.knownPeers && Object.values(bundle.knownPeers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
