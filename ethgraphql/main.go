@@ -49,23 +49,6 @@ func getBackend(n *node.Node) (ethapi.Backend, error) {
 	return ethereum.APIBackend, nil
 }
 
-type Bytes32 struct {
-	common.Hash
-}
-
-func (_ Bytes32) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
-
-func (b *Bytes32) UnmarshalGraphQL(input interface{}) error {
-	var err error
-	switch input := input.(type) {
-	case string:
-		*b = Bytes32{common.HexToHash(input)}
-	default:
-		err = fmt.Errorf("Unexpected type for Hash: %v", input)
-	}
-	return err
-}
-
 type Account struct {
 	node        *node.Node
 	address     common.Address
@@ -114,16 +97,16 @@ func (a *Account) Code(ctx context.Context) (hexutil.Bytes, error) {
 }
 
 type StorageSlotArgs struct {
-	Slot Bytes32
+	Slot common.Hash
 }
 
-func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (Bytes32, error) {
+func (a *Account) Storage(ctx context.Context, args StorageSlotArgs) (common.Hash, error) {
 	state, err := a.getState(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
 
-	return Bytes32{state.GetState(a.address, args.Slot.Hash)}, nil
+	return state.GetState(a.address, args.Slot), nil
 }
 
 type Log struct {
@@ -148,12 +131,8 @@ func (l *Log) Index(ctx context.Context) int32 {
 	return int32(l.log.Index)
 }
 
-func (l *Log) Topics(ctx context.Context) []Bytes32 {
-	ret := make([]Bytes32, 0, len(l.log.Topics))
-	for _, topic := range l.log.Topics {
-		ret = append(ret, Bytes32{topic})
-	}
-	return ret
+func (l *Log) Topics(ctx context.Context) []common.Hash {
+	return l.log.Topics
 }
 
 func (l *Log) Data(ctx context.Context) hexutil.Bytes {
@@ -190,8 +169,8 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 	return t.tx, nil
 }
 
-func (tx *Transaction) Hash(ctx context.Context) Bytes32 {
-	return Bytes32{tx.hash}
+func (tx *Transaction) Hash(ctx context.Context) common.Hash {
+	return tx.hash
 }
 
 func (t *Transaction) InputData(ctx context.Context) (hexutil.Bytes, error) {
@@ -429,15 +408,15 @@ func (b *Block) Number(ctx context.Context) (int32, error) {
 	return int32(*b.num), nil
 }
 
-func (b *Block) Hash(ctx context.Context) (Bytes32, error) {
+func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
 	if b.hash == (common.Hash{}) {
 		block, err := b.resolve(ctx)
 		if err != nil {
-			return Bytes32{}, err
+			return common.Hash{}, err
 		}
 		b.hash = block.Hash()
 	}
-	return Bytes32{b.hash}, nil
+	return b.hash, nil
 }
 
 func (b *Block) GasLimit(ctx context.Context) (int32, error) {
@@ -507,44 +486,44 @@ func (b *Block) Nonce(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*i), nil
 }
 
-func (b *Block) MixHash(ctx context.Context) (Bytes32, error) {
+func (b *Block) MixHash(ctx context.Context) (common.Hash, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
-	return Bytes32{block.MixDigest()}, nil
+	return block.MixDigest(), nil
 }
 
-func (b *Block) TransactionsRoot(ctx context.Context) (Bytes32, error) {
+func (b *Block) TransactionsRoot(ctx context.Context) (common.Hash, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
-	return Bytes32{block.TxHash()}, nil
+	return block.TxHash(), nil
 }
 
-func (b *Block) StateRoot(ctx context.Context) (Bytes32, error) {
+func (b *Block) StateRoot(ctx context.Context) (common.Hash, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
-	return Bytes32{block.Root()}, nil
+	return block.Root(), nil
 }
 
-func (b *Block) ReceiptsRoot(ctx context.Context) (Bytes32, error) {
+func (b *Block) ReceiptsRoot(ctx context.Context) (common.Hash, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
-	return Bytes32{block.ReceiptHash()}, nil
+	return block.ReceiptHash(), nil
 }
 
-func (b *Block) OmmerHash(ctx context.Context) (Bytes32, error) {
+func (b *Block) OmmerHash(ctx context.Context) (common.Hash, error) {
 	block, err := b.resolve(ctx)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
-	return Bytes32{block.UncleHash()}, nil
+	return block.UncleHash(), nil
 }
 
 func (b *Block) OmmerCount(ctx context.Context) (int32, error) {
@@ -709,7 +688,7 @@ type Resolver struct {
 
 type BlockArgs struct {
 	Number *int32
-	Hash   *Bytes32
+	Hash   *common.Hash
 }
 
 func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
@@ -723,7 +702,7 @@ func (r *Resolver) Block(ctx context.Context, args BlockArgs) (*Block, error) {
 	} else if args.Hash != nil {
 		block = &Block{
 			node: r.node,
-			hash: args.Hash.Hash,
+			hash: *args.Hash,
 		}
 	} else {
 		num := rpc.LatestBlockNumber
@@ -797,13 +776,13 @@ func (r *Resolver) Account(ctx context.Context, args AccountArgs) *Account {
 }
 
 type TransactionArgs struct {
-	Hash Bytes32
+	Hash common.Hash
 }
 
 func (r *Resolver) Transaction(ctx context.Context, args TransactionArgs) (*Transaction, error) {
 	tx := &Transaction{
 		node: r.node,
-		hash: args.Hash.Hash,
+		hash: args.Hash,
 	}
 
 	// Resolve the transaction; if it doesn't exist, return nil.
@@ -816,18 +795,18 @@ func (r *Resolver) Transaction(ctx context.Context, args TransactionArgs) (*Tran
 	return tx, nil
 }
 
-func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hexutil.Bytes }) (Bytes32, error) {
+func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hexutil.Bytes }) (common.Hash, error) {
 	be, err := getBackend(r.node)
 	if err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
 
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(args.Data, tx); err != nil {
-		return Bytes32{}, err
+		return common.Hash{}, err
 	}
 	hash, err := ethapi.SubmitTransaction(ctx, be, tx)
-	return Bytes32{hash}, err
+	return hash, err
 }
 
 type CallData struct {

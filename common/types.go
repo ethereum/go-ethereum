@@ -141,6 +141,19 @@ func (h Hash) Value() (driver.Value, error) {
 	return h[:], nil
 }
 
+func (_ Hash) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
+
+func (h *Hash) UnmarshalGraphQL(input interface{}) error {
+	var err error
+	switch input := input.(type) {
+	case string:
+		*h = HexToHash(input)
+	default:
+		err = fmt.Errorf("Unexpected type for Bytes32: %v", input)
+	}
+	return err
+}
+
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
 type UnprefixedHash Hash
 
