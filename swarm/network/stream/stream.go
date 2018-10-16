@@ -88,9 +88,9 @@ type Registry struct {
 	intervalsStore state.Store
 	autoRetrieval  bool //automatically subscribe to retrieve request stream
 	maxPeerServers int
-	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	spec           *protocols.Spec   //this protocol's spec
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -235,10 +235,14 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	return streamer
 }
 
+//This is an accounted protocol, therefore we need to provide a pricing Hook to the spec
+//For simulations to be able to run multiple nodes and not override the hook's balance,
 //we need to construct a spec instance per node instance
 func (r *Registry) setupSpec() {
 	//first create the "bare" spec
 	r.createSpec()
+	//now create the pricing object
+	r.createPriceOracle()
 	//if balance is nil, this node has been started without swap support (swapEnabled flag is false)
 	if r.balance != nil && !reflect.ValueOf(r.balance).IsNil() {
 		//swap is enabled, so setup the hook
@@ -762,6 +766,40 @@ func (r *Registry) createSpec() {
 		},
 	}
 	r.spec = spec
+}
+
+//An accountable message needs some meta information attached to it
+//in order to evaluate the correct price
+type StreamerPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+	registry    *Registry
+}
+
+func (spo *StreamerPrices) Price(msg interface{}) *protocols.Price {
+	typ := reflect.TypeOf(msg).Elem()
+	return spo.priceMatrix[typ]
+}
+
+func (r *Registry) createPriceOracle() {
+
+	po := &StreamerPrices{
+		registry: r,
+	}
+	po.priceMatrix = map[reflect.Type]*protocols.Price{
+
+		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): &protocols.Price{
+			Value:   uint64(100),
+			PerByte: true,
+			Payer:   protocols.Receiver,
+		},
+
+		reflect.TypeOf(RetrieveRequestMsg{}): &protocols.Price{
+			Value:   uint64(10),
+			PerByte: false,
+			Payer:   protocols.Sender,
+		},
+	}
+	r.prices = po
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
