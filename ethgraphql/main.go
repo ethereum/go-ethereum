@@ -1012,6 +1012,16 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	return runFilter(ctx, r.node, filter)
 }
 
+func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
+	be, err := getBackend(r.node)
+	if err != nil {
+		return hexutil.Big{}, err
+	}
+
+	price, err := be.SuggestPrice(ctx)
+	return hexutil.Big(*price), err
+}
+
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -1124,6 +1134,7 @@ func NewHandler(n *node.Node) (http.Handler, error) {
             call(data: CallData!, blockNumber: Long): CallResult
             estimateGas(data: CallData!, blockNumber: Long): Long!
             logs(filter: FilterCriteria!): [Log!]!
+            gasPrice: BigInt!
         }
 
         type Mutation {
