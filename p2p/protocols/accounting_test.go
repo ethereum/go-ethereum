@@ -19,11 +19,15 @@ package protocols
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -31,6 +35,11 @@ import (
 type dummyBalance struct {
 	amount int64
 	peer   *Peer
+}
+
+//dummy Balance implementation
+type testExchangeBalance struct {
+	balances map[enode.ID]int64
 }
 
 //dummy Prices implementation
@@ -108,6 +117,12 @@ func (d *dummyPrices) Price(msg interface{}) *Price {
 func (d *dummyBalance) Add(amount int64, peer *Peer) error {
 	d.amount = amount
 	d.peer = peer
+	return nil
+}
+
+//test exchanges balance implementation
+func (d *testExchangeBalance) Add(amount int64, peer *Peer) error {
+	d.balances[peer.ID()] += amount
 	return nil
 }
 
@@ -234,18 +249,83 @@ func TestBalanceWithPeer(t *testing.T) {
 	checkPeerTestCases(t, testCases, peer, balance, spec, false)
 }
 
+type msgSimulator struct {
+	maxMessages int
+	count       int
+}
+
 func TestAccountedMsgSimulation(t *testing.T) {
+	simulator := &msgSimulator{
+		maxMessages: 1000,
+		count:       0,
+	}
 
-	/*
-		  using this type of simulation introduces circular dependency
-			and drags the swap package into this package
+	balances := map[enode.ID]*testExchangeBalance{}
 
-			sim := simulation.New(map[string]simulation.ServiceFunc{
-				"dummyService": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-				},
-			})
-			defer sim.Close()
-	*/
+	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		//create instances
+		balance := &testExchangeBalance{
+			balances: make(map[enode.ID]int64),
+		}
+		prices := &dummyPrices{}
+		spec := createTestSpec()
+		//create the accounting hook for the spec
+		spec.Hook = NewAccounting(balance, prices)
+
+		balances[p.ID()] = balance
+
+		peer := NewPeer(p, rw, spec)
+
+		handle := func(ctx context.Context, msg interface{}) error {
+			return nil
+		}
+
+		return peer.Run(handle)
+	}
+
+	conf := adapters.RandomNodeConfig()
+	tester := p2ptest.NewProtocolTester(t, conf.ID, 10, runFunc)
+
+	err := tester.TestExchanges(createTestSpecExchanges(tester, simulator, createTestSpec()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, bal := range balances {
+		for _, b := range bal.balances {
+			fmt.Println(b)
+		}
+	}
+}
+
+func createTestSpecExchanges(tester *p2ptest.ProtocolTester, sim *msgSimulator, spec *Spec) p2ptest.Exchange {
+	triggers := make([]p2ptest.Trigger, 0, sim.maxMessages)
+
+	for i := sim.count; i < sim.maxMessages; i++ {
+		index := i % len(spec.Messages)
+		msg := spec.Messages[index]
+
+		switch msg.(type) {
+		case *perBytesMsgReceiverPays:
+			msg.(*perBytesMsgReceiverPays).Content = "this is just test content"
+		case *perBytesMsgSenderPays:
+			msg.(*perBytesMsgSenderPays).Content = "this is just test content"
+		default:
+		}
+		id := tester.Nodes[rand.Intn(len(tester.Nodes)-1)].ID()
+		code, _ := spec.GetCode(msg)
+		x := p2ptest.Trigger{
+			Code: code,
+			Msg:  msg,
+			Peer: id,
+		}
+		triggers = append(triggers, x)
+	}
+	exchange := p2ptest.Exchange{
+		Triggers: triggers,
+	}
+
+	return exchange
 }
 
 func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, peer *Peer, balance *dummyBalance, send bool) {
