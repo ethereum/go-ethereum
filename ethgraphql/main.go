@@ -710,7 +710,7 @@ func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]
 	for _, log := range logs {
 		ret = append(ret, &Log{
 			node:        node,
-			transaction: &Transaction{hash: log.TxHash},
+			transaction: &Transaction{node: node, hash: log.TxHash},
 			log:         log,
 		})
 	}
