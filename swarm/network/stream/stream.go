@@ -66,8 +66,9 @@ type Registry struct {
 // RegistryOptions holds optional values for NewRegistry constructor.
 type RegistryOptions struct {
 	SkipCheck       bool
-	DoSync          bool
-	DoRetrieve      bool
+	DoSync          bool // Sets if the server syncs with peers. Default is true, set to false by lightnode or nosync flags.
+	DoRetrieve      bool // Sets if the server issues Retrieve requests. Default is true.
+	DoServeRetrieve bool // Sets if the server serves Retrieve requests. Default is true, set to false by lightnode flag.
 	SyncUpdateDelay time.Duration
 	MaxPeerServers  int // The limit of servers for each peer in registry
 }
@@ -93,14 +94,21 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	}
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
-	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
-		return NewSwarmChunkServer(delivery.chunkStore), nil
-	})
+
+	if options.DoServeRetrieve {
+		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
+			return NewSwarmChunkServer(delivery.chunkStore), nil
+		})
+	}
+
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
 	})
-	RegisterSwarmSyncerServer(streamer, syncChunkStore)
-	RegisterSwarmSyncerClient(streamer, syncChunkStore)
+
+	if options.DoSync {
+		RegisterSwarmSyncerServer(streamer, syncChunkStore)
+		RegisterSwarmSyncerClient(streamer, syncChunkStore)
+	}
 
 	if options.DoSync {
 		// latestIntC function ensures that
