@@ -1144,12 +1144,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			for !bc.HasState(parent.Root()) {
 				winner = append(winner, parent)
 				parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+				if bc.isBadHash(parent.Hash()) {
+					log.Info("Found bad hash in competing sidechain, aborting import", "hash", parent.Hash(), "number", parent.Number())
+					return i, events, coalescedLogs, ErrBlacklistedHash
+				}
 			}
 			for j := 0; j < len(winner)/2; j++ {
 				winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
 			}
 			// Import all the pruned blocks to make the state available
 			bc.chainmu.Unlock()
+			log.Info("Importing competing sidechain", "len", len(winner), "from", winner[0].Number(), "to", winner[len(winner)-1].Number())
 			_, evs, logs, err := bc.insertChain(winner)
 			bc.chainmu.Lock()
 			events, coalescedLogs = evs, logs
@@ -1441,6 +1446,9 @@ func (bc *BlockChain) BadBlocks() []*types.Block {
 		}
 	}
 	return blocks
+}
+func (bc *BlockChain) isBadHash(hash common.Hash) bool {
+	return bc.badBlocks.Contains(hash)
 }
 
 // addBadBlock adds a bad block to the bad-block LRU cache
