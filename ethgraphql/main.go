@@ -42,6 +42,8 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
+// getBackend fetches the Ethereum instannce from the provided node, and returns
+// the API backend from that.
 func getBackend(n *node.Node) (*eth.EthAPIBackend, error) {
 	var ethereum *eth.Ethereum
 	if err := n.Service(&ethereum); err != nil {
@@ -50,12 +52,14 @@ func getBackend(n *node.Node) (*eth.EthAPIBackend, error) {
 	return ethereum.APIBackend, nil
 }
 
+// Account represents an Ethereum account at a particular block.
 type Account struct {
 	node        *node.Node
 	address     common.Address
 	blockNumber rpc.BlockNumber
 }
 
+// getState fetches the StateDB object for an account.
 func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
 	be, err := getBackend(a.node)
 	if err != nil {
@@ -106,6 +110,7 @@ func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) 
 	return state.GetState(a.address, args.Slot), nil
 }
 
+// Log represents an individual log message. All arguments are mandatory.
 type Log struct {
 	node        *node.Node
 	transaction *Transaction
@@ -136,6 +141,8 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 	return hexutil.Bytes(l.log.Data)
 }
 
+// Transactionn represents an Ethereum transaction.
+// node and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
 	node  *node.Node
 	hash  common.Hash
@@ -144,6 +151,7 @@ type Transaction struct {
 	index uint64
 }
 
+// resolve returns the internal transaction object, fetching it if needed.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 	if t.tx == nil {
 		be, err := getBackend(t.node)
@@ -265,6 +273,7 @@ func (t *Transaction) Index(ctx context.Context) (*int32, error) {
 	return &index, nil
 }
 
+// getReceipt returns the receipt associated with this transaction, if any.
 func (t *Transaction) getReceipt(ctx context.Context) (*types.Receipt, error) {
 	if _, err := t.resolve(ctx); err != nil {
 		return nil, err
@@ -342,6 +351,9 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	return &ret, nil
 }
 
+// Block represennts an Ethereum block.
+// node, and either num or hash are mandatory. All other fields are lazily fetched
+// when required.
 type Block struct {
 	node     *node.Node
 	num      *rpc.BlockNumber
@@ -351,6 +363,8 @@ type Block struct {
 	receipts []*types.Receipt
 }
 
+// resolve returns the internal Block object represennting this block, fetching
+// it if necessary.
 func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	if b.block != nil {
 		return b.block, nil
@@ -372,6 +386,9 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	return b.block, err
 }
 
+// resolveHeader returns the internal Header object for this block, fetching it
+// if necessary. Call this function instead of `resolve` unless you need the
+// additional data (transactions and uncles).
 func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	if b.header == nil {
 		if _, err := b.resolve(ctx); err != nil {
@@ -381,6 +398,8 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	return b.header, nil
 }
 
+// resolveReceipts returns the list of receipts for this block, fetching them
+// if necessary.
 func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	if b.receipts == nil {
 		be, err := getBackend(b.node)
@@ -596,10 +615,13 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*be.GetTd(h)), nil
 }
 
+// BlockNumberArgs encapsulates arguments to accessors that specify a block number.
 type BlockNumberArgs struct {
 	Block *hexutil.Uint64
 }
 
+// Number returns the provided block number, or rpc.LatestBlockNumber if none
+// was provided.
 func (a BlockNumberArgs) Number() rpc.BlockNumber {
 	if a.Block != nil {
 		return rpc.BlockNumber(*a.Block)
@@ -690,6 +712,8 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index int32 }) (*Block
 	}, nil
 }
 
+// BlockFilterCriteria encapsulates criteria passed to a `logs` accessor inside
+// a block.
 type BlockFilterCriteria struct {
 	Addresses *[]common.Address // restricts matches to events created by specific contracts
 
@@ -707,6 +731,8 @@ type BlockFilterCriteria struct {
 	Topics *[][]common.Hash
 }
 
+// runFilter accepts a filter and executes it, returning all its results as
+// `Log` objects.
 func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]*Log, error) {
 	logs, err := filter.Logs(ctx)
 	if err != nil || logs == nil {
@@ -756,6 +782,7 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	return runFilter(ctx, b.node, filter)
 }
 
+// Resolver is the top-level object in the GraphQL heirarchy.
 type Resolver struct {
 	node *node.Node
 }
@@ -873,19 +900,22 @@ func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hex
 	return hash, err
 }
 
+// CallData encapsulates arguments to `call` or `estimateGas`.
+// All arguments are optional.
 type CallData struct {
-	From     *common.Address
-	To       *common.Address
-	Gas      *hexutil.Uint64
-	GasPrice *hexutil.Big
-	Value    *hexutil.Big
-	Data     *hexutil.Bytes
+	From     *common.Address // The Ethereum address the call is from.
+	To       *common.Address // The Ethereum address the call is to.
+	Gas      *hexutil.Uint64 // The amount of gas provided for the call.
+	GasPrice *hexutil.Big    // The price of each unit of gas, in wei.
+	Value    *hexutil.Big    // The value sent along with the call.
+	Data     *hexutil.Bytes  // Any data sent with the call.
 }
 
+// CallResult encapsulates the result of an invocation of the `call` accessor.
 type CallResult struct {
-	data    hexutil.Bytes
-	gasUsed hexutil.Uint64
-	status  hexutil.Uint64
+	data    hexutil.Bytes  // The return data from the call
+	gasUsed hexutil.Uint64 // The amount of gas used
+	status  hexutil.Uint64 // The return status of the call - 0 for failure or 1 for success.
 }
 
 func (c *CallResult) Data() hexutil.Bytes {
@@ -944,6 +974,7 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	return hexutil.Uint64(gas), err
 }
 
+// FilterCritera encapsulates the arguments to `logs` on the root resolver object.
 type FilterCriteria struct {
 	FromBlock *hexutil.Uint64   // beginning of the queried range, nil means genesis block
 	ToBlock   *hexutil.Uint64   // end of the range, nil means latest block
@@ -1014,6 +1045,7 @@ func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
 	return int32(be.ProtocolVersion()), nil
 }
 
+// SyncState represents the synchronisation status returned from the `syncing` accessor.
 type SyncState struct {
 	progress ethereum.SyncProgress
 }
@@ -1062,6 +1094,8 @@ func (r *Resolver) Syncing() (*SyncState, error) {
 	return &SyncState{progress}, nil
 }
 
+// NewHandler returns a new `http.Handler` that will answer GraphQL queries.
+// It additionally exports an interactive query browser on the / endpoint.
 func NewHandler(n *node.Node) (http.Handler, error) {
 	q := Resolver{n}
 
@@ -1078,18 +1112,21 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 	return mux, nil
 }
 
+// Service encapsulates an  ETHGraphQL service.
 type Service struct {
-	endpoint string
-	cors     []string
-	vhosts   []string
-	timeouts rpc.HTTPTimeouts
-	node     *node.Node
-	handler  http.Handler
-	listener net.Listener
+	endpoint string           // The host:port endpoint for this service.
+	cors     []string         // Allowed CORS domains
+	vhosts   []string         // Recognised vhosts
+	timeouts rpc.HTTPTimeouts // Timeout settings for HTTP requests.
+	node     *node.Node       // The node that queries will operate onn.
+	handler  http.Handler     // The `http.Handler` used to answer queries.
+	listener net.Listener     // The listening socket.
 }
 
+// Protocols returns the list of protocols exported by this service.
 func (s *Service) Protocols() []p2p.Protocol { return nil }
 
+// APIs returns the list of APIs exported by this service.
 func (s *Service) APIs() []rpc.API { return nil }
 
 // Start is called after all services have been constructed and the networking
@@ -1121,6 +1158,7 @@ func (s *Service) Stop() error {
 	return nil
 }
 
+// NewService constructs a new service instance.
 func NewService(ctx *node.ServiceContext, stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
 	return &Service{
 		endpoint: endpoint,
@@ -1131,6 +1169,7 @@ func NewService(ctx *node.ServiceContext, stack *node.Node, endpoint string, cor
 	}, nil
 }
 
+// RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
 	return stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return NewService(ctx, stack, endpoint, cors, vhosts, timeouts)
