@@ -101,7 +101,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
-		ExitWhenSynced          time.Duration
+		ExitWhenSynced          *time.Duration
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
