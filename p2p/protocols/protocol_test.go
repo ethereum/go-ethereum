@@ -17,11 +17,14 @@
 package protocols
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -541,4 +544,40 @@ func XTestMultiplePeersDropOther(t *testing.T) {
 		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("subprotocol error"),
 	)
+}
+
+//dummy implementation of a MsgReadWriter
+//this allows for quick and easy unit tests without
+//having to build up the complete protocol
+type dummyRW struct {
+	msg  interface{}
+	size uint32
+	code uint64
+}
+
+func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
+	return nil
+}
+
+func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	enc := bytes.NewReader(d.getDummyMsg())
+	return p2p.Msg{
+		Code:       d.code,
+		Size:       d.size,
+		Payload:    enc,
+		ReceivedAt: time.Now(),
+	}, nil
+}
+
+func (d *dummyRW) getDummyMsg() []byte {
+	r, _ := rlp.EncodeToBytes(d.msg)
+	var b bytes.Buffer
+	wmsg := WrappedMsg{
+		Context: b.Bytes(),
+		Size:    uint32(len(r)),
+		Payload: r,
+	}
+	rr, _ := rlp.EncodeToBytes(wmsg)
+	d.size = uint32(len(rr))
+	return rr
 }

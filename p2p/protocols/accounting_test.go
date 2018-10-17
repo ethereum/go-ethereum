@@ -17,17 +17,11 @@
 package protocols
 
 import (
-	"bytes"
-	"context"
-	"fmt"
-	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -192,142 +186,6 @@ func TestBalance(t *testing.T) {
 	checkAccountingTestCases(t, testCases, acc, peer, balance, false)
 }
 
-func TestBalanceWithPeer(t *testing.T) {
-	//create instances
-	balance := &dummyBalance{}
-	prices := &dummyPrices{}
-	//create the spec
-	spec := createTestSpec()
-	//create the accounting hook for the spec
-	spec.Hook = NewAccounting(balance, prices)
-	//create a peer
-	id := adapters.RandomNodeConfig().ID
-	p := p2p.NewPeer(id, "testPeer", nil)
-	peer := NewPeer(p, &dummyRW{}, spec)
-	//price depends on size, receiver pays
-	msg := &perBytesMsgReceiverPays{Content: "testBalance"}
-	size, _ := rlp.EncodeToBytes(msg)
-	testCases := []testCase{
-		{
-			msg,
-			uint32(len(size)),
-			int64(len(size) * 100),
-			int64(len(size) * -100),
-		},
-		{
-			&perBytesMsgSenderPays{Content: "testBalance"},
-			uint32(len(size)),
-			int64(len(size) * -100),
-			int64(len(size) * 100),
-		},
-		{
-			&perUnitMsgSenderPays{},
-			0,
-			int64(-99),
-			int64(99),
-		},
-		{
-			&perUnitMsgReceiverPays{},
-			0,
-			int64(99),
-			int64(-99),
-		},
-		{
-			&zeroPriceMsg{},
-			0,
-			int64(0),
-			int64(0),
-		},
-		{
-			&nilPriceMsg{},
-			0,
-			int64(0),
-			int64(0),
-		},
-	}
-	checkPeerTestCases(t, testCases, peer, balance, spec, true)
-	checkPeerTestCases(t, testCases, peer, balance, spec, false)
-}
-
-type msgSimulator struct {
-	maxMessages int
-	count       int
-}
-
-func TestAccountedMsgSimulation(t *testing.T) {
-	simulator := &msgSimulator{
-		maxMessages: 1000,
-		count:       0,
-	}
-
-	balances := map[enode.ID]*testExchangeBalance{}
-
-	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		//create instances
-		balance := &testExchangeBalance{
-			balances: make(map[enode.ID]int64),
-		}
-		prices := &dummyPrices{}
-		spec := createTestSpec()
-		//create the accounting hook for the spec
-		spec.Hook = NewAccounting(balance, prices)
-
-		balances[p.ID()] = balance
-
-		peer := NewPeer(p, rw, spec)
-
-		handle := func(ctx context.Context, msg interface{}) error {
-			return nil
-		}
-
-		return peer.Run(handle)
-	}
-
-	conf := adapters.RandomNodeConfig()
-	tester := p2ptest.NewProtocolTester(t, conf.ID, 10, runFunc)
-
-	err := tester.TestExchanges(createTestSpecExchanges(tester, simulator, createTestSpec()))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, bal := range balances {
-		for _, b := range bal.balances {
-			fmt.Println(b)
-		}
-	}
-}
-
-func createTestSpecExchanges(tester *p2ptest.ProtocolTester, sim *msgSimulator, spec *Spec) p2ptest.Exchange {
-	triggers := make([]p2ptest.Trigger, 0, sim.maxMessages)
-
-	for i := sim.count; i < sim.maxMessages; i++ {
-		index := i % len(spec.Messages)
-		msg := spec.Messages[index]
-
-		switch msg.(type) {
-		case *perBytesMsgReceiverPays:
-			msg.(*perBytesMsgReceiverPays).Content = "this is just test content"
-		case *perBytesMsgSenderPays:
-			msg.(*perBytesMsgSenderPays).Content = "this is just test content"
-		default:
-		}
-		id := tester.Nodes[rand.Intn(len(tester.Nodes)-1)].ID()
-		code, _ := spec.GetCode(msg)
-		x := p2ptest.Trigger{
-			Code: code,
-			Msg:  msg,
-			Peer: id,
-		}
-		triggers = append(triggers, x)
-	}
-	exchange := p2ptest.Exchange{
-		Triggers: triggers,
-	}
-
-	return exchange
-}
-
 func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, peer *Peer, balance *dummyBalance, send bool) {
 	for _, c := range cases {
 		var err error
@@ -346,29 +204,6 @@ func checkAccountingTestCases(t *testing.T, cases []testCase, acc *Accounting, p
 	}
 }
 
-func checkPeerTestCases(t *testing.T, cases []testCase, peer *Peer, balance *dummyBalance, spec *Spec, send bool) {
-	for _, c := range cases {
-		var err error
-		var expectedResult int64
-		//reset balance before every check
-		balance.amount = 0
-		var ctx context.Context
-		if send {
-			err = peer.Send(ctx, c.msg)
-			expectedResult = c.sendResult
-		} else {
-			peer.rw.(*dummyRW).msg = c.msg
-			peer.rw.(*dummyRW).code, _ = spec.GetCode(c.msg)
-			err = peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
-				return nil
-			})
-			expectedResult = c.recvResult
-		}
-
-		checkResults(t, err, balance, peer, expectedResult)
-	}
-}
-
 func checkResults(t *testing.T, err error, balance *dummyBalance, peer *Peer, result int64) {
 	if err != nil {
 		t.Fatal(err)
@@ -379,42 +214,6 @@ func checkResults(t *testing.T, err error, balance *dummyBalance, peer *Peer, re
 	if balance.amount != result {
 		t.Fatalf("Expected balance to be %d but is %d", result, balance.amount)
 	}
-}
-
-//dummy implementation of a MsgReadWriter
-//this allows for quick and easy unit tests without
-//having to build up the complete protocol
-type dummyRW struct {
-	msg  interface{}
-	size uint32
-	code uint64
-}
-
-func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
-	return nil
-}
-
-func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
-	enc := bytes.NewReader(d.getDummyMsg())
-	return p2p.Msg{
-		Code:       d.code,
-		Size:       d.size,
-		Payload:    enc,
-		ReceivedAt: time.Now(),
-	}, nil
-}
-
-func (d *dummyRW) getDummyMsg() []byte {
-	r, _ := rlp.EncodeToBytes(d.msg)
-	var b bytes.Buffer
-	wmsg := WrappedMsg{
-		Context: b.Bytes(),
-		Size:    uint32(len(r)),
-		Payload: r,
-	}
-	rr, _ := rlp.EncodeToBytes(wmsg)
-	d.size = uint32(len(rr))
-	return rr
 }
 
 //create a test spec
