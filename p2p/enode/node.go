@@ -253,3 +253,12 @@ func RandomID(a ID, n int) (b ID) {
 	}
 	return b
 }
+
+func Equal(a, b ID) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
