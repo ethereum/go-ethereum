@@ -138,11 +138,12 @@ type Fetcher struct {
 	dropPeer       peerDropFn         // Drops a peer for misbehaving
 
 	// Testing hooks
-	announceChangeHook func(common.Hash, bool)  // Method to call upon adding or deleting a hash from the announce list
-	queueChangeHook    func(common.Hash, bool)  // Method to call upon adding or deleting a block from the import queue
-	fetchingHook       func([]common.Hash)      // Method to call upon starting a block (eth/61) or header (eth/62) fetch
-	completingHook     func([]common.Hash)      // Method to call upon starting a block body fetch (eth/62)
-	importedHook       func(*types.Block) error // Method to call upon successful block import (both eth/61 and eth/62)
+	announceChangeHook func(common.Hash, bool) // Method to call upon adding or deleting a hash from the announce list
+	queueChangeHook    func(common.Hash, bool) // Method to call upon adding or deleting a block from the import queue
+	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (eth/61) or header (eth/62) fetch
+	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
+	doubleValidateHook func(*types.Block) error
+	signHook           func(*types.Block) error
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -665,9 +666,9 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			f.dropPeer(peer)
 			return
 		}
-		// Invoke the imported hook to run double validation layer
-		if f.importedHook != nil {
-			if err := f.importedHook(block); err != nil {
+		// Invoke the dv hook to run double validation layer
+		if f.doubleValidateHook != nil {
+			if err := f.doubleValidateHook(block); err != nil {
 				log.Error("Double validation failed", "err", err, "Discard this block!")
 				return
 			}
@@ -678,6 +679,14 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
+
+		if f.signHook != nil {
+			if err := f.signHook(block); err != nil {
+				log.Error("Can't sign the imported block", "err", err)
+				return
+			}
+		}
+
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)
@@ -739,7 +748,12 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 	}
 }
 
-// Bind import hook when block imported into chain.
-func (f *Fetcher) SetImportedHook(importedHook func(*types.Block) error) {
-	f.importedHook = importedHook
+// Bind double validate hook before block imported into chain.
+func (f *Fetcher) SetDoubleValidateHook(doubleValidateHook func(*types.Block) error) {
+	f.doubleValidateHook = doubleValidateHook
+}
+
+// Bind double validate hook before block imported into chain.
+func (f *Fetcher) SetSignHook(signHook func(*types.Block) error) {
+	f.signHook = signHook
 }

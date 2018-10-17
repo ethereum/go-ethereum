@@ -189,8 +189,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Posv != nil {
 		c := eth.engine.(*posv.Posv)
 
-		// Hook sends tx sign to smartcontract after inserting block to chain.
-		importedHook := func(block *types.Block) error {
+		// Hook double validation
+		doubleValidateHook := func(block *types.Block) error {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
 				if err == consensus.ErrUnknownAncestor {
@@ -199,7 +199,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return fmt.Errorf("Fail to get snapshot for sign tx validator: %v", err)
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
-				// double validation
 				m2, err := getM2(snap, eth, block)
 				if err != nil {
 					return fmt.Errorf("Fail to validate M2 condition for importing block: %v", err)
@@ -216,9 +215,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					if len(txsSentFromM2) > 0 {
 						for _, tx := range txsSentFromM2 {
 							if tx.To().String() == common.BlockSigners {
-								if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-									return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
-								}
 								return nil
 							}
 						}
@@ -226,29 +222,32 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					//then wait until signTx from m2 comes into txPool
 					txCh := make(chan core.TxPreEvent, txChanSize)
 					subEvent := eth.txPool.SubscribeTxPreEvent(txCh)
-				G:
 					select {
 					case event := <-txCh:
 						from, err := eth.txPool.GetSender(event.Tx)
 						if (err == nil) && (event.Tx.To().String() == common.BlockSigners) && (from == m2) {
-							if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-								return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
-							}
 							return nil
 						}
 					//timeout 10s
 					case <-time.After(time.Duration(10) * time.Second):
-						break G
+						return fmt.Errorf("Time out waiting for confirmation from m2")
 					}
 					subEvent.Unsubscribe()
-				} else if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 				}
-				// end of double validation
+				return nil
+			}
+			return fmt.Errorf("This address is not authorized to validate block")
+		}
+
+		signHook := func(block *types.Block) error {
+			if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+				return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 			}
 			return nil
 		}
-		eth.protocolManager.fetcher.SetImportedHook(importedHook)
+
+		eth.protocolManager.fetcher.SetDoubleValidateHook(doubleValidateHook)
+		eth.protocolManager.fetcher.SetSignHook(signHook)
 
 		// Hook prepares validators M2 for the current epoch
 		c.HookValidator = func(header *types.Header, signers []common.Address) error {

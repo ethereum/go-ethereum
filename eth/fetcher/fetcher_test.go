@@ -288,7 +288,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks until all are imported
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -329,7 +329,7 @@ func testConcurrentAnnouncements(t *testing.T, protocol int) {
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -369,7 +369,7 @@ func testOverlappingAnnouncements(t *testing.T, protocol int) {
 	for i := 0; i < overlap; i++ {
 		imported <- nil
 	}
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -446,7 +446,7 @@ func testRandomArrivalImport(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -480,7 +480,7 @@ func testQueueGapFill(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -520,7 +520,7 @@ func testImportDeduplication(t *testing.T, protocol int) {
 	fetching := make(chan []common.Hash)
 	imported := make(chan *types.Block, len(hashes)-1)
 	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- hashes }
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -632,7 +632,7 @@ func testInvalidNumberAnnouncement(t *testing.T, protocol int) {
 	badBodyFetcher := tester.makeBodyFetcher("bad", blocks, 0)
 
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -687,7 +687,7 @@ func testEmptyBlockShortCircuit(t *testing.T, protocol int) {
 	tester.fetcher.completingHook = func(hashes []common.Hash) { completing <- hashes }
 
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -720,7 +720,7 @@ func testHashMemoryExhaustionAttack(t *testing.T, protocol int) {
 	tester := newTester()
 
 	imported, announces := make(chan *types.Block), int32(0)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -770,7 +770,7 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	tester := newTester()
 
 	imported, enqueued := make(chan *types.Block), int32(0)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
