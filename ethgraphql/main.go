@@ -42,31 +42,16 @@ import (
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
-// getBackend fetches the Ethereum instannce from the provided node, and returns
-// the API backend from that.
-func getBackend(n *node.Node) (*eth.EthAPIBackend, error) {
-	var ethereum *eth.Ethereum
-	if err := n.Service(&ethereum); err != nil {
-		return nil, err
-	}
-	return ethereum.APIBackend, nil
-}
-
 // Account represents an Ethereum account at a particular block.
 type Account struct {
-	node        *node.Node
+	backend     *eth.EthAPIBackend
 	address     common.Address
 	blockNumber rpc.BlockNumber
 }
 
 // getState fetches the StateDB object for an account.
 func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
-	be, err := getBackend(a.node)
-	if err != nil {
-		return nil, err
-	}
-
-	state, _, err := be.StateAndHeaderByNumber(ctx, a.blockNumber)
+	state, _, err := a.backend.StateAndHeaderByNumber(ctx, a.blockNumber)
 	return state, err
 }
 
@@ -112,7 +97,7 @@ func (a *Account) Storage(ctx context.Context, args struct{ Slot common.Hash }) 
 
 // Log represents an individual log message. All arguments are mandatory.
 type Log struct {
-	node        *node.Node
+	backend     *eth.EthAPIBackend
 	transaction *Transaction
 	log         *types.Log
 }
@@ -123,7 +108,7 @@ func (l *Log) Transaction(ctx context.Context) *Transaction {
 
 func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
 	return &Account{
-		node:        l.node,
+		backend:     l.backend,
 		address:     l.log.Address,
 		blockNumber: args.Number(),
 	}
@@ -142,33 +127,28 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 }
 
 // Transactionn represents an Ethereum transaction.
-// node and hash are mandatory; all others will be fetched when required.
+// backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
-	node  *node.Node
-	hash  common.Hash
-	tx    *types.Transaction
-	block *Block
-	index uint64
+	backend *eth.EthAPIBackend
+	hash    common.Hash
+	tx      *types.Transaction
+	block   *Block
+	index   uint64
 }
 
 // resolve returns the internal transaction object, fetching it if needed.
 func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, error) {
 	if t.tx == nil {
-		be, err := getBackend(t.node)
-		if err != nil {
-			return nil, err
-		}
-
-		tx, blockHash, _, index := rawdb.ReadTransaction(be.ChainDb(), t.hash)
+		tx, blockHash, _, index := rawdb.ReadTransaction(t.backend.ChainDb(), t.hash)
 		if tx != nil {
 			t.tx = tx
 			t.block = &Block{
-				node: t.node,
-				hash: blockHash,
+				backend: t.backend,
+				hash:    blockHash,
 			}
 			t.index = index
 		} else {
-			t.tx = be.GetPoolTransaction(t.hash)
+			t.tx = t.backend.GetPoolTransaction(t.hash)
 		}
 	}
 	return t.tx, nil
@@ -230,7 +210,7 @@ func (t *Transaction) To(ctx context.Context, args BlockNumberArgs) (*Account, e
 	}
 
 	return &Account{
-		node:        t.node,
+		backend:     t.backend,
 		address:     *to,
 		blockNumber: args.Number(),
 	}, nil
@@ -249,7 +229,7 @@ func (t *Transaction) From(ctx context.Context, args BlockNumberArgs) (*Account,
 	from, _ := types.Sender(signer, tx)
 
 	return &Account{
-		node:        t.node,
+		backend:     t.backend,
 		address:     from,
 		blockNumber: args.Number(),
 	}, nil
@@ -328,7 +308,7 @@ func (t *Transaction) CreatedContract(ctx context.Context, args BlockNumberArgs)
 	}
 
 	return &Account{
-		node:        t.node,
+		backend:     t.backend,
 		address:     receipt.ContractAddress,
 		blockNumber: args.Number(),
 	}, nil
@@ -343,7 +323,7 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 	ret := make([]*Log, 0, len(receipt.Logs))
 	for _, log := range receipt.Logs {
 		ret = append(ret, &Log{
-			node:        t.node,
+			backend:     t.backend,
 			transaction: t,
 			log:         log,
 		})
@@ -352,10 +332,10 @@ func (t *Transaction) Logs(ctx context.Context) (*[]*Log, error) {
 }
 
 // Block represennts an Ethereum block.
-// node, and either num or hash are mandatory. All other fields are lazily fetched
+// backend, and either num or hash are mandatory. All other fields are lazily fetched
 // when required.
 type Block struct {
-	node     *node.Node
+	backend  *eth.EthAPIBackend
 	num      *rpc.BlockNumber
 	hash     common.Hash
 	header   *types.Header
@@ -370,15 +350,11 @@ func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 		return b.block, nil
 	}
 
-	be, err := getBackend(b.node)
-	if err != nil {
-		return nil, err
-	}
-
+	var err error
 	if b.hash != (common.Hash{}) {
-		b.block, err = be.GetBlock(ctx, b.hash)
+		b.block, err = b.backend.GetBlock(ctx, b.hash)
 	} else {
-		b.block, err = be.BlockByNumber(ctx, *b.num)
+		b.block, err = b.backend.BlockByNumber(ctx, *b.num)
 	}
 	if b.block != nil {
 		b.header = b.block.Header()
@@ -402,11 +378,6 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 // if necessary.
 func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 	if b.receipts == nil {
-		be, err := getBackend(b.node)
-		if err != nil {
-			return nil, err
-		}
-
 		hash := b.hash
 		if hash == (common.Hash{}) {
 			header, err := b.resolveHeader(ctx)
@@ -416,7 +387,7 @@ func (b *Block) resolveReceipts(ctx context.Context) ([]*types.Receipt, error) {
 			hash = header.Hash()
 		}
 
-		receipts, err := be.GetReceipts(ctx, hash)
+		receipts, err := b.backend.GetReceipts(ctx, hash)
 		if err != nil {
 			return nil, err
 		}
@@ -475,15 +446,15 @@ func (b *Block) Parent(ctx context.Context) (*Block, error) {
 	if b.header != nil && b.block.NumberU64() > 0 {
 		num := rpc.BlockNumber(b.header.Number.Uint64() - 1)
 		return &Block{
-			node: b.node,
-			num:  &num,
-			hash: b.header.ParentHash,
+			backend: b.backend,
+			num:     &num,
+			hash:    b.header.ParentHash,
 		}, nil
 	} else if b.num != nil && *b.num != 0 {
 		num := *b.num - 1
 		return &Block{
-			node: b.node,
-			num:  &num,
+			backend: b.backend,
+			num:     &num,
 		}, nil
 	}
 	return nil, nil
@@ -572,10 +543,10 @@ func (b *Block) Ommers(ctx context.Context) (*[]*Block, error) {
 	for _, uncle := range block.Uncles() {
 		blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 		ret = append(ret, &Block{
-			node:   b.node,
-			num:    &blockNumber,
-			hash:   uncle.Hash(),
-			header: uncle,
+			backend: b.backend,
+			num:     &blockNumber,
+			hash:    uncle.Hash(),
+			header:  uncle,
 		})
 	}
 	return &ret, nil
@@ -607,12 +578,7 @@ func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
 		h = header.Hash()
 	}
 
-	be, err := getBackend(b.node)
-	if err != nil {
-		return hexutil.Big{}, err
-	}
-
-	return hexutil.Big(*be.GetTd(h)), nil
+	return hexutil.Big(*b.backend.GetTd(h)), nil
 }
 
 // BlockNumberArgs encapsulates arguments to accessors that specify a block number.
@@ -636,7 +602,7 @@ func (b *Block) Miner(ctx context.Context, args BlockNumberArgs) (*Account, erro
 	}
 
 	return &Account{
-		node:        b.node,
+		backend:     b.backend,
 		address:     block.Coinbase(),
 		blockNumber: args.Number(),
 	}, nil
@@ -660,11 +626,11 @@ func (b *Block) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	ret := make([]*Transaction, 0, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		ret = append(ret, &Transaction{
-			node:  b.node,
-			hash:  tx.Hash(),
-			tx:    tx,
-			block: b,
-			index: uint64(i),
+			backend: b.backend,
+			hash:    tx.Hash(),
+			tx:      tx,
+			block:   b,
+			index:   uint64(i),
 		})
 	}
 	return &ret, nil
@@ -683,11 +649,11 @@ func (b *Block) TransactionAt(ctx context.Context, args struct{ Index int32 }) (
 
 	tx := txes[args.Index]
 	return &Transaction{
-		node:  b.node,
-		hash:  tx.Hash(),
-		tx:    tx,
-		block: b,
-		index: uint64(args.Index),
+		backend: b.backend,
+		hash:    tx.Hash(),
+		tx:      tx,
+		block:   b,
+		index:   uint64(args.Index),
 	}, nil
 }
 
@@ -705,10 +671,10 @@ func (b *Block) OmmerAt(ctx context.Context, args struct{ Index int32 }) (*Block
 	uncle := uncles[args.Index]
 	blockNumber := rpc.BlockNumber(uncle.Number.Uint64())
 	return &Block{
-		node:   b.node,
-		num:    &blockNumber,
-		hash:   uncle.Hash(),
-		header: uncle,
+		backend: b.backend,
+		num:     &blockNumber,
+		hash:    uncle.Hash(),
+		header:  uncle,
 	}, nil
 }
 
@@ -733,7 +699,7 @@ type BlockFilterCriteria struct {
 
 // runFilter accepts a filter and executes it, returning all its results as
 // `Log` objects.
-func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]*Log, error) {
+func runFilter(ctx context.Context, be *eth.EthAPIBackend, filter *filters.Filter) ([]*Log, error) {
 	logs, err := filter.Logs(ctx)
 	if err != nil || logs == nil {
 		return nil, err
@@ -742,8 +708,8 @@ func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]
 	ret := make([]*Log, 0, len(logs))
 	for _, log := range logs {
 		ret = append(ret, &Log{
-			node:        node,
-			transaction: &Transaction{node: node, hash: log.TxHash},
+			backend:     be,
+			transaction: &Transaction{backend: be, hash: log.TxHash},
 			log:         log,
 		})
 	}
@@ -751,11 +717,6 @@ func runFilter(ctx context.Context, node *node.Node, filter *filters.Filter) ([]
 }
 
 func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteria }) ([]*Log, error) {
-	be, err := getBackend(b.node)
-	if err != nil {
-		return nil, err
-	}
-
 	var addresses []common.Address
 	if args.Filter.Addresses != nil {
 		addresses = *args.Filter.Addresses
@@ -776,15 +737,15 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	}
 
 	// Construct the range filter
-	filter := filters.NewBlockFilter(be, hash, addresses, topics)
+	filter := filters.NewBlockFilter(b.backend, hash, addresses, topics)
 
 	// Run the filter and return all the logs
-	return runFilter(ctx, b.node, filter)
+	return runFilter(ctx, b.backend, filter)
 }
 
 // Resolver is the top-level object in the GraphQL heirarchy.
 type Resolver struct {
-	node *node.Node
+	backend *eth.EthAPIBackend
 }
 
 func (r *Resolver) Block(ctx context.Context, args struct {
@@ -795,19 +756,19 @@ func (r *Resolver) Block(ctx context.Context, args struct {
 	if args.Number != nil {
 		num := rpc.BlockNumber(uint64(*args.Number))
 		block = &Block{
-			node: r.node,
-			num:  &num,
+			backend: r.backend,
+			num:     &num,
 		}
 	} else if args.Hash != nil {
 		block = &Block{
-			node: r.node,
-			hash: *args.Hash,
+			backend: r.backend,
+			hash:    *args.Hash,
 		}
 	} else {
 		num := rpc.LatestBlockNumber
 		block = &Block{
-			node: r.node,
-			num:  &num,
+			backend: r.backend,
+			num:     &num,
 		}
 	}
 
@@ -825,18 +786,13 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	From hexutil.Uint64
 	To   *hexutil.Uint64
 }) ([]*Block, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return nil, err
-	}
-
 	from := rpc.BlockNumber(args.From)
 
 	var to rpc.BlockNumber
 	if args.To != nil {
 		to = rpc.BlockNumber(*args.To)
 	} else {
-		to = rpc.BlockNumber(be.CurrentBlock().Number().Int64())
+		to = rpc.BlockNumber(r.backend.CurrentBlock().Number().Int64())
 	}
 
 	if to < from {
@@ -847,8 +803,8 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	for i := from; i <= to; i++ {
 		num := i
 		ret = append(ret, &Block{
-			node: r.node,
-			num:  &num,
+			backend: r.backend,
+			num:     &num,
 		})
 	}
 	return ret, nil
@@ -864,7 +820,7 @@ func (r *Resolver) Account(ctx context.Context, args struct {
 	}
 
 	return &Account{
-		node:        r.node,
+		backend:     r.backend,
 		address:     args.Address,
 		blockNumber: blockNumber,
 	}
@@ -872,8 +828,8 @@ func (r *Resolver) Account(ctx context.Context, args struct {
 
 func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Hash }) (*Transaction, error) {
 	tx := &Transaction{
-		node: r.node,
-		hash: args.Hash,
+		backend: r.backend,
+		hash:    args.Hash,
 	}
 
 	// Resolve the transaction; if it doesn't exist, return nil.
@@ -887,16 +843,11 @@ func (r *Resolver) Transaction(ctx context.Context, args struct{ Hash common.Has
 }
 
 func (r *Resolver) SendRawTransaction(ctx context.Context, args struct{ Data hexutil.Bytes }) (common.Hash, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(args.Data, tx); err != nil {
 		return common.Hash{}, err
 	}
-	hash, err := ethapi.SubmitTransaction(ctx, be, tx)
+	hash, err := ethapi.SubmitTransaction(ctx, r.backend, tx)
 	return hash, err
 }
 
@@ -934,17 +885,12 @@ func (r *Resolver) Call(ctx context.Context, args struct {
 	Data        ethapi.CallArgs
 	BlockNumber *hexutil.Uint64
 }) (*CallResult, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return nil, err
-	}
-
 	blockNumber := rpc.LatestBlockNumber
 	if args.BlockNumber != nil {
 		blockNumber = rpc.BlockNumber(*args.BlockNumber)
 	}
 
-	result, gas, failed, err := ethapi.DoCall(ctx, be, args.Data, blockNumber, vm.Config{}, 5*time.Second)
+	result, gas, failed, err := ethapi.DoCall(ctx, r.backend, args.Data, blockNumber, vm.Config{}, 5*time.Second)
 	status := hexutil.Uint64(1)
 	if failed {
 		status = 0
@@ -960,17 +906,12 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	Data        ethapi.CallArgs
 	BlockNumber *hexutil.Uint64
 }) (hexutil.Uint64, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return 0, err
-	}
-
 	blockNumber := rpc.LatestBlockNumber
 	if args.BlockNumber != nil {
 		blockNumber = rpc.BlockNumber(*args.BlockNumber)
 	}
 
-	gas, err := ethapi.DoEstimateGas(ctx, be, args.Data, blockNumber)
+	gas, err := ethapi.DoEstimateGas(ctx, r.backend, args.Data, blockNumber)
 	return hexutil.Uint64(gas), err
 }
 
@@ -995,11 +936,6 @@ type FilterCriteria struct {
 }
 
 func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria }) ([]*Log, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return nil, err
-	}
-
 	// Convert the RPC block numbers into internal representations
 	begin := rpc.LatestBlockNumber.Int64()
 	if args.Filter.FromBlock != nil {
@@ -1021,28 +957,18 @@ func (r *Resolver) Logs(ctx context.Context, args struct{ Filter FilterCriteria 
 	}
 
 	// Construct the range filter
-	filter := filters.NewRangeFilter(filters.Backend(be), begin, end, addresses, topics)
+	filter := filters.NewRangeFilter(filters.Backend(r.backend), begin, end, addresses, topics)
 
-	return runFilter(ctx, r.node, filter)
+	return runFilter(ctx, r.backend, filter)
 }
 
 func (r *Resolver) GasPrice(ctx context.Context) (hexutil.Big, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return hexutil.Big{}, err
-	}
-
-	price, err := be.SuggestPrice(ctx)
+	price, err := r.backend.SuggestPrice(ctx)
 	return hexutil.Big(*price), err
 }
 
 func (r *Resolver) ProtocolVersion(ctx context.Context) (int32, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return 0, err
-	}
-
-	return int32(be.ProtocolVersion()), nil
+	return int32(r.backend.ProtocolVersion()), nil
 }
 
 // SyncState represents the synchronisation status returned from the `syncing` accessor.
@@ -1080,11 +1006,7 @@ func (s *SyncState) KnownStates() *hexutil.Uint64 {
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (r *Resolver) Syncing() (*SyncState, error) {
-	be, err := getBackend(r.node)
-	if err != nil {
-		return nil, err
-	}
-	progress := be.Downloader().Progress()
+	progress := r.backend.Downloader().Progress()
 
 	// Return not syncing if the synchronisation already completed
 	if progress.CurrentBlock >= progress.HighestBlock {
@@ -1096,8 +1018,8 @@ func (r *Resolver) Syncing() (*SyncState, error) {
 
 // NewHandler returns a new `http.Handler` that will answer GraphQL queries.
 // It additionally exports an interactive query browser on the / endpoint.
-func NewHandler(n *node.Node) (http.Handler, error) {
-	q := Resolver{n}
+func NewHandler(be *eth.EthAPIBackend) (http.Handler, error) {
+	q := Resolver{be}
 
 	s, err := graphql.ParseSchema(schema, &q)
 	if err != nil {
@@ -1114,13 +1036,13 @@ func NewHandler(n *node.Node) (http.Handler, error) {
 
 // Service encapsulates an  ETHGraphQL service.
 type Service struct {
-	endpoint string           // The host:port endpoint for this service.
-	cors     []string         // Allowed CORS domains
-	vhosts   []string         // Recognised vhosts
-	timeouts rpc.HTTPTimeouts // Timeout settings for HTTP requests.
-	node     *node.Node       // The node that queries will operate onn.
-	handler  http.Handler     // The `http.Handler` used to answer queries.
-	listener net.Listener     // The listening socket.
+	endpoint string             // The host:port endpoint for this service.
+	cors     []string           // Allowed CORS domains
+	vhosts   []string           // Recognised vhosts
+	timeouts rpc.HTTPTimeouts   // Timeout settings for HTTP requests.
+	backend  *eth.EthAPIBackend // The backend that queries will operate onn.
+	handler  http.Handler       // The `http.Handler` used to answer queries.
+	listener net.Listener       // The listening socket.
 }
 
 // Protocols returns the list of protocols exported by this service.
@@ -1133,7 +1055,7 @@ func (s *Service) APIs() []rpc.API { return nil }
 // layer was also initialized to spawn any goroutines required by the service.
 func (s *Service) Start(server *p2p.Server) error {
 	var err error
-	s.handler, err = NewHandler(s.node)
+	s.handler, err = NewHandler(s.backend)
 	if err != nil {
 		return err
 	}
@@ -1159,19 +1081,23 @@ func (s *Service) Stop() error {
 }
 
 // NewService constructs a new service instance.
-func NewService(ctx *node.ServiceContext, stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
+func NewService(backend *eth.EthAPIBackend, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) (*Service, error) {
 	return &Service{
 		endpoint: endpoint,
 		cors:     cors,
 		vhosts:   vhosts,
 		timeouts: timeouts,
-		node:     stack,
+		backend:  backend,
 	}, nil
 }
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
 func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []string, timeouts rpc.HTTPTimeouts) error {
 	return stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return NewService(ctx, stack, endpoint, cors, vhosts, timeouts)
+		var ethereum *eth.Ethereum
+		if err := ctx.Service(&ethereum); err != nil {
+			return nil, err
+		}
+		return NewService(ethereum.APIBackend, endpoint, cors, vhosts, timeouts)
 	})
 }
