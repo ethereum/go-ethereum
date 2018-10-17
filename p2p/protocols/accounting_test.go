@@ -424,12 +424,12 @@ func createTestSpec() *Spec {
 		Version:    42,
 		MaxMsgSize: 10 * 1024,
 		Messages: []interface{}{
-			perBytesMsgReceiverPays{},
-			perBytesMsgSenderPays{},
-			perUnitMsgReceiverPays{},
-			perUnitMsgSenderPays{},
-			zeroPriceMsg{},
-			nilPriceMsg{},
+			&perBytesMsgReceiverPays{},
+			&perBytesMsgSenderPays{},
+			&perUnitMsgReceiverPays{},
+			&perUnitMsgSenderPays{},
+			&zeroPriceMsg{},
+			&nilPriceMsg{},
 		},
 	}
 	return spec
