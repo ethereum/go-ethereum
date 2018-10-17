@@ -122,7 +122,7 @@ type Config struct {
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
 
-	// specify time to exit after syncing
+	// Specify time to exit after syncing
 	ExitWhenSynced time.Duration
 
 	// Type of the EWASM interpreter ("" for detault)

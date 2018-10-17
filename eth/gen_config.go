@@ -43,6 +43,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
+		ExitWhenSynced          time.Duration
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -69,6 +70,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
+	enc.ExitWhenSynced = c.ExitWhenSynced
 	return &enc, nil
 }
 
@@ -99,6 +101,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
+		ExitWhenSynced          time.Duration
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -175,6 +178,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
+	}
+	if dec.ExitWhenSynced != nil {
+		c.ExitWhenSynced = *dec.ExitWhenSynced
 	}
 	return nil
 }
