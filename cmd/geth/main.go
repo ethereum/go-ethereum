@@ -344,7 +344,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				var mux = stack.EventMux()
 				var sub = mux.Subscribe(downloader.DoneEvent{})
 				<-sub.Chan()
-				log.Info("Synchronisation completed, exitting", "countdown", downloader.DoneEvent{})
+				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 				time.Sleep(exitWhenSynced)
 				stack.Stop()
 			} else {
@@ -355,7 +355,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				var mux = stack.EventMux()
 				var sub = mux.Subscribe(downloader.DoneEvent{})
 				<-sub.Chan()
-				log.Info("Synchronisation completed, exitting", "countdown", downloader.DoneEvent{})
+				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
 				time.Sleep(exitWhenSynced)
 				stack.Stop()
 			}
