@@ -189,7 +189,7 @@ func (c *meteredConn) handshakeDone(id enode.ID) {
 func (c *meteredConn) Close() error {
 	err := c.Conn.Close()
 	c.lock.RLock()
-	if enode.Equal(c.id, enode.ID{}) {
+	if c.id == (enode.ID{}) {
 		// If the peer disconnects before the handshake.
 		c.lock.RUnlock()
 		meteredPeerFeed.Send(MeteredPeerEvent{

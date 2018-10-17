@@ -253,13 +253,3 @@ func RandomID(a ID, n int) (b ID) {
 	}
 	return b
 }
-
-// Equal returns a boolean reporting whether a and b contain the same bytes.
-func Equal(a, b ID) bool {
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
