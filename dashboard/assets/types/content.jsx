@@ -58,8 +58,7 @@ export type Network = {
 export type PeerEvent = {
 	ip:           string,
 	id:           string,
-	removeIP:     string,
-	removeID:     string,
+	remove:       string,
 	location:     GeoLocation,
 	connected:    Date,
 	disconnected: Date,

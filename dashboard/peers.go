@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	eventBufferLimit = 128                  // Maximum number of events of buffered peer events.
-	knownPeerLimit   = p2p.MeteredPeerLimit // Maximum number of stored peers, which successfully made the handshake.
-	unknownPeerLimit = p2p.MeteredPeerLimit // Maximum number of stored peers, which failed to make the handshake.
+	eventBufferLimit = 128 // Maximum number of events of buffered peer events.
+	knownPeerLimit   = 30  //p2p.MeteredPeerLimit // Maximum number of stored peers, which successfully made the handshake.
+	unknownPeerLimit = 100 //p2p.MeteredPeerLimit // Maximum number of stored peers, which failed to make the handshake.
 
 	// eventLimit is the maximum number of the dashboard's custom peer events,
 	// that are collected between two metering period and sent to the clients
@@ -136,27 +136,16 @@ func (pc *PeerContainer) getOrInitBundle(ip string) (*PeerBundle, []*PeerEvent) 
 	return pc.Bundles[ip], events
 }
 
+func (pc *PeerContainer) getOrInitKnownPeer(ip, id string) (*KnownPeer, []*PeerEvent) {
+	bundle, events := pc.getOrInitBundle(ip)
+	peer, peerEvents := bundle.getOrInitKnownPeer(ip, id, pc.refresh)
+	return peer, append(events, peerEvents...)
+}
+
 // extendKnown handles the events of the successfully connected peers.
 // Returns the events occurring during the extension.
-func (pc *PeerContainer) extendKnown(event *PeerEvent) (events []*PeerEvent) {
-	bundle, bundleInitEvents := pc.getOrInitBundle(event.IP)
-	events = append(events, bundleInitEvents...)
-	peer, peerInitEvents := bundle.getOrInitKnownPeer(event.IP, event.ID, pc.refresh)
-	events = append(events, peerInitEvents...)
-	if peer.listElement != nil {
-		// If the peer is already in the list, remove it and reinsert later.
-		pc.knownPeers.Remove(peer.listElement)
-		peer.listElement = nil
-	}
-	for pc.knownPeers.Len() >= knownPeerLimit {
-		// While the length of the list is greater than or equal to the limit before
-		// the insertion, remove the first element from the list and from the map.
-		if removedPeer, ok := pc.knownPeers.Remove(pc.knownPeers.Front()).(*KnownPeer); ok {
-			if event := pc.removeKnown(removedPeer.ip, removedPeer.id); event != nil {
-				events = append(events, event)
-			}
-		}
-	}
+func (pc *PeerContainer) extendKnown(event *PeerEvent) []*PeerEvent {
+	peer, events := pc.getOrInitKnownPeer(event.IP, event.ID)
 	// Append the connect and the disconnect events to
 	// the corresponding arrays keeping the limit.
 	if event.Connected != nil {
@@ -171,24 +160,44 @@ func (pc *PeerContainer) extendKnown(event *PeerEvent) (events []*PeerEvent) {
 			peer.Disconnected = peer.Disconnected[first:]
 		}
 	}
+	if peer.listElement != nil {
+		if pc.activeSeparator == peer.listElement {
+			pc.activeSeparator = pc.activeSeparator.Prev()
+		}
+		// If the peer is already in the list, remove and reinsert it.
+		_ = pc.knownPeers.Remove(peer.listElement)
+		peer.listElement = nil
+	}
 	// Insert the peer into the list.
 	if pc.activeSeparator == nil {
 		// If there isn't active peer in the list
 		peer.listElement = pc.knownPeers.PushBack(peer)
 		pc.activeSeparator = peer.listElement
+	} else if e := pc.knownPeers.InsertAfter(peer, pc.activeSeparator); e != nil {
+		// Insert the peer after the last inactive peer, and set it as the separator.
+		peer.listElement, pc.activeSeparator = e, e
 	} else {
-		// Insert the peer after the last inactive peer, then increment the separator.
-		peer.listElement = pc.knownPeers.InsertAfter(peer, pc.activeSeparator)
-		pc.activeSeparator = pc.activeSeparator.Next()
+		log.Warn("Failed to insert known peer", "peer", *peer)
+	}
+	for pc.knownPeers.Len() > knownPeerLimit {
+		// While the length of the list is greater than the limit,
+		// remove the first element from the list and from the map.
+		if pc.activeSeparator == pc.knownPeers.Front() {
+			pc.activeSeparator = nil
+		}
+		if removedPeer, ok := pc.knownPeers.Remove(pc.knownPeers.Front()).(*KnownPeer); ok {
+			events = append(events, pc.removeKnown(removedPeer.ip, removedPeer.id)...)
+		} else {
+			log.Warn("Failed to parse the removed peer")
+		}
 	}
 	return events
 }
 
 // extendUnknown handles the events of the peers failing before/during the handshake.
 // Returns the events occurring during the extension.
-func (pc *PeerContainer) extendUnknown(event *PeerEvent) (events []*PeerEvent) {
-	bundle, initEvents := pc.getOrInitBundle(event.IP)
-	events = append(events, initEvents...)
+func (pc *PeerContainer) extendUnknown(event *PeerEvent) []*PeerEvent {
+	bundle, events := pc.getOrInitBundle(event.IP)
 	bundle.UnknownPeers = append(bundle.UnknownPeers, &UnknownPeer{
 		Connected:    *event.Connected,
 		Disconnected: *event.Disconnected,
@@ -198,16 +207,14 @@ func (pc *PeerContainer) extendUnknown(event *PeerEvent) (events []*PeerEvent) {
 		// While the length of the connection attempt order array is greater
 		// than the limit, remove the first element from the involved peer's
 		// array and also from the super array.
-		if r := pc.removeUnknown(pc.unknownPeers[0]); r != nil {
-			events = append(events, r)
-		}
+		events = append(events, pc.removeUnknown(pc.unknownPeers[0])...)
 		pc.unknownPeers = pc.unknownPeers[1:]
 	}
 	return events
 }
 
 // setActive moves the peer denoted by the given IP address and node ID after
-// the list's active separator.
+// the list's active separator. Takes no effect if the peer doesn't exist.
 func (pc *PeerContainer) setActive(ip, id string) {
 	if bundle, ok := pc.Bundles[ip]; ok {
 		if peer, ok := bundle.KnownPeers[id]; ok {
@@ -215,14 +222,19 @@ func (pc *PeerContainer) setActive(ip, id string) {
 				// If the peer is already in the list, remove it first.
 				// Theoretically this should always happen, because all
 				// the peers are inserted into the list.
-				pc.knownPeers.Remove(peer.listElement)
+				if pc.activeSeparator == peer.listElement {
+					pc.activeSeparator = pc.activeSeparator.Prev()
+				}
+				_ = pc.knownPeers.Remove(peer.listElement)
 			}
 			if pc.activeSeparator == nil {
 				// If there isn't active peer yet.
 				peer.listElement = pc.knownPeers.PushBack(peer)
 				pc.activeSeparator = peer.listElement
+			} else if e := pc.knownPeers.InsertAfter(peer, pc.activeSeparator); e != nil {
+				peer.listElement = e
 			} else {
-				peer.listElement = pc.knownPeers.InsertAfter(peer, pc.activeSeparator)
+				log.Warn("Failed to insert the peer after the separator", "peer", peer)
 			}
 		}
 	}
@@ -250,41 +262,53 @@ type PeerBundle struct {
 
 // removeKnown removes the known peer belonging to the
 // given IP address and node ID from the peer tree.
-func (pc *PeerContainer) removeKnown(ip, id string) (removed *PeerEvent) {
+func (pc *PeerContainer) removeKnown(ip, id string) (events []*PeerEvent) {
 	if bundle, ok := pc.Bundles[ip]; ok {
 		if _, ok := bundle.KnownPeers[id]; ok {
-			removed = &PeerEvent{
-				RemoveID: id,
-			}
+			events = append(events, &PeerEvent{
+				Remove: RemoveKnown,
+				IP:     ip,
+				ID:     id,
+			})
 			delete(bundle.KnownPeers, id)
+		} else {
+			log.Warn("No peer to remove", ip, id)
 		}
 		if len(bundle.KnownPeers) < 1 && len(bundle.UnknownPeers) < 1 {
-			if removed == nil {
-				removed = &PeerEvent{
-					RemoveIP: ip,
-				}
-			} else {
-				removed.RemoveIP = ip
-			}
+			events = append(events, &PeerEvent{
+				Remove: RemoveBundle,
+				IP:     ip,
+			})
 			delete(pc.Bundles, ip)
 		}
+	} else {
+		log.Warn("No bundle to remove", ip)
 	}
-	return removed
+	return events
 }
 
 // removeUnknown removes the unknown peer belonging to the
 // given IP address and node ID from the peer tree.
-func (pc *PeerContainer) removeUnknown(ip string) (removed *PeerEvent) {
+func (pc *PeerContainer) removeUnknown(ip string) (events []*PeerEvent) {
 	if bundle, ok := pc.Bundles[ip]; ok {
 		if len(bundle.UnknownPeers) > 0 {
+			events = append(events, &PeerEvent{
+				Remove: RemoveUnknown,
+				IP:     ip,
+			})
 			bundle.UnknownPeers = bundle.UnknownPeers[1:]
 		}
-		if len(bundle.KnownPeers) < 1 && len(bundle.UnknownPeers) < 1 {
-			removed = &PeerEvent{RemoveIP: ip}
+		if len(bundle.UnknownPeers) < 1 && len(bundle.KnownPeers) < 1 {
+			events = append(events, &PeerEvent{
+				Remove: RemoveBundle,
+				IP:     ip,
+			})
 			delete(pc.Bundles, ip)
 		}
+	} else {
+		log.Warn("No bundle to remove", ip)
 	}
-	return removed
+	return events
 }
 
 // getOrInitKnownPeer inserts a new peer into the map, if the peer belonging
@@ -300,8 +324,8 @@ func (bundle *PeerBundle) getOrInitKnownPeer(ip, id string, refresh time.Duratio
 		events = append(events, &PeerEvent{
 			IP:      ip,
 			ID:      id,
-			Ingress: ingress,
-			Egress:  egress,
+			Ingress: append([]*ChartEntry{}, ingress...),
+			Egress:  append([]*ChartEntry{}, egress...),
 		})
 		bundle.KnownPeers[id] = &KnownPeer{
 			ip:      ip,
@@ -333,6 +357,8 @@ type KnownPeer struct {
 
 	listElement *list.Element // Pointer to the peer element in the list.
 	ip, id      string        // The IP and the ID by which the peer can be accessed in the tree.
+	prevIngress float64
+	prevEgress  float64
 }
 
 // UnknownPeer contains a failed peer connection attempt's attributes.
@@ -345,17 +371,24 @@ type UnknownPeer struct {
 	Disconnected time.Time `json:"disconnected"`
 }
 
+type RemovedPeerType string
+
+const (
+	RemoveKnown   RemovedPeerType = "known"
+	RemoveUnknown RemovedPeerType = "unknown"
+	RemoveBundle  RemovedPeerType = "bundle"
+)
+
 // PeerEvent contains the attributes of a peer event.
 type PeerEvent struct {
-	IP           string       `json:"ip,omitempty"`           // IP address of the peer.
-	ID           string       `json:"id,omitempty"`           // Node ID of the peer.
-	RemoveIP     string       `json:"removeIP,omitempty"`     // IP address of the peer that is to be removed.
-	RemoveID     string       `json:"removeID,omitempty"`     // Node ID of the peer that is to be removed.
-	Location     *GeoLocation `json:"location,omitempty"`     // Geographical location of the peer.
-	Connected    *time.Time   `json:"connected,omitempty"`    // Timestamp of the connection moment.
-	Disconnected *time.Time   `json:"disconnected,omitempty"` // Timestamp of the disonnection moment.
-	Ingress      ChartEntries `json:"ingress,omitempty"`      // Ingress samples.
-	Egress       ChartEntries `json:"egress,omitempty"`       // Egress samples.
+	IP           string          `json:"ip,omitempty"`           // IP address of the peer.
+	ID           string          `json:"id,omitempty"`           // Node ID of the peer.
+	Remove       RemovedPeerType `json:"remove,omitempty"`       // Type of the peer that is to be removed.
+	Location     *GeoLocation    `json:"location,omitempty"`     // Geographical location of the peer.
+	Connected    *time.Time      `json:"connected,omitempty"`    // Timestamp of the connection moment.
+	Disconnected *time.Time      `json:"disconnected,omitempty"` // Timestamp of the disonnection moment.
+	Ingress      ChartEntries    `json:"ingress,omitempty"`      // Ingress samples.
+	Egress       ChartEntries    `json:"egress,omitempty"`       // Egress samples.
 }
 
 // trafficMap
@@ -423,9 +456,9 @@ func (db *Dashboard) collectPeerData() {
 	}
 	db.peerLock.Unlock()
 
-	// diff contains peer events, which trigger operations that
+	// newPeerEvents contains peer events, which trigger operations that
 	// will be executed on the peer tree after a metering period.
-	diff := make([]*PeerEvent, 0, eventLimit)
+	newPeerEvents := make([]*PeerEvent, 0, eventLimit)
 	ingress, egress := new(trafficMap), new(trafficMap)
 	*ingress, *egress = make(trafficMap), make(trafficMap)
 
@@ -436,15 +469,16 @@ func (db *Dashboard) collectPeerData() {
 			switch event.Type {
 			case p2p.PeerConnected:
 				connected := now.Add(-event.Elapsed)
-				diff = append(diff, &PeerEvent{
+				newPeerEvents = append(newPeerEvents, &PeerEvent{
 					IP:        event.IP.String(),
-					ID:        event.ID,
+					ID:        event.ID.String(),
 					Connected: &connected,
 				})
 			case p2p.PeerDisconnected:
-				diff = append(diff, &PeerEvent{
-					IP:           event.IP.String(),
-					ID:           event.ID,
+				ip, id := event.IP.String(), event.ID.String()
+				newPeerEvents = append(newPeerEvents, &PeerEvent{
+					IP:           ip,
+					ID:           id,
 					Disconnected: &now,
 				})
 				// The disconnect event comes with the last metered traffic count,
@@ -453,11 +487,11 @@ func (db *Dashboard) collectPeerData() {
 				// period the same peer disconnects multiple times, and appending
 				// all the samples to the traffic arrays would shift the metering,
 				// so only the last metering is stored, overwriting the previous one.
-				ingress.insert(event.IP.String(), event.ID, float64(event.Ingress))
-				egress.insert(event.IP.String(), event.ID, float64(event.Egress))
+				ingress.insert(ip, id, float64(event.Ingress))
+				egress.insert(ip, id, float64(event.Egress))
 			case p2p.PeerHandshakeFailed:
 				connected := now.Add(-event.Elapsed)
-				diff = append(diff, &PeerEvent{
+				newPeerEvents = append(newPeerEvents, &PeerEvent{
 					IP:           event.IP.String(),
 					Connected:    &connected,
 					Disconnected: &now,
@@ -470,7 +504,9 @@ func (db *Dashboard) collectPeerData() {
 			p2p.PeerIngressRegistry.Each(collectIngress(ingress))
 			p2p.PeerEgressRegistry.Each(collectEgress(egress))
 
+			// Protect 'peers', because it is part of the history.
 			db.peerLock.Lock()
+
 			// Usually the active peers don't produce events, and marking
 			// them as active makes it sure that they won't be removed from
 			// the tree. Only the active peers are registered into the peer
@@ -486,44 +522,58 @@ func (db *Dashboard) collectPeerData() {
 			peers.resetActiveSeparator()
 			for ip, bundle := range *ingress {
 				for id := range bundle {
+					// Only set the peers that are inserted both
+					// into the ingress and the egress maps.
 					if _, ok := (*egress)[ip][id]; ok {
 						peers.setActive(ip, id)
+					} else {
+						log.Warn("Peer missing traffic sample", "IP", ip, "ID", id)
 					}
 				}
 			}
-			var events []*PeerEvent
-			for i := 0; i < len(diff); i++ {
-				if diff[i].IP == "" {
-					log.Warn("Peer event without IP", "event", *diff[i])
+			var diff []*PeerEvent
+			for i := 0; i < len(newPeerEvents); i++ {
+				if newPeerEvents[i].IP == "" {
+					log.Warn("Peer event without IP", "event", *newPeerEvents[i])
 					continue
 				}
+				diff = append(diff, newPeerEvents[i])
 				// There are two main branches of peer events coming from the event
 				// feed, one belongs to the known peers, one to the unknown peers.
 				// If the event has node ID, it belongs to a known peer, otherwise
 				// to an unknown one.
-				if diff[i].ID == "" {
-					events = append(events, peers.extendUnknown(diff[i])...)
+				//
+				// The extension can produce additional peer events, such
+				// as remove, location and initial samples events.
+				if newPeerEvents[i].ID == "" {
+					diff = append(diff, peers.extendUnknown(newPeerEvents[i])...)
 					continue
 				}
-				events = append(events, peers.extendKnown(diff[i])...)
+				diff = append(diff, peers.extendKnown(newPeerEvents[i])...)
 			}
-			// The insertion can produce additional peer events, such
-			// as remove, location and initial samples events. These
-			// are stored in the 'events', then appended to the 'diff'.
-			diff = append(diff, events...)
+
 			now := time.Now()
-			// Update the peer tree using the events.
+			// Update the peer tree using the traffic maps.
 			for ip, bundle := range peers.Bundles {
 				for id, peer := range bundle.KnownPeers {
 					// Value is 0 if the traffic map doesn't have the
 					// entry corresponding to the given IP and ID.
+					curIngress, curEgress := (*ingress)[ip][id], (*egress)[ip][id]
+					deltaIngress, deltaEgress := curIngress, curEgress
+					if deltaIngress >= peer.prevIngress {
+						deltaIngress -= peer.prevIngress
+					}
+					if deltaEgress >= peer.prevEgress {
+						deltaEgress -= peer.prevEgress
+					}
+					peer.prevIngress, peer.prevEgress = curIngress, curEgress
 					i := &ChartEntry{
 						Time:  now,
-						Value: (*ingress)[ip][id],
+						Value: deltaIngress,
 					}
 					e := &ChartEntry{
 						Time:  now,
-						Value: (*egress)[ip][id],
+						Value: deltaEgress,
 					}
 					peer.Ingress = append(peer.Ingress, i)
 					peer.Egress = append(peer.Egress, e)
@@ -542,15 +592,20 @@ func (db *Dashboard) collectPeerData() {
 					})
 				}
 			}
+			//ss, _ := json.MarshalIndent(db.history.Network, "", "  ")
+			//fmt.Println(string(ss))
+
 			db.peerLock.Unlock()
 
+			//s, _ := json.MarshalIndent(diff, "", "  ")
+			//fmt.Println(string(s))
 			db.sendToAll(&Message{Network: &NetworkMessage{
-				Diff: append([]*PeerEvent{}, diff...)},
-			})
+				Diff: diff,
+			}})
 			// Clear the traffic maps, and the event array,
 			// prepare them for the next metering.
 			*ingress, *egress = make(trafficMap), make(trafficMap)
-			diff = diff[:0]
+			newPeerEvents = newPeerEvents[:0]
 		case err := <-subPeer.Err():
 			log.Warn("Peer subscription error", "err", err)
 			return
