@@ -262,7 +262,7 @@ func TestProtocolHook(t *testing.T) {
 	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "handshake" {
 		t.Fatal("Expected msg to be set, but it is not")
 	}
-	if testHook.send != true {
+	if !testHook.send {
 		t.Fatal("Expected a send message, but it is not")
 	}
 	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[0].ID() {
@@ -290,7 +290,7 @@ func TestProtocolHook(t *testing.T) {
 	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "response" {
 		t.Fatal("Expected msg to be set, but it is not")
 	}
-	if testHook.send != false {
+	if testHook.send {
 		t.Fatal("Expected a send message, but it is not")
 	}
 	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[1].ID() {

@@ -104,6 +104,9 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 }
 
 //Implement Hook.Send
+// Send takes a peer, a size and a msg and
+// - calculates the cost for the local node sending a msg of size to peer using the Prices interface
+// - credits/debits local node using balance interface
 func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	//get the price for a message (through the protocol spec)
 	price := ah.Price(msg)
@@ -121,6 +124,9 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 }
 
 //Implement Hook.Receive
+// Receive takes a peer, a size and a msg and
+// - calculates the cost for the local node receiving a msg of size from peer using the Prices interface
+// - credits/debits local node using balance interface
 func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 	//get the price for a message (through the protocol spec)
 	price := ah.Price(msg)
@@ -139,21 +145,19 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 
 //record some metrics
 func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
-	/*
-		if price > 0 {
-			mBalanceCredit.Inc(int64(price))
-			mBytesCredit.Inc(int64(size))
-			mMsgCredit.Inc(1)
-			if err != nil {
-				mPeerDrops.Inc(1)
-			}
-		} else {
-			mBalanceDebit.Inc(int64(price))
-			mBytesDebit.Inc(int64(size))
-			mMsgDebit.Inc(1)
-			if err != nil {
-				mSelfDrops.Inc(1)
-			}
+	if price > 0 {
+		mBalanceCredit.Inc(price)
+		mBytesCredit.Inc(int64(size))
+		mMsgCredit.Inc(1)
+		if err != nil {
+			mPeerDrops.Inc(1)
 		}
-	*/
+	} else {
+		mBalanceDebit.Inc(price)
+		mBytesDebit.Inc(int64(size))
+		mMsgDebit.Inc(1)
+		if err != nil {
+			mSelfDrops.Inc(1)
+		}
+	}
 }
