@@ -160,18 +160,18 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // handshakeDone is called when a peer handshake is done. Registers the peer to
 // the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
-func (c *meteredConn) handshakeDone(nodeID enode.ID) {
+func (c *meteredConn) handshakeDone(id enode.ID) {
 	if atomic.AddInt32(&meteredPeerCount, 1) >= MeteredPeerLimit {
 		// Don't register the peer in the traffic registries.
 		atomic.AddInt32(&meteredPeerCount, -1)
 		c.lock.Lock()
-		c.id, c.trafficMetered = nodeID, false
+		c.id, c.trafficMetered = id, false
 		c.lock.Unlock()
 		log.Warn("Metered peer count reached the limit")
 	} else {
-		key := fmt.Sprintf("%s/%s", c.ip, nodeID.String())
+		key := fmt.Sprintf("%s/%s", c.ip, id.String())
 		c.lock.Lock()
-		c.id, c.trafficMetered = nodeID, true
+		c.id, c.trafficMetered = id, true
 		c.ingressMeter = metrics.NewRegisteredMeter(key, PeerIngressRegistry)
 		c.egressMeter = metrics.NewRegisteredMeter(key, PeerEgressRegistry)
 		c.lock.Unlock()
@@ -179,7 +179,7 @@ func (c *meteredConn) handshakeDone(nodeID enode.ID) {
 	meteredPeerFeed.Send(MeteredPeerEvent{
 		Type:    PeerConnected,
 		IP:      c.ip,
-		ID:      nodeID,
+		ID:      id,
 		Elapsed: time.Since(c.connected),
 	})
 }
