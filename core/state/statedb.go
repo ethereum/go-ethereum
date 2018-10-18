@@ -268,7 +268,7 @@ func (n *ProofList) Put(key []byte, value []byte) error {
 func (self *StateDB) GetProof(a common.Address) [][]byte {
 	var proof ProofList
 	self.trie.Prove(crypto.Keccak256(a.Bytes()), 0, &proof)
-	return [][]byte(proof)
+	return proof
 }
 
 // returns the StorageProof for given key
@@ -279,7 +279,7 @@ func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) [][]byte
 	}
 	var proof ProofList
 	trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	return [][]byte(proof)
+	return proof
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.

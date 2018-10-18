@@ -514,28 +514,32 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	codeHash := state.GetCodeHash(address)
 	storageProof := make([]map[string]interface{}, len(storageKeys))
 
+	// if we have a storageTrie, (which means the account exists), we can update the storagehash
 	if storageTrie != nil {
 		storageHash = storageTrie.Hash()
 	} else {
+		// no storageTrie means the account does not exist, so the codeHash is the hash of an empty bytearray.
 		codeHash = crypto.Keccak256Hash(nil)
 	}
 
-	for i := range storageKeys {
+	// create the proof for the storageKeys
+	for i, key := range storageKeys {
 		if storageTrie != nil {
 			storageProof[i] = map[string]interface{}{
-				"key":   storageKeys[i],
-				"value": state.GetState(address, common.HexToHash(storageKeys[i])),
-				"proof": common.ToHexArray(state.GetStorageProof(address, common.HexToHash(storageKeys[i]))),
+				"key":   key,
+				"value": state.GetState(address, common.HexToHash(key)),
+				"proof": common.ToHexArray(state.GetStorageProof(address, common.HexToHash(key))),
 			}
 		} else {
 			storageProof[i] = map[string]interface{}{
-				"key":   storageKeys[i],
+				"key":   key,
 				"value": common.Hash{},
 				"proof": []string{},
 			}
 		}
 	}
 
+	// fill results for the account
 	fields := map[string]interface{}{
 		"address":      address,
 		"accountProof": common.ToHexArray(state.GetProof(address)),
