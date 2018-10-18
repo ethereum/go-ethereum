@@ -406,16 +406,16 @@ func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Heade
 }
 
 func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
-	if header.Number.Uint64() == 0 {
-		// Not check signer for genesis block.
-		return true, nil
+	pre := common.Address{}
+	// masternode[0] has chance to create block 1
+	preIndex := -1
+	if header.Number.Uint64() != 0 {
+		pre, err := ecrecover(header, snap.sigcache)
+		if err != nil {
+			return false, err
+		}
+		preIndex = position(masternodes, pre)
 	}
-
-	pre, err := ecrecover(header, snap.sigcache)
-	if err != nil {
-		return false, err
-	}
-	preIndex := position(masternodes, pre)
 	curIndex := position(masternodes, cur)
 	log.Info("Debugging info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
 	for i, s := range masternodes {
