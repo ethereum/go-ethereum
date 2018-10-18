@@ -502,8 +502,24 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+// Result structs for GetProof
+type AccountResult struct {
+	Address      common.Address  `json:"address"`
+	AccountProof []string        `json:"accountProof"`
+	Balance      *hexutil.Big    `json:"balance"`
+	CodeHash     common.Hash     `json:"codeHash"`
+	Nonce        hexutil.Uint64  `json:"nonce"`
+	StorageHash  common.Hash     `json:"storageHash"`
+	StorageProof []StorageResult `json:"storageProof"`
+}
+type StorageResult struct {
+	Key   string      `json:"key"`
+	Value common.Hash `json:"value"`
+	Proof []string    `json:"proof"`
+}
+
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
-func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNr rpc.BlockNumber) (*AccountResult, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
@@ -512,7 +528,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	storageTrie := state.StorageTrie(address)
 	storageHash := types.EmptyRootHash
 	codeHash := state.GetCodeHash(address)
-	storageProof := make([]map[string]interface{}, len(storageKeys))
+	storageProof := make([]StorageResult, len(storageKeys))
 
 	// if we have a storageTrie, (which means the account exists), we can update the storagehash
 	if storageTrie != nil {
@@ -525,32 +541,21 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
-			storageProof[i] = map[string]interface{}{
-				"key":   key,
-				"value": state.GetState(address, common.HexToHash(key)),
-				"proof": common.ToHexArray(state.GetStorageProof(address, common.HexToHash(key))),
-			}
+			storageProof[i] = StorageResult{key, state.GetState(address, common.HexToHash(key)), common.ToHexArray(state.GetStorageProof(address, common.HexToHash(key)))}
 		} else {
-			storageProof[i] = map[string]interface{}{
-				"key":   key,
-				"value": common.Hash{},
-				"proof": []string{},
-			}
+			storageProof[i] = StorageResult{key, common.Hash{}, []string{}}
 		}
 	}
 
-	// fill results for the account
-	fields := map[string]interface{}{
-		"address":      address,
-		"accountProof": common.ToHexArray(state.GetProof(address)),
-		"balance":      (*hexutil.Big)(state.GetBalance(address)),
-		"codeHash":     codeHash,
-		"nonce":        hexutil.Uint64(state.GetNonce(address)),
-		"storageHash":  storageHash,
-		"storageProof": storageProof,
-	}
-
-	return fields, state.Error()
+	return &AccountResult{
+		Address:      address,
+		AccountProof: common.ToHexArray(state.GetProof(address)),
+		Balance:      (*hexutil.Big)(state.GetBalance(address)),
+		CodeHash:     codeHash,
+		Nonce:        hexutil.Uint64(state.GetNonce(address)),
+		StorageHash:  storageHash,
+		StorageProof: storageProof,
+	}, state.Error()
 }
 
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
