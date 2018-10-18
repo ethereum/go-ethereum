@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"os"
@@ -306,6 +307,11 @@ func (evm *EVMC) Run(contract *Contract, input []byte, readOnly bool) (ret []byt
 	return output, err
 }
 
-func (evm *EVMC) CanRun([]byte) bool {
-	return true
+func (evm *EVMC) CanRun(code []byte) bool {
+	cap := evmc.CapabilityEVM1
+	if (bytes.Equal(code[0:4], []byte("\x00asm"))) {
+		cap = evmc.CapabilityEWASM
+	}
+	// FIXME: Optimize. Access capabilities once.
+	return evm.instance.HasCapability(cap)
 }
