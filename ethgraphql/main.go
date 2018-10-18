@@ -743,7 +743,7 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	return runFilter(ctx, b.backend, filter)
 }
 
-// Resolver is the top-level object in the GraphQL heirarchy.
+// Resolver is the top-level object in the GraphQL hierarchy.
 type Resolver struct {
 	backend *eth.EthAPIBackend
 }
