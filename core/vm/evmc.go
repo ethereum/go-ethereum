@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/evmc/bindings/go/evmc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -285,16 +284,16 @@ func (evm *EVMC) Run(contract *Contract, input []byte, readOnly bool) (ret []byt
 	output, gasLeft, err := evm.instance.Execute(
 		&HostContext{evm.env, contract},
 		getRevision(evm.env),
-		contract.Address(),
-		contract.Caller(),
-		common.BigToHash(contract.value),
-		input,
-		crypto.Keccak256Hash(contract.Code),
-		int64(contract.Gas),
-		evm.env.depth-1,
 		kind,
 		evm.readOnly,
-		contract.Code)
+		evm.env.depth-1,
+		int64(contract.Gas),
+		contract.Address(),
+		contract.Caller(),
+		input,
+		common.BigToHash(contract.value),
+		contract.Code,
+		common.Hash{})
 
 	contract.Gas = uint64(gasLeft)
 
