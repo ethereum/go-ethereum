@@ -147,3 +147,14 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 	}
 	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
 }
+
+// EventById looks up an event by the first topic hash
+// returns nil if none was found
+func (abi *ABI) EventById(topic []byte) (*Event, error) {
+	for _, event := range abi.Events {
+		if bytes.Equal(event.Id().Bytes(), topic) {
+			return &event, nil
+		}
+	}
+	return nil, fmt.Errorf("no event with id: %#x", topic)
+}
