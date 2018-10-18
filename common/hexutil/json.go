@@ -221,10 +221,6 @@ func (b *Big) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
-func (b Big) MarshalJSON() ([]byte, error) {
-	return strconv.AppendQuote(nil, (*big.Int)(&b).Text(10)), nil
-}
-
 // Uint64 marshals/unmarshals as a JSON string with 0x prefix.
 // The zero value marshals as "0x0".
 type Uint64 uint64
