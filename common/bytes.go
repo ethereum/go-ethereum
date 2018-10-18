@@ -31,7 +31,7 @@ func ToHex(b []byte) string {
 	return "0x" + hex
 }
 
-// creates a array of hex-string based on []byte
+// ToHexArray creates a array of hex-string based on []byte
 func ToHexArray(b [][]byte) []string {
 	r := make([]string, len(b))
 	for i := range b {
