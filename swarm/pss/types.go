@@ -159,9 +159,34 @@ func (msg *PssMsg) String() string {
 }
 
 // Signature for a message handler function for a PssMsg
-//
 // Implementations of this type are passed to Pss.Register together with a topic,
-type Handler func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
+type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
+
+// Handler defines code to be executed upon reception of content.
+type handler struct {
+	f    HandlerFunc
+	raw  bool // if true, will allow raw messages to be handled
+	prox bool // if true, explicit recipient address will be truncated to minproxsize depth
+}
+
+// NewHandler returns a new message handler
+func NewHandler(f HandlerFunc) *handler {
+	return &handler{
+		f: f,
+	}
+}
+
+// WithRaw is a chainable method that allows raw messages to be handled.
+func (h *handler) WithRaw() *handler {
+	h.raw = true
+	return h
+}
+
+// WithProxBin is a chainable method that allows sending messages with full addresses to neighbourhoods using the kademlia depth as reference
+func (h *handler) WithProxBin() *handler {
+	h.prox = true
+	return h
+}
 
 // the stateStore handles saving and loading PSS peers and their corresponding keys
 // it is currently unimplemented

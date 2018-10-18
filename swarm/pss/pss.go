@@ -136,9 +136,8 @@ type Pss struct {
 	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
 
 	// message handling
-	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlers   map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu sync.RWMutex
-	allowRaw   bool
 	hashPool   sync.Pool
 
 	// process
@@ -180,8 +179,7 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		symKeyDecryptCache:         make([]*string, params.SymKeyCacheCapacity),
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
-		handlers: make(map[Topic]map[*Handler]bool),
-		allowRaw: params.AllowRaw,
+		handlers: make(map[Topic]map[*handler]bool),
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return storage.MakeHashFunc(storage.DefaultHash)()
@@ -313,18 +311,18 @@ func (p *Pss) PublicKey() *ecdsa.PublicKey {
 //
 // Returns a deregister function which needs to be called to
 // deregister the handler,
-func (p *Pss) Register(topic *Topic, handler Handler) func() {
+func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
 	if handlers == nil {
-		handlers = make(map[*Handler]bool)
+		handlers = make(map[*handler]bool)
 		p.handlers[*topic] = handlers
 	}
-	handlers[&handler] = true
-	return func() { p.deregister(topic, &handler) }
+	handlers[hndlr] = true
+	return func() { p.deregister(topic, hndlr) }
 }
-func (p *Pss) deregister(topic *Topic, h *Handler) {
+func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
@@ -332,11 +330,11 @@ func (p *Pss) deregister(topic *Topic, h *Handler) {
 		delete(p.handlers, *topic)
 		return
 	}
-	delete(handlers, h)
+	delete(handlers, hndlr)
 }
 
 // get all registered handlers for respective topics
-func (p *Pss) getHandlers(topic Topic) map[*Handler]bool {
+func (p *Pss) getHandlers(topic Topic) map[*handler]bool {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	return p.handlers[topic]
@@ -392,15 +390,16 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 	var payload []byte
 	var from *PssAddress
 	var asymmetric bool
+	var raw bool
 	var keyid string
 	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
 	if pssmsg.isRaw() {
-		if !p.allowRaw {
-			return errors.New("raw message support disabled")
-		}
+		//		if !p.allowRaw {
+		//			return errors.New("raw message support disabled")
+		//		}
 		payload = pssmsg.Payload.Data
 	} else {
 		if pssmsg.isSym() {
@@ -414,7 +413,6 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 		if err != nil {
 			return errors.New("Decryption failed")
 		}
-		payload = recvmsg.Payload
 	}
 
 	if len(pssmsg.To) < addressLength {
@@ -422,19 +420,22 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 			return err
 		}
 	}
-	p.executeHandlers(psstopic, payload, from, asymmetric, keyid)
+	p.executeHandlers(psstopic, payload, from, raw, asymmetric, keyid)
 
 	return nil
 
 }
 
-func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, asymmetric bool, keyid string) {
+func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw bool, asymmetric bool, keyid string) {
 	handlers := p.getHandlers(topic)
 	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
-	for f := range handlers {
-		err := (*f)(payload, peer, asymmetric, keyid)
+	for h := range handlers {
+		if !h.raw && raw {
+			continue
+		}
+		err := (h.f)(payload, peer, asymmetric, keyid)
 		if err != nil {
-			log.Warn("Pss handler %p failed: %v", f, err)
+			log.Warn("Pss handler %p failed: %v", h.f, err)
 		}
 	}
 }
@@ -684,9 +685,9 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
-	if !p.allowRaw {
-		return errors.New("Raw messages not enabled")
-	}
+	//if !p.allowRaw {
+	//	return errors.New("Raw messages not enabled")
+	//}
 	pssMsgParams := &msgParams{
 		raw: true,
 	}

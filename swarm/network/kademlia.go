@@ -29,6 +29,16 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
+const (
+	defaultMaxProxDisplay = 16
+	defaultMinProxBinSize = 2
+	defaultMinBinSize     = 2
+	defaultMaxBinSize     = 4
+	defaultRetryInterval  = 4200000000 // 4.2 sec
+	defaultMaxRetries     = 42
+	defaultRetryExponent  = 2
+)
+
 /*
 
 Taking the proximity order relative to a fix point x classifies the points in
@@ -68,13 +78,13 @@ type KadParams struct {
 // NewKadParams returns a params struct with default values
 func NewKadParams() *KadParams {
 	return &KadParams{
-		MaxProxDisplay: 16,
-		MinProxBinSize: 2,
-		MinBinSize:     2,
-		MaxBinSize:     4,
-		RetryInterval:  4200000000, // 4.2 sec
-		MaxRetries:     42,
-		RetryExponent:  2,
+		MaxProxDisplay: defaultMaxProxDisplay,
+		MinProxBinSize: defaultMinProxBinSize,
+		MinBinSize:     defaultMinBinSize,
+		MaxBinSize:     defaultMaxBinSize,
+		RetryInterval:  defaultRetryInterval,
+		MaxRetries:     defaultMaxRetries,
+		RetryExponent:  defaultRetryExponent,
 	}
 }
 
@@ -289,6 +299,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 // neighbourhood depth on each change.
 // Not receiving from the returned channel will block On function
 // when the neighbourhood depth is changed.
+// TODO: Why is this exported, and if it should be; why can't we have more subscribers than one?
 func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 	k.lock.Lock()
 	defer k.lock.Unlock()
@@ -430,6 +441,12 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 // the nearest neighbour set with cardinality >= MinProxBinSize
 // if there is altogether less than MinProxBinSize peers it returns 0
 // caller must hold the lock
+func (k *Kademlia) NeighbourhoodDepth() (depth int) {
+	k.lock.RLock()
+	defer k.lock.Unlock()
+	return k.neighbourhoodDepth()
+}
+
 func (k *Kademlia) neighbourhoodDepth() (depth int) {
 	if k.conns.Size() < k.MinProxBinSize {
 		return 0
