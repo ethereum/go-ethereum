@@ -10,6 +10,8 @@
  * These are convenient for languages where invoking function pointers
  * is "ugly" or impossible (such as Go).
  *
+ * It also contains helpers (overloaded operators) for using EVMC types effectively in C++.
+ *
  * @defgroup helpers EVMC Helpers
  * @{
  */
@@ -42,6 +44,17 @@ static inline const char* evmc_vm_version(struct evmc_instance* instance)
 }
 
 /**
+ * Checks if the VM instance has the given capability.
+ *
+ * @see evmc_get_capabilities_fn
+ */
+static inline bool evmc_vm_has_capability(struct evmc_instance* vm,
+                                          enum evmc_capabilities capability)
+{
+    return (vm->get_capabilities(vm) & (evmc_capabilities_flagset)capability) != 0;
+}
+
+/**
  * Destroys the VM instance.
  *
  * @see evmc_destroy_fn
@@ -56,13 +69,13 @@ static inline void evmc_destroy(struct evmc_instance* instance)
  *
  * @see evmc_set_option_fn
  */
-static inline int evmc_set_option(struct evmc_instance* instance,
-                                  char const* name,
-                                  char const* value)
+static inline enum evmc_set_option_result evmc_set_option(struct evmc_instance* instance,
+                                                          char const* name,
+                                                          char const* value)
 {
     if (instance->set_option)
         return instance->set_option(instance, name, value);
-    return 0;
+    return EVMC_SET_OPTION_INVALID_NAME;
 }
 
 /**

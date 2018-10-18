@@ -60,15 +60,16 @@ enum evmc_loader_error_code
  *   "libexample-interpreter.so",
  * - the "lib" prefix and file extension are stripped from the name:
  *   "example-interpreter"
- * - all "-" are replaced with "_" to construct _full name_:
+ * - all "-" are replaced with "_" to construct _base name_:
  *   "example_interpreter",
- * - the _full name_ is split by "_" char and the last item is taken to form the _short name_:
- *   "interpreter",
- * - the name "evmc_create_" + _full name_ is checked in the library:
+ * - the function name "evmc_create_" + _base name_ is searched in the library:
  *   "evmc_create_example_interpreter",
- * - then, the name "evmc_create_" + _short name_ is checked in the library:
- *   "evmc_create_interpreter".
- * - lastly, the name "evmc_create" is checked in the library
+ * - if function not found, the _base name_ is shorten by skipping the first word separated by "_":
+ *   "interpreter",
+ * - then, the function of the shorter name "evmc_create_" + _base name_ is searched in the library:
+ *   "evmc_create_interpreter",
+ * - the name shortening continues until a function is found or the name cannot be shorten more,
+ * - lastly, when no function found, the function name "evmc_create" is searched in the library.
  *
  * If the create function is found in the library, the pointer to the function is returned.
  * Otherwise, the ::EVMC_LOADER_SYMBOL_NOT_FOUND error code is signaled and NULL is returned.

@@ -39,13 +39,14 @@ const (
 type StorageStatus int
 
 const (
-	StorageUnchanged StorageStatus = C.EVMC_STORAGE_UNCHANGED
-	StorageModified  StorageStatus = C.EVMC_STORAGE_MODIFIED
-	StorageAdded     StorageStatus = C.EVMC_STORAGE_ADDED
-	StorageDeleted   StorageStatus = C.EVMC_STORAGE_DELETED
+	StorageUnchanged     StorageStatus = C.EVMC_STORAGE_UNCHANGED
+	StorageModified      StorageStatus = C.EVMC_STORAGE_MODIFIED
+	StorageModifiedAgain StorageStatus = C.EVMC_STORAGE_MODIFIED_AGAIN
+	StorageAdded         StorageStatus = C.EVMC_STORAGE_ADDED
+	StorageDeleted       StorageStatus = C.EVMC_STORAGE_DELETED
 )
 
-func goAddress(in C.struct_evmc_address) common.Address {
+func goAddress(in C.evmc_address) common.Address {
 	out := common.Address{}
 	for i := 0; i < len(out); i++ {
 		out[i] = byte(in.bytes[i])
@@ -53,7 +54,7 @@ func goAddress(in C.struct_evmc_address) common.Address {
 	return out
 }
 
-func goHash(in C.struct_evmc_uint256be) common.Hash {
+func goHash(in C.evmc_bytes32) common.Hash {
 	out := common.Hash{}
 	for i := 0; i < len(out); i++ {
 		out[i] = byte(in.bytes[i])
@@ -87,56 +88,49 @@ type HostContext interface {
 }
 
 //export accountExists
-func accountExists(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address) C.int {
+func accountExists(pCtx unsafe.Pointer, pAddr *C.evmc_address) C.bool {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
-	exists := ctx.AccountExists(goAddress(*pAddr))
-	r := C.int(0)
-	if exists {
-		r = 1
-	}
-	return r
+	return C.bool(ctx.AccountExists(goAddress(*pAddr)))
 }
 
 //export getStorage
-func getStorage(pResult *C.struct_evmc_uint256be, pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pKey *C.struct_evmc_uint256be) {
+func getStorage(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pKey *C.evmc_bytes32) C.evmc_bytes32 {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
-	value := ctx.GetStorage(goAddress(*pAddr), goHash(*pKey))
-	*pResult = evmcUint256be(value)
+	return evmcBytes32(ctx.GetStorage(goAddress(*pAddr), goHash(*pKey)))
 }
 
 //export setStorage
-func setStorage(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pKey *C.struct_evmc_uint256be, pVal *C.struct_evmc_uint256be) C.enum_evmc_storage_status {
+func setStorage(pCtx unsafe.Pointer, pAddr *C.evmc_address, pKey *C.evmc_bytes32, pVal *C.evmc_bytes32) C.enum_evmc_storage_status {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 	return C.enum_evmc_storage_status(ctx.SetStorage(goAddress(*pAddr), goHash(*pKey), goHash(*pVal)))
 }
 
 //export getBalance
-func getBalance(pResult *C.struct_evmc_uint256be, pCtx unsafe.Pointer, pAddr *C.struct_evmc_address) {
+func getBalance(pCtx unsafe.Pointer, pAddr *C.evmc_address) C.evmc_uint256be {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
-	balance := ctx.GetBalance(goAddress(*pAddr))
-	*pResult = evmcUint256be(balance)
+	return evmcBytes32(ctx.GetBalance(goAddress(*pAddr)))
 }
 
 //export getCodeSize
-func getCodeSize(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address) C.size_t {
+func getCodeSize(pCtx unsafe.Pointer, pAddr *C.evmc_address) C.size_t {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 	return C.size_t(ctx.GetCodeSize(goAddress(*pAddr)))
 }
 
 //export getCodeHash
-func getCodeHash(pResult *C.struct_evmc_uint256be, pCtx unsafe.Pointer, pAddr *C.struct_evmc_address) {
+func getCodeHash(pCtx unsafe.Pointer, pAddr *C.evmc_address) C.evmc_bytes32 {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
-	*pResult = evmcUint256be(ctx.GetCodeHash(goAddress(*pAddr)))
+	return evmcBytes32(ctx.GetCodeHash(goAddress(*pAddr)))
 }
 
 //export copyCode
-func copyCode(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, offset C.size_t, p *C.uint8_t, size C.size_t) C.size_t {
+func copyCode(pCtx unsafe.Pointer, pAddr *C.evmc_address, offset C.size_t, p *C.uint8_t, size C.size_t) C.size_t {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 	code := ctx.GetCode(goAddress(*pAddr))
@@ -157,40 +151,39 @@ func copyCode(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, offset C.size_t
 }
 
 //export selfdestruct
-func selfdestruct(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pBeneficiary *C.struct_evmc_address) {
+func selfdestruct(pCtx unsafe.Pointer, pAddr *C.evmc_address, pBeneficiary *C.evmc_address) {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 	ctx.Selfdestruct(goAddress(*pAddr), goAddress(*pBeneficiary))
 }
 
 //export getTxContext
-func getTxContext(pResult unsafe.Pointer, pCtx unsafe.Pointer) {
+func getTxContext(pCtx unsafe.Pointer) C.struct_evmc_tx_context {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 
 	gasPrice, origin, coinbase, number, timestamp, gasLimit, difficulty := ctx.GetTxContext()
 
-	*(*C.struct_evmc_tx_context)(pResult) = C.struct_evmc_tx_context{
-		evmcUint256be(gasPrice),
+	return C.struct_evmc_tx_context{
+		evmcBytes32(gasPrice),
 		evmcAddress(origin),
 		evmcAddress(coinbase),
 		C.int64_t(number),
 		C.int64_t(timestamp),
 		C.int64_t(gasLimit),
-		evmcUint256be(difficulty),
+		evmcBytes32(difficulty),
 	}
 }
 
 //export getBlockHash
-func getBlockHash(pResult *C.struct_evmc_uint256be, pCtx unsafe.Pointer, number int64) {
+func getBlockHash(pCtx unsafe.Pointer, number int64) C.evmc_bytes32 {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
-
-	*pResult = evmcUint256be(ctx.GetBlockHash(number))
+	return evmcBytes32(ctx.GetBlockHash(number))
 }
 
 //export emitLog
-func emitLog(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pData unsafe.Pointer, dataSize C.size_t, pTopics unsafe.Pointer, topicsCount C.size_t) {
+func emitLog(pCtx unsafe.Pointer, pAddr *C.evmc_address, pData unsafe.Pointer, dataSize C.size_t, pTopics unsafe.Pointer, topicsCount C.size_t) {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 
@@ -208,7 +201,7 @@ func emitLog(pCtx unsafe.Pointer, pAddr *C.struct_evmc_address, pData unsafe.Poi
 }
 
 //export call
-func call(pResult *C.struct_evmc_result, pCtx unsafe.Pointer, msg *C.struct_evmc_message) {
+func call(pCtx unsafe.Pointer, msg *C.struct_evmc_message) C.struct_evmc_result {
 	idx := int((*C.struct_extended_context)(pCtx).index)
 	ctx := getHostContext(idx)
 
@@ -234,5 +227,5 @@ func call(pResult *C.struct_evmc_result, pCtx unsafe.Pointer, msg *C.struct_evmc
 		result.release = (C.evmc_release_result_fn)(C.evmc_go_free_result_output)
 	}
 
-	*pResult = result
+	return result
 }

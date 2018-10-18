@@ -15,9 +15,9 @@ package evmc
 #include <stdlib.h>
 #include <string.h>
 
-static inline int set_option(struct evmc_instance* instance, char* name, char* value)
+static inline enum evmc_set_option_result set_option(struct evmc_instance* instance, char* name, char* value)
 {
-	int ret = evmc_set_option(instance, name, value);
+	enum evmc_set_option_result ret = evmc_set_option(instance, name, value);
 	free(name);
 	free(value);
 	return ret;
@@ -29,29 +29,29 @@ struct extended_context
 	int64_t index;
 };
 
-extern const struct evmc_context_fn_table evmc_go_fn_table;
+extern const struct evmc_host_interface evmc_go_host;
 
-static struct evmc_result execute_wrapper(struct evmc_instance* instance, int64_t context_index, enum evmc_revision rev,
-	const struct evmc_address* destination, const struct evmc_address* sender, const struct evmc_uint256be* value,
-	const uint8_t* input_data, size_t input_size, const struct evmc_uint256be* code_hash, int64_t gas,
-	int32_t depth, enum evmc_call_kind kind, uint32_t flags, const uint8_t* code, size_t code_size)
+static struct evmc_result execute_wrapper(struct evmc_instance* instance,
+	int64_t context_index, enum evmc_revision rev,
+	enum evmc_call_kind kind, uint32_t flags, int32_t depth, int64_t gas,
+	const evmc_address* destination, const evmc_address* sender,
+	const uint8_t* input_data, size_t input_size, const evmc_uint256be* value,
+	const uint8_t* code, size_t code_size, const evmc_bytes32* create2_salt)
 {
-	struct evmc_uint256be create2_salt = {};
 	struct evmc_message msg = {
-		*destination,
-		*sender,
-		*value,
-		input_data,
-		input_size,
-		*code_hash,
-		create2_salt,
-		gas,
-		depth,
 		kind,
 		flags,
+		depth,
+		gas,
+		*destination,
+		*sender,
+		input_data,
+		input_size,
+		*value,
+		*create2_salt,
 	};
 
-	struct extended_context ctx = {{&evmc_go_fn_table}, context_index};
+	struct extended_context ctx = {{&evmc_go_host}, context_index};
 	return evmc_execute(instance, &ctx.context, rev, &msg, code, code_size);
 }
 */
@@ -68,10 +68,10 @@ import (
 
 // Static asserts.
 const (
-	_ = uint(common.HashLength - C.sizeof_struct_evmc_uint256be) // The size of evmc_uint256be equals the size of Hash.
-	_ = uint(C.sizeof_struct_evmc_uint256be - common.HashLength)
-	_ = uint(common.AddressLength - C.sizeof_struct_evmc_address) // The size of evmc_address equals the size of Address.
-	_ = uint(C.sizeof_struct_evmc_address - common.AddressLength)
+	_ = uint(common.HashLength - C.sizeof_evmc_bytes32) // The size of evmc_bytes32 equals the size of Hash.
+	_ = uint(C.sizeof_evmc_bytes32 - common.HashLength)
+	_ = uint(common.AddressLength - C.sizeof_evmc_address) // The size of evmc_address equals the size of Address.
+	_ = uint(C.sizeof_evmc_address - common.AddressLength)
 )
 
 type Error int32
@@ -185,18 +185,34 @@ func (instance *Instance) Version() string {
 	return C.GoString(instance.handle.version)
 }
 
+type Capability uint32
+
+const (
+	CapabilityEVM1  Capability = C.EVMC_CAPABILITY_EVM1
+	CapabilityEWASM Capability = C.EVMC_CAPABILITY_EWASM
+)
+
+func (instance *Instance) HasCapability(capability Capability) bool {
+	return bool(C.evmc_vm_has_capability(instance.handle, uint32(capability)))
+}
+
 func (instance *Instance) SetOption(name string, value string) (err error) {
 
 	r := C.set_option(instance.handle, C.CString(name), C.CString(value))
-	if r != 1 {
+	switch r {
+	case C.EVMC_SET_OPTION_INVALID_NAME:
 		err = fmt.Errorf("evmc: option '%s' not accepted", name)
+	case C.EVMC_SET_OPTION_INVALID_VALUE:
+		err = fmt.Errorf("evmc: option '%s' has invalid value", name)
+	case C.EVMC_SET_OPTION_SUCCESS:
 	}
 	return err
 }
 
 func (instance *Instance) Execute(ctx HostContext, rev Revision,
-	destination common.Address, sender common.Address, value common.Hash, input []byte, codeHash common.Hash, gas int64,
-	depth int, kind CallKind, static bool, code []byte) (output []byte, gasLeft int64, err error) {
+	kind CallKind, static bool, depth int, gas int64,
+	destination common.Address, sender common.Address, input []byte, value common.Hash,
+	code []byte, create2Salt common.Hash) (output []byte, gasLeft int64, err error) {
 
 	flags := C.uint32_t(0)
 	if static {
@@ -207,11 +223,12 @@ func (instance *Instance) Execute(ctx HostContext, rev Revision,
 	// FIXME: Clarify passing by pointer vs passing by value.
 	evmcDestination := evmcAddress(destination)
 	evmcSender := evmcAddress(sender)
-	evmcValue := evmcUint256be(value)
-	evmcCodeHash := evmcUint256be(codeHash)
-	result := C.execute_wrapper(instance.handle, C.int64_t(ctxId), uint32(rev), &evmcDestination, &evmcSender, &evmcValue,
-		bytesPtr(input), C.size_t(len(input)), &evmcCodeHash, C.int64_t(gas), C.int32_t(depth), C.enum_evmc_call_kind(kind),
-		flags, bytesPtr(code), C.size_t(len(code)))
+	evmcValue := evmcBytes32(value)
+	evmcCreate2Salt := evmcBytes32(create2Salt)
+	result := C.execute_wrapper(instance.handle, C.int64_t(ctxId), uint32(rev),
+		C.enum_evmc_call_kind(kind), flags, C.int32_t(depth), C.int64_t(gas),
+		&evmcDestination, &evmcSender, bytesPtr(input), C.size_t(len(input)), &evmcValue,
+		bytesPtr(code), C.size_t(len(code)), &evmcCreate2Salt)
 	removeHostContext(ctxId)
 
 	output = C.GoBytes(unsafe.Pointer(result.output_data), C.int(result.output_size))
@@ -255,16 +272,16 @@ func getHostContext(idx int) HostContext {
 	return ctx
 }
 
-func evmcUint256be(in common.Hash) C.struct_evmc_uint256be {
-	out := C.struct_evmc_uint256be{}
+func evmcBytes32(in common.Hash) C.evmc_bytes32 {
+	out := C.evmc_bytes32{}
 	for i := 0; i < len(in); i++ {
 		out.bytes[i] = C.uint8_t(in[i])
 	}
 	return out
 }
 
-func evmcAddress(address common.Address) C.struct_evmc_address {
-	r := C.struct_evmc_address{}
+func evmcAddress(address common.Address) C.evmc_address {
+	r := C.evmc_address{}
 	for i := 0; i < len(address); i++ {
 		r.bytes[i] = C.uint8_t(address[i])
 	}

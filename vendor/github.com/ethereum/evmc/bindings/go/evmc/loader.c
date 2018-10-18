@@ -16,7 +16,7 @@
 #define DLL_HANDLE HMODULE
 #define DLL_OPEN(filename) LoadLibrary(filename)
 #define DLL_CLOSE(handle) FreeLibrary(handle)
-#define DLL_GET_CREATE_FN(handle, name) (evmc_create_fn) GetProcAddress(handle, name)
+#define DLL_GET_CREATE_FN(handle, name) (evmc_create_fn)(uintptr_t) GetProcAddress(handle, name)
 #define HAVE_STRCPY_S 1
 #else
 #include <dlfcn.h>
@@ -69,8 +69,8 @@ evmc_create_fn evmc_load(const char* filename, enum evmc_loader_error_code* erro
     // Create name buffer with the prefix.
     const char prefix[] = "evmc_create_";
     const size_t prefix_length = strlen(prefix);
-    char name[sizeof(prefix) + PATH_MAX_LENGTH];
-    strcpy_s(name, sizeof(name), prefix);
+    char prefixed_name[sizeof(prefix) + PATH_MAX_LENGTH];
+    strcpy_s(prefixed_name, sizeof(prefixed_name), prefix);
 
     // Find filename in the path.
     const char* sep_pos = strrchr(filename, '/');
@@ -87,30 +87,28 @@ evmc_create_fn evmc_load(const char* filename, enum evmc_loader_error_code* erro
     if (strncmp(name_pos, lib_prefix, lib_prefix_length) == 0)
         name_pos += lib_prefix_length;
 
-    strcpy_s(name + prefix_length, PATH_MAX_LENGTH, name_pos);
+    char* base_name = prefixed_name + prefix_length;
+    strcpy_s(base_name, PATH_MAX_LENGTH, name_pos);
 
     // Trim the file extension.
-    char* ext_pos = strrchr(name, '.');
+    char* ext_pos = strrchr(prefixed_name, '.');
     if (ext_pos)
         *ext_pos = 0;
 
     // Replace all "-" with "_".
-    char* dash_pos = name;
+    char* dash_pos = base_name;
     while ((dash_pos = strchr(dash_pos, '-')) != NULL)
         *dash_pos++ = '_';
 
-    // Search for the "full name" based function name.
-    create_fn = DLL_GET_CREATE_FN(handle, name);
-    if (!create_fn)
+    // Search for the built function name.
+    while ((create_fn = DLL_GET_CREATE_FN(handle, prefixed_name)) == NULL)
     {
-        // Try the "short name" based function name.
-        const char* short_name_pos = strrchr(name, '_');
-        if (short_name_pos)
-        {
-            short_name_pos += 1;
-            memmove(name + prefix_length, short_name_pos, strlen(short_name_pos) + 1);
-            create_fn = DLL_GET_CREATE_FN(handle, name);
-        }
+        // Shorten the base name by skipping the `word_` segment.
+        const char* shorter_name_pos = strchr(base_name, '_');
+        if (!shorter_name_pos)
+            break;
+
+        memmove(base_name, shorter_name_pos + 1, strlen(shorter_name_pos) + 1);
     }
 
     if (!create_fn)
