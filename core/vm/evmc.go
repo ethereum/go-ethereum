@@ -42,7 +42,7 @@ var (
 	evmcInstance *evmc.Instance
 )
 
-func createVM(path string) *evmc.Instance {
+func createVM(path string, options []string) *evmc.Instance {
 	createMu.Lock()
 	defer createMu.Unlock()
 
@@ -62,7 +62,10 @@ func createVM(path string) *evmc.Instance {
 		}
 		log.Info("EVMC VM loaded", "name", evmcInstance.Name(), "version", evmcInstance.Version(), "path", vmPath)
 
-		for _, option := range strings.Split(os.Getenv("EVMC_OPTIONS"), " ") {
+		opts := strings.Split(os.Getenv("EVMC_OPTIONS"), " ")
+		opts = append(opts, options...)
+
+		for _, option := range opts {
 			if idx := strings.Index(option, "="); idx >= 0 {
 				name := option[:idx]
 				value := option[idx+1:]
@@ -78,8 +81,8 @@ func createVM(path string) *evmc.Instance {
 	return evmcInstance
 }
 
-func NewEVMC(path string, env *EVM) *EVMC {
-	return &EVMC{createVM(path), env, false}
+func NewEVMC(path string, options []string, env *EVM) *EVMC {
+	return &EVMC{createVM(path, options), env, false}
 }
 
 // Implements evmc.HostContext interface.
@@ -309,7 +312,8 @@ func (evm *EVMC) Run(contract *Contract, input []byte, readOnly bool) (ret []byt
 
 func (evm *EVMC) CanRun(code []byte) bool {
 	cap := evmc.CapabilityEVM1
-	if (bytes.Equal(code[0:4], []byte("\x00asm"))) {
+	wasmPreamble := []byte("\x00asm\x01\x00\x00\x00")
+	if (bytes.HasPrefix(code, wasmPreamble)) {
 		cap = evmc.CapabilityEWASM
 	}
 	// FIXME: Optimize. Access capabilities once.

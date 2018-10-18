@@ -19,6 +19,7 @@ package vm
 import (
 	"math/big"
 	"os"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -141,23 +142,21 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	}
 
 	if chainConfig.IsEWASM(ctx.BlockNumber) {
-		// to be implemented by EVM-C and Wagon PRs.
-		// if vmConfig.EWASMInterpreter != "" {
-		//  extIntOpts := strings.Split(vmConfig.EWASMInterpreter, ":")
-		//  path := extIntOpts[0]
-		//  options := []string{}
-		//  if len(extIntOpts) > 1 {
-		//    options = extIntOpts[1..]
-		//  }
-		//  evm.interpreters = append(evm.interpreters, NewEVMVCInterpreter(evm, vmConfig, options))
-		// } else {
-		// 	evm.interpreters = append(evm.interpreters, NewEWASMInterpreter(evm, vmConfig))
-		// }
-		panic("No supported ewasm interpreter yet.")
+		if vmConfig.EWASMInterpreter != "" {
+			extIntOpts := strings.Split(vmConfig.EWASMInterpreter, ":")
+			path := extIntOpts[0]
+			options := []string{}
+			if len(extIntOpts) > 1 {
+				options = extIntOpts[1:]
+			}
+		 	evm.interpreters = append(evm.interpreters, NewEVMC(path, options, evm))
+		} else {
+			panic("No supported ewasm interpreter yet.")
+		}
 	}
 
 	if len(vmConfig.EVMInterpreter) != 0 || len(os.Getenv("EVMC_PATH")) != 0 {
-		evm.interpreters = append(evm.interpreters, NewEVMC(vmConfig.EVMInterpreter, evm))
+		evm.interpreters = append(evm.interpreters, NewEVMC(vmConfig.EVMInterpreter, nil, evm))
 	}
 
 	// vmConfig.EVMInterpreter will be used by EVM-C, it won't be checked here
