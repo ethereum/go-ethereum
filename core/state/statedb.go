@@ -18,6 +18,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -264,22 +265,22 @@ func (n *ProofList) Put(key []byte, value []byte) error {
 	return nil
 }
 
-// returns the MerkleProof for a given Account
-func (self *StateDB) GetProof(a common.Address) [][]byte {
+// GetProof returns the MerkleProof for a given Account
+func (self *StateDB) GetProof(a common.Address) ([][]byte, error) {
 	var proof ProofList
-	self.trie.Prove(crypto.Keccak256(a.Bytes()), 0, &proof)
-	return proof
+	err := self.trie.Prove(crypto.Keccak256(a.Bytes()), 0, &proof)
+	return proof, err
 }
 
-// returns the StorageProof for given key
-func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) [][]byte {
+// GetProof returns the StorageProof for given key
+func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
 	trie := self.StorageTrie(a)
 	if trie == nil {
-		return [][]byte{}
+		return [][]byte{}, errors.New("storage trie for requested address does not exist")
 	}
 	var proof ProofList
-	trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	return proof
+	err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
+	return proof, err
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.

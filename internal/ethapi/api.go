@@ -541,15 +541,25 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 	// create the proof for the storageKeys
 	for i, key := range storageKeys {
 		if storageTrie != nil {
-			storageProof[i] = StorageResult{key, state.GetState(address, common.HexToHash(key)), common.ToHexArray(state.GetStorageProof(address, common.HexToHash(key)))}
+			proof, storageError := state.GetStorageProof(address, common.HexToHash(key))
+			if storageError != nil {
+				return nil, storageError
+			}
+			storageProof[i] = StorageResult{key, state.GetState(address, common.HexToHash(key)), common.ToHexArray(proof)}
 		} else {
 			storageProof[i] = StorageResult{key, common.Hash{}, []string{}}
 		}
 	}
 
+	// create the accountProof
+	accountProof, proofErr := state.GetProof(address)
+	if proofErr != nil {
+		return nil, proofErr
+	}
+
 	return &AccountResult{
 		Address:      address,
-		AccountProof: common.ToHexArray(state.GetProof(address)),
+		AccountProof: common.ToHexArray(accountProof),
 		Balance:      (*hexutil.Big)(state.GetBalance(address)),
 		CodeHash:     codeHash,
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
