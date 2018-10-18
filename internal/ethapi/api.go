@@ -513,9 +513,9 @@ type AccountResult struct {
 	StorageProof []StorageResult `json:"storageProof"`
 }
 type StorageResult struct {
-	Key   string      `json:"key"`
-	Value common.Hash `json:"value"`
-	Proof []string    `json:"proof"`
+	Key   string       `json:"key"`
+	Value *hexutil.Big `json:"value"`
+	Proof []string     `json:"proof"`
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
@@ -545,9 +545,9 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, state.GetState(address, common.HexToHash(key)), common.ToHexArray(proof)}
+			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), common.ToHexArray(proof)}
 		} else {
-			storageProof[i] = StorageResult{key, common.Hash{}, []string{}}
+			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
 		}
 	}
 
