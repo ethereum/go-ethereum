@@ -416,7 +416,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				return fmt.Errorf("No registry")
 			}
 			registry := item.(*Registry)
-			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", true), NewRange(0, 0), Top)
+			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", true), nil, Top)
 			if err != nil {
 				return err
 			}

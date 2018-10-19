@@ -158,6 +158,7 @@ type SubscribeErrorMsg struct {
 }
 
 func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
+	//TODO the error should be channeled to whoever calls the subscribe
 	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), req.Error)
 }
 

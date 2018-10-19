@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -96,7 +97,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	delivery.getPeer = streamer.getPeer
 
 	if options.DoServeRetrieve {
-		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
+		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
+			if !live {
+				return nil, errors.New("only live retrieval requests supported")
+			}
 			return NewSwarmChunkServer(delivery.chunkStore), nil
 		})
 	}
@@ -279,7 +283,6 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	if err != nil {
 		return err
 	}
-
 	if s.Live && h != nil {
 		if err := peer.setClientParams(
 			getHistoryStream(s),
