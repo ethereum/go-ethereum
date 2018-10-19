@@ -48,20 +48,24 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 var (
-	initOnce       = sync.Once{}
-	debugdebugflag = flag.Bool("vv", false, "veryverbose")
-	debugflag      = flag.Bool("v", false, "verbose")
-	longrunning    = flag.Bool("longrunning", false, "do run long-running tests")
-	w              *whisper.Whisper
-	wapi           *whisper.PublicWhisperAPI
-	psslogmain     log.Logger
-	pssprotocols   map[string]*protoCtrl
-	useHandshake   bool
+	initOnce        = sync.Once{}
+	debugdebugflag  = flag.Bool("vv", false, "veryverbose")
+	debugflag       = flag.Bool("v", false, "verbose")
+	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
+	w               *whisper.Whisper
+	wapi            *whisper.PublicWhisperAPI
+	psslogmain      log.Logger
+	pssprotocols    map[string]*protoCtrl
+	useHandshake    bool
+	noopHandlerFunc = func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+		return nil
+	}
 )
 
 func init() {
@@ -280,8 +284,7 @@ func TestAddressMatch(t *testing.T) {
 	}
 
 	pssmsg := &PssMsg{
-		To:      remoteaddr,
-		Payload: &whisper.Envelope{},
+		To: remoteaddr,
 	}
 
 	// differ from first byte
@@ -309,10 +312,94 @@ func TestAddressMatch(t *testing.T) {
 	if !ps.isSelfPossibleRecipient(pssmsg, false) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
 	}
+
 }
 
-//
-func TestHandlerConditions(t *testing.T) {
+// verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
+func TestAddressMatchProx(t *testing.T) {
+
+	// recipient node address
+	localAddr := network.RandomAddr().Over()
+	localPotAddr := pot.NewAddressFromBytes(localAddr)
+
+	// set up kademlia
+	kadparams := network.NewKadParams()
+	kad := network.NewKademlia(localAddr, kadparams)
+	peerCount := kad.MinBinSize + 2
+
+	// set up pss
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	keys, err := wapi.NewKeyPair(ctx)
+	if err != nil {
+		t.Fatalf("Could not generate private key: %v", err)
+	}
+	privkey, err := w.GetPrivateKey(keys)
+	pssp := NewPssParams().WithPrivateKey(privkey)
+	ps, err := NewPss(kad, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// create kademlia peers, so we have peers outside minprox
+	var peers []*network.Peer
+	for i := 0; i < peerCount; i++ {
+		rw := &p2p.MsgPipeRW{}
+		ptpPeer := p2p.NewPeer(enode.ID{}, "362436 call me anytime", []p2p.Cap{})
+		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
+		peerAddr := pot.RandomAddressAt(localPotAddr, i)
+		bzzPeer := &network.BzzPeer{
+			Peer: protoPeer,
+			BzzAddr: &network.BzzAddr{
+				OAddr: peerAddr.Bytes(),
+				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
+			},
+		}
+		peer := network.NewPeer(bzzPeer, kad)
+		kad.On(peer)
+		peers = append(peers, peer)
+	}
+
+	// TODO: create a test in the network package to make a table with n peers where n-m are proxpeers
+	// meanwhile test regression for kademlia since we the params are generated outside the package
+	var proxes int
+	var conns int
+	kad.EachConn(nil, peerCount, func(p *network.Peer, po int, prox bool) bool {
+		conns++
+		if prox {
+			proxes++
+		}
+		log.Trace("kadconn", "po", po, "peer", p, "prox", prox)
+		return true
+	})
+	if proxes != kad.MinBinSize {
+		t.Fatalf("expected %d proxpeers, have %d", kad.MinBinSize, proxes)
+	} else if conns != peerCount {
+		t.Fatalf("expected %d peers total, have %d", peerCount, proxes)
+	}
+
+	// remote address distances from localAddr to try and the expected outcomes
+	remoteDistances := []int{255, kad.MinBinSize + 1, kad.MinBinSize, kad.MinBinSize - 1, 0}
+	expects := []bool{true, true, true, false, false}
+
+	// for each distance check if we are possible recipient when prox variant is used is set
+	for i, distance := range remoteDistances {
+		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remoteAddr := remotePotAddr.Bytes()
+
+		pssmsg := &PssMsg{
+			To: remoteAddr,
+		}
+
+		log.Trace("addrs", "local", localAddr, "remote", remoteAddr)
+		if ps.isSelfPossibleRecipient(pssmsg, true) != expects[i] {
+			t.Fatalf("expected distance %d to be %v", distance, expects[i])
+		}
+	}
+}
+
+// verify that message queueing happens when it should, and that expired and corrupt messages are dropped
+func TestMessageProcessing(t *testing.T) {
 
 	t.Skip("Disabled due to probable faulty logic for outbox expectations")
 	// setup
@@ -326,13 +413,12 @@ func TestHandlerConditions(t *testing.T) {
 	ps := newTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewPssParams())
 
 	// message should pass
-	msg := &PssMsg{
-		To:     addr,
-		Expire: uint32(time.Now().Add(time.Second * 60).Unix()),
-		Payload: &whisper.Envelope{
-			Topic: [4]byte{},
-			Data:  []byte{0x66, 0x6f, 0x6f},
-		},
+	msg := newPssMsg(&msgParams{})
+	msg.To = addr
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+	msg.Payload = &whisper.Envelope{
+		Topic: [4]byte{},
+		Data:  []byte{0x66, 0x6f, 0x6f},
 	}
 	if err := ps.handlePssMsg(context.TODO(), msg); err != nil {
 		t.Fatal(err.Error())
@@ -422,6 +508,8 @@ func TestHandlerConditions(t *testing.T) {
 	}
 
 	// outbox full should return error
+	return
+
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	for i := 0; i < defaultOutboxCapacity; i++ {
 		ps.outbox <- msg
@@ -498,6 +586,7 @@ func TestKeys(t *testing.T) {
 	}
 }
 
+// check that we can retrieve previously added public key entires per topic and peer
 func TestGetPublickeyEntries(t *testing.T) {
 
 	privkey, err := crypto.GenerateKey()
@@ -557,7 +646,7 @@ OUTER:
 }
 
 // forwarding should skip peers that do not have matching pss capabilities
-func TestMismatch(t *testing.T) {
+func TestPeerCapabilityMismatch(t *testing.T) {
 
 	// create privkey for forwarder node
 	privkey, err := crypto.GenerateKey()
@@ -615,6 +704,64 @@ func TestMismatch(t *testing.T) {
 
 }
 
+// verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
+func TestRawAllow(t *testing.T) {
+
+	var receives int
+	privKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseAddr := network.RandomAddr()
+	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
+	ps := newTestPss(privKey, kad, nil)
+	topic := BytesToTopic([]byte{0x2a})
+	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+		log.Trace("in allowraw handler")
+		receives++
+		return nil
+	}
+
+	hndlrNoRaw := &handler{
+		f: rawHandlerFunc,
+	}
+	ps.Register(&topic, hndlrNoRaw)
+
+	pssMsg := newPssMsg(&msgParams{
+		raw: true,
+	})
+	pssMsg.To = baseAddr.OAddr
+	pssMsg.Expire = uint32(time.Now().Unix() + 4200)
+	pssMsg.Payload = &whisper.Envelope{
+		Topic: whisper.TopicType(topic),
+	}
+	ps.handlePssMsg(context.TODO(), pssMsg)
+	if receives > 0 {
+		t.Fatalf("Expected handler not to be executed with raw cap off")
+	}
+
+	hndlrRaw := &handler{
+		f:    rawHandlerFunc,
+		caps: handlerCapRaw,
+	}
+	deregRawHandler := ps.Register(&topic, hndlrRaw)
+	pssMsg.Payload.Data = []byte("raw deal")
+	ps.handlePssMsg(context.TODO(), pssMsg)
+	if receives == 0 {
+		t.Fatalf("Expected handler to be executed with raw cap on")
+	}
+
+	prevReceives := receives
+	deregRawHandler()
+
+	pssMsg.Payload.Data = []byte("raw trump")
+	ps.handlePssMsg(context.TODO(), pssMsg)
+	if receives != prevReceives {
+		t.Fatalf("Expected handler not to be executed when raw handler is retracted")
+	}
+}
+
+// verifies that nodes can send and receive raw (verbatim) messages
 func TestSendRaw(t *testing.T) {
 	t.Run("32", testSendRaw)
 	t.Run("8", testSendRaw)
@@ -1393,9 +1540,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("could not generate whisper envelope: %v", err)
 		}
 		ps.Register(&topic, &handler{
-			f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-				return nil
-			},
+			f: noopHandlerFunc,
 		})
 		pssmsgs = append(pssmsgs, &PssMsg{
 			To:      to,
@@ -1479,9 +1624,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		b.Fatalf("could not generate whisper envelope: %v", err)
 	}
 	ps.Register(&topic, &handler{
-		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			return nil
-		},
+		f: noopHandlerFunc,
 	})
 	pssmsg := &PssMsg{
 		To:      addr[len(addr)-1][:],

@@ -482,7 +482,22 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 // test match of leftmost bytes in given message to node's Kademlia address
 func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	local := p.Kademlia.BaseAddr()
-	return bytes.Equal(msg.To, local[:len(msg.To)])
+
+	// if a partial address matches we are possible recipient regardless of prox
+	// if not and prox is not set, we are surely not
+	if bytes.Equal(msg.To, local[:len(msg.To)]) {
+		return true
+	} else if !prox {
+		return false
+	}
+
+	minProx := p.Kademlia.NeighbourhoodDepth()
+	depth, eq := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+	log.Trace("selfpossible", "mixprox", minProx, "depth", depth)
+	if eq || minProx <= depth {
+		return true
+	}
+	return false
 }
 
 /////////////////////////////////////////////////////////////////////
