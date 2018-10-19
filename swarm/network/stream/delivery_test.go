@@ -36,6 +36,7 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -241,14 +242,19 @@ func TestRequestFromPeers(t *testing.T) {
 	}, to)
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
-	r.setPeer(NewPeer(protocolsPeer, r))
-	ctx := context.Background()
+
+	sp := &Peer{
+		Peer:     protocolsPeer,
+		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
+		streamer: r,
+	}
+	r.setPeer(sp)
 	req := network.NewRequest(
 		storage.Address(hash0[:]),
 		true,
 		&sync.Map{},
 	)
-
+	ctx := context.Background()
 	id, _, err := delivery.RequestFromPeers(ctx, req)
 
 	if err != nil {
@@ -273,14 +279,20 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	}, to)
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
-	r.setPeer(NewPeer(protocolsPeer, r))
-	ctx := context.Background()
+	sp := &Peer{
+		Peer:     protocolsPeer,
+		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
+		streamer: r,
+	}
+	r.setPeer(sp)
+
 	req := network.NewRequest(
 		storage.Address(hash0[:]),
 		true,
 		&sync.Map{},
 	)
 
+	ctx := context.Background()
 	_, _, err := delivery.RequestFromPeers(ctx, req)
 
 	expectedError := "no peer found"
