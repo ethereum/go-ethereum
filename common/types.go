@@ -289,7 +289,7 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 	case string:
 		*a = HexToAddress(input)
 	default:
-		err = fmt.Errorf("Unexpected type for Hash: %v", input)
+		err = fmt.Errorf("Unexpected type for Address: %v", input)
 	}
 	return err
 }
