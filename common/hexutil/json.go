@@ -278,7 +278,7 @@ func (b *Uint64) UnmarshalGraphQL(input interface{}) error {
 	case int32:
 		*b = Uint64(input)
 	default:
-		err = fmt.Errorf("Unexpected type for BigInt: %v", input)
+		err = fmt.Errorf("Unexpected type for Long: %v", input)
 	}
 	return err
 }
