@@ -38,6 +38,12 @@ const (
 	pssControlRaw = 1 << 1
 )
 
+const (
+	handlerCapSym  = 1 << 0
+	handlerCapRaw  = 1 << 1
+	handlerCapProx = 1 << 2
+)
+
 var (
 	topicHashMutex = sync.Mutex{}
 	topicHashFunc  = storage.MakeHashFunc("SHA256")()
@@ -165,8 +171,9 @@ type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) er
 // Handler defines code to be executed upon reception of content.
 type handler struct {
 	f    HandlerFunc
-	raw  bool // if true, will allow raw messages to be handled
-	prox bool // if true, explicit recipient address will be truncated to minproxsize depth
+	caps byte
+	//raw  bool // if true, will allow raw messages to be handled
+	//prox bool // if true, explicit recipient address will be truncated to minproxsize depth
 }
 
 // NewHandler returns a new message handler
@@ -178,13 +185,15 @@ func NewHandler(f HandlerFunc) *handler {
 
 // WithRaw is a chainable method that allows raw messages to be handled.
 func (h *handler) WithRaw() *handler {
-	h.raw = true
+	//h.raw = true
+	h.caps |= handlerCapRaw
 	return h
 }
 
 // WithProxBin is a chainable method that allows sending messages with full addresses to neighbourhoods using the kademlia depth as reference
 func (h *handler) WithProxBin() *handler {
-	h.prox = true
+	//h.prox = true
+	h.caps |= handlerCapProx
 	return h
 }
 

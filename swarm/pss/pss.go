@@ -136,9 +136,10 @@ type Pss struct {
 	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
 
 	// message handling
-	handlers   map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
-	handlersMu sync.RWMutex
-	hashPool   sync.Pool
+	handlers         map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlersMu       sync.RWMutex
+	hashPool         sync.Pool
+	topicHandlerCaps map[Topic]byte // caches capabilities of each topic's handlers (see topicHandlerCap* consts)
 
 	// process
 	quitC chan struct{}
@@ -179,7 +180,8 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		symKeyDecryptCache:         make([]*string, params.SymKeyCacheCapacity),
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
-		handlers: make(map[Topic]map[*handler]bool),
+		handlers:         make(map[Topic]map[*handler]bool),
+		topicHandlerCaps: make(map[Topic]byte),
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return storage.MakeHashFunc(storage.DefaultHash)()
@@ -318,6 +320,8 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	if handlers == nil {
 		handlers = make(map[*handler]bool)
 		p.handlers[*topic] = handlers
+		p.topicHandlerCaps[*topic] = hndlr.caps
+		log.Debug("registered handler", "caps", hndlr.caps)
 	}
 	handlers[hndlr] = true
 	return func() { p.deregister(topic, hndlr) }
@@ -328,6 +332,12 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	handlers := p.handlers[*topic]
 	if len(handlers) == 1 {
 		delete(p.handlers, *topic)
+		// check if we still have a prox handler on this topic
+		var caps byte
+		for h := range handlers {
+			caps |= h.caps
+		}
+		p.topicHandlerCaps[*topic] = caps
 		return
 	}
 	delete(handlers, hndlr)
@@ -363,13 +373,37 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	}
 	p.addFwdCache(pssmsg)
 
-	if !p.isSelfPossibleRecipient(pssmsg) {
-		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()))
+	psstopic := Topic(pssmsg.Payload.Topic)
+
+	// raw is simplest handler contingency to check, so check that first
+	var isRaw bool
+	if pssmsg.isRaw() {
+		if p.topicHandlerCaps[psstopic]&handlerCapRaw == 0 {
+			log.Debug("No handler for raw message", "topic", psstopic)
+			//return errors.New("No handler for raw message")
+		}
+		isRaw = true
+	}
+
+	// check if we can be recipient:
+	// - no prox handler on message and partial address matches
+	// - prox handler on message and we are in prox regardless of partial address match
+	// store this result so we don't calculate again on every handler
+	var isProx bool
+	var isRecipient bool
+	if p.isSelfPossibleRecipient(pssmsg, false) && p.topicHandlerCaps[psstopic]&handlerCapProx == 0 {
+		isRecipient = true
+	} else if p.isSelfPossibleRecipient(pssmsg, true) {
+		isRecipient = true
+		isProx = true
+	}
+	if !isRecipient {
+		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()))
-	if err := p.process(pssmsg); err != nil {
+	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
 			return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
@@ -382,7 +416,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 // Entry point to processing a message for which the current node can be the intended recipient.
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
-func (p *Pss) process(pssmsg *PssMsg) error {
+func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	metrics.GetOrRegisterCounter("pss.process", nil).Inc(1)
 
 	var err error
@@ -390,16 +424,12 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 	var payload []byte
 	var from *PssAddress
 	var asymmetric bool
-	var raw bool
 	var keyid string
 	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
-	if pssmsg.isRaw() {
-		//		if !p.allowRaw {
-		//			return errors.New("raw message support disabled")
-		//		}
+	if raw {
 		payload = pssmsg.Payload.Data
 	} else {
 		if pssmsg.isSym() {
@@ -413,6 +443,7 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 		if err != nil {
 			return errors.New("Decryption failed")
 		}
+		payload = recvmsg.Payload
 	}
 
 	if len(pssmsg.To) < addressLength {
@@ -420,17 +451,20 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 			return err
 		}
 	}
-	p.executeHandlers(psstopic, payload, from, raw, asymmetric, keyid)
+	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
 
 	return nil
 
 }
 
-func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw bool, asymmetric bool, keyid string) {
+func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
 	handlers := p.getHandlers(topic)
 	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
 	for h := range handlers {
-		if !h.raw && raw {
+		if h.caps&handlerCapRaw == 0 && raw {
+			continue
+		}
+		if h.caps&handlerCapProx == 0 && prox {
 			continue
 		}
 		err := (h.f)(payload, peer, asymmetric, keyid)
@@ -446,7 +480,7 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 }
 
 // test match of leftmost bytes in given message to node's Kademlia address
-func (p *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
+func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	local := p.Kademlia.BaseAddr()
 	return bytes.Equal(msg.To, local[:len(msg.To)])
 }

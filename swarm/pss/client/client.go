@@ -236,7 +236,7 @@ func (c *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topichex := topicobj.String()
 	msgC := make(chan pss.APIMsg)
 	c.peerPool[topicobj] = make(map[string]*pssRPCRW)
-	sub, err := c.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex)
+	sub, err := c.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex, false)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}

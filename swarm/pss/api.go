@@ -51,7 +51,7 @@ func NewAPI(ps *Pss) *API {
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg
 // struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -59,19 +59,24 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 
 	psssub := notifier.CreateSubscription()
 
-	handler := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-		apimsg := &APIMsg{
-			Msg:        hexutil.Bytes(msg),
-			Asymmetric: asymmetric,
-			Key:        keyid,
-		}
-		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
-		}
-		return nil
+	hndlr := &handler{
+		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+			apimsg := &APIMsg{
+				Msg:        hexutil.Bytes(msg),
+				Asymmetric: asymmetric,
+				Key:        keyid,
+			}
+			if err := notifier.Notify(psssub.ID, apimsg); err != nil {
+				log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
+			}
+			return nil
+		},
+	}
+	if raw {
+		hndlr.caps |= handlerCapRaw
 	}
 
-	deregf := pssapi.Register(&topic, handler)
+	deregf := pssapi.Register(&topic, hndlr)
 	go func() {
 		defer deregf()
 		select {

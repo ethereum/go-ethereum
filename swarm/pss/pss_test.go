@@ -288,7 +288,7 @@ func TestAddressMatch(t *testing.T) {
 	if ps.isSelfRecipient(pssmsg) {
 		t.Fatalf("isSelfRecipient true but %x != %x", remoteaddr, localaddr)
 	}
-	if ps.isSelfPossibleRecipient(pssmsg) {
+	if ps.isSelfPossibleRecipient(pssmsg, false) {
 		t.Fatalf("isSelfPossibleRecipient true but %x != %x", remoteaddr[:8], localaddr[:8])
 	}
 
@@ -297,7 +297,7 @@ func TestAddressMatch(t *testing.T) {
 	if ps.isSelfRecipient(pssmsg) {
 		t.Fatalf("isSelfRecipient true but %x != %x", remoteaddr, localaddr)
 	}
-	if !ps.isSelfPossibleRecipient(pssmsg) {
+	if !ps.isSelfPossibleRecipient(pssmsg, false) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
 	}
 
@@ -306,7 +306,7 @@ func TestAddressMatch(t *testing.T) {
 	if !ps.isSelfRecipient(pssmsg) {
 		t.Fatalf("isSelfRecipient false but %x == %x", remoteaddr, localaddr)
 	}
-	if !ps.isSelfPossibleRecipient(pssmsg) {
+	if !ps.isSelfPossibleRecipient(pssmsg, false) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
 	}
 }
@@ -658,13 +658,13 @@ func testSendRaw(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, true)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, true)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -757,13 +757,13 @@ func testSendSym(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -872,13 +872,13 @@ func testSendAsym(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1037,7 +1037,7 @@ func testNetwork(t *testing.T) {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", topic)
+		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", topic, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1209,7 +1209,7 @@ func TestDeduplication(t *testing.T) {
 	rmsgC := make(chan APIMsg)
 	rctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
 	defer cancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1392,8 +1392,10 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("could not generate whisper envelope: %v", err)
 		}
-		ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			return nil
+		ps.Register(&topic, &handler{
+			f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+				return nil
+			},
 		})
 		pssmsgs = append(pssmsgs, &PssMsg{
 			To:      to,
@@ -1402,7 +1404,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]); err != nil {
+		if err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1], false, false); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
@@ -1476,15 +1478,17 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not generate whisper envelope: %v", err)
 	}
-	ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-		return nil
+	ps.Register(&topic, &handler{
+		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+			return nil
+		},
 	})
 	pssmsg := &PssMsg{
 		To:      addr[len(addr)-1][:],
 		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
-		if err := ps.process(pssmsg); err != nil {
+		if err := ps.process(pssmsg, false, false); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
@@ -1581,7 +1585,10 @@ func newServices(allowRaw bool) adapters.Services {
 			if useHandshake {
 				SetHandshakeController(ps, NewHandshakeParams())
 			}
-			ps.Register(&PingTopic, pp.Handle)
+			ps.Register(&PingTopic, &handler{
+				f:    pp.Handle,
+				caps: handlerCapRaw,
+			})
 			ps.addAPI(rpc.API{
 				Namespace: "psstest",
 				Version:   "0.3",

@@ -92,7 +92,7 @@ func testProtocol(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func testProtocol(t *testing.T) {
 	rmsgC := make(chan APIMsg)
 	rctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false)
 	if err != nil {
 		t.Fatal(err)
 	}
