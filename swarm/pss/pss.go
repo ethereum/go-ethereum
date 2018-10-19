@@ -139,7 +139,7 @@ type Pss struct {
 	handlers         map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu       sync.RWMutex
 	hashPool         sync.Pool
-	topicHandlerCaps map[Topic]byte // caches capabilities of each topic's handlers (see topicHandlerCap* consts)
+	topicHandlerCaps map[Topic]byte // caches capabilities of each topic's handlers (see handlerCap* consts in types.go)
 
 	// process
 	quitC chan struct{}
@@ -719,9 +719,6 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
-	//if !p.allowRaw {
-	//	return errors.New("Raw messages not enabled")
-	//}
 	pssMsgParams := &msgParams{
 		raw: true,
 	}
