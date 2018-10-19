@@ -429,6 +429,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
+
 	if raw {
 		payload = pssmsg.Payload.Data
 	} else {
@@ -462,9 +463,11 @@ func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw
 	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
 	for h := range handlers {
 		if h.caps&handlerCapRaw == 0 && raw {
+			log.Trace("norawhandler")
 			continue
 		}
 		if h.caps&handlerCapProx == 0 && prox {
+			log.Trace("noproxhandler")
 			continue
 		}
 		err := (h.f)(payload, peer, asymmetric, keyid)
@@ -486,6 +489,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	// if a partial address matches we are possible recipient regardless of prox
 	// if not and prox is not set, we are surely not
 	if bytes.Equal(msg.To, local[:len(msg.To)]) {
+
 		return true
 	} else if !prox {
 		return false
@@ -493,7 +497,9 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 
 	minProx := p.Kademlia.NeighbourhoodDepth()
 	depth, eq := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
-	log.Trace("selfpossible", "mixprox", minProx, "depth", depth)
+	log.Trace("selfpossible", "minprox", minProx, "depth", depth)
+
+	log.Debug("here")
 	if eq || minProx <= depth {
 		return true
 	}

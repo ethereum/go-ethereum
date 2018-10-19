@@ -316,6 +316,7 @@ func TestAddressMatch(t *testing.T) {
 }
 
 // verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
+// note that in these tests we use the raw capability on handlers for convenience
 func TestAddressMatchProx(t *testing.T) {
 
 	// recipient node address
@@ -378,23 +379,122 @@ func TestAddressMatchProx(t *testing.T) {
 		t.Fatalf("expected %d peers total, have %d", peerCount, proxes)
 	}
 
-	// remote address distances from localAddr to try and the expected outcomes
-	remoteDistances := []int{255, kad.MinBinSize + 1, kad.MinBinSize, kad.MinBinSize - 1, 0}
+	// remote address distances from localAddr to try and the expected outcomes if we use prox handler
+	remoteDistances := []int{
+		255,
+		kad.MinBinSize + 1,
+		kad.MinBinSize,
+		kad.MinBinSize - 1,
+		0,
+	}
 	expects := []bool{true, true, true, false, false}
 
+	// first the unit test on the method that calculates possible receipient using prox
+	for i, distance := range remoteDistances {
+		pssMsg := newPssMsg(&msgParams{})
+		pssMsg.To = make([]byte, len(localAddr))
+		copy(pssMsg.To, localAddr)
+		var byteIdx = distance / 8
+		pssMsg.To[byteIdx] ^= 1 << uint(7-(distance%8))
+		log.Trace(fmt.Sprintf("addrmatch %v", bytes.Equal(pssMsg.To, localAddr)))
+		if ps.isSelfPossibleRecipient(pssMsg, true) != expects[i] {
+			t.Fatalf("expected distance %d to be %v", distance, expects[i])
+		}
+	}
+
+	// we move up to higher level and test the actual message handler
 	// for each distance check if we are possible recipient when prox variant is used is set
+
+	// this handler will increment a counter for every message that gets passed to the handler
+	var receives int
+	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+		log.Trace("in allowraw handler")
+		receives++
+		return nil
+	}
+
+	// register it marking prox capability
+	topic := BytesToTopic([]byte{0x2a})
+	hndlrProxDereg := ps.Register(&topic, &handler{
+		f:    rawHandlerFunc,
+		caps: handlerCapProx | handlerCapRaw,
+	})
+
+	// test the distances
+	var prevReceive int
 	for i, distance := range remoteDistances {
 		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
 		remoteAddr := remotePotAddr.Bytes()
 
-		pssmsg := &PssMsg{
-			To: remoteAddr,
+		var data [32]byte
+		rand.Read(data[:])
+		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg.To = remoteAddr
+		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  data[:],
 		}
 
-		log.Trace("addrs", "local", localAddr, "remote", remoteAddr)
-		if ps.isSelfPossibleRecipient(pssmsg, true) != expects[i] {
-			t.Fatalf("expected distance %d to be %v", distance, expects[i])
+		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
+		ps.handlePssMsg(context.TODO(), pssMsg)
+		if (!expects[i] && prevReceive != receives) || (expects[i] && prevReceive == receives) {
+			t.Fatalf("expected distance %d recipient %v when prox is set for handler", distance, expects[i])
 		}
+		prevReceive = receives
+	}
+
+	// now add a non prox-capable handler and test
+	ps.Register(&topic, &handler{
+		f:    rawHandlerFunc,
+		caps: handlerCapRaw,
+	})
+	receives = 0
+	prevReceive = 0
+	for i, distance := range remoteDistances {
+		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remoteAddr := remotePotAddr.Bytes()
+
+		var data [32]byte
+		rand.Read(data[:])
+		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg.To = remoteAddr
+		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  data[:],
+		}
+
+		log.Trace("withprox addrs", "local", localAddr, "remote", remoteAddr)
+		ps.handlePssMsg(context.TODO(), pssMsg)
+		if (!expects[i] && prevReceive != receives) || (expects[i] && prevReceive == receives) {
+			t.Fatalf("expected distance %d recipient %v when prox is set for handler", distance, expects[i])
+		}
+		prevReceive = receives
+	}
+
+	// now deregister the prox capable handler, now none of the messages will be handled
+	hndlrProxDereg()
+	receives = 0
+
+	for _, distance := range remoteDistances {
+		remotePotAddr := pot.RandomAddressAt(localPotAddr, distance)
+		remoteAddr := remotePotAddr.Bytes()
+
+		pssMsg := newPssMsg(&msgParams{raw: true})
+		pssMsg.To = remoteAddr
+		pssMsg.Expire = uint32(time.Now().Unix() + 4200)
+		pssMsg.Payload = &whisper.Envelope{
+			Topic: whisper.TopicType(topic),
+			Data:  []byte(remotePotAddr.String()),
+		}
+
+		log.Trace("noprox addrs", "local", localAddr, "remote", remoteAddr)
+		ps.handlePssMsg(context.TODO(), pssMsg)
+		if receives != 0 {
+			t.Fatalf("expected distance %d to not be recipient when prox is not set for handler", distance)
+		}
+
 	}
 }
 
@@ -707,7 +807,6 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 // verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
 func TestRawAllow(t *testing.T) {
 
-	var receives int
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -716,6 +815,8 @@ func TestRawAllow(t *testing.T) {
 	kad := network.NewKademlia((baseAddr).Over(), network.NewKadParams())
 	ps := newTestPss(privKey, kad, nil)
 	topic := BytesToTopic([]byte{0x2a})
+
+	var receives int
 	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		log.Trace("in allowraw handler")
 		receives++
