@@ -278,7 +278,7 @@ func ReadReceipts(db DatabaseReader, hash common.Hash, number uint64) types.Rece
 	if len(data) == 0 {
 		return nil
 	}
-	// Convert the revceipts from their storage form to their internal representation
+	// Convert the receipts from their storage form to their internal representation
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
