@@ -23,7 +23,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -83,7 +83,7 @@ func init() {
 }
 
 func thePow() pow.PoW {
-	pow, _ := ethash.NewForTesting()
+	pow, _ := ubqhash.NewForTesting()
 	return pow
 }
 

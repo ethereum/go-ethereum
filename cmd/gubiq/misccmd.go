@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/params"
@@ -36,11 +36,11 @@ var (
 	makedagCommand = cli.Command{
 		Action:    makedag,
 		Name:      "makedag",
-		Usage:     "Generate ethash DAG (for testing)",
+		Usage:     "Generate ubqhash DAG (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
 		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
-The makedag command generates an ethash DAG in /tmp/dag.
+The makedag command generates an ubqhash DAG in /tmp/dag.
 
 This command exists to support the system testing project.
 Regular users do not need to execute it.
@@ -87,7 +87,7 @@ func makedag(ctx *cli.Context) error {
 				utils.Fatalf("Can't find dir")
 			}
 			fmt.Println("making DAG, this could take awhile...")
-			ethash.MakeDAG(blockNum, dir)
+			ubqhash.MakeDAG(blockNum, dir)
 		}
 	default:
 		wrongArgs()

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ubiq/go-ubiq/accounts"
@@ -1276,7 +1276,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	hash, err := ethash.GetSeedHash(number)
+	hash, err := ubqhash.GetSeedHash(number)
 	if err != nil {
 		return "", err
 	}

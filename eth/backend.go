@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
@@ -52,7 +52,7 @@ import (
 
 const (
 	epochLength    = 30000
-	ethashRevision = 23
+	ubqhashRevision = 23
 
 	autoDAGcheckInterval = 10 * time.Hour
 	autoDAGepochHeight   = epochLength / 2
@@ -286,16 +286,16 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 func CreatePoW(config *Config) (pow.PoW, error) {
 	switch {
 	case config.PowFake:
-		glog.V(logger.Info).Infof("ethash used in fake mode")
+		glog.V(logger.Info).Infof("ubqhash used in fake mode")
 		return pow.PoW(core.FakePow{}), nil
 	case config.PowTest:
-		glog.V(logger.Info).Infof("ethash used in test mode")
-		return ethash.NewForTesting()
+		glog.V(logger.Info).Infof("ubqhash used in test mode")
+		return ubqhash.NewForTesting()
 	case config.PowShared:
-		glog.V(logger.Info).Infof("ethash used in shared mode")
-		return ethash.NewShared(), nil
+		glog.V(logger.Info).Infof("ubqhash used in shared mode")
+		return ubqhash.NewShared(), nil
 	default:
-		return ethash.New(), nil
+		return ubqhash.New(), nil
 	}
 }
 
@@ -453,7 +453,7 @@ func (s *Ethereum) WaitForShutdown() {
 // StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval
 // by default that is 10 times per epoch
 // in epoch n, if we past autoDAGepochHeight within-epoch blocks,
-// it calls ethash.MakeDAG  to pregenerate the DAG for the next epoch n+1
+// it calls ubqhash.MakeDAG  to pregenerate the DAG for the next epoch n+1
 // if it does not exist yet as well as remove the DAG for epoch n-1
 // the loop quits if autodagquit channel is closed, it can safely restart and
 // stop any number of times.
@@ -464,29 +464,29 @@ func (self *Ethereum) StartAutoDAG() {
 		return // already started
 	}
 	go func() {
-		glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir)
+		glog.V(logger.Info).Infof("Automatic pregeneration of ubqhash DAG ON (ubqhash dir: %s)", ubqhash.DefaultDir)
 		var nextEpoch uint64
 		timer := time.After(0)
 		self.autodagquit = make(chan bool)
 		for {
 			select {
 			case <-timer:
-				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
+				glog.V(logger.Info).Infof("checking DAG (ubqhash dir: %s)", ubqhash.DefaultDir)
 				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
 					if currentBlock%epochLength > autoDAGepochHeight {
 						if thisEpoch > 0 {
 							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
+							os.Remove(filepath.Join(ubqhash.DefaultDir, previousDag))
+							os.Remove(filepath.Join(ubqhash.DefaultDir, previousDagFull))
 							glog.V(logger.Info).Infof("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag)
 						}
 						nextEpoch = thisEpoch + 1
 						dag, _ := dagFiles(nextEpoch)
 						if _, err := os.Stat(dag); os.IsNotExist(err) {
 							glog.V(logger.Info).Infof("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag)
-							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
+							err := ubqhash.MakeDAG(nextEpoch*epochLength, "") // "" -> ubqhash.DefaultDir
 							if err != nil {
 								glog.V(logger.Error).Infof("Error generating DAG for epoch %d (%s)", nextEpoch, dag)
 								return
@@ -510,13 +510,13 @@ func (self *Ethereum) StopAutoDAG() {
 		close(self.autodagquit)
 		self.autodagquit = nil
 	}
-	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
+	glog.V(logger.Info).Infof("Automatic pregeneration of ubqhash DAG OFF (ubqhash dir: %s)", ubqhash.DefaultDir)
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)
 // 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
 func dagFiles(epoch uint64) (string, string) {
-	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
-	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
+	seedHash, _ := ubqhash.GetSeedHash(epoch * epochLength)
+	dag := fmt.Sprintf("full-R%d-%x", ubqhashRevision, seedHash[:8])
 	return dag, "full-R" + dag
 }

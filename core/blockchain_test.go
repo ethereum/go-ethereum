@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/hashicorp/golang-lru"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
@@ -46,7 +46,7 @@ func init() {
 }
 
 func thePow() pow.PoW {
-	pow, _ := ethash.NewForTesting()
+	pow, _ := ubqhash.NewForTesting()
 	return pow
 }
 

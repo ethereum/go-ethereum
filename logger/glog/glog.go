@@ -123,7 +123,7 @@ var severityName = []string{
 // matching vmodule filters.
 var trimPrefixes = []string{
 	"/github.com/ubiq/go-ubiq",
-	"/github.com/ethereum/ethash",
+	"/github.com/ubiq/ubqhash",
 }
 
 func trimToImportPath(file string) string {

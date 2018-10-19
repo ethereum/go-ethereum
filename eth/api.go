@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core"
@@ -190,7 +190,7 @@ func (s *PrivateMinerAPI) StopAutoDAG() bool {
 
 // MakeDAG creates the new DAG for the given block number
 func (s *PrivateMinerAPI) MakeDAG(blockNr rpc.BlockNumber) (bool, error) {
-	if err := ethash.MakeDAG(uint64(blockNr.Int64()), ""); err != nil {
+	if err := ubqhash.MakeDAG(uint64(blockNr.Int64()), ""); err != nil {
 		return false, err
 	}
 	return true, nil
