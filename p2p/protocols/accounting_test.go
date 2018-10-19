@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -29,11 +28,6 @@ import (
 type dummyBalance struct {
 	amount int64
 	peer   *Peer
-}
-
-//dummy Balance implementation
-type testExchangeBalance struct {
-	balances map[enode.ID]int64
 }
 
 //dummy Prices implementation
@@ -111,12 +105,6 @@ func (d *dummyPrices) Price(msg interface{}) *Price {
 func (d *dummyBalance) Add(amount int64, peer *Peer) error {
 	d.amount = amount
 	d.peer = peer
-	return nil
-}
-
-//test exchanges balance implementation
-func (d *testExchangeBalance) Add(amount int64, peer *Peer) error {
-	d.balances[peer.ID()] += amount
 	return nil
 }
 
