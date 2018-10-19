@@ -329,20 +329,14 @@ func TestAddressMatchProx(t *testing.T) {
 	peerCount := kad.MinBinSize + 2
 
 	// set up pss
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	if err != nil {
-		t.Fatalf("Could not generate private key: %v", err)
-	}
-	privkey, err := w.GetPrivateKey(keys)
-	pssp := NewPssParams().WithPrivateKey(privkey)
+	privKey, err := crypto.GenerateKey()
+	pssp := NewPssParams().WithPrivateKey(privKey)
 	ps, err := NewPss(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	// create kademlia peers, so we have peers outside minprox
+	// create kademlia peers, so we have peers both inside and outside minproxlimit
 	var peers []*network.Peer
 	for i := 0; i < peerCount; i++ {
 		rw := &p2p.MsgPipeRW{}
@@ -362,7 +356,7 @@ func TestAddressMatchProx(t *testing.T) {
 	}
 
 	// TODO: create a test in the network package to make a table with n peers where n-m are proxpeers
-	// meanwhile test regression for kademlia since we the params are generated outside the package
+	// meanwhile test regression for kademlia since we are compiling the test parameters from different packages
 	var proxes int
 	var conns int
 	kad.EachConn(nil, peerCount, func(p *network.Peer, po int, prox bool) bool {
@@ -387,7 +381,13 @@ func TestAddressMatchProx(t *testing.T) {
 		kad.MinBinSize - 1,
 		0,
 	}
-	expects := []bool{true, true, true, false, false}
+	expects := []bool{
+		true,
+		true,
+		true,
+		false,
+		false,
+	}
 
 	// first the unit test on the method that calculates possible receipient using prox
 	for i, distance := range remoteDistances {
@@ -608,8 +608,6 @@ func TestMessageProcessing(t *testing.T) {
 	}
 
 	// outbox full should return error
-	return
-
 	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
 	for i := 0; i < defaultOutboxCapacity; i++ {
 		ps.outbox <- msg
@@ -807,6 +805,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 // verifies that message handlers for raw messages only are invoked when minimum one handler for the topic exists in which raw messages are explicitly allowed
 func TestRawAllow(t *testing.T) {
 
+	// set up pss like so many times before
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -816,6 +815,7 @@ func TestRawAllow(t *testing.T) {
 	ps := newTestPss(privKey, kad, nil)
 	topic := BytesToTopic([]byte{0x2a})
 
+	// create handler innards that increments every time a message hits it
 	var receives int
 	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		log.Trace("in allowraw handler")
@@ -823,11 +823,13 @@ func TestRawAllow(t *testing.T) {
 		return nil
 	}
 
+	// wrap this handler function with a handler without raw capability and register it
 	hndlrNoRaw := &handler{
 		f: rawHandlerFunc,
 	}
 	ps.Register(&topic, hndlrNoRaw)
 
+	// test it with a raw message, should be poo-poo
 	pssMsg := newPssMsg(&msgParams{
 		raw: true,
 	})
@@ -841,21 +843,26 @@ func TestRawAllow(t *testing.T) {
 		t.Fatalf("Expected handler not to be executed with raw cap off")
 	}
 
+	// now wrap the same handler function with raw capabilities and register it
 	hndlrRaw := &handler{
 		f:    rawHandlerFunc,
 		caps: handlerCapRaw,
 	}
 	deregRawHandler := ps.Register(&topic, hndlrRaw)
-	pssMsg.Payload.Data = []byte("raw deal")
+
+	// should work now
+	pssMsg.Payload.Data = []byte("Raw Deal")
 	ps.handlePssMsg(context.TODO(), pssMsg)
 	if receives == 0 {
 		t.Fatalf("Expected handler to be executed with raw cap on")
 	}
 
+	// now deregister the raw capable handler
 	prevReceives := receives
 	deregRawHandler()
 
-	pssMsg.Payload.Data = []byte("raw trump")
+	// check that raw messages fail again
+	pssMsg.Payload.Data = []byte("Raw Trump")
 	ps.handlePssMsg(context.TODO(), pssMsg)
 	if receives != prevReceives {
 		t.Fatalf("Expected handler not to be executed when raw handler is retracted")

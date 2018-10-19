@@ -332,7 +332,7 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	handlers := p.handlers[*topic]
 	if len(handlers) == 1 {
 		delete(p.handlers, *topic)
-		// check if we still have a prox handler on this topic
+		// topic caps might have changed now that a handler is gone
 		var caps byte
 		for h := range handlers {
 			caps |= h.caps
@@ -380,7 +380,6 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	if pssmsg.isRaw() {
 		if p.topicHandlerCaps[psstopic]&handlerCapRaw == 0 {
 			log.Debug("No handler for raw message", "topic", psstopic)
-			//return errors.New("No handler for raw message")
 		}
 		isRaw = true
 	}
@@ -496,11 +495,11 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	}
 
 	minProx := p.Kademlia.NeighbourhoodDepth()
-	depth, eq := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+	depth, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "minprox", minProx, "depth", depth)
 
 	log.Debug("here")
-	if eq || minProx <= depth {
+	if minProx <= depth {
 		return true
 	}
 	return false
