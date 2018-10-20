@@ -95,13 +95,14 @@ func runCmd(ctx *cli.Context) error {
 			// 	VM:       vm,
 			// }
 
-			output, err := evm.Interpreter().Run(contract, []byte(input), false)
+			output, leftOver, err := evm.Call(coreVM.AccountRef(callerAddr), contractAddr, input, gas, big.NewInt(0))
 
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("Output: %v\n", output)
+			fmt.Println("Output\n", output)
+			fmt.Println("left over gas: ", leftOver)
 			return nil
 		}
 

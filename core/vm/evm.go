@@ -407,7 +407,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	ret, err := run(evm, contract, nil, false)
 
 	/* The new contract needs to be metered after it has executed the constructor */
-	ret = evm.interpreter.PostContractCreation(ret)
+	for _, interpreter := range evm.interpreters {
+		if interpreter.CanRun(contract.Code) {
+			ret = interpreter.PostContractCreation(ret)
+		}
+	}
 
 	// check whether the max code size has been exceeded
 	maxCodeSizeExceeded := evm.ChainConfig().IsEIP158(evm.BlockNumber) && len(ret) > params.MaxCodeSize

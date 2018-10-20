@@ -110,7 +110,7 @@ func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]by
 
 	module, err := wasm.ReadModule(bytes.NewReader(contract.Code), WrappedModuleResolver(in))
 	if err != nil {
-		return nil, fmt.Errorf("Error decoding module at address %s: %v", contract.Address(), err)
+		return nil, fmt.Errorf("Error decoding module at address %s: %v", contract.Address().Hex(), err)
 	}
 
 	// The module should not have any start function

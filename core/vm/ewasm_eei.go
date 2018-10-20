@@ -704,8 +704,11 @@ func sentinel(in *InterpreterEWASM, input []byte) ([]byte, error) {
 	in.contract = in.meteringContract
 	in.contract.SetCallCode(&meteringContractAddress, crypto.Keccak256Hash(meteringCode), meteringCode)
 	in.vm = in.meteringVM
-	meteredCode, err := in.meteringVM.ExecCode(0)
-	return meteredCode.([]byte), err
+	var asBytes []byte
+	if err == nil {
+		asBytes = meteredCode.([]byte)
+	}
+	return asBytes, err
 }
 
 func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffset uint32, length uint32, resultOffset uint32) int32 {
