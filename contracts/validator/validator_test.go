@@ -6,12 +6,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"time"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/rand"
+	"time"
 )
 
 var (
@@ -100,6 +100,9 @@ func TestRewardBalance(t *testing.T) {
 
 	totalReward := new(big.Int).SetInt64(15 * 1000)
 	rewards, err := contracts.GetRewardBalancesRate(acc3Addr, totalReward, baseValidator)
+	if err != nil {
+		t.Error("Fail to get reward balances rate.", err)
+	}
 
 	afterReward := new(big.Int)
 	for _, value := range rewards {
