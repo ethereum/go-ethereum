@@ -44,7 +44,7 @@ func TestRandomize(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(key)
 	transactOpts.GasLimit = 1000000
 
-	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend, big.NewInt(2))
+	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend)
 	t.Log("contract address", randomizeAddress.String())
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
@@ -79,7 +79,7 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
 	transactOpts.GasLimit = 4200000
 	epocNumber := uint64(900)
-	randomizeAddr, randomizeContract, err := DeployRandomize(transactOpts, backend, new(big.Int).SetInt64(0))
+	randomizeAddr, randomizeContract, err := DeployRandomize(transactOpts, backend)
 	if err != nil {
 		t.Fatalf("Can't deploy randomize SC: %v", err)
 	}

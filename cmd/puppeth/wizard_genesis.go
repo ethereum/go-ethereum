@@ -222,7 +222,7 @@ func (w *wizard) makeGenesis() {
 		}
 
 		// Randomize Smart Contract Code
-		randomizeAddress, _, err := randomizeContract.DeployRandomize(transactOpts, contractBackend, big.NewInt(90))
+		randomizeAddress, _, err := randomizeContract.DeployRandomize(transactOpts, contractBackend)
 		if err != nil {
 			fmt.Println("Can't deploy root registry")
 		}
