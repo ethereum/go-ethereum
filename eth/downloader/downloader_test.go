@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1385,9 +1384,9 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 
 // This test reproduces an issue where unexpected deliveries would
 // block indefinitely if they arrived at the right time.
-// We use data driven subtests to manage this so that it will be parallel on its own
-// and not with the other tests, avoiding intermittent failures.
 func TestDeliverHeadersHang(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		protocol int
 		syncMode SyncMode
@@ -1401,14 +1400,13 @@ func TestDeliverHeadersHang(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("protocol %d mode %v", tc.protocol, tc.syncMode), func(t *testing.T) {
+			t.Parallel()
 			testDeliverHeadersHang(t, tc.protocol, tc.syncMode)
 		})
 	}
 }
 
 func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
-	t.Parallel()
-
 	master := newTester()
 	defer master.terminate()
 	chain := testChainBase.shorten(15)
@@ -1428,16 +1426,12 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 			t.Errorf("test %d: sync failed: %v", i, err)
 		}
 		tester.terminate()
-
-		// Flush all goroutines to prevent messing with subsequent tests
-		tester.downloader.peers.peers["peer"].peer.(*floodingTestPeer).pend.Wait()
 	}
 }
 
 type floodingTestPeer struct {
 	peer   Peer
 	tester *downloadTester
-	pend   sync.WaitGroup
 }
 
 func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
@@ -1456,25 +1450,29 @@ func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
 
 func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {
 	deliveriesDone := make(chan struct{}, 500)
-	for i := 0; i < cap(deliveriesDone); i++ {
+	for i := 0; i < cap(deliveriesDone)-1; i++ {
 		peer := fmt.Sprintf("fake-peer%d", i)
-		ftp.pend.Add(1)
-
 		go func() {
 			ftp.tester.downloader.DeliverHeaders(peer, []*types.Header{{}, {}, {}, {}})
 			deliveriesDone <- struct{}{}
-			ftp.pend.Done()
 		}()
 	}
-	// Deliver the actual requested headers. runtime.Gosched is needed to ensure some of
-	// the flooding delivery goroutines run before we deliver the real answer.
-	runtime.Gosched()
-	ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
+
 	// None of the extra deliveries should block.
 	timeout := time.After(60 * time.Second)
+	launched := false
 	for i := 0; i < cap(deliveriesDone); i++ {
 		select {
 		case <-deliveriesDone:
+			if !launched {
+				// Start delivering the requested headers
+				// after one of the flooding responses has arrived.
+				go func() {
+					ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
+					deliveriesDone <- struct{}{}
+				}()
+				launched = true
+			}
 		case <-timeout:
 			panic("blocked")
 		}
