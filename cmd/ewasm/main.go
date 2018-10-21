@@ -111,9 +111,7 @@ func runCmd(ctx *cli.Context) error {
 			}
 
 			evm := coreVM.NewEVM(permissiveContext, statedb, &params.ChainConfig{}, coreVM.Config{})
-
 			evm.StateDB.SetCode(contractAddr, code)
-
 
 			output, leftOver, err := evm.Call(coreVM.AccountRef(callerAddr), contractAddr, input, gas, big.NewInt(0))
 

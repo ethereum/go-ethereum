@@ -31,3 +31,6 @@ const u128Len = 16
 
 // Max recursion depth for contracts
 const maxCallDepth = 1024
+
+// Address of the sentinel (metering) contract
+const sentinelContractAddress = "0x000000000000000000000000000000000000000a"

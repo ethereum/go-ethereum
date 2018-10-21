@@ -66,10 +66,14 @@ type Interpreter interface {
 	// }
 	// ```
 	CanRun([]byte) bool
+	// Hook to be called on the init code of a contract to be created.
+	// This let the interpreter pre-process the init-code before it is
+	// executed.
+	PreContractCreation([]byte, *Contract) ([]byte, error)
 	// Hook to be called once a newly created contract's init code
 	// has been called and is going to be stored. This let the
 	// interpreter post-process the bytecode before it is persisted.
-	PostContractCreation([]byte) []byte
+	PostContractCreation([]byte) ([]byte, error)
 }
 
 // EVMInterpreter represents an EVM interpreter
@@ -276,9 +280,15 @@ func (in *EVMInterpreter) CanRun(code []byte) bool {
 	return true
 }
 
+// PreContractCreation doesn't need to do anything in the case
+// of EVM1 bytecode.
+func (in *EVMInterpreter) PreContractCreation(code []byte, contract *Contract) ([]byte, error) {
+	return code, nil
+}
+
 // PostContractCreation doesn't need to do anything in the case
 // of EVM1 bytecode, but it could turn out useful when extending
 // the tracer.
-func (in *EVMInterpreter) PostContractCreation(code []byte) []byte {
-	return code
+func (in *EVMInterpreter) PostContractCreation(code []byte) ([]byte, error) {
+	return code, nil
 }

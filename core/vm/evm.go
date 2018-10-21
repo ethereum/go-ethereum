@@ -393,6 +393,15 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// EVM. The contract is a scoped environment for this execution context
 	// only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
+	for _, interpreter := range evm.interpreters {
+		if interpreter.CanRun(codeAndHash.code) {
+			var err error
+			codeAndHash.code, err = interpreter.PreContractCreation(codeAndHash.code, contract)
+			if err != nil {
+				return nil, address, gas, nil
+			}
+		}
+	}
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
@@ -407,9 +416,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	ret, err := run(evm, contract, nil, false)
 
 	/* The new contract needs to be metered after it has executed the constructor */
-	for _, interpreter := range evm.interpreters {
-		if interpreter.CanRun(contract.Code) {
-			ret = interpreter.PostContractCreation(ret)
+	if err == nil {
+		for _, interpreter := range evm.interpreters {
+			if interpreter.CanRun(contract.Code) {
+				ret, err = interpreter.PostContractCreation(ret)
+			}
 		}
 	}
 

@@ -691,24 +691,34 @@ func getBlockCoinbase(p *exec.Process, in *InterpreterEWASM, resultOffset int32)
 	p.WriteAt(in.evm.Coinbase.Bytes(), int64(resultOffset))
 }
 
-func sentinel(in *InterpreterEWASM, input []byte) ([]byte, error) {
+func sentinel(in *InterpreterEWASM, input []byte) ([]byte, uint64, error) {
 	savedContract := in.contract
 	savedVM := in.vm
 	defer func() {
 		in.contract = savedContract
 		in.vm = savedVM
 	}()
-	meteringContractAddress := common.HexToAddress("0x000000000000000000000000000000000000000a")
+	meteringContractAddress := common.HexToAddress(sentinelContractAddress)
 	meteringCode := in.StateDB.GetCode(meteringContractAddress)
-	in.contract = NewContract(in.contract, AccountRef(meteringContractAddress), &big.Int{}, 0)
-	in.contract = in.meteringContract
+	in.contract = NewContract(in.contract, AccountRef(meteringContractAddress), &big.Int{}, in.contract.Gas)
 	in.contract.SetCallCode(&meteringContractAddress, crypto.Keccak256Hash(meteringCode), meteringCode)
-	in.vm = in.meteringVM
+	vm, err := exec.NewVM(in.meteringModule)
+	vm.RecoverPanic = true
+	in.vm = vm
+	if err != nil {
+		panic(fmt.Sprintf("Error allocating metering VM: %v", err))
+	}
+	in.contract.Input = input
+	meteredCode, err := in.vm.ExecCode(in.meteringStartIndex)
+	if meteredCode == nil {
+		meteredCode = in.returnData
+	}
+
 	var asBytes []byte
 	if err == nil {
 		asBytes = meteredCode.([]byte)
 	}
-	return asBytes, err
+	return asBytes, savedContract.Gas - in.contract.Gas, err
 }
 
 func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffset uint32, length uint32, resultOffset uint32) int32 {
@@ -740,8 +750,10 @@ func create(p *exec.Process, in *InterpreterEWASM, valueOffset uint32, codeOffse
 
 	/* Meter the contract code if metering is enabled */
 	if in.metering {
-		/* It seems that hera doesn't handle errors */
-		input, _ = sentinel(in, input)
+		input, _, _ = sentinel(in, input)
+		if len(input) < 5 {
+			return ErrEEICallFailure
+		}
 	}
 
 	_, addr, gasLeft, _ := in.evm.Create(in.contract, input, gas, big.NewInt(0).SetBytes(value))

@@ -62,8 +62,9 @@ type InterpreterEWASM struct {
 
 	metering bool
 
-	meteringContract *Contract
-	meteringVM       *exec.VM
+	meteringContract   *Contract
+	meteringModule     *wasm.Module
+	meteringStartIndex int64
 }
 
 // NewEWASMInterpreter creates a new wagon-based ewasm interpreter. It
@@ -72,29 +73,32 @@ type InterpreterEWASM struct {
 func NewEWASMInterpreter(evm *EVM, cfg Config) Interpreter {
 	metering := cfg.EWASMInterpreter["metering"] == "true"
 
-	var meteringVM *exec.VM
-	var meteringContract *Contract
+	inter := &InterpreterEWASM{
+		StateDB:  evm.StateDB,
+		evm:      evm,
+		gasTable: evm.chainConfig.GasTable(evm.BlockNumber),
+		metering: metering,
+	}
+
 	if metering {
-		meteringContractAddress := common.HexToAddress("0x000000000000000000000000000000000000000a")
+		meteringContractAddress := common.HexToAddress(sentinelContractAddress)
 		meteringCode := evm.StateDB.GetCode(meteringContractAddress)
 
-		module, err := wasm.ReadModule(bytes.NewReader(meteringCode), nil)
+		var err error
+		inter.meteringModule, err = wasm.ReadModule(bytes.NewReader(meteringCode), WrappedModuleResolver(inter))
 		if err != nil {
 			panic(fmt.Sprintf("Error loading the metering contract: %v", err))
 		}
-		meteringVM, err = exec.NewVM(module)
-		if err != nil {
-			panic(fmt.Sprintf("Error allocating metering contract: %v", err))
+		// TODO when the metering contract abides by that rule, check that it
+		// only exports "main" and "memory".
+		inter.meteringStartIndex = int64(inter.meteringModule.Export.Entries["main"].Index)
+		mainSig := inter.meteringModule.FunctionIndexSpace[inter.meteringStartIndex].Sig
+		if len(mainSig.ParamTypes) != 0 || len(mainSig.ReturnTypes) != 0 {
+			panic(fmt.Sprintf("Invalid main function for the metering contract: index=%d sig=%v", inter.meteringStartIndex, mainSig))
 		}
 	}
-	return &InterpreterEWASM{
-		StateDB:          evm.StateDB,
-		evm:              evm,
-		gasTable:         evm.chainConfig.GasTable(evm.BlockNumber),
-		meteringVM:       meteringVM,
-		meteringContract: meteringContract,
-		metering:         metering,
-	}
+
+	return inter
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -176,13 +180,35 @@ func (in *InterpreterEWASM) CanRun(file []byte) bool {
 	return true
 }
 
+// PreContractCreation meters the contract's its init code before it
+// is run.
+func (in *InterpreterEWASM) PreContractCreation(code []byte, contract *Contract) ([]byte, error) {
+	savedContract := in.contract
+	in.contract = contract
+
+	defer func() {
+		in.contract = savedContract
+	}()
+
+	if in.metering {
+		metered, _, err := sentinel(in, code)
+		if len(metered) < 5 || err != nil {
+			return nil, fmt.Errorf("Error metering the init contract code, err=%v", err)
+		}
+		return metered, nil
+	}
+	return code, nil
+}
+
 // PostContractCreation meters the contract once its init code has
 // been run.
-func (in *InterpreterEWASM) PostContractCreation(code []byte) []byte {
+func (in *InterpreterEWASM) PostContractCreation(code []byte) ([]byte, error) {
 	if in.metering {
-		// hera currently seems to ignore the error code
-		metered, _ := sentinel(in, code)
-		return metered
+		metered, _, err := sentinel(in, code)
+		if len(metered) < 5 || err != nil {
+			return nil, fmt.Errorf("Error metering the generated contract code, err=%v", err)
+		}
+		return metered, nil
 	}
-	return code
+	return code, nil
 }
