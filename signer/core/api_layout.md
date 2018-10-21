@@ -1,7 +1,7 @@
 # Specs
-`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`  
+`encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01EthereumSignedMessage\n" ‖ domainSeparator ‖ hashStruct(message)`  
 - data adheres to 𝕊, a structure defined in the rigorous eip-712
-- `\x00` is needed to comply with EIP-191
+- `\x01` is needed to comply with EIP-191
 - `domainSeparator` and `hashStruct` are defined below
 
 ## A) domainSeparator
@@ -34,9 +34,9 @@ Example: `Mail(Person from,Person to,string contents)Person(string name,address 
 
     #### a) atomic
 
-    - `boolean`     => `uint256`
+    - `bool`     => `uint256`
     - `address`     => `uint160`
-    - `uint`        => sign-extended `uint256` in big endian order
+    - `int8:int256` and `uint8:uint256`        => sign-extended `uint256` in big endian order
     - `bytes1:31`   => `bytes32` 
 
     #### b) dynamic
@@ -49,7 +49,21 @@ Example: `Mail(Person from,Person to,string contents)Person(string name,address 
     - `array`       => `keccak256(encodeData(array))`
     - `struct`      => `rec(keccak256(hashStruct(struct)))`
 
-## C) Example
+## C) Algo
+- hashStruct
+    - encodeType
+    - encodeData
+        - if primitive
+            - encode
+        - else
+            - if array
+                - encodeData
+            - else if struct
+                - hashStruct
+            - else
+                - break
+                
+## D) Example
 ### Query
 ```json
 {
