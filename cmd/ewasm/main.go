@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -59,10 +60,28 @@ func runCmd(ctx *cli.Context) error {
 
 	if args.Present() {
 		filename := args.First()
-		input := args.Get(1)
+		inputStr := args.Get(1)
 		gas, err := strconv.ParseUint(args.Get(2), 10, 64)
 		if err != nil {
 			return fmt.Errorf("Error parsing gas number: %v", err)
+		}
+
+		// Convert the input
+		input := []byte{}
+		if inputStr[0:2] != "0x" {
+			return fmt.Errorf("Invalid input, it should be a hexadecimal number starting with 0x")
+		}
+		inputStr = inputStr[2:]
+		if len(inputStr)%2 == 1 {
+			inputStr = "0" + inputStr
+		}
+		for inputStr != "" {
+			x, err := strconv.ParseUint(inputStr[0:2], 16, 8)
+			if err != nil {
+				return fmt.Errorf("Invalid byte in input")
+			}
+			input = append(input, byte(x))
+			inputStr = inputStr[2:]
 		}
 
 		if fd, err := os.Open(filename); err == nil {
@@ -84,16 +103,17 @@ func runCmd(ctx *cli.Context) error {
 
 			contract := coreVM.NewContract(coreVM.AccountRef(callerAddr), coreVM.AccountRef(contractAddr), big.NewInt(100), gas)
 			contract.Code = code
+			contract.Input = input
 
-			evm := coreVM.NewEVM(coreVM.Context{}, statedb, &params.ChainConfig{}, coreVM.Config{})
-			// &ewasm.Contract{
-			// 	StateDB:  statedb,
-			// 	Gas:      100,
-			// 	Address:  &contractAddr,
-			// 	CodeAddr: &codeAddr,
-			// 	Module:   m,
-			// 	VM:       vm,
-			// }
+			permissiveContext := coreVM.Context{
+				CanTransfer: core.CanTransfer,
+				Transfer:    core.Transfer,
+			}
+
+			evm := coreVM.NewEVM(permissiveContext, statedb, &params.ChainConfig{}, coreVM.Config{})
+
+			evm.StateDB.SetCode(contractAddr, code)
+
 
 			output, leftOver, err := evm.Call(coreVM.AccountRef(callerAddr), contractAddr, input, gas, big.NewInt(0))
 
