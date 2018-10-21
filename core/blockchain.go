@@ -210,6 +210,11 @@ func (bc *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
 
+// GetVMConfig returns the block chain VM config.
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
+}
+
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
