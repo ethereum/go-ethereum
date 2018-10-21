@@ -28,7 +28,11 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 }
 
 func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Validator, error) {
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100))
+	minDeposit := new(big.Int)
+
+	minDeposit.SetString("50000000000000000000000", 10)
+	fmt.Println("--->", common.BigToHash(minDeposit).Hex())
+	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, minDeposit, big.NewInt(99), big.NewInt(100), big.NewInt(100))
 	if err != nil {
 		return validatorAddr, nil, err
 	}
