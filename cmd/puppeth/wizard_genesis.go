@@ -34,6 +34,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner"
+	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -132,7 +134,7 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
-		w.readAddress()
+		owner := *w.readAddress()
 
 		// We also need the initial list of signers
 		fmt.Println()
@@ -156,8 +158,12 @@ func (w *wizard) makeGenesis() {
 				}
 			}
 		}
+		validatorCap := new(big.Int)
+		validatorCap.SetString("50000000000000000000000", 10)
+		var validatorCaps []*big.Int
 		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 		for i, signer := range signers {
+			validatorCaps = append(validatorCaps, validatorCap)
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
 
@@ -165,13 +171,13 @@ func (w *wizard) makeGenesis() {
 		fmt.Println("How many blocks per checkpoint? (default = 990)")
 		genesis.Config.Clique.RewardCheckpoint = uint64(w.readDefaultInt(990))
 
-		// Smart Contract Code
-		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr := crypto.PubkeyToAddress(key.PublicKey)
+		// Validator Smart Contract Code
+		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr := crypto.PubkeyToAddress(pKey.PublicKey)
 		contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
-		transactOpts := bind.NewKeyedTransactor(key)
+		transactOpts := bind.NewKeyedTransactor(pKey)
 
-		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend)
+		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend, signers, validatorCaps, owner)
 		if err != nil {
 			fmt.Println("Can't deploy root registry")
 		}
@@ -187,7 +193,39 @@ func (w *wizard) makeGenesis() {
 			return true
 		}
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
+		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000088")] = core.GenesisAccount{
+			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
+			Code:    code,
+			Storage: storage,
+		}
+
+		// Block Signers Smart Contract
+		blockSignerAddress, _, err := blockSignerContract.DeployBlockSigner(transactOpts, contractBackend)
+		if err != nil {
+			fmt.Println("Can't deploy root registry")
+		}
+		contractBackend.Commit()
+
+		code, _ = contractBackend.CodeAt(ctx, blockSignerAddress, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000089")] = core.GenesisAccount{
+			Balance: big.NewInt(0),
+			Code:    code,
+			Storage: storage,
+		}
+
+		// Randomize Smart Contract Code
+		randomizeAddress, _, err := randomizeContract.DeployRandomize(transactOpts, contractBackend)
+		if err != nil {
+			fmt.Println("Can't deploy root registry")
+		}
+		contractBackend.Commit()
+
+		code, _ = contractBackend.CodeAt(ctx, randomizeAddress, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, randomizeAddress, nil, f)
+		genesis.Alloc[common.StringToAddress("0x0000000000000000000000000000000000000090")] = core.GenesisAccount{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,

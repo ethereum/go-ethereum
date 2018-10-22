@@ -28,7 +28,7 @@ func NewBlockSigner(transactOpts *bind.TransactOpts, contractAddr common.Address
 }
 
 func DeployBlockSigner(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *BlockSigner, error) {
-	blockSignerAddr, _, _, err := contract.DeployBlockSigner(transactOpts, contractBackend, big.NewInt(990))
+	blockSignerAddr, _, _, err := contract.DeployBlockSigner(transactOpts, contractBackend, big.NewInt(99))
 	if err != nil {
 		return blockSignerAddr, nil, err
 	}
