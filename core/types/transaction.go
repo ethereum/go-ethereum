@@ -268,11 +268,10 @@ func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
 }
 
 func (tx *Transaction) IsSpecialTransaction() bool {
-	to := ""
-	if tx.To() != nil {
-		to = tx.To().String()
+	if tx.To() == nil {
+		return false
 	}
-	return to == common.RandomizeSMC || to == common.BlockSigners
+	return tx.To().String() == common.RandomizeSMC || tx.To().String() == common.BlockSigners
 }
 
 func (tx *Transaction) String() string {
@@ -403,6 +402,8 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
+
+// It also classifies special txs and normal txs
 func NewTransactionsByPriceAndNonce(signer Signer, txs map[common.Address]Transactions) (*TransactionsByPriceAndNonce, Transactions) {
 	// Initialize a price based heap with the head transactions
 	heads := TxByPrice{}

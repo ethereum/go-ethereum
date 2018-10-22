@@ -210,6 +210,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
 	go pm.txBroadcastLoop()
 
+	// broadcast special transactions
 	pm.specialTxCh = make(chan core.TxPreEvent, txChanSize)
 	pm.specialTxSub = pm.txpool.SubscribeSpecialTxPreEvent(pm.specialTxCh)
 	go pm.specialTxBroadcastLoop()

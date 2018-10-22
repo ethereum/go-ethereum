@@ -55,7 +55,8 @@ type peer struct {
 	id string
 
 	*p2p.Peer
-	rw p2p.MsgReadWriter
+	rw     p2p.MsgReadWriter
+	pairRw p2p.MsgReadWriter
 
 	version  int         // Protocol version negotiated
 	forkDrop *time.Timer // Timed connection dropper if forks aren't validated in time
@@ -66,7 +67,6 @@ type peer struct {
 
 	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
 	knownBlocks *set.Set // Set of block hashes known to be known by this peer
-	pairRw      p2p.MsgReadWriter
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -338,13 +338,13 @@ func (ps *peerSet) Register(p *peer) error {
 	if ps.closed {
 		return errClosed
 	}
-	if exitPeer, ok := ps.peers[p.id]; ok {
-		if exitPeer.pairRw != nil {
+	if existPeer, ok := ps.peers[p.id]; ok {
+		if existPeer.pairRw != nil {
 			return errAlreadyRegistered
 		}
-		exitPeer.PairPeer = p.Peer
-		exitPeer.pairRw = p.rw
-		p.PairPeer = exitPeer.Peer
+		existPeer.PairPeer = p.Peer
+		existPeer.pairRw = p.rw
+		p.PairPeer = existPeer.Peer
 		return p2p.ErrAddPairPeer
 	}
 	ps.peers[p.id] = p
