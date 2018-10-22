@@ -471,9 +471,9 @@ func (s *Ethereum) StartStaking(local bool) error {
 	return nil
 }
 
-func (s *Ethereum) StopStaking()        { s.miner.Stop() }
-func (s *Ethereum) IsStaking() bool     { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *Ethereum) StopStaking()         { s.miner.Stop() }
+func (s *Ethereum) IsStaking() bool      { return s.miner.Mining() }
+func (s *Ethereum) Miner() *miner.Miner  { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }

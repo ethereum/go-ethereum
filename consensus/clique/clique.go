@@ -48,7 +48,6 @@ const (
 	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
 	wiggleTime         = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-
 )
 
 type Masternode struct {
@@ -405,23 +404,29 @@ func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Heade
 	return masternodes
 }
 
-func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+func (c *Clique) GetPeriod() uint64 { return c.config.Period }
+
+func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (int, int, bool, error) {
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
+	var err error
 	preIndex := -1
 	if header.Number.Uint64() != 0 {
-		pre, err := ecrecover(header, snap.sigcache)
+		pre, err = ecrecover(header, snap.sigcache)
 		if err != nil {
-			return false, err
+			return 0, 0, false, err
 		}
 		preIndex = position(masternodes, pre)
 	}
 	curIndex := position(masternodes, cur)
-	log.Info("Debugging info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
 	for i, s := range masternodes {
 		fmt.Printf("%d - %s\n", i, s.String())
 	}
-	return (preIndex+1)%len(masternodes) == curIndex, nil
+	if (preIndex+1)%len(masternodes) == curIndex {
+		return preIndex, curIndex, true, nil
+	}
+	return preIndex, curIndex, false, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
