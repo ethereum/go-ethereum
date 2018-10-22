@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -96,7 +97,10 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	delivery.getPeer = streamer.getPeer
 
 	if options.DoServeRetrieve {
-		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
+		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
+			if !live {
+				return nil, errors.New("only live retrieval requests supported")
+			}
 			return NewSwarmChunkServer(delivery.chunkStore), nil
 		})
 	}
@@ -279,7 +283,6 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	if err != nil {
 		return err
 	}
-
 	if s.Live && h != nil {
 		if err := peer.setClientParams(
 			getHistoryStream(s),
@@ -486,8 +489,13 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *WantedHashesMsg:
 		return p.handleWantedHashesMsg(ctx, msg)
 
-	case *ChunkDeliveryMsg:
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
+	case *ChunkDeliveryMsgRetrieval:
+		//handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
+		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+
+	case *ChunkDeliveryMsgSyncing:
+		//handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
+		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
@@ -678,7 +686,7 @@ func (c *clientParams) clientCreated() {
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
-	Version:    7,
+	Version:    8,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		UnsubscribeMsg{},
@@ -687,10 +695,11 @@ var Spec = &protocols.Spec{
 		TakeoverProofMsg{},
 		SubscribeMsg{},
 		RetrieveRequestMsg{},
-		ChunkDeliveryMsg{},
+		ChunkDeliveryMsgRetrieval{},
 		SubscribeErrorMsg{},
 		RequestSubscriptionMsg{},
 		QuitMsg{},
+		ChunkDeliveryMsgSyncing{},
 	},
 }
 
