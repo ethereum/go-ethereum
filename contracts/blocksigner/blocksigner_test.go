@@ -8,6 +8,7 @@ package blocksigner
 
  	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -21,14 +22,15 @@ package blocksigner
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
- 	_, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend)
-	if err != nil {
+	blockSignerAddress, blockSigner, err := DeployBlockSigner(transactOpts, contractBackend)
+		if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
 	contractBackend.Commit()
 
 	d := time.Now().Add(1000 * time.Millisecond)
-	ctx, _ := context.WithDeadline(context.Background(), d)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
 	code, _ := contractBackend.CodeAt(ctx, blockSignerAddress, nil)
 	t.Log("contract code", common.ToHex(code))
 	f := func(key, val common.Hash) bool {

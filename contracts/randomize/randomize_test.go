@@ -31,7 +31,8 @@ func TestRandomize(t *testing.T) {
 	contractBackend.Commit()
 
 	d := time.Now().Add(1000 * time.Millisecond)
-	ctx, _ := context.WithDeadline(context.Background(), d)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
 	code, _ := contractBackend.CodeAt(ctx, randomizeAddress, nil)
 	t.Log("contract code", common.ToHex(code))
 	f := func(key, val common.Hash) bool {
