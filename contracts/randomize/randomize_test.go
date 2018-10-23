@@ -44,7 +44,7 @@ func TestRandomize(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(key)
 	transactOpts.GasLimit = 1000000
 
-	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend, big.NewInt(2))
+	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend)
 	t.Log("contract address", randomizeAddress.String())
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
@@ -79,62 +79,78 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
 	transactOpts.GasLimit = 4200000
 	epocNumber := uint64(900)
-	randomizeAddr, randomizeContract, err := DeployRandomize(transactOpts, backend, new(big.Int).SetInt64(0))
+	randomizeAddr, randomizeContract, err := DeployRandomize(transactOpts, backend)
 	if err != nil {
 		t.Fatalf("Can't deploy randomize SC: %v", err)
 	}
 	backend.Commit()
 
-	nonce := uint64(1)
 	randomizeKeyValue := contracts.RandStringByte(32)
-	tx, err := contracts.BuildTxSecretRandomize(nonce, randomizeAddr, epocNumber, randomizeKeyValue)
-	if err != nil {
-		t.Fatalf("Can't create tx randomize secret: %v", err)
-	}
-	tx, err = types.SignTx(tx, signer, acc1Key)
-	if err != nil {
-		t.Fatalf("Can't sign tx randomize secret: %v", err)
-	}
 
-	err = backend.SendTransaction(ctx, tx)
-	if err != nil {
-		t.Fatalf("Can't send tx for create randomize secret: %v", err)
-	}
-	backend.Commit()
-	// Increment nonce.
-	nonce++
-	// Set opening.
-	tx, err = contracts.BuildTxOpeningRandomize(nonce, randomizeAddr, randomizeKeyValue)
-	if err != nil {
-		t.Fatalf("Can't create tx randomize opening: %v", err)
-	}
-	tx, err = types.SignTx(tx, signer, acc1Key)
-	if err != nil {
-		t.Fatalf("Can't sign tx randomize opening: %v", err)
-	}
+	for i := 1; i <= 900; i++ {
+		nonce := uint64(i)
+		switch i {
+		case 800:
+			tx, err := contracts.BuildTxSecretRandomize(nonce, randomizeAddr, epocNumber, randomizeKeyValue)
+			if err != nil {
+				t.Fatalf("Can't create tx randomize secret: %v", err)
+			}
+			tx, err = types.SignTx(tx, signer, acc1Key)
+			if err != nil {
+				t.Fatalf("Can't sign tx randomize secret: %v", err)
+			}
+			err = backend.SendTransaction(ctx, tx)
+			if err != nil {
+				t.Fatalf("Can't send tx for create randomize secret: %v", err)
+			}
+			break
+		case 850:
+			// Set opening.
+			tx, err := contracts.BuildTxOpeningRandomize(nonce, randomizeAddr, randomizeKeyValue)
+			if err != nil {
+				t.Fatalf("Can't create tx randomize opening: %v", err)
+			}
+			tx, err = types.SignTx(tx, signer, acc1Key)
+			if err != nil {
+				t.Fatalf("Can't sign tx randomize opening: %v", err)
+			}
+			err = backend.SendTransaction(ctx, tx)
+			if err != nil {
+				t.Fatalf("Can't send tx for create randomize opening: %v", err)
+			}
+			break
 
-	err = backend.SendTransaction(ctx, tx)
-	if err != nil {
-		t.Fatalf("Can't send tx for create randomize opening: %v", err)
-	}
-	backend.Commit()
-
-	// Get randomize secret from SC.
-	secrets, err := randomizeContract.GetSecret(acc1Addr)
-	if err != nil {
-		t.Error("Fail get secrets from randomize", err)
-	}
-	if len(secrets) <= 0 {
-		t.Error("Empty get secrets from SC", err)
-	}
-	// Decrypt randomize from SC.
-	opening, err := randomizeContract.GetOpening(acc1Addr)
-	if err != nil {
-		t.Fatalf("Can't get secret from SC: %v", err)
-	}
-	randomize, err := contracts.DecryptRandomizeFromSecretsAndOpening(secrets, opening)
-	t.Log("randomize", randomize)
-	if err != nil {
-		t.Error("Can't decrypt secret and opening", err)
+		case 900:
+			// Get randomize secret from SC.
+			secrets, err := randomizeContract.GetSecret(acc1Addr)
+			if err != nil {
+				t.Error("Fail get secrets from randomize", err)
+			}
+			if len(secrets) <= 0 {
+				t.Error("Empty get secrets from SC", err)
+			}
+			// Decrypt randomize from SC.
+			opening, err := randomizeContract.GetOpening(acc1Addr)
+			if err != nil {
+				t.Fatalf("Can't get secret from SC: %v", err)
+			}
+			randomize, err := contracts.DecryptRandomizeFromSecretsAndOpening(secrets, opening)
+			t.Log("randomize", randomize)
+			if err != nil {
+				t.Error("Can't decrypt secret and opening", err)
+			}
+			break
+		default:
+			tx, err := types.SignTx(types.NewTransaction(nonce, common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, acc1Key)
+			if err != nil {
+				t.Fatalf("Can't sign tx randomize: %v", err)
+			}
+			err = backend.SendTransaction(ctx, tx)
+			if err != nil {
+				t.Fatalf("Can't send tx for create randomize: %v", err)
+			}
+			break
+		}
+		backend.Commit()
 	}
 }

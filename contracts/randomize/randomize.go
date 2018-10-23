@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/randomize/contract"
-	"math/big"
 )
 
 type Randomize struct {
@@ -42,8 +41,8 @@ func NewRandomize(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 	}, nil
 }
 
-func DeployRandomize(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, randomNumber *big.Int) (common.Address, *Randomize, error) {
-	randomizeAddr, _, _, err := contract.DeployTomoRandomize(transactOpts, contractBackend, randomNumber)
+func DeployRandomize(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Randomize, error) {
+	randomizeAddr, _, _, err := contract.DeployTomoRandomize(transactOpts, contractBackend)
 	if err != nil {
 		return randomizeAddr, nil, err
 	}

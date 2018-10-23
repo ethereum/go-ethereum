@@ -155,6 +155,6 @@ func TestRemoveItemInArray(t *testing.T) {
 	remove := []Address{HexToAddress("0x0000000"), HexToAddress("0x0000004"), HexToAddress("0x0000003")}
 	array = RemoveItemFromArray(array, remove)
 	if len(array) != 2 {
-		t.Error("fail remove item from array addres ")
+		t.Error("fail remove item from array address")
 	}
 }
