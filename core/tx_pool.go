@@ -80,6 +80,8 @@ var (
 	ErrOversizedData = errors.New("oversized data")
 
 	ErrZeroGasPrice = errors.New("zero gas price")
+
+	ErrDuplicateSpecialTransaction = errors.New("duplicate a specail transaction")
 )
 
 var (
@@ -186,16 +188,17 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config       TxPoolConfig
-	chainconfig  *params.ChainConfig
-	chain        blockChain
-	gasPrice     *big.Int
-	txFeed       event.Feed
-	scope        event.SubscriptionScope
-	chainHeadCh  chan ChainHeadEvent
-	chainHeadSub event.Subscription
-	signer       types.Signer
-	mu           sync.RWMutex
+	config        TxPoolConfig
+	chainconfig   *params.ChainConfig
+	chain         blockChain
+	gasPrice      *big.Int
+	txFeed        event.Feed
+	specialTxFeed event.Feed
+	scope         event.SubscriptionScope
+	chainHeadCh   chan ChainHeadEvent
+	chainHeadSub  event.Subscription
+	signer        types.Signer
+	mu            sync.RWMutex
 
 	currentState  *state.StateDB      // Current state in the blockchain head
 	pendingState  *state.ManagedState // Pending state tracking virtual nonces
@@ -454,6 +457,12 @@ func (pool *TxPool) SubscribeTxPreEvent(ch chan<- TxPreEvent) event.Subscription
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+// SubscribeSpecialTxPreEvent registers a subscription of TxPreEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeSpecialTxPreEvent(ch chan<- TxPreEvent) event.Subscription {
+	return pool.scope.Track(pool.specialTxFeed.Subscribe(ch))
+}
+
 // GasPrice returns the current gas price enforced by the transaction pool.
 func (pool *TxPool) GasPrice() *big.Int {
 	pool.mu.RLock()
@@ -576,7 +585,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !local && tx.To() != nil && !tx.IsSpecialTransaction() && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -589,7 +598,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 
-	if tx.To() != nil && tx.To().String() != common.BlockSigners && tx.To().String() != common.RandomizeSMC {
+	if tx.To() != nil && !tx.IsSpecialTransaction() {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err
@@ -646,8 +655,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 			pool.removeTx(tx.Hash())
 		}
 	}
-	// If the transaction is replacing an already pending one, do directly
 	from, _ := types.Sender(pool.signer, tx) // already validated
+	if tx.IsSpecialTransaction() {
+		return pool.promoteSpecialTx(from, tx)
+	}
+	// If the transaction is replacing an already pending one, do directly
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -761,6 +773,54 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
 
 	go pool.txFeed.Send(TxPreEvent{tx})
+}
+
+func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction) (bool, error) {
+	// Try to insert the transaction into the pending queue
+	if pool.pending[addr] == nil {
+		pool.pending[addr] = newTxList(true)
+	}
+	list := pool.pending[addr]
+	old := list.txs.Get(tx.Nonce())
+	if old != nil && old.IsSpecialTransaction() {
+		return false, ErrDuplicateSpecialTransaction
+	}
+	// Otherwise discard any previous transaction and mark this
+	if old != nil {
+		delete(pool.all, old.Hash())
+		pool.priced.Removed()
+		pendingReplaceCounter.Inc(1)
+	}
+	list.txs.Put(tx)
+	if cost := tx.Cost(); list.costcap.Cmp(cost) < 0 {
+		list.costcap = cost
+	}
+	if gas := tx.Gas(); list.gascap < gas {
+		list.gascap = gas
+	}
+	// Failsafe to work around direct pending inserts (tests)
+	if pool.all[tx.Hash()] == nil {
+		pool.all[tx.Hash()] = tx
+	}
+	// Set the potentially new pending nonce and notify any subsystems of the new tx
+	pool.beats[addr] = time.Now()
+	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
+	broadcastTxs := types.Transactions{}
+	for i := tx.Nonce() - 1; i > 0; i-- {
+		before := list.txs.Get(i)
+		if before == nil || before.IsSpecialTransaction() {
+			break
+		}
+		broadcastTxs = append(broadcastTxs, before)
+	}
+	broadcastTxs = append(broadcastTxs, tx)
+	go func() {
+		for _, btx := range broadcastTxs {
+			pool.specialTxFeed.Send(TxPreEvent{btx})
+			log.Debug("Pooled new special transaction", "hash", tx.Hash(), "from", addr, "to", tx.To(), "nonce", tx.Nonce())
+		}
+	}()
+	return true, nil
 }
 
 // AddLocal enqueues a single transaction into the pool if it is valid, marking

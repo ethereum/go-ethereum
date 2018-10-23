@@ -122,6 +122,7 @@ func (t *rlpx) close(err error) {
 }
 
 func (t *rlpx) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error) {
+
 	// Writing our handshake happens concurrently, we prefer
 	// returning the handshake read error. If the remote side
 	// disconnects us early with a valid reason, we should return it
