@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -45,6 +44,13 @@ var (
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256Hash(nil)
 )
+
+type proofList [][]byte
+
+func (n *proofList) Put(key []byte, value []byte) error {
+	*n = append(*n, value)
+	return nil
+}
 
 // StateDBs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
@@ -259,21 +265,21 @@ func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash
 }
 
 // GetProof returns the MerkleProof for a given Account
-func (self *StateDB) GetProof(a common.Address) (vm.ProofList, error) {
-	var proof vm.ProofList
+func (self *StateDB) GetProof(a common.Address) ([][]byte, error) {
+	var proof proofList
 	err := self.trie.Prove(crypto.Keccak256(a.Bytes()), 0, &proof)
-	return proof, err
+	return [][]byte(proof), err
 }
 
 // GetProof returns the StorageProof for given key
-func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) (vm.ProofList, error) {
-	var proof vm.ProofList
+func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error) {
+	var proof proofList
 	trie := self.StorageTrie(a)
 	if trie == nil {
 		return proof, errors.New("storage trie for requested address does not exist")
 	}
 	err := trie.Prove(crypto.Keccak256(key.Bytes()), 0, &proof)
-	return proof, err
+	return [][]byte(proof), err
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
