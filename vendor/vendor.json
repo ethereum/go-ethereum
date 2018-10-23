@@ -9,10 +9,10 @@
 			"revisionTime": "2018-06-07T21:19:23Z"
 		},
 		{
-			"checksumSHA1": "5nsGu77r69lloEWbFhMof2UA9rY=",
-			"path": "github.com/Azure/azure-storage-blob-go/2018-03-28/azblob",
-			"revision": "eaae161d9d5e07363f04ddb19d84d57efc66d1a1",
-			"revisionTime": "2018-07-12T00:56:34Z"
+			"checksumSHA1": "2tjghBLyLnO+Gry+Nu+f6y8txiw=",
+			"path": "github.com/Azure/azure-storage-blob-go/azblob",
+			"revision": "cf01652132ccc92af2b9da9d2de542b5b7eafc1d",
+			"revisionTime": "2018-10-23T07:08:48Z"
 		},
 		{
 			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
