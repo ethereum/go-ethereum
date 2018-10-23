@@ -1246,7 +1246,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				}
 				// If no headers were retrieved at all, the peer violated its TD promise that it had a
 				// better chain compared to ours. The only exception is if its promised blocks were
-				// already imported by other means (e.g. fecher):
+				// already imported by other means (e.g. fetcher):
 				//
 				// R <remote peer>, L <local node>: Both at block 10
 				// R: Mine block 11, and propagate it to L
@@ -1415,7 +1415,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 	defer stateSync.Cancel()
 	go func() {
 		if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
-			d.queue.Close() // wake up WaitResults
+			d.queue.Close() // wake up Results
 		}
 	}()
 	// Figure out the ideal pivot block. Note, that this goalpost may move if the
@@ -1473,7 +1473,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 				defer stateSync.Cancel()
 				go func() {
 					if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
-						d.queue.Close() // wake up WaitResults
+						d.queue.Close() // wake up Results
 					}
 				}()
 				oldPivot = P
