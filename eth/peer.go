@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -54,7 +55,8 @@ type peer struct {
 	id string
 
 	*p2p.Peer
-	rw p2p.MsgReadWriter
+	rw     p2p.MsgReadWriter
+	pairRw p2p.MsgReadWriter
 
 	version  int         // Protocol version negotiated
 	forkDrop *time.Timer // Timed connection dropper if forks aren't validated in time
@@ -139,6 +141,15 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
+func (p *peer) SendSpecialTransactions(tx *types.Transaction) error {
+	p.knownTxs.Add(tx.Hash())
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, TxMsg, types.Transactions{tx})
+	} else {
+		return p2p.Send(p.rw, TxMsg, types.Transactions{tx})
+	}
+}
+
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
@@ -156,7 +167,13 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+	if p.pairRw != nil {
+		log.Trace("p2p send new block to the pairRw connection", "p", p, "number", block.NumberU64())
+		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
+	} else {
+		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+	}
+
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
@@ -321,8 +338,14 @@ func (ps *peerSet) Register(p *peer) error {
 	if ps.closed {
 		return errClosed
 	}
-	if _, ok := ps.peers[p.id]; ok {
-		return errAlreadyRegistered
+	if existPeer, ok := ps.peers[p.id]; ok {
+		if existPeer.pairRw != nil {
+			return errAlreadyRegistered
+		}
+		existPeer.PairPeer = p.Peer
+		existPeer.pairRw = p.rw
+		p.PairPeer = existPeer.Peer
+		return p2p.ErrAddPairPeer
 	}
 	ps.peers[p.id] = p
 	return nil

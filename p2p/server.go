@@ -286,6 +286,7 @@ func (srv *Server) PeerCount() int {
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
 func (srv *Server) AddPeer(node *discover.Node) {
+
 	select {
 	case srv.addstatic <- node:
 	case <-srv.quit:
@@ -642,9 +643,15 @@ running:
 					p.events = &srv.peerFeed
 				}
 				name := truncateName(c.name)
-				srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+
 				go srv.runPeer(p)
-				peers[c.id] = p
+				if peers[c.id] != nil {
+					peers[c.id].PairPeer = p
+					srv.log.Debug("Adding p2p pair peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+				} else {
+					peers[c.id] = p
+					srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+				}
 				if p.Inbound() {
 					inboundCount++
 				}
@@ -708,7 +715,11 @@ func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCo
 	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.id] != nil:
-		return DiscAlreadyConnected
+		exitPeer := peers[c.id]
+		if exitPeer.PairPeer != nil {
+			return DiscAlreadyConnected
+		}
+		return nil
 	case c.id == srv.Self().ID:
 		return DiscSelf
 	default:
