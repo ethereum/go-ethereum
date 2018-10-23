@@ -332,7 +332,7 @@ func initialize(c *cli.Context) error {
 		// If using the stdioui, we can't do the 'confirm'-flow
 		fmt.Fprintf(logOutput, legalWarning)
 	} else {
-		// Temporarily disabled while in development
+		// Temporarily disabled
 		//if !confirm(legalWarning) {
 		//	return fmt.Errorf("aborted by user")
 		//}
@@ -558,7 +558,7 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var password string
 	// If ui is not nil, get the password from ui.
 	if ui != nil {
-		// Temporarily disabled while in development
+		// Temporarily disabled
 		//resp, err := ui.OnInputRequired(core.UserInputRequest{
 		//	Title:      "Master Password",
 		//	Prompt:     "Please enter the password to decrypt the master seed",
