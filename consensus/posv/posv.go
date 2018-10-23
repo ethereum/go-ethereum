@@ -136,6 +136,8 @@ var (
 	// on an instant chain (0 second period). It's important to refuse these as the
 	// block reward is zero, so an empty block just bloats the chain... fast.
 	errWaitTransactions = errors.New("waiting for transactions")
+
+	ErrInvalidCheckpointValidators = errors.New("invalid validators list on checkpoint block")
 )
 
 // SignerFn is a signer callback function to request a hash to be signed by a
@@ -213,9 +215,10 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward  func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
-	HookPenalty func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookPrepare func(header *types.Header, signers []common.Address) error
+	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
+	HookValidator func(header *types.Header, signers []common.Address) error
+	HookVerifyMNs func(header *types.Header, signers []common.Address) error
 }
 
 // New creates a Posv proof-of-stake-voting consensus engine with the initial
@@ -379,7 +382,7 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 				return errInvalidCheckpointPenalties
 			}
 		}
-		signers := snap.signers()
+		signers := snap.GetSigners()
 		signers = common.RemoveItemFromArray(signers, penPenalties)
 		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
 			if number > uint64(i)*c.config.Epoch {
@@ -390,6 +393,12 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 		extraSuffix := len(header.Extra) - extraSeal
 		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], byteMasterNodes) {
 			return errInvalidCheckpointSigners
+		}
+		if c.HookVerifyMNs != nil {
+			err := c.HookVerifyMNs(header, signers)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// All basic checks passed, verify the seal and return
@@ -581,7 +590,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 		mstring = append(mstring, m.String())
 	}
 	nstring := []string{}
-	for _, n := range snap.signers() {
+	for _, n := range snap.GetSigners() {
 		nstring = append(nstring, n.String())
 	}
 	if _, ok := snap.Signers[signer]; !ok {
@@ -656,7 +665,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:extraVanity]
-	signers := snap.signers()
+	signers := snap.GetSigners()
 	if number%c.config.Epoch == 0 {
 		if c.HookPenalty != nil {
 			penSigners, err := c.HookPenalty(chain, number)
@@ -696,8 +705,11 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
-	if c.HookPrepare != nil {
-		c.HookPrepare(header, signers)
+	if c.HookValidator != nil {
+		c.HookValidator(header, signers)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -710,7 +722,7 @@ func (c *Posv) UpdateMasternodes(chain consensus.ChainReader, header *types.Head
 	if err != nil {
 		return err
 	}
-	currentSigners := snap.signers()
+	currentSigners := snap.GetSigners()
 	proposedSigners := make(map[common.Address]struct{})
 	// count all addresses in ms to be masternode
 	for _, m := range ms {
@@ -724,7 +736,7 @@ func (c *Posv) UpdateMasternodes(chain consensus.ChainReader, header *types.Head
 		}
 	}
 	nm := []string{}
-	newSigners := snap.signers()
+	newSigners := snap.GetSigners()
 	for _, n := range newSigners {
 		nm = append(nm, n.String())
 	}
