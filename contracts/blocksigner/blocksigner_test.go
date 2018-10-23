@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -39,7 +40,16 @@ func TestBlockSigner(t *testing.T) {
 	}
 	contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 
-	byte0 := [32]byte{}
+	byte0 := contracts.RandomHash()
+
+	// Test sign.
+	tx, err := blockSigner.Sign(big.NewInt(50), byte0)
+	if err != nil {
+		t.Fatalf("can't sign: %v", err)
+	}
+	contractBackend.Commit()
+	t.Log("tx", tx)
+
 	signers, err := blockSigner.GetSigners(byte0)
 	if err != nil {
 		t.Fatalf("can't get candidates: %v", err)
@@ -47,11 +57,4 @@ func TestBlockSigner(t *testing.T) {
 	for _, it := range signers {
 		t.Log("signer", it.String())
 	}
-
-	s, err := blockSigner.Sign(big.NewInt(1), byte0)
-	if err != nil {
-		t.Fatalf("can't sign: %v", err)
-	}
-	t.Log("tx data", s)
-	contractBackend.Commit()
 }
