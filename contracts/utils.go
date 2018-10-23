@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 const (
