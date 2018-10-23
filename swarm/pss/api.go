@@ -51,7 +51,7 @@ func NewAPI(ps *Pss) *API {
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg
 // struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool, prox bool) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -74,6 +74,9 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool) (*rpc.Sub
 	}
 	if raw {
 		hndlr.caps |= handlerCapRaw
+	}
+	if prox {
+		hndlr.caps |= handlerCapProx
 	}
 
 	deregf := pssapi.Register(&topic, hndlr)
