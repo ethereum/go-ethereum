@@ -192,6 +192,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		// Hook double validation
 		doubleValidateHook := func(block *types.Block) error {
 			parentBlk := eth.blockchain.GetBlockByHash(block.ParentHash())
+			if parentBlk == nil {
+				return fmt.Errorf("Fail to get parent block for hash: %v", block.ParentHash())
+			}
 			snap, err := c.GetSnapshot(eth.blockchain, parentBlk.Header())
 			if err != nil {
 				if err == consensus.ErrUnknownAncestor {
@@ -205,6 +208,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return fmt.Errorf("Fail to validate M2 condition for importing block: %v", err)
 				}
 				if eth.etherbase != m2 {
+					txCh := make(chan core.TxPreEvent, txChanSize)
+					subEvent := eth.txPool.SubscribeSpecialTxPreEvent(txCh)
+					defer subEvent.Unsubscribe()
 					// firstly, look into pending txPool
 					pendingMap, err := eth.txPool.Pending()
 					if err != nil {
@@ -221,8 +227,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 					//then wait until signTx from m2 comes into txPool
-					txCh := make(chan core.TxPreEvent, txChanSize)
-					subEvent := eth.txPool.SubscribeTxPreEvent(txCh)
 					select {
 					case event := <-txCh:
 						from, err := eth.txPool.GetSender(event.Tx)
@@ -233,7 +237,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					case <-time.After(time.Duration(10) * time.Second):
 						return fmt.Errorf("Time out waiting for confirmation from m2")
 					}
-					subEvent.Unsubscribe()
 				}
 				return nil
 			}
