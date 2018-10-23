@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestSendTxSign(t *testing.T) {
@@ -56,7 +57,7 @@ func TestSendTxSign(t *testing.T) {
 	signCount := int64(0)
 	blockHashes := make([]common.Hash, 10)
 	for i := int64(0); i < 10; i++ {
-		blockHash := RandomHash()
+		blockHash := randomHash()
 		blockHashes[i] = blockHash
 		randIndex := rand.Intn(len(keys))
 		accKey := keys[randIndex]
@@ -118,4 +119,15 @@ func TestSendTxSign(t *testing.T) {
 	//if rewards.Cmp(new(big.Int).SetUint64(14999999999999999996)) != 0 {
 	//	t.Errorf("Total reward not same reward checkpoint: %v - %v", chainReward, rewards)
 	//}
+}
+
+// Generate random string.
+func randomHash() common.Hash {
+	letterBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
+	var b common.Hash
+	for i := range b {
+		rand.Seed(time.Now().UnixNano())
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return b
 }

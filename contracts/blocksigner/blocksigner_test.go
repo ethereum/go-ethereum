@@ -9,9 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"math/rand"
 )
 
 var (
@@ -40,7 +40,7 @@ func TestBlockSigner(t *testing.T) {
 	}
 	contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
 
-	byte0 := contracts.RandomHash()
+	byte0 := randomHash()
 
 	// Test sign.
 	tx, err := blockSigner.Sign(big.NewInt(50), byte0)
@@ -57,4 +57,15 @@ func TestBlockSigner(t *testing.T) {
 	for _, it := range signers {
 		t.Log("signer", it.String())
 	}
+}
+
+// Generate random string.
+func randomHash() common.Hash {
+	letterBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
+	var b common.Hash
+	for i := range b {
+		rand.Seed(time.Now().UnixNano())
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return b
 }
