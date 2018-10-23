@@ -191,7 +191,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook double validation
 		doubleValidateHook := func(block *types.Block) error {
-			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
+			parentBlk := eth.blockchain.GetBlockByHash(block.ParentHash())
+			snap, err := c.GetSnapshot(eth.blockchain, parentBlk.Header())
 			if err != nil {
 				if err == consensus.ErrUnknownAncestor {
 					log.Warn("Block chain forked.", "error", err)
