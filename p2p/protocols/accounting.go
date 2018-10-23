@@ -39,10 +39,6 @@ var (
 	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", nil)
 	//how many times local node overdrafted and dropped
 	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", nil)
-	//how many cheques have been issued
-	//mChequesIssued = metrics.NewRegisteredCounterForced("account.cheques.issued", nil)
-	//how many cheques have been received
-	//mChequesReceived = metrics.NewRegisteredCounterForced("account.cheques.received", nil)
 )
 
 //Prices defines how prices are being passed on to the accounting instance
