@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"

@@ -7,10 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 	"mime"
 	"reflect"
@@ -18,18 +15,21 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/PaulRBerg/basics/helpers"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type TypedData struct {
-	Types       EIP712Types				`json:"types"`
-	PrimaryType string 					`json:"primaryType"`
-	Domain      EIP712Domain			`json:"domain"`
-	Message     EIP712Data				`json:"message"`
+	Types       EIP712Types  `json:"types"`
+	PrimaryType string       `json:"primaryType"`
+	Domain      EIP712Domain `json:"domain"`
+	Message     EIP712Data   `json:"message"`
 }
 
 type EIP712Type []map[string]string
@@ -44,20 +44,19 @@ type EIP712TypePriority struct {
 type EIP712Data = map[string]interface{}
 
 type EIP712Domain struct {
-	Name              string         	`json:"name"`
-	Version           string         	`json:"version"`
-	ChainId           *big.Int       	`json:"chainId"`
-	VerifyingContract common.Address 	`json:"verifyingContract"`
-	Salt              hexutil.Bytes  	`json:"salt"`
+	Name              string         `json:"name"`
+	Version           string         `json:"version"`
+	ChainId           *big.Int       `json:"chainId"`
+	VerifyingContract common.Address `json:"verifyingContract"`
+	Salt              hexutil.Bytes  `json:"salt"`
 }
 
 const (
-	TypeArray 		= "array"
-	TypeAddress 	= "address"
-	TypeBool 		= "bool"
-	TypeBytes 		= "bytes"
-	TypeInt 		= "int"
-	TypeString		= "string"
+	TypeAddress = "address"
+	TypeBool    = "bool"
+	TypeBytes   = "bytes"
+	TypeInt     = "int"
+	TypeString  = "string"
 )
 
 // Sign receives a request and produces a signature
@@ -215,57 +214,52 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	domainTypes := EIP712Types{
 		"EIP712Domain": typedData.Types["EIP712Domain"],
 	}
-	domainSeparatorBytes := hashStruct(domainTypes, typedData.Domain.Map(), "EIP712Domain", 0)
-	domainSeparator := common.Bytes2Hex(domainSeparatorBytes)
-	//if err != nil {
-	//	return nil, err
-	//}
-	delete(typedData.Types, "EIP712Domain")
-	typedDataHashBytes := hashStruct(typedData.Types, typedData.Message, typedData.PrimaryType, 0)
-	typedDataHash := common.Bytes2Hex(typedDataHashBytes)
-	//if err != nil {
-	//	return nil, err
-	//}
+	domainSeparatorBytes := typedData.hashStruct(domainTypes, typedData.Domain.Map(), "EIP712Domain", 0)
+	domainSeparator := common.BytesToHash(domainSeparatorBytes)
 
-	fmt.Println("domainSeparator", domainSeparator)
-	fmt.Println("typedDataHash", typedDataHash)
+	domainlessTypes := make(EIP712Types)
+	for typeKey, typeVal := range typedData.Types {
+		if typeKey == "EIP712Domain" {
+			continue
+		}
+		domainlessTypes[typeKey] = typeVal
+	}
+	typedDataHashBytes := typedData.hashStruct(domainlessTypes, typedData.Message, typedData.PrimaryType, 0)
+	typedDataHash := common.BytesToHash(typedDataHashBytes)
 
-	var buffer bytes.Buffer
-	buffer.WriteString("\x19\x01")
-	buffer.WriteString(domainSeparator)
-	buffer.WriteString(typedDataHash)
-
-	sighash := crypto.Keccak256(buffer.Bytes())
-	msg := fmt.Sprintf("\x19\\x%xEthereum Signed Message\n:%s%s", DataTyped.ByteVersion, domainSeparator, typedDataHash)
-	//req := &SignDataRequest{Rawdata: typedData, Message: msg, Hash: sighash, ContentType: DataTyped.Mime}
-
-	var req, err = api.determineSignatureFormat(contentType, data)
+	typedDataJson, err := json.Marshal(typedData.Map())
 	if err != nil {
 		return nil, err
 	}
+	printJson("SignTypedData", typedData.Map())
+	fmt.Printf("domainSeparator: %s\n", domainSeparator.String())
+	fmt.Printf("typedDataHash: %s\n\n", typedDataHash.String())
+
+	buffer := bytes.Buffer{}
+	buffer.WriteString("\x19")
+	buffer.WriteString(fmt.Sprintf("\x19\\x%x", DataTyped.ByteVersion))
+	buffer.Write(domainSeparator.Bytes())
+	buffer.Write(typedDataHash.Bytes())
+
+	msg := buffer.String()
+	sighash := crypto.Keccak256(buffer.Bytes())
+	req := &SignDataRequest{Rawdata: typedDataJson, Message: msg, Hash: sighash, ContentType: DataTyped.Mime}
 
 	signature, err := api.Sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
 	}
-
 	return signature, nil
-
-	return crypto.Keccak256(buffer.Bytes()), nil
 }
 
 // hashStruct generates the following encoding for the given domain and message:
 // `encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`
-func hashStruct(_types EIP712Types, data EIP712Data, dataType string, depth int) []byte {
-	helpers.PrintJson("hashStruct", map[string]interface{}{
-		"depth": depth,
-	})
-
-	typeEncoding := encodeType(_types)
+func (typedData *TypedData) hashStruct(_types EIP712Types, data EIP712Data, dataType string, depth int) []byte {
+	typeEncoding := typedData.encodeType(_types)
 	typeHash := hex.EncodeToString(crypto.Keccak256(typeEncoding))
 
-	dataEncoding := encodeData(_types, data, dataType, depth)
+	dataEncoding := typedData.encodeData(_types, data, dataType, depth)
 	dataHash := hex.EncodeToString(crypto.Keccak256(dataEncoding))
 
 	var buffer bytes.Buffer
@@ -278,6 +272,10 @@ func hashStruct(_types EIP712Types, data EIP712Data, dataType string, depth int)
 		fmt.Printf("dataEncoding %s\n", common.Bytes2Hex(dataEncoding))
 	}
 
+	printJson("hashStruct", map[string]interface{}{
+		"depth": 	depth,
+		"encoding": buffer.String(),
+	})
 	return encoding
 }
 
@@ -285,12 +283,7 @@ func hashStruct(_types EIP712Types, data EIP712Data, dataType string, depth int)
 // `name ‖ "(" ‖ member₁ ‖ "," ‖ member₂ ‖ "," ‖ … ‖ memberₙ ")"`
 //
 // each member is written as `type ‖ " " ‖ name` encodings cascade down and are sorted by name
-func encodeType(_types EIP712Types) []byte {
-	helpers.PrintJson("encodeType", map[string]interface{}{
-		"types": _types,
-	})
-	//fmt.Printf("encodeType: types %v\n\n", types)
-
+func (typedData *TypedData) encodeType(_types EIP712Types) []byte {
 	var priorities = make(map[string]uint)
 	for key := range _types {
 		priorities[key] = 0
@@ -313,8 +306,8 @@ func encodeType(_types EIP712Types) []byte {
 
 	// Checks if referenced type has already been visited to optimise algo
 	visited := func(arr []string, val string) bool {
-		for _, elem := range arr {
-			if elem == val {
+		for _, obj := range arr {
+			if obj == val {
 				return true
 			}
 		}
@@ -323,25 +316,20 @@ func encodeType(_types EIP712Types) []byte {
 
 	for typeKey, typeArr := range _types {
 		var typeValArr []string
-
 		for _, typeObj := range typeArr {
 			typeVal := typeObj["type"]
-			//if typeKey == typeVal {
-			//	panic(fmt.Errorf("type %s cannot reference itself", typeVal))
-			//}
 
-			firstChar := []rune(typeVal)[0]
-			if unicode.IsUpper(firstChar) {
-				if _types[typeVal] != nil {
-					if !visited(typeValArr, typeVal) {
-						typeValArr = append(typeValArr, typeVal)
-						update(typeKey, typeVal)
-					}
-				}
+			// filtering the structs from the primitives
+			if  _types[typeVal] != nil && !visited(typeValArr, typeVal) {
+				typeValArr = append(typeValArr, typeVal)
+				update(typeKey, typeVal)
 			}
 		}
-
 		typeValArr = []string{}
+	}
+
+	if _types[typedData.PrimaryType] != nil {
+		priorities[typedData.PrimaryType] = math.MaxInt32
 	}
 
 	sortedPriorities := sortByPriorityAndName(priorities)
@@ -364,44 +352,18 @@ func encodeType(_types EIP712Types) []byte {
 		buffer.WriteString(")")
 	}
 
+	printJson("encodeType", map[string]interface{}{
+		"types": _types,
+		"encoding": buffer.String(),
+	})
 	return buffer.Bytes()
-}
-
-// sortByPriorityAndName is a helper function to sort types by priority and name. Priority is calculated b
-// based upon the number of references.
-func sortByPriorityAndName(input map[string]uint) []EIP712TypePriority {
-	var priorities []EIP712TypePriority
-	for key, val := range input {
-		priorities = append(priorities, EIP712TypePriority{key, val})
-	}
-	// Alphabetically
-	sort.Slice(priorities, func(i, j int) bool {
-		return priorities[i].Type < priorities[j].Type
-	})
-	// Priority
-	sort.Slice(priorities, func(i, j int) bool {
-		return priorities[i].Value > priorities[j].Value
-	})
-
-	//for _, priority := range priorities {
-	//	fmt.Printf("%s, Value %d\n", priority.Type, priority.Value)
-	//}
-	//fmt.Printf("\n")
-
-	return priorities
 }
 
 // encodeData generates the following encoding:
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
-func encodeData(_types EIP712Types, data interface{}, dataType string, depth int) []byte {
-	helpers.PrintJson("encodeData", map[string]interface{}{
-		"dataType": dataType,
-		"data":   data,
-		"depth": depth,
-	})
-
+func (typedData *TypedData) encodeData(_types EIP712Types, data interface{}, dataType string, depth int) []byte {
 	var buffer bytes.Buffer
 
 	// TODO regex
@@ -412,7 +374,7 @@ func encodeData(_types EIP712Types, data interface{}, dataType string, depth int
 
 		var arrayBuffer bytes.Buffer
 		for obj := range arrayVal {
-			objEncoding := encodeData(_types, obj, dataType, depth+1)
+			objEncoding := typedData.encodeData(_types, obj, dataType, depth+1)
 			arrayBuffer.Write(objEncoding)
 		}
 
@@ -428,10 +390,10 @@ func encodeData(_types EIP712Types, data interface{}, dataType string, depth int
 			nextDataType := findNextDataType(_types, dataType, mapKey)
 			if reflect.TypeOf(mapVal) == reflect.TypeOf(EIP712Data{}) {
 				data := mapVal.(map[string]interface{})
-				encoding := hashStruct(_types, data, nextDataType, depth+1)
+				encoding := typedData.hashStruct(_types, data, nextDataType, depth+1)
 				buffer.Write(encoding)
 			} else {
-				encoding := encodeData(_types, mapVal, nextDataType, depth+1)
+				encoding := typedData.encodeData(_types, mapVal, nextDataType, depth+1)
 				buffer.Write(encoding)
 			}
 		}
@@ -479,151 +441,13 @@ func encodeData(_types EIP712Types, data interface{}, dataType string, depth int
 		break
 	}
 
+	printJson("encodeData", map[string]interface{}{
+		"dataType": dataType,
+		"data":     data,
+		"depth":    depth,
+		"encoding": buffer.String(),
+	})
 	return buffer.Bytes()
-}
-
-// findNextDataType
-// blah blah
-func findNextDataType(_types EIP712Types, mapType string, mapKey string) string {
-	eip712type := _types[mapType]
-
-	for _, mapObj := range eip712type {
-		if mapObj["name"] == mapKey {
-			return mapObj["type"]
-		}
-	}
-
-	return ""
-}
-
-// UnmarshalJSON validates the input data
-func (typedData *TypedData) UnmarshalJSON(data []byte) error {
-	type input struct {
-		Types       EIP712Types 			`json:"types"`
-		PrimaryType string                	`json:"primaryType"`
-		Domain      EIP712Domain          	`json:"domain"`
-		Message     EIP712Data         		`json:"message"`
-	}
-
-	var raw input
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	if raw.Types == nil {
-		return errors.New("types are undefined")
-	}
-	if err := raw.Types.IsValid(); err != nil {
-		return err
-	}
-	typedData.Types = raw.Types
-
-	if raw.Types["EIP712Domain"] == nil {
-		return errors.New("domain types are undefined")
-	}
-	if err := raw.Domain.IsValid(); err != nil {
-		return err
-	}
-	typedData.Domain = raw.Domain
-
-	if len(raw.PrimaryType) == 0 {
-		return errors.New("primary type is undefined")
-	}
-	typedData.PrimaryType = raw.PrimaryType
-
-	if raw.Message == nil {
-		return errors.New("message is undefined")
-	}
-	typedData.Message = raw.Message
-
-	return nil
-}
-
-// isStandardType checks if the given type is a EIP712 conformant type
-func isStandardTypeStr(typeStr string) bool {
-	standardTypes := []string{
-		"array",
-		"address",
-		"boolean",
-		"bytes",
-		"string",
-		"struct",
-		"uint",
-	}
-	for _, val := range standardTypes {
-		if strings.HasPrefix(typeStr, val) {
-			return true
-		}
-	}
-	return false
-}
-
-
-// IsValid checks if the given types object is conformant to the specs
-func (types *EIP712Types) IsValid() error {
-	for typeKey, typeArr := range (*types) {
-		for _, typeObj := range typeArr {
-			typeVal := typeObj["type"]
-			if typeKey == typeVal {
-				panic(fmt.Errorf("type %s cannot reference itself", typeVal))
-			}
-
-			firstChar := []rune(typeVal)[0]
-			if unicode.IsUpper(firstChar) {
-				if (*types)[typeVal] == nil {
-					return fmt.Errorf("referenced type %s is undefined", typeVal)
-				}
-			} else {
-				if !isStandardTypeStr(typeVal) {
-					if (*types)[typeVal] != nil {
-						return fmt.Errorf("custom type %s must be capitalized", typeVal)
-					} else {
-						return fmt.Errorf("unknown type %s", typeVal)
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// IsValid checks if the given domain is valid, i.e. contains at least
-// the minimum viable keys and values
-func (domain *EIP712Domain) IsValid() error {
-	if domain.ChainId == big.NewInt(0) {
-		return errors.New("chainId must be specified according to EIP-155")
-	}
-
-	if len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
-		return errors.New("domain undefined")
-	}
-
-	return nil
-}
-
-// Values is a helper function to return the values of a domain as a map
-// with arbitrary values
-func (domain *EIP712Domain) Map() EIP712Data {
-	dataMap := EIP712Data{
-		"chainId":		domain.ChainId,
-	}
-
-	if len(domain.Name) > 0 {
-		dataMap["name"] = domain.Name
-	}
-
-	if len(domain.Version) > 0 {
-		dataMap["version"] = domain.Version
-	}
-
-	if len(domain.VerifyingContract) > 0 {
-		dataMap["verifyingContract"] = domain.VerifyingContract
-	}
-
-	if len(domain.Salt) > 0 {
-		dataMap["salt"] = domain.Salt
-	}
-	return dataMap
 }
 
 // Determines the content type and then recovers the address associated with the given sig
@@ -662,4 +486,186 @@ func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data he
 	default:
 		return common.Address{}, fmt.Errorf("content type '%s' not implemented for ecRecover", contentType)
 	}
+}
+
+// sortByPriorityAndName is a helper function to sort types by priority and name. Priority is calculated b
+// based upon the number of references.
+func sortByPriorityAndName(input map[string]uint) []EIP712TypePriority {
+	var priorities []EIP712TypePriority
+	for key, val := range input {
+		priorities = append(priorities, EIP712TypePriority{key, val})
+	}
+	// Alphabetically
+	sort.Slice(priorities, func(i, j int) bool {
+		return priorities[i].Type < priorities[j].Type
+	})
+	// Priority
+	sort.Slice(priorities, func(i, j int) bool {
+		return priorities[i].Value > priorities[j].Value
+	})
+
+	return priorities
+}
+
+// findNextDataType
+// blah blah
+func findNextDataType(_types EIP712Types, mapType string, mapKey string) string {
+	eip712type := _types[mapType]
+
+	for _, mapObj := range eip712type {
+		if mapObj["name"] == mapKey {
+			return mapObj["type"]
+		}
+	}
+
+	return ""
+}
+
+// UnmarshalJSON validates the input data
+func (typedData *TypedData) UnmarshalJSON(data []byte) error {
+	type input struct {
+		Types       EIP712Types  `json:"types"`
+		PrimaryType string       `json:"primaryType"`
+		Domain      EIP712Domain `json:"domain"`
+		Message     EIP712Data   `json:"message"`
+	}
+
+	var raw input
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if raw.Types == nil {
+		return errors.New("types are undefined")
+	}
+	if err := raw.Types.IsValid(); err != nil {
+		return err
+	}
+	typedData.Types = raw.Types
+
+	if raw.Types["EIP712Domain"] == nil {
+		return errors.New("domain types are undefined")
+	}
+	if err := raw.Domain.IsValid(); err != nil {
+		return err
+	}
+	typedData.Domain = raw.Domain
+
+	if len(raw.PrimaryType) == 0 {
+		return errors.New("primary type is undefined")
+	}
+	typedData.PrimaryType = raw.PrimaryType
+
+	if raw.Message == nil {
+		return errors.New("message is undefined")
+	}
+	typedData.Message = raw.Message
+
+	return nil
+}
+
+// Map is a helper function to generate a map version of the typed data
+func (typedData *TypedData) Map() map[string]interface{} {
+	dataMap := map[string]interface{}{
+		"Types":       typedData.Types,
+		"Domain":      typedData.Domain.Map(),
+		"PrimaryType": typedData.PrimaryType,
+		"Message":     typedData.Message,
+	}
+
+	return dataMap
+}
+
+// IsValid checks if the given types object is conformant to the specs
+func (types *EIP712Types) IsValid() error {
+	for typeKey, typeArr := range *types {
+		for _, typeObj := range typeArr {
+			typeVal := typeObj["type"]
+			if typeKey == typeVal {
+				panic(fmt.Errorf("type %s cannot reference itself", typeVal))
+			}
+
+			firstChar := []rune(typeVal)[0]
+			if unicode.IsUpper(firstChar) {
+				if (*types)[typeVal] == nil {
+					return fmt.Errorf("referenced type %s is undefined", typeVal)
+				}
+			} else {
+				if !isStandardTypeStr(typeVal) {
+					if (*types)[typeVal] != nil {
+						return fmt.Errorf("custom type %s must be capitalized", typeVal)
+					} else {
+						return fmt.Errorf("unknown type %s", typeVal)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// isStandardType checks if the given type is a EIP712 conformant type
+func isStandardTypeStr(typeStr string) bool {
+	standardTypes := []string{
+		TypeAddress,
+		TypeBool,
+		TypeBytes,
+		TypeInt,
+		TypeString,
+	}
+	for _, val := range standardTypes {
+		if strings.HasPrefix(typeStr, val) || strings.Contains(typeStr, val) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsValid checks if the given domain is valid, i.e. contains at least
+// the minimum viable keys and values
+func (domain *EIP712Domain) IsValid() error {
+	if domain.ChainId == big.NewInt(0) {
+		return errors.New("chainId must be specified according to EIP-155")
+	}
+
+	if len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
+		return errors.New("domain undefined")
+	}
+
+	return nil
+}
+
+// Map is a helper function to generate a map version of the domain
+func (domain *EIP712Domain) Map() map[string]interface{} {
+	dataMap := map[string]interface{}{
+		"chainId": domain.ChainId,
+	}
+
+	if len(domain.Name) > 0 {
+		dataMap["name"] = domain.Name
+	}
+
+	if len(domain.Version) > 0 {
+		dataMap["version"] = domain.Version
+	}
+
+	if len(domain.VerifyingContract) > 0 {
+		dataMap["verifyingContract"] = domain.VerifyingContract
+	}
+
+	if len(domain.Salt) > 0 {
+		dataMap["salt"] = domain.Salt
+	}
+	return dataMap
+}
+
+// PrintJson will be removed
+func printJson(label string, output map[string]interface{}) {
+	jsonVal, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s:", label)
+	fmt.Print(string(jsonVal))
+	fmt.Print("\n\n")
 }
