@@ -22,7 +22,7 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/Azure/azure-storage-blob-go/2018-03-28/azblob"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 )
 
 // AzureBlobstoreConfig is an authentication and configuration struct containing
