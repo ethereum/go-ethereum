@@ -18,17 +18,14 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"math/big"
-	"testing"
-
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"math/big"
+	"testing"
 )
 
-var typesStandard = Types{
+var typesStandard = EIP712Types{
 	"EIP712Domain": {
 		{
 			"name": "name",
@@ -73,89 +70,17 @@ var typesStandard = Types{
 	},
 }
 
-var jsonTypedData = `
-    {
-      "types": {
-        "EIP712Domain": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "version",
-            "type": "string"
-          },
-          {
-            "name": "chainId",
-            "type": "uint256"
-          },
-          {
-            "name": "verifyingContract",
-            "type": "address"
-          }
-        ],
-        "Person": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "test",
-            "type": "uint8"
-          },
-          {
-            "name": "wallet",
-            "type": "address"
-          }
-        ],
-        "Mail": [
-          {
-            "name": "from",
-            "type": "Person"
-          },
-          {
-            "name": "to",
-            "type": "Person"
-          },
-          {
-            "name": "contents",
-            "type": "string"
-          }
-        ]
-      },
-      "primaryType": "Mail",
-      "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-      },
-      "message": {
-        "from": {
-          "name": "Cow",
-		  "test": 3,
-          "wallet": "0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
-        },
-        "to": {
-          "name": "Bob",
-          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
-        },
-        "contents": "Hello, Bob!"
-      }
-    }
-`
-
 const primaryType = "Mail"
 
-var domainStandard = TypedDataDomain{
+var domainStandard = EIP712Domain{
 	"Ether Mail",
 	"1",
 	big.NewInt(1),
 	"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
-	"",
+	nil,
 }
 
-var messageStandard = map[string]interface{}{
+var dataStandard = map[string]interface{}{
 	"from": map[string]interface{}{
 		"name":   "Cow",
 		"wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
@@ -168,10 +93,10 @@ var messageStandard = map[string]interface{}{
 }
 
 var typedData = TypedData{
-	Types:       typesStandard,
-	PrimaryType: primaryType,
-	Domain:      domainStandard,
-	Message:     messageStandard,
+	typesStandard,
+	primaryType,
+	domainStandard,
+	dataStandard,
 }
 
 func TestSignData(t *testing.T) {
@@ -188,7 +113,7 @@ func TestSignData(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	signature, err := api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
+	signature, err := api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
@@ -196,7 +121,7 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected ErrLocked! %v", err)
 	}
 	control <- "No way"
-	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
+	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
@@ -206,7 +131,7 @@ func TestSignData(t *testing.T) {
 	// text/plain
 	control <- "Y"
 	control <- "a_long_password"
-	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
+	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,378 +148,44 @@ func TestSignData(t *testing.T) {
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
+	// TODO: test signature r,s,v values
 }
 
 func TestHashStruct(t *testing.T) {
-	hash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
+	mainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.HashStruct(typedData.PrimaryType, typedData.Message)))
 	if mainHash != "0xc52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e" {
-		t.Errorf("Expected different hashStruct result (got %s)", mainHash)
+		t.Fatal(fmt.Errorf("hashStruct result %s is incorrect", mainHash))
 	}
 
-	hash, err = typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	if err != nil {
-		t.Error(err)
-	}
-	domainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
+	domainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.HashStruct("EIP712Domain", typedData.Domain.Map())))
 	if domainHash != "0xf2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f" {
-		t.Errorf("Expected different domain hashStruct result (got %s)", domainHash)
+		t.Fatal(fmt.Errorf("hashStruct result %s is incorrect", domainHash))
 	}
 }
 
 func TestEncodeType(t *testing.T) {
 	domainTypeEncoding := string(typedData.EncodeType("EIP712Domain"))
 	if domainTypeEncoding != "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)" {
-		t.Errorf("Expected different encodeType result (got %s)", domainTypeEncoding)
+		t.Fatal(fmt.Errorf("encodeType result %s is incorrect", domainTypeEncoding))
 	}
 
 	mailTypeEncoding := string(typedData.EncodeType(typedData.PrimaryType))
 	if mailTypeEncoding != "Mail(Person from,Person to,string contents)Person(string name,address wallet)" {
-		t.Errorf("Expected different encodeType result (got %s)", mailTypeEncoding)
+		t.Fatal(fmt.Errorf("encodeType result %s is incorrect", mailTypeEncoding))
 	}
 }
 
 func TestTypeHash(t *testing.T) {
 	mailTypeHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.TypeHash(typedData.PrimaryType)))
 	if mailTypeHash != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2" {
-		t.Errorf("Expected different typeHash result (got %s)", mailTypeHash)
+		t.Fatal(fmt.Errorf("typeHash result %s is incorrect", mailTypeHash))
 	}
 }
 
 func TestEncodeData(t *testing.T) {
-	hash, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
+
+	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.EncodeData(typedData.PrimaryType, typedData.Message)))
 	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2fc71e5fa27ff56c350aa531bc129ebdf613b772b6604664f5d8dbe21b85eb0c8cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
-		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
-	}
-}
-
-func TestMalformedData1(t *testing.T) {
-	// Verifies that malformed domain keys are properly caught:
-	//{
-	//	"name": "Ether Mail",
-	//	"version": "1",
-	//	"chainId": 1,
-	//	"vxerifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-	//}
-	var jsonTypedData = `
-    {
-      "types": {
-        "EIP712Domain": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "version",
-            "type": "string"
-          },
-          {
-            "name": "chainId",
-            "type": "uint256"
-          },
-          {
-            "name": "verifyingContract",
-            "type": "address"
-          }
-        ],
-        "Person": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "wallet",
-            "type": "address"
-          }
-        ],
-        "Mail": [
-          {
-            "name": "from",
-            "type": "Person"
-          },
-          {
-            "name": "to",
-            "type": "Person"
-          },
-          {
-            "name": "contents",
-            "type": "string"
-          }
-        ]
-      },
-      "primaryType": "Mail",
-      "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "vxerifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-      },
-      "message": {
-        "from": {
-          "name": "Cow",
-          "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
-        },
-        "to": {
-          "name": "Bob",
-          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
-        },
-        "contents": "Hello, Bob!"
-      }
-    }
-
-`
-	var malformedTypedData TypedData
-	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
-	if err != nil {
-		t.Fatalf("unmarshalling failed %v", err)
-	}
-	err = malformedTypedData.Validate()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	_, err = malformedTypedData.HashStruct("EIP712Domain", malformedTypedData.Domain.Map())
-	if err == nil || err.Error() != "provided data '<nil>' doesn't match type 'address'" {
-		t.Errorf("Expected `provided data '<nil>' doesn't match type 'address'`, got %v", err)
-	}
-}
-
-func TestMalformedData2(t *testing.T) {
-	// Verifies that:
-	// 1. Mismatches between the given type and data, i.e. `Person` and
-	// 		the data item is a string, are properly caught:
-	//{
-	//	"name": "contents",
-	//	"type": "Person"
-	//},
-	//{
-	//	"contents": "Hello, Bob!" <-- string not "Person"
-	//}
-	// 2. Nonexistent types are properly caught:
-	//{
-	//	"name": "contents",
-	//	"type": "Blahonga"
-	//}
-	jsonTypedData := `
-    {
-      "types": {
-        "EIP712Domain": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "version",
-            "type": "string"
-          },
-          {
-            "name": "chainId",
-            "type": "uint256"
-          },
-          {
-            "name": "verifyingContract",
-            "type": "address"
-          }
-        ],
-        "Person": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "wallet",
-            "type": "address"
-          }
-        ],
-        "Mail": [
-          {
-            "name": "from",
-            "type": "Person"
-          },
-          {
-            "name": "to",
-            "type": "Person"
-          },
-          {
-            "name": "contents",
-            "type": "Person"
-          }
-        ]
-      },
-      "primaryType": "Mail",
-      "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-      },
-      "message": {
-        "from": {
-          "name": "Cow",
-          "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
-        },
-        "to": {
-          "name": "Bob",
-          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
-        },
-        "contents": "Hello, Bob!"
-      }
-    }
-`
-	var malformedTypedData TypedData
-	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
-	if err != nil {
-		t.Fatalf("unmarshalling failed %v", err)
-	}
-	err = malformedTypedData.Validate()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err.Error() != "provided data 'Hello, Bob!' doesn't match type 'Person'" {
-		t.Errorf("Expected `provided data 'Hello, Bob!' doesn't match type 'Person'`, got %v", err)
-	}
-
-	malformedTypedData.Types["Mail"][2]["type"] = "Blahonga"
-	err = malformedTypedData.Validate()
-	if err == nil || err.Error() != "referenced type 'Blahonga' is undefined" {
-		t.Fatalf("Expected `referenced type 'Blahonga' is undefined`, got %v", err)
-	}
-	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err == nil || err.Error() != "unrecognized type 'Blahonga'" {
-		t.Errorf("Expected `unrecognized type 'Blahonga'`, got %v", err)
-	}
-}
-
-func TestMalformedData3(t *testing.T) {
-	// Verifies several quirks
-	// 1. Using dynamic types and only validating the prefix:
-	//{
-	//	"name": "chainId",
-	//	"type": "uint256 ... and now for something completely different"
-	//}
-	// 2. Extra data in message:
-	//{
-	//  "blahonga": "zonk bonk"
-	//}
-	jsonTypedData := `
-    {
-      "types": {
-        "EIP712Domain": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "version",
-            "type": "string"
-          },
-          {
-            "name": "chainId",
-            "type": "uint256 ... and now for something completely different"
-          },
-          {
-            "name": "verifyingContract",
-            "type": "address"
-          }
-        ],
-        "Person": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "wallet",
-            "type": "address"
-          }
-        ],
-        "Mail": [
-          {
-            "name": "from",
-            "type": "Person"
-          },
-          {
-            "name": "to",
-            "type": "Person"
-          },
-          {
-            "name": "contents",
-            "type": "string"
-          }
-        ]
-      },
-      "primaryType": "Mail",
-      "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-      },
-      "message": {
-        "from": {
-          "name": "Cow",
-          "wallet": "0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
-        },
-        "to": {
-          "name": "Bob",
-          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
-        },
-        "contents": "Hello, Bob!"
-      }
-    }
-`
-	var malformedTypedData TypedData
-	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
-	if err != nil {
-		t.Fatalf("unmarshalling failed %v", err)
-	}
-	err = malformedTypedData.Validate()
-	if err == nil || err.Error() != "unknown atomic type 'uint256 ... and now for something completely different'" {
-		t.Fatalf("Expected `unknown atomic type 'uint256 ... and now for something completely different'`, got %v", err)
-	}
-
-	malformedTypedData.Types["EIP712Domain"][2]["type"] = "uint256"
-	malformedTypedData.Message["blahonga"] = "zonk bonk"
-	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err == nil || err.Error() != "there is extra data provided in the message" {
-		t.Errorf("Expected `there is extra data provided in the message`, got %v", err)
-	}
-}
-
-func TestMalformedData4(t *testing.T) {
-	// Verifies data that doesn't fit into it:
-	//{
-	//	"test": 65536 <-- test defined as uint8
-	//}
-	var malformedTypedData TypedData
-	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
-	if err != nil {
-		t.Fatalf("unmarshalling failed %v", err)
-	}
-	// Set test to something outside uint8
-	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = 65536
-
-	err = malformedTypedData.Validate()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err == nil || err.Error() != "provided data '65536' doesn't match type 'uint8'" {
-		t.Fatalf("Expected `provided data '65536' doesn't match type 'uint8'`, got %v", err)
-	}
-
-	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = big.NewInt(3)
-	(malformedTypedData.Message["to"]).(map[string]interface{})["test"] = big.NewInt(4)
-
-	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err != nil {
-		t.Fatalf("Expected no err, got %v", err)
+		t.Fatal(fmt.Errorf("encodeData result %s is incorrect", dataEncoding))
 	}
 }
