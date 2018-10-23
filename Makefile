@@ -21,6 +21,11 @@ XDC:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/XDC\" to launch XDC."
 
+bootnode:
+	build/env.sh go run build/ci.go install ./cmd/bootnode
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/bootnode\" to launch a bootnode."
+
 swarm:
 	build/env.sh go run build/ci.go install ./cmd/swarm
 	@echo "Done building."
