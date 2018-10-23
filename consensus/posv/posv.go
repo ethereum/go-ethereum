@@ -215,10 +215,10 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward       func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
-	HookPenalty      func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookPrepare      func(header *types.Header, signers []common.Address) error
-	VerifyValidators func(header *types.Header, signers []common.Address) error
+	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
+	HookValidator func(header *types.Header, signers []common.Address) error
+	HookVerifyMNs func(header *types.Header, signers []common.Address) error
 }
 
 // New creates a Posv proof-of-stake-voting consensus engine with the initial
@@ -394,8 +394,8 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], byteMasterNodes) {
 			return errInvalidCheckpointSigners
 		}
-		if c.VerifyValidators != nil {
-			err := c.VerifyValidators(header, signers)
+		if c.HookVerifyMNs != nil {
+			err := c.HookVerifyMNs(header, signers)
 			if err != nil {
 				return err
 			}
@@ -705,8 +705,8 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
-	if c.HookPrepare != nil {
-		c.HookPrepare(header, signers)
+	if c.HookValidator != nil {
+		c.HookValidator(header, signers)
 		if err != nil {
 			return err
 		}

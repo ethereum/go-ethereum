@@ -190,7 +190,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Posv != nil {
 		c := eth.engine.(*posv.Posv)
 
-		// Inject hook for send tx sign to smartcontract after insert block into chain.
+		// Hook sends tx sign to smartcontract after inserting block to chain.
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
@@ -210,8 +210,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 		eth.protocolManager.fetcher.SetImportedHook(importedHook)
 
-		// Hook will process when preparing block.
-		c.HookPrepare = func(header *types.Header, signers []common.Address) error {
+		// Hook prepares validators M2 for the current epoch
+		c.HookValidator = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				validators, err := GetValidators(eth.blockchain, signers)
@@ -222,7 +222,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return nil
 		}
-		// Hook penalty.
+
+		// Hook scans for bad masternodes and decide to penalty them
 		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
@@ -263,7 +264,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return []common.Address{}, nil
 		}
 
-		// Hook reward for posv validator.
+		// Hook calculates reward for masternodes
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
@@ -308,7 +309,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 			return nil
 		}
-		c.VerifyValidators = func(header *types.Header, signers []common.Address) error {
+
+		// Hook verifies masternodes set
+		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				validators, err := GetValidators(eth.blockchain, signers)
