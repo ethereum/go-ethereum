@@ -47,5 +47,11 @@ func TestBlockSigner(t *testing.T) {
 	for _, it := range signers {
 		t.Log("signer", it.String())
 	}
+
+	s, err := blockSigner.Sign(big.NewInt(1), byte0)
+	if err != nil {
+		t.Fatalf("can't sign: %v", err)
+	}
+	t.Log("tx data", s)
 	contractBackend.Commit()
 }

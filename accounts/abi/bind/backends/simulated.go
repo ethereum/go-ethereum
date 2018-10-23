@@ -162,7 +162,7 @@ func (b *SimulatedBackend) ForEachStorageAt(ctx context.Context, contract common
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
- 	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
 		return errBlockNumberUnsupported
 	}
 	statedb, _ := b.blockchain.State()
