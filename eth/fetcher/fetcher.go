@@ -654,8 +654,6 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
-			// Append m2 to block header.
-			// Invoke the dv hook to run double validation layer
 			if f.appendM2HeaderHook != nil {
 				if block, err = f.appendM2HeaderHook(block); err != nil {
 					log.Error("Append m2 to block header fail", "err", err)

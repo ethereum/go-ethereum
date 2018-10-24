@@ -77,7 +77,7 @@ var daoProForkGenesis = `{
 	}
 }`
 
-var daoGenesisHash = common.HexToHash("e99f371cb126efa0a5bf4dc0660114a607ee3b5458c7c82b044164923f61069e")
+var daoGenesisHash = common.HexToHash("29a4b5d743bfbda3a7461974d49c62bf23ba5df9c8b01de8256e2ac2a9ae1cd8")
 var daoGenesisForkBlock = big.NewInt(314)
 
 // TestDAOForkBlockNewChain tests that the DAO hard-fork number and the nodes support/opposition is correctly
@@ -127,11 +127,10 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	}
 	defer db.Close()
 
-	genesisHash := common.HexToHash("205f64c83f065fe851db5703843304e46115c42c96434da316ce567ab9d5cc22")
+	genesisHash := common.HexToHash("8d13370621558f4ed0da587934473c0404729f28b0ff1d50e5fdd840457a2f17")
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
-	t.Log("genesisHash", genesisHash.String())
 	config, err := core.GetChainConfig(db, genesisHash)
 	if err != nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)

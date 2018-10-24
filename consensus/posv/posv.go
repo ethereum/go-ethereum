@@ -643,7 +643,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	}
 
 	// header must contain validator info following double validation design
-	validator, err := RecoverValidator(header)
+	validator, err := c.RecoverValidator(header)
 	if err != nil {
 		return err
 	}
