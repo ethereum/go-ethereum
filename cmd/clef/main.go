@@ -200,7 +200,7 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, addCredentialCommand, setCredentialCommand}
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand}
 
 }
 func main() {
