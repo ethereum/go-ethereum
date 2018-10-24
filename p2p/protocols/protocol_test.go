@@ -235,8 +235,12 @@ func TestProtocolHook(t *testing.T) {
 	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		peer := NewPeer(p, rw, spec)
 		ctx := context.TODO()
-		peer.Send(ctx, &dummyMsg{
+		err := peer.Send(ctx, &dummyMsg{
 			Content: "handshake"})
+
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		handle := func(ctx context.Context, msg interface{}) error {
 			return nil
@@ -335,7 +339,10 @@ func TestNoHook(t *testing.T) {
 	ctx := context.TODO()
 	msg := &perBytesMsgSenderPays{Content: "testBalance"}
 	//send a message
-	peer.Send(ctx, msg)
+	err := peer.Send(ctx, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	//simulate receiving a message
 	rw.msg = msg
 	peer.handleIncoming(func(ctx context.Context, msg interface{}) error {

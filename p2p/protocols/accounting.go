@@ -61,7 +61,13 @@ type Price struct {
 	Payer   Payer
 }
 
-//ForSender gives back the price for sending a message
+//For gives back the price for a message
+//A protocol provides the message price in absolute value
+//This method then returns the correct signed amount,
+//depending on who pays, which is identified by the `payer` argument:
+//`Send` will pass a `Sender` payer, `Receive` will pass the `Receiver` argument.
+//Thus: If Sending and sender pays, amount positive, otherwise negative
+//If Receiving, and receiver pays, amount positive, otherwise negative
 func (p *Price) For(payer Payer, size uint32) int64 {
 	price := p.Value
 	if p.PerByte {
@@ -114,7 +120,7 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	costToLocalNode := price.For(Sender, size)
 	//do the accounting
 	err := ah.Add(costToLocalNode, peer)
-	//record metrics
+	//record metrics: just increase counters for user-facing metrics
 	ah.doMetrics(costToLocalNode, size, err)
 	return err
 }
@@ -134,18 +140,24 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 	costToLocalNode := price.For(Receiver, size)
 	//do the accounting
 	err := ah.Add(costToLocalNode, peer)
-	//record metrics
+	//record metrics: just increase counters for user-facing metrics
 	ah.doMetrics(costToLocalNode, size, err)
 	return err
 }
 
 //record some metrics
+//this is not an error handling. `err` is returned by both `Send` and `Receive`
+//`err` will only be non-nil if a limit has been violated (overdraft), in which case the peer has been dropped.
+//if the limit has been violated and `err` is thus not nil:
+// * if the price is positive, local node has been credited; thus `err` implicitly signals the REMOTE has been dropped
+// * if the price is negative, local node has been debited, thus `err` implicitly signals LOCAL node "overdraft"
 func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
 	if price > 0 {
 		mBalanceCredit.Inc(price)
 		mBytesCredit.Inc(int64(size))
 		mMsgCredit.Inc(1)
 		if err != nil {
+			//increase the number of times a remote node has been dropped due to "overdraft"
 			mPeerDrops.Inc(1)
 		}
 	} else {
@@ -153,6 +165,7 @@ func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
 		mBytesDebit.Inc(int64(size))
 		mMsgDebit.Inc(1)
 		if err != nil {
+			//increase the number of times the local node has done an "overdraft" in respect to other nodes
 			mSelfDrops.Inc(1)
 		}
 	}

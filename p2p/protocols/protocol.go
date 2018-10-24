@@ -32,7 +32,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -361,11 +360,6 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 
 	//if the accounting hook is set, call it
 	if p.spec.Hook != nil {
-		if wmsg.Size != uint32(len(wmsg.Payload)) {
-			errMsg := "Advertised message size and payload length don't match"
-			log.Warn(errMsg)
-			p.Drop(errors.New(errMsg))
-		}
 		err := p.spec.Hook.Receive(p, wmsg.Size, val)
 		if err != nil {
 			return err
