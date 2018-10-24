@@ -187,7 +187,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	if eth.chainConfig.Posv != nil {
 		c := eth.engine.(*posv.Posv)
-
 		signHook := func(block *types.Block) error {
 			if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 				return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
@@ -195,7 +194,41 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return nil
 		}
 
+		appendM2HeaderHook := func(block *types.Block) (*types.Block, error) {
+			eb, err := eth.Etherbase()
+			if err != nil {
+				log.Error("Cannot get etherbase for append m2 header", "err", err)
+				return block, fmt.Errorf("etherbase missing: %v", err)
+			}
+			// Get m1.
+			snap, err := c.GetSnapshot(eth.blockchain, eth.blockchain.CurrentHeader())
+			if err != nil {
+				return block, fmt.Errorf("can't get snapshot: %v", err)
+			}
+			m1, err := c.RecoverSigner(block.Header())
+			if err != nil {
+				return block, fmt.Errorf("can't get block creator: %v", err)
+			}
+			m2, err := c.GetValidator(m1, snap, eth.blockchain, block.Header())
+			if err != nil {
+				return block, fmt.Errorf("can't get block validator: %v", err)
+			}
+			if m2 == eb {
+				wallet, _ := eth.accountManager.Find(accounts.Account{Address: eb})
+				header := block.Header()
+				sighash, _ := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
+				header.Validator = sighash
+				block = types.NewBlockWithHeader(header)
+				//c := eth.engine.(*posv.Posv)
+				//validator, _ := c.RecoverValidator(block.Header())
+				//log.Error("addr", "addr", validator)
+			}
+
+			return block, nil
+		}
+
 		eth.protocolManager.fetcher.SetSignHook(signHook)
+		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
 		// Hook prepares validators M2 for the current epoch
 		c.HookValidator = func(header *types.Header, signers []common.Address) error {
