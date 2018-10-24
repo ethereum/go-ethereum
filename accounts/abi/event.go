@@ -41,7 +41,7 @@ func (e Event) String() string {
 			inputs[i] = fmt.Sprintf("%v indexed %v", input.Name, input.Type)
 		}
 	}
-	return fmt.Sprintf("e %v(%v)", e.Name, strings.Join(inputs, ", "))
+	return fmt.Sprintf("event %v(%v)", e.Name, strings.Join(inputs, ", "))
 }
 
 // Id returns the canonical representation of the event's signature used by the
