@@ -71,7 +71,7 @@ func initErrHandling() {
 	multipleChoicesPage := GetMultipleChoicesErrorPage()
 	//map the codes to the available pages
 	tnames := map[int]string{
-		0: genErrPage, //default
+		0:                              genErrPage, //default
 		http.StatusBadRequest:          genErrPage,
 		http.StatusNotFound:            notFoundPage,
 		http.StatusMultipleChoices:     multipleChoicesPage,

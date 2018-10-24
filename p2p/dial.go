@@ -318,7 +318,7 @@ func (t *dialTask) Do(srv *Server) {
 			}
 		}
 		if err == nil {
-			log.Trace("Dial pair connection sucess", "task", t.dest)
+			log.Trace("Dial pair connection success", "task", t.dest)
 		} else {
 			log.Trace("Dial pair connection error", "task", t.dest, "err", err)
 		}

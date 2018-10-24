@@ -81,7 +81,7 @@ var (
 
 	ErrZeroGasPrice = errors.New("zero gas price")
 
-	ErrDuplicateSpecialTransaction = errors.New("duplicate a specail transaction")
+	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
 )
 
 var (
@@ -560,6 +560,14 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 		}
 	}
 	return txs
+}
+
+func (pool *TxPool) GetSender(tx *types.Transaction) (common.Address, error) {
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return common.Address{}, ErrInvalidSender
+	}
+	return from, nil
 }
 
 // validateTx checks whether a transaction is valid according to the consensus
