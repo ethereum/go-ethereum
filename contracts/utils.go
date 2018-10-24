@@ -23,11 +23,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
+	"math/rand"
+	"strconv"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
@@ -37,18 +44,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/pkg/errors"
-	"io"
-	"math/big"
-	"math/rand"
-	"strconv"
-	"time"
 )
 
 const (
-	M2ByteLength = 4
-	extraVanity  = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal    = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 )
 
 type rewardLog struct {
@@ -256,28 +256,11 @@ func BuildValidatorFromM2(listM2 []int64) []byte {
 	var validatorBytes []byte
 	for _, numberM2 := range listM2 {
 		// Convert number to byte.
-		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), M2ByteLength)
+		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), posv.M2ByteLength)
 		validatorBytes = append(validatorBytes, m2Byte...)
 	}
 
 	return validatorBytes
-}
-
-// Extract validators from byte array.
-func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
-	lenValidator := len(byteValidators) / M2ByteLength
-	var validators []int64
-	for i := 0; i < lenValidator; i++ {
-		trimByte := bytes.Trim(byteValidators[i*M2ByteLength:(i+1)*M2ByteLength], "\x00")
-		intNumber, err := strconv.Atoi(string(trimByte))
-		if err != nil {
-			log.Error("Can not convert string to integer", "error", err)
-			return []int64{}
-		}
-		validators = append(validators, int64(intNumber))
-	}
-
-	return validators
 }
 
 // Decode validator hex string.
@@ -287,7 +270,7 @@ func DecodeValidatorsHexData(validatorsStr string) ([]int64, error) {
 		return nil, err
 	}
 
-	return ExtractValidatorsFromBytes(validatorsByte), nil
+	return posv.ExtractValidatorsFromBytes(validatorsByte), nil
 }
 
 // Decrypt randomize from secrets and opening.
@@ -557,34 +540,4 @@ func isInt(strNumber string) bool {
 	} else {
 		return false
 	}
-}
-
-// Get masternodes address from checkpoint Header.
-func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
-	masternodes := make([]common.Address, (len(checkpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], checkpointHeader.Extra[extraVanity+i*common.AddressLength:])
-	}
-	return masternodes
-}
-
-// Get m2 list from checkpoint block.
-func GetM1M2FromCheckpointBlock(checkpointBlock *types.Block) (map[common.Address]common.Address, error) {
-	if checkpointBlock.Number().Int64()%common.EpocBlockRandomize != 0 {
-		return nil, errors.New("This block is not checkpoint block epoc.")
-	}
-	m1m2 := map[common.Address]common.Address{}
-	// Get signers from this block.
-	masternodes := GetMasternodesFromCheckpointHeader(checkpointBlock.Header())
-	validators := ExtractValidatorsFromBytes(checkpointBlock.Header().Validators)
-
-	if len(validators) < len(masternodes) {
-		return nil, errors.New("len(m2) is less than len(m1)")
-	}
-	if len(masternodes) > 0 {
-		for i, m1 := range masternodes {
-			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
-		}
-	}
-	return m1m2, nil
 }
