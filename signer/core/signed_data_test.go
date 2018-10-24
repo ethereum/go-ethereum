@@ -76,18 +76,18 @@ var domainStandard = EIP712Domain{
 	"Ether Mail",
 	"1",
 	big.NewInt(1),
-	"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+	common.HexToAddress("0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"),
 	nil,
 }
 
 var dataStandard = map[string]interface{}{
 	"from": map[string]interface{}{
 		"name":   "Cow",
-		"wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
+		"wallet": common.HexToAddress("0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"),
 	},
 	"to": map[string]interface{}{
 		"name":   "Bob",
-		"wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+		"wallet": common.HexToAddress("0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"),
 	},
 	"contents": "Hello, Bob!",
 }
