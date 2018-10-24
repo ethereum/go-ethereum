@@ -61,7 +61,7 @@ type EIP712Domain struct {
 	Name              string        `json:"name"`
 	Version           string        `json:"version"`
 	ChainId           *big.Int      `json:"chainId"`
-	VerifyingContract string 		`json:"verifyingContract"`
+	VerifyingContract common.Address 		`json:"verifyingContract"`
 	Salt              hexutil.Bytes `json:"salt"`
 }
 
@@ -358,14 +358,14 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 		switch encType {
 		case "address":
-			primitiveEncType = "address"
+			primitiveEncType = "uint160"
 			bytesValue := []byte{}
 			for i := 0; i < 12; i++ {
 				bytesValue = append(bytesValue, 0)
 			}
-			foo := common.BytesToAddress([]byte(encValue.(string)))
-			fmt.Println(foo)
-			for _, _byte := range common.BytesToAddress([]byte(encValue.(string))) {
+			//foo := common.BytesToAddress([]byte(encValue.(string)))
+			//fmt.Println(foo)
+			for _, _byte := range encValue.(common.Address) {
 				bytesValue = append(bytesValue, _byte)
 			}
 			primitiveEncValue = bytesValue
