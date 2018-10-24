@@ -36,9 +36,9 @@ type Event struct {
 func (e Event) String() string {
 	inputs := make([]string, len(e.Inputs))
 	for i, input := range e.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
+		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
 		if input.Indexed {
-			inputs[i] = fmt.Sprintf("%v indexed %v", input.Name, input.Type)
+			inputs[i] = fmt.Sprintf("%v indexed %v", input.Type, input.Name)
 		}
 	}
 	return fmt.Sprintf("event %v(%v)", e.Name, strings.Join(inputs, ", "))
