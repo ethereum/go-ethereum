@@ -29,7 +29,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"text/template"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -60,15 +59,6 @@ func GOPATH() string {
 	return os.Getenv("GOPATH")
 }
 
-// VERSION returns the content of the VERSION file.
-func VERSION() string {
-	version, err := ioutil.ReadFile("VERSION")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return string(bytes.TrimSpace(version))
-}
-
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.
@@ -96,34 +86,6 @@ func readGitFile(file string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(content))
-}
-
-// Render renders the given template file into outputFile.
-func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.ParseFiles(templateFile))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-// RenderString renders the given template string into outputFile.
-func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.New("").Parse(templateContent))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x interface{}) {
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
-		log.Fatal(err)
-	}
-	out, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, outputPerm)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := tpl.Execute(out, x); err != nil {
-		log.Fatal(err)
-	}
-	if err := out.Close(); err != nil {
-		log.Fatal(err)
-	}
 }
 
 // CopyFile copies a file.
