@@ -19,12 +19,13 @@ package posv
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -47,6 +48,7 @@ const (
 	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
 	wiggleTime         = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	M2ByteLength       = 4
 )
 
 type Masternode struct {
@@ -132,6 +134,8 @@ var (
 	// errUnauthorized is returned if a header is signed by a non-authorized entity.
 	errUnauthorized = errors.New("unauthorized")
 
+	errFailedDoubleValidation = errors.New("wrong pair of creator-validator in double validation")
+
 	// errWaitTransactions is returned if an empty block is attempted to be sealed
 	// on an instant chain (0 second period). It's important to refuse these as the
 	// block reward is zero, so an empty block just bloats the chain... fast.
@@ -173,6 +177,10 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	})
 	hasher.Sum(hash[:0])
 	return hash
+}
+
+func SigHash(header *types.Header) (hash common.Hash) {
+	return sigHash(header)
 }
 
 // ecrecover extracts the Ethereum account address from a signed header.
@@ -578,6 +586,8 @@ func (c *Posv) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
 // from.
+// verifySeal also checks the pair of creator-validator set in the header satisfies
+// the double validation.
 func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
@@ -591,7 +601,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	}
 
 	// Resolve the authorization key and check against signers
-	signer, err := ecrecover(header, c.signatures)
+	creator, err := ecrecover(header, c.signatures)
 	if err != nil {
 		return err
 	}
@@ -604,22 +614,22 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	for _, n := range snap.GetSigners() {
 		nstring = append(nstring, n.String())
 	}
-	if _, ok := snap.Signers[signer]; !ok {
+	if _, ok := snap.Signers[creator]; !ok {
 		valid := false
 		for _, m := range masternodes {
-			if m == signer {
+			if m == creator {
 				valid = true
 				break
 			}
 		}
 		if !valid {
-			log.Debug("Unauthorized signer found", "block number", number, "signer", signer.String(), "masternodes", mstring, "snapshot from parent block", nstring)
+			log.Debug("Unauthorized creator found", "block number", number, "creator", creator.String(), "masternodes", mstring, "snapshot from parent block", nstring)
 			return errUnauthorized
 		}
 	}
 	if len(masternodes) > 1 {
 		for seen, recent := range snap.Recents {
-			if recent == signer {
+			if recent == creator {
 				// Signer is among recents, only fail if the current block doesn't shift it out
 				// There is only case that we don't allow signer to create two continuous blocks.
 				if limit := uint64(2); seen > number-limit {
@@ -631,7 +641,51 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 			}
 		}
 	}
+
+	// header must contain validator info following double validation design
+	// start checking from epoch 2nd.
+	if header.Number.Uint64() > c.config.Epoch {
+		validator, err := c.RecoverValidator(header)
+		if err != nil {
+			return err
+		}
+
+		// verify validator
+		assignedValidator, err := c.GetValidator(creator, snap, chain, header)
+		if err != nil {
+			return err
+		}
+		if validator != assignedValidator {
+			log.Debug("Bad block detected. Header contains wrong pair of creator-validator", "creator", creator, "assigned validator", assignedValidator, "wrong validator", validator)
+			return errFailedDoubleValidation
+		}
+	}
 	return nil
+}
+
+func (c *Posv) GetValidator(creator common.Address, snap *Snapshot, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
+	epoch := c.config.Epoch
+	no := header.Number.Uint64()
+	cpNo := no
+	if no%epoch != 0 {
+		cpNo = no - (no % epoch)
+	}
+	if cpNo == 0 {
+		return common.Address{}, nil
+	}
+	cpHeader := chain.GetHeaderByNumber(cpNo)
+	if cpHeader == nil {
+		if no%epoch == 0 {
+			cpHeader = header
+		} else {
+			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
+		}
+	}
+	m, err := GetM1M2FromCheckpointHeader(cpHeader)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return m[creator], nil
 }
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
@@ -899,6 +953,30 @@ func (c *Posv) RecoverSigner(header *types.Header) (common.Address, error) {
 	return ecrecover(header, c.signatures)
 }
 
+func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
+	// If the signature's already cached, return that
+	hash := header.Hash()
+	if address, known := c.signatures.Get(hash); known {
+		return address.(common.Address), nil
+	}
+	// Retrieve the signature from the header extra-data
+	if len(header.Validator) < extraSeal {
+		return common.Address{}, errMissingSignature
+	}
+	signature := header.Validator[len(header.Validator)-extraSeal:]
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	c.signatures.Add(hash, signer)
+	return signer, nil
+}
+
 // Get master nodes over extra data of previous checkpoint block.
 func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header, n, e uint64) []common.Address {
 	if preCheckpointHeader == nil {
@@ -925,4 +1003,51 @@ func RemovePenaltiesFromBlock(chain consensus.ChainReader, signers []common.Addr
 		signers = common.RemoveItemFromArray(signers, prevPenalties)
 	}
 	return signers
+}
+
+// Get masternodes address from checkpoint Header.
+func GetMasternodesFromCheckpointHeader(checkpointHeader *types.Header) []common.Address {
+	masternodes := make([]common.Address, (len(checkpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
+	for i := 0; i < len(masternodes); i++ {
+		copy(masternodes[i][:], checkpointHeader.Extra[extraVanity+i*common.AddressLength:])
+	}
+	return masternodes
+}
+
+// Get m2 list from checkpoint block.
+func GetM1M2FromCheckpointHeader(checkpointHeader *types.Header) (map[common.Address]common.Address, error) {
+	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
+		return nil, errors.New("This block is not checkpoint block epoc.")
+	}
+	m1m2 := map[common.Address]common.Address{}
+	// Get signers from this block.
+	masternodes := GetMasternodesFromCheckpointHeader(checkpointHeader)
+	validators := ExtractValidatorsFromBytes(checkpointHeader.Validators)
+
+	if len(validators) < len(masternodes) {
+		return nil, errors.New("len(m2) is less than len(m1)")
+	}
+	if len(masternodes) > 0 {
+		for i, m1 := range masternodes {
+			m1m2[m1] = masternodes[validators[i]%int64(len(masternodes))]
+		}
+	}
+	return m1m2, nil
+}
+
+// Extract validators from byte array.
+func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
+	lenValidator := len(byteValidators) / M2ByteLength
+	var validators []int64
+	for i := 0; i < lenValidator; i++ {
+		trimByte := bytes.Trim(byteValidators[i*M2ByteLength:(i+1)*M2ByteLength], "\x00")
+		intNumber, err := strconv.Atoi(string(trimByte))
+		if err != nil {
+			log.Error("Can not convert string to integer", "error", err)
+			return []int64{}
+		}
+		validators = append(validators, int64(intNumber))
+	}
+
+	return validators
 }
