@@ -17,11 +17,14 @@
 package protocols
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -183,6 +186,169 @@ func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
 	if err := s.TestDisconnected(disconnects...); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type dummyHook struct {
+	peer  *Peer
+	size  uint32
+	msg   interface{}
+	send  bool
+	err   error
+	waitC chan struct{}
+}
+
+type dummyMsg struct {
+	Content string
+}
+
+func (d *dummyHook) Send(peer *Peer, size uint32, msg interface{}) error {
+	d.peer = peer
+	d.size = size
+	d.msg = msg
+	d.send = true
+	return d.err
+}
+
+func (d *dummyHook) Receive(peer *Peer, size uint32, msg interface{}) error {
+	d.peer = peer
+	d.size = size
+	d.msg = msg
+	d.send = false
+	d.waitC <- struct{}{}
+	return d.err
+}
+
+func TestProtocolHook(t *testing.T) {
+	testHook := &dummyHook{
+		waitC: make(chan struct{}, 1),
+	}
+	spec := &Spec{
+		Name:       "test",
+		Version:    42,
+		MaxMsgSize: 10 * 1024,
+		Messages: []interface{}{
+			dummyMsg{},
+		},
+		Hook: testHook,
+	}
+
+	runFunc := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		peer := NewPeer(p, rw, spec)
+		ctx := context.TODO()
+		err := peer.Send(ctx, &dummyMsg{
+			Content: "handshake"})
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handle := func(ctx context.Context, msg interface{}) error {
+			return nil
+		}
+
+		return peer.Run(handle)
+	}
+
+	conf := adapters.RandomNodeConfig()
+	tester := p2ptest.NewProtocolTester(t, conf.ID, 2, runFunc)
+	err := tester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "handshake"},
+				Peer: tester.Nodes[0].ID(),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "handshake" {
+		t.Fatal("Expected msg to be set, but it is not")
+	}
+	if !testHook.send {
+		t.Fatal("Expected a send message, but it is not")
+	}
+	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[0].ID() {
+		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	}
+	if testHook.size != 11 { //11 is the length of the encoded message
+		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "response"},
+				Peer: tester.Nodes[1].ID(),
+			},
+		},
+	})
+
+	<-testHook.waitC
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testHook.msg == nil || testHook.msg.(*dummyMsg).Content != "response" {
+		t.Fatal("Expected msg to be set, but it is not")
+	}
+	if testHook.send {
+		t.Fatal("Expected a send message, but it is not")
+	}
+	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[1].ID() {
+		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	}
+	if testHook.size != 10 { //11 is the length of the encoded message
+		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
+	}
+
+	testHook.err = fmt.Errorf("dummy error")
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 0,
+				Msg:  &dummyMsg{Content: "response"},
+				Peer: tester.Nodes[1].ID(),
+			},
+		},
+	})
+
+	<-testHook.waitC
+
+	time.Sleep(100 * time.Millisecond)
+	err = tester.TestDisconnected(&p2ptest.Disconnect{tester.Nodes[1].ID(), testHook.err})
+	if err != nil {
+		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
+	}
+
+}
+
+//We need to test that if the hook is not defined, then message infrastructure
+//(send,receive) still works
+func TestNoHook(t *testing.T) {
+	//create a test spec
+	spec := createTestSpec()
+	//a random node
+	id := adapters.RandomNodeConfig().ID
+	//a peer
+	p := p2p.NewPeer(id, "testPeer", nil)
+	rw := &dummyRW{}
+	peer := NewPeer(p, rw, spec)
+	ctx := context.TODO()
+	msg := &perBytesMsgSenderPays{Content: "testBalance"}
+	//send a message
+	err := peer.Send(ctx, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//simulate receiving a message
+	rw.msg = msg
+	peer.handleIncoming(func(ctx context.Context, msg interface{}) error {
+		return nil
+	})
+	//all should just work and not result in any error
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {
@@ -385,4 +551,40 @@ func XTestMultiplePeersDropOther(t *testing.T) {
 		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("subprotocol error"),
 	)
+}
+
+//dummy implementation of a MsgReadWriter
+//this allows for quick and easy unit tests without
+//having to build up the complete protocol
+type dummyRW struct {
+	msg  interface{}
+	size uint32
+	code uint64
+}
+
+func (d *dummyRW) WriteMsg(msg p2p.Msg) error {
+	return nil
+}
+
+func (d *dummyRW) ReadMsg() (p2p.Msg, error) {
+	enc := bytes.NewReader(d.getDummyMsg())
+	return p2p.Msg{
+		Code:       d.code,
+		Size:       d.size,
+		Payload:    enc,
+		ReceivedAt: time.Now(),
+	}, nil
+}
+
+func (d *dummyRW) getDummyMsg() []byte {
+	r, _ := rlp.EncodeToBytes(d.msg)
+	var b bytes.Buffer
+	wmsg := WrappedMsg{
+		Context: b.Bytes(),
+		Size:    uint32(len(r)),
+		Payload: r,
+	}
+	rr, _ := rlp.EncodeToBytes(wmsg)
+	d.size = uint32(len(rr))
+	return rr
 }
