@@ -52,7 +52,7 @@ const (
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
 	chainSideChanSize = 10
 	// Timeout waiting for M1
-	m1Timeout = 1
+	m1Timeout = 10
 )
 
 // Agent can register themself with the worker
