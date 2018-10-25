@@ -218,7 +218,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				header := block.Header()
 				sighash, _ := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
 				header.Validator = sighash
-				block = types.NewBlockWithHeader(header)
+				block = types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles())
 			}
 
 			return block, nil
