@@ -317,9 +317,6 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	err := d.synchronise(id, head, td, mode)
 	switch err {
 	case nil:
-		select {
-		default:
-		}
 	case errBusy:
 
 	case errTimeout, errBadPeer, errStallingPeer,
