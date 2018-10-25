@@ -85,6 +85,7 @@ type Header struct {
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 	Validators  []byte         `json:"validators"       gencodec:"required"`
+	Validator   []byte         `json:"validator"        gencodec:"required"`
 	Penalties   []byte         `json:"penalties"        gencodec:"required"`
 }
 
@@ -256,6 +257,10 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+	if len(h.Validator) > 0 {
+		cpy.Validator = make([]byte, len(h.Validator))
+		copy(cpy.Validator, h.Validator)
+	}
 	return &cpy
 }
 
@@ -322,6 +327,7 @@ func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
 func (b *Block) Penalties() []byte        { return common.CopyBytes(b.header.Penalties) }
+func (b *Block) Validator() []byte        { return common.CopyBytes(b.header.Validator) }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

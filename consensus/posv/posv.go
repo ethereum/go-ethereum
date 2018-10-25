@@ -179,6 +179,10 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
+func SigHash(header *types.Header) (hash common.Hash) {
+	return sigHash(header)
+}
+
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -639,13 +643,13 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	}
 
 	// header must contain validator info following double validation design
-	validator, err := RecoverValidator(header)
+	validator, err := c.RecoverValidator(header)
 	if err != nil {
 		return err
 	}
 
 	// verify validator
-	assignedValidator, err := c.getValidator(creator, snap, chain, header)
+	assignedValidator, err := c.GetValidator(creator, snap, chain, header)
 	if err != nil {
 		return err
 	}
@@ -656,7 +660,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	return nil
 }
 
-func (c *Posv) getValidator(creator common.Address, snap *Snapshot, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
+func (c *Posv) GetValidator(creator common.Address, snap *Snapshot, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
 	epoch := c.config.Epoch
 	no := header.Number.Uint64()
 	cpNo := no
@@ -944,6 +948,30 @@ func (c *Posv) APIs(chain consensus.ChainReader) []rpc.API {
 
 func (c *Posv) RecoverSigner(header *types.Header) (common.Address, error) {
 	return ecrecover(header, c.signatures)
+}
+
+func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
+	// If the signature's already cached, return that
+	hash := header.Hash()
+	if address, known := c.signatures.Get(hash); known {
+		return address.(common.Address), nil
+	}
+	// Retrieve the signature from the header extra-data
+	if len(header.Validator) < extraSeal {
+		return common.Address{}, errMissingSignature
+	}
+	signature := header.Validator[len(header.Validator)-extraSeal:]
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	c.signatures.Add(hash, signer)
+	return signer, nil
 }
 
 // Get master nodes over extra data of previous checkpoint block.

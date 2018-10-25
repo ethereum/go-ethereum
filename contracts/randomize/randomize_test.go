@@ -103,7 +103,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize secret: %v", err)
 			}
-			break
 		case 850:
 			// Set opening.
 			tx, err := contracts.BuildTxOpeningRandomize(nonce, randomizeAddr, randomizeKeyValue)
@@ -118,7 +117,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize opening: %v", err)
 			}
-			break
 
 		case 900:
 			// Get randomize secret from SC.
@@ -139,7 +137,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Error("Can't decrypt secret and opening", err)
 			}
-			break
 		default:
 			tx, err := types.SignTx(types.NewTransaction(nonce, common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, acc1Key)
 			if err != nil {
@@ -149,7 +146,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize: %v", err)
 			}
-			break
 		}
 		backend.Commit()
 	}

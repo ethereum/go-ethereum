@@ -144,6 +144,7 @@ type Fetcher struct {
 	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
 	doubleValidateHook func(*types.Block) error
 	signHook           func(*types.Block) error
+	appendM2HeaderHook func(*types.Block) (*types.Block, error)
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
@@ -653,6 +654,13 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
+			if f.appendM2HeaderHook != nil {
+				if block, err = f.appendM2HeaderHook(block); err != nil {
+					log.Error("Append m2 to block header fail", "err", err)
+					return
+				}
+			}
+
 			// All ok, quickly propagate to our peers
 			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
@@ -756,4 +764,9 @@ func (f *Fetcher) SetDoubleValidateHook(doubleValidateHook func(*types.Block) er
 // Bind double validate hook before block imported into chain.
 func (f *Fetcher) SetSignHook(signHook func(*types.Block) error) {
 	f.signHook = signHook
+}
+
+// Bind append m2 to block header hook when imported into chain.
+func (f *Fetcher) SetAppendM2HeaderHook(appendM2HeaderHook func(*types.Block) (*types.Block, error)) {
+	f.appendM2HeaderHook = appendM2HeaderHook
 }
