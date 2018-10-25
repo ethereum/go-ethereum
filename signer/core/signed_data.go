@@ -39,6 +39,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type ValidatorData struct {
+	Address 	common.Address
+	Message		hexutil.Bytes
+}
+
 type TypedData struct {
 	Types       EIP712Types  `json:"types"`
 	PrimaryType string       `json:"primaryType"`
@@ -77,7 +82,7 @@ const (
 
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
-func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, req *SignDataRequest) ([]byte, error) {
+func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, req *SignDataRequest) (hexutil.Bytes, error) {
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
 
@@ -110,7 +115,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, re
 //
 // Different types of validation occur.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
-	var req, err = api.determineSignatureFormat(contentType, data)
+	var req, err = api.determineSignatureFormat(contentType, addr, data)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +130,11 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 }
 
 // Determines which signature method should be used based upon the mime type
-func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.Bytes) (*SignDataRequest, error) {
+// In the cases where it matters ensure that the charset is handled. The charset
+// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
+// charset, ok := params["charset"]
+// As it is now, we accept any charset and just treat it as 'raw'.
+func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (*SignDataRequest, error) {
 	var req *SignDataRequest
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
@@ -135,18 +144,19 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.
 	switch mediaType {
 	case TextValidator.Mime:
 		// Data with an intended validator
-		sighash, msg := signTextWithValidator(data)
+		if len(data) < common.AddressLength {
+			return nil, errors.New("validator address and data undefined")
+		}
+		if len(data) == common.AddressLength {
+			return nil, errors.New("no data to sign")
+		}
+		sighash, msg := SignTextValidator(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 		break
 	case TextPlain.Mime:
 		// Sign calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
-
-		// In the cases where it matters ensure that the charset is handled. The charset
-		// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
-		// charset, ok := params["charset"]
-		// As it is now, we accept any charset and just treat it as 'raw'.
-		sighash, msg := signTextPlain(data)
+		sighash, msg := SignTextPlain(data)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 		break
 	case ApplicationClique.Mime:
@@ -155,11 +165,11 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.
 		if err := rlp.DecodeBytes(data, header); err != nil {
 			return nil, err
 		}
-		sighash, err := signCliqueHeader(header)
+		sighash, err := SignCliqueHeader(header)
 		if err != nil {
 			return nil, err
 		}
-		msg := fmt.Sprintf("Clique block %d [0x%x]", header.Number, header.Hash())
+		msg := fmt.Sprintf("clique block %d [0x%x]", header.Number, header.Hash())
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 		break
 	default:
@@ -169,23 +179,15 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, data hexutil.
 
 }
 
-// signTextPlain is a helper function that calculates a hash for the given message that can be
-// safely used to calculate a signature from.
-//
-// The hash is calculated as
-//	keccak256("\x19${byteVersion}Ethereum Signed Message:\n"${message length}${message}).
-//
-// This gives context to the signed message and prevents signing of transactions.
-func signTextPlain(data []byte) ([]byte, string) {
-	msg := fmt.Sprintf("\x19\\x%xEthereum Signed Message:\n%d%s", TextPlain.ByteVersion, len(data), data)
-	return crypto.Keccak256([]byte(msg)), msg
-}
-
 // signTextWithValidator signs the given message which can be further recovered
 // with the given validator.
-func signTextWithValidator(data []byte) ([]byte, string) {
-	msg := "TODO"
-	return crypto.Keccak256([]byte(msg)), msg
+//
+// hash = keccak256("\x19\x00"${address}${data}).
+func SignTextValidator(data hexutil.Bytes) (hexutil.Bytes, string) {
+	address := common.BytesToAddress(data[:common.AddressLength])
+	message := data[common.AddressLength:len(data)-1]
+	hash := fmt.Sprintf("\x19\x00:%x%s", address, string(message))
+	return crypto.Keccak256(hexutil.Bytes(hash)), hash
 }
 
 // signCliqueHeader returns the hash which is used as input for the proof-of-authority
@@ -195,7 +197,7 @@ func signTextWithValidator(data []byte) ([]byte, string) {
 // The method requires the extra data to be at least 65 bytes -- the original implementation
 // in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
-func signCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
+func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	hash := common.Hash{}
 	if len(header.Extra) < 65 {
 		return hash.Bytes(), fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
@@ -220,6 +222,18 @@ func signCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	})
 	hasher.Sum(hash[:0])
 	return hash.Bytes(), nil
+}
+
+// signTextPlain is a helper function that calculates a hash for the given message that can be
+// safely used to calculate a signature from. This gives context to the signed message and prevents
+// signing of transactions.
+//
+// hash = keccak256("\x19$Ethereum Signed Message:\n"${message length}${message}).
+func SignTextPlain(data hexutil.Bytes) (hexutil.Bytes, string) {
+	// The letter `E` is \x45 in hex, retrofitting
+	// https://github.com/ethereum/go-ethereum/pull/2940/commits
+	hash := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), string(data))
+	return crypto.Keccak256(hexutil.Bytes(hash)), hash
 }
 
 // SignTypedData signs EIP-712 conformant typed data
@@ -252,12 +266,11 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 
 // hashStruct generates the following encoding for the given domain and message:
 // `encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`
-func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) []byte {
+func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) hexutil.Bytes {
 	return crypto.Keccak256(typedData.EncodeData(primaryType, data))
 }
 
-// dependencies returns an array of custom types ordered by their
-// hierarchical reference tree
+// dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
 	includes := func(arr []string, str string) bool {
 		for _, obj := range arr {
@@ -289,7 +302,7 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 // `name ‖ "(" ‖ member₁ ‖ "," ‖ member₂ ‖ "," ‖ … ‖ memberₙ ")"`
 //
 // each member is written as `type ‖ " " ‖ name` encodings cascade down and are sorted by name
-func (typedData *TypedData) EncodeType(primaryType string) []byte {
+func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	// Get dependencies primary first, then alphabetical
 	deps := typedData.Dependencies(primaryType, []string{})
 	for i, dep := range deps {
@@ -317,33 +330,33 @@ func (typedData *TypedData) EncodeType(primaryType string) []byte {
 	return buffer.Bytes()
 }
 
-func (typedData *TypedData) TypeHash(primaryType string) []byte {
+func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 	return crypto.Keccak256(typedData.EncodeType(primaryType))
 }
 
-func bytesValueOf(_interface interface{}) []byte {
-	bytesVal, ok := _interface.([]byte)
+func bytesValueOf(_interface interface{}) hexutil.Bytes {
+	bytesVal, ok := _interface.(hexutil.Bytes)
 	if ok {
 		return bytesVal
 	}
 
 	switch reflect.TypeOf(_interface) {
 	case reflect.TypeOf(string("")):
-		return []byte(_interface.(string))
+		return hexutil.Bytes(_interface.(string))
 		break
 	default:
 		break
 	}
 
 	panic(fmt.Errorf("unrecognized interface %v", _interface))
-	return []byte{}
+	return hexutil.Bytes{}
 }
 
 // encodeData generates the following encoding:
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
-func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) []byte {
+func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) hexutil.Bytes {
 	encTypes := []string{}
 	encValues := []interface{}{}
 
@@ -359,12 +372,10 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		switch encType {
 		case "address":
 			primitiveEncType = "uint160"
-			bytesValue := []byte{}
+			bytesValue := hexutil.Bytes{}
 			for i := 0; i < 12; i++ {
 				bytesValue = append(bytesValue, 0)
 			}
-			//foo := common.BytesToAddress([]byte(encValue.(string)))
-			//fmt.Println(foo)
 			for _, _byte := range encValue.(common.Address) {
 				bytesValue = append(bytesValue, _byte)
 			}
@@ -387,11 +398,11 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				encTypes = append(encTypes, "bytes32")
 				sizeStr := strings.TrimPrefix(encType, "bytes")
 				size, _ := strconv.Atoi(sizeStr)
-				bytesValue := []byte{}
+				bytesValue := hexutil.Bytes{}
 				for i := 0; i < 32-size; i++ {
 					bytesValue = append(bytesValue, 0)
 				}
-				for _, _byte := range encValue.([]byte) {
+				for _, _byte := range encValue.(hexutil.Bytes) {
 					bytesValue = append(bytesValue, _byte)
 				}
 				primitiveEncValue = bytesValue
@@ -461,7 +472,6 @@ func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data he
 		// the V value must be be 27 or 28 for legacy reasons.
 		//
 		// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
-
 		if len(sig) != 65 {
 			return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
 		}
@@ -469,7 +479,7 @@ func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data he
 			return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 		}
 		sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
-		hash, _ := signTextPlain(data)
+		hash, _ := SignTextPlain(data)
 		rpk, err := crypto.SigToPub(hash, sig)
 		if err != nil {
 			return common.Address{}, err
@@ -481,7 +491,7 @@ func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data he
 }
 
 // UnmarshalJSON validates the input data
-func (typedData *TypedData) UnmarshalJSON(data []byte) error {
+func (typedData *TypedData) UnmarshalJSON(data hexutil.Bytes) error {
 	type input struct {
 		Types       EIP712Types  `json:"types"`
 		PrimaryType string       `json:"primaryType"`
