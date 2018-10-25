@@ -301,6 +301,10 @@ func (self *worker) wait() {
 				continue
 			}
 			block := result.Block
+			if self.config.Posv != nil && block.NumberU64() >= self.config.Posv.Epoch {
+				self.mux.Post(core.NewMinedBlockEvent{Block: block})
+				continue
+			}
 			work := result.Work
 
 			// Update the block hash in all logs since it is now available and not when the
@@ -641,7 +645,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			log.Debug("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
+			log.Trace("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
 			continue
 		}
 		// Start executing the transaction
@@ -650,11 +654,11 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		switch err {
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			log.Debug("Skipping special transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
+			log.Trace("Skipping special transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Debug("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
+			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
 
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
