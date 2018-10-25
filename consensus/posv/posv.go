@@ -214,10 +214,10 @@ type Posv struct {
 	config *params.PosvConfig // Consensus engine configuration parameters
 	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
-	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
-	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
-
-	proposals map[common.Address]bool // Current list of proposals we are pushing
+	recents             *lru.ARCCache           // Snapshots for recent block to speed up reorgs
+	signatures          *lru.ARCCache           // Signatures of recent blocks to speed up mining
+	validatorSignatures *lru.ARCCache           // Signatures of recent blocks to speed up mining
+	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
 	signFn clique.SignerFn // Signer function to authorize hashes with
@@ -240,13 +240,14 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
-
+	validatorSignatures, _ := lru.NewARC(inmemorySignatures)
 	return &Posv{
-		config:     &conf,
-		db:         db,
-		recents:    recents,
-		signatures: signatures,
-		proposals:  make(map[common.Address]bool),
+		config:              &conf,
+		db:                  db,
+		recents:             recents,
+		signatures:          signatures,
+		validatorSignatures: validatorSignatures,
+		proposals:           make(map[common.Address]bool),
 	}
 }
 
@@ -956,12 +957,12 @@ func (c *Posv) RecoverSigner(header *types.Header) (common.Address, error) {
 func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
-	if address, known := c.signatures.Get(hash); known {
+	if address, known := c.validatorSignatures.Get(hash); known {
 		return address.(common.Address), nil
 	}
 	// Retrieve the signature from the header extra-data
 	if len(header.Validator) < extraSeal {
-		return common.Address{}, errMissingSignature
+		return common.Address{}, consensus.ErrMissingValidatorSignature
 	}
 	signature := header.Validator[len(header.Validator)-extraSeal:]
 
@@ -973,7 +974,7 @@ func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
 
-	c.signatures.Add(hash, signer)
+	c.validatorSignatures.Add(hash, signer)
 	return signer, nil
 }
 
