@@ -142,7 +142,6 @@ type Fetcher struct {
 	queueChangeHook    func(common.Hash, bool) // Method to call upon adding or deleting a block from the import queue
 	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (eth/61) or header (eth/62) fetch
 	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
-	doubleValidateHook func(*types.Block) error
 	signHook           func(*types.Block) error
 	appendM2HeaderHook func(*types.Block) (*types.Block, error)
 }
@@ -674,13 +673,6 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			f.dropPeer(peer)
 			return
 		}
-		// Invoke the dv hook to run double validation layer
-		if f.doubleValidateHook != nil {
-			if err := f.doubleValidateHook(block); err != nil {
-				log.Error("Double validation failed", "err", err, "Discard this block!")
-				return
-			}
-		}
 
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
@@ -754,11 +746,6 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 		}
 		delete(f.queued, hash)
 	}
-}
-
-// Bind double validate hook before block imported into chain.
-func (f *Fetcher) SetDoubleValidateHook(doubleValidateHook func(*types.Block) error) {
-	f.doubleValidateHook = doubleValidateHook
 }
 
 // Bind double validate hook before block imported into chain.
