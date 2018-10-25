@@ -643,19 +643,22 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	}
 
 	// header must contain validator info following double validation design
-	validator, err := c.RecoverValidator(header)
-	if err != nil {
-		return err
-	}
+	// start checking from epoch 2nd.
+	if header.Number.Uint64() > c.config.Epoch {
+		validator, err := c.RecoverValidator(header)
+		if err != nil {
+			return err
+		}
 
-	// verify validator
-	assignedValidator, err := c.GetValidator(creator, snap, chain, header)
-	if err != nil {
-		return err
-	}
-	if validator != assignedValidator {
-		log.Debug("Bad block detected. Header contains wrong pair of creator-validator", "creator", creator, "assigned validator", assignedValidator, "wrong validator", validator)
-		return errFailedDoubleValidation
+		// verify validator
+		assignedValidator, err := c.GetValidator(creator, snap, chain, header)
+		if err != nil {
+			return err
+		}
+		if validator != assignedValidator {
+			log.Debug("Bad block detected. Header contains wrong pair of creator-validator", "creator", creator, "assigned validator", assignedValidator, "wrong validator", validator)
+			return errFailedDoubleValidation
+		}
 	}
 	return nil
 }
