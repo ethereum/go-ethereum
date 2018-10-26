@@ -665,8 +665,8 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 					return
 				}
 			}
-			go f.broadcastBlock(block, true)
 			if newBlock.Hash() == block.Hash() {
+				go f.broadcastBlock(block, true)
 				return
 			}
 			block = newBlock
@@ -693,6 +693,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
+		go f.broadcastBlock(block, true)
 		go f.broadcastBlock(block, false)
 
 	}()
