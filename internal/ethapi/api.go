@@ -854,7 +854,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	}
 	var signers []common.Address
 	var filterSigners []common.Address
-	finality := false
+	finality := int32(0)
 	if b.Number().Int64() > 0 {
 		addrBlockSigner := common.HexToAddress(common.BlockSigners)
 		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
@@ -877,9 +877,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 						}
 					}
 				}
-				if countFinality >= len(masternodes)*75/100 {
-					finality = true
-				}
+				finality = int32(countFinality * 100 / len(masternodes))
 			}
 		}
 	}
