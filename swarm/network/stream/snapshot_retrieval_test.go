@@ -127,10 +127,9 @@ func retrievalStreamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s no
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-		DoSync:          true,
+		Retrieval:       RetrievalEnabled,
+		Syncing:         SyncingAutoSubscribe,
 		SyncUpdateDelay: 3 * time.Second,
-		DoRetrieve:      true,
-		DoServeRetrieve: true,
 	})
 
 	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
