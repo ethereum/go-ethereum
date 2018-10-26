@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/rand"
-
 )
 
 var (
@@ -34,7 +33,9 @@ func TestValidator(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
-	validatorAddress, validator, err := DeployValidator(transactOpts, contractBackend)
+	validatorCap := new(big.Int)
+	validatorCap.SetString("50000000000000000000000", 10)
+	validatorAddress, validator, err := DeployValidator(transactOpts, contractBackend, []common.Address{addr}, []*big.Int{validatorCap}, addr)
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
@@ -75,7 +76,20 @@ func TestRewardBalance(t *testing.T) {
 	accounts := []*bind.TransactOpts{acc1Opts, acc2Opts}
 	transactOpts := bind.NewKeyedTransactor(acc1Key)
 
-	validatorAddr, _, baseValidator, err := contract.DeployXDCValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100), big.NewInt(100))
+	// validatorAddr, _, baseValidator, err := contract.DeployXDCValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100), big.NewInt(100))
+	validatorCap := new(big.Int)
+	validatorCap.SetString("50000000000000000000000", 10)
+	validatorAddr, _, baseValidator, err := contract.DeployXDCValidator(
+		transactOpts,
+		contractBackend,
+		[]common.Address{addr},
+		[]*big.Int{validatorCap},
+		addr,
+		big.NewInt(50000),
+		big.NewInt(99),
+		big.NewInt(100),
+		big.NewInt(100),
+	)
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
 	}
@@ -123,7 +137,7 @@ func TestRewardBalance(t *testing.T) {
 		afterReward = new(big.Int).Add(afterReward, value)
 	}
 
-	if totalReward.Int64()+1 < afterReward.Int64() || totalReward.Int64()-1 > afterReward.Int64() {
+	if totalReward.Int64()+5 < afterReward.Int64() || totalReward.Int64()-5 > afterReward.Int64() {
 		callOpts := new(bind.CallOpts)
 		voters, err := baseValidator.GetVoters(callOpts, acc3Addr)
 		if err != nil {
