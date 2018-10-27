@@ -126,6 +126,22 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
+func TestDiscoverySimulationDockerAdapter(t *testing.T) {
+	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
+}
+
+func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
+	adapter, err := adapters.NewDockerAdapter()
+	if err != nil {
+		if err == adapters.ErrLinuxOnly {
+			t.Skip(err)
+		} else {
+			t.Fatal(err)
+		}
+	}
+	testDiscoverySimulation(t, nodes, conns, adapter)
+}
+
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
 }
@@ -310,16 +326,12 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		var err error
 		var snap *simulations.Snapshot
 		if len(*serviceOverride) > 0 {
-			log.Debug("fooooo")
 			var addServices []string
 			var removeServices []string
 			for _, osvc := range strings.Split(*serviceOverride, ",") {
-				log.Debug("serviceoverride", "osc", osvc)
 				if strings.Index(osvc, "+") == 0 {
-					log.Debug("add", "a", osvc)
 					addServices = append(addServices, osvc[1:])
 				} else if strings.Index(osvc, "-") == 0 {
-					log.Debug("drop", "d", osvc)
 					removeServices = append(removeServices, osvc[1:])
 				}
 			}
@@ -550,7 +562,8 @@ func triggerChecks(trigger chan enode.ID, net *simulations.Network, id enode.ID)
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	addr := network.NewAddr(ctx.Config.Node())
+	node := enode.NewV4(&ctx.Config.PrivateKey.PublicKey, adapters.ExternalIP(), int(ctx.Config.Port), int(ctx.Config.Port))
+	addr := network.NewAddr(node)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize
