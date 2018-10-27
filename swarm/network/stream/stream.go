@@ -53,15 +53,23 @@ type RetrievalOption int
 
 //Syncing options
 const (
-	SyncingDisabled      SyncingOption = iota //Disable Syncing
-	SyncingRegisterOnly                       //Register the client but not subscribe
-	SyncingAutoSubscribe                      //Subscribe automatically
+	//Syncing disabled
+	SyncingDisabled SyncingOption = iota
+	//Register the client and the server but not subscribe
+	SyncingRegisterOnly
+	//Both client and server funcs are registered, subscribe sent automatically
+	SyncingAutoSubscribe
 )
 
 const (
-	RetrievalDisabled   RetrievalOption = iota //Retrieval disabled
-	RetrievalClientOnly                        //Clients retrieve only (Light nodes)
-	RetrievalEnabled                           //Enabled
+	//Retrieval disabled
+	RetrievalDisabled RetrievalOption = iota
+	//Only the client side of the retrieve request is registered.
+	//(light nodes do not serve retrieve requests)
+	//once the client is registered, subscription to retrieve request stream is always sent
+	RetrievalClientOn
+	//Both client and server funcs are registered, subscribe sent automatically
+	RetrievalEnabled
 )
 
 // Registry registry for outgoing and incoming streamer constructors
@@ -77,15 +85,15 @@ type Registry struct {
 	peers          map[enode.ID]*Peer
 	delivery       *Delivery
 	intervalsStore state.Store
-	autoRetrieval  bool
+	autoRetrieval  bool //automatically subscribe to retrieve request stream
 	maxPeerServers int
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
 type RegistryOptions struct {
 	SkipCheck       bool
-	Syncing         SyncingOption
-	Retrieval       RetrievalOption
+	Syncing         SyncingOption   //Defines syncing behavior
+	Retrieval       RetrievalOption //Defines retrieval behavior
 	SyncUpdateDelay time.Duration
 	MaxPeerServers  int // The limit of servers for each peer in registry
 }
@@ -98,6 +106,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
+	//check if retriaval has been disabled
 	retrieval := options.Retrieval != RetrievalDisabled
 
 	streamer := &Registry{
@@ -114,6 +123,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 
+	//if retrieval is enabled, register the server func, so that retrieve requests will be served (non-light nodes only)
 	if options.Retrieval == RetrievalEnabled {
 		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
 			if !live {
@@ -123,17 +133,20 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		})
 	}
 
+	//if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
 	if options.Retrieval != RetrievalDisabled {
 		streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
 			return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
 		})
 	}
 
+	//If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
 		RegisterSwarmSyncerServer(streamer, syncChunkStore)
 		RegisterSwarmSyncerClient(streamer, syncChunkStore)
 	}
 
+	//if syncing is set to automatically subscribe to the syncing stream, start the subscription process
 	if options.Syncing == SyncingAutoSubscribe {
 		// latestIntC function ensures that
 		//   - receiving from the in chan is not blocked by processing inside the for loop
