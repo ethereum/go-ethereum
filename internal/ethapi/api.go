@@ -30,7 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -507,7 +509,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, blockNr)
 	if block != nil {
-		response, err := s.rpcOutputBlock(block, true, fullTx)
+		response, err := s.rpcOutputBlock(block, true, fullTx, ctx)
 		if err == nil && blockNr == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -524,7 +526,7 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.
 func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.GetBlock(ctx, blockHash)
 	if block != nil {
-		return s.rpcOutputBlock(block, true, fullTx)
+		return s.rpcOutputBlock(block, true, fullTx, ctx)
 	}
 	return nil, err
 }
@@ -540,7 +542,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcOutputBlock(block, false, false)
+		return s.rpcOutputBlock(block, false, false, ctx)
 	}
 	return nil, err
 }
@@ -556,7 +558,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return s.rpcOutputBlock(block, false, false)
+		return s.rpcOutputBlock(block, false, false, ctx)
 	}
 	return nil, err
 }
@@ -793,7 +795,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 // rpcOutputBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool, ctx context.Context) (map[string]interface{}, error) {
 	head := b.Header() // copies the header once
 	fields := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
@@ -844,6 +846,45 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
+
+	// Get signers for block.
+	client, err := s.b.GetIPCClient()
+	if err != nil {
+		log.Error("Fail to connect IPC client for block status", "error", err)
+	}
+	var signers []common.Address
+	var filterSigners []common.Address
+	finality := false
+	if b.Number().Int64() > 0 {
+		addrBlockSigner := common.HexToAddress(common.BlockSigners)
+		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
+		if err != nil {
+			log.Error("Fail to get signers from block signer SC.", "error", err)
+		}
+		// Get block epoc latest.
+		if s.b.ChainConfig().Clique != nil {
+			engine := s.b.GetEngine()
+			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().Clique.Epoch))
+			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
+			if prevCheckpointBlock != nil {
+				masternodes := engine.(*clique.Clique).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header())
+				countFinality := 0
+				for _, masternode := range masternodes {
+					for _, signer := range signers {
+						if signer == masternode {
+							countFinality++
+							filterSigners = append(filterSigners, masternode)
+						}
+					}
+				}
+				if countFinality >= len(masternodes)*75/100 {
+					finality = true
+				}
+			}
+		}
+	}
+	fields["signers"] = filterSigners
+	fields["finality"] = finality
 
 	return fields, nil
 }
