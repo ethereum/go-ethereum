@@ -23,7 +23,7 @@ func TestRandomize(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 
-	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend)
+	randomizeAddress, randomize, err := DeployRandomize(transactOpts, contractBackend, big.NewInt(2))
 	t.Log("contract address", randomizeAddress.String())
 	if err != nil {
 		t.Fatalf("can't deploy root registry: %v", err)
