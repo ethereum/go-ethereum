@@ -63,11 +63,11 @@ type EIP712TypePriority struct {
 type EIP712Data = map[string]interface{}
 
 type EIP712Domain struct {
-	Name              string        `json:"name"`
-	Version           string        `json:"version"`
-	ChainId           *big.Int      `json:"chainId"`
-	VerifyingContract common.Address 		`json:"verifyingContract"`
-	Salt              hexutil.Bytes `json:"salt"`
+	Name              string        	`json:"name"`
+	Version           string        	`json:"version"`
+	ChainId           *big.Int      	`json:"chainId"`
+	VerifyingContract string			`json:"verifyingContract"`
+	Salt              hexutil.Bytes 	`json:"salt"`
 }
 
 const (
@@ -76,6 +76,7 @@ const (
 	TypeBytes   = "bytes"
 	TypeInt     = "int"
 	TypeString  = "string"
+	TypeUint	= "uint"
 )
 
 // Sign receives a request and produces a signature
@@ -151,6 +152,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, errors.New("no data to sign")
 		}
 		sighash, msg := SignTextValidator(data)
+		fmt.Printf("%s", sighash)
 		req = &SignDataRequest{Rawdata: data, Message: msg, Hash: sighash, ContentType: mediaType}
 		break
 	case TextPlain.Mime:
@@ -185,8 +187,8 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 // hash = keccak256("\x19\x00"${address}${data}).
 func SignTextValidator(data hexutil.Bytes) (hexutil.Bytes, string) {
 	address := common.BytesToAddress(data[:common.AddressLength])
-	message := data[common.AddressLength:len(data)-1]
-	hash := fmt.Sprintf("\x19\x00:%x%s", address, string(message))
+	message := data[common.AddressLength:]
+	hash := fmt.Sprintf("\x19\x00%s%s", address, string(message))
 	return crypto.Keccak256(hexutil.Bytes(hash)), hash
 }
 
@@ -335,20 +337,23 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 }
 
 func bytesValueOf(_interface interface{}) hexutil.Bytes {
-	bytesVal, ok := _interface.(hexutil.Bytes)
+	bytesValue, ok := _interface.(hexutil.Bytes)
 	if ok {
-		return bytesVal
+		return bytesValue
 	}
 
 	switch reflect.TypeOf(_interface) {
+	case reflect.TypeOf(hexutil.Bytes{}):
+		return _interface.(hexutil.Bytes)
+	case reflect.TypeOf([]uint8{}):
+		return _interface.([]uint8)
 	case reflect.TypeOf(string("")):
 		return hexutil.Bytes(_interface.(string))
-		break
 	default:
 		break
 	}
 
-	panic(fmt.Errorf("unrecognized interface %v", _interface))
+	panic(fmt.Errorf("unrecognized interface type %T", _interface))
 	return hexutil.Bytes{}
 }
 
@@ -376,7 +381,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			for i := 0; i < 12; i++ {
 				bytesValue = append(bytesValue, 0)
 			}
-			for _, _byte := range encValue.(common.Address) {
+			for _, _byte := range common.HexToAddress(encValue.(string)) {
 				bytesValue = append(bytesValue, _byte)
 			}
 			primitiveEncValue = bytesValue
@@ -575,19 +580,35 @@ func (types *EIP712Types) IsValid() error {
 }
 
 // isStandardType checks if the given type is a EIP712 conformant type
-func isStandardTypeStr(typeStr string) bool {
-	standardTypes := []string{
+func isStandardTypeStr(encType string) bool {
+	// Atomic types
+	for _, standardType := range []string{
 		TypeAddress,
 		TypeBool,
 		TypeBytes,
-		TypeInt,
 		TypeString,
-	}
-	for _, val := range standardTypes {
-		if strings.HasPrefix(typeStr, val) || strings.Contains(typeStr, val) {
+	} {
+		if standardType == encType {
 			return true
 		}
 	}
+
+	// Dynamic types
+	for _, standardType := range []string {
+		TypeBytes,
+		TypeInt,
+		TypeUint,
+	} {
+		if strings.HasPrefix(encType, standardType) {
+			return true
+		}
+	}
+
+	// Reference types
+	if encType[len(encType)-1] == ']' {
+		return true
+	}
+
 	return false
 }
 
@@ -627,15 +648,4 @@ func (domain *EIP712Domain) Map() map[string]interface{} {
 		dataMap["salt"] = domain.Salt
 	}
 	return dataMap
-}
-
-// PrintJson will be removed
-func printJson(label string, output map[string]interface{}) {
-	jsonVal, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%s:", label)
-	fmt.Print(string(jsonVal))
-	fmt.Print("\n\n")
 }
