@@ -671,20 +671,23 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 		for _, addSvc := range addServices {
 			haveSvc := false
 			for _, svc := range snap.Nodes[i].Node.Config.Services {
+
 				if svc == addSvc {
 					haveSvc = true
 					break
 				}
-				if !haveSvc {
-					snap.Nodes[i].Node.Config.Services = append(snap.Nodes[i].Node.Config.Services, addSvc)
-				}
 
 			}
+			if !haveSvc {
+				log.Debug("addsvc in network", "addsvc", addSvc)
+				snap.Nodes[i].Node.Config.Services = append(snap.Nodes[i].Node.Config.Services, addSvc)
+			}
 		}
+		log.Debug("nodeservices", "svc", snap.Nodes[i].Node.Config.Services)
 		if len(removeServices) > 0 {
 			var cleanedServices []string
-			haveSvc := false
 			for _, svc := range snap.Nodes[i].Node.Config.Services {
+				haveSvc := false
 				for _, rmSvc := range removeServices {
 					if rmSvc == svc {
 						haveSvc = true
