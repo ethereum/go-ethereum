@@ -50,10 +50,6 @@ type testStore struct {
 	values map[string][]byte
 }
 
-func newTestStore() *testStore {
-	return &testStore{values: make(map[string][]byte)}
-}
-
 func (t *testStore) Load(key string) ([]byte, error) {
 	t.Lock()
 	defer t.Unlock()

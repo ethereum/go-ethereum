@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
@@ -71,13 +70,6 @@ var (
 var (
 	ErrDBClosed = errors.New("LDBStore closed")
 )
-
-type gcItem struct {
-	idx    *dpaDBIndex
-	value  uint64
-	idxKey []byte
-	po     uint8
-}
 
 type LDBStoreParams struct {
 	*StoreParams
@@ -960,16 +952,4 @@ func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Add
 		}
 	}
 	return it.Error()
-}
-
-func databaseExists(path string) bool {
-	o := &opt.Options{
-		ErrorIfMissing: true,
-	}
-	tdb, err := leveldb.OpenFile(path, o)
-	if err != nil {
-		return false
-	}
-	defer tdb.Close()
-	return true
 }
