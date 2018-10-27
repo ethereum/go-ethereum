@@ -19,12 +19,86 @@ package simulations
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 )
+
+func init() {
+	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+}
+
+func TestSnapshotExplicit(t *testing.T) {
+	// create simulation network with 20 testService nodes
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"test":    newTestService,
+		"placebo": newPlaceboService,
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	defer network.Shutdown()
+	nodeCount := 3
+	ids := make([]enode.ID, nodeCount)
+	for i := 0; i < nodeCount; i++ {
+		conf := adapters.RandomNodeConfig()
+		conf.Services = []string{"test", "placebo"}
+		node, err := network.NewNodeWithConfig(conf)
+		if err != nil {
+			t.Fatalf("error creating node: %s", err)
+		}
+		if err := network.Start(node.ID()); err != nil {
+			t.Fatalf("error starting node: %s", err)
+		}
+		ids[i] = node.ID()
+	}
+
+	network.Connect(ids[0], ids[1])
+	network.Connect(ids[0], ids[2])
+	time.Sleep(time.Second)
+	network.Disconnect(ids[0], ids[2])
+	time.Sleep(time.Second)
+
+	snap, err := network.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Conns) > 1 {
+		t.Fatalf("expected one connect object")
+	}
+	for _, svc := range snap.Nodes[0].Node.Config.Services {
+		if svc != "test" && svc != "placebo" {
+			t.Fatalf("unexpected service %s", svc)
+		}
+	}
+
+	snap, err = network.SnapshotWithServices([]string{"bzz"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range snap.Nodes[0].Node.Config.Services {
+		if svc != "test" && svc != "placebo" && svc != "bzz" {
+			t.Fatalf("unexpected service %s", svc)
+		}
+	}
+
+	snap, err = network.SnapshotWithServices([]string{"bzz"}, []string{"test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range snap.Nodes[0].Node.Config.Services {
+		if svc != "placebo" && svc != "bzz" {
+			t.Fatalf("unexpected service %s", svc)
+		}
+	}
+}
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
 // connected in a ring topology, checks that all nodes successfully handshake
@@ -138,6 +212,29 @@ func TestNetworkSimulation(t *testing.T) {
 			t.Fatalf("expected conn[%d].Other to be %s, got %s", i, peerID, conn.Other)
 		}
 	}
+}
+
+type placeboService struct {
+}
+
+func newPlaceboService(ctx *adapters.ServiceContext) (node.Service, error) {
+	return &placeboService{}, nil
+}
+
+func (p *placeboService) APIs() []rpc.API {
+	return []rpc.API{}
+}
+
+func (p *placeboService) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{}
+}
+
+func (p *placeboService) Start(server *p2p.Server) error {
+	return nil
+}
+
+func (p *placeboService) Stop() error {
+	return nil
 }
 
 func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, interval time.Duration) {
