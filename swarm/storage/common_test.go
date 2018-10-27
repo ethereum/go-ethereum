@@ -88,17 +88,6 @@ func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Chunk, error)
 	return mput(store, n, GenerateRandomChunk)
 }
 
-func mputChunks(store ChunkStore, chunks ...Chunk) error {
-	i := 0
-	f := func(n int64) Chunk {
-		chunk := chunks[i]
-		i++
-		return chunk
-	}
-	_, err := mput(store, len(chunks), f)
-	return err
-}
-
 func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error) {
 	// put to localstore and wait for stored channel
 	// does not check delivery error state

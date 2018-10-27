@@ -976,11 +976,6 @@ func TestNetwork10000(t *testing.T) {
 }
 
 func testNetwork(t *testing.T) {
-	type msgnotifyC struct {
-		id     enode.ID
-		msgIdx int
-	}
-
 	paramstring := strings.Split(t.Name(), "/")
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
