@@ -76,18 +76,18 @@ var domainStandard = EIP712Domain{
 	"Ether Mail",
 	"1",
 	big.NewInt(1),
-	common.HexToAddress("0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"),
+	"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
 	nil,
 }
 
 var dataStandard = map[string]interface{}{
 	"from": map[string]interface{}{
 		"name":   "Cow",
-		"wallet": common.HexToAddress("0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"),
+		"wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
 	},
 	"to": map[string]interface{}{
 		"name":   "Bob",
-		"wallet": common.HexToAddress("0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"),
+		"wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
 	},
 	"contents": "Hello, Bob!",
 }
@@ -148,43 +148,42 @@ func TestSignData(t *testing.T) {
 	if signature == nil || len(signature) != 65 {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(signature))
 	}
-	// TODO: test signature r,s,v values
 }
 
 func TestHashStruct(t *testing.T) {
 	mainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.HashStruct(typedData.PrimaryType, typedData.Message)))
 	if mainHash != "0xc52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e" {
-		t.Fatal(fmt.Errorf("hashStruct result %s is incorrect", mainHash))
+		t.Errorf("Expected different hashStruct result (got %s)", mainHash)
 	}
 
 	domainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.HashStruct("EIP712Domain", typedData.Domain.Map())))
 	if domainHash != "0xf2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f" {
-		t.Fatal(fmt.Errorf("hashStruct result %s is incorrect", domainHash))
+		t.Errorf("Expected different hashStruct result (got %s)", domainHash)
 	}
 }
 
 func TestEncodeType(t *testing.T) {
 	domainTypeEncoding := string(typedData.EncodeType("EIP712Domain"))
 	if domainTypeEncoding != "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)" {
-		t.Fatal(fmt.Errorf("encodeType result %s is incorrect", domainTypeEncoding))
+		t.Errorf("Expected different encodeType result (got %s)", domainTypeEncoding)
 	}
 
 	mailTypeEncoding := string(typedData.EncodeType(typedData.PrimaryType))
 	if mailTypeEncoding != "Mail(Person from,Person to,string contents)Person(string name,address wallet)" {
-		t.Fatal(fmt.Errorf("encodeType result %s is incorrect", mailTypeEncoding))
+		t.Errorf("Expected different encodeType result (got %s)", mailTypeEncoding)
 	}
 }
 
 func TestTypeHash(t *testing.T) {
 	mailTypeHash := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.TypeHash(typedData.PrimaryType)))
 	if mailTypeHash != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2" {
-		t.Fatal(fmt.Errorf("typeHash result %s is incorrect", mailTypeHash))
+		t.Errorf("Expected different typeHash result (got %s)", mailTypeHash)
 	}
 }
 
 func TestEncodeData(t *testing.T) {
 	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(typedData.EncodeData(typedData.PrimaryType, typedData.Message)))
 	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2fc71e5fa27ff56c350aa531bc129ebdf613b772b6604664f5d8dbe21b85eb0c8cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
-		t.Fatal(fmt.Errorf("encodeData result %s is incorrect", dataEncoding))
+		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
 	}
 }
