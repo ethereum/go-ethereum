@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/console"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -371,7 +371,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						utils.Fatalf("Can't get list of masternode candidates: %v", err)
 					}
 
-					var ms []clique.Masternode
+					var ms []XDPoS.Masternode
 					for _, candidate := range candidates {
 						v, err := validator.GetCandidateCap(opts, candidate)
 						if err != nil {
@@ -379,7 +379,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						}
 						//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
 						if candidate.String() != "0x0000000000000000000000000000000000000000" {
-							ms = append(ms, clique.Masternode{Address: candidate, Stake: v.String()})
+							ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v.String()})
 						}
 					}
 					//// order by cap

@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
@@ -186,8 +186,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
 
-	if eth.chainConfig.Clique != nil {
-		c := eth.engine.(*clique.Clique)
+	if eth.chainConfig.XDPoS != nil {
+		c := eth.engine.(*XDPoS.XDPoS)
 
 		// Inject hook for send tx sign to smartcontract after insert block into chain.
 		importedHook := func(block *types.Block) {
@@ -209,18 +209,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 		eth.protocolManager.fetcher.SetImportedHook(importedHook)
 
-		// Hook reward for clique validator.
+		// Hook reward for XDPoS validator.
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
 				log.Error("Fail to connect IPC client for blockSigner", "error", err)
 			}
 			number := header.Number.Uint64()
-			rCheckpoint := chain.Config().Clique.RewardCheckpoint
+			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 			if number > 0 && number-rCheckpoint > 0 {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
-				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Clique.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
@@ -285,9 +285,9 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If proof-of-authority is requested, set it up
-	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
+	// If proof-of-stake-voting is requested, set it up
+	if chainConfig.XDPoS != nil {
+		return XDPoS.New(chainConfig.XDPoS, db)
 	}
 	// Otherwise assume proof-of-work
 	switch {
@@ -413,9 +413,9 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if s.chainConfig.Clique != nil {
+	if s.chainConfig.XDPoS != nil {
 		//check if miner's wallet is in set of validators
-		c := s.engine.(*clique.Clique)
+		c := s.engine.(*XDPoS.XDPoS)
 		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
 			return false, fmt.Errorf("Can't verify miner: %v", err)
@@ -425,18 +425,18 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify miners in Clique protocol")
+		return false, fmt.Errorf("Only verify miners in XDPoS protocol")
 	}
 	return true, nil
 }
 
 // Store new set of masternodes into local db
-func (s *Ethereum) UpdateMasternodes(ms []clique.Masternode) error {
+func (s *Ethereum) UpdateMasternodes(ms []XDPoS.Masternode) error {
 	// get snapshot from local db
-	if s.chainConfig.Clique == nil {
-		return errors.New("not clique")
+	if s.chainConfig.XDPoS == nil {
+		return errors.New("not XDPoS")
 	}
-	c := s.engine.(*clique.Clique)
+	c := s.engine.(*XDPoS.XDPoS)
 	return c.UpdateMasternodes(s.blockchain, s.blockchain.CurrentHeader(), ms)
 }
 
@@ -446,13 +446,13 @@ func (s *Ethereum) StartStaking(local bool) error {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	if clique, ok := s.engine.(*clique.Clique); ok {
+	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-		clique.Authorize(eb, wallet.SignHash)
+		XDPoS.Authorize(eb, wallet.SignHash)
 	}
 	if local {
 		// If local (CPU) mining is started, we can disable the transaction rejection

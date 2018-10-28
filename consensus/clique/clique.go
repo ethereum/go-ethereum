@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -40,19 +39,16 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
-	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
-	wiggleTime         = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-)
+	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
+	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
+	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-type Masternode struct {
-	Address common.Address
-	Stake   string
-}
+	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+)
 
 // Clique proof-of-authority protocol constants.
 var (
@@ -210,8 +206,6 @@ type Clique struct {
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer fields
-
-	HookReward func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -283,6 +277,9 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
 	checkpoint := (number % c.config.Epoch) == 0
+	if checkpoint && header.Coinbase != (common.Address{}) {
+		return errInvalidCheckpointBeneficiary
+	}
 	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
 	if !bytes.Equal(header.Nonce[:], nonceAuthVote) && !bytes.Equal(header.Nonce[:], nonceDropVote) {
 		return errInvalidVote
@@ -370,71 +367,6 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 	return c.verifySeal(chain, header, parents)
 }
 
-func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
-	number := header.Number.Uint64()
-	log.Trace("take snapshot", "number", number, "hash", header.Hash())
-	snap, err := c.snapshot(chain, number, header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap, nil
-}
-
-func (c *Clique) StoreSnapshot(snap *Snapshot) error {
-	return snap.store(c.db)
-}
-
-func position(list []common.Address, x common.Address) int {
-	for i, item := range list {
-		if item == x {
-			return i
-		}
-	}
-	return -1
-}
-
-func (c *Clique) GetMasternodes(chain consensus.ChainReader, header *types.Header) []common.Address {
-	n := header.Number.Uint64()
-	e := c.config.Epoch
-	switch {
-	case n % e == 0:
-		return c.GetMasternodesFromCheckpointHeader(header, n, e)
-	case n % e != 0:
-		h := chain.GetHeaderByNumber(n - (n % e))
-		return c.GetMasternodesFromCheckpointHeader(h, n, e)
-	default:
-		return []common.Address{}
-	}
-}
-
-func (c *Clique) GetPeriod() uint64 { return c.config.Period }
-
-func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (int, int, bool, error) {
-	if len(masternodes) == 0 {
-		return -1, -1, true, nil
-	}
-	pre := common.Address{}
-	// masternode[0] has chance to create block 1
-	var err error
-	preIndex := -1
-	if header.Number.Uint64() != 0 {
-		pre, err = ecrecover(header, snap.sigcache)
-		if err != nil {
-			return 0, 0, false, err
-		}
-		preIndex = position(masternodes, pre)
-	}
-	curIndex := position(masternodes, cur)
-	log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
-	for i, s := range masternodes {
-		fmt.Printf("%d - %s\n", i, s.String())
-	}
-	if (preIndex+1)%len(masternodes) == curIndex {
-		return preIndex, curIndex, true, nil
-	}
-	return preIndex, curIndex, false, nil
-}
-
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
@@ -449,8 +381,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 			break
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
-		// checkpoint snapshot = checkpoint - gap
-		if (number + c.config.Gap)%c.config.Epoch == 0 {
+		if number%checkpointInterval == 0 {
 			if s, err := loadSnapshot(c.config, c.signatures, c.db, hash); err == nil {
 				log.Trace("Loaded voting snapshot form disk", "number", number, "hash", hash)
 				snap = s
@@ -504,7 +435,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 	c.recents.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
-	if (snap.Number + c.config.Gap)%c.config.Epoch == 0 {
+	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
 		if err = snap.store(c.db); err != nil {
 			return nil, err
 		}
@@ -549,35 +480,24 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 	if err != nil {
 		return err
 	}
-	masternodes := c.GetMasternodes(chain, header)
-	mstring := []string{}
-	for _, m := range masternodes {
-		mstring = append(mstring, m.String())
-	}
-	nstring := []string{}
-	for _, n := range snap.signers() {
-		nstring = append(nstring, n.String())
-	}
 	if _, ok := snap.Signers[signer]; !ok {
-		valid := false
-		for _, m := range masternodes {
-			if m == signer {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			log.Debug("Unauthorized signer found", "block number", number, "signer", signer.String(), "masternodes", mstring, "snapshot from parent block", nstring)
-			return errUnauthorized
-		}
+		return errUnauthorized
 	}
 	for seen, recent := range snap.Recents {
 		if recent == signer {
 			// Signer is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(len(masternodes)/2 + 1); seen > number-limit {
+			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
 				return errUnauthorized
 			}
 		}
+	}
+	// Ensure that the difficulty corresponds to the turn-ness of the signer
+	inturn := snap.inturn(header.Number.Uint64(), signer)
+	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
+		return errInvalidDifficulty
+	}
+	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
+		return errInvalidDifficulty
 	}
 	return nil
 }
@@ -647,51 +567,9 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	return nil
 }
 
-func (c *Clique) UpdateMasternodes(chain consensus.ChainReader, header *types.Header, ms []Masternode) error {
-	number := header.Number.Uint64()
-	log.Trace("take snapshot", "number", number, "hash", header.Hash())
-	// get snapshot
-	snap, err := c.snapshot(chain, number, header.Hash(), nil)
-	if err != nil {
-		return err
-	}
-	currentSigners := snap.signers()
-	proposedSigners := make(map[common.Address]struct{})
-	// count all addresses in ms to be masternode
-	for _, m := range ms {
-		proposedSigners[m.Address] = struct{}{}
-		snap.Signers[m.Address] = struct{}{}
-	}
-	// deactivate current masternodes which aren't in ms
-	for _, s := range currentSigners {
-		if _, ok := proposedSigners[s]; !ok {
-			delete(snap.Signers, s)
-		}
-	}
-	nm := []string{}
-	newSigners := snap.signers()
-	for _, n := range newSigners {
-		nm = append(nm, n.String())
-	}
-	c.recents.Add(snap.Hash, snap)
-	log.Info("New set of masternodes has been updated to snapshot", "number", snap.Number, "hash", snap.Hash, "new masternodes", nm)
-	return nil
-}
-
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, and returns the final block.
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	// set block reward
-	// FIXME: unit Ether could be too plump
-	number := header.Number.Uint64()
-	rCheckpoint := chain.Config().Clique.RewardCheckpoint
-
-	if c.HookReward != nil && number%rCheckpoint == 0 {
-		if err := c.HookReward(chain, state, header); err != nil {
-			return nil, err
-		}
-	}
-
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -734,25 +612,15 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	if err != nil {
 		return nil, err
 	}
-	masternodes := c.GetMasternodes(chain, header)
+	masternodes := []common.Address{}
 	if _, authorized := snap.Signers[signer]; !authorized {
-		valid := false
-		for _, m := range masternodes {
-			if m == signer {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return nil, errUnauthorized
-		}
+		return nil, errUnauthorized
 	}
 	// If we're amongst the recent signers, wait for the next block
 	for seen, recent := range snap.Recents {
 		if recent == signer {
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(masternodes)/2 + 1); number < limit || seen > number-limit {
-				log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 				log.Info("Signed recently, must wait for others")
 				<-stop
 				return nil, nil
@@ -763,7 +631,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(masternodes)/2+1) * wiggleTime
+		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
 		delay += time.Duration(rand.Int63n(int64(wiggle)))
 
 		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
@@ -815,21 +683,4 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 		Service:   &API{chain: chain, clique: c},
 		Public:    false,
 	}}
-}
-
-func (c *Clique) RecoverSigner(header *types.Header) (common.Address, error) {
-	return ecrecover(header, c.signatures)
-}
-
-// Get master nodes over extra data of previous checkpoint block.
-func (c *Clique) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Header, n, e uint64) []common.Address {
-	if preCheckpointHeader == nil {
-		log.Info("Previous checkpoint's header is empty", "block number", n, "epoch", e)
-		return []common.Address{}
-	}
-	masternodes := make([]common.Address, (len(preCheckpointHeader.Extra)-extraVanity-extraSeal)/common.AddressLength)
-	for i := 0; i < len(masternodes); i++ {
-		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
-	}
-	return masternodes
 }
