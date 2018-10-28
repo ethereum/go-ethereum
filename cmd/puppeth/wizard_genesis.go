@@ -60,7 +60,7 @@ func (w *wizard) makeGenesis() {
 	fmt.Println()
 	fmt.Println("Which consensus engine to use? (default = XDPos)")
 	fmt.Println(" 1. Ethash - proof-of-work")
-	fmt.Println(" 2. XDPos - proof-of-authority")
+	fmt.Println(" 2. Clique  - proof-of-authority")
 	fmt.Println(" 3. XDPos - proof-of-stake-voting")
 
 	choice := w.read()
