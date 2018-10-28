@@ -108,6 +108,7 @@ type Peer struct {
 
 	wg       sync.WaitGroup
 	protoErr chan error
+	readErr  chan error
 	closed   chan struct{}
 	disc     chan DiscReason
 
@@ -183,6 +184,7 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 		running:  protomap,
 		created:  mclock.Now(),
 		disc:     make(chan DiscReason),
+		readErr:  make(chan error),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
@@ -190,6 +192,7 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 	return p
 }
 
+//Log return logger
 func (p *Peer) Log() log.Logger {
 	return p.log
 }
@@ -198,11 +201,10 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 	var (
 		writeStart = make(chan struct{}, 1)
 		writeErr   = make(chan error, 1)
-		readErr    = make(chan error, 1)
 		reason     DiscReason // sent to the peer
 	)
-	p.wg.Add(2)
-	go p.readLoop(readErr)
+	p.wg.Add(1)
+	go p.readLoop()
 	go p.pingLoop()
 
 	// Start all protocol handlers.
@@ -221,7 +223,7 @@ loop:
 				break loop
 			}
 			writeStart <- struct{}{}
-		case err = <-readErr:
+		case err = <-p.readErr:
 			if r, ok := err.(DiscReason); ok {
 				remoteRequested = true
 				reason = r
@@ -246,8 +248,8 @@ loop:
 
 func (p *Peer) pingLoop() {
 	ping := time.NewTimer(pingInterval)
-	defer p.wg.Done()
 	defer ping.Stop()
+	defer p.wg.Done()
 	for {
 		select {
 		case <-ping.C:
@@ -262,17 +264,16 @@ func (p *Peer) pingLoop() {
 	}
 }
 
-func (p *Peer) readLoop(errc chan<- error) {
-	defer p.wg.Done()
+func (p *Peer) readLoop() {
 	for {
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
-			errc <- err
+			p.readErr <- err
 			return
 		}
 		msg.ReceivedAt = time.Now()
 		if err = p.handle(msg); err != nil {
-			errc <- err
+			p.readErr <- err
 			return
 		}
 	}
