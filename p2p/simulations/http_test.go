@@ -605,6 +605,7 @@ func TestHTTPSnapshot(t *testing.T) {
 	if err := client.ConnectNode(nodes[0].ID, nodes[1].ID); err != nil {
 		t.Fatalf("error connecting nodes: %s", err)
 	}
+	time.Sleep(time.Second)
 
 	// store some state in the test services
 	states := make([]string, nodeCount)
