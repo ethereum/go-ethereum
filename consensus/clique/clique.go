@@ -579,14 +579,6 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 			}
 		}
 	}
-	 //Ensure that the difficulty corresponds to the turn-ness of the signer
-	inturn := snap.inturn(header.Number.Uint64(), signer)
-	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-		return errInvalidDifficulty
-	}
-	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
-		return errInvalidDifficulty
-	}
 	return nil
 }
 
@@ -760,6 +752,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 		if recent == signer {
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(masternodes)/2 + 1); number < limit || seen > number-limit {
+				log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 				log.Info("Signed recently, must wait for others")
 				<-stop
 				return nil, nil
