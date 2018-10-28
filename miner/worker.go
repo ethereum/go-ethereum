@@ -471,6 +471,10 @@ func (self *worker) commitNewWork() {
 					// first block
 					return
 				}
+				if curIndex == -1 {
+					// you're not allowed to create this block
+					return
+				}
 				h := hop(len(masternodes), preIndex, curIndex)
 				gap := int64(c.GetPeriod()) * int64(h)
 				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
