@@ -232,6 +232,7 @@ func TestUDP_findnodeTimeout(t *testing.T) {
 }
 
 func TestUDP_findnode(t *testing.T) {
+	bucketSizeTest := 16
 	test := newUDPTest(t)
 	defer test.table.Close()
 
@@ -240,8 +241,8 @@ func TestUDP_findnode(t *testing.T) {
 	// take care not to overflow any bucket.
 	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
-	for i := 0; i < bucketSize; i++ {
-		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
+	for i := 0; i < bucketSizeTest; i++ {
+		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSizeTest)
 	}
 	test.table.stuff(nodes.entries)
 
@@ -251,12 +252,12 @@ func TestUDP_findnode(t *testing.T) {
 
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
-	expected := test.table.closest(targetHash, bucketSize)
+	expected := test.table.closest(targetHash, bucketSizeTest)
 
 	waitNeighbors := func(want []*Node) {
 		test.waitPacketOut(func(p *neighbors) {
 			if len(p.Nodes) != len(want) {
-				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSizeTest)
 			}
 			for i := range p.Nodes {
 				if p.Nodes[i].ID != want[i].ID {

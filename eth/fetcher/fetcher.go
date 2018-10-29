@@ -142,7 +142,6 @@ type Fetcher struct {
 	queueChangeHook    func(common.Hash, bool) // Method to call upon adding or deleting a block from the import queue
 	fetchingHook       func([]common.Hash)     // Method to call upon starting a block (eth/61) or header (eth/62) fetch
 	completingHook     func([]common.Hash)     // Method to call upon starting a block body fetch (eth/62)
-	doubleValidateHook func(*types.Block) error
 	signHook           func(*types.Block) error
 	appendM2HeaderHook func(*types.Block) (*types.Block, error)
 }
@@ -654,32 +653,29 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
+			// All ok, quickly propagate to our peers
+			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			go f.broadcastBlock(block, true)
+		case consensus.ErrFutureBlock:
+		case consensus.ErrMissingValidatorSignature:
+			newBlock := block
 			if f.appendM2HeaderHook != nil {
-				if block, err = f.appendM2HeaderHook(block); err != nil {
+				if newBlock, err = f.appendM2HeaderHook(block); err != nil {
 					log.Error("Append m2 to block header fail", "err", err)
 					return
 				}
 			}
-
-			// All ok, quickly propagate to our peers
+			if newBlock.Hash() == block.Hash() {
+				go f.broadcastBlock(block, true)
+				return
+			}
+			block = newBlock
 			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
-
-		case consensus.ErrFutureBlock:
-			// Weird future block, don't fail, but neither propagate
-
 		default:
 			// Something went very wrong, drop the peer
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
-		}
-		// Invoke the dv hook to run double validation layer
-		if f.doubleValidateHook != nil {
-			if err := f.doubleValidateHook(block); err != nil {
-				log.Error("Double validation failed", "err", err, "Discard this block!")
-				return
-			}
 		}
 
 		// Run the actual import and log any issues
@@ -697,6 +693,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
+		go f.broadcastBlock(block, true)
 		go f.broadcastBlock(block, false)
 
 	}()
@@ -754,11 +751,6 @@ func (f *Fetcher) forgetBlock(hash common.Hash) {
 		}
 		delete(f.queued, hash)
 	}
-}
-
-// Bind double validate hook before block imported into chain.
-func (f *Fetcher) SetDoubleValidateHook(doubleValidateHook func(*types.Block) error) {
-	f.doubleValidateHook = doubleValidateHook
 }
 
 // Bind double validate hook before block imported into chain.
