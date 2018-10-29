@@ -13,16 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pborman/uuid"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-
 	colorable "github.com/mattn/go-colorable"
-
+	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -190,7 +187,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 		for _, hex := range []string{topicHex, subTopicOnlyHex, mergedSubTopicHex} {
 			wg.Add(1)
 			ruid := uuid.New()[:8]
-			go func(endpoint string, ruid string) {
+			go func(hex string, endpoint string, ruid string) {
 				for {
 					err := fetchFeed(hex, userHex, endpoint, dataHash, ruid)
 					if err != nil {
@@ -200,7 +197,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 					wg.Done()
 					return
 				}
-			}(endpoint, ruid)
+			}(hex, endpoint, ruid)
 
 		}
 	}
@@ -268,7 +265,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 		for _, url := range []string{manifestWithTopic, manifestWithSubTopic, manifestWithMergedTopic} {
 			wg.Add(1)
 			ruid := uuid.New()[:8]
-			go func(endpoint string, ruid string) {
+			go func(url string, endpoint string, ruid string) {
 				for {
 					err := fetch(url, endpoint, fileHash, ruid)
 					if err != nil {
@@ -278,7 +275,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 					wg.Done()
 					return
 				}
-			}(endpoint, ruid)
+			}(url, endpoint, ruid)
 		}
 
 	}
