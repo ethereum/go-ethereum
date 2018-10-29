@@ -20,7 +20,8 @@ package web3ext
 var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
-	"clique":     clique_JS,
+	"clique":     Clique_JS,
+	"XDPoS":       XDPoS_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -63,7 +64,7 @@ web3._extend({
 });
 `
 
-const clique_JS = `
+const Clique_JS = `
 web3._extend({
 	property: 'clique',
 	methods: [
@@ -108,6 +109,43 @@ web3._extend({
 	]
 });
 `
+
+const XDPoS_JS = `
+web3._extend({
+	property: 'XDPoS',
+	methods: [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'XDPoS_getSnapshot',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'XDPoS_getSnapshotAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getSigners',
+			call: 'XDPoS_getSigners',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSignersAtHash',
+			call: 'XDPoS_getSignersAtHash',
+			params: 1
+		}),
+	],
+	properties: [
+		new web3._extend.Property({
+			name: 'proposals',
+			getter: 'XDPoS_proposals'
+		}),
+	]
+});
+`
+
 
 const Admin_JS = `
 web3._extend({
