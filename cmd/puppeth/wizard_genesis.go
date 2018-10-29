@@ -58,10 +58,10 @@ func (w *wizard) makeGenesis() {
 	}
 	// Figure out which consensus engine to choose
 	fmt.Println()
-	fmt.Println("Which consensus engine to use? (default = XDPos)")
+	fmt.Println("Which consensus engine to use? (default = XDPoS)")
 	fmt.Println(" 1. Ethash - proof-of-work")
-	fmt.Println(" 2. Clique  - proof-of-authority")
-	fmt.Println(" 3. XDPos - proof-of-stake-voting")
+	fmt.Println(" 2. Clique - proof-of-authority")
+	fmt.Println(" 3. XDPoS - proof-of-stake-voting")
 
 	choice := w.read()
 	switch {
@@ -70,7 +70,7 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Ethash = new(params.EthashConfig)
 		genesis.ExtraData = make([]byte, 32)
 
-	case  choice == "2":
+	case choice == "2":
 		// In the case of clique, configure the consensus parameters
 		genesis.Difficulty = big.NewInt(1)
 		genesis.Config.Clique = &params.CliqueConfig{
@@ -110,7 +110,7 @@ func (w *wizard) makeGenesis() {
 
 	case choice == "" || choice == "3":
 		genesis.Difficulty = big.NewInt(1)
-		genesis.Config.XDPoS = &params.XDPosConfig{
+		genesis.Config.XDPoS = &params.XDPoSConfig{
 			Period: 15,
 			Epoch:  30000,
 			Reward: 0,
@@ -161,12 +161,16 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many blocks per epoch? (default = 900)")
 		epochNumber := uint64(w.readDefaultInt(900))
-        genesis.Config.XDPoS.Epoch = genesis.Config.XDPoS.RewardCheckpoint
+		genesis.Config.XDPoS.Epoch = epochNumber
 		genesis.Config.XDPoS.RewardCheckpoint = epochNumber
 
 		fmt.Println()
 		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 450)")
 		genesis.Config.XDPoS.Gap = uint64(w.readDefaultInt(450))
+
+		fmt.Println()
+		fmt.Println("What is foundation wallet address? (default = 0x0000000000000000000000000000000000000068)")
+		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress("0x0000000000000000000000000000000000000068"))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
