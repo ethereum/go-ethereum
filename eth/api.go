@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
-  "bytes"
 	"fmt"
 	"io"
 	"math/big"
@@ -70,23 +69,32 @@ func accountRange(st state.Trie, start *common.Hash, maxResult int) (AccountRang
 
 //block hash or number, tx index, start address hash, max results
 func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, blockNr rpc.BlockNumber, txIndex int, startAddr *common.Hash, maxResults int) (AccountRangeResult, error) {
- zeros := make([]byte, common.HashLength)
+  var statedb *state.StateDB = nil
+  var err error = nil
+  var block = api.eth.blockchain.CurrentBlock()
 
- if (maxResults > 100) {
-   maxResults = 100
- }
+  if len(block.Transactions()) == 0 {
+    parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+    if parent == nil {
+      return AccountRangeResult{}, fmt.Errorf("parent %x not found", block.ParentHash())
+    }
+    statedb, err = api.computeStateDB(parent, defaultTraceReexec)
+    if err != nil {
+      return AccountRangeResult{}, err
+    }
+  } else {
+    _, _, statedb, err = api.computeTxEnv(block.Hash(), len(block.Transactions())-1, 0)
+    if err != nil {
+      return AccountRangeResult{}, err
+    }
+  }
 
- if bytes.Equal(startAddr[:], zeros) {
-   startAddr = nil
- }
+  trie, err := statedb.Database().OpenTrie(block.Header().Root)
+  if err != nil {
+    return AccountRangeResult{}, err
+  }
 
- blockHash := api.eth.blockchain.CurrentBlock().Hash()
- _, _, statedb, err := api.computeTxEnv(blockHash, txIndex, 0)
- if err != nil {
-   return AccountRangeResult{}, err
- }
-
- return accountRange(statedb.GetTrie(), startAddr, maxResults)
+  return accountRange(trie, startAddr, maxResults)
 }
 
 // NewPublicEthereumAPI creates a new Ethereum protocol API for full nodes.
