@@ -136,6 +136,10 @@ func (self *StateDB) Reset(root common.Hash) error {
 	return nil
 }
 
+func (self *StateDB) GetTrie() Trie {
+  return self.trie
+}
+
 func (self *StateDB) AddLog(log *types.Log) {
 	self.journal.append(addLogChange{txhash: self.thash})
 
