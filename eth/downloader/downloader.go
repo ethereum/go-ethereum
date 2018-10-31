@@ -173,7 +173,7 @@ type LightChain interface {
 // BlockChain encapsulates functions required to sync a (full or fast) blockchain.
 type BlockChain interface {
 	Config() *params.ChainConfig
-	UpdateM1()
+	UpdateM1() error
 	LightChain
 
 	// HasBlock verifies a block's presence in the local chain.
@@ -1349,7 +1349,10 @@ func (d *Downloader) processFullSyncContent() error {
 					}
 					// prepare set of masternodes for the next epoch
 					if (inserts[len(inserts)-1].Header.Number.Uint64() % epoch) == (epoch - gap) {
-						d.blockchain.UpdateM1()
+						err := d.blockchain.UpdateM1()
+						if (err != nil) {
+							log.Error("Error when update M1", err)
+						}
 					}
 				}
 				start = end + 1

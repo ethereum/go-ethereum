@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// XDC is the official command-line client for Ethereum.
 package main
 
 import (
@@ -26,13 +25,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/console"
-	validatorContract "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -51,7 +46,7 @@ var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the XDC command line interface")
+	app = utils.NewApp(gitCommit, "the XDCchain command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -151,7 +146,7 @@ func init() {
 	// Initialize the CLI app and start XDC
 	app.Action = XDC
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2018 Xinfin "
+	app.Copyright = "Copyright (c) 2018 Xinfin"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -315,7 +310,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					utils.Fatalf("Failed to start staking: %v", err)
 				}
 				started = true
-				log.Info("Enabled staking  node!!!")
+				log.Info("Enabled staking node!!!")
 			}
 			defer close(core.CheckpointCh)
 			defer close(core.M1Ch)
@@ -329,13 +324,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					}
 					if !ok {
 						if started {
-							log.Info("Only masternode can propose and verify blocks. Cancelling staking  on this node...")
+							log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
 							ethereum.StopStaking()
 							started = false
 							log.Info("Cancelled mining mode!!!")
 						}
 					} else if !started {
-						log.Info("Masternode found. Enabling staking  mode...")
+						log.Info("Masternode found. Enabling staking mode...")
 						// Use a reduced number of threads if requested
 						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 							type threaded interface {
@@ -354,52 +349,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 						log.Info("Enabled staking node!!!")
 					}
 				case <-core.M1Ch:
-					log.Info("It's time to update new set of masternodes for the next epoch...")
-					// get masternodes information from smart contract
-					client, err := ethclient.Dial(stack.IPCEndpoint())
-					if err != nil {
-						utils.Fatalf("Fail to connect IPC: %v", err)
-					}
-					addr := common.HexToAddress(common.MasternodeVotingSMC)
-					validator, err := validatorContract.NewXDCValidator(addr, client)
-					if err != nil {
-						utils.Fatalf("Fail to get validator smc: %v", err)
-					}
-					opts := new(bind.CallOpts)
-					candidates, err := validator.GetCandidates(opts)
-					if err != nil {
-						utils.Fatalf("Can't get list of masternode candidates: %v", err)
-					}
-
-					var ms []XDPoS.Masternode
-					for _, candidate := range candidates {
-						v, err := validator.GetCandidateCap(opts, candidate)
-						if err != nil {
-							log.Warn("Can't get cap of a masternode candidate. Will ignore him", "address", candidate, "error", err)
-						}
-						//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
-						if candidate.String() != "0x0000000000000000000000000000000000000000" {
-							ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v.String()})
-						}
-					}
-					//// order by cap
-					//sort.Slice(ms, func(i, j int) bool {
-					//	return ms[i].Stake > ms[j].Stake
-					//})
-					log.Info("Ordered list of masternode candidates")
-					for _, m := range ms {
-						fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
-					}
-					if len(ms) == 0 {
-						log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
-					} else {
-						// update masternodes
-						log.Info("Updating new set of masternodes")
-						err = ethereum.UpdateMasternodes(ms)
-						if err != nil {
-							utils.Fatalf("Can't update masternodes: %v", err)
-						}
-						log.Info("Masternodes are ready for the next epoch")
+					err := ethereum.BlockChain().UpdateM1()
+					if(err !=nil){
+						log.Error("Error when update M1",err)
 					}
 				}
 			}
