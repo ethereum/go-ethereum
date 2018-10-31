@@ -382,10 +382,10 @@ const (
 type Config struct {
 	CacheDir       string  `toml:"cachedir"`
 	CachesInMem    int	   `toml:"cachesinmem"`
-	CachesOnDisk   int		`toml:"cachesinmem"`
-	DatasetDir     string	`toml:"cachesinmem"`
-	DatasetsInMem  int		`toml:"cachesinmem"`
-	DatasetsOnDisk int		`toml:"cachesinmem"`
+	CachesOnDisk   int	   `toml:"cachesinmem"`
+	DatasetDir     string  `toml:"cachesinmem"`
+	DatasetsInMem  int	   `toml:"cachesinmem"`
+	DatasetsOnDisk int	   `toml:"cachesinmem"`
 	PowMode        Mode
 }
 
