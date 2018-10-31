@@ -1326,31 +1326,28 @@ func (d *Downloader) processFullSyncContent() error {
 		if d.blockchain.Config() != nil && d.blockchain.Config().Posv != nil {
 			epoch := d.blockchain.Config().Posv.Epoch
 			gap := d.blockchain.Config().Posv.Gap
-			length := len(results)
-			start := int(results[0].Header.Number.Uint64() % epoch)
-			end := int(epoch - gap - uint64(start))
-			if end < 0 {
-				end = end + int(epoch)
-			}
-			start = 0
-			for {
-				if end >= length {
-					end = length - 1
-				}
-				inserts := make([]*fetchResult, end-start+1)
-				copy(inserts, results[start:end+1])
-				if len(inserts) > 0 {
+			inserts := []*fetchResult{}
+			for i := 0; i < len(results); i++ {
+				number := results[i].Header.Number.Uint64() % epoch
+				if number == 0 || number == epoch-1 || number == epoch-gap {
+					inserts = append(inserts, results[i])
 					if d.chainInsertHook != nil {
 						d.chainInsertHook(inserts)
 					}
 					if err := d.importBlockResults(inserts); err != nil {
 						return err
 					}
+					inserts = []*fetchResult{}
+				} else {
+					inserts = append(inserts, results[i])
 				}
-				start = end + 1
-				end = end + int(epoch)
-				if start >= length {
-					break
+			}
+			if len(inserts) > 0 {
+				if d.chainInsertHook != nil {
+					d.chainInsertHook(inserts)
+				}
+				if err := d.importBlockResults(inserts); err != nil {
+					return err
 				}
 			}
 		} else {
