@@ -50,7 +50,7 @@ func ParseURI(h http.Handler) http.Handler {
 		uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			RespondError(w, r, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
+			respondError(w, r, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
 			return
 		}
 		if uri.Addr != "" && strings.HasPrefix(uri.Addr, "0x") {
