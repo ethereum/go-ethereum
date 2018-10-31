@@ -29,13 +29,13 @@ var DefaultConfig = Config{
 type Config struct {
 	// Host is the host interface on which to start the dashboard server. If this
 	// field is empty, no dashboard will be started.
-	Host string `toml:",omitempty"`
+	Host string `toml:"host,default=localhost"`
 
 	// Port is the TCP port number on which to start the dashboard server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
-	Port int `toml:",omitempty"`
+	Port int `toml:"port,default=8080"`
 
 	// Refresh is the refresh rate of the data updates, the chartEntry will be collected this often.
-	Refresh time.Duration `toml:",omitempty"`
+	Refresh time.Duration
 }

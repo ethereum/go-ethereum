@@ -54,7 +54,7 @@ See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
 		Flags:     append(consoleFlags, utils.DataDirFlag),
 		Category:  "CONSOLE COMMANDS",
 		Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
+The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.
 This command allows to open a console on a running XDC node.`,
@@ -77,8 +77,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Cons
 // same time.
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
-	node := makeFullNode(ctx)
-	startNode(ctx, node)
+	node,cfg := makeFullNode(ctx)
+	startNode(ctx, node,cfg)
 	defer node.Stop()
 
 	// Attach to the newly started node and start the JavaScript console
@@ -130,6 +130,7 @@ func remoteConsole(ctx *cli.Context) error {
 		}
 		endpoint = fmt.Sprintf("%s/XDC.ipc", path)
 	}
+
 	client, err := dialRPC(endpoint)
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote XDC: %v", err)
@@ -178,8 +179,8 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 // everything down.
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
-	node := makeFullNode(ctx)
-	startNode(ctx, node)
+	node,cfg := makeFullNode(ctx)
+	startNode(ctx, node,cfg)
 	defer node.Stop()
 
 	// Attach to the newly started node and start the JavaScript console

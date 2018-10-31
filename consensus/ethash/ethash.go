@@ -380,12 +380,12 @@ const (
 
 // Config are the configuration parameters of the ethash.
 type Config struct {
-	CacheDir       string
-	CachesInMem    int
-	CachesOnDisk   int
-	DatasetDir     string
-	DatasetsInMem  int
-	DatasetsOnDisk int
+	CacheDir       string  `toml:"cachedir"`
+	CachesInMem    int	   `toml:"cachesinmem"`
+	CachesOnDisk   int		`toml:"cachesinmem"`
+	DatasetDir     string	`toml:"cachesinmem"`
+	DatasetsInMem  int		`toml:"cachesinmem"`
+	DatasetsOnDisk int		`toml:"cachesinmem"`
 	PowMode        Mode
 }
 

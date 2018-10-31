@@ -55,7 +55,6 @@ var (
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
-
 It expects the genesis file as argument.`,
 	}
 	importCommand = cli.Command{
@@ -75,7 +74,6 @@ It expects the genesis file as argument.`,
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
-
 If only one file is used, import error will result in failure. If several files are used,
 processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
@@ -190,7 +188,7 @@ func initGenesis(ctx *cli.Context) error {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
 	// Open an initialise both full and light databases
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0)
 		if err != nil {
@@ -209,7 +207,7 @@ func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
@@ -303,7 +301,7 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
@@ -336,7 +334,7 @@ func importPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
 
 	start := time.Now()
@@ -352,7 +350,7 @@ func exportPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	diskdb := utils.MakeChainDatabase(ctx, stack).(*ethdb.LDBDatabase)
 
 	start := time.Now()
@@ -369,7 +367,7 @@ func copyDb(ctx *cli.Context) error {
 		utils.Fatalf("Source chaindata directory path argument missing")
 	}
 	// Initialize a new chain for the running node to sync into
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
 
 	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
@@ -441,7 +439,7 @@ func removeDB(ctx *cli.Context) error {
 }
 
 func dump(ctx *cli.Context) error {
-	stack := makeFullNode(ctx)
+	stack,_ := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
