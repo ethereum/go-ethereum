@@ -260,7 +260,7 @@ need to configure a miner to process transactions and create new blocks for you.
 #### Running a private miner
 
 Mining on the public Ethereum network is a complex task as it's only feasible using GPUs, requiring
-an OpenCL or CUDA enabled `ethminer` instance. For information on such a setup, please consult the
+an OpenCL or CUDA enabled *`ethminer`* instance. For information on such a setup, please consult the
 [EtherMining subreddit](https://www.reddit.com/r/EtherMining/) and the [Genoil miner](https://github.com/Genoil/cpp-ethereum)
 repository.
 
