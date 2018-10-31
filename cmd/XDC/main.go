@@ -229,13 +229,11 @@ func startNode(ctx *cli.Context, stack *node.Node,cfg XDCConfig) {
 	// Unlock any account specifically requested
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	//passwords := utils.MakePasswordList(ctx)
-	//unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	if(ctx.GlobalIsSet(utils.UnlockedAccountFlag.Name)) {
 		cfg.Account.Unlocks=strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	}
 
- 	if(ctx.GlobalIsSet(utils.PasswordFileFlag.Name)) {
+	if(ctx.GlobalIsSet(utils.PasswordFileFlag.Name)) {
 		cfg.Account.Passwords=utils.MakePasswordList(ctx)
 	}
 
@@ -286,8 +284,7 @@ func startNode(ctx *cli.Context, stack *node.Node,cfg XDCConfig) {
 		}
 	}()
 	// Start auxiliary services if enabled
-	//if ctx.GlobalBool(utils.StakingEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
-	if cfg.MineEnable || ctx.GlobalBool(utils.DeveloperFlag.Name) {
+	if cfg.StakeEnable || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
 		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support staking")
