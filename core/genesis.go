@@ -176,8 +176,9 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 		}
 	}
 
-	// Get the existing chain configuration.
+	// Get the new chain configuration for genesis block.
 	newcfg := genesis.configOrDefault(stored)
+	// Get the existing chain configuration for genesis block.
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
