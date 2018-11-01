@@ -151,6 +151,7 @@ exec tomo $params \
   --identity $IDENTITY \
   --password ./password \
   --port 30303 \
+  --maxpeer 200 \
   --rpc \
   --rpccorsdomain "*" \
   --rpcaddr 0.0.0.0 \
