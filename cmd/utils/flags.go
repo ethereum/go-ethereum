@@ -909,6 +909,64 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
 	lightPeers := ctx.GlobalInt(LightPeersFlag.Name)
 
+	setMaxPeers(ctx, cfg, lightServer, lightPeers, lightClient)
+	if !(lightClient || lightServer) {
+		lightPeers = 0
+	}
+	ethPeers := getEthPeers(cfg, lightPeers, lightClient)
+	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
+
+	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
+		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
+	}
+	if ctx.GlobalIsSet(NoDiscoverFlag.Name) || lightClient {
+		cfg.NoDiscovery = true
+	}
+
+	setDiscoveryV5(lightClient, lightServer, ctx, cfg)
+
+	setNetRestrict(ctx, cfg)
+
+	if ctx.GlobalBool(DeveloperFlag.Name) {
+		// --dev mode can't use p2p networking.
+		cfg.MaxPeers = 0
+		cfg.ListenAddr = ":0"
+		cfg.NoDiscovery = true
+		cfg.DiscoveryV5 = false
+	}
+}
+
+func setNetRestrict(ctx *cli.Context, cfg *p2p.Config) {
+	if netrestrict := ctx.GlobalString(NetrestrictFlag.Name); netrestrict != "" {
+		list, err := netutil.ParseNetlist(netrestrict)
+		if err != nil {
+			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
+		}
+		cfg.NetRestrict = list
+	}
+}
+
+func setDiscoveryV5(lightClient bool, lightServer bool, ctx *cli.Context, cfg *p2p.Config) {
+	// if we're running a light client or server, force enable the v5 peer discovery
+	// unless it is explicitly disabled with --nodiscover note that explicitly specifying
+	// --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
+	forceV5Discovery := (lightClient || lightServer) && !ctx.GlobalBool(NoDiscoverFlag.Name)
+	if ctx.GlobalIsSet(DiscoveryV5Flag.Name) {
+		cfg.DiscoveryV5 = ctx.GlobalBool(DiscoveryV5Flag.Name)
+	} else if forceV5Discovery {
+		cfg.DiscoveryV5 = true
+	}
+}
+
+func getEthPeers(cfg *p2p.Config, lightPeers int, lightClient bool) int {
+	ethPeers := cfg.MaxPeers - lightPeers
+	if lightClient {
+		ethPeers = 0
+	}
+	return ethPeers
+}
+
+func setMaxPeers(ctx *cli.Context, cfg *p2p.Config, lightServer bool, lightPeers int, lightClient bool) {
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
 		if lightServer && !ctx.GlobalIsSet(LightPeersFlag.Name) {
@@ -921,47 +979,6 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		if lightClient && ctx.GlobalIsSet(LightPeersFlag.Name) && cfg.MaxPeers < lightPeers {
 			cfg.MaxPeers = lightPeers
 		}
-	}
-	if !(lightClient || lightServer) {
-		lightPeers = 0
-	}
-	ethPeers := cfg.MaxPeers - lightPeers
-	if lightClient {
-		ethPeers = 0
-	}
-	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
-
-	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
-		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
-	}
-	if ctx.GlobalIsSet(NoDiscoverFlag.Name) || lightClient {
-		cfg.NoDiscovery = true
-	}
-
-	// if we're running a light client or server, force enable the v5 peer discovery
-	// unless it is explicitly disabled with --nodiscover note that explicitly specifying
-	// --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
-	forceV5Discovery := (lightClient || lightServer) && !ctx.GlobalBool(NoDiscoverFlag.Name)
-	if ctx.GlobalIsSet(DiscoveryV5Flag.Name) {
-		cfg.DiscoveryV5 = ctx.GlobalBool(DiscoveryV5Flag.Name)
-	} else if forceV5Discovery {
-		cfg.DiscoveryV5 = true
-	}
-
-	if netrestrict := ctx.GlobalString(NetrestrictFlag.Name); netrestrict != "" {
-		list, err := netutil.ParseNetlist(netrestrict)
-		if err != nil {
-			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
-		}
-		cfg.NetRestrict = list
-	}
-
-	if ctx.GlobalBool(DeveloperFlag.Name) {
-		// --dev mode can't use p2p networking.
-		cfg.MaxPeers = 0
-		cfg.ListenAddr = ":0"
-		cfg.NoDiscovery = true
-		cfg.DiscoveryV5 = false
 	}
 }
 
