@@ -637,7 +637,7 @@ function ApproveSignData(r){
 		return
 	}
 	message := []byte("baz bazonk foo")
-	hash, msg := core.SignHash(message)
+	hash, msg := core.SignTextPlain(message)
 	raw := hexutil.Bytes(message)
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
 
