@@ -48,10 +48,10 @@ type ExternalAPI interface {
 	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// SignData - request to sign the given data (plus prefix)
 	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error)
-	// SignStructuredData - request to sign the given structured data (plus prefix)
-	//SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
+	// SignTypedData - request to sign the given structured data (plus prefix)
+	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
 	// EcRecover - recover public key from given message and signature
-	EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
+	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
@@ -175,7 +175,7 @@ type (
 	SignDataRequest struct {
 		ContentType string                  `json:"content_type"`
 		Address     common.MixedcaseAddress `json:"address"`
-		Rawdata     interface{}           	`json:"raw_data"`
+		Rawdata     interface{}             `json:"raw_data"`
 		Message     string                  `json:"message"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`

@@ -19,11 +19,12 @@ package core
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"math/big"
-	"testing"
 )
 
 var typesStandard = EIP712Types{
@@ -94,18 +95,11 @@ var messageStandard = map[string]interface{}{
 }
 
 var typedData = TypedData{
-	Types: typesStandard,
+	Types:       typesStandard,
 	PrimaryType: primaryType,
-	Domain: domainStandard,
-	Message: messageStandard,
+	Domain:      domainStandard,
+	Message:     messageStandard,
 }
-
-//var typedDataMap = map[string]interface{}{
-//	"types": typesStandard,
-//	"primaryType": primaryType,
-//	"domain": domainStandard,
-//	"message": messageStandard,
-//}
 
 func TestSignData(t *testing.T) {
 	api, control := setup(t)
@@ -149,7 +143,7 @@ func TestSignData(t *testing.T) {
 	// data/typed
 	control <- "Y"
 	control <- "a_long_password"
-	signature, err = api.SignData(context.Background(), DataTyped.Mime, a, typedData.Map())
+	signature, err = api.SignTypedData(context.Background(), a, typedData)
 	if err != nil {
 		t.Fatal(err)
 	}
