@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
@@ -146,7 +147,7 @@ func init() {
 	// Initialize the CLI app and start XDC
 	app.Action = XDC
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2018 XDCchain"
+	app.Copyright = "Copyright (c) 2018 Xinfin"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -284,15 +285,16 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 		}
 	}()
 	// Start auxiliary services if enabled
-	if cfg.StakeEnable || ctx.GlobalBool(utils.DeveloperFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support staking")
-		}
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			utils.Fatalf("Ethereum service not running: %v", err)
-		}
+
+	// Mining only makes sense if a full Ethereum node is running
+	if ctx.GlobalBool(utils.LightModeFlag.Name) || ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+		utils.Fatalf("Light clients do not support staking")
+	}
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		utils.Fatalf("Ethereum service not running: %v", err)
+	}
+	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
 			ok, err := ethereum.ValidateStaker()
@@ -356,8 +358,8 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 					}
 				case <-core.M1Ch:
 					err := ethereum.BlockChain().UpdateM1()
-					if(err !=nil){
-						log.Error("Error when update M1",err)
+					if err != nil {
+						log.Error("Error when update M1", err)
 					}
 				}
 			}
