@@ -5,6 +5,8 @@ RUN apk add --no-cache make gcc musl-dev linux-headers
 ADD . /XDCchain
 RUN cd /XDCchain && make bootnode
 
+RUN chmod +x /XDCchain/build/bin/bootnode
+
 FROM alpine:latest
 
 LABEL maintainer="admin@xinfin.org"
@@ -13,10 +15,10 @@ WORKDIR /XDCchain
 
 COPY --from=builder /XDCchain/build/bin/bootnode /usr/local/bin/bootnode
 
-RUN chmod +x /usr/local/bin/bootnode
+COPY docker/bootnode ./
 
 EXPOSE 30301
 
-ENTRYPOINT ["/usr/local/bin/bootnode"]
+ENTRYPOINT ["./entrypoint.sh"]
 
-CMD ["--help"]
+CMD ["-verbosity", "6", "-nodekey", "bootnode.key", "--addr", ":30301"
