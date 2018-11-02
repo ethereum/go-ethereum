@@ -148,11 +148,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		}
 	}
 	cfg.Account.Passwords = passwords
-	//Apply Bootnodes
-	applyValues(cfg.Bootnodes.Mainnet, &params.MainnetBootnodes)
-	applyValues(cfg.Bootnodes.Testnet, &params.TestnetBootnodes)
 
-	// Apply flags.
+    // Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
