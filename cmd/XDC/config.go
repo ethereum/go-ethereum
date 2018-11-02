@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
@@ -72,7 +73,7 @@ var tomlSettings = toml.Config{
 }
 
 type ethstatsConfig struct {
-	URL string `toml:",omitempty"`
+	URL string
 }
 
 type account struct {
@@ -94,6 +95,8 @@ type XDCConfig struct {
 	Account     account
 	StakeEnable bool
 	Bootnodes   Bootnodes
+	Verbosity   int
+	NAT         string
 }
 
 func loadConfig(file string, cfg *XDCConfig) error {
@@ -123,16 +126,29 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Load defaults.
 	cfg := XDCConfig{
-		Eth:       eth.DefaultConfig,
-		Shh:       whisper.DefaultConfig,
-		Node:      defaultNodeConfig(),
-		Dashboard: dashboard.DefaultConfig,
+		Eth:         eth.DefaultConfig,
+		Shh:         whisper.DefaultConfig,
+		Node:        defaultNodeConfig(),
+		Dashboard:   dashboard.DefaultConfig,
+		StakeEnable: true,
+		Verbosity:   0,
+		NAT:         "",
 	}
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
+	}
+	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
+		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
+	}
+	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
+		ctx.Set(debug.VerbosityFlag.Name, string(cfg.Verbosity))
+	}
+
+	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
+		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
 	// read passwords from enviroment
@@ -149,7 +165,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	}
 	cfg.Account.Passwords = passwords
 
-    // Apply flags.
+	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {

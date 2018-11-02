@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	verbosityFlag = cli.IntFlag{
+	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
 		Value: 3,
@@ -87,7 +87,7 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
+	VerbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 }
@@ -108,7 +108,7 @@ func init() {
 func Setup(ctx *cli.Context) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
+	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
 	log.Root().SetHandler(glogger)
