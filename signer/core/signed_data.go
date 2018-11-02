@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -63,8 +64,8 @@ var (
 )
 
 type ValidatorData struct {
-	Address 	common.Address
-	Message		hexutil.Bytes
+	Address common.Address
+	Message hexutil.Bytes
 }
 
 type TypedData struct {
@@ -86,11 +87,11 @@ type EIP712TypePriority struct {
 type EIP712Data = map[string]interface{}
 
 type EIP712Domain struct {
-	Name              string        	`json:"name"`
-	Version           string        	`json:"version"`
-	ChainId           *big.Int      	`json:"chainId"`
-	VerifyingContract string			`json:"verifyingContract"`
-	Salt              string 			`json:"salt"`
+	Name              string   `json:"name"`
+	Version           string   `json:"version"`
+	ChainId           *big.Int `json:"chainId"`
+	VerifyingContract string   `json:"verifyingContract"`
+	Salt              string   `json:"salt"`
 }
 
 const (
@@ -99,7 +100,7 @@ const (
 	TypeBytes   = "bytes"
 	TypeInt     = "int"
 	TypeString  = "string"
-	TypeUint	= "uint"
+	TypeUint    = "uint"
 )
 
 // Sign receives a request and produces a signature
@@ -139,7 +140,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, re
 //
 // Different types of validation occur.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
-	var req, err= api.determineSignatureFormat(contentType, addr, data)
+	var req, err = api.determineSignatureFormat(contentType, addr, data)
 	if err != nil {
 		return nil, err
 	}
@@ -173,18 +174,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, err
 		}
 		sighash, msg := SignTextValidator(validatorData)
-		fmt.Printf("sighash:%s", sighash)
 		req = &SignDataRequest{Rawdata: validatorData, Message: msg, Hash: sighash, ContentType: mediaType}
-		break
-	case DataTyped.Mime:
-		// Signs EIP-712 conformant typed data
-		// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
-		typedData, err := UnmarshalTypedData(data)
-		if err != nil {
-			return nil, err
-		}
-		sighash, msg := SignDataTyped(typedData)
-		req = &SignDataRequest{Rawdata: typedData, Message: msg, Hash: sighash, ContentType: mediaType}
 		break
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
@@ -222,7 +212,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 
 // SignTextWithValidator signs the given message which can be further recovered
 // with the given validator.
-//
 // hash = keccak256("\x19\x00"${address}${data}).
 func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 	msg := fmt.Sprintf("\x19\x00%s%s", string(validatorData.Address.Bytes()), string(validatorData.Message))
@@ -267,51 +256,33 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 // SignTextPlain is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from. This gives context to the signed message and prevents
 // signing of transactions.
-//
 // hash = keccak256("\x19$Ethereum Signed Message:\n"${message length}${message}).
 func SignTextPlain(data hexutil.Bytes) (hexutil.Bytes, string) {
 	// The letter `E` is \x45 in hex, retrofitting
 	// https://github.com/ethereum/go-ethereum/pull/2940/commits
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), string(data))
 	return crypto.Keccak256([]byte(msg)), msg
-}
-
-// SignDataTyped signs EIP-712 conformant typed data
-// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
-func SignDataTyped(typedData TypedData) (hexutil.Bytes, string) {
-	domainSeparator := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	typedDataHash := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	msg := fmt.Sprintf("\x19\x01%s%s", common.Bytes2Hex(domainSeparator), common.Bytes2Hex(typedDataHash))
-	return crypto.Keccak256(common.Hex2Bytes(msg)), msg
 }
 
 // SignTypedData signs EIP-712 conformant typed data
 // hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
-//func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
-//	domainSeparator := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-//	typedDataHash := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-//	typedDataJson, err := json.Marshal(typedData.Map())
-//	if err != nil {
-//		return nil, err
-//	}
-//	buffer := bytes.Buffer{}
-//	buffer.WriteString("\x19")
-//	buffer.WriteString("\x01")
-//	buffer.WriteString(common.Bytes2Hex(domainSeparator))
-//	buffer.WriteString(common.Bytes2Hex(typedDataHash))
-//	req := &SignDataRequest{
-//		Rawdata: typedDataJson,
-//		Message: buffer.String(),
-//		Hash: crypto.Keccak256(buffer.Bytes()),
-//		ContentType: DataTyped.Mime,
-//	}
-//	signature, err := api.Sign(ctx, addr, req)
-//	if err != nil {
-//		api.UI.ShowError(err.Error())
-//		return nil, err
-//	}
-//	return signature, nil
-//}
+func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
+	domainSeparator := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	typedDataHash := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	_, err := json.Marshal(typedData.Map())
+	if err != nil {
+		return nil, err
+	}
+	msg := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
+	sighash := crypto.Keccak256([]byte(msg))
+	req := &SignDataRequest{Rawdata: typedData.Map(), Message: msg, Hash: sighash, ContentType: DataTyped.Mime}
+	signature, err := api.Sign(ctx, addr, req)
+	if err != nil {
+		api.UI.ShowError(err.Error())
+		return nil, err
+	}
+	return signature, nil
+}
 
 // HashStruct generates the following encoding for the given domain and message:
 // `encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`
@@ -319,7 +290,7 @@ func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) hexu
 	return crypto.Keccak256(typedData.EncodeData(primaryType, data))
 }
 
-// dependencies returns an array of custom types ordered by their hierarchical reference tree
+// Dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
 	includes := func(arr []string, str string) bool {
 		for _, obj := range arr {
@@ -347,7 +318,7 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 	return found
 }
 
-// encodeType generates the following encoding:
+// EncodeType generates the following encoding:
 // `name ‖ "(" ‖ member₁ ‖ "," ‖ member₂ ‖ "," ‖ … ‖ memberₙ ")"`
 //
 // each member is written as `type ‖ " " ‖ name` encodings cascade down and are sorted by name
@@ -496,7 +467,7 @@ func bytesValueOf(_interface interface{}) hexutil.Bytes {
 	case reflect.TypeOf([]uint8{}):
 		return _interface.([]uint8)
 	case reflect.TypeOf(string("")):
-		return common.Hex2Bytes(_interface.(string))
+		return hexutil.Bytes(_interface.(string))
 	default:
 		break
 	}
@@ -507,7 +478,7 @@ func bytesValueOf(_interface interface{}) hexutil.Bytes {
 
 // EcRecover recovers the address associated with the given sig.
 // Only compatible with `text/plain`
-func (api *SignerAPI) EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
+func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
 	// Returns the address for the Account that was used to create the signature.
 	//
 	// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
@@ -561,74 +532,6 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 		Message: messageBytes,
 	}, nil
 }
-
-// UnmarshalTypedData converts the bytes input to typed data
-func UnmarshalTypedData(data interface{}) (TypedData, error) {
-	raw := data.(map[string]interface{})
-
-	var _types, ok = raw["types"].(EIP712Types)
-	if !ok || _types == nil {
-		return TypedData{}, errors.New("types are undefined")
-	}
-	if err := _types.IsValid(); err != nil {
-		return TypedData{}, err
-	}
-
-	if _types["EIP712Domain"] == nil {
-		return TypedData{}, errors.New("domain types are undefined")
-	}
-
-	domain, err := UnmarshalDomain(data)
-	if err != nil {
-		return TypedData{}, err
-	}
-
-	primaryType, ok := raw["primaryType"].(string)
-	if !ok || len(primaryType) == 0 {
-		return TypedData{}, errors.New("primary type is undefined")
-	}
-
-	message, ok := raw["message"].(EIP712Data)
-	if !ok || message == nil {
-		return TypedData{}, errors.New("message is undefined")
-	}
-	return TypedData{
-		Types: _types,
-		PrimaryType: primaryType,
-		Domain: domain,
-		Message: message,
-	}, nil
-}
-
-// UnmarshalDomain converts the bytes input to a domain
-func UnmarshalDomain(data interface{}) (EIP712Domain, error) {
-	raw := data.(map[string]interface{})["domain"].(map[string]interface{})
-
-	chainId := raw["chainId"].(*big.Int)
-	if chainId == big.NewInt(0) {
-		return EIP712Domain{}, errors.New("chainId must be specified according to EIP-155")
-	}
-
-	name, nameOk := raw["name"].(string)
-	version, versionOk := raw["version"].(string)
-	verifyingContract, verifyingContractOk := raw["verifyingContract"].(string)
-	salt, saltOk := raw["salt"].(string)
-	if (!nameOk || len(name) == 0) &&
-		(!versionOk || len(version) == 0) &&
-		(!verifyingContractOk || len(verifyingContract) == 0) &&
-		(!saltOk || len(salt) == 0) {
-		return EIP712Domain{}, errors.New("domain is undefined")
-	}
-
-	return EIP712Domain{
-		Name: name,
-		Version: version,
-		ChainId: chainId,
-		VerifyingContract: verifyingContract,
-		Salt: salt,
-	}, nil
-}
-
 
 // Map is a helper function to generate a map version of the typed data
 func (typedData *TypedData) Map() map[string]interface{} {
@@ -686,7 +589,7 @@ func isStandardTypeStr(encType string) bool {
 	}
 
 	// Dynamic types
-	for _, standardType := range []string {
+	for _, standardType := range []string{
 		TypeBytes,
 		TypeInt,
 		TypeUint,
@@ -712,7 +615,7 @@ func (domain *EIP712Domain) IsValid() error {
 	}
 
 	if len(domain.Name) == 0 && len(domain.Version) == 0 && len(domain.VerifyingContract) == 0 && len(domain.Salt) == 0 {
-		return errors.New("domain undefined")
+		return errors.New("domain is undefined")
 	}
 
 	return nil
