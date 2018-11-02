@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -88,6 +89,8 @@ type ProtocolManager struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
+	whitelist map[uint64]common.Hash
+
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
 	txsyncCh    chan *txsync
@@ -101,7 +104,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkID:   networkID,
@@ -110,6 +113,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		blockchain:  blockchain,
 		chainconfig: config,
 		peers:       newPeerSet(),
+		whitelist:   whitelist,
 		newPeerCh:   make(chan *peer),
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
@@ -307,6 +311,16 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}()
 	}
+
+	// If we have any explicit whitelist block hashes, request them
+	for bn := range pm.whitelist {
+		p.Log().Debug("Requesting whitelist block", "number", bn)
+		if err := p.RequestHeadersByNumber(bn, 1, 0, false); err != nil {
+			p.Log().Error("whitelist request failed", "err", err, "number", bn, "peer", p.id)
+			return err
+		}
+	}
+
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
@@ -452,6 +466,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Filter out any explicitly requested headers, deliver the rest to the downloader
 		filter := len(headers) == 1
 		if filter {
+			// Check for any responses not matching our whitelist
+			if expected, ok := pm.whitelist[headers[0].Number.Uint64()]; ok {
+				actual := headers[0].Hash()
+				if !bytes.Equal(expected.Bytes(), actual.Bytes()) {
+					p.Log().Info("Dropping peer with non-matching whitelist block", "number", headers[0].Number.Uint64(), "hash", actual, "expected", expected)
+					return errors.New("whitelist block mismatch")
+				}
+				p.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", expected)
+			}
+
 			// If it's a potential DAO fork check, validate against the rules
 			if p.forkDrop != nil && pm.chainconfig.DAOForkBlock.Cmp(headers[0].Number) == 0 {
 				// Disable the fork drop timer

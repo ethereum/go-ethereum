@@ -182,6 +182,10 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	WhitelistFlag = cli.StringFlag{
+		Name:  "whitelist",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
+	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  metrics.DashboardEnabledFlag,
@@ -1072,6 +1076,34 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
+func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
+	if ctx.GlobalIsSet(WhitelistFlag.Name) {
+		entries := strings.Split(ctx.String(WhitelistFlag.Name), ",")
+		whitelist := make(map[uint64]common.Hash)
+		for _, entry := range entries {
+			split := strings.SplitN(entry, "=", 2)
+			if len(split) != 2 {
+				Fatalf("invalid whitelist entry: %s", entry)
+			}
+
+			bn, err := strconv.ParseUint(split[0], 0, 64)
+			if err != nil {
+				Fatalf("Invalid whitelist block number %s: %v", split[0], err)
+			}
+
+			hash := common.Hash{}
+			err = hash.UnmarshalText([]byte(split[1]))
+			if err != nil {
+				Fatalf("Invalid whitelist hash %s: %v", split[1], err)
+			}
+
+			whitelist[bn] = hash
+		}
+
+		cfg.Whitelist = whitelist
+	}
+}
+
 // checkExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
@@ -1137,6 +1169,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setWhitelist(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
