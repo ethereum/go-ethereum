@@ -52,7 +52,6 @@ import (
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 	CheckpointCh     = make(chan int)
-	M1Ch             = make(chan int)
 	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
@@ -698,7 +697,7 @@ func (bc *BlockChain) procFutureBlocks() {
 type WriteStatus byte
 
 const (
-	NonStatTy   WriteStatus = iota
+	NonStatTy WriteStatus = iota
 	CanonStatTy
 	SideStatTy
 )
@@ -1192,14 +1191,21 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if i == len(chain)-1 && bc.chainConfig.XDPoS != nil {
+		if bc.chainConfig.XDPoS != nil {
 			// epoch block
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
-				M1Ch <- 1
+				err := bc.UpdateM1()
+				if err != nil {
+					if err == ErrNotXDPoS {
+						log.Crit("Error when update M1 ", "err", err)
+					} else {
+						log.Error("Error when update M1 ", "err", err)
+					}
+				}
 			}
 		}
 	}
@@ -1594,14 +1600,14 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 
 func (bc *BlockChain) UpdateM1() error {
 	if bc.Config().XDPoS == nil {
-		return errors.New("XDPoS not found in config")
+		return ErrNotXDPoS
 	}
 	engine := bc.Engine().(*XDPoS.XDPoS)
 	log.Info("It's time to update new set of masternodes for the next epoch...")
 	// get masternodes information from smart contract
-	client, err := ethclient.Dial(bc.IPCEndpoint)
+	client, err := bc.GetClient()
 	if err != nil {
-		log.Crit("Fail to connect IPC: %v", err)
+		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
 	validator, err := contractValidator.NewXDCValidator(addr, client)
@@ -1613,7 +1619,6 @@ func (bc *BlockChain) UpdateM1() error {
 	if err != nil {
 		return err
 	}
-
 	var ms []XDPoS.Masternode
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
@@ -1627,7 +1632,7 @@ func (bc *BlockChain) UpdateM1() error {
 	}
 	log.Info("Ordered list of masternode candidates")
 	for _, m := range ms {
-		fmt.Printf("address: %s, stake: %s\n", m.Address.String(), m.Stake)
+		log.Info("", "address", m.Address.String(), "stake", m.Stake)
 	}
 	if len(ms) == 0 {
 		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")

@@ -593,7 +593,14 @@ func (self *worker) commitNewWork() {
 		}
 		// prepare set of masternodes for the next epoch
 		if (work.Block.NumberU64() % work.config.XDPoS.Epoch) == (work.config.XDPoS.Epoch - work.config.XDPoS.Gap) {
-			core.M1Ch <- 1
+			err := self.chain.UpdateM1()
+			if err != nil {
+				if err == core.ErrNotXDPoS {
+					log.Crit("Error when update M1 ", "err", err)
+				} else {
+					log.Error("Error when update M1 ", "err", err)
+				}
+			}		
 		}
 	}
 	self.push(work)
