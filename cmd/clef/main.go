@@ -26,8 +26,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -42,9 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/rules"
@@ -330,10 +330,9 @@ func initialize(c *cli.Context) error {
 		// If using the stdioui, we can't do the 'confirm'-flow
 		fmt.Fprintf(logOutput, legalWarning)
 	} else {
-		// Temporarily disabled
-		//if !confirm(legalWarning) {
-		//	return fmt.Errorf("aborted by user")
-		//}
+		if !confirm(legalWarning) {
+			return fmt.Errorf("aborted by user")
+		}
 	}
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(logOutput, log.TerminalFormat(true))))
@@ -556,15 +555,14 @@ func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var password string
 	// If ui is not nil, get the password from ui.
 	if ui != nil {
-		// Temporarily disabled
-		//resp, err := ui.OnInputRequired(core.UserInputRequest{
-		//	Title:      "Master Password",
-		//	Prompt:     "Please enter the password to decrypt the master seed",
-		//	IsPassword: true})
-		//if err != nil {
-		//	return nil, err
-		//}
-		//password = resp.Text
+		resp, err := ui.OnInputRequired(core.UserInputRequest{
+			Title:      "Master Password",
+			Prompt:     "Please enter the password to decrypt the master seed",
+			IsPassword: true})
+		if err != nil {
+			return nil, err
+		}
+		password = resp.Text
 	} else {
 		password = getPassPhrase("Decrypt master seed of clef", false)
 	}
