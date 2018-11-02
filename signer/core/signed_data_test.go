@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"testing"
 )
@@ -77,10 +78,10 @@ var domainStandard = EIP712Domain{
 	"1",
 	big.NewInt(1),
 	"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
-	nil,
+	"",
 }
 
-var dataStandard = map[string]interface{}{
+var messageStandard = map[string]interface{}{
 	"from": map[string]interface{}{
 		"name":   "Cow",
 		"wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
@@ -93,11 +94,18 @@ var dataStandard = map[string]interface{}{
 }
 
 var typedData = TypedData{
-	typesStandard,
-	primaryType,
-	domainStandard,
-	dataStandard,
+	Types: typesStandard,
+	PrimaryType: primaryType,
+	Domain: domainStandard,
+	Message: messageStandard,
 }
+
+//var typedDataMap = map[string]interface{}{
+//	"types": typesStandard,
+//	"primaryType": primaryType,
+//	"domain": domainStandard,
+//	"message": messageStandard,
+//}
 
 func TestSignData(t *testing.T) {
 	api, control := setup(t)
@@ -113,7 +121,7 @@ func TestSignData(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	signature, err := api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
+	signature, err := api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
@@ -121,7 +129,7 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected ErrLocked! %v", err)
 	}
 	control <- "No way"
-	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
+	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if signature != nil {
 		t.Errorf("Expected nil-data, got %x", signature)
 	}
@@ -131,7 +139,7 @@ func TestSignData(t *testing.T) {
 	// text/plain
 	control <- "Y"
 	control <- "a_long_password"
-	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, []byte("EHLO world"))
+	signature, err = api.SignData(context.Background(), TextPlain.Mime, a, hexutil.Encode([]byte("EHLO world")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +149,7 @@ func TestSignData(t *testing.T) {
 	// data/typed
 	control <- "Y"
 	control <- "a_long_password"
-	signature, err = api.SignTypedData(context.Background(), a, typedData)
+	signature, err = api.SignData(context.Background(), DataTyped.Mime, a, typedData.Map())
 	if err != nil {
 		t.Fatal(err)
 	}
