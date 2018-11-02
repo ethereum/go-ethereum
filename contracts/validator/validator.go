@@ -33,11 +33,12 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	minVoterCap := new(big.Int)
 	minVoterCap.SetString("10000000000000000000", 10)
 	// Deposit 50K XDC
-   // Min Voter Cap 10 XDC
+	// Min Voter Cap 10 XDC
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
-	// Voter Delay Withdraw 2 days = 8640 blocks
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(150), big.NewInt(1296000), big.NewIn	t(8640))	if err != nil {
+	// Voter Delay Withdraw 2 days = 86400 blocks
+	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(150), big.NewInt(1296000), big.NewInt(86400))
+	if err != nil {
 		return validatorAddr, nil, err
 	}
 
