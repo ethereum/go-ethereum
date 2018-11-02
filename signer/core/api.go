@@ -47,9 +47,9 @@ type ExternalAPI interface {
 	// SignTransaction request to sign the specified transaction
 	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// SignData - request to sign the given data (plus prefix)
-	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error)
 	// SignStructuredData - request to sign the given structured data (plus prefix)
-	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
+	//SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
 	// EcRecover - recover public key from given message and signature
 	EcRecover(ctx context.Context, contentType string, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
@@ -107,30 +107,6 @@ type Metadata struct {
 	UserAgent string `json:"User-Agent"`
 	Origin    string `json:"Origin"`
 }
-
-type SigFormat struct {
-	Mime        string
-	ByteVersion byte
-}
-
-var (
-	TextValidator = SigFormat{
-		"text/validator",
-		0x00,
-	}
-	DataTyped = SigFormat{
-		"data/typed",
-		0x01,
-	}
-	ApplicationClique = SigFormat{
-		"application/clique",
-		0x02,
-	}
-	TextPlain = SigFormat{
-		"text/plain",
-		0x45,
-	}
-)
 
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
@@ -199,7 +175,7 @@ type (
 	SignDataRequest struct {
 		ContentType string                  `json:"content_type"`
 		Address     common.MixedcaseAddress `json:"address"`
-		Rawdata     hexutil.Bytes           `json:"raw_data"`
+		Rawdata     interface{}           	`json:"raw_data"`
 		Message     string                  `json:"message"`
 		Hash        hexutil.Bytes           `json:"hash"`
 		Meta        Metadata                `json:"meta"`
