@@ -37,6 +37,7 @@ import (
 	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
+	multiSignWalletContract "github.com/ethereum/go-ethereum/contracts/multisigwallet"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -171,7 +172,7 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("What is foundation wallet address? (default = 0x0000000000000000000000000000000000000068)")
-		genesis.Config.Posv.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress("0x0000000000000000000000000000000000000068"))
+		genesis.Config.Posv.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -201,6 +202,37 @@ func (w *wizard) makeGenesis() {
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
 		genesis.Alloc[common.HexToAddress(common.MasternodeVotingSMC)] = core.GenesisAccount{
 			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
+			Code:    code,
+			Storage: storage,
+		}
+
+		fmt.Println()
+		fmt.Println("Which accounts are allowed to confirm in MultiSignWallet?")
+		var owners []common.Address
+		for {
+			if address := w.readAddress(); address != nil {
+				owners = append(owners, *address)
+				continue
+			}
+			if len(owners) > 0 {
+				break
+			}
+		}
+		fmt.Println()
+		fmt.Println("How many require for confirm tx in MultiSignWallet? (default = 2)")
+		required := int64(w.readDefaultInt(2))
+
+		// MultiSigWallet.
+		multiSignWalletAddr, _, err := multiSignWalletContract.DeployMultiSigWallet(transactOpts, contractBackend, owners, big.NewInt(required))
+		if err != nil {
+			fmt.Println("Can't deploy MultiSignWallet SMC")
+		}
+		contractBackend.Commit()
+		code, _ = contractBackend.CodeAt(ctx, multiSignWalletAddr, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, multiSignWalletAddr, nil, f)
+		genesis.Alloc[common.HexToAddress(common.FoudationAddr)] = core.GenesisAccount{
+			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
 		}
@@ -235,6 +267,20 @@ func (w *wizard) makeGenesis() {
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
+		}
+
+		fmt.Println()
+		fmt.Println("What is swap wallet address for fund 55m tomo?")
+		swapAddr := w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
+		baseBalance := big.NewInt(0) // 55m
+		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
+		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
+		subBalance := big.NewInt(0) // 150k
+		subBalance.Add(subBalance, big.NewInt(150*1000))
+		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
+		baseBalance.Sub(baseBalance, subBalance) // 55m - 150k
+		genesis.Alloc[swapAddr] = core.GenesisAccount{
+			Balance: baseBalance,
 		}
 
 	default:
