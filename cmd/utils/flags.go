@@ -653,7 +653,7 @@ func setListenAddress(ctx *cli.Context, cfg *p2p.Config) {
 // setNAT creates a port mapper from command line flags.
 func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	if ctx.GlobalIsSet(NATFlag.Name) {
-		log.Info("NAT is setted","value",ctx.GlobalString(NATFlag.Name))
+		log.Info("NAT is setted", "value", ctx.GlobalString(NATFlag.Name))
 		natif, err := nat.Parse(ctx.GlobalString(NATFlag.Name))
 		if err != nil {
 			Fatalf("Option %s: %v", NATFlag.Name, err)

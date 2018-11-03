@@ -23,10 +23,11 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"os"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -1203,9 +1204,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				err := bc.UpdateM1()
 				if err != nil {
 					if err == ErrNotXDPoS {
-						log.Crit("Error when update M1 ", "err", err)
+						log.Error("Stopping node", "err", err)
+						os.Exit(1)
 					} else {
-						log.Error("Error when update M1 ", "err", err)
+						log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
 					}
 				}
 			}
@@ -1400,7 +1402,7 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.NewTicker(5 * time.Second)
+	futureTimer := time.NewTicker(10 * time.Millisecond)
 	defer futureTimer.Stop()
 	for {
 		select {
