@@ -142,7 +142,7 @@ fi
 echo "dump: $IDENTITY $account $BOOTNODES"
 
 exec XDC $params \
-  --verbosity  \
+  --verbosity $VERBOSITY \
   --datadir $DATA_DIR \
   --keystore $KEYSTORE_DIR \
   --identity $IDENTITY \
