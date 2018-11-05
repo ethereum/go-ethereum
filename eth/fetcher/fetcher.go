@@ -669,8 +669,8 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 				go f.broadcastBlock(block, true)
 				return
 			}
-			block = newBlock
-			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			f.enqueue(peer,newBlock)
+			return
 		default:
 			// Something went very wrong, drop the peer
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
@@ -693,7 +693,6 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
-		go f.broadcastBlock(block, true)
 		go f.broadcastBlock(block, false)
 
 	}()
