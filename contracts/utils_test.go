@@ -218,8 +218,7 @@ func TestDecodeValidatorsHexData(t *testing.T) {
 	if err != nil {
 		t.Error("Fail to decode validator from hex string", err)
 	}
-	c:= []int64{1, 0, 2, 1, 0, 2, 1, 0, 2, 1, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 2, 0, 1, 2, 0, 1, 2, 0, 1, 0, 0}
-	if !isArrayEqual([][]int64{b}, [][]int64{c}) {
+	c := []int64{1, 0, 2, 1, 0, 2, 1, 0, 2, 1, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 2, 0, 1, 2, 0, 1, 2, 0, 1, 0, 0}	if !isArrayEqual([][]int64{b}, [][]int64{c}) {
 		t.Errorf("Fail to get m2 result %v", b)
 	}
 	t.Log("b", b)
