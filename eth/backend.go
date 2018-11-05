@@ -255,7 +255,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			// Check m2 exists on chaindb.
 			// Get secrets and opening at epoc block checkpoint.
 			if number > 0 && number%contracts.EpocBlockRandomize == 0 {
-				var candidates [][]int64
+				var candidates []int64
 				// Get signers from snapshot.
 				snap, err := c.GetSnapshot(eth.blockchain, chain.CurrentHeader())
 				if err != nil {
@@ -270,9 +270,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						if err != nil {
 							log.Error("Fail to get random m2 from contract.", "error", err)
 						}
-						if random != nil {
-							candidates = append(candidates, random)
-						}
+						candidates = append(candidates, random)
 					}
 				}
 
@@ -284,7 +282,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				if len(m2) > 0 {
 					header.Validators = contracts.BuildValidatorFromM2(m2)
 				}
-				log.Debug("list m2", "M2", m2)
 			}
 
 			return nil
