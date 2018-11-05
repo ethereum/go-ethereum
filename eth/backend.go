@@ -200,16 +200,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				log.Error("Cannot get etherbase for append m2 header", "err", err)
 				return block, fmt.Errorf("etherbase missing: %v", err)
 			}
-			// Get m1.
-			snap, err := c.GetSnapshot(eth.blockchain, eth.blockchain.CurrentHeader())
-			if err != nil {
-				return block, fmt.Errorf("can't get snapshot: %v", err)
-			}
 			m1, err := c.RecoverSigner(block.Header())
 			if err != nil {
 				return block, fmt.Errorf("can't get block creator: %v", err)
 			}
-			m2, err := c.GetValidator(m1, snap, eth.blockchain, block.Header())
+			m2, err := c.GetValidator(m1, eth.blockchain, block.Header())
 			if err != nil {
 				return block, fmt.Errorf("can't get block validator: %v", err)
 			}
