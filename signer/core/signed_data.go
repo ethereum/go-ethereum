@@ -175,7 +175,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 		sighash, msg := SignTextValidator(validatorData)
 		req = &SignDataRequest{Rawdata: validatorData, Message: msg, Hash: sighash, ContentType: mediaType}
-		break
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
 		cliqueData, err := hexutil.Decode(data.(string))
@@ -192,7 +191,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 		msg := fmt.Sprintf("clique block %d [0x%x]", header.Number, header.Hash())
 		req = &SignDataRequest{Rawdata: cliqueData, Message: msg, Hash: sighash, ContentType: mediaType}
-		break
 	case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
@@ -202,7 +200,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 		sighash, msg := SignTextPlain(plainData)
 		req = &SignDataRequest{Rawdata: plainData, Message: msg, Hash: sighash, ContentType: mediaType}
-		break
 	default:
 		return nil, fmt.Errorf("content type '%s' not implemented for signing", contentType)
 	}
@@ -382,7 +379,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				bytesValue = append(bytesValue, _byte)
 			}
 			primitiveEncValue = bytesValue
-			break
 		case "bool":
 			primitiveEncType = "uint256"
 			var int64Val int64
@@ -390,11 +386,9 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				int64Val = 1
 			}
 			primitiveEncValue = abi.U256(big.NewInt(int64Val))
-			break
 		case "bytes", "string":
 			primitiveEncType = "bytes32"
 			primitiveEncValue = crypto.Keccak256(bytesValueOf(encValue))
-			break
 		default:
 			if strings.HasPrefix(encType, "bytes") {
 				encTypes = append(encTypes, "bytes32")
@@ -404,15 +398,12 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				for i := 0; i < 32-size; i++ {
 					bytesValue = append(bytesValue, 0)
 				}
-				for _, _byte := range encValue.(hexutil.Bytes) {
-					bytesValue = append(bytesValue, _byte)
-				}
+				bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
 				primitiveEncValue = bytesValue
 			} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 				primitiveEncType = "uint256"
 				primitiveEncValue = abi.U256(encValue.(*big.Int))
 			}
-			break
 		}
 		return primitiveEncType, primitiveEncValue
 	}
@@ -600,11 +591,7 @@ func isStandardTypeStr(encType string) bool {
 	}
 
 	// Reference types
-	if encType[len(encType)-1] == ']' {
-		return true
-	}
-
-	return false
+	return encType[len(encType)-1] == ']'
 }
 
 // IsValid checks if the given domain is valid, i.e. contains at least
