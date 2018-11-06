@@ -27,11 +27,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -228,6 +227,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 }
 
+// if there is one peer in the Kademlia, RequestFromPeers should return it
 func TestRequestFromPeers(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
@@ -243,6 +243,7 @@ func TestRequestFromPeers(t *testing.T) {
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
 
+	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
 		Peer:     protocolsPeer,
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
@@ -265,13 +266,16 @@ func TestRequestFromPeers(t *testing.T) {
 	}
 }
 
+// RequestFromPeers should not return light nodes
 func TestRequestFromPeersWithLightNode(t *testing.T) {
 	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
 
 	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
+
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
+	// setting up a lightnode
 	peer := network.NewPeer(&network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: true,
@@ -279,6 +283,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	}, to)
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
+	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
 		Peer:     protocolsPeer,
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
@@ -293,6 +298,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	)
 
 	ctx := context.Background()
+	// making a request which should return with "no peer found"
 	_, _, err := delivery.RequestFromPeers(ctx, req)
 
 	expectedError := "no peer found"

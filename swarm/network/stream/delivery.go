@@ -235,7 +235,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int, nn bool) bool {
 			id := p.ID()
 			if p.LightNode {
-				log.Trace("Delivery.RequestFromPeers: skip lightnode peer", "peer id", id)
+				// skip light nodes
 				return true
 			}
 			if req.SkipPeer(id.String()) {
