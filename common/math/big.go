@@ -198,6 +198,18 @@ func S256(x *big.Int) *big.Int {
 // Courtesy @karalabe and @chfast
 func Exp(base, exponent *big.Int) *big.Int {
 	result := big.NewInt(1)
+	// some shortcuts
+	cmpToOne := exponent.Cmp(result)
+	if cmpToOne < 0 { // Exponent is zero
+		// x ^ 0 == 1
+		return result
+	} else if base.Sign() == 0 {
+		// 0 ^ y, if y != 0, == 0
+		return result.SetUint64(0)
+	} else if cmpToOne == 0 { // Exponent is one
+		// x ^ 1 == x
+		return result.Set(base)
+	}
 
 	for _, word := range exponent.Bits() {
 		for i := 0; i < wordBits; i++ {
