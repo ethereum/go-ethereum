@@ -337,6 +337,24 @@ func (self *worker) wait() {
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
+			if work.config.Posv != nil {
+				// epoch block
+				if (block.NumberU64() % work.config.Posv.Epoch) == 0 {
+					core.CheckpointCh <- 1
+				}
+				// prepare set of masternodes for the next epoch
+				if (block.NumberU64() % work.config.Posv.Epoch) == (work.config.Posv.Epoch - work.config.Posv.Gap) {
+					err := self.chain.UpdateM1()
+					if err != nil {
+						if err == core.ErrNotPoSV {
+							log.Error("Stopping node", "err", err)
+							os.Exit(1)
+						} else {
+							log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
+						}
+					}
+				}
+			}
 			self.chain.PostChainEvents(events, logs)
 
 			// Insert the block into the set of pending ones to wait for confirmations
@@ -589,24 +607,6 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
-	}
-	if work.config.Posv != nil {
-		// epoch block
-		if (work.Block.NumberU64() % work.config.Posv.Epoch) == 0 {
-			core.CheckpointCh <- 1
-		}
-		// prepare set of masternodes for the next epoch
-		if (work.Block.NumberU64() % work.config.Posv.Epoch) == (work.config.Posv.Epoch - work.config.Posv.Gap) {
-			err := self.chain.UpdateM1()
-			if err != nil {
-				if err == core.ErrNotPoSV {
-					log.Error("Stopping node", "err", err)
-					os.Exit(1)
-				} else {
-					log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
-				}
-			}
-		}
 	}
 	self.push(work)
 }
