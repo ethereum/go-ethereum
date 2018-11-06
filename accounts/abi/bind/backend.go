@@ -82,6 +82,10 @@ type ContractTransactor interface {
 	EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error)
 	// SendTransaction injects the transaction into the pending pool for execution.
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
+	//NetworkID bai add to compatible with spectrum and ethereum
+	NetworkID(ctx context.Context) (*big.Int, error)
+	//HeaderByNumber bai add to get a block's header
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
 // ContractFilterer defines the methods needed to access log events using one-off

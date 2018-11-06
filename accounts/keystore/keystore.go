@@ -491,3 +491,9 @@ func zeroKey(k *ecdsa.PrivateKey) {
 		b[i] = 0
 	}
 }
+
+//Close close accountCache
+//add by bai, fix memory leak
+func (ks *KeyStore) Close() {
+	ks.cache.close()
+}
