@@ -589,7 +589,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 
-	if tx.To() == nil || (tx.To() != nil && tx.To().String() != common.BlockSigners) {
+	if tx.To() != nil && tx.To().String() != common.BlockSigners && tx.To().String() != common.RandomizeSMC {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err

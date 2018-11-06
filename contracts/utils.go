@@ -1,237 +1,195 @@
 package contracts
 
 import (
-	"encoding/json"
-	"github.com/ethereum/go-ethereum/accounts"
+	"bytes"
+	"context"
+	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
+	"github.com/ethereum/go-ethereum/contracts/blocksigner"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+	"math/rand"
+	"testing"
+	"time"
 )
 
-const (
-	HexSignMethod           = "e341eaa4"
-	RewardMasterPercent     = 40
-	RewardVoterPercent      = 50
-	RewardFoundationPercent = 10
+var (
+	acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	acc3Key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	acc4Key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee04aefe388d1e14474d32c45c72ce7b7a")
+	acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+	acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
+	acc3Addr   = crypto.PubkeyToAddress(acc3Key.PublicKey)
+	acc4Addr   = crypto.PubkeyToAddress(acc4Key.PublicKey)
 )
 
-type rewardLog struct {
-	Sign   uint64   `json:"sign"`
-	Reward *big.Int `json:"reward"`
+func getCommonBackend() *backends.SimulatedBackend {
+	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
+	backend := backends.NewSimulatedBackend(genesis)
+	backend.Commit()
+
+	return backend
 }
 
-// Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block) error {
-	if chainConfig.XDPoS != nil {
-		// Find active account.
-		account := accounts.Account{}
-		var wallet accounts.Wallet
-		if wallets := manager.Wallets(); len(wallets) > 0 {
-			wallet = wallets[0]
-			if accts := wallets[0].Accounts(); len(accts) > 0 {
-				account = accts[0]
+func TestSendTxSign(t *testing.T) {
+	accounts := []common.Address{acc2Addr, acc3Addr, acc4Addr}
+	keys := []*ecdsa.PrivateKey{acc2Key, acc3Key, acc4Key}
+	backend := getCommonBackend()
+	signer := types.HomesteadSigner{}
+	ctx := context.Background()
+
+	transactOpts := bind.NewKeyedTransactor(acc1Key)
+	blockSignerAddr, blockSigner, err := blocksigner.DeployBlockSigner(transactOpts, backend, big.NewInt(99))
+	if err != nil {
+		t.Fatalf("Can't get block signer: %v", err)
+	}
+	backend.Commit()
+
+	nonces := make(map[*ecdsa.PrivateKey]int)
+	oldBlocks := make(map[common.Hash]common.Address)
+
+	signTx := func(ctx context.Context, backend *backends.SimulatedBackend, signer types.HomesteadSigner, nonces map[*ecdsa.PrivateKey]int, accKey *ecdsa.PrivateKey, blockNumber *big.Int, blockHash common.Hash) *types.Transaction {
+		tx, _ := types.SignTx(CreateTxSign(blockNumber, blockHash, uint64(nonces[accKey]), blockSignerAddr), signer, accKey)
+		backend.SendTransaction(ctx, tx)
+		backend.Commit()
+		nonces[accKey]++
+
+		return tx
+	}
+
+	// Tx sign for signer.
+	signCount := int64(0)
+	blockHashes := make([]common.Hash, 10)
+	for i := int64(0); i < 10; i++ {
+		blockHash := randomHash()
+		blockHashes[i] = blockHash
+		randIndex := rand.Intn(len(keys))
+		accKey := keys[randIndex]
+		signTx(ctx, backend, signer, nonces, accKey, new(big.Int).SetInt64(i), blockHash)
+		oldBlocks[blockHash] = accounts[randIndex]
+		signCount++
+
+		// Tx sign for validators.
+		for _, key := range keys {
+			if key != accKey {
+				signTx(ctx, backend, signer, nonces, key, new(big.Int).SetInt64(i), blockHash)
+				signCount++
 			}
 		}
+	}
 
-		// Create and send tx to smart contract for sign validate block.
-		nonce := pool.State().GetNonce(account.Address)
-		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
+	for _, blockHash := range blockHashes {
+		signers, err := blockSigner.GetSigners(blockHash)
 		if err != nil {
-			log.Error("Fail to create tx sign", "error", err)
-			return err
+			t.Fatalf("Can't get signers: %v", err)
 		}
 
-		// Add tx signed to local tx pool.
-		pool.AddLocal(txSigned)
-	}
-
-	return nil
-}
-
-// Create tx sign.
-func CreateTxSign(blockNumber *big.Int, blockHash common.Hash, nonce uint64, blockSigner common.Address) *types.Transaction {
-	data := common.Hex2Bytes(HexSignMethod)
-	inputData := append(data, common.LeftPadBytes(blockNumber.Bytes(), 32)...)
-	inputData = append(inputData, common.LeftPadBytes(blockHash.Bytes(), 32)...)
-	tx := types.NewTransaction(nonce, blockSigner, big.NewInt(0), 200000, big.NewInt(0), inputData)
-
-	return tx
-}
-
-// Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
-	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
-	if err != nil {
-		log.Error("Fail get instance of blockSigner", "error", err)
-		return nil, err
-	}
-	opts := new(bind.CallOpts)
-	addrs, err := blockSigner.GetSigners(opts, blockHash)
-	if err != nil {
-		log.Error("Fail get block signers", "error", err)
-		return nil, err
-	}
-
-	return addrs, nil
-}
-
-// Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
-	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
-	startBlockNumber := number - (rCheckpoint * 2) + 1
-	endBlockNumber := startBlockNumber + rCheckpoint - 1
-	signers := make(map[common.Address]*rewardLog)
-
-	for i := startBlockNumber; i <= endBlockNumber; i++ {
-		block := chain.GetHeaderByNumber(i)
-		addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
-		if err != nil {
-			log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-			return nil, err
+		if signers[0].String() != oldBlocks[blockHash].String() {
+			t.Errorf("Tx sign for block signer not match %v - %v", signers[0].String(), oldBlocks[blockHash].String())
 		}
-		// Filter duplicate address.
-		if len(addrs) > 0 {
-			addrSigners := make(map[common.Address]bool)
-			for _, addr := range addrs {
-				if _, ok := addrSigners[addr]; !ok {
-					addrSigners[addr] = true
-				}
-			}
-			for addr := range addrSigners {
-				_, exist := signers[addr]
-				if exist {
-					signers[addr].Sign++
-				} else {
-					signers[addr] = &rewardLog{1, new(big.Int)}
-				}
-				*totalSigner++
+
+		if len(signers) != len(keys) {
+			t.Error("Tx sign for block validators not match")
+		}
+	}
+}
+
+// Generate random string.
+func randomHash() common.Hash {
+	letterBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"
+	var b common.Hash
+	for i := range b {
+		rand.Seed(time.Now().UnixNano())
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return b
+}
+
+// Unit test for get random position of masternodes.
+func TestRandomMasterNode(t *testing.T) {
+	oldSlice := NewSlice(0, 10, 1)
+	newSlice := Shuffle(oldSlice)
+	for _, newNumber := range newSlice {
+		for i, oldNumber := range oldSlice {
+			if oldNumber == newNumber {
+				// Delete find element.
+				oldSlice = append(oldSlice[:i], oldSlice[i+1:]...)
 			}
 		}
 	}
-
-	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
-
-	return signers, nil
+	if len(oldSlice) != 0 {
+		t.Errorf("Test generate random masternode fail %v - %v", oldSlice, newSlice)
+	}
 }
 
-// Calculate reward for signers.
-func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*rewardLog, totalSigner uint64) (map[common.Address]*big.Int, error) {
-	resultSigners := make(map[common.Address]*big.Int)
-	// Add reward for signers.
-	if totalSigner > 0 {
-		for signer, rLog := range signers {
-			// Add reward for signer.
-			calcReward := new(big.Int)
-			calcReward.Div(chainReward, new(big.Int).SetUint64(totalSigner))
-			calcReward.Mul(calcReward, new(big.Int).SetUint64(rLog.Sign))
-			rLog.Reward = calcReward
-
-			resultSigners[signer] = calcReward
-		}
-	}
-	jsonSigners, err := json.Marshal(signers)
-	if err != nil {
-		log.Error("Fail to parse json signers", "error", err)
-		return nil, err
-	}
-	log.Info("Signers data", "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
-
-	return resultSigners, nil
+func TestEncryptDecrypt(t *testing.T) {
+	//byteInteger := common.LeftPadBytes([]byte(new(big.Int).SetInt64(4).String()), 32)
+	randomByte := RandStringByte(32)
+	encrypt := Encrypt(randomByte, new(big.Int).SetInt64(4).String())
+	decrypt := Decrypt(randomByte, encrypt)
+	t.Log("Encrypt", encrypt, "Test", string(randomByte), "Decrypt", decrypt, "trim", string(bytes.TrimLeft([]byte(decrypt), "\x00")))
 }
 
-// Get candidate owner by address.
-func GetCandidatesOwnerBySigner(validator *contractValidator.XDCValidator, signerAddr common.Address) common.Address {
-	owner := signerAddr
-	opts := new(bind.CallOpts)
-	owner, err := validator.GetCandidateOwner(opts, signerAddr)
-	if err != nil {
-		log.Error("Fail get candidate owner", "error", err)
-		return owner
+func isArrayEqual(a [][]int64, b [][]int64) bool {
+	if len(a) != len(b) {
+		return false
 	}
-
-	return owner
-}
-
-// Calculate reward for holders.
-func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.XDCValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) error {
-	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
-	if err != nil {
-		return err
-	}
-	if len(rewards) > 0 {
-		for holder, reward := range rewards {
-			state.AddBalance(holder, reward)
-		}
-	}
-	return nil
-}
-
-// Get reward balance rates for master node, founder and holders.
-func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.XDCValidator) (map[common.Address]*big.Int, error) {
-	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
-	balances := make(map[common.Address]*big.Int)
-	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardMasterPercent))
-	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
-	balances[owner] = rewardMaster
-	// Get voters for masternode.
-	opts := new(bind.CallOpts)
-	voters, err := validator.GetVoters(opts, masterAddr)
-	if err != nil {
-		log.Error("Fail to get voters", "error", err)
-		return nil, err
-	}
-
-	if len(voters) > 0 {
-		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(RewardVoterPercent))
-		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
-		totalCap := new(big.Int)
-		// Get voters capacities.
-		voterCaps := make(map[common.Address]*big.Int)
-		for _, voteAddr := range voters {
-			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
-			if err != nil {
-				log.Error("Fail to get vote capacity", "error", err)
-				return nil, err
-			}
-
-			totalCap.Add(totalCap, voterCap)
-			voterCaps[voteAddr] = voterCap
-		}
-		if totalCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-			for addr, voteCap := range voterCaps {
-				// Only valid voter has cap > 0.
-				if voteCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-					rcap := new(big.Int).Mul(totalVoterReward, voteCap)
-					rcap = new(big.Int).Div(rcap, totalCap)
-					if balances[addr] != nil {
-						balances[addr].Add(balances[addr], rcap)
-					} else {
-						balances[addr] = rcap
-					}
-				}
+	for i, vs := range a {
+		for j, v := range vs {
+			if v != b[i][j] {
+				return false
 			}
 		}
 	}
+	return true
+}
 
-	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(RewardFoundationPercent))
-	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
-	balances[foudationWalletAddr] = foudationReward
-
-	jsonHolders, err := json.Marshal(balances)
-	if err != nil {
-		log.Error("Fail to parse json holders", "error", err)
-		return nil, err
+// Unit test for
+func TestGenM2FromRandomize(t *testing.T) {
+	var a []int64
+	for i := 0; i <= 10; i++ {
+		rand.Seed(time.Now().UTC().UnixNano())
+		a = append(a, int64(rand.Intn(9999)))
 	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
+	b, err := GenM2FromRandomize(a, common.MaxMasternodes)
+	t.Log("randomize", b, "len", len(b))
+	if err != nil {
+		t.Error("Fail to test gen m2 for randomize.", err)
+	}
+	// Test Permutation Without Fixed-point.
+	M1List := NewSlice(int64(0), common.MaxMasternodes, 1)
+	for i, m1 := range M1List {
+		if m1 == b[i] {
+			t.Errorf("Error check Permutation Without Fixed-point %v - %v - %v", i, b[i], a)
+		}
+	}
+}
 
-	return balances, nil
+// Unit test for validator m2.
+func TestBuildValidatorFromM2(t *testing.T) {
+	a := []int64{84, 58, 27, 96, 127, 60, 136, 20, 121, 31, 87, 85, 40, 120, 149, 109, 141, 145, 11, 110, 147, 35, 76, 46, 34, 108, 72, 103, 102, 12, 23, 47, 70, 86, 125, 112, 128, 13, 130, 98, 126, 62, 132, 111, 134, 6, 106, 67, 24, 91, 101, 50, 94, 43, 77, 73, 129, 71, 51, 10, 92, 29, 80, 95, 33, 100, 124, 75, 38, 133, 79, 83, 61, 36, 122, 99, 16, 28, 18, 116, 140, 97, 119, 82, 148, 48, 56, 32, 93, 107, 69, 68, 123, 81, 22, 137, 25, 115, 44, 8, 42, 131, 143, 17, 55, 89, 9, 15, 19, 59, 146, 54, 5, 30, 41, 144, 117, 1, 104, 49, 105, 45, 88, 78, 74, 135, 0, 21, 57, 3, 66, 52, 63, 138, 4, 114, 37, 118, 14, 2, 26, 7, 65, 139, 39, 64, 90, 142, 53, 113}
+	b := BuildValidatorFromM2(a)
+	c := ExtractValidatorsFromBytes(b)
+	if !isArrayEqual([][]int64{a}, [][]int64{c}) {
+		t.Errorf("Fail to get m2 result %v", b)
+	}
+}
+
+// Unit test for decode validator string data.
+func TestDecodeValidatorsHexData(t *testing.T) {
+	a := "0x000000310000003000000032000000310000003000000032000000310000003000000032000000310000003000000031000000320000003000000031000000320000003000000031000000320000003000000030000000310000003200000030000000310000003200000030000000310000003200000030000000300000003100000032000000300000003100000032000000300000003100000032000000300000003200000030000000310000003200000030000000310000003200000030000000310000003000000030"
+	b, err := DecodeValidatorsHexData(a)
+	if err != nil {
+		t.Error("Fail to decode validator from hex string", err)
+	}
+	c := []int64{1, 0, 2, 1, 0, 2, 1, 0, 2, 1, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 2, 0, 1, 2, 0, 1, 2, 0, 1, 0, 0}
+	if !isArrayEqual([][]int64{b}, [][]int64{c}) {
+		t.Errorf("Fail to get m2 result %v", b)
+	}
+	t.Log("b", b)
 }
