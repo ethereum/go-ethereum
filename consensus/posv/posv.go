@@ -652,7 +652,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 		}
 
 		// verify validator
-		assignedValidator, err := c.GetValidator(creator, snap, chain, header)
+		assignedValidator, err := c.GetValidator(creator, chain, header)
 		if err != nil {
 			return err
 		}
@@ -664,7 +664,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	return nil
 }
 
-func (c *Posv) GetValidator(creator common.Address, snap *Snapshot, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
+func (c *Posv) GetValidator(creator common.Address, chain consensus.ChainReader, header *types.Header) (common.Address, error) {
 	epoch := c.config.Epoch
 	no := header.Number.Uint64()
 	cpNo := no
