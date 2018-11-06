@@ -25,7 +25,8 @@ import (
 // when it is serving Retrieve requests.
 func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		DoServeRetrieve: true,
+		Retrieval: RetrievalClientOnly,
+		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(t, registryOptions)
 	defer teardown()
@@ -63,7 +64,8 @@ func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 // requests are disabled
 func TestLigthnodeRetrieveRequestWithoutRetrieve(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		DoServeRetrieve: false,
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(t, registryOptions)
 	defer teardown()
@@ -106,7 +108,8 @@ func TestLigthnodeRetrieveRequestWithoutRetrieve(t *testing.T) {
 // when syncing is enabled.
 func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		DoSync: true,
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingRegisterOnly,
 	}
 	tester, _, _, teardown, err := newStreamerTester(t, registryOptions)
 	defer teardown()
@@ -150,7 +153,8 @@ func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 // when syncing is disabled.
 func TestLigthnodeRequestSubscriptionWithoutSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		DoSync: false,
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(t, registryOptions)
 	defer teardown()

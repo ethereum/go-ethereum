@@ -83,6 +83,8 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingRegisterOnly,
 				SkipCheck: skipCheck,
 			})
 			bucket.Store(bucketKeyRegistry, r)

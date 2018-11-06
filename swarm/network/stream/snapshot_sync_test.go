@@ -165,8 +165,8 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
 	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-		DoSync:          true,
-		DoServeRetrieve: true,
+		Retrieval:       RetrievalDisabled,
+		Syncing:         SyncingAutoSubscribe,
 		SyncUpdateDelay: 3 * time.Second,
 	})
 
@@ -360,8 +360,8 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				DoServeRetrieve: true,
-				DoSync:          true,
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingRegisterOnly,
 			})
 			bucket.Store(bucketKeyRegistry, r)
 
