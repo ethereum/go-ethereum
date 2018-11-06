@@ -62,12 +62,12 @@ const (
 )
 
 const (
-	//Retrieval disabled
+	//Retrieval disabled. Used mostly for tests to isolate syncing features (i.e. syncing only)
 	RetrievalDisabled RetrievalOption = iota
 	//Only the client side of the retrieve request is registered.
 	//(light nodes do not serve retrieve requests)
 	//once the client is registered, subscription to retrieve request stream is always sent
-	RetrievalClientOn
+	RetrievalClientOnly
 	//Both client and server funcs are registered, subscribe sent automatically
 	RetrievalEnabled
 )
