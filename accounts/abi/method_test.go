@@ -28,25 +28,23 @@ const methoddata = `
 	{ "type" : "function", "name" : "transfer", "constant" : false, "inputs" : [ { "name" : "from", "type" : "address" }, { "name" : "to", "type" : "address" }, { "name" : "value", "type" : "uint256" } ], "outputs" : [ { "name" : "success", "type" : "bool" } ]  }
 ]`
 
-
 func TestMethodString(t *testing.T) {
 	var table = []struct {
-		method   string
+		method      string
 		expectation string
 	}{
 		{
-			method: "balance",
-			expectation:"function balance() constant returns()",
+			method:      "balance",
+			expectation: "function balance() constant returns()",
 		},
 		{
-			method: "send",
-			expectation:"function send(uint256 amount) returns()",
+			method:      "send",
+			expectation: "function send(uint256 amount) returns()",
 		},
 		{
-			method: "transfer",
-			expectation:"function transfer(address from, address to, uint256 value) returns(bool success)",
+			method:      "transfer",
+			expectation: "function transfer(address from, address to, uint256 value) returns(bool success)",
 		},
-
 	}
 
 	abi, err := JSON(strings.NewReader(methoddata))
@@ -56,8 +54,8 @@ func TestMethodString(t *testing.T) {
 
 	for _, test := range table {
 		got := abi.Methods[test.method].String()
-			if got != test.expectation {
-				t.Errorf("expected string to be %s, got %s", test.expectation, got)
-			}
+		if got != test.expectation {
+			t.Errorf("expected string to be %s, got %s", test.expectation, got)
+		}
 	}
 }

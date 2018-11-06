@@ -123,8 +123,8 @@ func TestEventString(t *testing.T) {
 			{ "type" : "event", "name" : "Transfer", "inputs": [{ "name": "from", "type": "address", "indexed": true }, { "name": "to", "type": "address", "indexed": true }, { "name": "value", "type": "uint256" }] }
 			]`,
 			expectations: map[string]string{
-				"Balance": "event Balance(uint256 in)",
-				"Check":   "event Check(address t, uint256 b)",
+				"Balance":  "event Balance(uint256 in)",
+				"Check":    "event Check(address t, uint256 b)",
 				"Transfer": "event Transfer(address indexed from, address indexed to, uint256 value)",
 			},
 		},
