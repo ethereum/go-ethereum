@@ -669,7 +669,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 				go f.broadcastBlock(block, true)
 				return
 			}
-			f.enqueue(peer,newBlock)
+			f.enqueue(peer, newBlock)
 			return
 		default:
 			// Something went very wrong, drop the peer
