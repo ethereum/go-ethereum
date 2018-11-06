@@ -306,6 +306,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 		t.Fatalf("expected '%v', got %v", expectedError, err)
 	}
 }
+
 func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	tester, streamer, localStore, teardown, err := newStreamerTester(t, &RegistryOptions{
 		DoServeRetrieve: true,
