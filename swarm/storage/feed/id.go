@@ -92,11 +92,7 @@ func (u *ID) binaryGet(serializedData []byte) error {
 	}
 	cursor += feedLength
 
-	if err := u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength]); err != nil {
-		return err
-	}
-
-	return nil
+	return u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength])
 }
 
 // FromValues deserializes this instance from a string key-value store

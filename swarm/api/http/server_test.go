@@ -292,7 +292,7 @@ func TestBzzFeed(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
