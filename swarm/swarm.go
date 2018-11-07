@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
@@ -197,10 +198,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		Retrieval:       retrieval,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
-	}
-	if config.LightNodeEnabled {
-		registryOptions.DoSync = false
-		registryOptions.DoRetrieve = false
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, registryOptions, self.swap)
 
