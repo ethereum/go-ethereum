@@ -313,12 +313,12 @@ func (s *stateSync) loop() (err error) {
 				s.d.dropPeer(req.peer.id)
 			}
 			// Process all the received blobs and check for stale delivery
-			numDelivered, err := s.process(req)
+			delivered, err := s.process(req)
 			if err != nil {
 				log.Warn("Node data write error", "err", err)
 				return err
 			}
-			req.peer.SetNodeDataIdle(numDelivered)
+			req.peer.SetNodeDataIdle(delivered)
 		}
 	}
 	return nil
@@ -403,7 +403,7 @@ func (s *stateSync) fillTasks(n int, req *stateReq) {
 // and any error that occurred
 func (s *stateSync) process(req *stateReq) (int, error) {
 	// Collect processing stats and update progress if valid data was received
-	duplicate, unexpected, successfull := 0, 0, 0
+	duplicate, unexpected, successful := 0, 0, 0
 
 	defer func(start time.Time) {
 		if duplicate > 0 || unexpected > 0 {
@@ -420,13 +420,13 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 			s.numUncommitted++
 			s.bytesUncommitted += len(blob)
 			progress = progress || prog
-			successfull++
+			successful++
 		case trie.ErrNotRequested:
 			unexpected++
 		case trie.ErrAlreadyProcessed:
 			duplicate++
 		default:
-			return successfull, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
+			return successful, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		}
 		if _, ok := req.tasks[hash]; ok {
 			delete(req.tasks, hash)
@@ -444,12 +444,12 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 		// If we've requested the node too many times already, it may be a malicious
 		// sync where nobody has the right data. Abort.
 		if len(task.attempts) >= npeers {
-			return successfull, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.attempts), npeers)
+			return successful, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.attempts), npeers)
 		}
 		// Missing item, place into the retry queue.
 		s.tasks[hash] = task
 	}
-	return successfull, nil
+	return successful, nil
 }
 
 // processNodeData tries to inject a trie node data blob delivered from a remote
