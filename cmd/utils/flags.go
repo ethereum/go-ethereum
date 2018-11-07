@@ -197,6 +197,11 @@ var (
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
 		Value: "full",
 	}
+	TrieTimeoutFlag = cli.DurationFlag{
+		Name:  "trietimeout",
+		Usage: `Time limit after which to flush the current in-memory trie to disk (default: 10s)`,
+		Value: eth.DefaultConfig.TrieTimeout,
+	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
@@ -1588,7 +1593,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Disabled:       ctx.GlobalString(GCModeFlag.Name) == "archive",
 		TrieCleanLimit: eth.DefaultConfig.TrieCleanCache,
 		TrieDirtyLimit: eth.DefaultConfig.TrieDirtyCache,
-		TrieTimeLimit:  eth.DefaultConfig.TrieTimeout,
+		TrieTimeLimit:  ctx.GlobalDuration(TrieTimeoutFlag.Name),
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
 		cache.TrieCleanLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
