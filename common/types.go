@@ -243,3 +243,38 @@ func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
 func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(a[:])), nil
 }
+
+// Extract validators from byte array.
+func RemoveItemFromArray(array []Address, items []Address) []Address {
+	if items == nil || len(items) == 0 {
+		return array
+	}
+	for i, value := range array {
+		for _, item := range items {
+			if value == item {
+				array = append(array[:i], array[i+1:]...)
+			}
+		}
+	}
+	return array
+}
+
+// Extract validators from byte array.
+func ExtractAddressToBytes(penalties []Address) []byte {
+	data := []byte{}
+	for _, signer := range penalties {
+		data = append(data, signer[:]...)
+	}
+	return data
+}
+
+func ExtractAddressFromBytes(bytePenalties []byte) []Address {
+	if bytePenalties != nil && len(bytePenalties) < AddressLength {
+		return []Address{}
+	}
+	penalties := make([]Address, len(bytePenalties)/AddressLength)
+	for i := 0; i < len(penalties); i++ {
+		copy(penalties[i][:], bytePenalties[i*AddressLength:])
+	}
+	return penalties
+}

@@ -11,4 +11,5 @@ const (
 	EpocBlockOpening        = 850
 	EpocBlockRandomize      = 900
 	MaxMasternodes          = 150
+	LimitPenaltyEpoch  = 4
 )
