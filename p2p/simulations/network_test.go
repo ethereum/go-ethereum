@@ -38,18 +38,18 @@ func init() {
 func TestSnapshotExplicit(t *testing.T) {
 	// create simulation network with 20 testService nodes
 	adapter := adapters.NewSimAdapter(adapters.Services{
-		"test":    newTestService,
-		"placebo": newPlaceboService,
+		"dummy":  newDummyService,
+		"dummy2": newDummy2Service,
 	})
 	network := NewNetwork(adapter, &NetworkConfig{
-		DefaultService: "test",
+		DefaultService: "dummy",
 	})
 	defer network.Shutdown()
 	nodeCount := 3
 	ids := make([]enode.ID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		conf := adapters.RandomNodeConfig()
-		conf.Services = []string{"test", "placebo"}
+		conf.Services = []string{"dummy", "dummy2"}
 		node, err := network.NewNodeWithConfig(conf)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
@@ -59,12 +59,44 @@ func TestSnapshotExplicit(t *testing.T) {
 		}
 		ids[i] = node.ID()
 	}
-
-	network.Connect(ids[0], ids[1])
-	network.Connect(ids[0], ids[2])
-	time.Sleep(time.Second)
-	network.Disconnect(ids[0], ids[2])
-	time.Sleep(time.Second)
+	var eventsDone = make(chan struct{})
+	count := 2
+	events := make(chan *Event)
+	sub := network.Events().Subscribe(events)
+	go func() {
+		for event := range events {
+			if event.Type == EventTypeConn && !event.Control {
+				count--
+				if count == 0 {
+					eventsDone <- struct{}{}
+					return
+				}
+			}
+		}
+	}()
+	err := network.Connect(ids[0], ids[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = network.Connect(ids[0], ids[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-eventsDone
+	go func() {
+		defer sub.Unsubscribe()
+		for event := range events {
+			if event.Type == EventTypeConn && !event.Control {
+				eventsDone <- struct{}{}
+				return
+			}
+		}
+	}()
+	err = network.Disconnect(ids[0], ids[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-eventsDone
 
 	snap, err := network.Snapshot()
 	if err != nil {
@@ -74,7 +106,7 @@ func TestSnapshotExplicit(t *testing.T) {
 		t.Fatalf("expected one connect object")
 	}
 	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "test" && svc != "placebo" {
+		if svc != "dummy" && svc != "dummy2" {
 			t.Fatalf("unexpected service %s", svc)
 		}
 	}
@@ -84,7 +116,7 @@ func TestSnapshotExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "test" && svc != "placebo" && svc != "bzz" {
+		if svc != "dummy" && svc != "dummy2" && svc != "bzz" {
 			t.Fatalf("unexpected service %s", svc)
 		}
 	}
@@ -94,7 +126,7 @@ func TestSnapshotExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "placebo" && svc != "bzz" {
+		if svc != "dummy" && svc != "dummy2" && svc != "bzz" {
 			t.Fatalf("unexpected service %s", svc)
 		}
 	}
@@ -214,26 +246,33 @@ func TestNetworkSimulation(t *testing.T) {
 	}
 }
 
-type placeboService struct {
+type dummyService struct {
 }
 
-func newPlaceboService(ctx *adapters.ServiceContext) (node.Service, error) {
-	return &placeboService{}, nil
+type dummy2Service struct {
+	dummyService
 }
 
-func (p *placeboService) APIs() []rpc.API {
+func newDummyService(ctx *adapters.ServiceContext) (node.Service, error) {
+	return &dummyService{}, nil
+}
+func newDummy2Service(ctx *adapters.ServiceContext) (node.Service, error) {
+	return &dummy2Service{}, nil
+}
+
+func (p *dummyService) APIs() []rpc.API {
 	return []rpc.API{}
 }
 
-func (p *placeboService) Protocols() []p2p.Protocol {
+func (p *dummyService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{}
 }
 
-func (p *placeboService) Start(server *p2p.Server) error {
+func (p *dummyService) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (p *placeboService) Stop() error {
+func (p *dummyService) Stop() error {
 	return nil
 }
 
