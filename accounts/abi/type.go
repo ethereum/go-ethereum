@@ -183,27 +183,69 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	if t.T == SliceTy || t.T == ArrayTy {
-		var packed []byte
+	switch t.T {
+	case SliceTy, ArrayTy:
+		var ret []byte
 
+		if t.requiresLengthPrefix() {
+			// append length
+			ret = append(ret, packNum(reflect.ValueOf(v.Len()))...)
+		}
+
+		// calculate offset if any
+		offset := 0
+		offsetReq := offsetRequired(*t.Elem)
+		if offsetReq {
+			offset = getOffset(*t.Elem) * v.Len()
+		}
+
+		var tail []byte
 		for i := 0; i < v.Len(); i++ {
 			val, err := t.Elem.pack(v.Index(i))
 			if err != nil {
 				return nil, err
 			}
-			packed = append(packed, val...)
+
+			if !offsetReq {
+				ret = append(ret, val...)
+				continue
+			}
+
+			ret = append(ret, packNum(reflect.ValueOf(offset))...)
+			offset += len(val)
+			tail = append(tail, val...)
 		}
-		if t.T == SliceTy {
-			return packBytesSlice(packed, v.Len()), nil
-		} else if t.T == ArrayTy {
-			return packed, nil
-		}
+
+		return append(ret, tail...), nil
+	default:
+		return packElement(t, v), nil
 	}
-	return packElement(t, v), nil
 }
 
 // requireLengthPrefix returns whether the type requires any sort of length
 // prefixing.
 func (t Type) requiresLengthPrefix() bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy
+}
+
+// offsetRequired returns true if the type is considered dynamic
+func offsetRequired(t Type) bool {
+	// dynamic types
+	// array is also a dynamic type if the array type is dynamic
+	if t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && offsetRequired(*t.Elem)) {
+		return true
+	}
+
+	return false
+}
+
+// getOffset returns the offset to be added for t
+func getOffset(t Type) int {
+	// if it is an array and there are no dynamic types
+	// then the array is static type
+	if t.T == ArrayTy && !offsetRequired(*t.Elem) {
+		return 32 * t.Size
+	}
+
+	return 32
 }
