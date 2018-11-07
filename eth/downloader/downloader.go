@@ -740,6 +740,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 					return 0, errBadPeer
 				}
 				start = check
+				hash = h
 
 			case <-timeout:
 				p.log.Debug("Waiting for search header timed out", "elapsed", ttl)
