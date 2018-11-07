@@ -142,6 +142,8 @@ fi
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
 
+set -x
+
 exec XDC $params \
   --verbosity $VERBOSITY \
   --datadir $DATA_DIR \
