@@ -271,7 +271,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 									}
 								}
 							}
-						}
+							} else {
+								break
 					}
 				}
 				return penSigners, nil
