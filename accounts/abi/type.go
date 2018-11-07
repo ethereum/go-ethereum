@@ -228,7 +228,7 @@ func (t Type) requiresLengthPrefix() bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy
 }
 
-// getOffset returns the offset to be added
+// getOffset returns the offset to be added for t
 func getOffset(t Type) int {
 	if t.T == ArrayTy {
 		return 32 * t.Size
