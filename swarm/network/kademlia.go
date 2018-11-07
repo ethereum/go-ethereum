@@ -261,7 +261,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 		// found among live peers, do nothing
 		return v
 	})
-	if ins {
+	if ins && !p.BzzPeer.LightNode {
 		a := newEntry(p.BzzAddr)
 		a.conn = p
 		// insert new online peer into addrs
@@ -329,14 +329,18 @@ func (k *Kademlia) Off(p *Peer) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var del bool
-	k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
-		// v cannot be nil, must check otherwise we overwrite entry
-		if v == nil {
-			panic(fmt.Sprintf("connected peer not found %v", p))
-		}
+	if !p.BzzPeer.LightNode {
+		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
+			// v cannot be nil, must check otherwise we overwrite entry
+			if v == nil {
+				panic(fmt.Sprintf("connected peer not found %v", p))
+			}
+			del = true
+			return newEntry(p.BzzAddr)
+		})
+	} else {
 		del = true
-		return newEntry(p.BzzAddr)
-	})
+	}
 
 	if del {
 		k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(_ pot.Val) pot.Val {

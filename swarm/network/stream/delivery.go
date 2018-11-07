@@ -245,7 +245,10 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	} else {
 		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int, nn bool) bool {
 			id := p.ID()
-			// TODO: skip light nodes that do not accept retrieve requests
+			if p.LightNode {
+				// skip light nodes
+				return true
+			}
 			if req.SkipPeer(id.String()) {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
