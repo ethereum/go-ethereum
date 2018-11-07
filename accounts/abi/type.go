@@ -183,56 +183,27 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	switch t.T {
-	case SliceTy, ArrayTy:
-		var ret []byte
+	if t.T == SliceTy || t.T == ArrayTy {
+		var packed []byte
 
-		if t.requiresLengthPrefix() {
-			// append length
-			ret = append(ret, packNum(reflect.ValueOf(v.Len()))...)
-		}
-
-		// calculate offset if any
-		offset := 0
-		offsetReq := t.Elem.requiresLengthPrefix()
-		if offsetReq {
-			offset = getOffset(*t.Elem) * v.Len()
-		}
-
-		var tail []byte
 		for i := 0; i < v.Len(); i++ {
 			val, err := t.Elem.pack(v.Index(i))
 			if err != nil {
 				return nil, err
 			}
-
-			if !offsetReq {
-				ret = append(ret, val...)
-				continue
-			}
-
-			ret = append(ret, packNum(reflect.ValueOf(offset))...)
-			offset += len(val)
-			tail = append(tail, val...)
+			packed = append(packed, val...)
 		}
-
-		return append(ret, tail...), nil
-	default:
-		return packElement(t, v), nil
+		if t.T == SliceTy {
+			return packBytesSlice(packed, v.Len()), nil
+		} else if t.T == ArrayTy {
+			return packed, nil
+		}
 	}
+	return packElement(t, v), nil
 }
 
 // requireLengthPrefix returns whether the type requires any sort of length
 // prefixing.
 func (t Type) requiresLengthPrefix() bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy
-}
-
-// getOffset returns the offset to be added for t
-func getOffset(t Type) int {
-	if t.T == ArrayTy {
-		return 32 * t.Size
-	}
-
-	return 32
 }
