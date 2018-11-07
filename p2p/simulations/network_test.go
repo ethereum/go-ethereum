@@ -25,21 +25,20 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(4, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(*loglevel, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
 
+//TestSnapshotExplicit tests that nodes connect and disconnect properly
+//and that the exposed services are as perscribed
 func TestSnapshotExplicit(t *testing.T) {
-	// create simulation network with 20 testService nodes
 	adapter := adapters.NewSimAdapter(adapters.Services{
-		"dummy":  newDummyService,
-		"dummy2": newDummy2Service,
+		"dummy":  node.NewNoopServiceA,
+		"dummy2": node.NewNoopServiceB,
 	})
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "dummy",
@@ -121,12 +120,12 @@ func TestSnapshotExplicit(t *testing.T) {
 		}
 	}
 
-	snap, err = network.SnapshotWithServices([]string{"bzz"}, []string{"test"})
+	snap, err = network.SnapshotWithServices([]string{"bzz"}, []string{"dummy2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "dummy" && svc != "dummy2" && svc != "bzz" {
+		if svc != "dummy" && svc != "bzz" {
 			t.Fatalf("unexpected service %s", svc)
 		}
 	}
@@ -244,36 +243,6 @@ func TestNetworkSimulation(t *testing.T) {
 			t.Fatalf("expected conn[%d].Other to be %s, got %s", i, peerID, conn.Other)
 		}
 	}
-}
-
-type dummyService struct {
-}
-
-type dummy2Service struct {
-	dummyService
-}
-
-func newDummyService(ctx *adapters.ServiceContext) (node.Service, error) {
-	return &dummyService{}, nil
-}
-func newDummy2Service(ctx *adapters.ServiceContext) (node.Service, error) {
-	return &dummy2Service{}, nil
-}
-
-func (p *dummyService) APIs() []rpc.API {
-	return []rpc.API{}
-}
-
-func (p *dummyService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
-}
-
-func (p *dummyService) Start(server *p2p.Server) error {
-	return nil
-}
-
-func (p *dummyService) Stop() error {
-	return nil
 }
 
 func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, interval time.Duration) {
