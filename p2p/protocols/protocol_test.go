@@ -318,7 +318,7 @@ func TestProtocolHook(t *testing.T) {
 	<-testHook.waitC
 
 	time.Sleep(100 * time.Millisecond)
-	err = tester.TestDisconnected(&p2ptest.Disconnect{tester.Nodes[1].ID(), testHook.err})
+	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: tester.Nodes[1].ID(), Error: testHook.err})
 	if err != nil {
 		t.Fatalf("Expected a specific disconnect error, but got different one: %v", err)
 	}
