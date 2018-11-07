@@ -62,6 +62,9 @@ func createMockStore(globalStore *mockdb.GlobalStore, id enode.ID, addr *network
 	params.Init(datadir)
 	params.BaseKey = addr.Over()
 	lstore, err = storage.NewLocalStore(params, mockStore)
+	if err != nil {
+		return nil, "", err
+	}
 	return lstore, datadir, nil
 }
 

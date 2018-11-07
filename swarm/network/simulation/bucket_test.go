@@ -94,7 +94,7 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", customValue, s)
 		}
 
-		v, ok = sim.NodeItem(id2, customKey)
+		_, ok = sim.NodeItem(id2, customKey)
 		if ok {
 			t.Fatal("bucket item should not be found")
 		}
@@ -119,7 +119,7 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", testValue+id1.String(), s)
 		}
 
-		v, ok = items[id2]
+		_, ok = items[id2]
 		if ok {
 			t.Errorf("node 2 item should not be found")
 		}

@@ -114,6 +114,9 @@ func accessNewPass(ctx *cli.Context) {
 		utils.Fatalf("error getting session key: %v", err)
 	}
 	m, err := api.GenerateAccessControlManifest(ctx, ref, accessKey, ae)
+	if err != nil {
+		utils.Fatalf("had an error generating the manifest: %v", err)
+	}
 	if dryRun {
 		err = printManifests(m, nil)
 		if err != nil {
@@ -147,6 +150,9 @@ func accessNewPK(ctx *cli.Context) {
 		utils.Fatalf("error getting session key: %v", err)
 	}
 	m, err := api.GenerateAccessControlManifest(ctx, ref, sessionKey, ae)
+	if err != nil {
+		utils.Fatalf("had an error generating the manifest: %v", err)
+	}
 	if dryRun {
 		err = printManifests(m, nil)
 		if err != nil {

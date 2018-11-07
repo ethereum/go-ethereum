@@ -263,7 +263,7 @@ func TestBzzFeed(t *testing.T) {
 	if resp.StatusCode == http.StatusOK {
 		t.Fatal("Expected error status since feed update does not contain multihash. Received 200 OK")
 	}
-	b, err = ioutil.ReadAll(resp.Body)
+	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,6 +491,9 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		}
 		defer resp.Body.Close()
 		respbody, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Error while reading response body: %v", err)
+		}
 
 		if string(respbody) != testmanifest[v] {
 			isexpectedfailrequest := false
