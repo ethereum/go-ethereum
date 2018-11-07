@@ -85,6 +85,7 @@ type Header struct {
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 	Validators  []byte         `json:"validators"       gencodec:"required"`
+	Penalties   []byte         `json:"penalties"		gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -320,6 +321,7 @@ func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
 func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) Penalties() []byte        { return common.CopyBytes(b.header.Penalties) }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 

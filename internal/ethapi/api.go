@@ -817,6 +817,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"transactionsRoot": head.TxHash,
 		"receiptsRoot":     head.ReceiptHash,
 		"validators":       hexutil.Bytes(head.Validators),
+		"penalties":        hexutil.Bytes(head.Penalties),
 	}
 
 	if inclTx {
