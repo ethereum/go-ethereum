@@ -484,7 +484,8 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if updateRequest.IsUpdate() {
+	switch {
+	case updateRequest.IsUpdate():
 		// Verify that the signature is intact and that the signer is authorized
 		// to update this feed
 		// Check this early, to avoid creating a feed and then not being able to set its first update.
@@ -497,9 +498,8 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 			respondError(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
-	}
-
-	if query.Get("manifest") == "1" {
+		fallthrough
+	case query.Get("manifest") == "1":
 		// we create a manifest so we can retrieve feed updates with bzz:// later
 		// this manifest has a special "feed type" manifest, and saves the
 		// feed identification used to retrieve feed updates later
@@ -519,6 +519,8 @@ func (s *Server) HandlePostFeed(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, string(outdata))
 
 		w.Header().Add("Content-type", "application/json")
+	default:
+		respondError(w, r, "Missing signature in feed update request", http.StatusBadRequest)
 	}
 }
 
