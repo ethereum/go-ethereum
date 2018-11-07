@@ -664,11 +664,10 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 			}
 			// Add the peer to the expiry report along the number of failed requests
 			expiries[id] = len(request.Headers)
+
+			// Remove the expired requests from the pending pool directly
+			delete(pendPool, id)
 		}
-	}
-	// Remove the expired requests from the pending pool
-	for id := range expiries {
-		delete(pendPool, id)
 	}
 	return expiries
 }
