@@ -38,13 +38,13 @@ func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
 	cd := common.Hex2Bytes(calldata)
 	sigdata, argdata := cd[:4], cd[4:]
 	method, err := abispec.MethodById(sigdata)
-
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	data, err := method.Inputs.UnpackValues(argdata)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(data) != len(exp) {
 		t.Fatalf("Mismatched length, expected %d, got %d", len(exp), len(data))
 	}
