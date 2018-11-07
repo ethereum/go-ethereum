@@ -257,7 +257,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				if len(penSigners) > 0 {
 					blockSignerAddr := common.HexToAddress(common.BlockSigners)
 					// Loop for each block to check missing sign.
-					for i := prevEpoc; i <= blockNumberEpoc; i++ {
+					for i := prevEpoc; i < blockNumberEpoc; i++ {
 						blockHeader := chain.GetHeaderByNumber(i)
 						if len(penSigners) > 0 {
 							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
