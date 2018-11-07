@@ -91,11 +91,12 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	simNode := &SimNode{
-		ID:      id,
-		config:  config,
-		node:    n,
-		adapter: s,
-		running: make(map[string]node.Service),
+		ID:        id,
+		config:    config,
+		node:      n,
+		adapter:   s,
+		running:   make(map[string]node.Service),
+		connected: make(map[discover.NodeID]bool),
 	}
 	s.nodes[id] = simNode
 	return simNode, nil
@@ -108,12 +109,16 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", dest.ID)
 	}
+	if node.connected[dest.ID] {
+		return nil, fmt.Errorf("dialed node: %s", dest.ID)
+	}
 	srv := node.Server()
 	if srv == nil {
 		return nil, fmt.Errorf("node not running: %s", dest.ID)
 	}
 	pipe1, pipe2 := net.Pipe()
 	go srv.SetupConn(pipe1, 0, nil)
+	node.connected[dest.ID] = true
 	return pipe2, nil
 }
 
@@ -151,6 +156,7 @@ type SimNode struct {
 	running      map[string]node.Service
 	client       *rpc.Client
 	registerOnce sync.Once
+	connected    map[discover.NodeID]bool
 }
 
 // Addr returns the node's discovery address

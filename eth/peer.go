@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -65,6 +66,7 @@ type peer struct {
 
 	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
 	knownBlocks *set.Set // Set of block hashes known to be known by this peer
+	pairRw      p2p.MsgReadWriter
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -156,7 +158,13 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
-	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+	if p.pairRw != nil {
+		log.Trace("p2p SendNewBlock with pairRw", "p", p, "number", block.NumberU64())
+		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
+	} else {
+		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+	}
+
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
@@ -321,8 +329,14 @@ func (ps *peerSet) Register(p *peer) error {
 	if ps.closed {
 		return errClosed
 	}
-	if _, ok := ps.peers[p.id]; ok {
-		return errAlreadyRegistered
+	if exitPeer, ok := ps.peers[p.id]; ok {
+		if exitPeer.pairRw != nil {
+			return errAlreadyRegistered
+		}
+		exitPeer.PairPeer = p.Peer
+		exitPeer.pairRw = p.rw
+		p.PairPeer = exitPeer.Peer
+		return p2p.ErrAddPairPeer
 	}
 	ps.peers[p.id] = p
 	return nil

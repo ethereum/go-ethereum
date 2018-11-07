@@ -54,6 +54,8 @@ func (self *peerError) Error() string {
 
 var errProtocolReturned = errors.New("protocol returned")
 
+var ErrAddPairPeer = errors.New("add a pair peer")
+
 type DiscReason uint
 
 const (
@@ -69,6 +71,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
+	DiscPairPeerStop
 	DiscSubprotocolError = 0x10
 )
 
@@ -85,6 +88,7 @@ var discReasonToString = [...]string{
 	DiscUnexpectedIdentity:  "unexpected identity",
 	DiscSelf:                "connected to self",
 	DiscReadTimeout:         "read timeout",
+	DiscPairPeerStop:        "pair peer connection stop",
 	DiscSubprotocolError:    "subprotocol error",
 }
 
