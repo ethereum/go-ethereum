@@ -58,7 +58,6 @@ func (f *Feed) binaryPut(serializedData []byte) error {
 	cursor += TopicLength
 
 	copy(serializedData[cursor:cursor+common.AddressLength], f.User[:])
-	cursor += common.AddressLength
 
 	return nil
 }
@@ -79,7 +78,6 @@ func (f *Feed) binaryGet(serializedData []byte) error {
 	cursor += TopicLength
 
 	copy(f.User[:], serializedData[cursor:cursor+common.AddressLength])
-	cursor += common.AddressLength
 
 	return nil
 }

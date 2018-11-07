@@ -59,7 +59,7 @@ func (s *InmemoryStore) Get(key string, i interface{}) (err error) {
 func (s *InmemoryStore) Put(key string, i interface{}) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	bytes := []byte{}
+	var bytes []byte
 
 	marshaler, ok := i.(encoding.BinaryMarshaler)
 	if !ok {

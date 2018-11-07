@@ -75,7 +75,6 @@ func (r *Update) binaryPut(serializedData []byte) error {
 
 	// add the data
 	copy(serializedData[cursor:], r.data)
-	cursor += datalength
 
 	return nil
 }
@@ -106,14 +105,12 @@ func (r *Update) binaryGet(serializedData []byte) error {
 	cursor += idLength
 
 	data := serializedData[cursor : cursor+dataLength]
-	cursor += dataLength
 
 	// now that all checks have passed, copy data into structure
 	r.data = make([]byte, dataLength)
 	copy(r.data, data)
 
 	return nil
-
 }
 
 // FromValues deserializes this instance from a string key-value store

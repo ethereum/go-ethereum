@@ -457,6 +457,9 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 	}
 
 	feedManifestHash, err := client.CreateFeedWithManifest(createRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	correctManifestAddrHex := "0e9b645ebc3da167b1d56399adc3276f7a08229301b72a03336be0e7d4b71882"
 	if feedManifestHash != correctManifestAddrHex {

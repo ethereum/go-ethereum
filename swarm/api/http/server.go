@@ -366,7 +366,7 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 		}
 
 		var size int64
-		var reader io.Reader = part
+		var reader io.Reader
 		if contentLength := part.Header.Get("Content-Length"); contentLength != "" {
 			size, err = strconv.ParseInt(contentLength, 10, 64)
 			if err != nil {

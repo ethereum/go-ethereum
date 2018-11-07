@@ -153,6 +153,7 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr, lightNode bool) *
 
 // should test handshakes in one exchange? parallelisation
 func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptest.Disconnect) error {
+	//TODO: peers is not used. fix test.
 	var peers []enode.ID
 	id := rhs.Addr.ID()
 	if len(disconnects) > 0 {

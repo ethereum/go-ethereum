@@ -71,7 +71,6 @@ func (u *ID) binaryPut(serializedData []byte) error {
 		return err
 	}
 	copy(serializedData[cursor:cursor+lookup.EpochLength], epochBytes[:])
-	cursor += lookup.EpochLength
 
 	return nil
 }
@@ -96,7 +95,6 @@ func (u *ID) binaryGet(serializedData []byte) error {
 	if err := u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength]); err != nil {
 		return err
 	}
-	cursor += lookup.EpochLength
 
 	return nil
 }

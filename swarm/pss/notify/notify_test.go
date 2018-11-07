@@ -223,7 +223,13 @@ func newServices(allowRaw bool) adapters.Services {
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
+			if err != nil {
+				return nil, err
+			}
 			privkey, err := w.GetPrivateKey(keys)
+			if err != nil {
+				return nil, err
+			}
 			pssp := pss.NewPssParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw

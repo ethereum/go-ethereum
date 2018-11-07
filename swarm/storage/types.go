@@ -244,11 +244,8 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	if dataSize > ch.DefaultSize {
-		dataSize = ch.DefaultSize
-	}
 	for i := 0; i < count; i++ {
-		ch := GenerateRandomChunk(ch.DefaultSize)
+		ch := GenerateRandomChunk(dataSize)
 		chunks = append(chunks, ch)
 	}
 	return chunks

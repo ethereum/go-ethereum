@@ -80,6 +80,9 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal(err)
 	}
 	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
 	dirs := []string{

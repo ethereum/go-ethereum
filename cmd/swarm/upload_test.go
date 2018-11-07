@@ -243,8 +243,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		}
 		defer os.RemoveAll(tmpDownload)
 		bzzLocator := "bzz:/" + hash
-		flagss := []string{}
-		flagss = []string{
+		flagss := []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"down",
 			"--recursive",
