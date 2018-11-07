@@ -333,15 +333,45 @@ func TestBzzFeed(t *testing.T) {
 	}
 	urlQuery = testUrl.Query()
 	body = updateRequest.AppendValues(urlQuery) // this adds all query parameters
+	goodQueryParameters := urlQuery.Encode()    // save the query parameters for a second attempt
+
+	// create bad query parameters in which the signature is missing
+	urlQuery.Del("signature")
 	testUrl.RawQuery = urlQuery.Encode()
 
+	// 1st attempt with bad query parameters in which the signature is missing
 	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Update returned %s", resp.Status)
+	expectedCode := http.StatusBadRequest
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
+	}
+
+	// 2nd attempt with bad query parameters in which the signature is of incorrect length
+	urlQuery.Set("signature", "0xabcd") // should be 130 hex chars
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	expectedCode = http.StatusBadRequest
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
+	}
+
+	// 3rd attempt, with good query parameters:
+	testUrl.RawQuery = goodQueryParameters
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	expectedCode = http.StatusOK
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
 	}
 
 	// get latest update through bzz-feed directly
