@@ -29,6 +29,16 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
+const (
+	defaultMaxProxDisplay = 16
+	defaultMinProxBinSize = 2
+	defaultMinBinSize     = 2
+	defaultMaxBinSize     = 4
+	defaultRetryInterval  = 4200000000 // 4.2 sec
+	defaultMaxRetries     = 42
+	defaultRetryExponent  = 2
+)
+
 /*
 
 Taking the proximity order relative to a fix point x classifies the points in
@@ -68,13 +78,13 @@ type KadParams struct {
 // NewKadParams returns a params struct with default values
 func NewKadParams() *KadParams {
 	return &KadParams{
-		MaxProxDisplay: 16,
-		MinProxBinSize: 2,
-		MinBinSize:     2,
-		MaxBinSize:     4,
-		RetryInterval:  4200000000, // 4.2 sec
-		MaxRetries:     42,
-		RetryExponent:  2,
+		MaxProxDisplay: defaultMaxProxDisplay,
+		MinProxBinSize: defaultMinProxBinSize,
+		MinBinSize:     defaultMinBinSize,
+		MaxBinSize:     defaultMaxBinSize,
+		RetryInterval:  defaultRetryInterval,
+		MaxRetries:     defaultMaxRetries,
+		RetryExponent:  defaultRetryExponent,
 	}
 }
 
@@ -89,6 +99,7 @@ type Kademlia struct {
 	nDepth     int      // stores the last neighbourhood depth
 	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
 	addrCountC chan int // returned by AddrCountC function to signal peer count change
+	Pof        func(pot.Val, pot.Val, int) (int, bool)
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -103,6 +114,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
+		Pof:       pof,
 	}
 }
 
@@ -430,15 +442,30 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 // the nearest neighbour set with cardinality >= MinProxBinSize
 // if there is altogether less than MinProxBinSize peers it returns 0
 // caller must hold the lock
+func (k *Kademlia) NeighbourhoodDepth() (depth int) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	return k.neighbourhoodDepth()
+}
+
 func (k *Kademlia) neighbourhoodDepth() (depth int) {
-	if k.conns.Size() < k.MinProxBinSize {
+	if k.conns.Size() <= k.MinProxBinSize {
 		return 0
 	}
 	var size int
+	var b bool
 	f := func(v pot.Val, i int) bool {
 		size++
-		depth = i
-		return size < k.MinProxBinSize
+		if size == k.MinProxBinSize {
+			b = true
+			depth = i
+			return true
+		}
+		if b && i < depth {
+			depth = i + 1
+			return false
+		}
+		return true
 	}
 	k.conns.EachNeighbour(k.base, pof, f)
 	return depth
