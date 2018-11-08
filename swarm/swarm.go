@@ -176,7 +176,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if config.SwapEnabled {
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
 		if err != nil {
-			return
+			return nil, err
 		}
 		self.swap = swap.New(balancesStore)
 	}

@@ -54,7 +54,10 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	defer s.lock.Unlock()
 
 	//load existing balances from the state store
-	s.loadState(peer)
+	err = s.loadState(peer)
+	if err != nil && err != state.ErrNotFound {
+		return
+	}
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
@@ -77,13 +80,13 @@ func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 }
 
 //load balances from the state store (persisted)
-func (s *Swap) loadState(peer *protocols.Peer) {
+func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	var peerBalance int64
 	peerID := peer.ID()
 	//only load if the current instance doesn't already have this peer's
 	//balance in memory
 	if _, ok := s.balances[peerID]; !ok {
-		s.stateStore.Get(peerID.String(), &peerBalance)
+		err = s.stateStore.Get(peerID.String(), &peerBalance)
 		s.balances[peerID] = peerBalance
 	}
 	return
