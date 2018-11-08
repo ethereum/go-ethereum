@@ -174,7 +174,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, err
 		}
 		sighash, msg := SignTextValidator(validatorData)
-		req = &SignDataRequest{Rawdata: validatorData, Message: msg, Hash: sighash, ContentType: mediaType}
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: validatorData, Message: msg, Hash: sighash}
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
 		cliqueData, err := hexutil.Decode(data.(string))
@@ -190,7 +190,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, err
 		}
 		msg := fmt.Sprintf("clique block %d [0x%x]", header.Number, header.Hash())
-		req = &SignDataRequest{Rawdata: cliqueData, Message: msg, Hash: sighash, ContentType: mediaType}
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueData, Message: msg, Hash: sighash}
 	case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
@@ -199,7 +199,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, err
 		}
 		sighash, msg := SignTextPlain(plainData)
-		req = &SignDataRequest{Rawdata: plainData, Message: msg, Hash: sighash, ContentType: mediaType}
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: plainData, Message: msg, Hash: sighash}
 	default:
 		return nil, fmt.Errorf("content type '%s' not implemented for signing", contentType)
 	}
@@ -272,7 +272,7 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	}
 	msg := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
 	sighash := crypto.Keccak256([]byte(msg))
-	req := &SignDataRequest{Rawdata: typedData.Map(), Message: msg, Hash: sighash, ContentType: DataTyped.Mime}
+	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: msg, Hash: sighash}
 	signature, err := api.Sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -281,8 +281,7 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	return signature, nil
 }
 
-// HashStruct generates the following encoding for the given domain and message:
-// `encode(domainSeparator : 𝔹²⁵⁶, message : 𝕊) = "\x19\x01" ‖ domainSeparator ‖ hashStruct(message)`
+// HashStruct generates a keccak256 hash of the encoding of the provided data
 func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) hexutil.Bytes {
 	return crypto.Keccak256(typedData.EncodeData(primaryType, data))
 }
