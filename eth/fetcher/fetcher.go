@@ -650,6 +650,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
 			return
 		}
+	again:
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
@@ -657,6 +658,10 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
 		case consensus.ErrFutureBlock:
+			delay := time.Unix(block.Time().Int64(), 0).Sub(time.Now()) // nolint: gosimple
+			time.Sleep(delay)
+			log.Info("Receive futrue block", "number", block.NumberU64(), "hash", block.Hash().Hex(), "delay", delay)
+			goto again
 		case consensus.ErrMissingValidatorSignature:
 			newBlock := block
 			if f.appendM2HeaderHook != nil {
