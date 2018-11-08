@@ -18,6 +18,7 @@ package simulations
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -25,20 +26,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
+var loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+
 func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(*loglevel, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
 
 //TestSnapshotExplicit tests that nodes connect and disconnect properly
 //and that the exposed services are as perscribed
 func TestSnapshotExplicit(t *testing.T) {
 	adapter := adapters.NewSimAdapter(adapters.Services{
-		"dummy":  node.NewNoopServiceA,
-		"dummy2": node.NewNoopServiceB,
+		"dummy":  newDummyService,
+		"dummy2": newDummy2Service,
 	})
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "dummy",
@@ -262,4 +267,29 @@ func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, i
 			return
 		}
 	}
+}
+
+type dummyService struct {
+}
+type dummy2Service struct {
+	dummyService
+}
+
+func newDummyService(ctx *adapters.ServiceContext) (node.Service, error) {
+	return &dummyService{}, nil
+}
+func newDummy2Service(ctx *adapters.ServiceContext) (node.Service, error) {
+	return &dummy2Service{}, nil
+}
+func (p *dummyService) APIs() []rpc.API {
+	return []rpc.API{}
+}
+func (p *dummyService) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{}
+}
+func (p *dummyService) Start(server *p2p.Server) error {
+	return nil
+}
+func (p *dummyService) Stop() error {
+	return nil
 }
