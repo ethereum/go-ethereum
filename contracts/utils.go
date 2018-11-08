@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"math/rand"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -56,8 +57,11 @@ type rewardLog struct {
 	Reward *big.Int `json:"reward"`
 }
 
+var TxSignMu sync.RWMutex
 // Send tx sign for block number to smart contract blockSigner.
 func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
+	TxSignMu.Lock()
+	defer TxSignMu.Unlock()
 	if chainConfig.Posv != nil {
 		// Find active account.
 		account := accounts.Account{}
@@ -80,7 +84,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		// Add tx signed to local tx pool.
 		err = pool.AddLocal(txSigned)
 		if err != nil {
-			log.Error("Fail to add tx sign to local pool.", "error", err)
+			log.Error("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 		}
 
 		// Create secret tx.
@@ -108,7 +112,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			// Add tx signed to local tx pool.
 			err = pool.AddLocal(txSigned)
 			if err != nil {
-				log.Error("Fail to add tx secret to local pool.", "error", err)
+				log.Error("Fail to add tx secret to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 			}
 
 			// Put randomize key into chainDb.
@@ -135,7 +139,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			// Add tx to pool.
 			err = pool.AddLocal(txSigned)
 			if err != nil {
-				log.Error("Fail to add tx opening to local pool.", "error", err)
+				log.Error("Fail to add tx opening to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 			}
 
 			// Clear randomize key in state db.
