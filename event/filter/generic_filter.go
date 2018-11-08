@@ -25,7 +25,7 @@ type Generic struct {
 
 // self = registered, f = incoming
 func (self Generic) Compare(f Filter) bool {
-	var strMatch, dataMatch = true, true
+	var strMatch = true
 
 	filter := f.(Generic)
 	if (len(self.Str1) > 0 && filter.Str1 != self.Str1) ||
@@ -40,7 +40,7 @@ func (self Generic) Compare(f Filter) bool {
 		}
 	}
 
-	return strMatch && dataMatch
+	return strMatch
 }
 
 func (self Generic) Trigger(data interface{}) {
