@@ -74,7 +74,7 @@ const (
 type MeteredPeerEvent struct {
 	Type    MeteredPeerEventType // Type of peer event
 	IP      net.IP               // IP address of the peer
-	ID      string               // NodeID of the peer
+	ID      enode.ID             // NodeID of the peer
 	Elapsed time.Duration        // Time elapsed between the connection and the handshake/disconnection
 	Ingress uint64               // Ingress count at the moment of the event
 	Egress  uint64               // Egress count at the moment of the event
@@ -93,7 +93,7 @@ type meteredConn struct {
 
 	connected time.Time // Connection time of the peer
 	ip        net.IP    // IP address of the peer
-	id        string    // NodeID of the peer
+	id        enode.ID  // NodeID of the peer
 
 	// trafficMetered denotes if the peer is registered in the traffic registries.
 	// Its value is true if the metered peer count doesn't reach the limit in the
@@ -160,8 +160,7 @@ func (c *meteredConn) Write(b []byte) (n int, err error) {
 // handshakeDone is called when a peer handshake is done. Registers the peer to
 // the ingress and the egress traffic registries using the peer's IP and node ID,
 // also emits connect event.
-func (c *meteredConn) handshakeDone(nodeID enode.ID) {
-	id := nodeID.String()
+func (c *meteredConn) handshakeDone(id enode.ID) {
 	if atomic.AddInt32(&meteredPeerCount, 1) >= MeteredPeerLimit {
 		// Don't register the peer in the traffic registries.
 		atomic.AddInt32(&meteredPeerCount, -1)
@@ -170,7 +169,7 @@ func (c *meteredConn) handshakeDone(nodeID enode.ID) {
 		c.lock.Unlock()
 		log.Warn("Metered peer count reached the limit")
 	} else {
-		key := fmt.Sprintf("%s/%s", c.ip, id)
+		key := fmt.Sprintf("%s/%s", c.ip, id.String())
 		c.lock.Lock()
 		c.id, c.trafficMetered = id, true
 		c.ingressMeter = metrics.NewRegisteredMeter(key, PeerIngressRegistry)
@@ -190,7 +189,7 @@ func (c *meteredConn) handshakeDone(nodeID enode.ID) {
 func (c *meteredConn) Close() error {
 	err := c.Conn.Close()
 	c.lock.RLock()
-	if c.id == "" {
+	if c.id == (enode.ID{}) {
 		// If the peer disconnects before the handshake.
 		c.lock.RUnlock()
 		meteredPeerFeed.Send(MeteredPeerEvent{
