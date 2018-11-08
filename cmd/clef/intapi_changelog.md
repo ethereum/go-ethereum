@@ -1,5 +1,9 @@
 ### Changelog for internal API (ui-api)
 
+### 3.1.0
+
+* Add `ContentType string` to `SignDataRequest` to accommodate the latest EIP-191 and EIP-712 implementations.
+
 ### 3.0.0
 
 * Make use of `OnInputRequired(info UserInputRequest)` for obtaining master password during startup
