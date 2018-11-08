@@ -23,11 +23,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"hash"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -184,7 +186,7 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		topicHandlerCaps: make(map[Topic]byte),
 		hashPool: sync.Pool{
 			New: func() interface{} {
-				return storage.MakeHashFunc(storage.DefaultHash)()
+				return sha3.NewKeccak256()
 			},
 		},
 	}
@@ -356,12 +358,11 @@ func (p *Pss) getHandlers(topic Topic) map[*handler]bool {
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
-
 	pssmsg, ok := msg.(*PssMsg)
-
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 	}
+	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
 		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
@@ -401,7 +402,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
@@ -471,7 +472,7 @@ func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw
 		}
 		err := (h.f)(payload, peer, asymmetric, keyid)
 		if err != nil {
-			log.Warn("Pss handler %p failed: %v", h.f, err)
+			log.Warn("Pss handler failed", "err", err)
 		}
 	}
 }
@@ -947,6 +948,10 @@ func (p *Pss) cleanFwdCache() {
 	}
 }
 
+func label(b []byte) string {
+	return fmt.Sprintf("%04x", b[:2])
+}
+
 // add a message to the cache
 func (p *Pss) addFwdCache(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.addfwdcache", nil).Inc(1)
@@ -986,10 +991,14 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 
 // Digest of message
 func (p *Pss) digest(msg *PssMsg) pssDigest {
-	hasher := p.hashPool.Get().(storage.SwarmHash)
+	return p.digestBytes(msg.serialize())
+}
+
+func (p *Pss) digestBytes(msg []byte) pssDigest {
+	hasher := p.hashPool.Get().(hash.Hash)
 	defer p.hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(msg.serialize())
+	hasher.Write(msg)
 	digest := pssDigest{}
 	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
