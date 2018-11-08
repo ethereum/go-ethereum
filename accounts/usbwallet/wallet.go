@@ -273,7 +273,10 @@ func (w *wallet) close() error {
 	w.device = nil
 
 	w.accounts, w.paths = nil, nil
-	w.driver.Close()
+	err := w.driver.Close()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
