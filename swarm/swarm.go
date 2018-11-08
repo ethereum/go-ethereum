@@ -174,7 +174,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
 	if config.SwapEnabled {
-		self.swap = swap.New(stateStore)
+		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
+		if err != nil {
+			return
+		}
+		self.swap = swap.New(balancesStore)
 	}
 
 	var nodeID enode.ID

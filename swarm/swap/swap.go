@@ -38,6 +38,15 @@ type Swap struct {
 	balances   map[enode.ID]int64 //map of balances for each peer
 }
 
+// New - swap constructor
+func New(stateStore state.Store) (swap *Swap) {
+	swap = &Swap{
+		stateStore: stateStore,
+		balances:   make(map[enode.ID]int64),
+	}
+	return
+}
+
 //Swap implements the protocols.Balance interface
 //Add is the (sole) accounting function
 func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
@@ -51,7 +60,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	s.balances[peer.ID()] += amount
 	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
-	s.stateStore.Put(peer.ID().String(), &peerBalance)
+	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 	return err
@@ -76,15 +85,6 @@ func (s *Swap) loadState(peer *protocols.Peer) {
 	if _, ok := s.balances[peerID]; !ok {
 		s.stateStore.Get(peerID.String(), &peerBalance)
 		s.balances[peerID] = peerBalance
-	}
-}
-
-// New - swap constructor
-func New(stateStore state.Store) (swap *Swap) {
-
-	swap = &Swap{
-		stateStore: stateStore,
-		balances:   make(map[enode.ID]int64),
 	}
 	return
 }

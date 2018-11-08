@@ -734,6 +734,9 @@ func (c *clientParams) clientCreated() {
 	close(c.clientCreatedC)
 }
 
+//Return the streamer spec to callers
+//This used to be a global variable but for simulations with
+//multiple nodes its fields (notably the Hook) would be overwritten
 func (r *Registry) GetSpec() *protocols.Spec {
 	return r.spec
 }

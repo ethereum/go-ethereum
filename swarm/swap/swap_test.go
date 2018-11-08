@@ -23,6 +23,7 @@ import (
 	mrand "math/rand"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -38,6 +39,7 @@ var (
 
 func init() {
 	flag.Parse()
+	mrand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
@@ -92,9 +94,9 @@ func TestRepeatedBookings(t *testing.T) {
 //try restoring a balance from state store
 //this is simulated by creating a node,
 //assigning it an arbitrary balance,
-//send a message (triggers to save to store),
-//then create a different SwapPeer instance with same peerID,
-//which will try to load a balance from the stateStore
+//then closing the state store.
+//Then we re-open the state store and check that
+//the balance is still the same
 func TestRestoreBalanceFromStateStore(t *testing.T) {
 	//create a test swap account
 	swap, testDir := createTestSwap(t)
