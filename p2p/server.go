@@ -228,7 +228,7 @@ type transport interface {
 	MsgReadWriter
 	// transports must provide Close because we use MsgPipe in some of
 	// the tests. Closing the actual network connection doesn't do
-	// anything in those tests because NsgPipe doesn't use it.
+	// anything in those tests because MsgPipe doesn't use it.
 	close(err error)
 }
 
