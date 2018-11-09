@@ -165,7 +165,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
 	fmt.Printf("message:  \n%q\n", request.Message)
-	fmt.Printf("raw data: \n%v\n", request.Rawdata)
+	fmt.Printf("raw data:  \n%v\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
