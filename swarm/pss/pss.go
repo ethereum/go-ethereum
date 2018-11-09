@@ -499,7 +499,6 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	depth, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "minprox", minProx, "depth", depth)
 
-	log.Debug("here")
 	if minProx <= depth {
 		return true
 	}
@@ -752,7 +751,14 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = payload
 	p.addFwdCache(pssMsg)
-	return p.enqueue(pssMsg)
+	err := p.enqueue(pssMsg)
+	if err != nil {
+		return err
+	}
+	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic]&handlerCapProx != 0 {
+		return p.process(pssMsg, true, true)
+	}
+	return nil
 }
 
 // Send a message using symmetric encryption
@@ -853,7 +859,14 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	pssMsg.To = to
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = envelope
-	return p.enqueue(pssMsg)
+	err = p.enqueue(pssMsg)
+	if err != nil {
+		return err
+	}
+	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic]&handlerCapProx != 0 {
+		return p.process(pssMsg, true, true)
+	}
+	return nil
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct

@@ -315,6 +315,136 @@ func TestAddressMatch(t *testing.T) {
 
 }
 
+func TestProxShortCircuit(t *testing.T) {
+
+	// sender node address
+	localAddr := network.RandomAddr().Over()
+	localPotAddr := pot.NewAddressFromBytes(localAddr)
+
+	// set up kademlia
+	kadParams := network.NewKadParams()
+	kad := network.NewKademlia(localAddr, kadParams)
+	peerCount := kad.MinBinSize + 1
+
+	// set up pss
+	privKey, err := crypto.GenerateKey()
+	pssp := NewPssParams().WithPrivateKey(privKey)
+	ps, err := NewPss(kad, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// create kademlia peers, so we have peers both inside and outside minproxlimit
+	var peers []*network.Peer
+	proxMessageAddress := pot.RandomAddressAt(localPotAddr, peerCount).Bytes()
+	distantMessageAddress := pot.RandomAddressAt(localPotAddr, 0).Bytes()
+
+	for i := 0; i < peerCount; i++ {
+		rw := &p2p.MsgPipeRW{}
+		ptpPeer := p2p.NewPeer(enode.ID{}, "wanna be with me? [ ] yes [ ] no", []p2p.Cap{})
+		protoPeer := protocols.NewPeer(ptpPeer, rw, &protocols.Spec{})
+		peerAddr := pot.RandomAddressAt(localPotAddr, i)
+		bzzPeer := &network.BzzPeer{
+			Peer: protoPeer,
+			BzzAddr: &network.BzzAddr{
+				OAddr: peerAddr.Bytes(),
+				UAddr: []byte(fmt.Sprintf("%x", peerAddr[:])),
+			},
+		}
+		peer := network.NewPeer(bzzPeer, kad)
+		kad.On(peer)
+		peers = append(peers, peer)
+	}
+
+	// register it marking prox capability
+	delivered := make(chan struct{})
+	rawHandlerFunc := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+		log.Trace("in allowraw handler")
+		delivered <- struct{}{}
+		return nil
+	}
+	topic := BytesToTopic([]byte{0x2a})
+	hndlrProxDereg := ps.Register(&topic, &handler{
+		f:    rawHandlerFunc,
+		caps: handlerCapProx | handlerCapRaw,
+	})
+	defer hndlrProxDereg()
+
+	errC := make(chan error)
+	go func() {
+		err := ps.SendRaw(distantMessageAddress, topic, []byte("foo"))
+		if err != nil {
+			errC <- err
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+	select {
+	case <-delivered:
+		t.Fatal("raw distant message delivered")
+	case err := <-errC:
+		t.Fatal(err)
+	case <-ctx.Done():
+	}
+
+	go func() {
+		err := ps.SendRaw(proxMessageAddress, topic, []byte("bar"))
+		if err != nil {
+			errC <- err
+		}
+	}()
+
+	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+	select {
+	case <-delivered:
+	case err := <-errC:
+		t.Fatal(err)
+	case <-ctx.Done():
+		t.Fatal("raw timeout")
+	}
+
+	localAddrPss := PssAddress(localAddr)
+	symKeyId, err := ps.GenerateSymmetricKey(topic, &localAddrPss, true)
+	go func() {
+		err := ps.SendSym(symKeyId, topic, []byte("baz"))
+		if err != nil {
+			errC <- err
+		}
+	}()
+	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+	select {
+	case <-delivered:
+	case err := <-errC:
+		t.Fatal(err)
+	case <-ctx.Done():
+		t.Fatal("sym timeout")
+	}
+
+	err = ps.SetPeerPublicKey(&privKey.PublicKey, topic, &localAddrPss)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubKeyId := hexutil.Encode(crypto.FromECDSAPub(&privKey.PublicKey))
+	go func() {
+		err := ps.SendAsym(pubKeyId, topic, []byte("xyzzy"))
+		if err != nil {
+			errC <- err
+		}
+	}()
+	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+	select {
+	case <-delivered:
+	case err := <-errC:
+		t.Fatal(err)
+	case <-ctx.Done():
+		t.Fatal("asym timeout")
+	}
+}
+
 // verify that node can be set as recipient regardless of explicit message address match if minimum one handler of a topic is explicitly set to allow it
 // note that in these tests we use the raw capability on handlers for convenience
 func TestAddressMatchProx(t *testing.T) {
