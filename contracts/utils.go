@@ -58,6 +58,7 @@ type rewardLog struct {
 }
 
 var TxSignMu sync.RWMutex
+
 // Send tx sign for block number to smart contract blockSigner.
 func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
 	TxSignMu.Lock()

@@ -291,7 +291,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
+				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
+
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
@@ -645,4 +648,15 @@ func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, e
 		return contracts.BuildValidatorFromM2(m2), nil
 	}
 	return nil, core.ErrNotFoundM1
+}
+
+func rewardInflation(chainReward *big.Int, number uint64, blockPerYear uint64) *big.Int {
+	if blockPerYear*2 <= number && number < blockPerYear*6 {
+		chainReward.Div(chainReward, new(big.Int).SetUint64(2))
+	}
+	if blockPerYear*6 <= number {
+		chainReward.Div(chainReward, new(big.Int).SetUint64(4))
+	}
+
+	return chainReward
 }
