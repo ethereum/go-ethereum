@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"mime"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -329,13 +330,9 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	// Get dependencies primary first, then alphabetical
 	deps := typedData.Dependencies(primaryType, []string{})
-	for i, dep := range deps {
-		if dep == primaryType {
-			deps = append(deps[:i], deps[i+1:]...)
-			break
-		}
-	}
-	deps = append([]string{primaryType}, deps...)
+	slicedDeps := deps[1:]
+	sort.Strings(slicedDeps)
+	deps = append([]string{primaryType}, slicedDeps...)
 
 	// Format as a string with fields
 	var buffer bytes.Buffer
