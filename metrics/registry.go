@@ -311,7 +311,10 @@ func (r *PrefixedRegistry) UnregisterAll() {
 	r.underlying.UnregisterAll()
 }
 
-var DefaultRegistry Registry = NewRegistry()
+var (
+	DefaultRegistry   = NewRegistry()
+	EphemeralRegistry = NewRegistry()
+)
 
 // Call the given function for each registered metric.
 func Each(f func(string, interface{})) {
