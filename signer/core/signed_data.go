@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -275,9 +276,12 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	if err != nil {
 		return nil, err
 	}
-	msg := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
-	sighash := crypto.Keccak256([]byte(msg))
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: msg, Hash: sighash}
+	msg, err := json.MarshalIndent(typedData.Message, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	sighash := crypto.Keccak256([]byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))))
+	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData, Message: string(msg), Hash: sighash}
 	signature, err := api.Sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -591,7 +595,7 @@ func (typedData *TypedData) IsValid() error {
 	return nil
 }
 
-// Map is a helper function to generate a map version of the typed data
+// Map generates a map version of the typed data
 func (typedData *TypedData) Map() map[string]interface{} {
 	dataMap := map[string]interface{}{
 		"types":       typedData.Types,
@@ -601,6 +605,11 @@ func (typedData *TypedData) Map() map[string]interface{} {
 	}
 
 	return dataMap
+}
+
+// PrettyPrint generates a pretty version of the typed data
+func (typedData *TypedData) PrettyPrint() string {
+	return ""
 }
 
 // IsValid checks if the types object is conformant to the specs
