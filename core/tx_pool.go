@@ -457,6 +457,8 @@ func (pool *TxPool) SubscribeTxPreEvent(ch chan<- TxPreEvent) event.Subscription
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
+// SubscribeSpecialTxPreEvent registers a subscription of TxPreEvent and
+// starts sending event to the given channel.
 func (pool *TxPool) SubscribeSpecialTxPreEvent(ch chan<- TxPreEvent) event.Subscription {
 	return pool.scope.Track(pool.specialTxFeed.Subscribe(ch))
 }

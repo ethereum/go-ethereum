@@ -627,6 +627,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 	var coalescedLogs []*types.Log
 
+	// first priority for special Txs
 	for _, tx := range specialTxs {
 		if gp.Gas() < params.TxGas && tx.Gas() > 0 {
 			log.Trace("Not enough gas for further transactions", "gp", gp)
