@@ -52,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"time"
 )
 
 const NumOfMasternodes = 99
@@ -190,7 +191,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.XDPoS != nil {
 		c := eth.engine.(*XDPoS.XDPoS)
 
-		// Inject hook for send tx sign to smartcontract after insert block into chain.
+		// Hook sends tx sign to smartcontract after inserting block to chain.
 		importedHook := func(block *types.Block) {
 			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
 			if err != nil {
@@ -202,16 +203,62 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
-				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+				// double validation
+				m2, err := getM2(snap, eth, block)
+				if err != nil {
+					log.Error("Fail to validate M2 condition for imported block", "error", err)
+					return
+				}
+				if eth.etherbase != m2 {
+					// firstly, look into pending txPool
+					pendingMap, err := eth.txPool.Pending()
+					if err != nil {
+						log.Error("Fail to get txPool pending", "err", err)
+						//reset pendingMap
+						pendingMap = map[common.Address]types.Transactions{}
+					}
+					txsSentFromM2 := pendingMap[m2]
+					if len(txsSentFromM2) > 0 {
+						for _, tx := range txsSentFromM2 {
+							if tx.To().String() == common.BlockSigners {
+								if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+									log.Error("Fail to create tx sign for imported block", "error", err)
+									return
+								}
+								return
+							}
+						}
+					}
+					//then wait until signTx from m2 comes into txPool
+					txCh := make(chan core.TxPreEvent, txChanSize)
+					subEvent := eth.txPool.SubscribeTxPreEvent(txCh)
+				G:
+					select {
+					case event := <-txCh:
+						from, err := eth.txPool.GetSender(event.Tx)
+						if (err == nil) && (event.Tx.To().String() == common.BlockSigners) && (from == m2) {
+							if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+								log.Error("Fail to create tx sign for imported block", "error", err)
+								return
+							}
+							return
+						}
+					//timeout 10s
+					case <-time.After(time.Duration(10) * time.Second):
+						break G
+					}
+					subEvent.Unsubscribe()
+				} else if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 					log.Error("Fail to create tx sign for imported block", "error", err)
 					return
 				}
+				// end of double validation
 			}
 		}
 		eth.protocolManager.fetcher.SetImportedHook(importedHook)
 
-		// Hook will process when preparing block.
-		c.HookPrepare = func(header *types.Header, signers []common.Address) error {
+		// Hook prepares validators M2 for the current epoch
+		c.HookValidator = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				validators, err := GetValidators(eth.blockchain, signers)
@@ -222,7 +269,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return nil
 		}
-		// Hook penalty.
+
+		// Hook scans for bad masternodes and decide to penalty them
 		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
@@ -263,7 +311,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return []common.Address{}, nil
 		}
 
-		// Hook reward for XDPoS validator.
+		// Hook calculates reward for masternodes
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
@@ -308,7 +356,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 			return nil
 		}
-		c.VerifyValidators = func(header *types.Header, signers []common.Address) error {
+
+		// Hook verifies masternodes set
+		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				validators, err := GetValidators(eth.blockchain, signers)
@@ -324,6 +374,25 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	return eth, nil
+}
+
+func getM2(snap *XDPoS.Snapshot, eth *Ethereum, block *types.Block) (common.Address, error) {
+	epoch := eth.chainConfig.XDPoS.Epoch
+	no := block.NumberU64()
+	cpNo := no
+	if no%epoch != 0 {
+		cpNo = no - (no % epoch)
+	}
+	cpBlk := eth.blockchain.GetBlockByNumber(cpNo)
+	m, err := contracts.GetM1M2FromCheckpointBlock(cpBlk)
+	if err != nil {
+		return common.Address{}, err
+	}
+	m1, err := XDPoS.WhoIsCreator(snap, block.Header())
+	if err != nil {
+		return common.Address{}, err
+	}
+	return m[m1], nil
 }
 
 func makeExtraData(extra []byte) []byte {
