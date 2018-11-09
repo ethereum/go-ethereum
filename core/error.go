@@ -35,4 +35,5 @@ var (
 
 	ErrNotXDPoS = errors.New("XDPoS not found in config")
 
+	ErrNotFoundM1 = errors.New("list M1 not found ")
 )
