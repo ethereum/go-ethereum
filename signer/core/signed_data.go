@@ -19,7 +19,6 @@ package core
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -264,9 +263,14 @@ func SignTextPlain(data hexutil.Bytes) (hexutil.Bytes, string) {
 // SignTypedData signs EIP-712 conformant typed data
 // hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
 func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
-	domainSeparator := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	typedDataHash := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	_, err := json.Marshal(typedData.Map())
+	if err := typedData.IsValid(); err != nil {
+		return nil, err
+	}
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err != nil {
+		return nil, err
+	}
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +286,12 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 }
 
 // HashStruct generates a keccak256 hash of the encoding of the provided data
-func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) hexutil.Bytes {
-	return crypto.Keccak256(typedData.EncodeData(primaryType, data))
+func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) (hexutil.Bytes, error) {
+	encodedData, err := typedData.EncodeData(primaryType, data)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.Keccak256(encodedData), nil
 }
 
 // Dependencies returns an array of custom types ordered by their hierarchical reference tree
@@ -354,7 +362,7 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
-func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) hexutil.Bytes {
+func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) (hexutil.Bytes, error) {
 	encTypes := []string{}
 	encValues := []interface{}{}
 
@@ -362,8 +370,13 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	encTypes = append(encTypes, "bytes32")
 	encValues = append(encValues, typedData.TypeHash(primaryType))
 
+	// Generate error for a mismatch between the provided type and data
+	dataMismatchError := func(encType string, encValue interface{}) error {
+		return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
+	}
+
 	// Handle primitive values
-	handlePrimitiveValue := func(encType string, encValue interface{}) (string, interface{}) {
+	handlePrimitiveValue := func(encType string, encValue interface{}) (string, interface{}, error) {
 		var primitiveEncType string
 		var primitiveEncValue interface{}
 
@@ -374,20 +387,32 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			for i := 0; i < 12; i++ {
 				bytesValue = append(bytesValue, 0)
 			}
-			for _, _byte := range common.HexToAddress(encValue.(string)) {
+			stringValue, ok := encValue.(string)
+			if !ok || !common.IsHexAddress(stringValue) {
+				return "", nil, dataMismatchError(encType, encValue)
+			}
+			for _, _byte := range common.HexToAddress(stringValue) {
 				bytesValue = append(bytesValue, _byte)
 			}
 			primitiveEncValue = bytesValue
 		case "bool":
 			primitiveEncType = "uint256"
 			var int64Val int64
-			if encValue.(bool) {
+			boolValue, ok := encValue.(bool)
+			if !ok {
+				return "", nil, dataMismatchError(encType, encValue)
+			}
+			if boolValue {
 				int64Val = 1
 			}
 			primitiveEncValue = abi.U256(big.NewInt(int64Val))
 		case "bytes", "string":
 			primitiveEncType = "bytes32"
-			primitiveEncValue = crypto.Keccak256(bytesValueOf(encValue))
+			bytesValue, err := bytesValueOf(encValue)
+			if err != nil {
+				return "", nil, dataMismatchError(encType, encValue)
+			}
+			primitiveEncValue = crypto.Keccak256(bytesValue)
 		default:
 			if strings.HasPrefix(encType, "bytes") {
 				encTypes = append(encTypes, "bytes32")
@@ -397,14 +422,21 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				for i := 0; i < 32-size; i++ {
 					bytesValue = append(bytesValue, 0)
 				}
+				if _, ok := encValue.(hexutil.Bytes); !ok {
+					return "", nil, dataMismatchError(encType, encValue)
+				}
 				bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
 				primitiveEncValue = bytesValue
 			} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 				primitiveEncType = "uint256"
-				primitiveEncValue = abi.U256(encValue.(*big.Int))
+				bigIntValue, ok := encValue.(*big.Int)
+				if !ok {
+					return "", nil, dataMismatchError(encType, encValue)
+				}
+				primitiveEncValue = abi.U256(bigIntValue)
 			}
 		}
-		return primitiveEncType, primitiveEncValue
+		return primitiveEncType, primitiveEncValue, nil
 	}
 
 	// Add field contents. Structs and arrays have special handlings.
@@ -414,24 +446,49 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		if encType[len(encType)-1:] == "]" {
 			encTypes = append(encTypes, "bytes32")
 			parsedType := strings.Split(encType, "[")[0]
+
 			arrayBuffer := bytes.Buffer{}
 			for _, item := range encValue.([]interface{}) {
 				if typedData.Types[parsedType] != nil {
-					encoding := typedData.EncodeData(parsedType, item.(map[string]interface{}))
-					arrayBuffer.Write(encoding)
+					mapValue, ok := item.(map[string]interface{})
+					if !ok {
+						return nil, dataMismatchError(parsedType, item)
+					}
+					encodedData, err := typedData.EncodeData(parsedType, mapValue)
+					if err != nil {
+						return nil, err
+					}
+					arrayBuffer.Write(encodedData)
 				} else {
-					_, encValue := handlePrimitiveValue(encType, encValue)
-					arrayBuffer.Write(bytesValueOf(encValue))
+					_, encValue, err := handlePrimitiveValue(encType, encValue)
+					if err != nil {
+						return nil, err
+					}
+					bytesValue, err := bytesValueOf(encValue)
+					if err != nil {
+						return nil, err
+					}
+					arrayBuffer.Write(bytesValue)
 				}
 			}
 			encValues = append(encValues, crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field["type"]] != nil {
 			encTypes = append(encTypes, "bytes32")
-			mapValue := encValue.(map[string]interface{})
-			encValue = crypto.Keccak256(typedData.EncodeData(field["type"], mapValue))
+			mapValue, ok := encValue.(map[string]interface{})
+			if !ok {
+				return nil, dataMismatchError(encType, encValue)
+			}
+			encodedData, err := typedData.EncodeData(field["type"], mapValue)
+			if err != nil {
+				return nil, err
+			}
+			encValue = crypto.Keccak256(encodedData)
 			encValues = append(encValues, encValue)
 		} else {
-			primitiveEncType, primitiveEncValue := handlePrimitiveValue(encType, encValue)
+			primitiveEncType, primitiveEncValue, err := handlePrimitiveValue(encType, encValue)
+			if err != nil {
+				return nil, err
+			}
 			encTypes = append(encTypes, primitiveEncType)
 			encValues = append(encValues, primitiveEncValue)
 		}
@@ -439,31 +496,34 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 	buffer := bytes.Buffer{}
 	for _, encValue := range encValues {
-		buffer.Write(bytesValueOf(encValue))
+		bytesValue, err := bytesValueOf(encValue)
+		if err != nil {
+			return nil, err
+		}
+		buffer.Write(bytesValue)
 	}
 
-	return buffer.Bytes() // https://github.com/ethereumjs/ethereumjs-abi/blob/master/lib/index.js#L336
+	return buffer.Bytes(), nil // https://github.com/ethereumjs/ethereumjs-abi/blob/master/lib/index.js#L336
 }
 
-func bytesValueOf(_interface interface{}) hexutil.Bytes {
+func bytesValueOf(_interface interface{}) (hexutil.Bytes, error) {
 	bytesValue, ok := _interface.(hexutil.Bytes)
 	if ok {
-		return bytesValue
+		return bytesValue, nil
 	}
 
 	switch reflect.TypeOf(_interface) {
 	case reflect.TypeOf(hexutil.Bytes{}):
-		return _interface.(hexutil.Bytes)
+		return _interface.(hexutil.Bytes), nil
 	case reflect.TypeOf([]uint8{}):
-		return _interface.([]uint8)
+		return _interface.([]uint8), nil
 	case reflect.TypeOf(string("")):
-		return hexutil.Bytes(_interface.(string))
+		return hexutil.Bytes(_interface.(string)), nil
 	default:
 		break
 	}
 
-	panic(fmt.Errorf("unrecognized interface type %T", _interface))
-	return hexutil.Bytes{}
+	return nil, fmt.Errorf("unrecognized interface type %T", _interface)
 }
 
 // EcRecover recovers the address associated with the given sig.
@@ -523,6 +583,17 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 	}, nil
 }
 
+// IsValid checks if the typed data is sound
+func (typedData *TypedData) IsValid() error {
+	if err := typedData.Types.IsValid(); err != nil {
+		return err
+	}
+	if err := typedData.Domain.IsValid(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Map is a helper function to generate a map version of the typed data
 func (typedData *TypedData) Map() map[string]interface{} {
 	dataMap := map[string]interface{}{
@@ -535,27 +606,25 @@ func (typedData *TypedData) Map() map[string]interface{} {
 	return dataMap
 }
 
-// IsValid checks if the given types object is conformant to the specs
+// IsValid checks if the types object is conformant to the specs
 func (types *EIP712Types) IsValid() error {
 	for typeKey, typeArr := range *types {
 		for _, typeObj := range typeArr {
 			typeVal := typeObj["type"]
 			if typeKey == typeVal {
-				panic(fmt.Errorf("type %s cannot reference itself", typeVal))
+				return fmt.Errorf("type '%s' cannot reference itself", typeVal)
 			}
-
 			firstChar := []rune(typeVal)[0]
 			if unicode.IsUpper(firstChar) {
 				if (*types)[typeVal] == nil {
-					return fmt.Errorf("referenced type %s is undefined", typeVal)
+					return fmt.Errorf("referenced type '%s' is undefined", typeVal)
 				}
 			} else {
-				// TODO: better type checking
 				if !isStandardTypeStr(typeVal) {
 					if (*types)[typeVal] != nil {
-						return fmt.Errorf("custom type %s must be capitalized", typeVal)
+						return fmt.Errorf("referenced type '%s' must be capitalized", typeVal)
 					} else {
-						return fmt.Errorf("unknown type %s", typeVal)
+						return fmt.Errorf("unknown atomic type '%s'", typeVal)
 					}
 				}
 			}
