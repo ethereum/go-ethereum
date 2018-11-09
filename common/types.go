@@ -249,11 +249,19 @@ func RemoveItemFromArray(array []Address, items []Address) []Address {
 	if items == nil {
 		return array
 	}
-	for i, value := range array {
+	i := 0;
+	for i < len(array) {
+		value := array[i]
+		remove := false
 		for _, item := range items {
 			if value == item {
 				array = append(array[:i], array[i+1:]...)
+				remove = true
+				break
 			}
+		}
+		if !remove {
+			i++
 		}
 	}
 	return array

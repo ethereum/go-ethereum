@@ -151,10 +151,10 @@ func BenchmarkAddressHex(b *testing.B) {
 }
 
 func TestRemoveItemInArray(t *testing.T) {
-	array := []Address{HexToAddress("0x0000000"), HexToAddress("0x0000001"), HexToAddress("0x0000002")}
-	remove := []Address{HexToAddress("0x0000000"), HexToAddress("0x0000004"), HexToAddress("0x0000003")}
+	array := []Address{HexToAddress("0x0000003"),HexToAddress("0x0000001"), HexToAddress("0x0000002"),HexToAddress("0x0000003")}
+	remove := []Address{HexToAddress("0x0000002"), HexToAddress("0x0000004"), HexToAddress("0x0000003")}
 	array = RemoveItemFromArray(array, remove)
-	if len(array) != 2 {
+	if len(array) != 1 {
 		t.Error("fail remove item from array address")
 	}
 }
