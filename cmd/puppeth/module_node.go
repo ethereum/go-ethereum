@@ -184,7 +184,7 @@ func (info *nodeInfos) Report() map[string]string {
 			report["Miner account"] = info.etherbase
 		}
 		if info.keyJSON != "" {
-			// Clique XDPos
+			// Clique XDPoS
 			var key struct {
 				Address string `json:"address"`
 			}
