@@ -40,9 +40,9 @@ import (
 )
 
 const (
-	alpha           = 3  // Kademlia concurrency factor
+	alpha           = 3   // Kademlia concurrency factor
 	bucketSize      = 200 // Kademlia bucket size
-	maxReplacements = 10 // Size of per-bucket replacement list
+	maxReplacements = 10  // Size of per-bucket replacement list
 
 	// We keep buckets for the upper 1/15 of distances because
 	// it's very unlikely we'll ever encounter a node that's closer.

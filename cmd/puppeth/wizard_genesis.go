@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner"
+	multiSignWalletContract "github.com/ethereum/go-ethereum/contracts/multisigwallet"
 	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator"
 	"github.com/ethereum/go-ethereum/crypto"
