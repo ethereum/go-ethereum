@@ -877,6 +877,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 						if signer == masternode {
 							countFinality++
 							filterSigners = append(filterSigners, masternode)
+							break
 						}
 					}
 				}
