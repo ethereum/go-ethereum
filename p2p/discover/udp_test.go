@@ -232,6 +232,7 @@ func TestUDP_findnodeTimeout(t *testing.T) {
 }
 
 func TestUDP_findnode(t *testing.T) {
+	bucketSizeTest := 16
 	test := newUDPTest(t)
 	defer test.table.Close()
 
@@ -240,8 +241,8 @@ func TestUDP_findnode(t *testing.T) {
 	// take care not to overflow any bucket.
 	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
-	for i := 0; i < bucketSize; i++ {
-		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
+	for i := 0; i < bucketSizeTest; i++ {
+		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSizeTest)
 	}
 	test.table.stuff(nodes.entries)
 
@@ -251,12 +252,12 @@ func TestUDP_findnode(t *testing.T) {
 
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
-	expected := test.table.closest(targetHash, bucketSize)
+	expected := test.table.closest(targetHash, bucketSizeTest)
 
 	waitNeighbors := func(want []*Node) {
 		test.waitPacketOut(func(p *neighbors) {
 			if len(p.Nodes) != len(want) {
-				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSizeTest)
 			}
 			for i := range p.Nodes {
 				if p.Nodes[i].ID != want[i].ID {
@@ -411,7 +412,8 @@ var testPackets = []struct {
 		},
 	},
 	{
-		input: "e3e987421accd2c75967d4a7229c436c18760def054738d8d9669697ee4726cdc9949c51df3e90d795d33d3f57d508c4687913338f6eb9caa89873aaae9dd49a5473ade5ea452c4df9d1f842eadf03439dbc373c0de8b20b412b6760d7b479140105f83e82022bd79020010db83c4d001500000000abcdef12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c50102030405",		wantPacket: &ping{
+		input: "e3e987421accd2c75967d4a7229c436c18760def054738d8d9669697ee4726cdc9949c51df3e90d795d33d3f57d508c4687913338f6eb9caa89873aaae9dd49a5473ade5ea452c4df9d1f842eadf03439dbc373c0de8b20b412b6760d7b479140105f83e82022bd79020010db83c4d001500000000abcdef12820cfa8215a8d79020010db885a308d313198a2e037073488208ae82823a8443b9a355c50102030405",
+		wantPacket: &ping{
 			Version:    555,
 			From:       rpcEndpoint{net.ParseIP("2001:db8:3c4d:15::abcd:ef12"), 3322, 5544},
 			To:         rpcEndpoint{net.ParseIP("2001:db8:85a3:8d3:1319:8a2e:370:7348"), 2222, 33338},
@@ -474,7 +476,6 @@ var testPackets = []struct {
 func TestForwardCompatibility(t *testing.T) {
 	testkey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	wantNodeID := PubkeyID(&testkey.PublicKey)
-
 	for _, test := range testPackets {
 		input, err := hex.DecodeString(test.input)
 		if err != nil {

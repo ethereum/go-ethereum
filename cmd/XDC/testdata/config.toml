@@ -28,7 +28,7 @@ UserIdent   =   ""          # flag  --identity
 
 [Node.P2P]
 ListenAddr  =   ":30311"    # flag  --port
-
+MaxPeers    =   200         # flag  --maxpeers
 
 BootstrapNodes = ["enode://a890c5762c406fe046fb93fd307577a8454d571b6bf789f7dbfbf3c559be751f5fa400bc10639691245a9b22be1cfce0bbf82b322a24d06c6dcf29bf7eeb930c@127.0.0.1:30310"]   # flag --bootnodes
 
