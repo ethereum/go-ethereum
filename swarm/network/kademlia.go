@@ -666,7 +666,6 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 	e := len(emptyBins)
 	ok := true
 	depth := k.neighbourhoodDepth()
-	log.Debug("emptybins", "b", emptyBins, "d", depth)
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
 		if po >= depth {
 			return false
@@ -676,7 +675,6 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 		}
 		for i := prev; i < po; i++ {
 			e--
-			log.Debug("e", "e", e)
 			if e < 0 {
 				ok = false
 				return false
