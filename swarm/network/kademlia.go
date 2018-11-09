@@ -609,6 +609,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		prev := 256
 		var emptyBins []int
 		var nns [][]byte
+		depthTraversed := false // any empty bins between furthest nn and nearest non-nn should not be counted as emptybins
 		np.EachNeighbour(addrs[i], pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
 			if po == 256 {
@@ -622,8 +623,12 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 				prev = po
 			}
 			if prev < pl {
-				for j := prev; j > po; j-- {
-					emptyBins = append(emptyBins, j)
+				if !depthTraversed {
+					depthTraversed = true
+				} else {
+					for j := prev; j > po; j-- {
+						emptyBins = append(emptyBins, j)
+					}
 				}
 			}
 			prev = po - 1
@@ -661,12 +666,17 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 	e := len(emptyBins)
 	ok := true
 	depth := k.neighbourhoodDepth()
+	log.Debug("emptybins", "b", emptyBins, "d", depth)
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
+		if po >= depth {
+			return false
+		}
 		if prev == depth+1 {
 			return true
 		}
 		for i := prev; i < po; i++ {
 			e--
+			log.Debug("e", "e", e)
 			if e < 0 {
 				ok = false
 				return false
