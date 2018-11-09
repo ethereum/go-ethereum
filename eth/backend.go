@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -186,12 +186,16 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
 
-	if eth.chainConfig.XDPoS != nil {
-		c := eth.engine.(*XDPoS.XDPoS)
+	if eth.chainConfig.Posv != nil {
+		c := eth.engine.(*posv.Posv)
 
-		// Hook sends tx sign to smartcontract after inserting block to chain.
-		importedHook := func(block *types.Block) error {
-			snap, err := c.GetSnapshot(eth.blockchain, block.Header())
+		// Hook double validation
+		doubleValidateHook := func(block *types.Block) error {
+			parentBlk := eth.blockchain.GetBlockByHash(block.ParentHash())
+			if parentBlk == nil {
+				return fmt.Errorf("Fail to get parent block for hash: %v", block.ParentHash())
+			}
+			snap, err := c.GetSnapshot(eth.blockchain, parentBlk.Header())
 			if err != nil {
 				if err == consensus.ErrUnknownAncestor {
 					log.Warn("Block chain forked.", "error", err)
@@ -199,12 +203,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return fmt.Errorf("Fail to get snapshot for sign tx validator: %v", err)
 			}
 			if _, authorized := snap.Signers[eth.etherbase]; authorized {
-				// double validation
 				m2, err := getM2(snap, eth, block)
 				if err != nil {
 					return fmt.Errorf("Fail to validate M2 condition for importing block: %v", err)
 				}
 				if eth.etherbase != m2 {
+					txCh := make(chan core.TxPreEvent, txChanSize)
+					subEvent := eth.txPool.SubscribeSpecialTxPreEvent(txCh)
+					defer subEvent.Unsubscribe()
 					// firstly, look into pending txPool
 					pendingMap, err := eth.txPool.Pending()
 					if err != nil {
@@ -216,39 +222,36 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					if len(txsSentFromM2) > 0 {
 						for _, tx := range txsSentFromM2 {
 							if tx.To().String() == common.BlockSigners {
-								if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-									return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
-								}
 								return nil
 							}
 						}
 					}
 					//then wait until signTx from m2 comes into txPool
-					txCh := make(chan core.TxPreEvent, txChanSize)
-					subEvent := eth.txPool.SubscribeTxPreEvent(txCh)
-				G:
 					select {
 					case event := <-txCh:
 						from, err := eth.txPool.GetSender(event.Tx)
 						if (err == nil) && (event.Tx.To().String() == common.BlockSigners) && (from == m2) {
-							if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-								return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
-							}
 							return nil
 						}
 					//timeout 10s
 					case <-time.After(time.Duration(10) * time.Second):
-						break G
+						return fmt.Errorf("Time out waiting for confirmation from m2")
 					}
-					subEvent.Unsubscribe()
-				} else if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
-					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 				}
-				// end of double validation
+				return nil
+			}
+			return fmt.Errorf("This address is not authorized to validate block")
+		}
+
+		signHook := func(block *types.Block) error {
+			if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+				return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 			}
 			return nil
 		}
-		eth.protocolManager.fetcher.SetImportedHook(importedHook)
+
+		eth.protocolManager.fetcher.SetDoubleValidateHook(doubleValidateHook)
+		eth.protocolManager.fetcher.SetSignHook(signHook)
 
 		// Hook prepares validators M2 for the current epoch
 		c.HookValidator = func(header *types.Header, signers []common.Address) error {
@@ -269,7 +272,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if err != nil {
 				return nil, err
 			}
-			prevEpoc := blockNumberEpoc - chain.Config().XDPoS.Epoch
+			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
 			if prevEpoc >= 0 {
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
@@ -311,15 +314,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				log.Error("Fail to connect IPC client for blockSigner", "error", err)
 			}
 			number := header.Number.Uint64()
-			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
-			foudationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+			rCheckpoint := chain.Config().Posv.RewardCheckpoint
+			foudationWalletAddr := chain.Config().Posv.FoudationWalletAddr
 			if foudationWalletAddr == (common.Address{}) {
 				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
 			}
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
-				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
@@ -330,9 +333,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					log.Error("Fail to calculate reward for signers", "error", err)
 				}
 				// Get validator.
-				validator, err := contract.NewXDCValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
+				validator, err := contract.NewTomoValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
 				if err != nil {
-					log.Error("Fail get instance of XDC Validator", "error", err)
+					log.Error("Fail get instance of Tomo Validator", "error", err)
 
 					return err
 				}
@@ -359,7 +362,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return err
 				}
 				if !bytes.Equal(header.Validators, validators) {
-					return XDPoS.ErrInvalidCheckpointValidators
+					return posv.ErrInvalidCheckpointValidators
 				}
 			}
 			return nil
@@ -369,8 +372,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-func getM2(snap *XDPoS.Snapshot, eth *Ethereum, block *types.Block) (common.Address, error) {
-	epoch := eth.chainConfig.XDPoS.Epoch
+func getM2(snap *posv.Snapshot, eth *Ethereum, block *types.Block) (common.Address, error) {
+	epoch := eth.chainConfig.Posv.Epoch
 	no := block.NumberU64()
 	cpNo := no
 	if no%epoch != 0 {
@@ -384,7 +387,7 @@ func getM2(snap *XDPoS.Snapshot, eth *Ethereum, block *types.Block) (common.Addr
 	if err != nil {
 		return common.Address{}, err
 	}
-	m1, err := XDPoS.WhoIsCreator(snap, block.Header())
+	m1, err := posv.WhoIsCreator(snap, block.Header())
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -423,8 +426,8 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If proof-of-stake-voting is requested, set it up
-	if chainConfig.XDPoS != nil {
-		return XDPoS.New(chainConfig.XDPoS, db)
+	if chainConfig.Posv != nil {
+		return posv.New(chainConfig.Posv, db)
 	}
 	// Otherwise assume proof-of-work
 	switch {
@@ -550,9 +553,9 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if s.chainConfig.XDPoS != nil {
+	if s.chainConfig.Posv != nil {
 		//check if miner's wallet is in set of validators
-		c := s.engine.(*XDPoS.XDPoS)
+		c := s.engine.(*posv.Posv)
 		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
 			return false, fmt.Errorf("Can't verify miner: %v", err)
@@ -562,7 +565,7 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify miners in XDPoS protocol")
+		return false, fmt.Errorf("Only verify miners in Posv protocol")
 	}
 	return true, nil
 }
@@ -573,13 +576,13 @@ func (s *Ethereum) StartStaking(local bool) error {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
+	if posv, ok := s.engine.(*posv.Posv); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-		XDPoS.Authorize(eb, wallet.SignHash)
+		posv.Authorize(eb, wallet.SignHash)
 	}
 	if local {
 		// If local (CPU) mining is started, we can disable the transaction rejection
@@ -664,8 +667,8 @@ func (s *Ethereum) Stop() error {
 }
 
 func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
-	if bc.Config().XDPoS == nil {
-		return nil, core.ErrNotXDPoS
+	if bc.Config().Posv == nil {
+		return nil, core.ErrNotPoSV
 	}
 	client, err := bc.GetClient()
 	if err != nil {

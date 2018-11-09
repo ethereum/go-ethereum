@@ -81,7 +81,7 @@ var (
 
 	ErrZeroGasPrice = errors.New("zero gas price")
 
-	ErrDuplicateSpecialTransaction = errors.New("duplicate a specail transaction")
+	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
 )
 
 var (
