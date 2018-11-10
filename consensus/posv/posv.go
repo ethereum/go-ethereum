@@ -960,14 +960,13 @@ func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
 	if address, known := c.validatorSignatures.Get(hash); known {
 		return address.(common.Address), nil
 	}
-	// Retrieve the signature from the header extra-data
-	if len(header.Validator) < extraSeal {
+	// Retrieve the signature from the header.Validator
+	// len equals 65 bytes
+	if len(header.Validator) != extraSeal {
 		return common.Address{}, consensus.ErrMissingValidatorSignature
 	}
-	signature := header.Validator[len(header.Validator)-extraSeal:]
-
 	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
+	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), header.Validator)
 	if err != nil {
 		return common.Address{}, err
 	}
