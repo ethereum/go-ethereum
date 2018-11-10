@@ -539,7 +539,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 		return nil, err
 	}
 	// Assemble sign the data with the wallet
-	signature, err := wallet.SignHashWithPassphrase(account, res.Password, sighash)
+	signature, err := wallet.SignTextWithPassphrase(account, res.Password, data)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err

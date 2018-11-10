@@ -78,17 +78,26 @@ func (w *keystoreWallet) Derive(path accounts.DerivationPath, pin bool) (account
 // there is no notion of hierarchical account derivation for plain keystore accounts.
 func (w *keystoreWallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainStateReader) {}
 
-// SignHash implements accounts.Wallet, attempting to sign the given hash with
+// signHash attempts to sign the given hash with
 // the given account. If the wallet does not wrap this particular account, an
 // error is returned to avoid account leakage (even though in theory we may be
 // able to sign via our shared keystore backend).
-func (w *keystoreWallet) SignHash(account accounts.Account, hash []byte) ([]byte, error) {
+func (w *keystoreWallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
 	if !w.Contains(account) {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
 	return w.keystore.SignHash(account, hash)
+}
+
+// SignCliqueHeader implements accounts.Wallet, attempting to sign the given clique header
+func (w *keystoreWallet) SignCliqueHeader(account accounts.Account, header *types.Header) ([]byte, error) {
+	return w.signHash(account, accounts.CliqueHash(header).Bytes())
+}
+
+func (w *keystoreWallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
+	return w.signHash(account, accounts.TextHash(text))
 }
 
 // SignTx implements accounts.Wallet, attempting to sign the given transaction
@@ -106,13 +115,13 @@ func (w *keystoreWallet) SignTx(account accounts.Account, tx *types.Transaction,
 
 // SignHashWithPassphrase implements accounts.Wallet, attempting to sign the
 // given hash with the given account using passphrase as extra authentication.
-func (w *keystoreWallet) SignHashWithPassphrase(account accounts.Account, passphrase string, hash []byte) ([]byte, error) {
+func (w *keystoreWallet) SignTextWithPassphrase(account accounts.Account, passphrase string, text []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
 	if !w.Contains(account) {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
-	return w.keystore.SignHashWithPassphrase(account, passphrase, hash)
+	return w.keystore.SignHashWithPassphrase(account, passphrase, accounts.TextHash(text))
 }
 
 // SignTxWithPassphrase implements accounts.Wallet, attempting to sign the given
