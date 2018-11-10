@@ -649,6 +649,10 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(api.config, block.Number())
 
+	if len(block.Transactions()) == 0 {
+		return nil, vm.Context{}, statedb, nil
+	}
+
 	for idx, tx := range block.Transactions() {
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := tx.AsMessage(signer)
