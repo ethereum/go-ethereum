@@ -88,11 +88,50 @@ type jsonrpcMessage struct {
 }
 
 func (msg *jsonrpcMessage) isNotification() bool {
-	return msg.ID == nil && msg.Method != ""
+	return len(msg.ID) == 0
 }
 
 func (msg *jsonrpcMessage) isResponse() bool {
-	return msg.hasValidID() && msg.Method == "" && len(msg.Params) == 0
+	/**
+	A response object https://www.jsonrpc.org/specification#request_object:
+
+	jsonrpc
+		A String specifying the version of the JSON-RPC protocol. MUST be exactly "2.0".
+
+	result
+		This member is REQUIRED on success.
+		This member MUST NOT exist if there was an error invoking the method.
+		The value of this member is determined by the method invoked on the Server.
+
+	error
+		This member is REQUIRED on error.
+		This member MUST NOT exist if there was no error triggered during invocation.
+		The value for this member MUST be an Object as defined in section 5.1.
+
+	id
+		This member is REQUIRED.
+	**/
+	return msg.hasValidID() && len(msg.Method) == 0 && len(msg.Params) == 0 &&
+		(len(msg.Result) > 0 || msg.Error != nil)
+}
+
+func (msg *jsonrpcMessage) isRequest() bool {
+	/**
+	A request object https://www.jsonrpc.org/specification#request_object:
+
+	jsonrpc
+		A String specifying the version of the JSON-RPC protocol. MUST be exactly "2.0".
+
+	method
+		A String containing the name of the method to be invoked. Method names that begin with the word rpc followed by a period character (U+002E or ASCII 46) are reserved for rpc-internal methods and extensions and MUST NOT be used for anything else.
+
+	params
+		A Structured value that holds the parameter values to be used during the invocation of the method. This member MAY be omitted.
+
+	id
+		An identifier established by the Client that MUST contain a String, Number, or NULL value if included. If it is not included it is assumed to be a notification. The value SHOULD normally not be Null [1] and Numbers SHOULD NOT contain fractional parts [2]
+	*/
+	return msg.hasValidID() && len(msg.Method) > 0 && msg.Error == nil && len(msg.Result) == 0
 }
 
 func (msg *jsonrpcMessage) hasValidID() bool {
@@ -265,6 +304,13 @@ func (c *Client) Notify(method string, args ...interface{}) error {
 		err = c.send(ctx, nil, msg)
 	}
 	return err
+}
+func (c *Client) Respond(msg interface{}) error {
+	if c.isHTTP {
+		return fmt.Errorf("Bidirectional communication not supported over HTTP")
+	}
+	ctx := context.Background()
+	return c.send(ctx, nil, msg)
 }
 
 // CallContext performs a JSON-RPC call with the given arguments. If the context is
@@ -449,9 +495,9 @@ func (c *Client) newNotification(method string, paramsIn ...interface{}) (*jsonr
 // send registers op with the dispatch loop, then sends msg on the connection.
 // if sending fails, op is deregistered.
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
-	if jsonrequest, ok := msg.(jsonrpcMessage); ok {
-		if jsonrequest.isNotification() {
-			// If we send a json-rpc notification, we expect no response
+	if jsonrequest, ok := msg.(*jsonrpcMessage); ok {
+		if jsonrequest.isNotification() || jsonrequest.isResponse() {
+			// If we send a json-rpc notification or response, we expect no response
 			return c.write(ctx, msg)
 		}
 	}
@@ -549,17 +595,19 @@ func (c *Client) dispatch(conn net.Conn) {
 			for _, msg := range batch {
 				switch {
 				case msg.isNotification():
-					log.Trace("", "msg", log.Lazy{Fn: func() string {
+					log.Info("", "msg", log.Lazy{Fn: func() string {
 						return fmt.Sprint("<-readResp: notification ", msg)
 					}})
 					c.handleNotification(msg)
 				case msg.isResponse():
-					log.Trace("", "msg", log.Lazy{Fn: func() string {
+					log.Info("", "msg", log.Lazy{Fn: func() string {
 						return fmt.Sprint("<-readResp: response ", msg)
 					}})
 					c.handleResponse(msg)
+				case msg.isRequest():
+					c.handleRequest(msg)
 				default:
-					log.Debug("", "msg", log.Lazy{Fn: func() string {
+					log.Info("", "msg", log.Lazy{Fn: func() string {
 						return fmt.Sprint("<-readResp: dropping weird message", msg)
 					}})
 					// TODO: maybe close
@@ -670,6 +718,19 @@ func (c *Client) handleResponse(msg *jsonrpcMessage) {
 		go op.sub.start()
 		c.subs[op.sub.subid] = op.sub
 	}
+}
+
+func (c *Client) handleRequest(msg *jsonrpcMessage) {
+	log.Info("Request handling not implemented")
+	response := &jsonrpcMessage{
+		Result:  nil,
+		ID:      msg.ID,
+		Version: "2.0",
+		Error:   &jsonError{Message: "Not implemented", Code: -32603},
+	}
+	go func() {
+		c.Respond(response)
+	}()
 }
 
 // Reading happens on a dedicated goroutine.

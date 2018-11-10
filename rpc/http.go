@@ -136,7 +136,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 		}
 		return err
 	}
-	if jsonrequest, ok := msg.(jsonrpcMessage); ok {
+	if jsonrequest, ok := msg.(*jsonrpcMessage); ok {
 		if jsonrequest.isNotification() {
 			// If we send a json-rpc notification, we expect no response
 			return nil
