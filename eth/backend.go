@@ -188,6 +188,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.Posv != nil {
 		c := eth.engine.(*posv.Posv)
 		signHook := func(block *types.Block) error {
+			ok, err := eth.ValidateMasternode()
+			if err != nil {
+				return fmt.Errorf("Can't verify masternode permission: %v", err)
+			}
+			if !ok {
+				// silently return as this node doesn't have masternode permission to sign block
+				return nil
+			}
 			if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 				return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 			}
@@ -497,8 +505,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-// ValidateMiner checks if node's address is in set of validators
-func (s *Ethereum) ValidateStaker() (bool, error) {
+// ValidateMasternode checks if node's address is in set of masternodes
+func (s *Ethereum) ValidateMasternode() (bool, error) {
 	eb, err := s.Etherbase()
 	if err != nil {
 		return false, err
@@ -508,14 +516,14 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 		c := s.engine.(*posv.Posv)
 		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
-			return false, fmt.Errorf("Can't verify miner: %v", err)
+			return false, fmt.Errorf("Can't verify masternode permission: %v", err)
 		}
 		if _, authorized := snap.Signers[eb]; !authorized {
 			//This miner doesn't belong to set of validators
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify miners in Posv protocol")
+		return false, fmt.Errorf("Only verify masternode permission in PoSV protocol")
 	}
 	return true, nil
 }

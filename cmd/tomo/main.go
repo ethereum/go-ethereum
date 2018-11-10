@@ -288,12 +288,12 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 	if _, ok := ethereum.Engine().(*posv.Posv); ok {
 		go func() {
 			started := false
-			ok, err := ethereum.ValidateStaker()
+			ok, err := ethereum.ValidateMasternode()
 			if err != nil {
-				utils.Fatalf("Can't verify validator permission: %v", err)
+				utils.Fatalf("Can't verify masternode permission: %v", err)
 			}
 			if ok {
-				log.Info("Validator found. Enabling staking mode...")
+				log.Info("Masternode found. Enabling staking mode...")
 				// Use a reduced number of threads if requested
 				if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 					type threaded interface {
@@ -314,7 +314,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg tomoConfig) {
 			defer close(core.CheckpointCh)
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
-				ok, err := ethereum.ValidateStaker()
+				ok, err := ethereum.ValidateMasternode()
 				if err != nil {
 					utils.Fatalf("Can't verify masternode permission: %v", err)
 				}
