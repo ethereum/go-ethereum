@@ -247,16 +247,18 @@ func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 
 // Extract validators from byte array.
 func RemoveItemFromArray(array []Address, items []Address) []Address {
-	if items == nil {
+	if len(items) == 0 {
 		return array
 	}
-	for i, value := range array {
-		for _, item := range items {
-			if value == item {
+
+	for _, item := range items {
+		for i := len(array) - 1; i >= 0; i-- {
+			if array[i] == item {
 				array = append(array[:i], array[i+1:]...)
 			}
 		}
 	}
+
 	return array
 }
 
