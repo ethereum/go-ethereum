@@ -960,7 +960,8 @@ func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
 	if address, known := c.validatorSignatures.Get(hash); known {
 		return address.(common.Address), nil
 	}
-	// Retrieve the signature from the header extra-data
+	// Retrieve the signature from the header.Validator
+	// len equals 65 bytes
 	if len(header.Validator) != extraSeal {
 		return common.Address{}, consensus.ErrMissingValidatorSignature
 	}
