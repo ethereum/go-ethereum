@@ -245,6 +245,28 @@ func (c *Client) Call(result interface{}, method string, args ...interface{}) er
 	return c.CallContext(ctx, result, method, args...)
 }
 
+// Notify sends a JSON-RPC notification with the given arguments, and does not wait for a response,
+// effectively ignoring any responses sent
+//
+// https://www.jsonrpc.org/specification#request_object:
+// A Notification is a Request object without an "id" member.
+// A Request object that is a Notification signifies the Client's lack of interest in the
+// corresponding Response object, and as such no Response object needs to be returned to the client.
+// The Server MUST NOT reply to a Notification, including those that are within a batch request.
+func (c *Client) Notify(method string, args ...interface{}) error {
+	ctx := context.Background()
+	msg, err := c.newNotification(method, args...)
+	if err != nil {
+		return err
+	}
+	if c.isHTTP {
+		err = c.sendHTTP(ctx, nil, msg)
+	} else {
+		err = c.send(ctx, nil, msg)
+	}
+	return err
+}
+
 // CallContext performs a JSON-RPC call with the given arguments. If the context is
 // canceled before the call has successfully returned, CallContext returns immediately.
 //
@@ -416,9 +438,23 @@ func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMes
 	return &jsonrpcMessage{Version: "2.0", ID: c.nextID(), Method: method, Params: params}, nil
 }
 
+func (c *Client) newNotification(method string, paramsIn ...interface{}) (*jsonrpcMessage, error) {
+	params, err := json.Marshal(paramsIn)
+	if err != nil {
+		return nil, err
+	}
+	return &jsonrpcMessage{Version: "2.0", Method: method, Params: params}, nil
+}
+
 // send registers op with the dispatch loop, then sends msg on the connection.
 // if sending fails, op is deregistered.
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
+	if jsonrequest, ok := msg.(jsonrpcMessage); ok {
+		if jsonrequest.isNotification() {
+			// If we send a json-rpc notification, we expect no response
+			return c.write(ctx, msg)
+		}
+	}
 	select {
 	case c.requestOp <- op:
 		log.Trace("", "msg", log.Lazy{Fn: func() string {
