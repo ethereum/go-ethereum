@@ -579,7 +579,7 @@ func TestTransactionPostponing(t *testing.T) {
 	txs := []*types.Transaction{}
 	for i, key := range keys {
 
-		for j := 0; j < 100; j++ {
+		for j := 0; j < 10; j++ {
 			var tx *types.Transaction
 			if (i+j)%2 == 0 {
 				tx = transaction(uint64(j), 25000, key)
@@ -628,7 +628,7 @@ func TestTransactionPostponing(t *testing.T) {
 	if _, ok := pool.queue[accs[0]].txs.items[txs[0].Nonce()]; ok {
 		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txs[0])
 	}
-	for i, tx := range txs[1:100] {
+	for i, tx := range txs[1:10] {
 		if i%2 == 1 {
 			if _, ok := pool.pending[accs[0]].txs.items[tx.Nonce()]; ok {
 				t.Errorf("tx %d: valid but future transaction present in pending pool: %v", i+1, tx)
@@ -650,7 +650,7 @@ func TestTransactionPostponing(t *testing.T) {
 	if pool.pending[accs[1]] != nil {
 		t.Errorf("invalidated account still has pending transactions")
 	}
-	for i, tx := range txs[100:] {
+	for i, tx := range txs[10:] {
 		if i%2 == 1 {
 			if _, ok := pool.queue[accs[1]].txs.items[tx.Nonce()]; !ok {
 				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", 100+i, tx)
@@ -734,9 +734,9 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 
 	account, _ := deriveSender(transaction(0, 0, key))
 	pool.currentState.AddBalance(account, big.NewInt(1000000))
-
+	testTxPoolConfig.AccountQueue = 10
 	// Keep queuing up transactions and make sure all above a limit are dropped
-	for i := uint64(1); i <= testTxPoolConfig.AccountQueue+5; i++ {
+	for i := uint64(1); i <= testTxPoolConfig.AccountQueue; i++ {
 		if err := pool.AddRemote(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
@@ -780,6 +780,7 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 
 	config := testTxPoolConfig
 	config.NoLocals = nolocals
+	config.AccountQueue = 1
 	config.GlobalQueue = config.AccountQueue*3 - 1 // reduce the queue limits to shorten test time (-1 to make it non divisible)
 
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
@@ -974,8 +975,8 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 
 	account1, _ := deriveSender(transaction(0, 0, key1))
 	pool1.currentState.AddBalance(account1, big.NewInt(1000000))
-
-	for i := uint64(0); i < testTxPoolConfig.AccountQueue+5; i++ {
+	testTxPoolConfig.AccountQueue = 10
+	for i := uint64(0); i < testTxPoolConfig.AccountQueue; i++ {
 		if err := pool1.AddRemote(transaction(origin+i, 100000, key1)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
@@ -988,7 +989,7 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	pool2.currentState.AddBalance(account2, big.NewInt(1000000))
 
 	txs := []*types.Transaction{}
-	for i := uint64(0); i < testTxPoolConfig.AccountQueue+5; i++ {
+	for i := uint64(0); i < testTxPoolConfig.AccountQueue; i++ {
 		txs = append(txs, transaction(origin+i, 100000, key2))
 	}
 	pool2.AddRemotes(txs)
@@ -1106,7 +1107,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 
 	config := testTxPoolConfig
 	config.GlobalSlots = 0
-
+	config.AccountSlots = 5
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
 
@@ -1285,20 +1286,20 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
 	}
 	// Create transaction (both pending and queued) with a linearly growing gasprice
-	for i := uint64(0); i < 500; i++ {
+	for i := uint64(0); i < 5; i++ {
 		// Add pending
 		p_tx := pricedTransaction(i, 100000, big.NewInt(int64(i+1)), keys[2])
 		if err := pool.AddLocal(p_tx); err != nil {
 			t.Fatal(err)
 		}
 		// Add queued
-		q_tx := pricedTransaction(i+501, 100000, big.NewInt(int64(i+1)), keys[2])
+		q_tx := pricedTransaction(i+6, 100000, big.NewInt(int64(i+1)), keys[2])
 		if err := pool.AddLocal(q_tx); err != nil {
 			t.Fatal(err)
 		}
 	}
 	pending, queued := pool.Stats()
-	expPending, expQueued := 500, 500
+	expPending, expQueued := 5, 5
 	validate := func() {
 		pending, queued = pool.Stats()
 		if pending != expPending {

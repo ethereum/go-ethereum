@@ -339,6 +339,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return nil
 		}
+		eth.txPool.IsMasterNode = func(address common.Address) bool {
+			currentHeader := eth.blockchain.CurrentHeader()
+			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
+			if err != nil {
+				log.Error("Can't get snap shot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex())
+				return false
+			}
+			if _, ok := snap.Signers[address]; ok {
+				return true
+			}
+			return false
+		}
 	}
 
 	return eth, nil
