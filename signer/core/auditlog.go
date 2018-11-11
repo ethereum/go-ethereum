@@ -80,14 +80,13 @@ func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.Raw
 	return j, e
 }
 
-//func (l *AuditLogger) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
-//	// Don't actually log the json contents
-//	l.log.Info("Import", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-//		"keyJSON size", len(keyJSON))
-//	a, e := l.api.Import(ctx, keyJSON)
-//	l.log.Info("Import", "type", "response", "addr", a.String(), "error", e)
-//	return a, e
-//}
+func (l *AuditLogger) Version(ctx context.Context) (string, error) {
+	l.log.Info("Version", "type", "request", "metadata", MetadataFromContext(ctx).String())
+	data, err := l.api.Version(ctx)
+	l.log.Info("Version", "type", "response", "data", data, "error", err)
+	return data, err
+
+}
 
 func NewAuditLogger(path string, api ExternalAPI) (*AuditLogger, error) {
 	l := log.New("api", "signer")

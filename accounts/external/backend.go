@@ -1,7 +1,6 @@
 package external
 
 import (
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -31,7 +30,7 @@ func NewExternalBackend(endpoint string) (*ExternalBackend, error) {
 		return nil, err
 	}
 	return &ExternalBackend{
-		signers: []accounts.Wallet{ signer},
+		signers: []accounts.Wallet{signer},
 	}, nil
 }
 
@@ -48,6 +47,7 @@ func (eb *ExternalBackend) Subscribe(sink chan<- accounts.WalletEvent) event.Sub
 type ExternalSigner struct {
 	client   *rpc.Client
 	endpoint string
+	status   string
 	cacheMu  sync.RWMutex
 	cache    []accounts.Account
 }
@@ -57,10 +57,17 @@ func NewExternalSigner(endpoint string) (*ExternalSigner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ExternalSigner{
+	extsigner := &ExternalSigner{
 		client:   client,
 		endpoint: endpoint,
-	}, nil
+	}
+	// Check if reachable
+	version, err := extsigner.pingVersion()
+	if err != nil {
+		return nil, err
+	}
+	extsigner.status = fmt.Sprintf("ok [version=%v]", version)
+	return extsigner, nil
 }
 
 func (api *ExternalSigner) URL() accounts.URL {
@@ -71,7 +78,7 @@ func (api *ExternalSigner) URL() accounts.URL {
 }
 
 func (api *ExternalSigner) Status() (string, error) {
-	return "ok", nil
+	return api.status, nil
 }
 
 func (api *ExternalSigner) Open(passphrase string) error {
@@ -107,8 +114,8 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
 	defer api.cacheMu.RUnlock()
-	for _, a := range api.cache{
-		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()){
+	for _, a := range api.cache {
+		if a.Address == account.Address && (account.URL == (accounts.URL{}) || account.URL == api.URL()) {
 			return true
 		}
 	}
@@ -134,10 +141,9 @@ func (api *ExternalSigner) SignCliqueHeader(account accounts.Account, header *ty
 	return api.signHash(account, accounts.CliqueHash(header).Bytes())
 }
 
-func (api *ExternalSigner) SignText(account accounts.Account, text []byte)([]byte, error){
+func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
 	return api.signHash(account, accounts.TextHash(text))
 }
-
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	res := ethapi.SignTransactionResult{}
@@ -174,17 +180,8 @@ func (api *ExternalSigner) listAccounts() ([]common.Address, error) {
 	}
 	return res, nil
 }
-func (api *ExternalSigner) newAccount() (common.Address, error) {
-	var res accounts.Account
-	if err := api.client.Call(&res, "account_new"); err != nil {
-		return common.Address{}, err
-	}
-	return res.Address, nil
-}
+
 func (api *ExternalSigner) signCliqueBlock(a common.Address, rlpBlock hexutil.Bytes) (hexutil.Bytes, error) {
-	if api == nil {
-		return nil, errors.New("External API not initialized")
-	}
 	var sig hexutil.Bytes
 	if err := api.client.Call(&sig, "account_signData", "application/clique", a, rlpBlock); err != nil {
 		return nil, err
@@ -194,4 +191,12 @@ func (api *ExternalSigner) signCliqueBlock(a common.Address, rlpBlock hexutil.By
 	}
 	sig[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
 	return sig, nil
+}
+
+func (api *ExternalSigner) pingVersion() (string, error) {
+	var v string
+	if err := api.client.Call(&v, "account_version"); err != nil {
+		return "", err
+	}
+	return v, nil
 }
