@@ -36,8 +36,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
-const numberOfAccountsToDerive = 10
+const(
+	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
+	numberOfAccountsToDerive = 10
+	// ExternalAPIVersion -- see extapi_changelog.md
+	ExternalAPIVersion = "4.0.0"
+	// InternalAPIVersion -- see intapi_changelog.md
+	InternalAPIVersion = "3.0.0"
+)
 
 // ExternalAPI defines the external API through which signing requests are made.
 type ExternalAPI interface {

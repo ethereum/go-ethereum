@@ -49,12 +49,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "4.0.0"
-
-// InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "3.0.0"
-
 const legalWarning = `
 WARNING! 
 
@@ -109,6 +103,11 @@ var (
 		Name:  "auditlog",
 		Usage: "File used to emit audit logs. Set to \"\" to disable",
 		Value: "audit.log",
+	}
+	timeoutFlag = cli.DurationFlag{
+		Name:  "timeout",
+		Usage: "Specify a timeout, so external callers get a response within a certain time (default 0 = no timeout)",
+		Value: 0,
 	}
 	ruleFlag = cli.StringFlag{
 		Name:  "rules",
@@ -194,6 +193,7 @@ func init() {
 		dBFlag,
 		customDBFlag,
 		auditLogFlag,
+		timeoutFlag,
 		ruleFlag,
 		stdiouiFlag,
 		testFlag,
@@ -414,6 +414,12 @@ func signer(c *cli.Context) error {
 		c.GlobalBool(utils.LightKDFFlag.Name),
 		c.GlobalBool(advancedMode.Name))
 	api = apiImpl
+
+	// Timeout
+	if timeout := c.GlobalDuration(timeoutFlag.Name); timeout > 0 {
+		log.Info("extapi timeout set", "time", timeout)
+		api = core.NewTimedExternalAPI(api, timeout)
+	}
 	// Audit logging
 	if logfile := c.GlobalString(auditLogFlag.Name); logfile != "" {
 		api, err = core.NewAuditLogger(logfile, api)
@@ -479,8 +485,8 @@ func signer(c *cli.Context) error {
 	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"extapi_version": ExternalAPIVersion,
-			"intapi_version": InternalAPIVersion,
+			"extapi_version": core.ExternalAPIVersion,
+			"intapi_version": core.InternalAPIVersion,
 			"extapi_http":    extapiURL,
 			"extapi_ipc":     ipcapiURL,
 		},
