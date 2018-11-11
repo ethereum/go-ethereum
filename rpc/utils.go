@@ -133,30 +133,22 @@ METHODS:
 			firstArg = 2
 		}
 
-		if h.isSubscribe {
-			h.argTypes = make([]reflect.Type, numIn-firstArg) // skip rcvr type
-			for i := firstArg; i < numIn; i++ {
-				argType := mtype.In(i)
-				if isExportedOrBuiltinType(argType) {
-					h.argTypes[i-firstArg] = argType
-				} else {
-					continue METHODS
-				}
-			}
-
-			subscriptions[mname] = &h
-			continue METHODS
-		}
-
 		// determine method arguments, ignore first arg since it's the receiver type
-		// Arguments must be exported or builtin types
 		h.argTypes = make([]reflect.Type, numIn-firstArg)
 		for i := firstArg; i < numIn; i++ {
 			argType := mtype.In(i)
-			if !isExportedOrBuiltinType(argType) {
+
+			// Arguments must be exported or builtin types
+			if isExportedOrBuiltinType(argType) {
+				h.argTypes[i-firstArg] = argType
+			} else {
 				continue METHODS
 			}
-			h.argTypes[i-firstArg] = argType
+		}
+
+		if h.isSubscribe {
+			subscriptions[mname] = &h
+			continue METHODS
 		}
 
 		// check that all returned values are exported or builtin types
