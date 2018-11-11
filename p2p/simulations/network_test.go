@@ -18,123 +18,13 @@ package simulations
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 )
-
-var loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-
-func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-}
-
-//TestSnapshotExplicit tests that nodes connect and disconnect properly
-//and that the exposed services are as perscribed
-func TestSnapshotExplicit(t *testing.T) {
-	adapter := adapters.NewSimAdapter(adapters.Services{
-		"dummy":  newDummyService,
-		"dummy2": newDummy2Service,
-	})
-	network := NewNetwork(adapter, &NetworkConfig{
-		DefaultService: "dummy",
-	})
-	defer network.Shutdown()
-	nodeCount := 3
-	ids := make([]enode.ID, nodeCount)
-	for i := 0; i < nodeCount; i++ {
-		conf := adapters.RandomNodeConfig()
-		conf.Services = []string{"dummy", "dummy2"}
-		node, err := network.NewNodeWithConfig(conf)
-		if err != nil {
-			t.Fatalf("error creating node: %s", err)
-		}
-		if err := network.Start(node.ID()); err != nil {
-			t.Fatalf("error starting node: %s", err)
-		}
-		ids[i] = node.ID()
-	}
-	var eventsDone = make(chan struct{})
-	count := 2
-	events := make(chan *Event)
-	sub := network.Events().Subscribe(events)
-	go func() {
-		for event := range events {
-			if event.Type == EventTypeConn && !event.Control {
-				count--
-				if count == 0 {
-					eventsDone <- struct{}{}
-					return
-				}
-			}
-		}
-	}()
-	err := network.Connect(ids[0], ids[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = network.Connect(ids[0], ids[2])
-	if err != nil {
-		t.Fatal(err)
-	}
-	<-eventsDone
-	go func() {
-		defer sub.Unsubscribe()
-		for event := range events {
-			if event.Type == EventTypeConn && !event.Control {
-				eventsDone <- struct{}{}
-				return
-			}
-		}
-	}()
-	err = network.Disconnect(ids[0], ids[2])
-	if err != nil {
-		t.Fatal(err)
-	}
-	<-eventsDone
-
-	snap, err := network.Snapshot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snap.Conns) > 1 {
-		t.Fatalf("expected one connect object")
-	}
-	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "dummy" && svc != "dummy2" {
-			t.Fatalf("unexpected service %s", svc)
-		}
-	}
-
-	snap, err = network.SnapshotWithServices([]string{"bzz"}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "dummy" && svc != "dummy2" && svc != "bzz" {
-			t.Fatalf("unexpected service %s", svc)
-		}
-	}
-
-	snap, err = network.SnapshotWithServices([]string{"bzz"}, []string{"dummy2"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, svc := range snap.Nodes[0].Node.Config.Services {
-		if svc != "dummy" && svc != "bzz" {
-			t.Fatalf("unexpected service %s", svc)
-		}
-	}
-}
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
 // connected in a ring topology, checks that all nodes successfully handshake
@@ -267,29 +157,4 @@ func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, i
 			return
 		}
 	}
-}
-
-type dummyService struct {
-}
-type dummy2Service struct {
-	dummyService
-}
-
-func newDummyService(ctx *adapters.ServiceContext) (node.Service, error) {
-	return &dummyService{}, nil
-}
-func newDummy2Service(ctx *adapters.ServiceContext) (node.Service, error) {
-	return &dummy2Service{}, nil
-}
-func (p *dummyService) APIs() []rpc.API {
-	return []rpc.API{}
-}
-func (p *dummyService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
-}
-func (p *dummyService) Start(server *p2p.Server) error {
-	return nil
-}
-func (p *dummyService) Stop() error {
-	return nil
 }
