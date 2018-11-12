@@ -71,6 +71,8 @@ type LightChain struct {
 	wg            sync.WaitGroup
 
 	engine consensus.Engine
+
+	disableCheckFreq bool
 }
 
 // NewLightChain returns a fully initialised light chain using information
@@ -355,6 +357,9 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	if self.disableCheckFreq {
+		checkFreq = 0
+	}
 	start := time.Now()
 	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
@@ -532,4 +537,18 @@ func (self *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (self *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return self.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+//DisableCheckFreq disables header validation. It needs for ULC
+func (self *LightChain) DisableCheckFreq() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.disableCheckFreq = true
+}
+
+//EnableCheckFreq enables header validation
+func (self *LightChain) EnableCheckFreq() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.disableCheckFreq = false
 }
