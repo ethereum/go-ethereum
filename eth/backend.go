@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"bytes"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -188,6 +189,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.chainConfig.XDPoS != nil {
 		c := eth.engine.(*XDPoS.XDPoS)
 		signHook := func(block *types.Block) error {
+			ok, err := eth.ValidateMasternode()
+			if err != nil {
+				return fmt.Errorf("Can't verify masternode permission: %v", err)
+			}
+			if !ok {
+				// silently return as this node doesn't have masternode permission to sign block
+				return nil
+			}
 			if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
 				return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
 			}
@@ -224,6 +233,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook prepares validators M2 for the current epoch
 		c.HookValidator = func(header *types.Header, signers []common.Address) error {
+			start := time.Now()
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				validators, err := GetValidators(eth.blockchain, signers)
@@ -232,6 +242,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 				header.Validators = validators
 			}
+			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			return nil
 		}
 
@@ -243,6 +254,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			prevEpoc := blockNumberEpoc - chain.Config().XDPoS.Epoch
 			if prevEpoc >= 0 {
+				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
@@ -271,6 +283,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 				}
+				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
 				return penSigners, nil
 			}
 			return []common.Address{}, nil
@@ -288,13 +301,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if foudationWalletAddr == (common.Address{}) {
 				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
 			}
+			start := time.Now()
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
 				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
-				
+
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				if err != nil {
@@ -321,7 +335,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 			}
-
+			log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			return nil
 		}
 
@@ -329,7 +343,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
+				start := time.Now()
 				validators, err := GetValidators(eth.blockchain, signers)
+				log.Debug("Time Calculated HookVerifyMNs ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					return err
 				}
@@ -497,8 +513,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-// ValidateMiner checks if node's address is in set of validators
-func (s *Ethereum) ValidateStaker() (bool, error) {
+// ValidateMasternode checks if node's address is in set of masternodes
+func (s *Ethereum) ValidateMasternode() (bool, error) {
 	eb, err := s.Etherbase()
 	if err != nil {
 		return false, err
@@ -508,14 +524,14 @@ func (s *Ethereum) ValidateStaker() (bool, error) {
 		c := s.engine.(*XDPoS.XDPoS)
 		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
-			return false, fmt.Errorf("Can't verify miner: %v", err)
+			return false, fmt.Errorf("Can't verify masternode permission: %v", err)
 		}
 		if _, authorized := snap.Signers[eb]; !authorized {
 			//This miner doesn't belong to set of validators
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify miners in XDPoS protocol")
+		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
 	}
 	return true, nil
 }
