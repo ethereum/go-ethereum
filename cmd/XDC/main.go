@@ -58,17 +58,17 @@ var (
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.NoUSBFlag,
-		utils.DashboardEnabledFlag,
-		utils.DashboardAddrFlag,
-		utils.DashboardPortFlag,
-		utils.DashboardRefreshFlag,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
+		//utils.NoUSBFlag,
+		//utils.DashboardEnabledFlag,
+		//utils.DashboardAddrFlag,
+		//utils.DashboardPortFlag,
+		//utils.DashboardRefreshFlag,
+		//utils.EthashCacheDirFlag,
+		//utils.EthashCachesInMemoryFlag,
+		//utils.EthashCachesOnDiskFlag,
+		//utils.EthashDatasetDirFlag,
+		//utils.EthashDatasetsInMemoryFlag,
+		//utils.EthashDatasetsOnDiskFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -83,13 +83,13 @@ var (
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
-		utils.LightServFlag,
-		utils.LightPeersFlag,
-		utils.LightKDFFlag,
-		utils.CacheFlag,
-		utils.CacheDatabaseFlag,
-		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
+		//utils.LightServFlag,
+		//utils.LightPeersFlag,
+		//utils.LightKDFFlag,
+		//utils.CacheFlag,
+		//utils.CacheDatabaseFlag,
+		//utils.CacheGCFlag,
+		//utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -100,25 +100,25 @@ var (
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
-		utils.DiscoveryV5Flag,
-		utils.NetrestrictFlag,
+		//utils.DiscoveryV5Flag,
+		//utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		utils.DeveloperFlag,
-		utils.DeveloperPeriodFlag,
-		utils.TestnetFlag,
-		utils.RinkebyFlag,
-		utils.VMEnableDebugFlag,
+		//utils.DeveloperFlag,
+		//utils.DeveloperPeriodFlag,
+		//utils.TestnetFlag,
+		//utils.RinkebyFlag,
+		//utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
-		utils.FakePoWFlag,
-		utils.NoCompactionFlag,
-		utils.GpoBlocksFlag,
-		utils.GpoPercentileFlag,
-		utils.ExtraDataFlag,
+		//utils.FakePoWFlag,
+		//utils.NoCompactionFlag,
+		//utils.GpoBlocksFlag,
+		//utils.GpoPercentileFlag,
+		//utils.ExtraDataFlag,
 		configFileFlag,
 	}
 
@@ -153,13 +153,8 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
-		importPreimagesCommand,
-		exportPreimagesCommand,
-		copydbCommand,
 		removedbCommand,
 		dumpCommand,
-		// See monitorcmd.go:
-		monitorCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -168,11 +163,7 @@ func init() {
 		attachCommand,
 		javascriptCommand,
 		// See misccmd.go:
-		makecacheCommand,
-		makedagCommand,
 		versionCommand,
-		bugCommand,
-		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
 	}
@@ -182,7 +173,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
-	app.Flags = append(app.Flags, whisperFlags...)
+	//app.Flags = append(app.Flags, whisperFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -297,12 +288,12 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
-			ok, err := ethereum.ValidateStaker()
+			ok, err := ethereum.ValidateMasternode()
 			if err != nil {
-				utils.Fatalf("Can't verify validator permission: %v", err)
+				utils.Fatalf("Can't verify masternode permission: %v", err)
 			}
 			if ok {
-				log.Info("Validator found. Enabling staking mode...")
+				log.Info("Masternode found. Enabling staking mode...")
 				// Use a reduced number of threads if requested
 				if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
 					type threaded interface {
@@ -321,41 +312,37 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 				log.Info("Enabled staking node!!!")
 			}
 			defer close(core.CheckpointCh)
-			for {
-				select {
-				case <-core.CheckpointCh:
-					log.Info("Checkpoint!!! It's time to reconcile node's state...")
-					ok, err := ethereum.ValidateStaker()
-					if err != nil {
-						utils.Fatalf("Can't verify masternode permission: %v", err)
+			for range core.CheckpointCh {
+				log.Info("Checkpoint!!! It's time to reconcile node's state...")
+				ok, err := ethereum.ValidateMasternode()
+				if err != nil {
+					utils.Fatalf("Can't verify masternode permission: %v", err)
+				}
+				if !ok {
+					if started {
+						log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
+						ethereum.StopStaking()
+						started = false
+						log.Info("Cancelled mining mode!!!")
 					}
-					if !ok {
-						if started {
-							log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
-							ethereum.StopStaking()
-							started = false
-							log.Info("Cancelled mining mode!!!")
+				} else if !started {
+					log.Info("Masternode found. Enabling staking mode...")
+					// Use a reduced number of threads if requested
+					if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
+						type threaded interface {
+							SetThreads(threads int)
 						}
-					} else if !started {
-						log.Info("Masternode found. Enabling staking mode...")
-						// Use a reduced number of threads if requested
-						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
-							type threaded interface {
-								SetThreads(threads int)
-							}
-							if th, ok := ethereum.Engine().(threaded); ok {
-								th.SetThreads(threads)
-							}
+						if th, ok := ethereum.Engine().(threaded); ok {
+							th.SetThreads(threads)
 						}
-						// Set the gas price to the limits from the CLI and start mining
-						ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-						if err := ethereum.StartStaking(true); err != nil {
-							utils.Fatalf("Failed to start staking: %v", err)
-						}
-						started = true
-						log.Info("Enabled staking node!!!")
 					}
-			
+					// Set the gas price to the limits from the CLI and start mining
+					ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
+					if err := ethereum.StartStaking(true); err != nil {
+						utils.Fatalf("Failed to start staking: %v", err)
+					}
+					started = true
+					log.Info("Enabled staking node!!!")
 				}
 			}
 		}()
