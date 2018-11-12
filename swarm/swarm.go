@@ -363,6 +363,8 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
+	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
+	//Once we integrate back the contracts, this check MUST be revisited
 	if self.config.SwapEnabled && self.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := self.SetChequebook(ctx)

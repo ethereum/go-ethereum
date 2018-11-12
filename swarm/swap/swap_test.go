@@ -45,6 +45,34 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
+//Test getting a peer's balance
+func TestGetPeerBalance(t *testing.T) {
+	//create a test swap account
+	swap, testDir := createTestSwap(t)
+	defer os.RemoveAll(testDir)
+
+	//test for correct value
+	testPeer := newDummyPeer()
+	swap.balances[testPeer.ID()] = 888
+	b, err := swap.GetPeerBalance(testPeer.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b != 888 {
+		t.Fatalf("Expected peer's balance to be %d, but is %d", 888, b)
+	}
+
+	//test for inexistent node
+	id := adapters.RandomNodeConfig().ID
+	_, err = swap.GetPeerBalance(id)
+	if err == nil {
+		t.Fatal("Expected call to fail, but it didn't!")
+	}
+	if err.Error() != "Peer not found" {
+		t.Fatalf("Expected test to fail with %s, but is %s", "Peer not found", err.Error())
+	}
+}
+
 //Test that repeated bookings do correct accounting
 func TestRepeatedBookings(t *testing.T) {
 	//create a test swap account
