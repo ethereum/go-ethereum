@@ -454,20 +454,32 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 	}
 	var size int
 	var b bool
+	var lastPo int
 	f := func(v pot.Val, i int) bool {
 		size++
+
+		// the actual depth of the farthest nn
 		if size == k.MinProxBinSize {
 			b = true
 			depth = i
 			return true
 		}
+
+		// if there are empty bins between farthest nn and current node, the depth should be the farthest of those empty bins
 		if b && i < depth {
 			depth = i + 1
+			lastPo = i
 			return false
 		}
+		lastPo = i
 		return true
 	}
 	k.conns.EachNeighbour(k.base, pof, f)
+
+	// cover edge case where more than one farthest nn and only proxpeers
+	if lastPo == depth {
+		depth = 0
+	}
 	return depth
 }
 

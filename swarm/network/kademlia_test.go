@@ -76,7 +76,7 @@ func Register(k *Kademlia, regs ...string) {
 	}
 }
 
-func TestNeighborhoodDepth(t *testing.T) {
+func TestNeighbourhoodDepth(t *testing.T) {
 	baseAddressBytes := RandomAddr().OAddr
 	kad := NewKademlia(baseAddressBytes, NewKadParams())
 
@@ -103,7 +103,7 @@ func TestNeighborhoodDepth(t *testing.T) {
 	kad.On(midPeer)
 	depth = kad.NeighbourhoodDepth()
 	if depth != 5 {
-		t.Fatalf("expected depth 4, was %d", depth)
+		t.Fatalf("expected depth 5, was %d", depth)
 	}
 
 	kad.Off(midPeer)
@@ -118,6 +118,24 @@ func TestNeighborhoodDepth(t *testing.T) {
 	depth = kad.NeighbourhoodDepth()
 	if depth != 2 {
 		t.Fatalf("expected depth 2, was %d", depth)
+	}
+
+	midSameAddress := pot.RandomAddressAt(baseAddress, 4)
+	midSamePeer := newTestDiscoveryPeer(midSameAddress, kad)
+	kad.Off(closerPeer)
+	kad.On(midPeer)
+	kad.On(midSamePeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 2 {
+		t.Fatalf("expected depth 2, was %d", depth)
+	}
+
+	kad.Off(fartherPeer)
+	log.Trace(kad.string())
+	time.Sleep(time.Millisecond)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 0 {
+		t.Fatalf("expected depth 0, was %d", depth)
 	}
 }
 
