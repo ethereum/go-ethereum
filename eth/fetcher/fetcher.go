@@ -669,7 +669,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			time.Sleep(delay)
 			log.Info("Receive future block", "number", block.NumberU64(), "hash", block.Hash().Hex(), "delay", delay)
 			goto again
-		case consensus.ErrMissingValidatorSignature:
+		case consensus.ErrNoValidatorSignature:
 			newBlock := block
 			if f.appendM2HeaderHook != nil {
 				if newBlock, err = f.appendM2HeaderHook(block); err != nil {
