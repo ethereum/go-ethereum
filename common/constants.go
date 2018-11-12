@@ -12,4 +12,5 @@ const (
 	EpocBlockRandomize      = 900
 	MaxMasternodes          = 150
 	LimitPenaltyEpoch       = 4
+	BlocksPerYear           = uint64(15768000)
 )
