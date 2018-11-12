@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	mrand "math/rand"
 	"os"
 	"sort"
 	"sync"
@@ -893,7 +892,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	defer bc.mu.Unlock()
 
 	currentBlock := bc.CurrentBlock()
-	localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+	//localTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	// Irrelevant of the canonical status, write the block itself to the database
@@ -967,12 +966,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	reorg := externTd.Cmp(localTd) > 0
-	currentBlock = bc.CurrentBlock()
-	if !reorg && externTd.Cmp(localTd) == 0 {
-		// Split same-difficulty blocks by number, then at random
-		reorg = block.NumberU64() < currentBlock.NumberU64() || (block.NumberU64() == currentBlock.NumberU64() && mrand.Float64() < 0.5)
-	}
+
+	reorg := block.NumberU64() > currentBlock.NumberU64()
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
@@ -1125,6 +1120,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			for j := 0; j < len(winner)/2; j++ {
 				winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
 			}
+			log.Debug("Number block need calculated again", "number", block.NumberU64(), "hash", block.Hash().Hex(), "winners", len(winner))
 			// Import all the pruned blocks to make the state available
 			bc.chainmu.Unlock()
 			_, evs, logs, err := bc.insertChain(winner)
@@ -1202,12 +1198,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
 				err := bc.UpdateM1()
 				if err != nil {
-					if err == ErrNotXDPoS {
-						log.Error("Stopping node", "err", err)
-						os.Exit(1)
-					} else {
-						log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
-					}
+					log.Error("Error when update masternodes set. Stopping node", "err", err)
+					os.Exit(1)
 				}
 			}
 		}
@@ -1634,7 +1626,8 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 	}
 	if len(ms) == 0 {
-		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+		log.Error("No masternode found. Stopping node")
+		os.Exit(1)
 	} else {
 		sort.Slice(ms, func(i, j int) bool {
 			return ms[i].Stake >= ms[j].Stake

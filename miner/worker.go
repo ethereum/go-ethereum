@@ -346,12 +346,8 @@ func (self *worker) wait() {
 				if (block.NumberU64() % work.config.XDPoS.Epoch) == (work.config.XDPoS.Epoch - work.config.XDPoS.Gap) {
 					err := self.chain.UpdateM1()
 					if err != nil {
-						if err == core.ErrNotXDPoS {
-							log.Error("Stopping node", "err", err)
-							os.Exit(1)
-						} else {
-							log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
-						}
+						log.Error("Error when update masternodes set. Stopping node", "err", err)
+						os.Exit(1)
 					}
 				}
 			}
