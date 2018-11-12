@@ -605,7 +605,7 @@ func (f *Fetcher) rescheduleComplete(complete *time.Timer) {
 func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	hash := block.Hash()
 	if f.knowns.Contains(hash) {
-		log.Debug("Discarded propagated block, knowns block", "peer", peer, "number", block.Number(), "hash", hash, "limit", blockLimit)
+		log.Debug("Discarded propagated block, known block", "peer", peer, "number", block.Number(), "hash", hash, "limit", blockLimit)
 		return
 	}
 	// Ensure the peer isn't DOSing us
