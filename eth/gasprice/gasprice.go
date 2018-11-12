@@ -30,6 +30,7 @@ import (
 )
 
 var maxPrice = big.NewInt(500 * params.Shannon)
+var minPrice = big.NewInt(common.MinGasPrice)
 
 type Config struct {
 	Blocks     int
@@ -138,6 +139,11 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	}
 	if price.Cmp(maxPrice) > 0 {
 		price = new(big.Int).Set(maxPrice)
+	}
+
+	// Check gas price min.
+	if price.Cmp(minPrice) < 0 {
+		price = new(big.Int).Set(minPrice)
 	}
 
 	gpo.cacheLock.Lock()
