@@ -276,7 +276,7 @@ func TestMalformedData1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
-	err = typedData.IsValid()
+	err = typedData.Validate()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -357,7 +357,7 @@ func TestMalformedDomainData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
-	err = typedData.IsValid()
+	err = typedData.Validate()
 	if err == nil {
 		t.Fatalf("Expected `referenced type 'Blahonga' is undefined`, got %v", err)
 	}
@@ -440,7 +440,7 @@ func TestMalformedData3(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
-	err = typedData.IsValid()
+	err = typedData.Validate()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -543,18 +543,8 @@ func TestMalformedData4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
-	err = typedData.IsValid()
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+	err = typedData.Validate()
+	if err.Error() != "unknown atomic type 'uint256 ... and now for something completely different'" {
+		t.Fatalf("Expected `unknown atomic type 'uint256 ... and now for something completely different'`, got %v", err)
 	}
-	hash, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	if err == nil{
-		t.Errorf("Expected error, got hash %v", hash)
-	}else
-	{
-		fmt.Printf("err %v", err)
-	}
-	//if err.Error() != "provided data '<nil>' doesn't match type 'address'" {
-	//	t.Errorf("Expected `provided data '<nil>' doesn't match type 'address'`, got %v", err)
-	//}
 }
