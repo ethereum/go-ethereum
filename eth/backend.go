@@ -258,15 +258,15 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		return ethash.NewShared(chainConfig.ProgpowBlock)
 	default:
 		engine := ethash.New(ethash.Config{
-			CacheDir:           stack.ResolvePath(config.CacheDir),
-			CachesInMem:        config.CachesInMem,
-			CachesOnDisk:       config.CachesOnDisk,
-			CachesLockMmap:     config.CachesLockMmap,
-			DatasetDir:         config.DatasetDir,
-			DatasetsInMem:      config.DatasetsInMem,
-			DatasetsOnDisk:     config.DatasetsOnDisk,
-			DatasetsLockMmap:   config.DatasetsLockMmap,
-			ProgpowBlockNumber: chainConfig.ProgpowBlock,
+			CacheDir:         stack.ResolvePath(config.CacheDir),
+			CachesInMem:      config.CachesInMem,
+			CachesOnDisk:     config.CachesOnDisk,
+			CachesLockMmap:   config.CachesLockMmap,
+			DatasetDir:       config.DatasetDir,
+			DatasetsInMem:    config.DatasetsInMem,
+			DatasetsOnDisk:   config.DatasetsOnDisk,
+			DatasetsLockMmap: config.DatasetsLockMmap,
+			ProgpowBlock:     chainConfig.ProgpowBlock,
 		}, notify, noverify)
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine

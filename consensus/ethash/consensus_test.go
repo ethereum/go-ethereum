@@ -123,7 +123,7 @@ func TestCalcDifficulty(t *testing.T) {
 //		DatasetDir:         "",
 //		DatasetsInMem:      1,
 //		DatasetsOnDisk:     1,
-//		ProgpowBlockNumber: config.ProgpowBlock,
+//		ProgpowBlock: config.ProgpowBlock,
 //	}, nil, false)
 //	bc, err := core.NewBlockChain(db, nil, config, engine, vm.Config{}, nil)
 //	//fmt.Printf("Genesis hash %x\n", bc.Genesis().Hash())

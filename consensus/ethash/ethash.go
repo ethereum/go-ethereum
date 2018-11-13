@@ -18,6 +18,7 @@
 package ethash
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -47,9 +48,9 @@ var (
 	// two256 is a big integer representing 2^256
 	two256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
-	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash *Ethash
-	ethashMu     sync.Mutex // lock for initializing sharedEthash
+	// sharedEngines contains ethash instances which are mapped by progpow blocknumber
+	sharedEngines map[uint64]*Ethash
+	ethashMu      sync.Mutex // lock for modifying sharedEngines
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -409,16 +410,16 @@ const (
 
 // Config are the configuration parameters of the ethash.
 type Config struct {
-	CacheDir           string
-	CachesInMem        int
-	CachesOnDisk       int
-	CachesLockMmap     bool
-	DatasetDir         string
-	DatasetsInMem      int
-	DatasetsOnDisk     int
-	DatasetsLockMmap   bool
-	PowMode            Mode
-	ProgpowBlockNumber *big.Int // Block number at which to use progpow instead of hashimoto
+	CacheDir         string
+	CachesInMem      int
+	CachesOnDisk     int
+	CachesLockMmap   bool
+	DatasetDir       string
+	DatasetsInMem    int
+	DatasetsOnDisk   int
+	DatasetsLockMmap bool
+	PowMode          Mode
+	ProgpowBlock     *big.Int // Block number at which to use progpow instead of hashimoto
 
 	Log log.Logger `toml:"-"`
 }
@@ -542,11 +543,16 @@ func NewFullFaker() *Ethash {
 // in the same process.
 func NewShared(progpowNumber *big.Int) *Ethash {
 	ethashMu.Lock()
-	if sharedEthash == nil {
-		sharedEthash = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, progpowNumber, nil}, nil, false)
+	if progpowNumber == nil {
+		progpowNumber = new(big.Int).SetUint64(uint64(math.MaxUint64))
+	}
+	sharedEngine, exist := sharedEngines[progpowNumber.Uint64()]
+	if !exist {
+		sharedEngine = New(Config{"", 3, 0, false, "", 1, 0, false, ModeNormal, progpowNumber, nil}, nil, false)
+		sharedEngines[progpowNumber.Uint64()] = sharedEngine
 	}
 	ethashMu.Unlock()
-	return &Ethash{shared: sharedEthash}
+	return &Ethash{shared: sharedEngine}
 }
 
 // Close closes the exit channel to notify all backend threads exiting.
@@ -700,8 +706,24 @@ type powLight func(size uint64, cache []uint32, hash []byte, nonce, number uint6
 
 // fullPow returns either hashimoto or progpow full checker depending on number
 func (ethash *Ethash) fullPow(number *big.Int) powFull {
-	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
-		return progpowFull
+	if progpowNumber := ethash.config.ProgpowBlock; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
+		ethashCache := ethash.cache(number.Uint64())
+		if ethashCache.cDag == nil {
+			log.Warn("cDag is nil, suboptimal performance")
+			cDag := make([]uint32, progpowCacheWords)
+			generateCDag(cDag, ethashCache.cache, number.Uint64()/epochLength)
+			ethashCache.cDag = cDag
+		}
+		mix := make([]byte, hashBytes)
+		return func(dataset []uint32, hash []byte, nonce, number uint64) ([]byte, []byte) {
+			lookup := func(index uint32) []byte {
+				for i := uint32(0); i < hashWords; i++ {
+					binary.LittleEndian.PutUint32(mix[i*4:], dataset[index+i])
+				}
+				return mix
+			}
+			return progpow(hash, nonce, uint64(len(dataset))*4, number, ethashCache.cDag, lookup)
+		}
 	}
 	return func(dataset []uint32, hash []byte, nonce uint64, number uint64) ([]byte, []byte) {
 		return hashimotoFull(dataset, hash, nonce)
@@ -710,13 +732,12 @@ func (ethash *Ethash) fullPow(number *big.Int) powFull {
 
 // lightPow returns either hashimoto or progpow depending on number
 func (ethash *Ethash) lightPow(number *big.Int) powLight {
-	if progpowNumber := ethash.config.ProgpowBlockNumber; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
+	if progpowNumber := ethash.config.ProgpowBlock; progpowNumber != nil && progpowNumber.Cmp(number) <= 0 {
 		return func(size uint64, cache []uint32, hash []byte, nonce uint64, blockNumber uint64) ([]byte, []byte) {
 			ethashCache := ethash.cache(blockNumber)
 			if ethashCache.cDag == nil {
 				log.Warn("cDag is nil, suboptimal performance")
-				var cDag []uint32
-				cDag = make([]uint32, progpowCacheWords)
+				cDag := make([]uint32, progpowCacheWords)
 				generateCDag(cDag, ethashCache.cache, blockNumber/epochLength)
 				ethashCache.cDag = cDag
 			}

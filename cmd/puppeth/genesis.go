@@ -239,6 +239,7 @@ type parityChainSpec struct {
 				DifficultyBombDelays   map[string]string `json:"difficultyBombDelays"`
 				HomesteadTransition    hexutil.Uint64    `json:"homesteadTransition"`
 				EIP100bTransition      hexutil.Uint64    `json:"eip100bTransition"`
+				ProgpowTransition      *hexutil.Uint64   `json:"progpowTransition,omitempty"`
 			} `json:"params"`
 		} `json:"Ethash"`
 	} `json:"engine"`
@@ -411,6 +412,11 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	// Istanbul
 	if num := genesis.Config.IstanbulBlock; num != nil {
 		spec.setIstanbul(num)
+	}
+	// Progpow
+	if num := genesis.Config.ProgpowBlock; num != nil {
+		hexnum := hexutil.Uint64(num.Uint64())
+		spec.Engine.Ethash.Params.ProgpowTransition = &hexnum
 	}
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)

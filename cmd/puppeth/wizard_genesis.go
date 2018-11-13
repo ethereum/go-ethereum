@@ -239,9 +239,11 @@ func (w *wizard) manageGenesis() {
 		fmt.Printf("Which block should YOLOv1 come into effect? (default = %v)\n", w.conf.Genesis.Config.YoloV1Block)
 		w.conf.Genesis.Config.YoloV1Block = w.readDefaultBigInt(w.conf.Genesis.Config.YoloV1Block)
 
-		fmt.Println()
-		fmt.Printf("Which block should ProgPow come into effect? (default = %v)\n", w.conf.Genesis.Config.ProgpowBlock)
-		w.conf.Genesis.Config.ProgpowBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ProgpowBlock)
+		if w.conf.Genesis.Config.Clique == nil {
+			fmt.Println()
+			fmt.Printf("Which block should ProgPow come into effect? (default = %v)\n", w.conf.Genesis.Config.ProgpowBlock)
+			w.conf.Genesis.Config.ProgpowBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ProgpowBlock)
+		}
 
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
