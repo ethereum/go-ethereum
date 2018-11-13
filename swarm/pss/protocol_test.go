@@ -129,7 +129,6 @@ func testProtocol(t *testing.T) {
 	case <-lmsgC:
 		log.Debug("lnode ok")
 	case cerr := <-lctx.Done():
-		log.Debug("testmsgtimeout")
 		_ = cerr
 		return
 		//t.Fatalf("test message timed out: %v", cerr)

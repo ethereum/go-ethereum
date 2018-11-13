@@ -381,6 +381,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	if pssmsg.isRaw() {
 		if p.topicHandlerCaps[psstopic]&handlerCapRaw == 0 {
 			log.Debug("No handler for raw message", "topic", psstopic)
+			return nil
 		}
 		isRaw = true
 	}
@@ -389,14 +390,8 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	// - no prox handler on message and partial address matches
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
-	var isProx bool
-	var isRecipient bool
-	if p.isSelfPossibleRecipient(pssmsg, false) && p.topicHandlerCaps[psstopic]&handlerCapProx == 0 {
-		isRecipient = true
-	} else if p.isSelfPossibleRecipient(pssmsg, true) {
-		isRecipient = true
-		isProx = true
-	}
+	isProx := p.topicHandlerCaps[psstopic]&handlerCapProx != 0
+	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
 		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)

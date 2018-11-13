@@ -315,6 +315,7 @@ func TestAddressMatch(t *testing.T) {
 
 }
 
+// test that message is handled by sender if a prox handler exists and sender is in prox of message
 func TestProxShortCircuit(t *testing.T) {
 
 	// sender node address
@@ -370,6 +371,8 @@ func TestProxShortCircuit(t *testing.T) {
 	})
 	defer hndlrProxDereg()
 
+	// send message too far away for sender to be in prox
+	// reception of this message should time out
 	errC := make(chan error)
 	go func() {
 		err := ps.SendRaw(distantMessageAddress, topic, []byte("foo"))
@@ -388,6 +391,8 @@ func TestProxShortCircuit(t *testing.T) {
 	case <-ctx.Done():
 	}
 
+	// send message that should be within sender prox
+	// this message should be delivered
 	go func() {
 		err := ps.SendRaw(proxMessageAddress, topic, []byte("bar"))
 		if err != nil {
@@ -405,8 +410,9 @@ func TestProxShortCircuit(t *testing.T) {
 		t.Fatal("raw timeout")
 	}
 
-	localAddrPss := PssAddress(localAddr)
-	symKeyId, err := ps.GenerateSymmetricKey(topic, &localAddrPss, true)
+	// try the same prox message with sym and asym send
+	proxAddrPss := PssAddress(proxMessageAddress)
+	symKeyId, err := ps.GenerateSymmetricKey(topic, &proxAddrPss, true)
 	go func() {
 		err := ps.SendSym(symKeyId, topic, []byte("baz"))
 		if err != nil {
@@ -423,7 +429,7 @@ func TestProxShortCircuit(t *testing.T) {
 		t.Fatal("sym timeout")
 	}
 
-	err = ps.SetPeerPublicKey(&privKey.PublicKey, topic, &localAddrPss)
+	err = ps.SetPeerPublicKey(&privKey.PublicKey, topic, &proxAddrPss)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +462,8 @@ func TestAddressMatchProx(t *testing.T) {
 	// set up kademlia
 	kadparams := network.NewKadParams()
 	kad := network.NewKademlia(localAddr, kadparams)
-	peerCount := kad.MinBinSize + 2
+	nnPeerCount := kad.MinBinSize
+	peerCount := nnPeerCount + 2
 
 	// set up pss
 	privKey, err := crypto.GenerateKey()
@@ -497,8 +504,8 @@ func TestAddressMatchProx(t *testing.T) {
 		log.Trace("kadconn", "po", po, "peer", p, "prox", prox)
 		return true
 	})
-	if proxes != kad.MinBinSize {
-		t.Fatalf("expected %d proxpeers, have %d", kad.MinBinSize, proxes)
+	if proxes != nnPeerCount {
+		t.Fatalf("expected %d proxpeers, have %d", nnPeerCount, proxes)
 	} else if conns != peerCount {
 		t.Fatalf("expected %d peers total, have %d", peerCount, proxes)
 	}
@@ -506,9 +513,9 @@ func TestAddressMatchProx(t *testing.T) {
 	// remote address distances from localAddr to try and the expected outcomes if we use prox handler
 	remoteDistances := []int{
 		255,
-		kad.MinBinSize + 1,
-		kad.MinBinSize,
-		kad.MinBinSize - 1,
+		nnPeerCount + 1,
+		nnPeerCount,
+		nnPeerCount - 1,
 		0,
 	}
 	expects := []bool{
