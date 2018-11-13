@@ -153,6 +153,7 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err e
 
 	if err == nil {
 		metrics.GetOrRegisterCounter("localstore.get.cachehit", nil).Inc(1)
+		go ls.DbStore.MarkAccessed(addr)
 		return chunk, nil
 	}
 

@@ -186,6 +186,20 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	return s, nil
 }
 
+// MarkAccessed increments the access counter as a best effort for a chunk, so
+// the chunk won't get garbage collected.
+func (s *LDBStore) MarkAccessed(addr Address) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.closed {
+		return
+	}
+
+	proximity := s.po(addr)
+	s.tryAccessIdx(addr, proximity)
+}
+
 // initialize and set values for processing of gc round
 func (s *LDBStore) startGC(c int) {
 
@@ -349,6 +363,7 @@ func (s *LDBStore) collectGarbage() error {
 			s.delete(s.gc.batch.Batch, index, keyIdx, po)
 			singleIterationCount++
 			s.gc.count++
+			log.Trace("garbage collect enqueued chunk for deletion", "key", hash)
 
 			// break if target is not on max garbage batch boundary
 			if s.gc.count >= s.gc.target {
@@ -685,12 +700,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, &index, po)
-	} else {
-		log.Debug("ldbstore.put: chunk already exists, only update access", "key", chunk.Address(), "po", po)
-		decodeIndex(idata, &index)
 	}
-	index.Access = s.accessCnt
-	s.accessCnt++
 	idata = encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 
@@ -723,7 +733,8 @@ func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	s.entryCnt++
 	dbEntryCount.Inc(1)
 	s.dataIdx++
-
+	index.Access = s.accessCnt
+	s.accessCnt++
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
@@ -796,18 +807,23 @@ func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
 	}
 }
 
-// try to find index; if found, update access cnt and return true
-func (s *LDBStore) tryAccessIdx(ikey []byte, po uint8, index *dpaDBIndex) bool {
+// tryAccessIdx tries to find index entry. If found then increments the access
+// count for garbage collection and returns the index entry and true for found,
+// otherwise returns nil and false.
+func (s *LDBStore) tryAccessIdx(addr Address, po uint8) (*dpaDBIndex, bool) {
+	ikey := getIndexKey(addr)
 	idata, err := s.db.Get(ikey)
 	if err != nil {
-		return false
+		return nil, false
 	}
+
+	index := new(dpaDBIndex)
 	decodeIndex(idata, index)
 	oldGCIdxKey := getGCIdxKey(index)
 	s.batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
-	s.accessCnt++
 	index.Access = s.accessCnt
 	idata = encodeIndex(index)
+	s.accessCnt++
 	s.batch.Put(ikey, idata)
 	newGCIdxKey := getGCIdxKey(index)
 	newGCIdxData := getGCIdxValue(index, po, ikey)
@@ -817,7 +833,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, po uint8, index *dpaDBIndex) bool {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-	return true
+	return index, true
 }
 
 // GetSchema is returning the current named schema of the datastore as read from LevelDB
@@ -858,12 +874,12 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 
 // TODO: To conform with other private methods of this object indices should not be updated
 func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
-	var indx dpaDBIndex
 	if s.closed {
 		return nil, ErrDBClosed
 	}
 	proximity := s.po(addr)
-	if s.tryAccessIdx(getIndexKey(addr), proximity, &indx) {
+	index, found := s.tryAccessIdx(addr, proximity)
+	if found {
 		var data []byte
 		if s.getDataFunc != nil {
 			// if getDataFunc is defined, use it to retrieve the chunk data
@@ -874,12 +890,12 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 			}
 		} else {
 			// default DbStore functionality to retrieve chunk data
-			datakey := getDataKey(indx.Idx, proximity)
+			datakey := getDataKey(index.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
+			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", index.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
-				s.deleteNow(&indx, getIndexKey(addr), s.po(addr))
+				s.deleteNow(index, getIndexKey(addr), s.po(addr))
 				return
 			}
 		}
