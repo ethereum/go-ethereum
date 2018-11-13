@@ -899,14 +899,10 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 			}
 		}
 	}
-	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now()) // nolint: gosimple
-	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
-
 	select {
 	case <-stop:
 		return nil, nil
-	case <-time.After(delay):
+	default:
 	}
 	// Sign all the things!
 	sighash, err := signFn(accounts.Account{Address: signer}, sigHash(header).Bytes())
