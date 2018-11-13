@@ -291,7 +291,7 @@ func TestRequestFromPeers(t *testing.T) {
 		Peer:      protocolsPeer,
 	}, to)
 	to.On(peer)
-	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
@@ -332,7 +332,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 		Peer:      protocolsPeer,
 	}, to)
 	to.On(peer)
-	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
 		Peer:     protocolsPeer,
