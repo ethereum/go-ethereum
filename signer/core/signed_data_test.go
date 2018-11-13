@@ -449,3 +449,112 @@ func TestMalformedData3(t *testing.T) {
 		t.Errorf("Expected `provided data '<nil>' doesn't match type 'address'`, got %v", err)
 	}
 }
+
+func TestMalformedData4(t *testing.T) {
+	var data = `
+    {
+      "types": {
+        "EIP712Domain": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256 ... and now for something completely different"
+          },
+          {
+            "name": "verifyingContract",
+            "type": "address"
+          }
+        ],
+        "Person": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "test",
+            "type": "uint8"
+          },
+          {
+            "name": "wallet",
+            "type": "address"
+          }
+        ],
+        "Mail": [
+          {
+            "name": "from",
+            "type": "Person"
+          },
+          {
+            "name": "to",
+            "type": "Person"
+          },
+          {
+            "name": "contents",
+            "type": "string"
+          }
+        ]
+      },
+      "primaryType": "Mail",
+      "domain": {
+		"Signed by": "Bill Gates -- this text won't affect the hash'",
+		"we can": "stuff anything here, really",
+        "name": "Ether Mail",
+        "version": "65536",
+        "chainId": 1,
+        "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+      },
+      "message": {
+        "from": {
+          "name": "Cow",
+          "wallet": "0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
+        },
+        "to": {
+          "name": "Bob",
+          "test": 65536,
+          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        },
+        "blahonga": "zonk bonk",
+        "contents": "åäzö \r\n test, Bob!"
+      }
+    }
+`
+	// The struct above contains several quirks
+	// 1. Using dynamic types and only validating the prefix:
+	//{
+	//	"name": "chainId",
+	//	"type": "uint256 ... and now for something completely different"
+	//},
+	// 2. Using dynamic types, but not verifying that the data fits into it
+	//            "test": 65536, <-- test defined as uint8
+	// 3a. Extra data in message
+	//  "blahonga": "zonk bonk",
+	// 3b ... and in domain
+	//  "Signed by": "Bill Gates",
+
+	var typedData TypedData
+	err := json.Unmarshal([]byte(data), &typedData)
+	if err != nil {
+		t.Fatalf("unmarshalling failed %v", err)
+	}
+	err = typedData.IsValid()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	hash, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err == nil{
+		t.Errorf("Expected error, got hash %v", hash)
+	}else
+	{
+		fmt.Printf("err %v", err)
+	}
+	//if err.Error() != "provided data '<nil>' doesn't match type 'address'" {
+	//	t.Errorf("Expected `provided data '<nil>' doesn't match type 'address'`, got %v", err)
+	//}
+}
