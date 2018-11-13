@@ -19,6 +19,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -621,6 +622,145 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	}
 
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+}
+
+func TestCleanIndex(t *testing.T) {
+	capacity := 5000
+	n := 3
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks, err := mputRandomChunks(ldb, n, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// remove the data of the first chunk
+	po := ldb.po(chunks[0].Address()[:])
+	dataKey := make([]byte, 10)
+	dataKey[0] = keyData
+	dataKey[1] = byte(po)
+	// dataKey[2:10] = first chunk has storageIdx 0 on [2:10]
+	if _, err := ldb.db.Get(dataKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Delete(dataKey); err != nil {
+		t.Fatal(err)
+	}
+
+	// remove the gc index row for the first chunk
+	gcFirstCorrectKey := make([]byte, 9)
+	gcFirstCorrectKey[0] = keyGCIdx
+	if err := ldb.db.Delete(gcFirstCorrectKey); err != nil {
+		t.Fatal(err)
+	}
+
+	// warp the gc data of the second chunk
+	// this data should be correct again after the clean
+	gcSecondCorrectKey := make([]byte, 9)
+	gcSecondCorrectKey[0] = keyGCIdx
+	binary.BigEndian.PutUint64(gcSecondCorrectKey[1:], uint64(1))
+	gcSecondCorrectVal, err := ldb.db.Get(gcSecondCorrectKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warpedGCVal := make([]byte, len(gcSecondCorrectVal)+1)
+	copy(warpedGCVal[1:], gcSecondCorrectVal)
+	if err := ldb.db.Delete(gcSecondCorrectKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Put(gcSecondCorrectKey, warpedGCVal); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ldb.CleanGCIndex(); err != nil {
+		t.Fatal(err)
+	}
+
+	// the index without corresponding data should have been deleted
+	idxKey := make([]byte, 33)
+	idxKey[0] = keyIndex
+	copy(idxKey[1:], chunks[0].Address())
+	if _, err := ldb.db.Get(idxKey); err == nil {
+		t.Fatalf("expected chunk 0 idx to be pruned: %v", idxKey)
+	}
+
+	// the two other indices should be present
+	copy(idxKey[1:], chunks[1].Address())
+	if _, err := ldb.db.Get(idxKey); err != nil {
+		t.Fatalf("expected chunk 1 idx to be present: %v", idxKey)
+	}
+
+	copy(idxKey[1:], chunks[2].Address())
+	if _, err := ldb.db.Get(idxKey); err != nil {
+		t.Fatalf("expected chunk 2 idx to be present: %v", idxKey)
+	}
+
+	// first gc index should still be gone
+	if _, err := ldb.db.Get(gcFirstCorrectKey); err == nil {
+		t.Fatalf("expected gc 0 idx to be pruned: %v", idxKey)
+	}
+
+	// second gc index should still be fixed
+	if _, err := ldb.db.Get(gcSecondCorrectKey); err != nil {
+		t.Fatalf("expected gc 1 idx to be present: %v", idxKey)
+	}
+
+	// third gc index should be unchanged
+	binary.BigEndian.PutUint64(gcSecondCorrectKey[1:], uint64(2))
+	if _, err := ldb.db.Get(gcSecondCorrectKey); err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	c, err := ldb.db.Get(keyEntryCnt)
+	if err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	// entrycount should now be one less
+	entryCount := binary.BigEndian.Uint64(c)
+	if entryCount != 2 {
+		t.Fatalf("expected entrycnt to be 2, was %d", c)
+	}
+
+	// the chunks might accidentally be in the same bin
+	// if so that bin counter will now be 2 - the highest added index.
+	// if not, the total of them will be 3
+	poBins := []uint8{ldb.po(chunks[1].Address()), ldb.po(chunks[2].Address())}
+	if poBins[0] == poBins[1] {
+		poBins = poBins[:1]
+	}
+
+	var binTotal uint64
+	var currentBin [2]byte
+	currentBin[0] = keyDistanceCnt
+	if len(poBins) == 1 {
+		currentBin[1] = poBins[0]
+		c, err := ldb.db.Get(currentBin[:])
+		if err != nil {
+			t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+		}
+		binCount := binary.BigEndian.Uint64(c)
+		if binCount != 2 {
+			t.Fatalf("expected entrycnt to be 2, was %d", binCount)
+		}
+	} else {
+		for _, bin := range poBins {
+			currentBin[1] = bin
+			c, err := ldb.db.Get(currentBin[:])
+			if err != nil {
+				t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+			}
+			binCount := binary.BigEndian.Uint64(c)
+			binTotal += binCount
+
+		}
+		if binTotal != 3 {
+			t.Fatalf("expected sum of bin indices to be 3, was %d", binTotal)
+		}
+	}
 }
 
 func waitGc(ctx context.Context, ldb *LDBStore) {
