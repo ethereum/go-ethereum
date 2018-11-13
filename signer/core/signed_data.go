@@ -365,92 +365,28 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 //
 // each encoded member is 32-byte long
 func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) (hexutil.Bytes, error) {
-	encTypes := []string{}
 	encValues := []interface{}{}
 
+	// Verify extra data
+	if len(typedData.Types[primaryType]) < len(data) {
+		return nil, errors.New("there is extra data provided in the message")
+	}
+
 	// Add typehash
-	encTypes = append(encTypes, "bytes32")
 	encValues = append(encValues, typedData.TypeHash(primaryType))
 
-	// Generate error for a mismatch between the provided type and data
-	dataMismatchError := func(encType string, encValue interface{}) error {
-		return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
-	}
-
-	// Handle primitive values
-	handlePrimitiveValue := func(encType string, encValue interface{}) (string, interface{}, error) {
-		var primitiveEncType string
-		var primitiveEncValue interface{}
-
-		switch encType {
-		case "address":
-			primitiveEncType = "uint160"
-			bytesValue := hexutil.Bytes{}
-			for i := 0; i < 12; i++ {
-				bytesValue = append(bytesValue, 0)
-			}
-			stringValue, ok := encValue.(string)
-			if !ok || !common.IsHexAddress(stringValue) {
-				return "", nil, dataMismatchError(encType, encValue)
-			}
-			for _, _byte := range common.HexToAddress(stringValue) {
-				bytesValue = append(bytesValue, _byte)
-			}
-			primitiveEncValue = bytesValue
-		case "bool":
-			primitiveEncType = "uint256"
-			var int64Val int64
-			boolValue, ok := encValue.(bool)
-			if !ok {
-				return "", nil, dataMismatchError(encType, encValue)
-			}
-			if boolValue {
-				int64Val = 1
-			}
-			primitiveEncValue = abi.U256(big.NewInt(int64Val))
-		case "bytes", "string":
-			primitiveEncType = "bytes32"
-			bytesValue, err := bytesValueOf(encValue)
-			if err != nil {
-				return "", nil, dataMismatchError(encType, encValue)
-			}
-			primitiveEncValue = crypto.Keccak256(bytesValue)
-		default:
-			if strings.HasPrefix(encType, "bytes") {
-				encTypes = append(encTypes, "bytes32")
-				sizeStr := strings.TrimPrefix(encType, "bytes")
-				size, _ := strconv.Atoi(sizeStr)
-				bytesValue := hexutil.Bytes{}
-				for i := 0; i < 32-size; i++ {
-					bytesValue = append(bytesValue, 0)
-				}
-				if _, ok := encValue.(hexutil.Bytes); !ok {
-					return "", nil, dataMismatchError(encType, encValue)
-				}
-				bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
-				primitiveEncValue = bytesValue
-			} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
-				primitiveEncType = "uint256"
-				bigIntValue, ok := encValue.(*big.Int)
-				if !ok {
-					return "", nil, dataMismatchError(encType, encValue)
-				}
-				primitiveEncValue = abi.U256(bigIntValue)
-			}
-		}
-		return primitiveEncType, primitiveEncValue, nil
-	}
-
-	// Add field contents. Structs and arrays have special handlings.
+	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {
 		encType := field["type"]
 		encValue := data[field["name"]]
 		if encType[len(encType)-1:] == "]" {
-			encTypes = append(encTypes, "bytes32")
+			arrayValue, ok := encValue.([]interface{})
+			if !ok {
+				return nil, dataMismatchError(encType, encValue)
+			}
 			parsedType := strings.Split(encType, "[")[0]
-
 			arrayBuffer := bytes.Buffer{}
-			for _, item := range encValue.([]interface{}) {
+			for _, item := range arrayValue {
 				if typedData.Types[parsedType] != nil {
 					mapValue, ok := item.(map[string]interface{})
 					if !ok {
@@ -462,7 +398,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					}
 					arrayBuffer.Write(encodedData)
 				} else {
-					_, encValue, err := handlePrimitiveValue(encType, encValue)
+					encValue, err := handlePrimitiveValue(encType, encValue)
 					if err != nil {
 						return nil, err
 					}
@@ -475,7 +411,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			}
 			encValues = append(encValues, crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field["type"]] != nil {
-			encTypes = append(encTypes, "bytes32")
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
@@ -487,11 +422,10 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			encValue = crypto.Keccak256(encodedData)
 			encValues = append(encValues, encValue)
 		} else {
-			primitiveEncType, primitiveEncValue, err := handlePrimitiveValue(encType, encValue)
+			primitiveEncValue, err := handlePrimitiveValue(encType, encValue)
 			if err != nil {
 				return nil, err
 			}
-			encTypes = append(encTypes, primitiveEncType)
 			encValues = append(encValues, primitiveEncValue)
 		}
 	}
@@ -508,6 +442,72 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 	return buffer.Bytes(), nil // https://github.com/ethereumjs/ethereumjs-abi/blob/master/lib/index.js#L336
 }
 
+// handlePrimitiveValues deals with the primitive values found
+// while searching through the typed data
+func handlePrimitiveValue(encType string, encValue interface{}) (interface{}, error) {
+	var primitiveEncValue interface{}
+
+	switch encType {
+	case "address":
+		bytesValue := hexutil.Bytes{}
+		for i := 0; i < 12; i++ {
+			bytesValue = append(bytesValue, 0)
+		}
+		stringValue, ok := encValue.(string)
+		if !ok || !common.IsHexAddress(stringValue) {
+			return nil, dataMismatchError(encType, encValue)
+		}
+		for _, _byte := range common.HexToAddress(stringValue) {
+			bytesValue = append(bytesValue, _byte)
+		}
+		primitiveEncValue = bytesValue
+	case "bool":
+		var int64Val int64
+		boolValue, ok := encValue.(bool)
+		if !ok {
+			return nil, dataMismatchError(encType, encValue)
+		}
+		if boolValue {
+			int64Val = 1
+		}
+		primitiveEncValue = abi.U256(big.NewInt(int64Val))
+	case "bytes", "string":
+		bytesValue, err := bytesValueOf(encValue)
+		if err != nil {
+			return nil, dataMismatchError(encType, encValue)
+		}
+		primitiveEncValue = crypto.Keccak256(bytesValue)
+	default:
+		if strings.HasPrefix(encType, "bytes") {
+			sizeStr := strings.TrimPrefix(encType, "bytes")
+			size, _ := strconv.Atoi(sizeStr)
+			bytesValue := hexutil.Bytes{}
+			for i := 0; i < 32-size; i++ {
+				bytesValue = append(bytesValue, 0)
+			}
+			if _, ok := encValue.(hexutil.Bytes); !ok {
+				return nil, dataMismatchError(encType, encValue)
+			}
+			bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
+			primitiveEncValue = bytesValue
+		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
+			bigIntValue, ok := encValue.(*big.Int)
+			if !ok {
+				return nil, dataMismatchError(encType, encValue)
+			}
+			primitiveEncValue = abi.U256(bigIntValue)
+		}
+	}
+	return primitiveEncValue, nil
+}
+
+// dataMismatchError generates an error for a mismatch between
+// the provided type and data
+func dataMismatchError(encType string, encValue interface{}) error {
+	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
+}
+
+// bytesValuesOf returns the bytes value of the given interface
 func bytesValueOf(_interface interface{}) (hexutil.Bytes, error) {
 	bytesValue, ok := _interface.(hexutil.Bytes)
 	if ok {
@@ -585,7 +585,7 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 	}, nil
 }
 
-// Validate checks if the typed data is sound
+// Validate make sure the types are sound
 func (typedData *TypedData) Validate() error {
 	if err := typedData.Types.Validate(); err != nil {
 		return err
@@ -604,13 +604,7 @@ func (typedData *TypedData) Map() map[string]interface{} {
 		"primaryType": typedData.PrimaryType,
 		"message":     typedData.Message,
 	}
-
 	return dataMap
-}
-
-// PrettyPrint generates a pretty version of the typed data
-func (typedData *TypedData) PrettyPrint() string {
-	return ""
 }
 
 // Validate checks if the types object is conformant to the specs
@@ -644,19 +638,18 @@ func (types *EIP712Types) Validate() error {
 func isStandardTypeStr(encType string) bool {
 	// Atomic types
 	exp, _ := regexp.Compile(`^(address|bool|bytes|string)$`)
-	if (exp.MatchString(encType)) {
+	if exp.MatchString(encType) {
 		return true
 	}
 
 	// Dynamic types
 	exp, _ = regexp.Compile(`^(bytes|int|uint)(\d+)$`)
-	if (exp.MatchString(encType)) {
+	if exp.MatchString(encType) {
 		return true
 	}
 
 	// Arrays
-	// TODO: add dynamic type arrays
-	exp, _ = regexp.Compile(`^(address|bool|bytes|string)\[]$`)
+	exp, _ = regexp.Compile(`^(address|bool|bytes|string|((bytes|int|uint)(\d+)))\[]$`)
 	return exp.MatchString(encType)
 }
 
