@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"mime"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -265,7 +266,7 @@ func SignTextPlain(data hexutil.Bytes) (hexutil.Bytes, string) {
 // SignTypedData signs EIP-712 conformant typed data
 // hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
 func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
-	if err := typedData.IsValid(); err != nil {
+	if err := typedData.Validate(); err != nil {
 		return nil, err
 	}
 	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
@@ -584,12 +585,12 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 	}, nil
 }
 
-// IsValid checks if the typed data is sound
-func (typedData *TypedData) IsValid() error {
-	if err := typedData.Types.IsValid(); err != nil {
+// Validate checks if the typed data is sound
+func (typedData *TypedData) Validate() error {
+	if err := typedData.Types.Validate(); err != nil {
 		return err
 	}
-	if err := typedData.Domain.IsValid(); err != nil {
+	if err := typedData.Domain.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -612,8 +613,8 @@ func (typedData *TypedData) PrettyPrint() string {
 	return ""
 }
 
-// IsValid checks if the types object is conformant to the specs
-func (types *EIP712Types) IsValid() error {
+// Validate checks if the types object is conformant to the specs
+func (types *EIP712Types) Validate() error {
 	for typeKey, typeArr := range *types {
 		for _, typeObj := range typeArr {
 			typeVal := typeObj["type"]
@@ -642,35 +643,26 @@ func (types *EIP712Types) IsValid() error {
 // isStandardType checks if the given type is a EIP712 conformant type
 func isStandardTypeStr(encType string) bool {
 	// Atomic types
-	for _, standardType := range []string{
-		TypeAddress,
-		TypeBool,
-		TypeBytes,
-		TypeString,
-	} {
-		if standardType == encType {
-			return true
-		}
+	exp, _ := regexp.Compile(`^(address|bool|bytes|string)$`)
+	if (exp.MatchString(encType)) {
+		return true
 	}
 
 	// Dynamic types
-	for _, standardType := range []string{
-		TypeBytes,
-		TypeInt,
-		TypeUint,
-	} {
-		if strings.HasPrefix(encType, standardType) {
-			return true
-		}
+	exp, _ = regexp.Compile(`^(bytes|int|uint)(\d+)$`)
+	if (exp.MatchString(encType)) {
+		return true
 	}
 
-	// Reference types
-	return encType[len(encType)-1] == ']'
+	// Arrays
+	// TODO: add dynamic type arrays
+	exp, _ = regexp.Compile(`^(address|bool|bytes|string)\[]$`)
+	return exp.MatchString(encType)
 }
 
-// IsValid checks if the given domain is valid, i.e. contains at least
+// Validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
-func (domain *EIP712Domain) IsValid() error {
+func (domain *EIP712Domain) Validate() error {
 	if domain.ChainId == big.NewInt(0) {
 		return errors.New("chainId must be specified according to EIP-155")
 	}
