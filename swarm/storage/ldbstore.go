@@ -601,36 +601,51 @@ func (s *LDBStore) CleanGCIndex() error {
 	if err := s.db.Write(&batch); err != nil {
 		return err
 	}
+	batch.Reset()
 
 	it.Release()
 
+	// corrected po index pointer values
 	var poPtrs [256]uint64
-	var doneIterating bool
-	lastIdxKey := []byte{keyIndex}
-	var cleanBatchCount int
-	for !doneIterating {
 
+	// set to true if chunk count not on 4096 iteration boundary
+	var doneIterating bool
+
+	// last key index in previous iteration
+	lastIdxKey := []byte{keyIndex}
+
+	// counter for debug output
+	var cleanBatchCount int
+
+	// go through all key index entries
+	for !doneIterating {
 		cleanBatchCount++
 		var idxs []dpaDBIndex
 		var chunkHashes [][]byte
 		var pos []uint8
 		it := s.db.NewIterator()
 
-		batch.Reset()
 		it.Seek(lastIdxKey)
 
+		// 4096 is just a nice number, don't look for any hidden meaning here...
 		var i int
 		for i = 0; i < 4096; i++ {
+
+			// this really shouldn't happen unless database is empty
+			// but let's keep it to be safe
 			if !it.Valid() {
 				doneIterating = true
 				break
 			}
+
+			// if it's not keyindex anymore we're done iterating
 			rowType, chunkHash := parseGCIdxKey(it.Key())
 			if rowType != keyIndex {
 				doneIterating = true
 				break
 			}
-			//err := decodeIndex(it.Value(), &idx)
+
+			// decode the retrieved index
 			var idx dpaDBIndex
 			err := decodeIndex(it.Value(), &idx)
 			if err != nil {
@@ -640,6 +655,7 @@ func (s *LDBStore) CleanGCIndex() error {
 			lastIdxKey = it.Key()
 
 			// if we don't find the data key, remove the entry
+			// if we find it, add to the array of new gc indices to create
 			dataKey := getDataKey(idx.Idx, po)
 			_, err = s.db.Get(dataKey)
 			if err != nil {
@@ -659,33 +675,39 @@ func (s *LDBStore) CleanGCIndex() error {
 		}
 		it.Release()
 
+		// flush the key index corrections
 		err := s.db.Write(&batch)
 		if err != nil {
 			return err
 		}
 		batch.Reset()
 
+		// add correct gc indices
 		for i, okIdx := range idxs {
 			gcIdxKey := getGCIdxKey(&okIdx)
 			gcIdxData := getGCIdxValue(&okIdx, pos[i], chunkHashes[i])
 			batch.Put(gcIdxKey, gcIdxData)
 			log.Trace("clean ok", "key", chunkHashes[i], "gcKey", gcIdxKey, "gcData", gcIdxData)
 		}
+
+		// flush them
 		err = s.db.Write(&batch)
 		if err != nil {
 			return err
 		}
+		batch.Reset()
 
 		log.Debug("clean gc index pass", "batch", cleanBatchCount, "checked", i, "kept", len(idxs))
 	}
 
 	log.Debug("gc cleanup entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
 
-	batch.Reset()
-
+	// lastly add updated entry count
 	var entryCount [8]byte
 	binary.BigEndian.PutUint64(entryCount[:], okEntryCount)
 	batch.Put(keyEntryCnt, entryCount[:])
+
+	// and add the new po index pointers
 	var poKey [2]byte
 	poKey[0] = keyDistanceCnt
 	for i, poPtr := range poPtrs {
@@ -699,6 +721,7 @@ func (s *LDBStore) CleanGCIndex() error {
 		}
 	}
 
+	// if you made it this far your harddisk has survived. Congratulations
 	return s.db.Write(&batch)
 }
 
