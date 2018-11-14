@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"time"
 )
 
 // The TimedExternalAPI implements ExternalAPI, but can be configured to time out after a specified interval.
@@ -49,18 +50,16 @@ func (t *TimedExternalAPI) List(ctx context.Context) ([]common.Address, error) {
 		addr []common.Address
 		err  error
 	}
-	ch := make(chan response)
+	ch := make(chan response, 1)
 	go func() {
 		addr, err := t.next.List(ctx)
 		ch <- response{addr, err}
 	}()
-
 	select {
 	case r := <-ch:
 		return r.addr, r.err
 	case <-time.After(t.timeout):
 		log.Info("timeout", "op", "list")
-		go func() { <-ch }()
 		return []common.Address{}, ErrTimeout
 	}
 }
@@ -70,18 +69,16 @@ func (t *TimedExternalAPI) New(ctx context.Context) (accounts.Account, error) {
 		acc accounts.Account
 		err error
 	}
-	ch := make(chan response)
+	ch := make(chan response, 1)
 	go func() {
 		acc, err := t.next.New(ctx)
 		ch <- response{acc, err}
 	}()
-
 	select {
 	case r := <-ch:
 		return r.acc, r.err
 	case <-time.After(t.timeout):
 		log.Info("timeout", "op", "list")
-		go func() { <-ch }()
 		return accounts.Account{}, ErrTimeout
 	}
 }
@@ -91,7 +88,7 @@ func (t *TimedExternalAPI) SignTransaction(ctx context.Context, args SendTxArgs,
 		res *ethapi.SignTransactionResult
 		err error
 	}
-	ch := make(chan response)
+	ch := make(chan response, 1)
 	go func() {
 		res, err := t.next.SignTransaction(ctx, args, methodSelector)
 		ch <- response{res, err}
@@ -101,7 +98,6 @@ func (t *TimedExternalAPI) SignTransaction(ctx context.Context, args SendTxArgs,
 		return r.res, r.err
 	case <-time.After(t.timeout):
 		log.Info("timeout", "op", "signTransaction")
-		go func() { <-ch }()
 		return nil, ErrTimeout
 	}
 }
@@ -111,7 +107,7 @@ func (t *TimedExternalAPI) Sign(ctx context.Context, addr common.MixedcaseAddres
 		res hexutil.Bytes
 		err error
 	}
-	ch := make(chan response)
+	ch := make(chan response, 1)
 	go func() {
 		res, err := t.next.Sign(ctx, addr, data)
 		ch <- response{res, err}
@@ -121,7 +117,6 @@ func (t *TimedExternalAPI) Sign(ctx context.Context, addr common.MixedcaseAddres
 		return r.res, r.err
 	case <-time.After(t.timeout):
 		log.Info("timeout", "op", "sign")
-		go func() { <-ch }()
 		return nil, ErrTimeout
 	}
 }
@@ -131,7 +126,7 @@ func (t *TimedExternalAPI) Export(ctx context.Context, addr common.Address) (jso
 		res json.RawMessage
 		err error
 	}
-	ch := make(chan response)
+	ch := make(chan response, 1)
 	go func() {
 		res, err := t.next.Export(ctx, addr)
 		ch <- response{res, err}
@@ -141,7 +136,6 @@ func (t *TimedExternalAPI) Export(ctx context.Context, addr common.Address) (jso
 		return r.res, r.err
 	case <-time.After(t.timeout):
 		log.Info("timeout", "op", "sign")
-		go func() { <-ch }()
 		return json.RawMessage{}, ErrTimeout
 	}
 }

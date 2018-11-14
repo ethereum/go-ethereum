@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const(
+const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
