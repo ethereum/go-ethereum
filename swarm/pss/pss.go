@@ -322,10 +322,10 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	if handlers == nil {
 		handlers = make(map[*handler]bool)
 		p.handlers[*topic] = handlers
-		p.topicHandlerCaps[*topic] = hndlr.caps
 		log.Debug("registered handler", "caps", hndlr.caps)
 	}
 	handlers[hndlr] = true
+	p.topicHandlerCaps[*topic] |= hndlr.caps
 	return func() { p.deregister(topic, hndlr) }
 }
 func (p *Pss) deregister(topic *Topic, hndlr *handler) {
