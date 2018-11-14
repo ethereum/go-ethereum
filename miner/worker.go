@@ -55,7 +55,7 @@ const (
 	// timeout waiting for M1
 	waitPeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 60
+	waitPeriodCheckpoint = 30
 )
 
 // Agent can register themself with the worker
@@ -501,7 +501,7 @@ func (self *worker) commitNewWork() {
 				// Check nearest checkpoint block in hop range.
 				nearest := self.config.XDPoA.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
 				if uint64(h) >= nearest {
-				gap += waitPeriodCheckpoint
+			    gap = waitPeriodCheckpoint * int64(h)
 				}
 				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
 			L:
