@@ -56,7 +56,7 @@ import (
 const ExternalAPIVersion = "5.0.0"
 
 // InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "3.0.0"
+const InternalAPIVersion = "3.1.0"
 
 const legalWarning = `
 WARNING! 

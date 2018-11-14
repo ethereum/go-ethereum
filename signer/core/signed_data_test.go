@@ -193,7 +193,7 @@ func TestTypeHash(t *testing.T) {
 }
 
 func TestEncodeData(t *testing.T) {
-	hash, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message)
+	hash, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,8 +395,8 @@ func TestMalformedData2(t *testing.T) {
 		t.Fatalf("Expected `referenced type 'Blahonga' is undefined`, got %v", err)
 	}
 	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
-	if err == nil || err.Error() != "unrecognized interface type <nil>" {
-		t.Errorf("Expected `unrecognized interface type <nil>`, got %v", err)
+	if err == nil || err.Error() != "unrecognized type 'Blahonga'" {
+		t.Errorf("Expected `unrecognized type 'Blahonga'`, got %v", err)
 	}
 }
 
