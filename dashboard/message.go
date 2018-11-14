@@ -18,7 +18,6 @@ package dashboard
 
 import (
 	"encoding/json"
-	"time"
 )
 
 type Message struct {
@@ -34,8 +33,7 @@ type Message struct {
 type ChartEntries []*ChartEntry
 
 type ChartEntry struct {
-	Time  time.Time `json:"time"`
-	Value float64   `json:"value"`
+	Value float64 `json:"value"`
 }
 
 type GeneralMessage struct {
@@ -58,8 +56,8 @@ type TxPoolMessage struct {
 // NetworkMessage contains information about the peers
 // organized based on their IP address and node ID.
 type NetworkMessage struct {
-	Peers *PeerContainer `json:"peers,omitempty"` // Peer tree.
-	Diff  []*PeerEvent   `json:"diff,omitempty"`  // Events that change the peer tree.
+	Peers *peerContainer `json:"peers,omitempty"` // Peer tree.
+	Diff  []*peerEvent   `json:"diff,omitempty"`  // Events that change the peer tree.
 }
 
 // SystemMessage contains the metered system data samples.

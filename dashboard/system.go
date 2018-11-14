@@ -92,39 +92,29 @@ func (db *Dashboard) collectSystemData() {
 			prevDiskRead = curDiskRead
 			prevDiskWrite = curDiskWrite
 
-			now := time.Now()
-
 			runtime.ReadMemStats(&mem)
 			activeMemory := &ChartEntry{
-				Time:  now,
 				Value: float64(mem.Alloc) / frequency,
 			}
 			virtualMemory := &ChartEntry{
-				Time:  now,
 				Value: float64(mem.Sys) / frequency,
 			}
 			networkIngress := &ChartEntry{
-				Time:  now,
 				Value: deltaNetworkIngress / frequency,
 			}
 			networkEgress := &ChartEntry{
-				Time:  now,
 				Value: deltaNetworkEgress / frequency,
 			}
 			processCPU := &ChartEntry{
-				Time:  now,
 				Value: deltaProcessCPUTime / frequency / numCPU * 100,
 			}
 			systemCPU := &ChartEntry{
-				Time:  now,
 				Value: float64(deltaSystemCPUUsage.Sys+deltaSystemCPUUsage.User) / frequency / numCPU,
 			}
 			diskRead := &ChartEntry{
-				Time:  now,
 				Value: float64(deltaDiskRead) / frequency,
 			}
 			diskWrite := &ChartEntry{
-				Time:  now,
 				Value: float64(deltaDiskWrite) / frequency,
 			}
 			db.sysLock.Lock()

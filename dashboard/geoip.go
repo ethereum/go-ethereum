@@ -23,9 +23,9 @@ import (
 	"github.com/apilayer/freegeoip"
 )
 
-// GeoDBInfo contains all the geographical information we could extract based on an IP
+// geoDBInfo contains all the geographical information we could extract based on an IP
 // address.
-type GeoDBInfo struct {
+type geoDBInfo struct {
 	Country struct {
 		Names struct {
 			English string `maxminddb:"en" json:"en,omitempty"`
@@ -42,22 +42,22 @@ type GeoDBInfo struct {
 	} `maxminddb:"location" json:"location,omitempty"`
 }
 
-// GeoLocation contains geographical information.
-type GeoLocation struct {
+// geoLocation contains geographical information.
+type geoLocation struct {
 	Country   string  `json:"country,omitempty"`
 	City      string  `json:"city,omitempty"`
 	Latitude  float64 `json:"latitude,omitempty"`
 	Longitude float64 `json:"longitude,omitempty"`
 }
 
-// GeoDB represents a geoip database that can be queried for IP to geographical
+// geoDB represents a geoip database that can be queried for IP to geographical
 // information conversions.
-type GeoDB struct {
+type geoDB struct {
 	geodb *freegeoip.DB
 }
 
 // Open creates a new geoip database with an up-to-date database from the internet.
-func OpenGeoDB() (*GeoDB, error) {
+func openGeoDB() (*geoDB, error) {
 	// Initiate a geoip database to cross reference locations
 	db, err := freegeoip.OpenURL(freegeoip.MaxMindDB, 24*time.Hour, time.Hour)
 	if err != nil {
@@ -70,26 +70,26 @@ func OpenGeoDB() (*GeoDB, error) {
 		return nil, err
 	}
 	// Assemble and return our custom wrapper
-	return &GeoDB{geodb: db}, nil
+	return &geoDB{geodb: db}, nil
 }
 
 // Close terminates the database background updater.
-func (db *GeoDB) Close() error {
+func (db *geoDB) close() error {
 	db.geodb.Close()
 	return nil
 }
 
 // Lookup converts an IP address to a geographical location.
-func (db *GeoDB) Lookup(ip net.IP) *GeoDBInfo {
-	result := new(GeoDBInfo)
+func (db *geoDB) lookup(ip net.IP) *geoDBInfo {
+	result := new(geoDBInfo)
 	db.geodb.Lookup(ip, result)
 	return result
 }
 
 // Location retrieves the geographical location of the given IP address.
-func (db *GeoDB) Location(ip string) *GeoLocation {
-	location := db.Lookup(net.ParseIP(ip))
-	return &GeoLocation{
+func (db *geoDB) location(ip string) *geoLocation {
+	location := db.lookup(net.ParseIP(ip))
+	return &geoLocation{
 		Country:   location.Country.Names.English,
 		City:      location.City.Names.English,
 		Latitude:  location.Location.Latitude,

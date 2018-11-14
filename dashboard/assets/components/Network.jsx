@@ -23,6 +23,7 @@ import TableHead from '@material-ui/core/TableHead';
 import TableBody from '@material-ui/core/TableBody';
 import TableRow from '@material-ui/core/TableRow';
 import TableCell from '@material-ui/core/TableCell';
+import Grid from '@material-ui/core/Grid/Grid';
 import AreaChart from 'recharts/es6/chart/AreaChart';
 import Tooltip from 'recharts/es6/component/Tooltip';
 import Area from 'recharts/es6/cartesian/Area';
@@ -57,13 +58,13 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 				delete bundle.knownPeers[event.id];
 				return;
 			}
-			case 'unknown': {
+			case 'attempt': {
 				const bundle = prev.peers.bundles[event.ip];
-				if (!bundle || !Array.isArray(bundle.unknownPeers) || bundle.unknownPeers.length < 1) {
+				if (!bundle || !Array.isArray(bundle.attempts) || bundle.attempts.length < 1) {
 					console.error('No unknown peer to remove', event.ip);
 					return;
 				}
-				bundle.unknownPeers.splice(0, 1);
+				bundle.attempts.splice(0, 1);
 				return;
 			}
 			}
@@ -76,7 +77,7 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 						longitude: 0,
 					},
 					knownPeers:   {},
-					unknownPeers: [],
+					attempts: [],
 				};
 			}
 			const bundle = prev.peers.bundles[event.ip];
@@ -85,13 +86,13 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 				return;
 			}
 			if (!event.id) {
-				bundle.unknownPeers.push({
+				bundle.attempts.push({
 					connected:    event.connected,
 					disconnected: event.disconnected,
 				});
 				return;
 			}
-			if (!bundle.knownPeers[event.id]) {
+			if (!bundle.knownPeers || !bundle.knownPeers[event.id]) {
 				bundle.knownPeers[event.id] = {
 					connected:    [],
 					disconnected: [],
@@ -138,7 +139,7 @@ type State = {};
 
 // Network renders the network page.
 class Network extends Component<Props, State> {
-	formatTime = (t) => {
+	formatTime = (t: string) => {
 		const time = new Date(t);
 		if (isNaN(time)) {
 			return '';
@@ -153,105 +154,96 @@ class Network extends Component<Props, State> {
 
 	render() {
 		return (
-			<div>
-				<Table>
-					<TableHead>
-						<TableRow>
-							<TableCell>IP</TableCell>
-							<TableCell>Location</TableCell>
-							<TableCell>Node ID</TableCell>
-							<TableCell>Traffic</TableCell>
-							<TableCell>Connected</TableCell>
-							<TableCell>Disconnected</TableCell>
-						</TableRow>
-					</TableHead>
-					<TableBody>
-						{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
-							if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
-								return null;
-							}
-							return (
-								<TableRow key={`known${ip}`}>
-									<TableCell>{ip}</TableCell>
-									<TableCell>
-										{bundle.location ? (() => {
-											const l = bundle.location;
-											return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''} ${l.latitude} ${l.longitude}`;
-										})() : ''}
-									</TableCell>
-									<TableCell>
-										{Object.keys(bundle.knownPeers).map(id => id.substring(0, 10)).join(' ')}
-									</TableCell>
-									<TableCell>
-										{Object.values(bundle.knownPeers).map(({ingress, egress}) => (
-											<div>
-												<AreaChart
-													width={300} height={50}
-													syncId={'footerSyncId'}
-													data={egress.map(({value}) => ({egress: value || 0}))}
-													margin={{top: 5, right: 5, bottom: 0, left: 5}}
-												>
-													<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
-													<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#8884d8' fill='#8884d8' />
-												</AreaChart>
-												<AreaChart
-													width={300} height={50}
-													syncId={'footerSyncId'}
-													data={ingress.map(({value}) => ({ingress: -value || 0}))}
-													margin={{top: 0, right: 5, bottom: 5, left: 5}}
-												>
-													<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
-													<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#82ca9d' fill='#82ca9d' />
-												</AreaChart>
-											</div>
-										))}
-									</TableCell>
-									<TableCell>
-										{Object.values(bundle.knownPeers).map(peer => peer.connected && peer.connected.map(time => this.formatTime(time)).join(' ')).join(', ')}
-									</TableCell>
-									<TableCell>
-										{Object.values(bundle.knownPeers).map(peer => peer.disconnected && peer.disconnected.map(time => this.formatTime(time)).join(' ')).join(', ')}
-									</TableCell>
-								</TableRow>
-							);
-						})}
-					</TableBody>
-				</Table>
-				<Table>
-					<TableHead>
-						<TableRow>
-							<TableCell>IP</TableCell>
-							<TableCell>Location</TableCell>
-							<TableCell>Connected</TableCell>
-							<TableCell>Disconnected</TableCell>
-						</TableRow>
-					</TableHead>
-					<TableBody>
-						{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
-							if (!bundle.unknownPeers || bundle.unknownPeers.length < 1) {
-								return null;
-							}
-							return (
-								<TableRow key={`unknown${ip}`}>
-									<TableCell>{ip}</TableCell>
-									<TableCell>
-										{bundle.location ? (() => {
-											const l = bundle.location;
-											return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''} ${l.latitude} ${l.longitude}`;
-										})() : ''}
-									</TableCell>
-									<TableCell>
-										{Object.values(bundle.unknownPeers).map(peer => peer.connected && `${this.formatTime(peer.connected)}`).join(', ')}
-									</TableCell>
-									<TableCell>
-										{Object.values(bundle.unknownPeers).map(peer => peer.disconnected && `${this.formatTime(peer.disconnected)}`).join(', ')}
-									</TableCell>
-								</TableRow>
-							);
-						})}
-					</TableBody>
-				</Table>
-			</div>);
+			<Grid container direction='row' justify='space-between' spacing={24}>
+				<Grid item xs={6}>
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableCell>Node ID</TableCell>
+								<TableCell>Location</TableCell>
+								<TableCell>Traffic</TableCell>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
+								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
+									return null;
+								}
+								return (
+									<TableRow key={`known_${ip}`}>
+										<TableCell>
+											{Object.keys(bundle.knownPeers).map(id => id.substring(0, 10)).join(' ')}
+										</TableCell>
+										<TableCell>
+											{bundle.location ? (() => {
+												const l = bundle.location;
+												return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
+											})() : ''}
+										</TableCell>
+										<TableCell>
+											{Object.values(bundle.knownPeers).map(({ingress, egress}) => (
+												<div>
+													<AreaChart
+														width={200} height={18}
+														syncId={'footerSyncId'}
+														data={egress.map(({value}) => ({egress: value || 0}))}
+														margin={{top: 5, right: 5, bottom: 0, left: 5}}
+													>
+														<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
+														<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#8884d8' fill='#8884d8' />
+													</AreaChart>
+													<AreaChart
+														width={200} height={18}
+														syncId={'footerSyncId'}
+														data={ingress.map(({value}) => ({ingress: -value || 0}))}
+														margin={{top: 0, right: 5, bottom: 5, left: 5}}
+													>
+														<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
+														<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#82ca9d' fill='#82ca9d' />
+													</AreaChart>
+												</div>
+											))}
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</Grid>
+				<Grid item xs={6}>
+					<Table>
+						<TableHead>
+							<TableRow>
+								<TableCell>IP</TableCell>
+								<TableCell>Location</TableCell>
+								<TableCell>Attempts</TableCell>
+							</TableRow>
+						</TableHead>
+						<TableBody>
+							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
+								if (!bundle.attempts || bundle.attempts.length < 1) {
+									return null;
+								}
+								return (
+									<TableRow key={`attempt_${ip}`}>
+										<TableCell>{ip}</TableCell>
+										<TableCell>
+											{bundle.location ? (() => {
+												const l = bundle.location;
+												return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
+											})() : ''}
+										</TableCell>
+										<TableCell>
+											{Object.values(bundle.attempts).length}
+										</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
+				</Grid>
+			</Grid>
+		);
 	}
 }
 

@@ -60,7 +60,7 @@ type Dashboard struct {
 	peerLock sync.RWMutex // Lock protecting the stored peer data
 	logLock  sync.RWMutex // Lock protecting the stored log data
 
-	geodb  *GeoDB // geoip database instance for IP to geographical information conversions
+	geodb  *geoDB // geoip database instance for IP to geographical information conversions
 	logdir string // Directory containing the log files
 
 	quit chan chan error // Channel used for graceful exit
@@ -91,14 +91,14 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
 			},
 			System: &SystemMessage{
-				ActiveMemory:   emptyChartEntries(now, sampleLimit, config.Refresh),
-				VirtualMemory:  emptyChartEntries(now, sampleLimit, config.Refresh),
-				NetworkIngress: emptyChartEntries(now, sampleLimit, config.Refresh),
-				NetworkEgress:  emptyChartEntries(now, sampleLimit, config.Refresh),
-				ProcessCPU:     emptyChartEntries(now, sampleLimit, config.Refresh),
-				SystemCPU:      emptyChartEntries(now, sampleLimit, config.Refresh),
-				DiskRead:       emptyChartEntries(now, sampleLimit, config.Refresh),
-				DiskWrite:      emptyChartEntries(now, sampleLimit, config.Refresh),
+				ActiveMemory:   emptyChartEntries(now, sampleLimit),
+				VirtualMemory:  emptyChartEntries(now, sampleLimit),
+				NetworkIngress: emptyChartEntries(now, sampleLimit),
+				NetworkEgress:  emptyChartEntries(now, sampleLimit),
+				ProcessCPU:     emptyChartEntries(now, sampleLimit),
+				SystemCPU:      emptyChartEntries(now, sampleLimit),
+				DiskRead:       emptyChartEntries(now, sampleLimit),
+				DiskWrite:      emptyChartEntries(now, sampleLimit),
 			},
 		},
 		logdir: logdir,
@@ -106,12 +106,10 @@ func New(config *Config, commit string, logdir string) *Dashboard {
 }
 
 // emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
-func emptyChartEntries(t time.Time, limit int, refresh time.Duration) ChartEntries {
+func emptyChartEntries(t time.Time, limit int) ChartEntries {
 	ce := make(ChartEntries, limit)
 	for i := 0; i < limit; i++ {
-		ce[i] = &ChartEntry{
-			Time: t.Add(-time.Duration(i) * refresh),
-		}
+		ce[i] = new(ChartEntry)
 	}
 	return ce
 }

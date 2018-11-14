@@ -29,7 +29,6 @@ export type Content = {
 export type ChartEntries = Array<ChartEntry>;
 
 export type ChartEntry = {
-	time:  Date,
 	value: number,
 };
 
@@ -73,7 +72,7 @@ export type Peers = {
 export type PeerBundle = {
 	location:     GeoLocation,
 	knownPeers:   {[string]: KnownPeer},
-	unknownPeers: Array<UnknownPeer>,
+	attempts: Array<UnknownPeer>,
 };
 
 export type KnownPeer = {
