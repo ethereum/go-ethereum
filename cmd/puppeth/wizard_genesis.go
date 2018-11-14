@@ -207,7 +207,7 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("Which accounts are allowed to confirm in MultiSignWallet?")
+		fmt.Println("Which accounts are allowed to confirm in Foudation MultiSignWallet?")
 		var owners []common.Address
 		for {
 			if address := w.readAddress(); address != nil {
@@ -219,7 +219,7 @@ func (w *wizard) makeGenesis() {
 			}
 		}
 		fmt.Println()
-		fmt.Println("How many require for confirm tx in MultiSignWallet? (default = 2)")
+		fmt.Println("How many require for confirm tx in Foudation MultiSignWallet? (default = 2)")
 		required := int64(w.readDefaultInt(2))
 
 		// MultiSigWallet.
@@ -270,15 +270,50 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
+		fmt.Println("Which accounts are allowed to confirm in Team MultiSignWallet?")
+		var teams []common.Address
+		for {
+			if address := w.readAddress(); address != nil {
+				teams = append(teams, *address)
+				continue
+			}
+			if len(teams) > 0 {
+				break
+			}
+		}
+		fmt.Println()
+		fmt.Println("How many require for confirm tx in Team MultiSignWallet? (default = 2)")
+		required = int64(w.readDefaultInt(2))
+
+		// MultiSigWallet.
+		multiSignWalletTeamAddr, _, err := multiSignWalletContract.DeployMultiSigWallet(transactOpts, contractBackend, teams, big.NewInt(required))
+		if err != nil {
+			fmt.Println("Can't deploy MultiSignWallet SMC")
+		}
+		contractBackend.Commit()
+		code, _ = contractBackend.CodeAt(ctx, multiSignWalletTeamAddr, nil)
+		storage = make(map[common.Hash]common.Hash)
+		contractBackend.ForEachStorageAt(ctx, multiSignWalletTeamAddr, nil, f)
+		// Team balance.
+		balance := big.NewInt(0) // 12m
+		balance.Add(balance, big.NewInt(12*1000*1000))
+		balance.Mul(balance, big.NewInt(1000000000000000000))
+		subBalance := big.NewInt(0) // i * 50k
+		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
+		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
+		balance.Sub(balance, subBalance) // 12m - i * 50k
+		genesis.Alloc[common.HexToAddress(common.TeamAddr)] = core.GenesisAccount{
+			Balance: balance,
+			Code:    code,
+			Storage: storage,
+		}
+
+		fmt.Println()
 		fmt.Println("What is swap wallet address for fund 55m XDC?")
-		swapAddr := w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
+		swapAddr := *w.readAddress()
 		baseBalance := big.NewInt(0) // 55m
 		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
-		subBalance := big.NewInt(0) // 150k
-		subBalance.Add(subBalance, big.NewInt(150*1000))
-		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
-		baseBalance.Sub(baseBalance, subBalance) // 55m - 150k
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,
 		}
