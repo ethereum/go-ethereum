@@ -165,5 +165,5 @@ exec XDC $params \
   --wsorigins "*" \
   --mine \
   --gasprice "2500" \
-  --targetgaslimit "420000000" \
+  --targetgaslimit "84000000" \
   "$@"
