@@ -633,6 +633,9 @@ func (s *LDBStore) CleanGCIndex() error {
 			}
 		}
 		totalEntryCount++
+		if err := s.db.Write(&batch); err != nil {
+			return err
+		}
 		it.Next()
 	}
 
