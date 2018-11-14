@@ -153,6 +153,7 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runFileRetrievalTest(nodeCount int) error {
+	t.Skip("temporarily disabled as simuations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -246,6 +247,8 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runRetrievalTest(chunkCount int, nodeCount int) error {
+
+	t.Skip("temporarily disabled as simuations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
