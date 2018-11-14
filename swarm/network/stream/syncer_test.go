@@ -18,9 +18,7 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -39,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 const dataChunkCount = 200
@@ -183,7 +182,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 				fileStore := item.(*storage.FileStore)
 				size := chunkCount * chunkSize
-				_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+				_, wait, err := fileStore.Store(ctx, testutil.RandomReader(j, size), int64(size), false)
 				if err != nil {
 					t.Fatal(err.Error())
 				}

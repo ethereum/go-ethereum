@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
@@ -58,7 +57,7 @@ func init() {
 	})
 }
 
-func serverFunc(api *api.API) testutil.TestServer {
+func serverFunc(api *api.API) swarmhttp.TestServer {
 	return swarmhttp.NewServer(api, "")
 }
 func TestMain(m *testing.M) {
