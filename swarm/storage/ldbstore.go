@@ -615,6 +615,8 @@ func (s *LDBStore) CleanGCIndex() error {
 		var chunkHashes [][]byte
 		var pos []uint8
 		it := s.db.NewIterator()
+
+		batch.Reset()
 		it.Seek(lastIdxKey)
 
 		var i int
@@ -672,12 +674,13 @@ func (s *LDBStore) CleanGCIndex() error {
 		if err != nil {
 			return err
 		}
-		batch.Reset()
 
 		log.Debug("clean gc index pass", "batch", cleanBatchCount, "checked", i, "kept", len(idxs))
 	}
 
 	log.Debug("gc cleanup entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
+
+	batch.Reset()
 
 	var entryCount [8]byte
 	binary.BigEndian.PutUint64(entryCount[:], okEntryCount)
