@@ -34,7 +34,7 @@ import (
 // all nodes have the their Kadmlias healthy.
 func ExampleSimulation_WaitTillHealthy() {
 
-	log.Error("temporarily disabled as simuations.WaitTillHealthy cannot be trusted")
+	log.Error("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	return
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
