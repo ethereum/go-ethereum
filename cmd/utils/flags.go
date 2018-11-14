@@ -74,10 +74,8 @@ SUBCOMMANDS:
 
 func init() {
 	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
-
 VERSION:
    {{.Version}}
-
 COMMANDS:
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
@@ -113,6 +111,11 @@ func NewApp(gitCommit, usage string) *cli.App {
 
 var (
 	// General settings
+	CommitTxWhenNotMiningFlag = DirectoryFlag{
+		Name:  "committxwhennotmining",
+		Usage: "Always commit transactions",
+		Value: DirectoryString{node.DefaultDataDir()},
+	}
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -128,7 +131,7 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
+		Usage: "Network identifier (integer, 89=XDCchain)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
@@ -311,11 +314,11 @@ var (
 		Value: int(state.MaxTrieCacheGen),
 	}
 	// Miner settings
-	StakingEnabledFlag  = cli.BoolFlag{
+	StakingEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable staking",
 	}
-	StakerThreadsFlag  = cli.IntFlag{
+	StakerThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of CPU threads to use for staking",
 		Value: runtime.NumCPU(),
@@ -896,6 +899,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
+	}
+	if ctx.GlobalIsSet(CommitTxWhenNotMiningFlag.Name) {
+		cfg.CommitTxWhenNotMining = ctx.GlobalBool(CommitTxWhenNotMiningFlag.Name)
 	}
 }
 

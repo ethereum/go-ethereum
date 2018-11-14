@@ -57,12 +57,12 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, commitTxWhenNotMining bool) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
+		worker:   newWorker(config, engine, common.Address{}, eth, mux, commitTxWhenNotMining),
 		canStart: 1,
 	}
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
@@ -77,7 +77,6 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
-out:
 	for ev := range events.Chan() {
 		switch ev.Data.(type) {
 		case downloader.StartEvent:
@@ -95,10 +94,7 @@ out:
 			if shouldStart {
 				self.Start(self.coinbase)
 			}
-			// unsubscribe. we're only interested in this event once
-			events.Unsubscribe()
-			// stop immediately and ignore all further pending events
-			break out
+
 		}
 	}
 }
