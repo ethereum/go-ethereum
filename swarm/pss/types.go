@@ -39,9 +39,8 @@ const (
 )
 
 const (
-	handlerCapSym  = 1 << 0
-	handlerCapRaw  = 1 << 1
-	handlerCapProx = 1 << 2
+	handlerCapRaw  = 1 << 0
+	handlerCapProx = 1 << 1
 )
 
 var (
