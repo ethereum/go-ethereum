@@ -19,7 +19,6 @@ package core
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -75,6 +74,7 @@ type TypedData struct {
 	PrimaryType string       `json:"primaryType"`
 	Domain      EIP712Domain `json:"domain"`
 	Message     EIP712Data   `json:"message"`
+	Output      bytes.Buffer
 }
 
 type EIP712Type []map[string]string
@@ -273,16 +273,16 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	if err != nil {
 		return nil, err
 	}
+	typedData.Output.Reset()
+	typedData.Output.WriteString(fmt.Sprintf("%s {\n", typedData.PrimaryType))
 	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
 		return nil, err
 	}
-	msg, err := json.MarshalIndent(typedData.Message, "", "  ")
-	if err != nil {
-		return nil, err
-	}
+	typedData.Output.Truncate(typedData.Output.Len() - 2)
+	typedData.Output.WriteString(fmt.Sprintf("\n}"))
 	sighash := crypto.Keccak256([]byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))))
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData, Message: string(msg), Hash: sighash}
+	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: typedData.Output.String(), Hash: sighash}
 	signature, err := api.Sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -293,7 +293,7 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 
 // HashStruct generates a keccak256 hash of the encoding of the provided data
 func (typedData *TypedData) HashStruct(primaryType string, data EIP712Data) (hexutil.Bytes, error) {
-	encodedData, err := typedData.EncodeData(primaryType, data)
+	encodedData, err := typedData.EncodeData(primaryType, data, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
-func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}) (hexutil.Bytes, error) {
+func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}, depth int) (hexutil.Bytes, error) {
 	encValues := []interface{}{}
 
 	// Verify extra data
@@ -384,21 +384,24 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-			parsedType := strings.Split(encType, "[")[0]
+			typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
+			typedData.Output.WriteString(fmt.Sprintf("\"%s\": [ %s\n", field["name"], encType))
+
 			arrayBuffer := bytes.Buffer{}
+			parsedType := strings.Split(encType, "[")[0]
 			for _, item := range arrayValue {
 				if typedData.Types[parsedType] != nil {
 					mapValue, ok := item.(map[string]interface{})
 					if !ok {
 						return nil, dataMismatchError(parsedType, item)
 					}
-					encodedData, err := typedData.EncodeData(parsedType, mapValue)
+					encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
 					if err != nil {
 						return nil, err
 					}
 					arrayBuffer.Write(encodedData)
 				} else {
-					encValue, err := handlePrimitiveValue(encType, encValue)
+					encValue, err := typedData.HandlePrimitiveValue(encType, encValue, depth)
 					if err != nil {
 						return nil, err
 					}
@@ -409,20 +412,29 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					arrayBuffer.Write(bytesValue)
 				}
 			}
+
+			typedData.Output.Truncate(typedData.Output.Len() - 2)
+			typedData.Output.WriteString(fmt.Sprintf("\n%s],\n", strings.Repeat("\u00a0", depth*2)))
 			encValues = append(encValues, crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field["type"]] != nil {
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-			encodedData, err := typedData.EncodeData(field["type"], mapValue)
+			typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
+			typedData.Output.WriteString(fmt.Sprintf("\"%s\": { %s\n", field["name"], encType))
+
+			encodedData, err := typedData.EncodeData(field["type"], mapValue, depth+1)
 			if err != nil {
 				return nil, err
 			}
+
+			typedData.Output.Truncate(typedData.Output.Len() - 2)
+			typedData.Output.WriteString(fmt.Sprintf("\n%s},\n", strings.Repeat("\u00a0", depth*2)))
 			encValue = crypto.Keccak256(encodedData)
 			encValues = append(encValues, encValue)
 		} else {
-			primitiveEncValue, err := handlePrimitiveValue(encType, encValue)
+			primitiveEncValue, err := typedData.HandlePrimitiveValue(encType, encValue, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -444,9 +456,11 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // handlePrimitiveValues deals with the primitive values found
 // while searching through the typed data
-func handlePrimitiveValue(encType string, encValue interface{}) (interface{}, error) {
+func (typedData *TypedData) HandlePrimitiveValue(encType string, encValue interface{}, depth int) (interface{}, error) {
 	var primitiveEncValue interface{}
 
+	typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
+	typedData.Output.WriteString(fmt.Sprintf("\"%s\": ", encType))
 	switch encType {
 	case "address":
 		bytesValue := hexutil.Bytes{}
@@ -457,10 +471,12 @@ func handlePrimitiveValue(encType string, encValue interface{}) (interface{}, er
 		if !ok || !common.IsHexAddress(stringValue) {
 			return nil, dataMismatchError(encType, encValue)
 		}
-		for _, _byte := range common.HexToAddress(stringValue) {
+		addressValue := common.HexToAddress(stringValue)
+		for _, _byte := range addressValue {
 			bytesValue = append(bytesValue, _byte)
 		}
 		primitiveEncValue = bytesValue
+		typedData.Output.WriteString(fmt.Sprintf("%s,\n", addressValue.String()))
 	case "bool":
 		var int64Val int64
 		boolValue, ok := encValue.(bool)
@@ -471,12 +487,14 @@ func handlePrimitiveValue(encType string, encValue interface{}) (interface{}, er
 			int64Val = 1
 		}
 		primitiveEncValue = abi.U256(big.NewInt(int64Val))
+		typedData.Output.WriteString(fmt.Sprintf("%t,\n", boolValue))
 	case "bytes", "string":
 		bytesValue, err := bytesValueOf(encValue)
 		if err != nil {
 			return nil, dataMismatchError(encType, encValue)
 		}
 		primitiveEncValue = crypto.Keccak256(bytesValue)
+		typedData.Output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
 	default:
 		if strings.HasPrefix(encType, "bytes") {
 			sizeStr := strings.TrimPrefix(encType, "bytes")
@@ -490,12 +508,16 @@ func handlePrimitiveValue(encType string, encValue interface{}) (interface{}, er
 			}
 			bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
 			primitiveEncValue = bytesValue
+			typedData.Output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
 		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 			bigIntValue, ok := encValue.(*big.Int)
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
 			primitiveEncValue = abi.U256(bigIntValue)
+			typedData.Output.WriteString(fmt.Sprintf("%d,\n", bigIntValue))
+		} else {
+			return nil, fmt.Errorf("unrecognized type '%s'", encType)
 		}
 	}
 	return primitiveEncValue, nil
@@ -525,7 +547,7 @@ func bytesValueOf(_interface interface{}) (hexutil.Bytes, error) {
 		break
 	}
 
-	return nil, fmt.Errorf("unrecognized interface type %T", _interface)
+	return nil, fmt.Errorf("unrecognized type '%T'", _interface)
 }
 
 // EcRecover recovers the address associated with the given sig.
