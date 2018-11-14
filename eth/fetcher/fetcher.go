@@ -704,8 +704,8 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, true)
-		go f.broadcastBlock(block, false)
-	}()
+		//go f.broadcastBlock(block, false)
+		}()
 }
 
 // forgetHash removes all traces of a block announcement from the fetcher's
