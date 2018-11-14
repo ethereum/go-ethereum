@@ -604,15 +604,15 @@ func (s *LDBStore) CleanGCIndex() error {
 
 	it.Release()
 
-	//var idx dpaDBIndex
 	var poPtrs [256]uint64
 	var doneIterating bool
+	lastIdxKey := []byte{keyIndex}
 	for !doneIterating {
 		var idxs []dpaDBIndex
 		var chunkHashes [][]byte
 		var pos []uint8
 		it := s.db.NewIterator()
-		it.Seek([]byte{keyIndex})
+		it.Seek(lastIdxKey)
 		for i := 0; i < 4096; i++ {
 			if !it.Valid() {
 				doneIterating = true
@@ -630,6 +630,7 @@ func (s *LDBStore) CleanGCIndex() error {
 				return fmt.Errorf("corrupt index: %v", err)
 			}
 			po := s.po(chunkHash)
+			lastIdxKey = it.Key()
 
 			// if we don't find the data key, remove the entry
 			dataKey := getDataKey(idx.Idx, po)
@@ -637,9 +638,6 @@ func (s *LDBStore) CleanGCIndex() error {
 			if err != nil {
 				log.Warn("deleting inconsistent index (missing data)", "key", chunkHash)
 				batch.Delete(it.Key())
-				//				if err := s.db.Delete(it.Key()); err != nil {
-				//					return err
-				//				}
 			} else {
 				idxs = append(idxs, idx)
 				chunkHashes = append(chunkHashes, chunkHash)
@@ -669,7 +667,6 @@ func (s *LDBStore) CleanGCIndex() error {
 		if err != nil {
 			return err
 		}
-
 	}
 
 	log.Debug("gc cleanup entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())

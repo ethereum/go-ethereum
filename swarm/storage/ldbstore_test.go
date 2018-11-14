@@ -761,6 +761,38 @@ func TestCleanIndex(t *testing.T) {
 			t.Fatalf("expected sum of bin indices to be 3, was %d", binTotal)
 		}
 	}
+
+	// check that the iterator quits properly
+	chunks, err = mputRandomChunks(ldb, 4100, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	po = ldb.po(chunks[4099].Address()[:])
+	dataKey = make([]byte, 10)
+	dataKey[0] = keyData
+	dataKey[1] = byte(po)
+	binary.BigEndian.PutUint64(dataKey[2:], 4099+3)
+	if _, err := ldb.db.Get(dataKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Delete(dataKey); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ldb.CleanGCIndex(); err != nil {
+		t.Fatal(err)
+	}
+
+	// entrycount should now be one less of added chunks
+	c, err = ldb.db.Get(keyEntryCnt)
+	if err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+	entryCount = binary.BigEndian.Uint64(c)
+	if entryCount != 4099+2 {
+		t.Fatalf("expected entrycnt to be 2, was %d", c)
+	}
 }
 
 func waitGc(ctx context.Context, ldb *LDBStore) {
