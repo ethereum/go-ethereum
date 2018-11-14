@@ -284,7 +284,7 @@ func getGCIdxValue(index *dpaDBIndex, po uint8, addr Address) []byte {
 	return val
 }
 
-func parseGCIdxKey(key []byte) (byte, []byte) {
+func parseIdxKey(key []byte) (byte, []byte) {
 	return key[0], key[1:]
 }
 
@@ -589,7 +589,7 @@ func (s *LDBStore) CleanGCIndex() error {
 	it.Seek([]byte{keyGCIdx})
 	var gcDeletes int
 	for it.Valid() {
-		rowType, _ := parseGCIdxKey(it.Key())
+		rowType, _ := parseIdxKey(it.Key())
 		if rowType != keyGCIdx {
 			break
 		}
@@ -639,7 +639,7 @@ func (s *LDBStore) CleanGCIndex() error {
 			}
 
 			// if it's not keyindex anymore we're done iterating
-			rowType, chunkHash := parseGCIdxKey(it.Key())
+			rowType, chunkHash := parseIdxKey(it.Key())
 			if rowType != keyIndex {
 				doneIterating = true
 				break
