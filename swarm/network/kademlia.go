@@ -450,20 +450,39 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 	if k.conns.Size() <= k.MinProxBinSize {
 		return 0
 	}
+
+	// total number of peers in iteration
 	var size int
+
+	// true if iteration has all prox peers
 	var b bool
+
+	// last po recorded in iteration
 	var lastPo int
+
 	f := func(v pot.Val, i int) bool {
 		size++
 
-		// the actual depth of the farthest nn
+		// this means we have all nn-peers.
+		// depth is by default set to the bin of the farthest nn-peer
 		if size == k.MinProxBinSize {
 			b = true
 			depth = i
 			return true
 		}
 
-		// if there are empty bins between farthest nn and current node, the depth should be the farthest of those empty bins
+		// if there are empty bins between farthest nn and current node,
+		// the depth should recalculated to be
+		// the farthest of those empty bins
+		//
+		// 0   abac ccde
+		// 1   2a2a
+		// 2   589f       <--- nearest non-nn
+		// 3              <--- don't count as empty bins
+		// 4              <--- don't count as empty bins
+		// ============ DEPTH 5  ===========
+		// 5  cbcb cdcd    <---- furthest nn
+		// 6  a1a2 b3c4
 		if b && i < depth {
 			depth = i + 1
 			lastPo = i
@@ -474,10 +493,12 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 	}
 	k.conns.EachNeighbour(k.base, pof, f)
 
-	// cover edge case where more than one farthest nn and only proxpeers
+	// cover edge case where more than one farthest nn
+	// AND we only have nn-peers
 	if lastPo == depth {
 		depth = 0
 	}
+
 	return depth
 }
 
@@ -607,6 +628,7 @@ type PeerPot struct {
 // as hexadecimal representations of the address.
 // used for testing only
 func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
+
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
 	for _, addr := range addrs {
@@ -615,38 +637,65 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 	ppmap := make(map[string]*PeerPot)
 
 	for i, a := range addrs {
+
+		// set to proxbin depth when all nn-peers are found
 		pl := 256
+
+		// next po in turn in iteration
 		prev := 256
+
+		// all bins outside proxbin depth with no peers
 		var emptyBins []int
+
+		// all nn-peers
 		var nns [][]byte
-		depthTraversed := false // any empty bins between furthest nn and nearest non-nn should not be counted as emptybins
+
+		// used to skip empty bins immediately after nn-peers
+		depthTraversed := false
+
 		np.EachNeighbour(addrs[i], pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
+
+			// 256 is self. We don't care about ourselves
 			if po == 256 {
 				return true
 			}
+
+			// if first nn-peer or peer in same bin as last
 			if pl == 256 || pl == po {
 				nns = append(nns, a)
 			}
+
+			// all bins are filled
+			// start counting pl and set prev to
 			if pl == 256 && len(nns) >= kadMinProxSize {
 				pl = po
 				prev = po
 			}
+
+			// only true starting from first peer after nn-peers
 			if prev < pl {
-				if !depthTraversed {
-					depthTraversed = true
-				} else {
+				if depthTraversed {
 					for j := prev; j > po; j-- {
 						emptyBins = append(emptyBins, j)
 					}
 				}
+
+				// after first peer after nn-peers, start counting emptybins
+				depthTraversed = true
 			}
+
+			// expected po in next iteration if there are no empty bins inbetween
 			prev = po - 1
 			return true
 		})
+
+		// add any remaining bins between po 0 and the last po in iteration
+		// to the list of empty bins
 		for j := prev; j >= 0; j-- {
 			emptyBins = append(emptyBins, j)
 		}
+
 		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns, emptyBins}
 	}
