@@ -99,7 +99,6 @@ type Kademlia struct {
 	nDepth     int      // stores the last neighbourhood depth
 	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
 	addrCountC chan int // returned by AddrCountC function to signal peer count change
-	Pof        func(pot.Val, pot.Val, int) (int, bool)
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -114,7 +113,6 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
-		Pof:       pof,
 	}
 }
 
