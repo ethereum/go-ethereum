@@ -631,7 +631,9 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		// set to proxbin depth when all nn-peers are found
 		pl := 256
 
-		// next po in turn in iteration
+		// upon entering a new iteration
+		// this will hold the value the po should be
+		// if it's one higher than the po in the last iteration
 		prev := 256
 
 		// all bins outside proxbin depth with no peers
@@ -646,7 +648,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		np.EachNeighbour(addrs[i], pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
 
-			// 256 is self. We don't care about ourselves
+			// 256 is self. We are selfless
 			if po == 256 {
 				return true
 			}
@@ -656,8 +658,8 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 				nns = append(nns, a)
 			}
 
-			// all bins are filled
-			// start counting pl and set prev to
+			// if true then all nn-bins have been filled
+			// start counting pl and set prev to current po initially (which will skip next block)
 			if pl == 256 && len(nns) >= kadMinProxSize {
 				pl = po
 				prev = po
