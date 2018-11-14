@@ -705,7 +705,7 @@ func TestCleanIndex(t *testing.T) {
 
 	// second gc index should still be fixed
 	if _, err := ldb.db.Get(gcSecondCorrectKey); err != nil {
-		t.Fatalf("expected gc 1 idx to be present: %v", idxKey)
+		t.Fatalf("expected gc 1 idx %v to be present: %v", gcSecondCorrectKey, idxKey)
 	}
 
 	// third gc index should be unchanged

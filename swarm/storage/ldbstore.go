@@ -602,44 +602,76 @@ func (s *LDBStore) CleanGCIndex() error {
 		return err
 	}
 
-	it.Seek([]byte{keyIndex})
-	var idx dpaDBIndex
-	var poPtrs [256]uint64
-	for it.Valid() {
-		rowType, chunkHash := parseGCIdxKey(it.Key())
-		if rowType != keyIndex {
-			break
-		}
-		err := decodeIndex(it.Value(), &idx)
-		if err != nil {
-			return fmt.Errorf("corrupt index: %v", err)
-		}
-		po := s.po(chunkHash)
+	it.Release()
 
-		// if we don't find the data key, remove the entry
-		dataKey := getDataKey(idx.Idx, po)
-		_, err = s.db.Get(dataKey)
-		if err != nil {
-			log.Warn("deleting inconsistent index (missing data)", "key", chunkHash)
-			batch.Delete(it.Key())
-		} else {
-			gcIdxKey := getGCIdxKey(&idx)
-			gcIdxData := getGCIdxValue(&idx, po, chunkHash)
-			batch.Put(gcIdxKey, gcIdxData)
-			log.Trace("clean ok", "key", chunkHash, "gcKey", gcIdxKey, "gcData", gcIdxData)
-			okEntryCount++
-			if idx.Idx > poPtrs[po] {
-				poPtrs[po] = idx.Idx
+	//var idx dpaDBIndex
+	var poPtrs [256]uint64
+	var doneIterating bool
+	for !doneIterating {
+		var idxs []dpaDBIndex
+		var chunkHashes [][]byte
+		var pos []uint8
+		it := s.db.NewIterator()
+		it.Seek([]byte{keyIndex})
+		for i := 0; i < 4096; i++ {
+			if !it.Valid() {
+				doneIterating = true
+				break
 			}
+			rowType, chunkHash := parseGCIdxKey(it.Key())
+			if rowType != keyIndex {
+				doneIterating = true
+				break
+			}
+			//err := decodeIndex(it.Value(), &idx)
+			var idx dpaDBIndex
+			err := decodeIndex(it.Value(), &idx)
+			if err != nil {
+				return fmt.Errorf("corrupt index: %v", err)
+			}
+			po := s.po(chunkHash)
+
+			// if we don't find the data key, remove the entry
+			dataKey := getDataKey(idx.Idx, po)
+			_, err = s.db.Get(dataKey)
+			if err != nil {
+				log.Warn("deleting inconsistent index (missing data)", "key", chunkHash)
+				batch.Delete(it.Key())
+				//				if err := s.db.Delete(it.Key()); err != nil {
+				//					return err
+				//				}
+			} else {
+				idxs = append(idxs, idx)
+				chunkHashes = append(chunkHashes, chunkHash)
+				pos = append(pos, po)
+				okEntryCount++
+				if idx.Idx > poPtrs[po] {
+					poPtrs[po] = idx.Idx
+				}
+			}
+			totalEntryCount++
+			it.Next()
 		}
-		totalEntryCount++
-		if err := s.db.Write(&batch); err != nil {
+		it.Release()
+
+		err := s.db.Write(&batch)
+		if err != nil {
 			return err
 		}
-		it.Next()
+
+		for i, okIdx := range idxs {
+			gcIdxKey := getGCIdxKey(&okIdx)
+			gcIdxData := getGCIdxValue(&okIdx, pos[i], chunkHashes[i])
+			batch.Put(gcIdxKey, gcIdxData)
+			log.Trace("clean ok", "key", chunkHashes[i], "gcKey", gcIdxKey, "gcData", gcIdxData)
+		}
+		err = s.db.Write(&batch)
+		if err != nil {
+			return err
+		}
+
 	}
 
-	it.Release()
 	log.Debug("gc cleanup entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
 
 	var entryCount [8]byte
