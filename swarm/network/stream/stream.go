@@ -734,7 +734,7 @@ func (c *clientParams) clientCreated() {
 	close(c.clientCreatedC)
 }
 
-//Return the streamer spec to callers
+//GetSpec returns the streamer spec to callers
 //This used to be a global variable but for simulations with
 //multiple nodes its fields (notably the Hook) would be overwritten
 func (r *Registry) GetSpec() *protocols.Spec {
@@ -742,11 +742,10 @@ func (r *Registry) GetSpec() *protocols.Spec {
 }
 
 func (r *Registry) createSpec() {
-
 	// Spec is the spec of the streamer protocol
 	var spec = &protocols.Spec{
 		Name:       "stream",
-		Version:    7,
+		Version:    8,
 		MaxMsgSize: 10 * 1024 * 1024,
 		Messages: []interface{}{
 			UnsubscribeMsg{},
@@ -772,8 +771,6 @@ func (r *Registry) Protocols() []p2p.Protocol {
 			Version: r.spec.Version,
 			Length:  r.spec.Length(),
 			Run:     r.runProtocol,
-			// NodeInfo: ,
-			// PeerInfo: ,
 		},
 	}
 }

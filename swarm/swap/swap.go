@@ -69,7 +69,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	return err
 }
 
-//Get a peer's balance
+//GetPeerBalance returns the balance for a given peer
 func (swap *Swap) GetPeerBalance(peer enode.ID) (int64, error) {
 	swap.lock.RLock()
 	defer swap.lock.RUnlock()
