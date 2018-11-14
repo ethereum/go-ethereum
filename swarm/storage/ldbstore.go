@@ -607,13 +607,18 @@ func (s *LDBStore) CleanGCIndex() error {
 	var poPtrs [256]uint64
 	var doneIterating bool
 	lastIdxKey := []byte{keyIndex}
+	var cleanBatchCount int
 	for !doneIterating {
+
+		cleanBatchCount++
 		var idxs []dpaDBIndex
 		var chunkHashes [][]byte
 		var pos []uint8
 		it := s.db.NewIterator()
 		it.Seek(lastIdxKey)
-		for i := 0; i < 4096; i++ {
+
+		var i int
+		for i = 0; i < 4096; i++ {
 			if !it.Valid() {
 				doneIterating = true
 				break
@@ -667,6 +672,8 @@ func (s *LDBStore) CleanGCIndex() error {
 		if err != nil {
 			return err
 		}
+
+		log.Debug("clean gc index pass", "batch", cleanBatchCount, "checked", i, "kept", len(idxs))
 	}
 
 	log.Debug("gc cleanup entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
