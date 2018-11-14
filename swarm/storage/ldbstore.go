@@ -663,6 +663,7 @@ func (s *LDBStore) CleanGCIndex() error {
 		if err != nil {
 			return err
 		}
+		batch.Reset()
 
 		for i, okIdx := range idxs {
 			gcIdxKey := getGCIdxKey(&okIdx)
