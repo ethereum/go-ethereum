@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"testing"
@@ -22,102 +22,87 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func TestJSONField(t *testing.T) {
+// TestStringField validates put and get operations
+// of the StringField.
+func TestStringField(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	complexField, err := db.NewJSONField("complex-field")
+	simpleString, err := db.NewStringField("simple-string")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	type complexStructure struct {
-		A string
-	}
-
-	t.Run("unmarshal empty", func(t *testing.T) {
-		var s complexStructure
-		err := complexField.Unmarshal(&s)
-		if err != leveldb.ErrNotFound {
-			t.Fatalf("got error %v, want %v", err, leveldb.ErrNotFound)
+	t.Run("get empty", func(t *testing.T) {
+		got, err := simpleString.Get()
+		if err != nil {
+			t.Fatal(err)
 		}
 		want := ""
-		if s.A != want {
-			t.Errorf("got string %q, want %q", s.A, want)
+		if got != want {
+			t.Errorf("got string %q, want %q", got, want)
 		}
 	})
 
 	t.Run("put", func(t *testing.T) {
-		want := complexStructure{
-			A: "simple string value",
-		}
-		err = complexField.Put(want)
+		want := "simple string value"
+		err = simpleString.Put(want)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var got complexStructure
-		err = complexField.Unmarshal(&got)
+		got, err := simpleString.Get()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.A != want.A {
-			t.Errorf("got string %q, want %q", got.A, want.A)
+		if got != want {
+			t.Errorf("got string %q, want %q", got, want)
 		}
 
 		t.Run("overwrite", func(t *testing.T) {
-			want := complexStructure{
-				A: "overwritten string value",
-			}
-			err = complexField.Put(want)
+			want := "overwritten string value"
+			err = simpleString.Put(want)
 			if err != nil {
 				t.Fatal(err)
 			}
-			var got complexStructure
-			err = complexField.Unmarshal(&got)
+			got, err := simpleString.Get()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.A != want.A {
-				t.Errorf("got string %q, want %q", got.A, want.A)
+			if got != want {
+				t.Errorf("got string %q, want %q", got, want)
 			}
 		})
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
 		batch := new(leveldb.Batch)
-		want := complexStructure{
-			A: "simple string batch value",
-		}
-		complexField.PutInBatch(batch, want)
+		want := "simple string batch value"
+		simpleString.PutInBatch(batch, want)
 		err = db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var got complexStructure
-		err := complexField.Unmarshal(&got)
+		got, err := simpleString.Get()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.A != want.A {
+		if got != want {
 			t.Errorf("got string %q, want %q", got, want)
 		}
 
 		t.Run("overwrite", func(t *testing.T) {
 			batch := new(leveldb.Batch)
-			want := complexStructure{
-				A: "overwritten string batch value",
-			}
-			complexField.PutInBatch(batch, want)
+			want := "overwritten string batch value"
+			simpleString.PutInBatch(batch, want)
 			err = db.WriteBatch(batch)
 			if err != nil {
 				t.Fatal(err)
 			}
-			var got complexStructure
-			err := complexField.Unmarshal(&got)
+			got, err := simpleString.Get()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.A != want.A {
+			if got != want {
 				t.Errorf("got string %q, want %q", got, want)
 			}
 		})

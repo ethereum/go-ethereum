@@ -14,22 +14,37 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// IndexItem holds fields relevant to Swarm Chunk data and metadata.
+// All information required for swarm storage and operations
+// on that storage must be defined here.
+// This structure is logically connected to swarm storage,
+// the only part of this package that is not generalized,
+// mostly for performance reasons.
+//
+// IndexItem is a type that is used for retrieving, storing and encoding
+// chunk data and metadata. It is passed as an argument to Index encoding
+// functions, get function and put function.
+// But it is also returned with additional data from get function call
+// and as the argument in iterator function definition.
 type IndexItem struct {
-	Hash            []byte
+	Address         []byte
 	Data            []byte
 	AccessTimestamp int64
 	StoreTimestamp  int64
 }
 
+// Join is a helper method to construct a new
+// IndexItem by filling up fields with default values
+// of a particular IndexItem with values from another one.
 func (i IndexItem) Join(i2 IndexItem) (new IndexItem) {
-	if i.Hash == nil {
-		i.Hash = i2.Hash
+	if i.Address == nil {
+		i.Address = i2.Address
 	}
 	if i.Data == nil {
 		i.Data = i2.Data
@@ -43,6 +58,12 @@ func (i IndexItem) Join(i2 IndexItem) (new IndexItem) {
 	return i
 }
 
+// Index represents a set of LevelDB key value pairs that have common
+// prefix. It holds functions for encoding and decoding keys and values
+// to provide transparent actions on saved data which inclide:
+// - getting a particular IndexItem
+// - saving a particular IndexItem
+// - iterating over a sorted LevelDB keys
 type Index struct {
 	db              *DB
 	prefix          []byte
@@ -52,6 +73,8 @@ type Index struct {
 	decodeValueFunc func(value []byte) (e IndexItem, err error)
 }
 
+// IndexFuncs structure defines functions for encoding and decoding
+// LevelDB keys and values for a specific index.
 type IndexFuncs struct {
 	EncodeKey   func(fields IndexItem) (key []byte, err error)
 	DecodeKey   func(key []byte) (e IndexItem, err error)
@@ -59,8 +82,11 @@ type IndexFuncs struct {
 	DecodeValue func(value []byte) (e IndexItem, err error)
 }
 
+// NewIndex returns a new Index instance with defined name and
+// encoding functions. The name must be unique and will be validated
+// on database schema for a key prefix byte.
 func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
-	id, err := db.schemaIndexID(name)
+	id, err := db.schemaIndexPrefix(name)
 	if err != nil {
 		return f, err
 	}
@@ -83,6 +109,9 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 	}, nil
 }
 
+// Get accepts key fields represented as IndexItem to retrieve a
+// value from the index and return maximum available information
+// from the index represented as another IndexItem.
 func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
@@ -99,6 +128,8 @@ func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
 	return out.Join(keyFields), nil
 }
 
+// Put accepts IndexItem to encode information from it
+// and save it to the database.
 func (f Index) Put(i IndexItem) (err error) {
 	key, err := f.encodeKeyFunc(i)
 	if err != nil {
@@ -111,6 +142,9 @@ func (f Index) Put(i IndexItem) (err error) {
 	return f.db.Put(key, value)
 }
 
+// PutInBatch is the same as Put method, but it just
+// saves the key/value pair to the batch instead
+// directly to the database.
 func (f Index) PutInBatch(batch *leveldb.Batch, i IndexItem) (err error) {
 	key, err := f.encodeKeyFunc(i)
 	if err != nil {
@@ -124,6 +158,8 @@ func (f Index) PutInBatch(batch *leveldb.Batch, i IndexItem) (err error) {
 	return nil
 }
 
+// Delete accepts IndexItem to remove a key/value pair
+// form the database based on its fields.
 func (f Index) Delete(keyFields IndexItem) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
@@ -132,6 +168,8 @@ func (f Index) Delete(keyFields IndexItem) (err error) {
 	return f.db.Delete(key)
 }
 
+// DeleteInBatch is the same as Delete just the operation
+// is performed on the batch instead on the database.
 func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields IndexItem) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
@@ -141,9 +179,15 @@ func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields IndexItem) (err err
 	return nil
 }
 
-type IterFunc func(item IndexItem) (stop bool, err error)
+// IndexIterFunc is a callback on every IndexItem that is decoded
+// by iterating on an Index keys.
+// By returning a true for stop variable, iteration will
+// stop, and by returning the error, that error will be
+// propagated to the called iterator method on Index.
+type IndexIterFunc func(item IndexItem) (stop bool, err error)
 
-func (f Index) IterateAll(fn IterFunc) (err error) {
+// IterateAll iterates over all keys of the Index.
+func (f Index) IterateAll(fn IndexIterFunc) (err error) {
 	it := f.db.NewIterator()
 	defer it.Release()
 
@@ -171,7 +215,9 @@ func (f Index) IterateAll(fn IterFunc) (err error) {
 	return it.Error()
 }
 
-func (f Index) IterateFrom(start IndexItem, fn IterFunc) (err error) {
+// IterateFrom iterates over Index keys starting from the key
+// encoded from the provided IndexItem.
+func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 	startKey, err := f.encodeKeyFunc(start)
 	if err != nil {
 		return err

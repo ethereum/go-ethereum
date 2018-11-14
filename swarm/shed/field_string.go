@@ -14,17 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// StringField is the most simple field implementation
+// that stores an arbitrary string under a specific LevelDB key.
 type StringField struct {
 	db  *DB
 	key []byte
 }
 
+// NewStringField retruns a new Instance fo StringField.
+// It validates its name and type against the database schema.
 func (db *DB) NewStringField(name string) (f StringField, err error) {
 	key, err := db.schemaFieldKey(name, "string")
 	if err != nil {
@@ -36,6 +40,9 @@ func (db *DB) NewStringField(name string) (f StringField, err error) {
 	}, nil
 }
 
+// Get returns a string value from database.
+// If the value is not found, an empty string is returned
+// an no error.
 func (f StringField) Get() (val string, err error) {
 	b, err := f.db.Get(f.key)
 	if err != nil {
@@ -47,10 +54,13 @@ func (f StringField) Get() (val string, err error) {
 	return string(b), nil
 }
 
+// Put stores a string in the database.
 func (f StringField) Put(val string) (err error) {
 	return f.db.Put(f.key, []byte(val))
 }
 
+// PutInBatch stores a string in a batch that can be
+// saved later in database.
 func (f StringField) PutInBatch(batch *leveldb.Batch, val string) {
 	batch.Put(f.key, []byte(val))
 }

@@ -14,7 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+// Package shed provides a simple abstraction components to compose
+// more complex operations on storage data organized in fields and indexes.
+//
+// Only type which holds logical information about swarm storage chunks data
+// and metadata is IndexItem. This part is not generalized mostly for
+// performance reasons.
+package shed
 
 import (
 	"github.com/ethereum/go-ethereum/metrics"
@@ -23,21 +29,33 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+// The limit for LevelDB OpenFilesCacheCapacity.
 const openFileLimit = 128
 
+// DB provides abstractions over LevelDB in order to
+// implement complex structures using fields and ordered indexes.
+// It provides a schema functionality to store fields and indexes
+// information about naming and types.
 type DB struct {
 	ldb *leveldb.DB
 }
 
+// NewDB constructs a new DB and validates the schema
+// if it exists in database on the given path.
 func NewDB(path string) (db *DB, err error) {
-	ldb, err := leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: openFileLimit})
+	ldb, err := leveldb.OpenFile(path, &opt.Options{
+		OpenFilesCacheCapacity: openFileLimit,
+	})
 	if err != nil {
 		return nil, err
 	}
-	db = &DB{ldb: ldb}
+	db = &DB{
+		ldb: ldb,
+	}
 
 	if _, err = db.getSchema(); err != nil {
 		if err == leveldb.ErrNotFound {
+			// save schema with initialized default fields
 			if err = db.putSchema(schema{
 				Fields:  make(map[string]fieldSpec),
 				Indexes: make(map[byte]indexSpec),
@@ -51,34 +69,42 @@ func NewDB(path string) (db *DB, err error) {
 	return db, nil
 }
 
+// Put wraps LevelDB Put method to increment metrics counter.
 func (db *DB) Put(key []byte, value []byte) (err error) {
 	metrics.GetOrRegisterCounter("DB.put", nil).Inc(1)
 
 	return db.ldb.Put(key, value, nil)
 }
 
+// Get wraps LevelDB Get method to increment metrics counter.
 func (db *DB) Get(key []byte) (value []byte, err error) {
 	metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
 
 	return db.ldb.Get(key, nil)
 }
 
+// Delete wraps LevelDB Delete method to increment metrics counter.
 func (db *DB) Delete(key []byte) error {
+	metrics.GetOrRegisterCounter("DB.delete", nil).Inc(1)
+
 	return db.ldb.Delete(key, nil)
 }
 
+// NewIterator wraps LevelDB NewIterator method to increment metrics counter.
 func (db *DB) NewIterator() iterator.Iterator {
 	metrics.GetOrRegisterCounter("DB.newiterator", nil).Inc(1)
 
 	return db.ldb.NewIterator(nil, nil)
 }
 
+// WriteBatch wraps LevelDB Write method to increment metrics counter.
 func (db *DB) WriteBatch(batch *leveldb.Batch) error {
 	metrics.GetOrRegisterCounter("DB.write", nil).Inc(1)
 
 	return db.ldb.Write(batch, nil)
 }
 
+// Close closes LevelDB database.
 func (db *DB) Close() (err error) {
 	return db.ldb.Close()
 }

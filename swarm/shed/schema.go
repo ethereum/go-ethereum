@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"encoding/json"
@@ -23,24 +23,37 @@ import (
 )
 
 var (
-	keySchema                = []byte{0}
-	keyPrefixFields     byte = 1
-	keyPrefixIndexStart byte = 2 // Q: or maybe 7, to have more space for potential specific perfixes
+	// LevelDB key value for storing the schema.
+	keySchema = []byte{0}
+	// LevelDB key prefix for all field type.
+	// LevelDB keys will be constructed by appending name values to this prefix.
+	keyPrefixFields byte = 1
+	// LevelDB key prefix from which indexing keys start.
+	// Every index has its own key prefix and this value defines the first one.
+	keyPrefixIndexStart byte = 2 // Q: or maybe a higher number like 7, to have more space for potential specific perfixes
 )
 
+// schema is used to serialize known database structure information.
 type schema struct {
-	Fields  map[string]fieldSpec `json:"fields"`
-	Indexes map[byte]indexSpec   `json:"indexes"`
+	Fields  map[string]fieldSpec `json:"fields"`  // keys are field names
+	Indexes map[byte]indexSpec   `json:"indexes"` // keys are index prefix bytes
 }
 
+// fieldSpec holds information about a particular field.
+// It does not need Name field as it is contained in the
+// schema.Field map key.
 type fieldSpec struct {
 	Type string `json:"type"`
 }
 
+// indxSpec holds information about a particular index.
+// It does not contain index type, as indexes do not have type.
 type indexSpec struct {
 	Name string `json:"name"`
 }
 
+// schemaFieldKey retrives the complete LevelDB key for
+// a particular field form the schema definition.
 func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	if name == "" {
 		return nil, errors.New("filed name can not be blank")
@@ -73,7 +86,9 @@ func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	return append([]byte{keyPrefixFields}, []byte(name)...), nil
 }
 
-func (db *DB) schemaIndexID(name string) (id byte, err error) {
+// schemaIndexID retrieves the complete LevelDB prefix for
+// a particular index.
+func (db *DB) schemaIndexPrefix(name string) (id byte, err error) {
 	if name == "" {
 		return 0, errors.New("index name can not be blank")
 	}
@@ -97,6 +112,8 @@ func (db *DB) schemaIndexID(name string) (id byte, err error) {
 	return id, db.putSchema(s)
 }
 
+// getSchema retrieves the complete schema from
+// the database.
 func (db *DB) getSchema() (s schema, err error) {
 	b, err := db.Get(keySchema)
 	if err != nil {
@@ -106,6 +123,8 @@ func (db *DB) getSchema() (s schema, err error) {
 	return s, err
 }
 
+// putSchema stores the complete schema to
+// the database.
 func (db *DB) putSchema(s schema) (err error) {
 	b, err := json.Marshal(s)
 	if err != nil {

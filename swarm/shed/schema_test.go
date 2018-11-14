@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"bytes"
 	"testing"
 )
 
-func TestSchema_schemaFieldKey(t *testing.T) {
+// TestDB_schemaFieldKey validates correctness of schemaFieldKey.
+func TestDB_schemaFieldKey(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
@@ -86,17 +87,18 @@ func TestSchema_schemaFieldKey(t *testing.T) {
 	})
 }
 
-func TestSchema_schemaIndexID(t *testing.T) {
+// TestDB_schemaIndexPrefix validates correctness of schemaIndexPrefix.
+func TestDB_schemaIndexPrefix(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
 	t.Run("same name", func(t *testing.T) {
-		id1, err := db.schemaIndexID("test")
+		id1, err := db.schemaIndexPrefix("test")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		id2, err := db.schemaIndexID("test")
+		id2, err := db.schemaIndexPrefix("test")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,12 +109,12 @@ func TestSchema_schemaIndexID(t *testing.T) {
 	})
 
 	t.Run("different names", func(t *testing.T) {
-		id1, err := db.schemaIndexID("test1")
+		id1, err := db.schemaIndexPrefix("test1")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		id2, err := db.schemaIndexID("test2")
+		id2, err := db.schemaIndexPrefix("test2")
 		if err != nil {
 			t.Fatal(err)
 		}

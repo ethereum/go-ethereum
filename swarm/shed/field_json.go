@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"encoding/json"
@@ -22,11 +22,15 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// JSONField is a helper to store complex structure by
+// encoding it in JSON format.
 type JSONField struct {
 	db  *DB
 	key []byte
 }
 
+// NewJSONField returns a new JSONField.
+// It validates its name and type against the database schema.
 func (db *DB) NewJSONField(name string) (f JSONField, err error) {
 	key, err := db.schemaFieldKey(name, "json")
 	if err != nil {
@@ -38,18 +42,17 @@ func (db *DB) NewJSONField(name string) (f JSONField, err error) {
 	}, nil
 }
 
+// Unmarshal unmarshals data fromt he database to a provided val.
+// If the data is not found leveldb.ErrNotFound is returned.
 func (f JSONField) Unmarshal(val interface{}) (err error) {
 	b, err := f.db.Get(f.key)
 	if err != nil {
-		// Q: should we ignore not found
-		// if err == leveldb.ErrNotFound {
-		// 	return nil
-		// }
 		return err
 	}
 	return json.Unmarshal(b, val)
 }
 
+// Put marshals provided val and saves it to the database.
 func (f JSONField) Put(val interface{}) (err error) {
 	b, err := json.Marshal(val)
 	if err != nil {
@@ -58,6 +61,7 @@ func (f JSONField) Put(val interface{}) (err error) {
 	return f.db.Put(f.key, b)
 }
 
+// PutInBatch marshals provided val and puts it into the batch.
 func (f JSONField) PutInBatch(batch *leveldb.Batch, val interface{}) (err error) {
 	b, err := json.Marshal(val)
 	if err != nil {

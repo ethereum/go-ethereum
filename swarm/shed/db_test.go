@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package internal
+package shed
 
 import (
 	"io/ioutil"
@@ -22,6 +22,8 @@ import (
 	"testing"
 )
 
+// TestNewDB constructs a new DB
+// and validates if the schema is initialized properly.
 func TestNewDB(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
@@ -44,6 +46,8 @@ func TestNewDB(t *testing.T) {
 	}
 }
 
+// TestDB_persistence creates one DB, saves a field and closes that DB.
+// Then, it constructs another DB and trues to retrieve the saved value.
 func TestDB_persistence(t *testing.T) {
 	dir, err := ioutil.TempDir("", "shed-test-persistence")
 	if err != nil {
@@ -86,6 +90,9 @@ func TestDB_persistence(t *testing.T) {
 	}
 }
 
+// newTestDB is a helper function that constructs a
+// temporary database and returns a cleanup function that must
+// be called to remove the data.
 func newTestDB(t *testing.T) (db *DB, cleanupFunc func()) {
 	t.Helper()
 
