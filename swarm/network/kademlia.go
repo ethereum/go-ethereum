@@ -468,9 +468,9 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 		// 0   abac ccde
 		// 1   2a2a
 		// 2   589f       <--- nearest non-nn
+		// ============ DEPTH 3  ===========
 		// 3              <--- don't count as empty bins
 		// 4              <--- don't count as empty bins
-		// ============ DEPTH 5  ===========
 		// 5  cbcb cdcd    <---- furthest nn
 		// 6  a1a2 b3c4
 		if b && i < depth {
