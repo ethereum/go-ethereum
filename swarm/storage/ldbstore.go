@@ -672,6 +672,7 @@ func (s *LDBStore) CleanGCIndex() error {
 		if err != nil {
 			return err
 		}
+		batch.Reset()
 
 		log.Debug("clean gc index pass", "batch", cleanBatchCount, "checked", i, "kept", len(idxs))
 	}
