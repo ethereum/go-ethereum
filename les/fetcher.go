@@ -410,6 +410,7 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 		bestHash   common.Hash
 		bestAmount uint64
 	)
+	bestAmount--
 	bestTd := f.maxConfirmedTd
 	bestSyncing := false
 
@@ -417,7 +418,7 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 		for hash, n := range fp.nodeByHash {
 			if !f.checkKnownNode(p, n) && !n.requested && (bestTd == nil || n.td.Cmp(bestTd) >= 0) {
 				amount := f.requestAmount(p, n)
-				if bestTd == nil || n.td.Cmp(bestTd) > 0 || amount < bestAmount {
+				if amount < bestAmount {
 					bestHash = hash
 					bestAmount = amount
 					bestTd = n.td
