@@ -69,6 +69,12 @@
 			"revisionTime": "2015-01-22T07:26:53Z"
 		},
 		{
+			"checksumSHA1": "99BDLkVcaOQTvXism79yXiVMA8k=",
+			"path": "github.com/cespare/xxhash",
+			"revision": "096ff4a8a0597537a6da372d07186f3ea5de20af",
+			"revisionTime": "2018-10-17T00:07:24Z"
+		},
+		{
 			"checksumSHA1": "7gK+lSShSu1NRw83/A95BcgMqsI=",
 			"path": "github.com/codahale/hdrhistogram",
 			"revision": "3a0bb77429bd3a61596f5e8a3172445844342120",

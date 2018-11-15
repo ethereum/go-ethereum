@@ -20,6 +20,7 @@ import (
 	"hash"
 	"sync"
 
+	"github.com/cespare/xxhash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -39,6 +40,13 @@ type hasher struct {
 type keccakState interface {
 	hash.Hash
 	Read([]byte) (int, error)
+}
+
+// xxhasher used to hash keys in bigcache.
+type xxhasher struct{}
+
+func (*xxhasher) Sum64(v string) uint64 {
+	return xxhash.Sum64String(v)
 }
 
 type sliceBuffer []byte
