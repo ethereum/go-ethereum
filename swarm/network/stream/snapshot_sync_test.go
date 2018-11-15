@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -210,12 +209,12 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	disconnections := sim.PeerEvents(
 		context.Background(),
 		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+		simulation.NewPeerEventsFilter().Drop(),
 	)
 
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 			t.Fatal("unexpected disconnect")
 			cancelSimRun()
 		}
@@ -402,12 +401,12 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 	disconnections := sim.PeerEvents(
 		context.Background(),
 		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+		simulation.NewPeerEventsFilter().Drop(),
 	)
 
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 			t.Fatal("unexpected disconnect")
 			cancelSimRun()
 		}
@@ -428,7 +427,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 
 		var subscriptionCount int
 
-		filter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(4)
+		filter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(4)
 		eventC := sim.PeerEvents(ctx, nodeIDs, filter)
 
 		for j, node := range nodeIDs {
