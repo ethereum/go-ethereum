@@ -22,13 +22,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// TestJSONField validates put and unmarshal operations
-// of the JSONField.
-func TestJSONField(t *testing.T) {
+// TestStructField validates put and unmarshal operations
+// of the StructField.
+func TestStructField(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	complexField, err := db.NewJSONField("complex-field")
+	complexField, err := db.NewStructField("complex-field")
 	if err != nil {
 		t.Fatal(err)
 	}

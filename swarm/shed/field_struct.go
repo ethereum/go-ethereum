@@ -17,26 +17,25 @@
 package shed
 
 import (
-	"encoding/json"
-
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// JSONField is a helper to store complex structure by
-// encoding it in JSON format.
-type JSONField struct {
+// StructField is a helper to store complex structure by
+// encoding it in RLP format.
+type StructField struct {
 	db  *DB
 	key []byte
 }
 
-// NewJSONField returns a new JSONField.
+// NewStructField returns a new StructField.
 // It validates its name and type against the database schema.
-func (db *DB) NewJSONField(name string) (f JSONField, err error) {
-	key, err := db.schemaFieldKey(name, "json")
+func (db *DB) NewStructField(name string) (f StructField, err error) {
+	key, err := db.schemaFieldKey(name, "struct-rlp")
 	if err != nil {
 		return f, err
 	}
-	return JSONField{
+	return StructField{
 		db:  db,
 		key: key,
 	}, nil
@@ -44,17 +43,17 @@ func (db *DB) NewJSONField(name string) (f JSONField, err error) {
 
 // Unmarshal unmarshals data fromt he database to a provided val.
 // If the data is not found leveldb.ErrNotFound is returned.
-func (f JSONField) Unmarshal(val interface{}) (err error) {
+func (f StructField) Unmarshal(val interface{}) (err error) {
 	b, err := f.db.Get(f.key)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, val)
+	return rlp.DecodeBytes(b, val)
 }
 
 // Put marshals provided val and saves it to the database.
-func (f JSONField) Put(val interface{}) (err error) {
-	b, err := json.Marshal(val)
+func (f StructField) Put(val interface{}) (err error) {
+	b, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return err
 	}
@@ -62,8 +61,8 @@ func (f JSONField) Put(val interface{}) (err error) {
 }
 
 // PutInBatch marshals provided val and puts it into the batch.
-func (f JSONField) PutInBatch(batch *leveldb.Batch, val interface{}) (err error) {
-	b, err := json.Marshal(val)
+func (f StructField) PutInBatch(batch *leveldb.Batch, val interface{}) (err error) {
+	b, err := rlp.EncodeToBytes(val)
 	if err != nil {
 		return err
 	}
