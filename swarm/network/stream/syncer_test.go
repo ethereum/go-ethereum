@@ -118,7 +118,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingAutoSubscribe,
 				SkipCheck: skipCheck,
-			})
+			}, nil)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)

@@ -290,7 +290,7 @@ func TestRequestFromPeers(t *testing.T) {
 		Peer:      protocolsPeer,
 	}, to)
 	to.On(peer)
-	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
@@ -331,7 +331,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 		Peer:      protocolsPeer,
 	}, to)
 	to.On(peer)
-	r := NewRegistry(addr.ID(), delivery, nil, nil, nil)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
 		Peer:     protocolsPeer,
@@ -480,7 +480,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				SkipCheck: skipCheck,
 				Syncing:   SyncingDisabled,
 				Retrieval: RetrievalEnabled,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
@@ -655,7 +655,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				Syncing:         SyncingDisabled,
 				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
-			})
+			}, nil)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
