@@ -245,7 +245,6 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	for _, abiArg := range abiArgs {
 		inputOffset += getOffset(abiArg.Type)
 	}
-
 	var ret []byte
 	for i, a := range args {
 		input := abiArgs[i]
@@ -258,10 +257,8 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 		if offsetRequired(input.Type) {
 			// set the offset
 			ret = append(ret, packNum(reflect.ValueOf(inputOffset))...)
-
 			// calculate next offset
 			inputOffset += len(packed)
-
 			// append to variable input
 			variableInput = append(variableInput, packed...)
 		} else {
