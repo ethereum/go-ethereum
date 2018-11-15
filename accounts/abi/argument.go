@@ -254,7 +254,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		// check for dynamic types)=
+		// check for dynamic types
 		if offsetRequired(input.Type) {
 			// set the offset
 			ret = append(ret, packNum(reflect.ValueOf(inputOffset))...)
