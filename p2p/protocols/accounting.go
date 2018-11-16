@@ -16,11 +16,16 @@
 
 package protocols
 
-import "github.com/ethereum/go-ethereum/metrics"
+import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
+)
 
 //define some metrics
 var (
 	//NOTE: these metrics just define the interfaces and are currently *NOT persisted* over sessions
+	metricsInitialized bool
 	//All metrics are cumulative
 
 	//total amount of units credited
@@ -152,6 +157,9 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 // * if the price is positive, local node has been credited; thus `err` implicitly signals the REMOTE has been dropped
 // * if the price is negative, local node has been debited, thus `err` implicitly signals LOCAL node "overdraft"
 func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
+	if !metricsInitialized {
+		initMetrics()
+	}
 	if price > 0 {
 		mBalanceCredit.Inc(price)
 		mBytesCredit.Inc(int64(size))
@@ -169,4 +177,9 @@ func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
 			mSelfDrops.Inc(1)
 		}
 	}
+}
+
+func initMetrics() {
+	NewMetricsStateStore(metrics.DefaultRegistry, 10*time.Second, "metrics.db")
+	metricsInitialized = true
 }
