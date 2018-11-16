@@ -413,12 +413,21 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 	bestAmount--
 	bestTd := f.maxConfirmedTd
 	bestSyncing := false
+	bestTdFound := false
 
 	for p, fp := range f.peers {
 		for hash, n := range fp.nodeByHash {
 			if !f.checkKnownNode(p, n) && !n.requested && (bestTd == nil || n.td.Cmp(bestTd) >= 0) {
 				amount := f.requestAmount(p, n)
-				if amount < bestAmount {
+				if (bestTd == nil || n.td.Cmp(bestTd) > 0) && (!bestTdFound || amount < bestAmount) {
+					// found one greater total difficulty force to sync with greater td
+					bestHash = hash
+					bestAmount = amount
+					bestTd = n.td
+					bestSyncing = fp.bestConfirmed == nil || fp.root == nil || !f.checkKnownNode(p, fp.root)
+					bestTdFound = true
+				} else if !bestTdFound && amount < bestAmount {
+					// sync with same difficulty
 					bestHash = hash
 					bestAmount = amount
 					bestTd = n.td
