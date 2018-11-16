@@ -179,6 +179,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		self.swap = swap.New(balancesStore)
+		protocols.SetupAccountingMetrics(10 *time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
 	var nodeID enode.ID

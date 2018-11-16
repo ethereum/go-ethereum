@@ -17,32 +17,74 @@
 package protocols
 
 import (
+	"encoding/binary"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/rcrowley/go-metrics"
+	"github.com/ethereum/go-ethereum/metrics"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type reporter struct {
-	reg        metrics.Registry
-	interval   time.Duration
-	stateStore *state.DBStore
+	reg      metrics.Registry
+	interval time.Duration
+	db       *leveldb.DB
 }
 
-func NewMetricsStateStore(r metrics.Registry, d time.Duration, path string) {
-	stateStore, err := state.NewDBStore(path)
+func NewMetricsDB(r metrics.Registry, d time.Duration, path string) *leveldb.DB {
+	var val = make([]byte, 8)
+	var err error
+
+	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		return
+		log.Error(err.Error())
+		return nil
 	}
 
-	rep := &reporter{
-		reg:        r,
-		interval:   d,
-		stateStore: stateStore,
+	val, err = db.Get([]byte("account.balance.credit"), nil)
+	if err == nil {
+		mBalanceCredit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.balance.debit"), nil)
+	if err == nil {
+		mBalanceDebit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.bytes.credit"), nil)
+	if err == nil {
+		mBytesCredit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.bytes.debit"), nil)
+	if err == nil {
+		mBytesDebit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.msg.credit"), nil)
+	if err == nil {
+		mMsgCredit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.msg.debit"), nil)
+	if err == nil {
+		mMsgDebit.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.peerdrops"), nil)
+	if err == nil {
+		mPeerDrops.Inc(int64(binary.BigEndian.Uint64(val)))
+	}
+	val, err = db.Get([]byte("account.selfdrops"), nil)
+	if err == nil {
+		mSelfDrops.Inc(int64(binary.BigEndian.Uint64(val)))
 	}
 
-	rep.run()
+	reg := &reporter{
+		reg:      r,
+		interval: d,
+		db:       db,
+	}
+
+	go reg.run()
+
+	return db
+
 }
 
 func (r *reporter) run() {
@@ -50,20 +92,21 @@ func (r *reporter) run() {
 
 	for _ = range intervalTicker.C {
 		if err := r.send(); err != nil {
-			log.Error("unable to send metrics to InfluxDB. err=%v", err)
+			log.Error("unable to send metrics to LevelDB. err=%v", "err", err)
+			return
 		}
 	}
 }
 
 func (r *reporter) send() error {
-
 	var err error
-
 	r.reg.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
 		case metrics.Counter:
 			ms := metric.Snapshot()
-			err = r.stateStore.Put(name, ms.Count())
+			byteVal := make([]byte, 8)
+			binary.BigEndian.PutUint64(byteVal, uint64(ms.Count()))
+			err = r.db.Put([]byte(name), byteVal, nil)
 		}
 	})
 

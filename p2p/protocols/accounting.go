@@ -20,30 +20,29 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 //define some metrics
 var (
-	//NOTE: these metrics just define the interfaces and are currently *NOT persisted* over sessions
-	metricsInitialized bool
 	//All metrics are cumulative
 
 	//total amount of units credited
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", nil)
+	mBalanceCredit metrics.Counter
 	//total amount of units debited
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", nil)
+	mBalanceDebit metrics.Counter
 	//total amount of bytes credited
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", nil)
+	mBytesCredit metrics.Counter
 	//total amount of bytes debited
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", nil)
+	mBytesDebit metrics.Counter
 	//total amount of credited messages
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", nil)
+	mMsgCredit metrics.Counter
 	//total amount of debited messages
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", nil)
+	mMsgDebit metrics.Counter
 	//how many times local node had to drop remote peers
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", nil)
+	mPeerDrops metrics.Counter
 	//how many times local node overdrafted and dropped
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", nil)
+	mSelfDrops metrics.Counter
 )
 
 //Prices defines how prices are being passed on to the accounting instance
@@ -110,6 +109,20 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 	return ah
 }
 
+func SetupAccountingMetrics(reportInterval time.Duration, path string) *leveldb.DB {
+	registry := metrics.NewRegistry()
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", registry)
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", registry)
+	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", registry)
+	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", registry)
+	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", registry)
+	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", registry)
+	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", registry)
+	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", registry)
+
+	return NewMetricsDB(registry, reportInterval, path)
+}
+
 //Implement Hook.Send
 // Send takes a peer, a size and a msg and
 // - calculates the cost for the local node sending a msg of size to peer using the Prices interface
@@ -157,9 +170,6 @@ func (ah *Accounting) Receive(peer *Peer, size uint32, msg interface{}) error {
 // * if the price is positive, local node has been credited; thus `err` implicitly signals the REMOTE has been dropped
 // * if the price is negative, local node has been debited, thus `err` implicitly signals LOCAL node "overdraft"
 func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
-	if !metricsInitialized {
-		initMetrics()
-	}
 	if price > 0 {
 		mBalanceCredit.Inc(price)
 		mBytesCredit.Inc(int64(size))
@@ -177,9 +187,4 @@ func (ah *Accounting) doMetrics(price int64, size uint32, err error) {
 			mSelfDrops.Inc(1)
 		}
 	}
-}
-
-func initMetrics() {
-	NewMetricsStateStore(metrics.DefaultRegistry, 10*time.Second, "metrics.db")
-	metricsInitialized = true
 }

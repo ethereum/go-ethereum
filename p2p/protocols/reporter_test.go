@@ -21,54 +21,41 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/rcrowley/go-metrics"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestReporter(t *testing.T) {
 	dir := os.TempDir()
 	defer os.RemoveAll(dir)
 
-	stateStore, err := state.NewDBStore(dir + "/test.db")
-	if err != nil {
-		return
-	}
+	log.Debug("Setting up metrics first time")
+	reportInterval := 100 * time.Millisecond
+	db := SetupAccountingMetrics(reportInterval, dir+"/test.db")
+	log.Debug("Done.")
 
-	rep := &reporter{
-		reg:        metrics.NewRegistry(),
-		interval:   time.Millisecond,
-		stateStore: stateStore,
-	}
-	go rep.run()
-	time.Sleep(1 * time.Second)
 	mBalanceCredit.Inc(12)
 	mBytesCredit.Inc(34)
 	mMsgDebit.Inc(9)
 
-	rep = nil
-	stateStore.Close()
-	stateStore, err = state.NewDBStore(dir + "/test.db")
-	if err != nil {
-		return
-	}
-	rep = &reporter{
-		reg:        metrics.NewRegistry(),
-		interval:   time.Millisecond,
-		stateStore: stateStore,
-	}
-	go rep.run()
-	time.Sleep(1 * time.Second)
-	mBalanceCredit.Inc(11)
-	mBytesCredit.Inc(22)
-	mMsgDebit.Inc(7)
+	//give the reporter time to write to DB
+	time.Sleep(500 * time.Millisecond)
 
-	if mBalanceCredit.Count() != 23 {
-		t.Fatalf("Expected counter to be %d, but is %d", 23, mBalanceCredit.Count())
+	mBalanceCredit = nil
+	mBytesCredit = nil
+	mMsgDebit = nil
+	db.Close()
+
+	log.Debug("Setting up metrics second time")
+	SetupAccountingMetrics(reportInterval, dir+"/test.db")
+	log.Debug("Done.")
+
+	if mBalanceCredit.Count() != 12 {
+		t.Fatalf("Expected counter to be %d, but is %d", 12, mBalanceCredit.Count())
 	}
-	if mBytesCredit.Count() != 56 {
+	if mBytesCredit.Count() != 34 {
 		t.Fatalf("Expected counter to be %d, but is %d", 23, mBytesCredit.Count())
 	}
-	if mMsgDebit.Count() != 16 {
-		t.Fatalf("Expected counter to be %d, but is %d", 23, mMsgDebit.Count())
+	if mMsgDebit.Count() != 9 {
+		t.Fatalf("Expected counter to be %d, but is %d", 9, mMsgDebit.Count())
 	}
 }
