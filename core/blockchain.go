@@ -561,6 +561,17 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	return rawdb.HasBody(bc.db, hash, number)
 }
 
+// HasFastBlock checks if a fast block is fully present in the database or not.
+func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
+	if !bc.HasBlock(hash, number) {
+		return false
+	}
+	if bc.receiptsCache.Contains(hash) {
+		return true
+	}
+	return rawdb.HasReceipts(bc.db, hash, number)
+}
+
 // HasState checks if state trie is fully present in the database or not.
 func (bc *BlockChain) HasState(hash common.Hash) bool {
 	_, err := bc.stateCache.OpenTrie(hash)
@@ -618,12 +629,10 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts.(types.Receipts)
 	}
-
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
 	}
-
 	receipts := rawdb.ReadReceipts(bc.db, hash, *number)
 	bc.receiptsCache.Add(hash, receipts)
 	return receipts
