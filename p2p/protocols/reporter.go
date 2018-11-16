@@ -26,22 +26,30 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+//reporter is an internal structure used to write p2p accounting related
+//metrics to a LevelDB. It will periodically write the accrued metrics to the DB.
 type reporter struct {
-	reg      metrics.Registry
-	interval time.Duration
-	db       *leveldb.DB
+	reg      metrics.Registry //the registry for these metrics (independent of other metrics)
+	interval time.Duration    //duration at which the reporter will persist metrics
+	db       *leveldb.DB      //the actual DB
 }
 
+//NewMetricsDB creates a new LevelDB instance used to persist metrics defined
+//inside p2p/protocols/accounting.go
 func NewMetricsDB(r metrics.Registry, d time.Duration, path string) *leveldb.DB {
 	var val = make([]byte, 8)
 	var err error
 
+	//Create the LevelDB
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return nil
 	}
 
+	//Check for all defined metrics that there is a value in the DB
+	//If there is, assign it to the metric. This means that the node
+	//has been running before and that metrics have been persisted.
 	val, err = db.Get([]byte("account.balance.credit"), nil)
 	if err == nil {
 		mBalanceCredit.Inc(int64(binary.BigEndian.Uint64(val)))
@@ -75,40 +83,52 @@ func NewMetricsDB(r metrics.Registry, d time.Duration, path string) *leveldb.DB 
 		mSelfDrops.Inc(int64(binary.BigEndian.Uint64(val)))
 	}
 
+	//create the reporter
 	reg := &reporter{
 		reg:      r,
 		interval: d,
 		db:       db,
 	}
 
+	//run the go routine
 	go reg.run()
 
 	return db
 
 }
 
+//run is the go routine which periodically sends the metrics to the configued LevelDB
 func (r *reporter) run() {
 	intervalTicker := time.NewTicker(r.interval)
 
 	for _ = range intervalTicker.C {
+		//at each tick send the metrics
 		if err := r.send(); err != nil {
 			log.Error("unable to send metrics to LevelDB. err=%v", "err", err)
+			//If there is an error in writing, exit the routine; we assume here that the error is
+			//severe and don't attempt to write again.
+			//Also, this should prevent leaking when the node is stopped
 			return
 		}
 	}
 }
 
+//send the metrics to the DB
 func (r *reporter) send() error {
 	var err error
+	//for each metric in the registry (which is independent)...
 	r.reg.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
+		//assuming every metric here to be a Counter (separate registry)
 		case metrics.Counter:
+			//...create a snapshot...
 			ms := metric.Snapshot()
 			byteVal := make([]byte, 8)
 			binary.BigEndian.PutUint64(byteVal, uint64(ms.Count()))
+			//...and save the value to the DB
 			err = r.db.Put([]byte(name), byteVal, nil)
+		default:
 		}
 	})
-
 	return err
 }

@@ -17,38 +17,53 @@
 package protocols
 
 import (
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
 
+//TestReporter tests that the metrics being collected for p2p accounting
+//are being persisted and available after restart of a node.
+//It simulates restarting by just recreating the DB as if the node had restarted.
 func TestReporter(t *testing.T) {
-	dir := os.TempDir()
+	//create a test directory
+	dir, err := ioutil.TempDir("", "reporter-test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer os.RemoveAll(dir)
 
+	//setup the metrics
 	log.Debug("Setting up metrics first time")
 	reportInterval := 100 * time.Millisecond
-	db := SetupAccountingMetrics(reportInterval, dir+"/test.db")
+	db := SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
 	log.Debug("Done.")
 
+	//do some metrics
 	mBalanceCredit.Inc(12)
 	mBytesCredit.Inc(34)
 	mMsgDebit.Inc(9)
 
-	//give the reporter time to write to DB
+	//give the reporter time to write the metrics to DB
 	time.Sleep(500 * time.Millisecond)
 
+	//set the metrics to nil - this effectively simulates the node having shut down...
 	mBalanceCredit = nil
 	mBytesCredit = nil
 	mMsgDebit = nil
+	//close the DB also, or we can't create a new one
 	db.Close()
 
+	//setup the metrics again
 	log.Debug("Setting up metrics second time")
-	SetupAccountingMetrics(reportInterval, dir+"/test.db")
+	SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
 	log.Debug("Done.")
 
+	//now check the metrics, they should have the same value as before "shutdown"
 	if mBalanceCredit.Count() != 12 {
 		t.Fatalf("Expected counter to be %d, but is %d", 12, mBalanceCredit.Count())
 	}

@@ -109,8 +109,14 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 	return ah
 }
 
+//SetupAccountingMetrics creates a separate registry for p2p accounting metrics;
+//this registry should be independent of any other metrics as it persists at different endpoints.
+//It also instantiates the given metrics and starts the persisting go-routine which
+//at the passed interval writes the metrics to a LevelDB
 func SetupAccountingMetrics(reportInterval time.Duration, path string) *leveldb.DB {
+	//create an empty registry
 	registry := metrics.NewRegistry()
+	//instantiate the metrics
 	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", registry)
 	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", registry)
 	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", registry)
@@ -119,7 +125,7 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *leveldb.
 	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", registry)
 	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", registry)
 	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", registry)
-
+	//create the DB and start persisting
 	return NewMetricsDB(registry, reportInterval, path)
 }
 
