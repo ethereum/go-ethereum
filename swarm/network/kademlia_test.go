@@ -78,7 +78,7 @@ func Register(k *Kademlia, regs ...string) {
 
 // tests the validity of neighborhood depth calculations
 //
-// in particular, it tests that if there are one or more consequtive
+// in particular, it tests that if there are one or more consecutive
 // empty bins above the farthest "nearest neighbor-peer" then
 // the depth should be set at the farthest of those empty bins
 //

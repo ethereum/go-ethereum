@@ -677,7 +677,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 				depthTraversed = true
 			}
 
-			// expected po in next iteration if there are no empty bins inbetween
+			// expected po in next iteration if there are no empty bins in between
 			prev = po - 1
 			return true
 		})
