@@ -1198,12 +1198,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			if (chain[i].NumberU64() % bc.chainConfig.Posv.Epoch) == (bc.chainConfig.Posv.Epoch - bc.chainConfig.Posv.Gap) {
 				err := bc.UpdateM1()
 				if err != nil {
-					if err == ErrNotPoSV {
-						log.Error("Stopping node", "err", err)
-						os.Exit(1)
-					} else {
-						log.Error("Error when update masternodes set. Keep the current masternodes set for the next epoch.", "err", err)
-					}
+					log.Error("Error when update masternodes set. Stopping node", "err", err)
+					os.Exit(1)
 				}
 			}
 		}
@@ -1632,7 +1628,8 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 	}
 	if len(ms) == 0 {
-		log.Info("No masternode candidates found. Keep the current masternodes set for the next epoch")
+		log.Error("No masternode found. Stopping node")
+		os.Exit(1)
 	} else {
 		sort.Slice(ms, func(i, j int) bool {
 			return ms[i].Stake >= ms[j].Stake
