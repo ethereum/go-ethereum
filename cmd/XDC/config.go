@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -151,6 +152,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
+	// Check testnet is enable.
+	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
+			common.IsTestnet = true
+	}
 	// read passwords from enviroment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
