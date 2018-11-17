@@ -472,17 +472,6 @@ func abs(x int64) int64 {
 	return x
 }
 
-func hop(len, pre, cur int) int {
-	switch {
-	case pre < cur:
-		return cur - (pre + 1)
-	case pre > cur:
-		return (len - pre) + (cur - 1)
-	default:
-		return len - 1
-	}
-}
-
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -508,14 +497,7 @@ func (self *worker) commitNewWork() {
 		if self.config.XDPoS != nil {
 			// get masternodes set from latest checkpoint
 			c := self.engine.(*XDPoS.XDPoS)
-			masternodes := c.GetMasternodes(self.chain, parent.Header())
-			snap, err := c.GetSnapshot(self.chain, parent.Header())
-			if err != nil {
-				log.Error("Failed when trying to commit new work", "err", err)
-				return
-			}
-			signers = snap.Signers
-			preIndex, curIndex, ok, err := XDPoS.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
+			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header())
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
@@ -531,7 +513,7 @@ func (self *worker) commitNewWork() {
 					// you're not allowed to create this block
 					return
 				}
-				h := hop(len(masternodes), preIndex, curIndex)
+				h := XDPoS.Hop(len, preIndex, curIndex)
 				gap := waitPeriod * int64(h)
 				// Check nearest checkpoint block in hop range.
 				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
