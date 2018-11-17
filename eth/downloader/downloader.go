@@ -295,7 +295,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	logger := log.New("peer", id)
 	logger.Trace("Unregistering sync peer")
 	if err := d.peers.Unregister(id); err != nil {
-		logger.Error("Failed to unregister sync peer", "err", err)
+		logger.Warn("Failed to unregister sync peer", "err", err)
 		return err
 	}
 	d.queue.Revoke(id)

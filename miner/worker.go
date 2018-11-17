@@ -500,7 +500,7 @@ func (self *worker) commitNewWork() {
 			c := self.engine.(*XDPoS.XDPoS)
 			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(),self.coinbase)
 			if err != nil {
-				log.Error("Failed when trying to commit new work", "err", err)
+				log.Warn("Failed when trying to commit new work", "err", err)
 				return
 			}
 			if !ok {
