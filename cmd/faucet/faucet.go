@@ -54,8 +54,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/net/websocket"
@@ -255,8 +255,10 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 	for _, boot := range enodes {
-		old, _ := discover.ParseNode(boot.String())
-		stack.Server().AddPeer(old)
+		old, err := enode.ParseV4(boot.String())
+		if err != nil {
+			stack.Server().AddPeer(old)
+		}
 	}
 	// Attach to the client and retrieve and interesting metadatas
 	api, err := stack.Attach()

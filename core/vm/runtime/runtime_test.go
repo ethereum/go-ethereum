@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestDefaults(t *testing.T) {
@@ -147,4 +148,58 @@ func BenchmarkCall(b *testing.B) {
 			Execute(code, refund, nil)
 		}
 	}
+}
+func benchmarkEVM_Create(bench *testing.B, code string) {
+	var (
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		sender     = common.BytesToAddress([]byte("sender"))
+		receiver   = common.BytesToAddress([]byte("receiver"))
+	)
+
+	statedb.CreateAccount(sender)
+	statedb.SetCode(receiver, common.FromHex(code))
+	runtimeConfig := Config{
+		Origin:      sender,
+		State:       statedb,
+		GasLimit:    10000000,
+		Difficulty:  big.NewInt(0x200000),
+		Time:        new(big.Int).SetUint64(0),
+		Coinbase:    common.Address{},
+		BlockNumber: new(big.Int).SetUint64(1),
+		ChainConfig: &params.ChainConfig{
+			ChainID:             big.NewInt(1),
+			HomesteadBlock:      new(big.Int),
+			ByzantiumBlock:      new(big.Int),
+			ConstantinopleBlock: new(big.Int),
+			DAOForkBlock:        new(big.Int),
+			DAOForkSupport:      false,
+			EIP150Block:         new(big.Int),
+			EIP155Block:         new(big.Int),
+			EIP158Block:         new(big.Int),
+		},
+		EVMConfig: vm.Config{},
+	}
+	// Warm up the intpools and stuff
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		Call(receiver, []byte{}, &runtimeConfig)
+	}
+	bench.StopTimer()
+}
+
+func BenchmarkEVM_CREATE_500(bench *testing.B) {
+	// initcode size 500K, repeatedly calls CREATE and then modifies the mem contents
+	benchmarkEVM_Create(bench, "5b6207a120600080f0600152600056")
+}
+func BenchmarkEVM_CREATE2_500(bench *testing.B) {
+	// initcode size 500K, repeatedly calls CREATE2 and then modifies the mem contents
+	benchmarkEVM_Create(bench, "5b586207a120600080f5600152600056")
+}
+func BenchmarkEVM_CREATE_1200(bench *testing.B) {
+	// initcode size 1200K, repeatedly calls CREATE and then modifies the mem contents
+	benchmarkEVM_Create(bench, "5b62124f80600080f0600152600056")
+}
+func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
+	// initcode size 1200K, repeatedly calls CREATE2 and then modifies the mem contents
+	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
 }

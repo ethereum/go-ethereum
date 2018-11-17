@@ -84,23 +84,23 @@ var (
 	}
 	// TestServerIndexerConfig wraps a set of configs as a test indexer config for server side.
 	TestServerIndexerConfig = &IndexerConfig{
-		ChtSize:           256,
-		PairChtSize:       2048,
-		ChtConfirms:       16,
-		BloomSize:         256,
-		BloomConfirms:     16,
-		BloomTrieSize:     2048,
-		BloomTrieConfirms: 16,
+		ChtSize:           64,
+		PairChtSize:       512,
+		ChtConfirms:       4,
+		BloomSize:         64,
+		BloomConfirms:     4,
+		BloomTrieSize:     512,
+		BloomTrieConfirms: 4,
 	}
 	// TestClientIndexerConfig wraps a set of configs as a test indexer config for client side.
 	TestClientIndexerConfig = &IndexerConfig{
-		ChtSize:           2048,
-		PairChtSize:       256,
-		ChtConfirms:       128,
-		BloomSize:         2048,
-		BloomConfirms:     128,
-		BloomTrieSize:     2048,
-		BloomTrieConfirms: 128,
+		ChtSize:           512,
+		PairChtSize:       64,
+		ChtConfirms:       32,
+		BloomSize:         512,
+		BloomConfirms:     32,
+		BloomTrieSize:     512,
+		BloomTrieConfirms: 32,
 	}
 )
 
@@ -159,7 +159,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *co
 		diskdb:      db,
 		odr:         odr,
 		trieTable:   trieTable,
-		triedb:      trie.NewDatabase(trieTable),
+		triedb:      trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
 		sectionSize: size,
 	}
 	return core.NewChainIndexer(db, ethdb.NewTable(db, "chtIndex-"), backend, size, confirms, time.Millisecond*100, "cht")
@@ -281,7 +281,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 		diskdb:     db,
 		odr:        odr,
 		trieTable:  trieTable,
-		triedb:     trie.NewDatabase(trieTable),
+		triedb:     trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
 		parentSize: parentSize,
 		size:       size,
 	}

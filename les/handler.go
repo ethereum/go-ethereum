@@ -213,8 +213,7 @@ func (pm *ProtocolManager) runPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWrit
 	var entry *poolEntry
 	peer := pm.newPeer(int(version), pm.networkId, p, rw)
 	if pm.serverPool != nil {
-		addr := p.RemoteAddr().(*net.TCPAddr)
-		entry = pm.serverPool.connect(peer, addr.IP, uint16(addr.Port))
+		entry = pm.serverPool.connect(peer, peer.Node())
 	}
 	peer.poolEntry = entry
 	select {
@@ -382,7 +381,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		if p.requestAnnounceType == announceTypeSigned {
-			if err := req.checkSignature(p.pubKey); err != nil {
+			if err := req.checkSignature(p.ID()); err != nil {
 				p.Log().Trace("Invalid announcement signature", "err", err)
 				return err
 			}

@@ -317,7 +317,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 		return err
 	}
 
-	// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of MRU is sent upon subscription
+	// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of Swarm feed is sent upon subscription
 	notify := []byte{}
 	replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.namestring, make([]byte, len(notify)+symKeyLength))
 	copy(replyMsg.Payload, notify)

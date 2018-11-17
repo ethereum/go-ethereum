@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -33,13 +34,13 @@ func TestEncryption(t *testing.T) {
 	key := []byte("AES256Key-32Characters1234567890")
 	plaintext := []byte("exampleplaintext")
 
-	c, iv, err := encrypt(key, plaintext)
+	c, iv, err := encrypt(key, plaintext, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Printf("Ciphertext %x, nonce %x\n", c, iv)
 
-	p, err := decrypt(key, iv, c)
+	p, err := decrypt(key, iv, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,5 +112,53 @@ func TestEnd2End(t *testing.T) {
 	s1.Put("bazonk", "foobar")
 	if v := s2.Get("bazonk"); v != "foobar" {
 		t.Errorf("Expected bazonk->foobar, got '%v'", v)
+	}
+}
+
+func TestSwappedKeys(t *testing.T) {
+	// It should not be possible to swap the keys/values, so that
+	// K1:V1, K2:V2 can be swapped into K1:V2, K2:V1
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+
+	d, err := ioutil.TempDir("", "eth-encrypted-storage-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s1 := &AESEncryptedStorage{
+		filename: fmt.Sprintf("%v/vault.json", d),
+		key:      []byte("AES256Key-32Characters1234567890"),
+	}
+	s1.Put("k1", "v1")
+	s1.Put("k2", "v2")
+	// Now make a modified copy
+
+	creds := make(map[string]storedCredential)
+	raw, err := ioutil.ReadFile(s1.filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(raw, &creds); err != nil {
+		t.Fatal(err)
+	}
+	swap := func() {
+		// Turn it into K1:V2, K2:V2
+		v1, v2 := creds["k1"], creds["k2"]
+		creds["k2"], creds["k1"] = v1, v2
+		raw, err = json.Marshal(creds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = ioutil.WriteFile(s1.filename, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	swap()
+	if v := s1.Get("k1"); v != "" {
+		t.Errorf("swapped value should return empty")
+	}
+	swap()
+	if v := s1.Get("k1"); v != "v1" {
+		t.Errorf("double-swapped value should work fine")
 	}
 }

@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -49,8 +49,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
@@ -78,6 +79,7 @@ type Swarm struct {
 	netStore    *storage.NetStore
 	sfs         *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
+	swap        *swap.Swap
 
 	tracerClose io.Closer
 }
@@ -125,21 +127,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	config.HiveParams.Discovery = true
 
-	nodeID, err := discover.HexID(config.NodeID)
-	if err != nil {
-		return nil, err
-	}
-	addr := &network.BzzAddr{
-		OAddr: common.FromHex(config.BzzKey),
-		UAddr: []byte(discover.NewNode(nodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
-	}
-
 	bzzconfig := &network.BzzConfig{
-		NetworkID:    config.NetworkID,
-		OverlayAddr:  addr.OAddr,
-		UnderlayAddr: addr.UAddr,
-		HiveParams:   config.HiveParams,
-		LightNode:    config.LightNodeEnabled,
+		NetworkID:   config.NetworkID,
+		OverlayAddr: common.FromHex(config.BzzKey),
+		HiveParams:  config.HiveParams,
+		LightNode:   config.LightNodeEnabled,
 	}
 
 	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -181,30 +173,60 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	delivery := stream.NewDelivery(to, self.netStore)
 	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
-	self.streamer = stream.NewRegistry(addr, delivery, self.netStore, stateStore, &stream.RegistryOptions{
-		SkipCheck:       config.SyncingSkipCheck,
-		DoSync:          config.SyncEnabled,
-		DoRetrieve:      true,
+	if config.SwapEnabled {
+		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
+		if err != nil {
+			return nil, err
+		}
+		self.swap = swap.New(balancesStore)
+	}
+
+	var nodeID enode.ID
+	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
+		return nil, err
+	}
+
+	syncing := stream.SyncingAutoSubscribe
+	if !config.SyncEnabled || config.LightNodeEnabled {
+		syncing = stream.SyncingDisabled
+	}
+
+	retrieval := stream.RetrievalEnabled
+	if config.LightNodeEnabled {
+		retrieval = stream.RetrievalClientOnly
+	}
+
+	registryOptions := &stream.RegistryOptions{
+		SkipCheck:       config.DeliverySkipCheck,
+		Syncing:         syncing,
+		Retrieval:       retrieval,
 		SyncUpdateDelay: config.SyncUpdateDelay,
-	})
+		MaxPeerServers:  config.MaxStreamPeerServers,
+	}
+	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, registryOptions, self.swap)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
 
-	var resourceHandler *mru.Handler
-	rhparams := &mru.HandlerParams{}
+	var feedsHandler *feed.Handler
+	fhParams := &feed.HandlerParams{}
 
-	resourceHandler = mru.NewHandler(rhparams)
-	resourceHandler.SetStore(self.netStore)
+	feedsHandler = feed.NewHandler(fhParams)
+	feedsHandler.SetStore(self.netStore)
 
 	lstore.Validators = []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
-		resourceHandler,
+		feedsHandler,
+	}
+
+	err = lstore.Migrate()
+	if err != nil {
+		return nil, err
 	}
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore, self.streamer.GetSpec(), self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
@@ -215,7 +237,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler, self.privateKey)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")
@@ -341,7 +363,9 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
-	if self.config.SwapEnabled {
+	//TODO: Currently if swap is enabled and no chequebook (or inexistent) contract is provided, the node would crash.
+	//Once we integrate back the contracts, this check MUST be revisited
+	if self.config.SwapEnabled && self.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := self.SetChequebook(ctx)
 		if err != nil {

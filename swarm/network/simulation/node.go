@@ -25,15 +25,15 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 // NodeIDs returns NodeIDs for all nodes in the network.
-func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
+func (s *Simulation) NodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
-	ids = make([]discover.NodeID, len(nodes))
+	ids = make([]enode.ID, len(nodes))
 	for i, node := range nodes {
 		ids[i] = node.ID()
 	}
@@ -41,7 +41,7 @@ func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
 }
 
 // UpNodeIDs returns NodeIDs for nodes that are up in the network.
-func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
+func (s *Simulation) UpNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
 		if node.Up {
@@ -52,7 +52,7 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 }
 
 // DownNodeIDs returns NodeIDs for nodes that are stopped in the network.
-func (s *Simulation) DownNodeIDs() (ids []discover.NodeID) {
+func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
 		if !node.Up {
@@ -88,7 +88,7 @@ func AddNodeWithService(serviceName string) AddNodeOption {
 // applies provided options to the config and adds the node to network.
 // By default all services will be started on a node. If one or more
 // AddNodeWithService option are provided, only specified services will be started.
-func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err error) {
+func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	conf := adapters.RandomNodeConfig()
 	for _, o := range opts {
 		o(conf)
@@ -105,8 +105,8 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err err
 
 // AddNodes creates new nodes with random configurations,
 // applies provided options to the config and adds nodes to network.
-func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
+func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+	ids = make([]enode.ID, 0, count)
 	for i := 0; i < count; i++ {
 		id, err := s.AddNode(opts...)
 		if err != nil {
@@ -119,7 +119,7 @@ func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.
 
 // AddNodesAndConnectFull is a helpper method that combines
 // AddNodes and ConnectNodesFull. Only new nodes will be connected.
-func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -137,7 +137,7 @@ func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (i
 // AddNodesAndConnectChain is a helpper method that combines
 // AddNodes and ConnectNodesChain. The chain will be continued from the last
 // added node, if there is one in simulation using ConnectToLastNode method.
-func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -153,7 +153,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 	if err != nil {
 		return nil, err
 	}
-	ids = append([]discover.NodeID{id}, ids...)
+	ids = append([]enode.ID{id}, ids...)
 	err = s.ConnectNodesChain(ids)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 
 // AddNodesAndConnectRing is a helpper method that combines
 // AddNodes and ConnectNodesRing.
-func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -180,7 +180,7 @@ func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (i
 
 // AddNodesAndConnectStar is a helpper method that combines
 // AddNodes and ConnectNodesStar.
-func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
@@ -246,7 +246,7 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 // differently then other nodes in test. SetPivotNode and
 // PivotNodeID are just a convenient functions to set and
 // retrieve it.
-func (s *Simulation) SetPivotNode(id discover.NodeID) {
+func (s *Simulation) SetPivotNode(id enode.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pivotNodeID = &id
@@ -254,19 +254,19 @@ func (s *Simulation) SetPivotNode(id discover.NodeID) {
 
 // PivotNodeID returns NodeID of the pivot node set by
 // Simulation.SetPivotNode method.
-func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
+func (s *Simulation) PivotNodeID() (id *enode.ID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.pivotNodeID
 }
 
 // StartNode starts a node by NodeID.
-func (s *Simulation) StartNode(id discover.NodeID) (err error) {
+func (s *Simulation) StartNode(id enode.ID) (err error) {
 	return s.Net.Start(id)
 }
 
 // StartRandomNode starts a random node.
-func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
+func (s *Simulation) StartRandomNode() (id enode.ID, err error) {
 	n := s.randomDownNode()
 	if n == nil {
 		return id, ErrNodeNotFound
@@ -275,8 +275,8 @@ func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
 }
 
 // StartRandomNodes starts random nodes.
-func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
+func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
+	ids = make([]enode.ID, 0, count)
 	downIDs := s.DownNodeIDs()
 	for i := 0; i < count; i++ {
 		n := s.randomNode(downIDs, ids...)
@@ -293,12 +293,12 @@ func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err err
 }
 
 // StopNode stops a node by NodeID.
-func (s *Simulation) StopNode(id discover.NodeID) (err error) {
+func (s *Simulation) StopNode(id enode.ID) (err error) {
 	return s.Net.Stop(id)
 }
 
 // StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
+func (s *Simulation) StopRandomNode() (id enode.ID, err error) {
 	n := s.RandomUpNode()
 	if n == nil {
 		return id, ErrNodeNotFound
@@ -307,8 +307,8 @@ func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
 }
 
 // StopRandomNodes stops random nodes.
-func (s *Simulation) StopRandomNodes(count int) (ids []discover.NodeID, err error) {
-	ids = make([]discover.NodeID, 0, count)
+func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
+	ids = make([]enode.ID, 0, count)
 	upIDs := s.UpNodeIDs()
 	for i := 0; i < count; i++ {
 		n := s.randomNode(upIDs, ids...)
@@ -331,17 +331,17 @@ func init() {
 
 // RandomUpNode returns a random SimNode that is up.
 // Arguments are NodeIDs for nodes that should not be returned.
-func (s *Simulation) RandomUpNode(exclude ...discover.NodeID) *adapters.SimNode {
+func (s *Simulation) RandomUpNode(exclude ...enode.ID) *adapters.SimNode {
 	return s.randomNode(s.UpNodeIDs(), exclude...)
 }
 
 // randomDownNode returns a random SimNode that is not up.
-func (s *Simulation) randomDownNode(exclude ...discover.NodeID) *adapters.SimNode {
+func (s *Simulation) randomDownNode(exclude ...enode.ID) *adapters.SimNode {
 	return s.randomNode(s.DownNodeIDs(), exclude...)
 }
 
 // randomNode returns a random SimNode from the slice of NodeIDs.
-func (s *Simulation) randomNode(ids []discover.NodeID, exclude ...discover.NodeID) *adapters.SimNode {
+func (s *Simulation) randomNode(ids []enode.ID, exclude ...enode.ID) *adapters.SimNode {
 	for _, e := range exclude {
 		var i int
 		for _, id := range ids {

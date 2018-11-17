@@ -18,7 +18,6 @@
 package les
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -51,7 +50,6 @@ const (
 
 type peer struct {
 	*p2p.Peer
-	pubKey *ecdsa.PublicKey
 
 	rw p2p.MsgReadWriter
 
@@ -69,7 +67,7 @@ type peer struct {
 	sendQueue   *execQueue
 
 	poolEntry      *poolEntry
-	hasBlock       func(common.Hash, uint64) bool
+	hasBlock       func(common.Hash, uint64, bool) bool
 	responseErrors int
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
@@ -80,11 +78,9 @@ type peer struct {
 
 func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
-	pubKey, _ := id.Pubkey()
 
 	return &peer{
 		Peer:        p,
-		pubKey:      pubKey,
 		rw:          rw,
 		version:     version,
 		network:     network,
@@ -175,11 +171,11 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 }
 
 // HasBlock checks if the peer has a given block
-func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
+func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
 	hasBlock := p.hasBlock
 	p.lock.RUnlock()
-	return hasBlock != nil && hasBlock(hash, number)
+	return hasBlock != nil && hasBlock(hash, number, hasState)
 }
 
 // SendAnnounce announces the availability of a number of blocks through

@@ -84,7 +84,7 @@ func (r *BlockRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *BlockRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Hash, r.Number)
+	return peer.HasBlock(r.Hash, r.Number, false)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -140,7 +140,7 @@ func (r *ReceiptsRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *ReceiptsRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Hash, r.Number)
+	return peer.HasBlock(r.Hash, r.Number, false)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -202,7 +202,7 @@ func (r *TrieRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *TrieRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
+	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -272,7 +272,7 @@ func (r *CodeRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *CodeRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber)
+	return peer.HasBlock(r.Id.BlockHash, r.Id.BlockNumber, true)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)

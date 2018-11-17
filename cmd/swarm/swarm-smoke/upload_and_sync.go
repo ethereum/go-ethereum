@@ -19,7 +19,8 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/rand"
+	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -85,7 +86,6 @@ func cliUploadAndSync(c *cli.Context) error {
 
 	wg := sync.WaitGroup{}
 	for _, endpoint := range endpoints {
-		endpoint := endpoint
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
@@ -166,6 +166,18 @@ func digest(r io.Reader) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// generates random data in heap buffer
+func generateRandomData(datasize int) ([]byte, error) {
+	b := make([]byte, datasize)
+	c, err := crand.Read(b)
+	if err != nil {
+		return nil, err
+	} else if c != datasize {
+		return nil, errors.New("short read")
+	}
+	return b, nil
+}
+
 // generateRandomFile is creating a temporary file with the requested byte size
 func generateRandomFile(size int) (f *os.File, teardown func()) {
 	// create a tmp file
@@ -181,7 +193,7 @@ func generateRandomFile(size int) (f *os.File, teardown func()) {
 	}
 
 	buf := make([]byte, size)
-	_, err = rand.Read(buf)
+	_, err = crand.Read(buf)
 	if err != nil {
 		panic(err)
 	}

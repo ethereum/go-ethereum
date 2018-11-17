@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -90,7 +91,7 @@ type testMatcher struct {
 	configpat    []testConfig
 	failpat      []testFailure
 	skiploadpat  []*regexp.Regexp
-	skipshortpat []*regexp.Regexp
+	slowpat      []*regexp.Regexp
 	whitelistpat *regexp.Regexp
 }
 
@@ -105,8 +106,8 @@ type testFailure struct {
 }
 
 // skipShortMode skips tests matching when the -short flag is used.
-func (tm *testMatcher) skipShortMode(pattern string) {
-	tm.skipshortpat = append(tm.skipshortpat, regexp.MustCompile(pattern))
+func (tm *testMatcher) slow(pattern string) {
+	tm.slowpat = append(tm.slowpat, regexp.MustCompile(pattern))
 }
 
 // skipLoad skips JSON loading of tests matching the pattern.
@@ -133,10 +134,14 @@ func (tm *testMatcher) config(pattern string, cfg params.ChainConfig) {
 
 // findSkip matches name against test skip patterns.
 func (tm *testMatcher) findSkip(name string) (reason string, skipload bool) {
-	if testing.Short() {
-		for _, re := range tm.skipshortpat {
-			if re.MatchString(name) {
+	isWin32 := runtime.GOARCH == "386" && runtime.GOOS == "windows"
+	for _, re := range tm.slowpat {
+		if re.MatchString(name) {
+			if testing.Short() {
 				return "skipped in -short mode", false
+			}
+			if isWin32 {
+				return "skipped on 32bit windows", false
 			}
 		}
 	}

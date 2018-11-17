@@ -16,6 +16,9 @@
 
 package api
 
+//go:generate mimegen --types=./../../cmd/swarm/mimegen/mime.types --package=api --out=gen_mime.go
+//go:generate gofmt -s -w gen_mime.go
+
 import (
 	"archive/tar"
 	"context"
@@ -42,7 +45,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -231,18 +236,18 @@ on top of the FileStore
 it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	resource  *mru.Handler
+	feed      *feed.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler, pk *ecdsa.PrivateKey) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
-		resource:  resourceHandler,
+		feed:      feedHandler,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -399,83 +404,60 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			return a.Get(ctx, decrypt, adr, entry.Path)
 		}
 
-		// we need to do some extra work if this is a mutable resource manifest
-		if entry.ContentType == ResourceContentType {
-
-			// get the resource rootAddr
-			log.Trace("resource type", "menifestAddr", manifestAddr, "hash", entry.Hash)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			rootAddr := storage.Address(common.FromHex(entry.Hash))
-			rsrc, err := a.resource.Load(ctx, rootAddr)
+		// we need to do some extra work if this is a Swarm feed manifest
+		if entry.ContentType == FeedContentType {
+			if entry.Feed == nil {
+				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode Feed in manifest")
+			}
+			_, err := a.feed.Lookup(ctx, feed.NewQueryLatest(entry.Feed, lookup.NoClue))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
-				log.Debug(fmt.Sprintf("get resource content error: %v", err))
+				log.Debug(fmt.Sprintf("get feed update content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
-
-			// use this key to retrieve the latest update
-			params := mru.LookupLatest(rootAddr)
-			rsrc, err = a.resource.Lookup(ctx, params)
+			// get the data of the update
+			_, rsrcData, err := a.feed.GetContent(entry.Feed)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
-				log.Debug(fmt.Sprintf("get resource content error: %v", err))
+				log.Warn(fmt.Sprintf("get feed update content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
 
-			// if it's multihash, we will transparently serve the content this multihash points to
-			// \TODO this resolve is rather expensive all in all, review to see if it can be achieved cheaper
-			if rsrc.Multihash() {
+			// extract multihash
+			decodedMultihash, err := multihash.FromMultihash(rsrcData)
+			if err != nil {
+				apiGetInvalid.Inc(1)
+				status = http.StatusUnprocessableEntity
+				log.Warn("invalid multihash in feed update", "err", err)
+				return reader, mimeType, status, nil, err
+			}
+			manifestAddr = storage.Address(decodedMultihash)
+			log.Trace("feed update contains multihash", "key", manifestAddr)
 
-				// get the data of the update
-				_, rsrcData, err := a.resource.GetContent(rootAddr)
-				if err != nil {
-					apiGetNotFound.Inc(1)
-					status = http.StatusNotFound
-					log.Warn(fmt.Sprintf("get resource content error: %v", err))
-					return reader, mimeType, status, nil, err
-				}
+			// get the manifest the multihash digest points to
+			trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, NOOPDecrypt)
+			if err != nil {
+				apiGetNotFound.Inc(1)
+				status = http.StatusNotFound
+				log.Warn(fmt.Sprintf("loadManifestTrie (feed update multihash) error: %v", err))
+				return reader, mimeType, status, nil, err
+			}
 
-				// validate that data as multihash
-				decodedMultihash, err := multihash.FromMultihash(rsrcData)
-				if err != nil {
-					apiGetInvalid.Inc(1)
-					status = http.StatusUnprocessableEntity
-					log.Warn("invalid resource multihash", "err", err)
-					return reader, mimeType, status, nil, err
-				}
-				manifestAddr = storage.Address(decodedMultihash)
-				log.Trace("resource is multihash", "key", manifestAddr)
-
-				// get the manifest the multihash digest points to
-				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
-				if err != nil {
-					apiGetNotFound.Inc(1)
-					status = http.StatusNotFound
-					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
-					return reader, mimeType, status, nil, err
-				}
-
-				// finally, get the manifest entry
-				// it will always be the entry on path ""
-				entry, _ = trie.getEntry(path)
-				if entry == nil {
-					status = http.StatusNotFound
-					apiGetNotFound.Inc(1)
-					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
-					log.Trace("manifest (resource multihash) entry not found", "key", manifestAddr, "path", path)
-					return reader, mimeType, status, nil, err
-				}
-
-			} else {
-				// data is returned verbatim since it's not a multihash
-				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
+			// finally, get the manifest entry
+			// it will always be the entry on path ""
+			entry, _ = trie.getEntry(path)
+			if entry == nil {
+				status = http.StatusNotFound
+				apiGetNotFound.Inc(1)
+				err = fmt.Errorf("manifest (feed update multihash) entry for '%s' not found", path)
+				log.Trace("manifest (feed update multihash) entry not found", "key", manifestAddr, "path", path)
+				return reader, mimeType, status, nil, err
 			}
 		}
 
-		// regardless of resource update manifests or normal manifests we will converge at this point
+		// regardless of feed update manifests or normal manifests we will converge at this point
 		// get the key the manifest entry points to and serve it if it's unambiguous
 		contentAddr = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
@@ -778,9 +760,14 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 
 		// add the entry under the path from the request
 		manifestPath := path.Join(manifestPath, hdr.Name)
+		contentType := hdr.Xattrs["user.swarm.content-type"]
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+		}
+		//DetectContentType("")
 		entry := &ManifestEntry{
 			Path:        manifestPath,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			ContentType: contentType,
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
@@ -791,10 +778,15 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
 		if hdr.Name == defaultPath {
+			contentType := hdr.Xattrs["user.swarm.content-type"]
+			if contentType == "" {
+				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+			}
+
 			entry := &ManifestEntry{
 				Hash:        contentKey.Hex(),
 				Path:        "", // default entry
-				ContentType: hdr.Xattrs["user.swarm.content-type"],
+				ContentType: contentType,
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
@@ -965,57 +957,120 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	return addr, manifestEntryMap, nil
 }
 
-// ResourceLookup finds mutable resource updates at specific periods and versions
-func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (string, []byte, error) {
-	var err error
-	rsrc, err := a.resource.Load(ctx, params.RootAddr())
+// FeedsLookup finds Swarm feeds updates at specific points in time, or the latest update
+func (a *API) FeedsLookup(ctx context.Context, query *feed.Query) ([]byte, error) {
+	_, err := a.feed.Lookup(ctx, query)
 	if err != nil {
-		return "", nil, err
-	}
-	_, err = a.resource.Lookup(ctx, params)
-	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	var data []byte
-	_, data, err = a.resource.GetContent(params.RootAddr())
+	_, data, err = a.feed.GetContent(&query.Feed)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
-	return rsrc.Name(), data, nil
+	return data, nil
 }
 
-// Create Mutable resource
-func (a *API) ResourceCreate(ctx context.Context, request *mru.Request) error {
-	return a.resource.New(ctx, request)
+// FeedsNewRequest creates a Request object to update a specific feed
+func (a *API) FeedsNewRequest(ctx context.Context, feed *feed.Feed) (*feed.Request, error) {
+	return a.feed.NewRequest(ctx, feed)
 }
 
-// ResourceNewRequest creates a Request object to update a specific mutable resource
-func (a *API) ResourceNewRequest(ctx context.Context, rootAddr storage.Address) (*mru.Request, error) {
-	return a.resource.NewUpdateRequest(ctx, rootAddr)
+// FeedsUpdate publishes a new update on the given feed
+func (a *API) FeedsUpdate(ctx context.Context, request *feed.Request) (storage.Address, error) {
+	return a.feed.Update(ctx, request)
 }
 
-// ResourceUpdate updates a Mutable Resource with arbitrary data.
-// Upon retrieval the update will be retrieved verbatim as bytes.
-func (a *API) ResourceUpdate(ctx context.Context, request *mru.SignedResourceUpdate) (storage.Address, error) {
-	return a.resource.Update(ctx, request)
+// FeedsHashSize returned the size of the digest produced by Swarm feeds' hashing function
+func (a *API) FeedsHashSize() int {
+	return a.feed.HashSize
 }
 
-// ResourceHashSize returned the size of the digest produced by the Mutable Resource hashing function
-func (a *API) ResourceHashSize() int {
-	return a.resource.HashSize
-}
+// ErrCannotLoadFeedManifest is returned when looking up a feeds manifest fails
+var ErrCannotLoadFeedManifest = errors.New("Cannot load feed manifest")
 
-// ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
-func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (storage.Address, error) {
+// ErrNotAFeedManifest is returned when the address provided returned something other than a valid manifest
+var ErrNotAFeedManifest = errors.New("Not a feed manifest")
+
+// ResolveFeedManifest retrieves the Swarm feed manifest for the given address, and returns the referenced Feed.
+func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*feed.Feed, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
-		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
+		return nil, ErrCannotLoadFeedManifest
 	}
 
 	entry, _ := trie.getEntry("")
-	if entry.ContentType != ResourceContentType {
-		return nil, fmt.Errorf("not a resource manifest: %s", addr)
+	if entry.ContentType != FeedContentType {
+		return nil, ErrNotAFeedManifest
 	}
 
-	return storage.Address(common.FromHex(entry.Hash)), nil
+	return entry.Feed, nil
+}
+
+// ErrCannotResolveFeedURI is returned when the ENS resolver is not able to translate a name to a Swarm feed
+var ErrCannotResolveFeedURI = errors.New("Cannot resolve Feed URI")
+
+// ErrCannotResolveFeed is returned when values provided are not enough or invalid to recreate a
+// feed out of them.
+var ErrCannotResolveFeed = errors.New("Cannot resolve Feed")
+
+// ResolveFeed attempts to extract feed information out of the manifest, if provided
+// If not, it attempts to extract the feed out of a set of key-value pairs
+func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*feed.Feed, error) {
+	var fd *feed.Feed
+	var err error
+	if uri.Addr != "" {
+		// resolve the content key.
+		manifestAddr := uri.Address()
+		if manifestAddr == nil {
+			manifestAddr, err = a.Resolve(ctx, uri.Addr)
+			if err != nil {
+				return nil, ErrCannotResolveFeedURI
+			}
+		}
+
+		// get the Swarm feed from the manifest
+		fd, err = a.ResolveFeedManifest(ctx, manifestAddr)
+		if err != nil {
+			return nil, err
+		}
+		log.Debug("handle.get.feed: resolved", "manifestkey", manifestAddr, "feed", fd.Hex())
+	} else {
+		var f feed.Feed
+		if err := f.FromValues(values); err != nil {
+			return nil, ErrCannotResolveFeed
+
+		}
+		fd = &f
+	}
+	return fd, nil
+}
+
+// MimeOctetStream default value of http Content-Type header
+const MimeOctetStream = "application/octet-stream"
+
+// DetectContentType by file file extension, or fallback to content sniff
+func DetectContentType(fileName string, f io.ReadSeeker) (string, error) {
+	ctype := mime.TypeByExtension(filepath.Ext(fileName))
+	if ctype != "" {
+		return ctype, nil
+	}
+
+	// save/rollback to get content probe from begin of file
+	currentPosition, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
+	}
+
+	// read a chunk to decide between utf-8 text and binary
+	var buf [512]byte
+	n, _ := f.Read(buf[:])
+	ctype = http.DetectContentType(buf[:n])
+
+	_, err = f.Seek(currentPosition, io.SeekStart) // rewind to output whole file
+	if err != nil {
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
+	}
+
+	return ctype, nil
 }

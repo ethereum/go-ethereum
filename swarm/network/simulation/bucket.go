@@ -16,15 +16,13 @@
 
 package simulation
 
-import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
-)
+import "github.com/ethereum/go-ethereum/p2p/enode"
 
 // BucketKey is the type that should be used for keys in simulation buckets.
 type BucketKey string
 
 // NodeItem returns an item set in ServiceFunc function for a particualar node.
-func (s *Simulation) NodeItem(id discover.NodeID, key interface{}) (value interface{}, ok bool) {
+func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -36,7 +34,7 @@ func (s *Simulation) NodeItem(id discover.NodeID, key interface{}) (value interf
 
 // SetNodeItem sets a new item associated with the node with provided NodeID.
 // Buckets should be used to avoid managing separate simulation global state.
-func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value interface{}) {
+func (s *Simulation) SetNodeItem(id enode.ID, key interface{}, value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -45,12 +43,12 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value inte
 
 // NodesItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
-func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) NodesItems(key interface{}) (values map[enode.ID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	ids := s.NodeIDs()
-	values = make(map[discover.NodeID]interface{}, len(ids))
+	values = make(map[enode.ID]interface{}, len(ids))
 	for _, id := range ids {
 		if _, ok := s.buckets[id]; !ok {
 			continue
@@ -63,12 +61,12 @@ func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]int
 }
 
 // UpNodesItems returns a map of items with the same BucketKey from all nodes that are up.
-func (s *Simulation) UpNodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) UpNodesItems(key interface{}) (values map[enode.ID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	ids := s.UpNodeIDs()
-	values = make(map[discover.NodeID]interface{})
+	values = make(map[enode.ID]interface{})
 	for _, id := range ids {
 		if _, ok := s.buckets[id]; !ok {
 			continue

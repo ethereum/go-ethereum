@@ -23,7 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -56,12 +56,13 @@ func NewHiveParams() *HiveParams {
 
 // Hive manages network connections of the swarm node
 type Hive struct {
-	*HiveParams                      // settings
-	*Kademlia                        // the overlay connectiviy driver
-	Store       state.Store          // storage interface to save peers across sessions
-	addPeer     func(*discover.Node) // server callback to connect to a peer
+	*HiveParams                   // settings
+	*Kademlia                     // the overlay connectiviy driver
+	Store       state.Store       // storage interface to save peers across sessions
+	addPeer     func(*enode.Node) // server callback to connect to a peer
 	// bookkeeping
 	lock   sync.Mutex
+	peers  map[enode.ID]*BzzPeer
 	ticker *time.Ticker
 }
 
@@ -74,6 +75,7 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 		HiveParams: params,
 		Kademlia:   kad,
 		Store:      store,
+		peers:      make(map[enode.ID]*BzzPeer),
 	}
 }
 
@@ -137,7 +139,7 @@ func (h *Hive) connect() {
 		}
 
 		log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
-		under, err := discover.ParseNode(string(addr.Under()))
+		under, err := enode.ParseV4(string(addr.Under()))
 		if err != nil {
 			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
 			continue
@@ -149,6 +151,9 @@ func (h *Hive) connect() {
 
 // Run protocol run function
 func (h *Hive) Run(p *BzzPeer) error {
+	h.trackPeer(p)
+	defer h.untrackPeer(p)
+
 	dp := NewPeer(p, h.Kademlia)
 	depth, changed := h.On(dp)
 	// if we want discovery, advertise change of depth
@@ -166,6 +171,18 @@ func (h *Hive) Run(p *BzzPeer) error {
 	return dp.Run(dp.HandleMsg)
 }
 
+func (h *Hive) trackPeer(p *BzzPeer) {
+	h.lock.Lock()
+	h.peers[p.ID()] = p
+	h.lock.Unlock()
+}
+
+func (h *Hive) untrackPeer(p *BzzPeer) {
+	h.lock.Lock()
+	delete(h.peers, p.ID())
+	h.lock.Unlock()
+}
+
 // NodeInfo function is used by the p2p.server RPC interface to display
 // protocol specific node information
 func (h *Hive) NodeInfo() interface{} {
@@ -174,8 +191,15 @@ func (h *Hive) NodeInfo() interface{} {
 
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
-func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
-	addr := NewAddrFromNodeID(id)
+func (h *Hive) PeerInfo(id enode.ID) interface{} {
+	h.lock.Lock()
+	p := h.peers[id]
+	h.lock.Unlock()
+
+	if p == nil {
+		return nil
+	}
+	addr := NewAddr(p.Node())
 	return struct {
 		OAddr hexutil.Bytes
 		UAddr hexutil.Bytes

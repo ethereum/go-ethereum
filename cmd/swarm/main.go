@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
@@ -70,151 +70,6 @@ var (
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
 )
 
-var (
-	ChequebookAddrFlag = cli.StringFlag{
-		Name:   "chequebook",
-		Usage:  "chequebook contract address",
-		EnvVar: SWARM_ENV_CHEQUEBOOK_ADDR,
-	}
-	SwarmAccountFlag = cli.StringFlag{
-		Name:   "bzzaccount",
-		Usage:  "Swarm account key file",
-		EnvVar: SWARM_ENV_ACCOUNT,
-	}
-	SwarmListenAddrFlag = cli.StringFlag{
-		Name:   "httpaddr",
-		Usage:  "Swarm HTTP API listening interface",
-		EnvVar: SWARM_ENV_LISTEN_ADDR,
-	}
-	SwarmPortFlag = cli.StringFlag{
-		Name:   "bzzport",
-		Usage:  "Swarm local http api port",
-		EnvVar: SWARM_ENV_PORT,
-	}
-	SwarmNetworkIdFlag = cli.IntFlag{
-		Name:   "bzznetworkid",
-		Usage:  "Network identifier (integer, default 3=swarm testnet)",
-		EnvVar: SWARM_ENV_NETWORK_ID,
-	}
-	SwarmSwapEnabledFlag = cli.BoolFlag{
-		Name:   "swap",
-		Usage:  "Swarm SWAP enabled (default false)",
-		EnvVar: SWARM_ENV_SWAP_ENABLE,
-	}
-	SwarmSwapAPIFlag = cli.StringFlag{
-		Name:   "swap-api",
-		Usage:  "URL of the Ethereum API provider to use to settle SWAP payments",
-		EnvVar: SWARM_ENV_SWAP_API,
-	}
-	SwarmSyncDisabledFlag = cli.BoolTFlag{
-		Name:   "nosync",
-		Usage:  "Disable swarm syncing",
-		EnvVar: SWARM_ENV_SYNC_DISABLE,
-	}
-	SwarmSyncUpdateDelay = cli.DurationFlag{
-		Name:   "sync-update-delay",
-		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
-		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
-	}
-	SwarmLightNodeEnabled = cli.BoolFlag{
-		Name:   "lightnode",
-		Usage:  "Enable Swarm LightNode (default false)",
-		EnvVar: SWARM_ENV_LIGHT_NODE_ENABLE,
-	}
-	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
-		Name:   "delivery-skip-check",
-		Usage:  "Skip chunk delivery check (default false)",
-		EnvVar: SWARM_ENV_DELIVERY_SKIP_CHECK,
-	}
-	EnsAPIFlag = cli.StringSliceFlag{
-		Name:   "ens-api",
-		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
-		EnvVar: SWARM_ENV_ENS_API,
-	}
-	SwarmApiFlag = cli.StringFlag{
-		Name:  "bzzapi",
-		Usage: "Swarm HTTP endpoint",
-		Value: "http://127.0.0.1:8500",
-	}
-	SwarmRecursiveFlag = cli.BoolFlag{
-		Name:  "recursive",
-		Usage: "Upload directories recursively",
-	}
-	SwarmWantManifestFlag = cli.BoolTFlag{
-		Name:  "manifest",
-		Usage: "Automatic manifest upload (default true)",
-	}
-	SwarmUploadDefaultPath = cli.StringFlag{
-		Name:  "defaultpath",
-		Usage: "path to file served for empty url path (none)",
-	}
-	SwarmAccessGrantKeyFlag = cli.StringFlag{
-		Name:  "grant-key",
-		Usage: "grants a given public key access to an ACT",
-	}
-	SwarmAccessGrantKeysFlag = cli.StringFlag{
-		Name:  "grant-keys",
-		Usage: "grants a given list of public keys in the following file (separated by line breaks) access to an ACT",
-	}
-	SwarmUpFromStdinFlag = cli.BoolFlag{
-		Name:  "stdin",
-		Usage: "reads data to be uploaded from stdin",
-	}
-	SwarmUploadMimeType = cli.StringFlag{
-		Name:  "mime",
-		Usage: "Manually specify MIME type",
-	}
-	SwarmEncryptedFlag = cli.BoolFlag{
-		Name:  "encrypt",
-		Usage: "use encrypted upload",
-	}
-	SwarmAccessPasswordFlag = cli.StringFlag{
-		Name:   "password",
-		Usage:  "Password",
-		EnvVar: SWARM_ACCESS_PASSWORD,
-	}
-	SwarmDryRunFlag = cli.BoolFlag{
-		Name:  "dry-run",
-		Usage: "dry-run",
-	}
-	CorsStringFlag = cli.StringFlag{
-		Name:   "corsdomain",
-		Usage:  "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
-		EnvVar: SWARM_ENV_CORS,
-	}
-	SwarmStorePath = cli.StringFlag{
-		Name:   "store.path",
-		Usage:  "Path to leveldb chunk DB (default <$GETH_ENV_DIR>/swarm/bzz-<$BZZ_KEY>/chunks)",
-		EnvVar: SWARM_ENV_STORE_PATH,
-	}
-	SwarmStoreCapacity = cli.Uint64Flag{
-		Name:   "store.size",
-		Usage:  "Number of chunks (5M is roughly 20-25GB) (default 5000000)",
-		EnvVar: SWARM_ENV_STORE_CAPACITY,
-	}
-	SwarmStoreCacheCapacity = cli.UintFlag{
-		Name:   "store.cache.size",
-		Usage:  "Number of recent chunks cached in memory (default 5000)",
-		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
-	}
-	SwarmResourceMultihashFlag = cli.BoolFlag{
-		Name:  "multihash",
-		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as raw, literal data that will be included in the resource",
-	}
-	SwarmResourceNameFlag = cli.StringFlag{
-		Name:  "name",
-		Usage: "User-defined name for the new resource",
-	}
-	SwarmResourceDataOnCreateFlag = cli.StringFlag{
-		Name:  "data",
-		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
-	}
-	SwarmCompressedFlag = cli.BoolFlag{
-		Name:  "compressed",
-		Usage: "Prints encryption keys in compressed form",
-	}
-)
-
 //declare a few constant error messages, useful for later error check comparisons in test
 var (
 	SWARM_ERR_NO_BZZACCOUNT   = "bzzaccount option is required but not set; check your config file, command line or environment variables"
@@ -242,12 +97,12 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-var app = utils.NewApp(gitCommit, "Ethereum Swarm")
+var app = utils.NewApp("", "Ethereum Swarm")
 
 // This init function creates the cli.App.
 func init() {
 	app.Action = bzzd
-	app.HideVersion = true // we have a command to print the version
+	app.Version = sv.ArchiveVersion(gitCommit)
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		{
@@ -265,249 +120,24 @@ func init() {
 			Usage:              "Print public key information",
 			Description:        "The output of this command is supposed to be machine-readable",
 		},
-		{
-			Action:             upload,
-			CustomHelpTemplate: helpTemplate,
-			Name:               "up",
-			Usage:              "uploads a file or directory to swarm using the HTTP API",
-			ArgsUsage:          "<file>",
-			Flags:              []cli.Flag{SwarmEncryptedFlag},
-			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
-		},
-		{
-			CustomHelpTemplate: helpTemplate,
-			Name:               "access",
-			Usage:              "encrypts a reference and embeds it into a root manifest",
-			ArgsUsage:          "<ref>",
-			Description:        "encrypts a reference and embeds it into a root manifest",
-			Subcommands: []cli.Command{
-				{
-					CustomHelpTemplate: helpTemplate,
-					Name:               "new",
-					Usage:              "encrypts a reference and embeds it into a root manifest",
-					ArgsUsage:          "<ref>",
-					Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
-					Subcommands: []cli.Command{
-						{
-							Action:             accessNewPass,
-							CustomHelpTemplate: helpTemplate,
-							Flags: []cli.Flag{
-								utils.PasswordFileFlag,
-								SwarmDryRunFlag,
-							},
-							Name:        "pass",
-							Usage:       "encrypts a reference with a password and embeds it into a root manifest",
-							ArgsUsage:   "<ref>",
-							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
-						},
-						{
-							Action:             accessNewPK,
-							CustomHelpTemplate: helpTemplate,
-							Flags: []cli.Flag{
-								utils.PasswordFileFlag,
-								SwarmDryRunFlag,
-								SwarmAccessGrantKeyFlag,
-							},
-							Name:        "pk",
-							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
-							ArgsUsage:   "<ref>",
-							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
-						},
-						{
-							Action:             accessNewACT,
-							CustomHelpTemplate: helpTemplate,
-							Flags: []cli.Flag{
-								SwarmAccessGrantKeysFlag,
-								SwarmDryRunFlag,
-								utils.PasswordFileFlag,
-							},
-							Name:        "act",
-							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
-							ArgsUsage:   "<ref>",
-							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
-						},
-					},
-				},
-			},
-		},
-		{
-			CustomHelpTemplate: helpTemplate,
-			Name:               "resource",
-			Usage:              "(Advanced) Create and update Mutable Resources",
-			ArgsUsage:          "<create|update|info>",
-			Description:        "Works with Mutable Resource Updates",
-			Subcommands: []cli.Command{
-				{
-					Action:             resourceCreate,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "create",
-					Usage:              "creates a new Mutable Resource",
-					ArgsUsage:          "<frequency>",
-					Description:        "creates a new Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceMultihashFlag},
-				},
-				{
-					Action:             resourceUpdate,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "update",
-					Usage:              "updates the content of an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
-					Description:        "updates the content of an existing Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceMultihashFlag},
-				},
-				{
-					Action:             resourceInfo,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "info",
-					Usage:              "obtains information about an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain>",
-					Description:        "obtains information about an existing Mutable Resource",
-				},
-			},
-		},
-		{
-			Action:             list,
-			CustomHelpTemplate: helpTemplate,
-			Name:               "ls",
-			Usage:              "list files and directories contained in a manifest",
-			ArgsUsage:          "<manifest> [<prefix>]",
-			Description:        "Lists files and directories contained in a manifest",
-		},
-		{
-			Action:             hash,
-			CustomHelpTemplate: helpTemplate,
-			Name:               "hash",
-			Usage:              "print the swarm hash of a file or directory",
-			ArgsUsage:          "<file>",
-			Description:        "Prints the swarm hash of file or directory",
-		},
-		{
-			Action:      download,
-			Name:        "down",
-			Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
-			Usage:       "downloads a swarm manifest or a file inside a manifest",
-			ArgsUsage:   " <uri> [<dir>]",
-			Description: `Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.`,
-		},
-		{
-			Name:               "manifest",
-			CustomHelpTemplate: helpTemplate,
-			Usage:              "perform operations on swarm manifests",
-			ArgsUsage:          "COMMAND",
-			Description:        "Updates a MANIFEST by adding/removing/updating the hash of a path.\nCOMMAND could be: add, update, remove",
-			Subcommands: []cli.Command{
-				{
-					Action:             manifestAdd,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "add",
-					Usage:              "add a new path to the manifest",
-					ArgsUsage:          "<MANIFEST> <path> <hash>",
-					Description:        "Adds a new path to the manifest",
-				},
-				{
-					Action:             manifestUpdate,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "update",
-					Usage:              "update the hash for an already existing path in the manifest",
-					ArgsUsage:          "<MANIFEST> <path> <newhash>",
-					Description:        "Update the hash for an already existing path in the manifest",
-				},
-				{
-					Action:             manifestRemove,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "remove",
-					Usage:              "removes a path from the manifest",
-					ArgsUsage:          "<MANIFEST> <path>",
-					Description:        "Removes a path from the manifest",
-				},
-			},
-		},
-		{
-			Name:               "fs",
-			CustomHelpTemplate: helpTemplate,
-			Usage:              "perform FUSE operations",
-			ArgsUsage:          "fs COMMAND",
-			Description:        "Performs FUSE operations by mounting/unmounting/listing mount points. This assumes you already have a Swarm node running locally. For all operation you must reference the correct path to bzzd.ipc in order to communicate with the node",
-			Subcommands: []cli.Command{
-				{
-					Action:             mount,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "mount",
-					Flags:              []cli.Flag{utils.IPCPathFlag},
-					Usage:              "mount a swarm hash to a mount point",
-					ArgsUsage:          "swarm fs mount --ipcpath <path to bzzd.ipc> <manifest hash> <mount point>",
-					Description:        "Mounts a Swarm manifest hash to a given mount point. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
-				},
-				{
-					Action:             unmount,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "unmount",
-					Flags:              []cli.Flag{utils.IPCPathFlag},
-					Usage:              "unmount a swarmfs mount",
-					ArgsUsage:          "swarm fs unmount --ipcpath <path to bzzd.ipc> <mount point>",
-					Description:        "Unmounts a swarmfs mount residing at <mount point>. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
-				},
-				{
-					Action:             listMounts,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "list",
-					Flags:              []cli.Flag{utils.IPCPathFlag},
-					Usage:              "list swarmfs mounts",
-					ArgsUsage:          "swarm fs list --ipcpath <path to bzzd.ipc>",
-					Description:        "Lists all mounted swarmfs volumes. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
-				},
-			},
-		},
-		{
-			Name:               "db",
-			CustomHelpTemplate: helpTemplate,
-			Usage:              "manage the local chunk database",
-			ArgsUsage:          "db COMMAND",
-			Description:        "Manage the local chunk database",
-			Subcommands: []cli.Command{
-				{
-					Action:             dbExport,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "export",
-					Usage:              "export a local chunk database as a tar archive (use - to send to stdout)",
-					ArgsUsage:          "<chunkdb> <file>",
-					Description: `
-Export a local chunk database as a tar archive (use - to send to stdout).
-
-    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
-
-The export may be quite large, consider piping the output through the Unix
-pv(1) tool to get a progress bar:
-
-    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks - | pv > chunks.tar
-`,
-				},
-				{
-					Action:             dbImport,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "import",
-					Usage:              "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
-					ArgsUsage:          "<chunkdb> <file>",
-					Description: `Import chunks from a tar archive into a local chunk database (use - to read from stdin).
-
-    swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
-
-The import may be quite large, consider piping the input through the Unix
-pv(1) tool to get a progress bar:
-
-    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
-				},
-				{
-					Action:             dbClean,
-					CustomHelpTemplate: helpTemplate,
-					Name:               "clean",
-					Usage:              "remove corrupt entries from a local chunk database",
-					ArgsUsage:          "<chunkdb>",
-					Description:        "Remove corrupt entries from a local chunk database",
-				},
-			},
-		},
-
+		// See upload.go
+		upCommand,
+		// See access.go
+		accessCommand,
+		// See feeds.go
+		feedCommand,
+		// See list.go
+		listCommand,
+		// See hash.go
+		hashCommand,
+		// See download.go
+		downloadCommand,
+		// See manifest.go
+		manifestCommand,
+		// See fs.go
+		fsCommand,
+		// See db.go
+		dbCommand,
 		// See config.go
 		DumpConfigCommand,
 	}
@@ -542,6 +172,7 @@ pv(1) tool to get a progress bar:
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
+		SwarmMaxStreamPeerServersFlag,
 		SwarmLightNodeEnabled,
 		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
@@ -697,7 +328,7 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 }
 
 // getPrivKey returns the private key of the specified bzzaccount
-// Used only by client commands, such as `resource`
+// Used only by client commands, such as `feed`
 func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	// booting up the swarm node just as we do in bzzd action
 	bzzconfig, err := buildConfig(ctx)
@@ -788,10 +419,10 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		return
 	}
 
-	cfg.P2P.BootstrapNodes = []*discover.Node{}
+	cfg.P2P.BootstrapNodes = []*enode.Node{}
 
 	for _, url := range SwarmBootnodes {
-		node, err := discover.ParseNode(url)
+		node, err := enode.ParseV4(url)
 		if err != nil {
 			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 		}

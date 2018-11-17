@@ -37,7 +37,7 @@ const (
 // ProtocolName is the official short name of the protocol used during capability negotiation.
 var ProtocolName = "eth"
 
-// ProtocolVersions are the upported versions of the eth protocol (first is primary).
+// ProtocolVersions are the supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth63, eth62}
 
 // ProtocolLengths are the number of implemented message corresponding to different protocol versions.

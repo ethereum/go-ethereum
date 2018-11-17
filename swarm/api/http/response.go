@@ -53,23 +53,23 @@ func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.Manife
 	log.Debug("ShowMultipleChoices", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	msg := ""
 	if list.Entries == nil {
-		RespondError(w, r, "Could not resolve", http.StatusInternalServerError)
+		respondError(w, r, "Could not resolve", http.StatusInternalServerError)
 		return
 	}
 	requestUri := strings.TrimPrefix(r.RequestURI, "/")
 
 	uri, err := api.Parse(requestUri)
 	if err != nil {
-		RespondError(w, r, "Bad Request", http.StatusBadRequest)
+		respondError(w, r, "Bad Request", http.StatusBadRequest)
 	}
 
 	uri.Scheme = "bzz-list"
 	msg += fmt.Sprintf("Disambiguation:<br/>Your request may refer to multiple choices.<br/>Click <a class=\"orange\" href='"+"/"+uri.String()+"'>here</a> if your browser does not redirect you within 5 seconds.<script>setTimeout(\"location.href='%s';\",5000);</script><br/>", "/"+uri.String())
-	RespondTemplate(w, r, "error", msg, http.StatusMultipleChoices)
+	respondTemplate(w, r, "error", msg, http.StatusMultipleChoices)
 }
 
-func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg string, code int) {
-	log.Debug("RespondTemplate", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+func respondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg string, code int) {
+	log.Debug("respondTemplate", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	respond(w, r, &ResponseParams{
 		Code:      code,
 		Msg:       template.HTML(msg),
@@ -78,13 +78,12 @@ func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg s
 	})
 }
 
-func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()), "code", code)
-	RespondTemplate(w, r, "error", msg, code)
+func respondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
+	log.Info("respondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()), "code", code)
+	respondTemplate(w, r, "error", msg, code)
 }
 
 func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
-
 	w.WriteHeader(params.Code)
 
 	if params.Code >= 400 {
@@ -96,7 +95,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	// this cannot be in a switch since an Accept header can have multiple values: "Accept: */*, text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
 	if strings.Contains(acceptHeader, "application/json") {
 		if err := respondJSON(w, r, params); err != nil {
-			RespondError(w, r, "Internal server error", http.StatusInternalServerError)
+			respondError(w, r, "Internal server error", http.StatusInternalServerError)
 		}
 	} else if strings.Contains(acceptHeader, "text/html") {
 		respondHTML(w, r, params)
@@ -107,7 +106,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 
 func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
-	log.Debug("respondHTML", "ruid", GetRUID(r.Context()))
+	log.Info("respondHTML", "ruid", GetRUID(r.Context()), "code", params.Code)
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -116,14 +115,14 @@ func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 
 func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	jsonCounter.Inc(1)
-	log.Debug("respondJSON", "ruid", GetRUID(r.Context()))
+	log.Info("respondJSON", "ruid", GetRUID(r.Context()), "code", params.Code)
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(params)
 }
 
 func respondPlaintext(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	plaintextCounter.Inc(1)
-	log.Debug("respondPlaintext", "ruid", GetRUID(r.Context()))
+	log.Info("respondPlaintext", "ruid", GetRUID(r.Context()), "code", params.Code)
 	w.Header().Set("Content-Type", "text/plain")
 	strToWrite := "Code: " + fmt.Sprintf("%d", params.Code) + "\n"
 	strToWrite += "Message: " + string(params.Msg) + "\n"

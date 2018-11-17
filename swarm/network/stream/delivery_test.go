@@ -19,9 +19,7 @@ package stream
 import (
 	"bytes"
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"testing"
@@ -29,23 +27,32 @@ import (
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
+//Tests initializing a retrieve request
 func TestStreamerRetrieveRequest(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t)
+	regOpts := &RegistryOptions{
+		Retrieval: RetrievalClientOnly,
+		Syncing:   SyncingDisabled,
+	}
+	tester, streamer, _, teardown, err := newStreamerTester(t, regOpts)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	ctx := context.Background()
 	req := network.NewRequest(
@@ -55,16 +62,27 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	)
 	streamer.delivery.RequestFromPeers(ctx, req)
 
+	stream := NewStream(swarmChunkServerStreamName, "", true)
+
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Expects: []p2ptest.Expect{
-			{
+			{ //start expecting a subscription for RETRIEVE_REQUEST due to `RetrievalClientOnly`
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   stream,
+					History:  nil,
+					Priority: Top,
+				},
+				Peer: node.ID(),
+			},
+			{ //expect a retrieve request message for the given hash
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Addr:      hash0[:],
 					SkipCheck: true,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -74,38 +92,58 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	}
 }
 
+//Test requesting a chunk from a peer then issuing a "empty" OfferedHashesMsg (no hashes available yet)
+//Should time out as the peer does not have the chunk (no syncing happened previously)
 func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
-	tester, streamer, _, teardown, err := newStreamerTester(t)
+	tester, streamer, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval: RetrievalEnabled,
+		Syncing:   SyncingDisabled, //do no syncing
+	})
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
 	chunk := storage.NewChunk(storage.Address(hash0[:]), nil)
 
-	peer := streamer.getPeer(peerID)
+	peer := streamer.getPeer(node.ID())
 
+	stream := NewStream(swarmChunkServerStreamName, "", true)
+	//simulate pre-subscription to RETRIEVE_REQUEST stream on peer
 	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", false),
+		Stream:   stream,
 		History:  nil,
 		Priority: Top,
 	})
 
+	//test the exchange
 	err = tester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{ //first expect a subscription to the RETRIEVE_REQUEST stream
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   stream,
+					History:  nil,
+					Priority: Top,
+				},
+				Peer: node.ID(),
+			},
+		},
+	}, p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			{
+			{ //then the actual RETRIEVE_REQUEST....
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Addr: chunk.Address()[:],
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
-			{
+			{ //to which the peer responds with offered hashes
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: nil,
@@ -113,12 +151,14 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 					From:          0,
 					To:            0,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
 
-	expectedError := `exchange #0 "RetrieveRequestMsg": timed out`
+	//should fail with a timeout as the peer we are requesting
+	//the chunk from does not have the chunk
+	expectedError := `exchange #1 "RetrieveRequestMsg": timed out`
 	if err == nil || err.Error() != expectedError {
 		t.Fatalf("Expected error %v, got %v", expectedError, err)
 	}
@@ -127,16 +167,20 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 // upstream request server receives a retrieve Request and responds with
 // offered hashes or delivery if skipHash is set to true
 func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
-	tester, streamer, localStore, teardown, err := newStreamerTester(t)
+	tester, streamer, localStore, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval: RetrievalEnabled,
+		Syncing:   SyncingDisabled,
+	})
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	peerID := tester.IDs[0]
-	peer := streamer.getPeer(peerID)
+	node := tester.Nodes[0]
 
-	stream := NewStream(swarmChunkServerStreamName, "", false)
+	peer := streamer.getPeer(node.ID())
+
+	stream := NewStream(swarmChunkServerStreamName, "", true)
 
 	peer.handleSubscribeMsg(context.TODO(), &SubscribeMsg{
 		Stream:   stream,
@@ -152,6 +196,18 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
+		Expects: []p2ptest.Expect{
+			{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   stream,
+					History:  nil,
+					Priority: Top,
+				},
+				Peer: node.ID(),
+			},
+		},
+	}, p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
 			{
@@ -159,7 +215,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 				Msg: &RetrieveRequestMsg{
 					Addr: hash,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -175,7 +231,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					To:     32,
 					Stream: stream,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -200,7 +256,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					Addr:      hash,
 					SkipCheck: true,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -210,7 +266,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					Addr:  hash,
 					SData: hash,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	})
@@ -220,8 +276,91 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 }
 
+// if there is one peer in the Kademlia, RequestFromPeers should return it
+func TestRequestFromPeers(t *testing.T) {
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	delivery := NewDelivery(to, nil)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
+	peer := network.NewPeer(&network.BzzPeer{
+		BzzAddr:   network.RandomAddr(),
+		LightNode: false,
+		Peer:      protocolsPeer,
+	}, to)
+	to.On(peer)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
+
+	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
+	sp := &Peer{
+		Peer:     protocolsPeer,
+		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
+		streamer: r,
+	}
+	r.setPeer(sp)
+	req := network.NewRequest(
+		storage.Address(hash0[:]),
+		true,
+		&sync.Map{},
+	)
+	ctx := context.Background()
+	id, _, err := delivery.RequestFromPeers(ctx, req)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *id != dummyPeerID {
+		t.Fatalf("Expected an id, got %v", id)
+	}
+}
+
+// RequestFromPeers should not return light nodes
+func TestRequestFromPeersWithLightNode(t *testing.T) {
+	dummyPeerID := enode.HexID("3431c3939e1ee2a6345e976a8234f9870152d64879f30bc272a074f6859e75e8")
+
+	addr := network.RandomAddr()
+	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
+	delivery := NewDelivery(to, nil)
+
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
+	// setting up a lightnode
+	peer := network.NewPeer(&network.BzzPeer{
+		BzzAddr:   network.RandomAddr(),
+		LightNode: true,
+		Peer:      protocolsPeer,
+	}, to)
+	to.On(peer)
+	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
+	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
+	sp := &Peer{
+		Peer:     protocolsPeer,
+		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
+		streamer: r,
+	}
+	r.setPeer(sp)
+
+	req := network.NewRequest(
+		storage.Address(hash0[:]),
+		true,
+		&sync.Map{},
+	)
+
+	ctx := context.Background()
+	// making a request which should return with "no peer found"
+	_, _, err := delivery.RequestFromPeers(ctx, req)
+
+	expectedError := "no peer found"
+	if err.Error() != expectedError {
+		t.Fatalf("expected '%v', got %v", expectedError, err)
+	}
+}
+
 func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
-	tester, streamer, localStore, teardown, err := newStreamerTester(t)
+	tester, streamer, localStore, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
+	})
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
@@ -233,10 +372,11 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		}, nil
 	})
 
-	peerID := tester.IDs[0]
+	node := tester.Nodes[0]
 
+	//subscribe to custom stream
 	stream := NewStream("foo", "", true)
-	err = streamer.Subscribe(peerID, stream, NewRange(5, 8), Top)
+	err = streamer.Subscribe(node.ID(), stream, NewRange(5, 8), Top)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -247,27 +387,28 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Expects: []p2ptest.Expect{
-			{
+			{ //first expect subscription to the custom stream...
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream:   stream,
 					History:  NewRange(5, 8),
 					Priority: Top,
 				},
-				Peer: peerID,
+				Peer: node.ID(),
 			},
 		},
 	},
 		p2ptest.Exchange{
 			Label: "ChunkDelivery message",
 			Triggers: []p2ptest.Trigger{
-				{
+				{ //...then trigger a chunk delivery for the given chunk from peer in order for
+					//local node to get the chunk delivered
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
 						Addr:  chunkKey,
 						SData: chunkData,
 					},
-					Peer: peerID,
+					Peer: node.ID(),
 				},
 			},
 		})
@@ -314,10 +455,9 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-
-			id := ctx.Config.ID
-			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForID(id, addr)
+			node := ctx.Config.Node()
+			addr := network.NewAddr(node)
+			store, datadir, err := createTestLocalStorageForID(node.ID(), addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -336,9 +476,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			delivery := NewDelivery(kad, netStore)
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
-			})
+				Syncing:   SyncingDisabled,
+				Retrieval: RetrievalEnabled,
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
@@ -387,7 +529,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		//now we can actually upload a (random) file to the round-robin store
 		size := chunkCount * chunkSize
 		log.Debug("Storing data to file store")
-		fileHash, wait, err := roundRobinFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		fileHash, wait, err := roundRobinFileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		// wait until all chunks stored
 		if err != nil {
 			return err
@@ -400,20 +542,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		log.Debug("Waiting for kademlia")
 		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 			return err
-		}
-
-		//each of the nodes (except pivot node) subscribes to the stream of the next node
-		for j, node := range nodeIDs[0 : nodes-1] {
-			sid := nodeIDs[j+1]
-			item, ok := sim.NodeItem(node, bucketKeyRegistry)
-			if !ok {
-				return fmt.Errorf("No registry")
-			}
-			registry := item.(*Registry)
-			err = registry.Subscribe(sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
-			if err != nil {
-				return err
-			}
 		}
 
 		//get the pivot node's filestore
@@ -437,13 +565,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		disconnections := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+			simulation.NewPeerEventsFilter().Drop(),
 		)
 
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 					t.Fatal(d.Error)
 				}
 			}
@@ -502,9 +630,9 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			id := ctx.Config.ID
-			addr := network.NewAddrFromNodeID(id)
-			store, datadir, err := createTestLocalStorageForID(id, addr)
+			node := ctx.Config.Node()
+			addr := network.NewAddr(node)
+			store, datadir, err := createTestLocalStorageForID(node.ID(), addr)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -522,11 +650,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 			delivery := NewDelivery(kad, netStore)
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
-				DoSync:          true,
+				Syncing:         SyncingDisabled,
+				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
-			})
+			}, nil)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
@@ -568,13 +697,13 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		disconnections := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+			simulation.NewPeerEventsFilter().Drop(),
 		)
 
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 					b.Fatal(d.Error)
 				}
 			}
@@ -589,7 +718,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 			for i := 0; i < chunkCount; i++ {
 				// create actual size real chunks
 				ctx := context.TODO()
-				hash, wait, err := remoteFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+				hash, wait, err := remoteFileStore.Store(ctx, testutil.RandomReader(i, chunkSize), int64(chunkSize), false)
 				if err != nil {
 					b.Fatalf("expected no error. got %v", err)
 				}

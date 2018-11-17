@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -38,8 +38,8 @@ import (
 var (
 	currentNetworkID int
 	cnt              int
-	nodeMap          map[int][]discover.NodeID
-	kademlias        map[discover.NodeID]*Kademlia
+	nodeMap          map[int][]enode.ID
+	kademlias        map[enode.ID]*Kademlia
 )
 
 const (
@@ -70,7 +70,7 @@ func TestNetworkID(t *testing.T) {
 	//arbitrarily set the number of nodes. It could be any number
 	numNodes := 24
 	//the nodeMap maps all nodes (slice value) with the same network ID (key)
-	nodeMap = make(map[int][]discover.NodeID)
+	nodeMap = make(map[int][]enode.ID)
 	//set up the network and connect nodes
 	net, err := setupNetwork(numNodes)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestNetworkID(t *testing.T) {
 			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int, _ bool) bool {
 				found := false
 				for _, nd := range netIDGroup {
-					p := ToOverlayAddr(nd.Bytes())
+					p := nd.Bytes()
 					if bytes.Equal(p, addr.Address()) {
 						found = true
 					}
@@ -183,12 +183,11 @@ func setupNetwork(numnodes int) (net *simulations.Network, err error) {
 }
 
 func newServices() adapters.Services {
-	kademlias = make(map[discover.NodeID]*Kademlia)
-	kademlia := func(id discover.NodeID) *Kademlia {
+	kademlias = make(map[enode.ID]*Kademlia)
+	kademlia := func(id enode.ID) *Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := NewAddrFromNodeID(id)
 		params := NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -196,19 +195,19 @@ func newServices() adapters.Services {
 		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
-		kademlias[id] = NewKademlia(addr.Over(), params)
+		kademlias[id] = NewKademlia(id[:], params)
 		return kademlias[id]
 	}
 	return adapters.Services{
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			addr := NewAddrFromNodeID(ctx.Config.ID)
+			addr := NewAddr(ctx.Config.Node())
 			hp := NewHiveParams()
 			hp.Discovery = false
 			cnt++
 			//assign the network ID
 			currentNetworkID = cnt % NumberOfNets
 			if ok := nodeMap[currentNetworkID]; ok == nil {
-				nodeMap[currentNetworkID] = make([]discover.NodeID, 0)
+				nodeMap[currentNetworkID] = make([]enode.ID, 0)
 			}
 			//add this node to the group sharing the same network ID
 			nodeMap[currentNetworkID] = append(nodeMap[currentNetworkID], ctx.Config.ID)
@@ -224,7 +223,7 @@ func newServices() adapters.Services {
 	}
 }
 
-func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) {
+func watchSubscriptionEvents(ctx context.Context, id enode.ID, client *rpc.Client, errc chan error, quitC chan struct{}) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {

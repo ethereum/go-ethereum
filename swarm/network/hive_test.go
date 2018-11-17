@@ -39,8 +39,8 @@ func TestRegisterAndConnect(t *testing.T) {
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params, 1, nil)
 
-	id := s.IDs[0]
-	raddr := NewAddrFromNodeID(id)
+	node := s.Nodes[0]
+	raddr := NewAddr(node)
 	pp.Register(raddr)
 
 	// start the hive and wait for the connection
@@ -51,7 +51,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	defer pp.Stop()
 	// retrieve and broadcast
 	err = s.TestDisconnected(&p2ptest.Disconnect{
-		Peer:  s.IDs[0],
+		Peer:  s.Nodes[0].ID(),
 		Error: nil,
 	})
 
@@ -70,13 +70,16 @@ func TestHiveStatePersistance(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	store, err := state.NewDBStore(dir) //start the hive with an empty dbstore
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params, 5, store)
 
 	peers := make(map[string]bool)
-	for _, id := range s.IDs {
-		raddr := NewAddrFromNodeID(id)
+	for _, node := range s.Nodes {
+		raddr := NewAddr(node)
 		pp.Register(raddr)
 		peers[raddr.String()] = true
 	}
@@ -90,6 +93,9 @@ func TestHiveStatePersistance(t *testing.T) {
 	store.Close()
 
 	persistedStore, err := state.NewDBStore(dir) //start the hive with an empty dbstore
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	s1, pp := newHiveTester(t, params, 1, persistedStore)
 
@@ -102,7 +108,10 @@ func TestHiveStatePersistance(t *testing.T) {
 		i++
 		return true
 	})
-	if len(peers) != 0 || i != 5 {
-		t.Fatalf("invalid peers loaded")
+	if i != 5 {
+		t.Errorf("invalid number of entries: got %v, want %v", i, 5)
+	}
+	if len(peers) != 0 {
+		t.Fatalf("%d peers left over: %v", len(peers), peers)
 	}
 }

@@ -59,27 +59,29 @@ var (
 
 //constants for environment variables
 const (
-	SWARM_ENV_CHEQUEBOOK_ADDR      = "SWARM_CHEQUEBOOK_ADDR"
-	SWARM_ENV_ACCOUNT              = "SWARM_ACCOUNT"
-	SWARM_ENV_LISTEN_ADDR          = "SWARM_LISTEN_ADDR"
-	SWARM_ENV_PORT                 = "SWARM_PORT"
-	SWARM_ENV_NETWORK_ID           = "SWARM_NETWORK_ID"
-	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
-	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
-	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
-	SWARM_ENV_LIGHT_NODE_ENABLE    = "SWARM_LIGHT_NODE_ENABLE"
-	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
-	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
-	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
-	SWARM_ENV_CORS                 = "SWARM_CORS"
-	SWARM_ENV_BOOTNODES            = "SWARM_BOOTNODES"
-	SWARM_ENV_PSS_ENABLE           = "SWARM_PSS_ENABLE"
-	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
-	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
-	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
-	SWARM_ACCESS_PASSWORD          = "SWARM_ACCESS_PASSWORD"
-	GETH_ENV_DATADIR               = "GETH_DATADIR"
+	SWARM_ENV_CHEQUEBOOK_ADDR         = "SWARM_CHEQUEBOOK_ADDR"
+	SWARM_ENV_ACCOUNT                 = "SWARM_ACCOUNT"
+	SWARM_ENV_LISTEN_ADDR             = "SWARM_LISTEN_ADDR"
+	SWARM_ENV_PORT                    = "SWARM_PORT"
+	SWARM_ENV_NETWORK_ID              = "SWARM_NETWORK_ID"
+	SWARM_ENV_SWAP_ENABLE             = "SWARM_SWAP_ENABLE"
+	SWARM_ENV_SWAP_API                = "SWARM_SWAP_API"
+	SWARM_ENV_SYNC_DISABLE            = "SWARM_SYNC_DISABLE"
+	SWARM_ENV_SYNC_UPDATE_DELAY       = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_MAX_STREAM_PEER_SERVERS = "SWARM_ENV_MAX_STREAM_PEER_SERVERS"
+	SWARM_ENV_LIGHT_NODE_ENABLE       = "SWARM_LIGHT_NODE_ENABLE"
+	SWARM_ENV_DELIVERY_SKIP_CHECK     = "SWARM_DELIVERY_SKIP_CHECK"
+	SWARM_ENV_ENS_API                 = "SWARM_ENS_API"
+	SWARM_ENV_ENS_ADDR                = "SWARM_ENS_ADDR"
+	SWARM_ENV_CORS                    = "SWARM_CORS"
+	SWARM_ENV_BOOTNODES               = "SWARM_BOOTNODES"
+	SWARM_ENV_PSS_ENABLE              = "SWARM_PSS_ENABLE"
+	SWARM_ENV_STORE_PATH              = "SWARM_STORE_PATH"
+	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
+	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
+	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
+	GETH_ENV_DATADIR                  = "GETH_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -124,7 +126,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
 	//set the resolved config path (geth --datadir)
-	config.Path = stack.InstanceDir()
+	config.Path = expandPath(stack.InstanceDir())
 	//finally, initialize the configuration
 	config.Init(prvkey)
 	//configuration phase completed here
@@ -175,14 +177,18 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
-		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkID = uint64(id)
+		id, err := strconv.ParseUint(networkid, 10, 64)
+		if err != nil {
+			utils.Fatalf("invalid cli flag %s: %v", SwarmNetworkIdFlag.Name, err)
+		}
+		if id != 0 {
+			currentConfig.NetworkID = id
 		}
 	}
 
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		if datadir := ctx.GlobalString(utils.DataDirFlag.Name); datadir != "" {
-			currentConfig.Path = datadir
+			currentConfig.Path = expandPath(datadir)
 		}
 	}
 
@@ -207,6 +213,9 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncUpdateDelay = d
 	}
 
+	// any value including 0 is acceptable
+	currentConfig.MaxStreamPeerServers = ctx.GlobalInt(SwarmMaxStreamPeerServersFlag.Name)
+
 	if ctx.GlobalIsSet(SwarmLightNodeEnabled.Name) {
 		currentConfig.LightNodeEnabled = true
 	}
@@ -226,6 +235,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		if len(ensAPIs) == 1 && ensAPIs[0] == "" {
 			ensAPIs = nil
 		}
+		for i := range ensAPIs {
+			ensAPIs[i] = expandPath(ensAPIs[i])
+		}
+
 		currentConfig.EnsAPIs = ensAPIs
 	}
 
@@ -262,13 +275,17 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
-		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkID = uint64(id)
+		id, err := strconv.ParseUint(networkid, 10, 64)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_NETWORK_ID, err)
+		}
+		if id != 0 {
+			currentConfig.NetworkID = id
 		}
 	}
 
 	if datadir := os.Getenv(GETH_ENV_DATADIR); datadir != "" {
-		currentConfig.Path = datadir
+		currentConfig.Path = expandPath(datadir)
 	}
 
 	bzzport := os.Getenv(SWARM_ENV_PORT)
@@ -281,33 +298,50 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if swapenable := os.Getenv(SWARM_ENV_SWAP_ENABLE); swapenable != "" {
-		if swap, err := strconv.ParseBool(swapenable); err != nil {
-			currentConfig.SwapEnabled = swap
+		swap, err := strconv.ParseBool(swapenable)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SWAP_ENABLE, err)
 		}
+		currentConfig.SwapEnabled = swap
 	}
 
 	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
-		if sync, err := strconv.ParseBool(syncdisable); err != nil {
-			currentConfig.SyncEnabled = !sync
+		sync, err := strconv.ParseBool(syncdisable)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_DISABLE, err)
 		}
+		currentConfig.SyncEnabled = !sync
 	}
 
 	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
-		if skipCheck, err := strconv.ParseBool(v); err != nil {
+		skipCheck, err := strconv.ParseBool(v)
+		if err != nil {
 			currentConfig.DeliverySkipCheck = skipCheck
 		}
 	}
 
 	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
-		if d, err := time.ParseDuration(v); err != nil {
-			currentConfig.SyncUpdateDelay = d
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_SYNC_UPDATE_DELAY, err)
 		}
+		currentConfig.SyncUpdateDelay = d
+	}
+
+	if max := os.Getenv(SWARM_ENV_MAX_STREAM_PEER_SERVERS); max != "" {
+		m, err := strconv.Atoi(max)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_MAX_STREAM_PEER_SERVERS, err)
+		}
+		currentConfig.MaxStreamPeerServers = m
 	}
 
 	if lne := os.Getenv(SWARM_ENV_LIGHT_NODE_ENABLE); lne != "" {
-		if lightnode, err := strconv.ParseBool(lne); err != nil {
-			currentConfig.LightNodeEnabled = lightnode
+		lightnode, err := strconv.ParseBool(lne)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_LIGHT_NODE_ENABLE, err)
 		}
+		currentConfig.LightNodeEnabled = lightnode
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {

@@ -23,9 +23,11 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-const testDataSize = 0x1000000
+const testDataSize = 0x0001000
 
 func TestFileStorerandom(t *testing.T) {
 	testFileStoreRandom(false, t)
@@ -49,9 +51,9 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	reader, slice := GenerateRandomData(testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
@@ -63,13 +65,13 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
-	resultSlice := make([]byte, len(slice))
+	resultSlice := make([]byte, testDataSize)
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
 		t.Fatalf("Retrieve error: %v", err)
 	}
-	if n != len(slice) {
-		t.Fatalf("Slice size error got %d, expected %d.", n, len(slice))
+	if n != testDataSize {
+		t.Fatalf("Slice size error got %d, expected %d.", n, testDataSize)
 	}
 	if !bytes.Equal(slice, resultSlice) {
 		t.Fatalf("Comparison error.")
@@ -114,9 +116,9 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
-	reader, slice := GenerateRandomData(testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

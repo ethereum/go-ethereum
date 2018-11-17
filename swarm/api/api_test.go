@@ -17,6 +17,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -431,5 +432,71 @@ func TestDecryptOrigin(t *testing.T) {
 		if err != v.expectError {
 			t.Fatalf("should fail with %v, got %v", v.expectError, err)
 		}
+	}
+}
+
+func TestDetectContentType(t *testing.T) {
+	for _, tc := range []struct {
+		file                string
+		content             string
+		expectedContentType string
+	}{
+		{
+			file:                "file-with-correct-css.css",
+			content:             "body {background-color: orange}",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+		{
+			file:                "empty-file.css",
+			content:             "",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+		{
+			file:                "empty-file.pdf",
+			content:             "",
+			expectedContentType: "application/pdf",
+		},
+		{
+			file:                "empty-file.md",
+			content:             "",
+			expectedContentType: "text/markdown; charset=utf-8",
+		},
+		{
+			file:                "empty-file-with-unknown-content.strangeext",
+			content:             "",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-with-unknown-extension-and-content.strangeext",
+			content:             "Lorem Ipsum",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-no-extension",
+			content:             "Lorem Ipsum",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-no-extension-no-content",
+			content:             "",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "css-file-with-html-inside.css",
+			content:             "<!doctype html><html><head></head><body></body></html>",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			detected, err := DetectContentType(tc.file, bytes.NewReader([]byte(tc.content)))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if detected != tc.expectedContentType {
+				t.Fatalf("File: %s, Expected mime type %s, got %s", tc.file, tc.expectedContentType, detected)
+			}
+
+		})
 	}
 }
