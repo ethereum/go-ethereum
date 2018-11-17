@@ -289,10 +289,11 @@ func (self *worker) update() {
 
 			// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
-			self.uncleMu.Lock()
-			self.possibleUncles[ev.Block.Hash()] = ev.Block
-			self.uncleMu.Unlock()
-
+			if self.config.XDPoS == nil {
+				self.uncleMu.Lock()
+				self.possibleUncles[ev.Block.Hash()] = ev.Block
+				self.uncleMu.Unlock()
+			}
 			// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
@@ -447,13 +448,15 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		createdAt: time.Now(),
 	}
 
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			work.family.Add(uncle.Hash())
+	if self.config.XDPoS == nil {
+		// when 08 is processed ancestors contain 07 (quick block)
+		for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
+			for _, uncle := range ancestor.Uncles() {
+				work.family.Add(uncle.Hash())
+			}
+			work.family.Add(ancestor.Hash())
+			work.ancestors.Add(ancestor.Hash())
 		}
-		work.family.Add(ancestor.Hash())
-		work.ancestors.Add(ancestor.Hash())
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -608,22 +611,24 @@ func (self *worker) commitNewWork() {
 		uncles    []*types.Header
 		badUncles []common.Hash
 	)
-	for hash, uncle := range self.possibleUncles {
-		if len(uncles) == 2 {
-			break
-		}
-		if err := self.commitUncle(work, uncle.Header()); err != nil {
-			log.Trace("Bad uncle found and will be removed", "hash", hash)
-			log.Trace(fmt.Sprint(uncle))
+	if self.config.XDPoS == nil {
+		for hash, uncle := range self.possibleUncles {
+			if len(uncles) == 2 {
+				break
+			}
+			if err := self.commitUncle(work, uncle.Header()); err != nil {
+				log.Trace("Bad uncle found and will be removed", "hash", hash)
+				log.Trace(fmt.Sprint(uncle))
 
-			badUncles = append(badUncles, hash)
-		} else {
-			log.Debug("Committing new uncle to block", "hash", hash)
-			uncles = append(uncles, uncle.Header())
+				badUncles = append(badUncles, hash)
+			} else {
+				log.Debug("Committing new uncle to block", "hash", hash)
+				uncles = append(uncles, uncle.Header())
+			}
 		}
-	}
-	for _, hash := range badUncles {
-		delete(self.possibleUncles, hash)
+		for _, hash := range badUncles {
+			delete(self.possibleUncles, hash)
+		}
 	}
 	// Create the new block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
