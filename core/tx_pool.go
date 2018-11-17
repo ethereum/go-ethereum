@@ -605,7 +605,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 
-	if tx.To() != nil && !tx.IsSpecialTransaction() {
+	if tx.To() == nil || (tx.To() != nil && !tx.IsSpecialTransaction()) {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err
