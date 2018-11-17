@@ -564,7 +564,7 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	}
 	var req packet
 	switch ptype := sigdata[0]; ptype {
-	case pingXDCt:
+	case pingXDC:
 		req = new(ping)
 	case pongPacket:
 		req = new(pong)

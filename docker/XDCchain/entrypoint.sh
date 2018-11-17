@@ -28,7 +28,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID; do
+           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -139,6 +139,11 @@ else
   echo "WS_SECRET not set, will not report to netstats server."
 fi
 
+# annonce txs
+if [[ ! -z $ANNOUNCE_TXS ]]; then
+  params="$params --announce-txs"
+fi
+
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
 
@@ -151,7 +156,7 @@ exec XDC $params \
   --identity $IDENTITY \
   --password ./password \
   --port 30303 \
-  --maxpeers 50 \
+  --maxpeers 25 \
   --txpool.globalqueue 5000 \
   --txpool.globalslots 5000 \
   --rpc \
