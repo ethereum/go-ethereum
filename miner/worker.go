@@ -658,7 +658,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 
 	var coalescedLogs []*types.Log
-
 	// first priority for special Txs
 	for _, tx := range specialTxs {
 		if gp.Gas() < params.TxGas && tx.Gas() > 0 {
@@ -678,6 +677,11 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		nonce := env.state.GetNonce(from)
+		if nonce != tx.Nonce() {
+			log.Trace("Skipping account with special transaction invalide nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", tx.To())
+			continue
+		}
 		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrNonceTooLow:
@@ -687,7 +691,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
-
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -699,7 +702,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			log.Debug("Add Special Transaction failed, account skipped", "hash", tx.Hash(), "sender", from, "nonce", tx.Nonce(), "to", tx.To(), "err", err)
 		}
 	}
-
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if gp.Gas() < params.TxGas {
@@ -720,13 +722,24 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
-
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
-
+		nonce := env.state.GetNonce(from)
+		if nonce > tx.Nonce() {
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+			continue
+		}
+		if nonce < tx.Nonce() {
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+			continue
+		}
 		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrGasLimitReached:
@@ -757,7 +770,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			txs.Shift()
 		}
 	}
-
 	if len(coalescedLogs) > 0 || env.tcount > 0 {
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
