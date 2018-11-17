@@ -647,7 +647,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, err
 	}
 	from, _ := types.Sender(pool.signer, tx) // already validated
-	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) {
+	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
 		return pool.promoteSpecialTx(from, tx)
 	}
 	// If the transaction pool is full, discard underpriced transactions
@@ -813,20 +813,7 @@ func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction)
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
-	broadcastTxs := types.Transactions{}
-	for i := tx.Nonce() - 1; i > 0; i-- {
-		before := list.txs.Get(i)
-		if before == nil || before.IsSpecialTransaction() {
-			break
-		}
-		broadcastTxs = append(broadcastTxs, before)
-	}
-	broadcastTxs = append(broadcastTxs, tx)
-	go func() {
-		for _, btx := range broadcastTxs {
-			pool.txFeed.Send(TxPreEvent{btx})
-		}
-	}()
+	go pool.txFeed.Send(TxPreEvent{tx})
 	return true, nil
 }
 
