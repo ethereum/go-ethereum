@@ -1,3 +1,4 @@
+
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -55,7 +56,7 @@ const (
 	// timeout waiting for M1
 	waitPeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 60
+	waitPeriodCheckpoint = 30
 )
 
 // Agent can register themself with the worker
@@ -132,30 +133,30 @@ type worker struct {
 	// atomic status counters
 	mining                int32
 	atWork                int32
-	commitTxWhenNotMining bool
+	announceTxs           bool
 	lastParentBlockCommit string
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, commitTxWhenNotMining bool) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, announceTxs bool) *worker {
 	worker := &worker{
-		config:                config,
-		engine:                engine,
-		eth:                   eth,
-		mux:                   mux,
-		txCh:                  make(chan core.TxPreEvent, txChanSize),
-		chainHeadCh:           make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:           make(chan core.ChainSideEvent, chainSideChanSize),
-		chainDb:               eth.ChainDb(),
-		recv:                  make(chan *Result, resultQueueSize),
-		chain:                 eth.BlockChain(),
-		proc:                  eth.BlockChain().Validator(),
-		possibleUncles:        make(map[common.Hash]*types.Block),
-		coinbase:              coinbase,
-		agents:                make(map[Agent]struct{}),
-		unconfirmed:           newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		commitTxWhenNotMining: commitTxWhenNotMining,
+		config:         config,
+		engine:         engine,
+		eth:            eth,
+		mux:            mux,
+		txCh:           make(chan core.TxPreEvent, txChanSize),
+		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
+		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
+		chainDb:        eth.ChainDb(),
+		recv:           make(chan *Result, resultQueueSize),
+		chain:          eth.BlockChain(),
+		proc:           eth.BlockChain().Validator(),
+		possibleUncles: make(map[common.Hash]*types.Block),
+		coinbase:       coinbase,
+		agents:         make(map[Agent]struct{}),
+		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		announceTxs:    announceTxs,
 	}
-	if worker.commitTxWhenNotMining {
+	if worker.announceTxs {
 		// Subscribe TxPreEvent for tx pool
 		worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
 	}
@@ -253,7 +254,7 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	if self.commitTxWhenNotMining {
+	if self.announceTxs {
 		defer self.txSub.Unsubscribe()
 	}
 	defer self.chainHeadSub.Unsubscribe()
@@ -486,7 +487,7 @@ func (self *worker) commitNewWork() {
 	if parent.Hash().Hex() == self.lastParentBlockCommit {
 		return
 	}
-	if !self.commitTxWhenNotMining && atomic.LoadInt32(&self.mining) == 0 {
+	if !self.announceTxs && atomic.LoadInt32(&self.mining) == 0 {
 		return
 	}
 
@@ -497,7 +498,7 @@ func (self *worker) commitNewWork() {
 		if self.config.XDPoS != nil {
 			// get masternodes set from latest checkpoint
 			c := self.engine.(*XDPoS.XDPoS)
-			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header())
+			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(),self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
@@ -518,7 +519,7 @@ func (self *worker) commitNewWork() {
 				// Check nearest checkpoint block in hop range.
 				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
 				if uint64(h) >= nearest {
-					gap += waitPeriodCheckpoint
+					gap = waitPeriodCheckpoint * int64(h)
 				}
 				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
 				waitedTime := time.Now().Unix() - parent.Header().Time.Int64()
@@ -553,7 +554,7 @@ func (self *worker) commitNewWork() {
 		header.Coinbase = self.coinbase
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
+		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
@@ -617,9 +618,8 @@ func (self *worker) commitNewWork() {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
-	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
@@ -741,7 +741,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
 		case nil:

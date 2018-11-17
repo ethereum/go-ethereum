@@ -120,7 +120,7 @@ var (
 		//utils.GpoPercentileFlag,
 		//utils.ExtraDataFlag,
 		configFileFlag,
-		utils.CommitTxWhenNotMiningFlag,
+		utils.AnnounceTxsFlag,
 	}
 
 	rpcFlags = []cli.Flag{
