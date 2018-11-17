@@ -92,7 +92,7 @@ func newTester() *fetcherTester {
 		blocks: map[common.Hash]*types.Block{genesis.Hash(): genesis},
 		drops:  make(map[string]bool),
 	}
-	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
+	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.broadcastBlock, tester.chainHeight, tester.insertBlock, tester.prepareBlock, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
@@ -123,7 +123,7 @@ func (f *fetcherTester) chainHeight() uint64 {
 	return f.blocks[f.hashes[len(f.hashes)-1]].NumberU64()
 }
 
-// insertChain injects a new blocks into the simulated chain.
+// insertBlock injects a new blocks into the simulated chain.
 func (f *fetcherTester) insertChain(blocks types.Blocks) (int, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -142,6 +142,31 @@ func (f *fetcherTester) insertChain(blocks types.Blocks) (int, error) {
 		f.blocks[block.Hash()] = block
 	}
 	return 0, nil
+}
+
+// insertBlock injects a new blocks into the simulated chain.
+func (f *fetcherTester) insertBlock(block *types.Block) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	// Make sure the parent in known
+	if _, ok := f.blocks[block.ParentHash()]; !ok {
+		return errors.New("unknown parent")
+	}
+	// Discard any new blocks if the same height already exists
+	if block.NumberU64() <= f.blocks[f.hashes[len(f.hashes)-1]].NumberU64() {
+		return nil
+	}
+	// Otherwise build our current chain
+	f.hashes = append(f.hashes, block.Hash())
+	f.blocks[block.Hash()] = block
+
+	return nil
+}
+
+// insertBlock injects a new blocks into the simulated chain.
+func (f *fetcherTester) prepareBlock(block *types.Block) error {
+	return nil
 }
 
 // dropPeer is an emulator for the peer removal, simply accumulating the various
@@ -288,7 +313,7 @@ func testSequentialAnnouncements(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks until all are imported
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -329,7 +354,7 @@ func testConcurrentAnnouncements(t *testing.T, protocol int) {
 	}
 	// Iteratively announce blocks until all are imported
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -369,7 +394,7 @@ func testOverlappingAnnouncements(t *testing.T, protocol int) {
 	for i := 0; i < overlap; i++ {
 		imported <- nil
 	}
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -446,7 +471,7 @@ func testRandomArrivalImport(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -480,7 +505,7 @@ func testQueueGapFill(t *testing.T, protocol int) {
 
 	// Iteratively announce blocks, skipping one entry
 	imported := make(chan *types.Block, len(hashes)-1)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -512,15 +537,15 @@ func testImportDeduplication(t *testing.T, protocol int) {
 	bodyFetcher := tester.makeBodyFetcher("valid", blocks, 0)
 
 	counter := uint32(0)
-	tester.fetcher.insertChain = func(blocks types.Blocks) (int, error) {
-		atomic.AddUint32(&counter, uint32(len(blocks)))
-		return tester.insertChain(blocks)
+	tester.fetcher.insertBlock = func(block *types.Block) error {
+		atomic.AddUint32(&counter, uint32(1))
+		return tester.insertBlock(block)
 	}
 	// Instrument the fetching and imported events
 	fetching := make(chan []common.Hash)
 	imported := make(chan *types.Block, len(hashes)-1)
 	tester.fetcher.fetchingHook = func(hashes []common.Hash) { fetching <- hashes }
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -632,7 +657,7 @@ func testInvalidNumberAnnouncement(t *testing.T, protocol int) {
 	badBodyFetcher := tester.makeBodyFetcher("bad", blocks, 0)
 
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -687,7 +712,7 @@ func testEmptyBlockShortCircuit(t *testing.T, protocol int) {
 	tester.fetcher.completingHook = func(hashes []common.Hash) { completing <- hashes }
 
 	imported := make(chan *types.Block)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -720,7 +745,7 @@ func testHashMemoryExhaustionAttack(t *testing.T, protocol int) {
 	tester := newTester()
 
 	imported, announces := make(chan *types.Block), int32(0)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}
@@ -770,7 +795,7 @@ func TestBlockMemoryExhaustionAttack(t *testing.T) {
 	tester := newTester()
 
 	imported, enqueued := make(chan *types.Block), int32(0)
-	tester.fetcher.importedHook = func(block *types.Block) error {
+	tester.fetcher.signHook = func(block *types.Block) error {
 		imported <- block
 		return nil
 	}

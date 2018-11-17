@@ -310,7 +310,6 @@ func (self *worker) update() {
 					self.commitNewWork()
 				}
 			}
-			// System stopped
 		case <-self.chainHeadSub.Err():
 			return
 		case <-self.chainSideSub.Err():
@@ -545,7 +544,6 @@ func (self *worker) commitNewWork() {
 			}
 		}
 	}
-
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
 		tstamp = parent.Time().Int64() + 1
