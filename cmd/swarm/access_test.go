@@ -57,10 +57,10 @@ func TestACT(t *testing.T) {
 		name string
 		f    func(t *testing.T)
 	}{
-		{"PK", tTestAccessPK},
-		{"ACT", tTestAccessACT},
-		{"ACTScale", tTestAccessACTScale},
-		{"Password", tTestAccessPassword},
+		{"Password", testPassword},
+		{"PK", testPK},
+		{"ACTWithoutBogus", testACTWithoutBogus},
+		{"ACTWithBogus", testACTWithBogus},
 	}
 
 	cluster = newTestCluster(t, clusterSize)
@@ -71,12 +71,12 @@ func TestACT(t *testing.T) {
 	}
 }
 
-// TestAccessPassword tests for the correct creation of an ACT manifest protected by a password.
+// testPassword tests for the correct creation of an ACT manifest protected by a password.
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
 // The parties participating - node (publisher), uploads to second node then disappears. Content which was uploaded
 // is then fetched through 2nd node. since the tested code is not key-aware - we can just
 // fetch from the 2nd node using HTTP BasicAuth
-func tTestAccessPassword(t *testing.T) {
+func testPassword(t *testing.T) {
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
 
@@ -223,12 +223,12 @@ func tTestAccessPassword(t *testing.T) {
 	up.ExpectExit()
 }
 
-// TestAccessPK tests for the correct creation of an ACT manifest between two parties (publisher and grantee).
+// testPK tests for the correct creation of an ACT manifest between two parties (publisher and grantee).
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
 // The parties participating - node (publisher), uploads to second node (which is also the grantee) then disappears.
 // Content which was uploaded is then fetched through the grantee's http proxy. Since the tested code is private-key aware,
 // the test will fail if the proxy's given private key is not granted on the ACT.
-func tTestAccessPK(t *testing.T) {
+func testPK(t *testing.T) {
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
 
@@ -360,22 +360,22 @@ func tTestAccessPK(t *testing.T) {
 	}
 }
 
-// TestAccessACT tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
-func tTestAccessACT(t *testing.T) {
-	testAccessACT(t, 0)
+// testACTWithoutBogus tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
+func testACTWithoutBogus(t *testing.T) {
+	testACT(t, 0)
 }
 
-// TestAccessACTScale tests the creation of the ACT manifest end-to-end, with 1000 bogus entries (i.e. 1000 EC keys + default scenario = 3 nodes 1 unauthorized = 1003 keys in the ACT manifest)
-func tTestAccessACTScale(t *testing.T) {
-	testAccessACT(t, 1000)
+// testACTWithBogus tests the creation of the ACT manifest end-to-end, with 100 bogus entries (i.e. 100 EC keys + default scenario = 3 nodes 1 unauthorized = 103 keys in the ACT manifest)
+func testACTWithBogus(t *testing.T) {
+	testACT(t, 100)
 }
 
-// TestAccessACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
+// testACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
 // set and also protects the ACT with a password. the third node should fail decoding the reference as it will not be granted access.
 // the third node then then tries to download using a correct password (and succeeds) then uses a wrong password and fails.
 // the publisher uploads through one of the nodes then disappears.
-func testAccessACT(t *testing.T, bogusEntries int) {
+func testACT(t *testing.T, bogusEntries int) {
 	var uploadThroughNode = cluster.Nodes[0]
 	client := swarmapi.NewClient(uploadThroughNode.URL)
 

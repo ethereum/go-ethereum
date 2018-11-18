@@ -41,16 +41,20 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-func TestCLI(t *testing.T) {
+func TestSwarmUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	cases := []struct {
 		name string
 		f    func(t *testing.T)
 	}{
-		{"SwarmUp", tTestCLISwarmUp},
-		{"SwarmUpEncrypted", tTestCLISwarmUpEncrypted},
-		{"SwarmUpRecursive", tTestCLISwarmUpRecursive},
-		{"SwarmUpEncryptedRecursive", tTestCLISwarmUpEncryptedRecursive},
-		{"SwarmUpDefaultPath", tTestCLISwarmUpDefaultPath},
+		{"NoEncryption", testNoEncryption},
+		{"Encrypted", testEncrypted},
+		{"RecursiveNoEncryption", testRecursiveNoEncryption},
+		{"RecursiveEncrypted", testRecursiveEncrypted},
+		{"DefaultPathAll", testDefaultPathAll},
 	}
 
 	cluster = newTestCluster(t, clusterSize)
@@ -61,38 +65,27 @@ func TestCLI(t *testing.T) {
 	}
 }
 
-// TestCLISwarmUp tests that running 'swarm up' makes the resulting file
+// testNoEncryption tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
-func tTestCLISwarmUp(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-
-	testCLISwarmUp(false, t)
-}
-func tTestCLISwarmUpRecursive(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	testCLISwarmUpRecursive(false, t)
+func testNoEncryption(t *testing.T) {
+	testDefault(false, t)
 }
 
-// TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
+// testEncrypted tests that running 'swarm up --encrypted' makes the resulting file
 // available from all nodes via the HTTP API
-func tTestCLISwarmUpEncrypted(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	testCLISwarmUp(true, t)
-}
-func tTestCLISwarmUpEncryptedRecursive(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	testCLISwarmUpRecursive(true, t)
+func testEncrypted(t *testing.T) {
+	testDefault(true, t)
 }
 
-func testCLISwarmUp(toEncrypt bool, t *testing.T) {
+func testRecursiveNoEncryption(t *testing.T) {
+	testRecursive(false, t)
+}
+
+func testRecursiveEncrypted(t *testing.T) {
+	testRecursive(true, t)
+}
+
+func testDefault(toEncrypt bool, t *testing.T) {
 	tmpFileName := testutil.TempFileWithContent(t, data)
 	defer os.Remove(tmpFileName)
 
@@ -197,7 +190,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	}
 }
 
-func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
+func testRecursive(toEncrypt bool, t *testing.T) {
 	tmpUploadDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
@@ -285,19 +278,16 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	}
 }
 
-// TestCLISwarmUpDefaultPath tests swarm recursive upload with relative and absolute
+// testDefaultPathAll tests swarm recursive upload with relative and absolute
 // default paths and with encryption.
-func tTestCLISwarmUpDefaultPath(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip()
-	}
-	testCLISwarmUpDefaultPath(false, false, t)
-	testCLISwarmUpDefaultPath(false, true, t)
-	testCLISwarmUpDefaultPath(true, false, t)
-	testCLISwarmUpDefaultPath(true, true, t)
+func testDefaultPathAll(t *testing.T) {
+	testDefaultPath(false, false, t)
+	testDefaultPath(false, true, t)
+	testDefaultPath(true, false, t)
+	testDefaultPath(true, true, t)
 }
 
-func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
+func testDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
 	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
 	if err != nil {
 		t.Fatal(err)

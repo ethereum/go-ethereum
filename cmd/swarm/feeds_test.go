@@ -36,7 +36,6 @@ import (
 )
 
 func TestCLIFeedUpdate(t *testing.T) {
-
 	srv := swarmhttp.NewTestSwarmServer(t, func(api *api.API) swarmhttp.TestServer {
 		return swarmhttp.NewServer(api, "")
 	}, nil)
@@ -44,7 +43,6 @@ func TestCLIFeedUpdate(t *testing.T) {
 	defer srv.Close()
 
 	// create a private key file for signing
-
 	privkeyHex := "0000000000000000000000000000000000000000000000000000000000001979"
 	privKey, _ := crypto.HexToECDSA(privkeyHex)
 	address := crypto.PubkeyToAddress(privKey.PublicKey)
