@@ -31,8 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	swarmapi "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/mattn/go-colorable"
 )
@@ -42,16 +41,36 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
+func TestCLI(t *testing.T) {
+	cases := []struct {
+		name string
+		f    func(t *testing.T)
+	}{
+		{"SwarmUp", tTestCLISwarmUp},
+		{"SwarmUpEncrypted", tTestCLISwarmUpEncrypted},
+		{"SwarmUpRecursive", tTestCLISwarmUpRecursive},
+		{"SwarmUpEncryptedRecursive", tTestCLISwarmUpEncryptedRecursive},
+		{"SwarmUpDefaultPath", tTestCLISwarmUpDefaultPath},
+	}
+
+	cluster = newTestCluster(t, clusterSize)
+	defer cluster.Shutdown()
+
+	for _, tc := range cases {
+		t.Run(tc.name, tc.f)
+	}
+}
+
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
-func TestCLISwarmUp(t *testing.T) {
+func tTestCLISwarmUp(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
 
 	testCLISwarmUp(false, t)
 }
-func TestCLISwarmUpRecursive(t *testing.T) {
+func tTestCLISwarmUpRecursive(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
@@ -60,13 +79,13 @@ func TestCLISwarmUpRecursive(t *testing.T) {
 
 // TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
 // available from all nodes via the HTTP API
-func TestCLISwarmUpEncrypted(t *testing.T) {
+func tTestCLISwarmUpEncrypted(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
 	testCLISwarmUp(true, t)
 }
-func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
+func tTestCLISwarmUpEncryptedRecursive(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
@@ -74,10 +93,6 @@ func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
 }
 
 func testCLISwarmUp(toEncrypt bool, t *testing.T) {
-	log.Info("starting 3 node cluster")
-	cluster := newTestCluster(t, 3)
-	defer cluster.Shutdown()
-
 	tmpFileName := testutil.TempFileWithContent(t, data)
 	defer os.Remove(tmpFileName)
 
@@ -183,10 +198,6 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 }
 
 func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
-	fmt.Println("starting 3 node cluster")
-	cluster := newTestCluster(t, 3)
-	defer cluster.Shutdown()
-
 	tmpUploadDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +264,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 
 			switch mode := fi.Mode(); {
 			case mode.IsRegular():
-				if file, err := swarm.Open(path.Join(tmpDownload, v.Name())); err != nil {
+				if file, err := swarmapi.Open(path.Join(tmpDownload, v.Name())); err != nil {
 					t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
 				} else {
 					ff := make([]byte, len(data))
@@ -276,7 +287,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 
 // TestCLISwarmUpDefaultPath tests swarm recursive upload with relative and absolute
 // default paths and with encryption.
-func TestCLISwarmUpDefaultPath(t *testing.T) {
+func tTestCLISwarmUpDefaultPath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip()
 	}
@@ -287,9 +298,6 @@ func TestCLISwarmUpDefaultPath(t *testing.T) {
 }
 
 func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
-	defer srv.Close()
-
 	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
 	if err != nil {
 		t.Fatal(err)
@@ -312,7 +320,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 
 	args := []string{
 		"--bzzapi",
-		srv.URL,
+		cluster.Nodes[0].URL,
 		"--recursive",
 		"--defaultpath",
 		defaultPath,
@@ -329,7 +337,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	up.ExpectExit()
 	hash := matches[0]
 
-	client := swarm.NewClient(srv.URL)
+	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
 	m, isEncrypted, err := client.DownloadManifest(hash)
 	if err != nil {
