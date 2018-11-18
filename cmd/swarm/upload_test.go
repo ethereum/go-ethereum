@@ -46,6 +46,8 @@ func TestSwarmUp(t *testing.T) {
 		t.Skip()
 	}
 
+	initCluster(t)
+
 	cases := []struct {
 		name string
 		f    func(t *testing.T)
@@ -56,9 +58,6 @@ func TestSwarmUp(t *testing.T) {
 		{"RecursiveEncrypted", testRecursiveEncrypted},
 		{"DefaultPathAll", testDefaultPathAll},
 	}
-
-	cluster = newTestCluster(t, clusterSize)
-	defer cluster.Shutdown()
 
 	for _, tc := range cases {
 		t.Run(tc.name, tc.f)

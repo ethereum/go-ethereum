@@ -28,7 +28,9 @@ import (
 	gorand "math/rand"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,11 +50,24 @@ const (
 
 var DefaultCurve = crypto.S256()
 
-var cluster *testCluster
-
 const clusterSize = 3
 
+var clusteronce sync.Once
+var cluster *testCluster
+
+func initCluster(t *testing.T) {
+	clusteronce.Do(func() {
+		cluster = newTestCluster(t, clusterSize)
+	})
+}
+
 func TestACT(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	initCluster(t)
+
 	cases := []struct {
 		name string
 		f    func(t *testing.T)
@@ -62,9 +77,6 @@ func TestACT(t *testing.T) {
 		{"ACTWithoutBogus", testACTWithoutBogus},
 		{"ACTWithBogus", testACTWithBogus},
 	}
-
-	cluster = newTestCluster(t, clusterSize)
-	defer cluster.Shutdown()
 
 	for _, tc := range cases {
 		t.Run(tc.name, tc.f)
