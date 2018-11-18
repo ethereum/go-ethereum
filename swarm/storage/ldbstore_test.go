@@ -344,17 +344,18 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	// below max ronud
-	cap := defaultMaxGCRound / 2
+	initialCap := defaultMaxGCRound / 100
+	cap := initialCap / 2
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 
 	// at max round
-	cap = defaultMaxGCRound
+	cap = initialCap
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 
 	// more than max around, not on threshold
-	cap = defaultMaxGCRound * 1.1
+	cap = initialCap + 500
 	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
 	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
 
@@ -578,7 +579,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbageAccessUnlikeIndex tests garbage collection where accesscount differs from indexcount
 func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 
-	capacity := defaultMaxGCRound * 2
+	capacity := defaultMaxGCRound / 100 * 2
 	n := capacity - 1
 
 	ldb, cleanup := newLDBStore(t)
