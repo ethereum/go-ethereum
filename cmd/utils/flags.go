@@ -115,6 +115,10 @@ var (
 		Name:  "announce-txs",
 		Usage: "Always commit transactions",
 	}
+	StoreRewardFlag = cli.BoolFlag{
+		Name:  "store-reward",
+		Usage: "Store reward to file",
+	}
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -1081,6 +1085,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
+		cfg.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
+		if _, err := os.Stat(cfg.StoreRewardFolder); os.IsNotExist(err) {
+			os.Mkdir(cfg.StoreRewardFolder, os.ModePerm)
+		}
+	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):

@@ -372,17 +372,17 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.XDCValidator, signe
 }
 
 // Calculate reward for holders.
-func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.XDCValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) error {
+func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.XDCValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
 	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
 	if err != nil {
-		return err
+		return err, nil
 	}
 	if len(rewards) > 0 {
 		for holder, reward := range rewards {
 			state.AddBalance(holder, reward)
 		}
 	}
-	return nil
+	return nil, rewards
 }
 
 // Get reward balance rates for master node, founder and holders.

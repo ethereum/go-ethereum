@@ -73,6 +73,7 @@ type Backend interface {
 	CurrentBlock() *types.Block
 	GetIPCClient() (*ethclient.Client, error)
 	GetEngine() consensus.Engine
+	GetRewardByHash(hash common.Hash) map[string]interface{}
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

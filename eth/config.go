@@ -112,6 +112,8 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+
+	StoreRewardFolder string
 }
 
 type configMarshaling struct {
