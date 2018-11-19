@@ -24,10 +24,14 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -43,7 +47,7 @@ type Store struct {
 	schemaName     shed.StringField
 	sizeCounter    shed.Uint64Field
 	accessCounter  shed.Uint64Field
-	retrievalIndex shed.Index
+	retrievalIndex shed.IndexInterface // example of swapable Index/MockIndex
 	accessIndex    shed.Index
 	gcIndex        shed.Index
 }
@@ -51,7 +55,7 @@ type Store struct {
 // New returns new Store. All fields and indexes are initialized
 // and possible conflicts with schema from existing database is checked
 // automatically.
-func New(path string) (s *Store, err error) {
+func New(path string, mockStore *mock.NodeStore) (s *Store, err error) {
 	db, err := shed.NewDB(path)
 	if err != nil {
 		return nil, err
@@ -70,7 +74,7 @@ func New(path string) (s *Store, err error) {
 		return nil, err
 	}
 	// Index storing actual chunk address, data and store timestamp.
-	s.retrievalIndex, err = db.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
+	retrievalIndex, err := db.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
 		EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
 			return fields.Address, nil
 		},
@@ -90,6 +94,14 @@ func New(path string) (s *Store, err error) {
 			return e, nil
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.retrievalIndex = retrievalIndex
+	if mockStore != nil {
+		// If mock store is provided, use it for retrieval index.
+		s.retrievalIndex = retrievalIndex.NewMockIndex(mockStore)
+	}
 	// Index storing access timestamp for a particular address.
 	// It is needed in order to update gc index keys for iteration order.
 	s.accessIndex, err = db.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
@@ -110,6 +122,9 @@ func New(path string) (s *Store, err error) {
 			return e, nil
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
 	// Index with keys ordered by access timestamp for garbage collection prioritization.
 	s.gcIndex, err = db.NewIndex("AccessTimestamp|StoredTimestamp|Address->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
@@ -303,7 +318,20 @@ func Example_store() {
 	}
 	defer os.RemoveAll(dir)
 
-	s, err := New(dir)
+	var mockStore *mock.NodeStore
+	// Configuring mock store using environment variable is
+	// just an example, it can be accomplished in more elegant ways.
+	if strings.EqualFold(os.Getenv("SWARM_USE_MOCKSTORE"), "true") {
+		// Global store is constructed here for example purposes.
+		// It should be available globally so that all nodes can access it.
+		globalStore := mem.NewGlobalStore()
+		// An arbitrary address is used for this example.
+		// In real situations this address should be the same as the Swarm
+		// node address.
+		mockStore = globalStore.NewNodeStore(common.HexToAddress("12345678"))
+	}
+
+	s, err := New(dir, mockStore)
 	if err != nil {
 		log.Fatal(err)
 	}

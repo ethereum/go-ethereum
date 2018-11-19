@@ -70,6 +70,12 @@ func (n *NodeStore) Put(key []byte, data []byte) error {
 	return n.store.Put(n.addr, key, data)
 }
 
+// Delete removes chunk data for a key for a node that has the address
+// provided on NodeStore initialization.
+func (n *NodeStore) Delete(key []byte) error {
+	return n.store.Delete(n.addr, key)
+}
+
 // GlobalStorer defines methods for mock db store
 // that stores chunk data for all swarm nodes.
 // It is used in tests to construct mock NodeStores
@@ -77,6 +83,7 @@ func (n *NodeStore) Put(key []byte, data []byte) error {
 type GlobalStorer interface {
 	Get(addr common.Address, key []byte) (data []byte, err error)
 	Put(addr common.Address, key []byte, data []byte) error
+	Delete(addr common.Address, key []byte) error
 	HasKey(addr common.Address, key []byte) bool
 	// NewNodeStore creates an instance of NodeStore
 	// to be used by a single swarm node with
