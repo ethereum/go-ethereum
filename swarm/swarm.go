@@ -53,7 +53,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -67,22 +66,22 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config       *api.Config        // swarm configuration
-	api          *api.API           // high level api layer (fs/manifest)
-	dns          api.Resolver       // DNS registrar
-	fileStore    *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer     *stream.Registry
-	bzz          *network.Bzz       // the logistic manager
-	backend      chequebook.Backend // simple blockchain Backend
-	privateKey   *ecdsa.PrivateKey
-	corsString   string
-	swapEnabled  bool
-	netStore     *storage.NetStore
-	sfs          *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
-	ps           *pss.Pss
-	swap         *swap.Swap
-	stateStore   *state.DBStore
-	metricsStore *leveldb.DB
+	config            *api.Config        // swarm configuration
+	api               *api.API           // high level api layer (fs/manifest)
+	dns               api.Resolver       // DNS registrar
+	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer          *stream.Registry
+	bzz               *network.Bzz       // the logistic manager
+	backend           chequebook.Backend // simple blockchain Backend
+	privateKey        *ecdsa.PrivateKey
+	corsString        string
+	swapEnabled       bool
+	netStore          *storage.NetStore
+	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
+	ps                *pss.Pss
+	swap              *swap.Swap
+	stateStore        *state.DBStore
+	accountingMetrics *protocols.AccountingMetrics
 
 	tracerClose io.Closer
 }
@@ -182,7 +181,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		self.swap = swap.New(balancesStore)
-		self.metricsStore = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
+		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
 	var nodeID enode.ID
@@ -453,8 +452,8 @@ func (self *Swarm) Stop() error {
 	if self.swap != nil {
 		self.swap.Close()
 	}
-	if self.metricsStore != nil {
-		self.metricsStore.Close()
+	if self.accountingMetrics != nil {
+		self.accountingMetrics.Close()
 	}
 	if self.stateStore != nil {
 		self.stateStore.Close()

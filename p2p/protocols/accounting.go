@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 //define some metrics
@@ -113,7 +112,7 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 //this registry should be independent of any other metrics as it persists at different endpoints.
 //It also instantiates the given metrics and starts the persisting go-routine which
 //at the passed interval writes the metrics to a LevelDB
-func SetupAccountingMetrics(reportInterval time.Duration, path string) *leveldb.DB {
+func SetupAccountingMetrics(reportInterval time.Duration, path string) *AccountingMetrics {
 	//create an empty registry
 	registry := metrics.NewRegistry()
 	//instantiate the metrics
@@ -126,7 +125,7 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *leveldb.
 	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", registry)
 	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", registry)
 	//create the DB and start persisting
-	return NewMetricsDB(registry, reportInterval, path)
+	return NewAccountingMetrics(registry, reportInterval, path)
 }
 
 //Implement Hook.Send

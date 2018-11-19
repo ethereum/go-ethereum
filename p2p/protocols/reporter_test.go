@@ -39,8 +39,8 @@ func TestReporter(t *testing.T) {
 
 	//setup the metrics
 	log.Debug("Setting up metrics first time")
-	reportInterval := 100 * time.Millisecond
-	db := SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
+	reportInterval := 5 * time.Millisecond
+	metrics := SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
 	log.Debug("Done.")
 
 	//do some metrics
@@ -49,18 +49,19 @@ func TestReporter(t *testing.T) {
 	mMsgDebit.Inc(9)
 
 	//give the reporter time to write the metrics to DB
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	//set the metrics to nil - this effectively simulates the node having shut down...
 	mBalanceCredit = nil
 	mBytesCredit = nil
 	mMsgDebit = nil
 	//close the DB also, or we can't create a new one
-	db.Close()
+	metrics.Close()
 
 	//setup the metrics again
 	log.Debug("Setting up metrics second time")
-	SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
+	metrics = SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
+	defer metrics.Close()
 	log.Debug("Done.")
 
 	//now check the metrics, they should have the same value as before "shutdown"

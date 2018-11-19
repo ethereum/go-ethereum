@@ -26,17 +26,32 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+//AccountMetrics abstracts away the metrics DB and
+//the reporter to persist metrics
+type AccountingMetrics struct {
+	metricsStore *leveldb.DB
+	reporter     *reporter
+}
+
+//Close will be called when the node is being shutdown
+//for a graceful cleanup
+func (am *AccountingMetrics) Close() {
+	am.reporter.quit <- struct{}{}
+	am.metricsStore.Close()
+}
+
 //reporter is an internal structure used to write p2p accounting related
 //metrics to a LevelDB. It will periodically write the accrued metrics to the DB.
 type reporter struct {
 	reg      metrics.Registry //the registry for these metrics (independent of other metrics)
 	interval time.Duration    //duration at which the reporter will persist metrics
 	db       *leveldb.DB      //the actual DB
+	quit     chan struct{}    //quit the reporter loop
 }
 
 //NewMetricsDB creates a new LevelDB instance used to persist metrics defined
 //inside p2p/protocols/accounting.go
-func NewMetricsDB(r metrics.Registry, d time.Duration, path string) *leveldb.DB {
+func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *AccountingMetrics {
 	var val = make([]byte, 8)
 	var err error
 
@@ -50,64 +65,64 @@ func NewMetricsDB(r metrics.Registry, d time.Duration, path string) *leveldb.DB 
 	//Check for all defined metrics that there is a value in the DB
 	//If there is, assign it to the metric. This means that the node
 	//has been running before and that metrics have been persisted.
-	val, err = db.Get([]byte("account.balance.credit"), nil)
-	if err == nil {
-		mBalanceCredit.Inc(int64(binary.BigEndian.Uint64(val)))
+	metricsMap := map[string]metrics.Counter{
+		"account.balance.credit": mBalanceCredit,
+		"account.balance.debit":  mBalanceDebit,
+		"account.bytes.credit":   mBytesCredit,
+		"account.bytes.debit":    mBytesDebit,
+		"account.msg.credit":     mMsgCredit,
+		"account.msg.debit":      mMsgDebit,
+		"account.peerdrops":      mPeerDrops,
+		"account.selfdrops":      mSelfDrops,
 	}
-	val, err = db.Get([]byte("account.balance.debit"), nil)
-	if err == nil {
-		mBalanceDebit.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.bytes.credit"), nil)
-	if err == nil {
-		mBytesCredit.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.bytes.debit"), nil)
-	if err == nil {
-		mBytesDebit.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.msg.credit"), nil)
-	if err == nil {
-		mMsgCredit.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.msg.debit"), nil)
-	if err == nil {
-		mMsgDebit.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.peerdrops"), nil)
-	if err == nil {
-		mPeerDrops.Inc(int64(binary.BigEndian.Uint64(val)))
-	}
-	val, err = db.Get([]byte("account.selfdrops"), nil)
-	if err == nil {
-		mSelfDrops.Inc(int64(binary.BigEndian.Uint64(val)))
+	//iterate the map and get the values
+	for key, metric := range metricsMap {
+		val, err = db.Get([]byte(key), nil)
+		//until the first time a value is being written,
+		//this will return an error.
+		//it could be beneficial though to log errors later,
+		//but that would require a different logic
+		if err == nil {
+			metric.Inc(int64(binary.BigEndian.Uint64(val)))
+		}
 	}
 
 	//create the reporter
-	reg := &reporter{
+	rep := &reporter{
 		reg:      r,
 		interval: d,
 		db:       db,
+		quit:     make(chan struct{}),
 	}
 
 	//run the go routine
-	go reg.run()
+	go rep.run()
 
-	return db
+	m := &AccountingMetrics{
+		metricsStore: db,
+		reporter:     rep,
+	}
 
+	return m
 }
 
 //run is the go routine which periodically sends the metrics to the configued LevelDB
 func (r *reporter) run() {
 	intervalTicker := time.NewTicker(r.interval)
 
-	for _ = range intervalTicker.C {
-		//at each tick send the metrics
-		if err := r.send(); err != nil {
-			log.Error("unable to send metrics to LevelDB. err=%v", "err", err)
-			//If there is an error in writing, exit the routine; we assume here that the error is
-			//severe and don't attempt to write again.
-			//Also, this should prevent leaking when the node is stopped
+	for {
+		select {
+		case <-intervalTicker.C:
+			//at each tick send the metrics
+			if err := r.send(); err != nil {
+				log.Error("unable to send metrics to LevelDB", "err", err)
+				//If there is an error in writing, exit the routine; we assume here that the error is
+				//severe and don't attempt to write again.
+				//Also, this should prevent leaking when the node is stopped
+				return
+			}
+		case <-r.quit:
+			//graceful shutdown
 			return
 		}
 	}
