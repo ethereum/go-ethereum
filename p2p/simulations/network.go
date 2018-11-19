@@ -644,11 +644,18 @@ type NodeSnapshot struct {
 
 // Snapshot creates a network snapshot
 func (net *Network) Snapshot() (*Snapshot, error) {
+	return net.snapshot(nil, nil)
+}
+
+func (net *Network) SnapshotWithServices(addServices []string, removeServices []string) (*Snapshot, error) {
+	return net.snapshot(addServices, removeServices)
+}
+
+func (net *Network) snapshot(addServices []string, removeServices []string) (*Snapshot, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
 	snap := &Snapshot{
 		Nodes: make([]NodeSnapshot, len(net.Nodes)),
-		Conns: make([]Conn, len(net.Conns)),
 	}
 	for i, node := range net.Nodes {
 		snap.Nodes[i] = NodeSnapshot{Node: *node}
@@ -660,9 +667,40 @@ func (net *Network) Snapshot() (*Snapshot, error) {
 			return nil, err
 		}
 		snap.Nodes[i].Snapshots = snapshots
+		for _, addSvc := range addServices {
+			haveSvc := false
+			for _, svc := range snap.Nodes[i].Node.Config.Services {
+				if svc == addSvc {
+					haveSvc = true
+					break
+				}
+			}
+			if !haveSvc {
+				snap.Nodes[i].Node.Config.Services = append(snap.Nodes[i].Node.Config.Services, addSvc)
+			}
+		}
+		if len(removeServices) > 0 {
+			var cleanedServices []string
+			for _, svc := range snap.Nodes[i].Node.Config.Services {
+				haveSvc := false
+				for _, rmSvc := range removeServices {
+					if rmSvc == svc {
+						haveSvc = true
+						break
+					}
+				}
+				if !haveSvc {
+					cleanedServices = append(cleanedServices, svc)
+				}
+
+			}
+			snap.Nodes[i].Node.Config.Services = cleanedServices
+		}
 	}
-	for i, conn := range net.Conns {
-		snap.Conns[i] = *conn
+	for _, conn := range net.Conns {
+		if conn.Up {
+			snap.Conns = append(snap.Conns, *conn)
+		}
 	}
 	return snap, nil
 }

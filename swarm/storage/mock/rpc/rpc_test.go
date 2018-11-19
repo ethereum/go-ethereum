@@ -37,5 +37,5 @@ func TestRPCStore(t *testing.T) {
 	store := NewGlobalStore(rpc.DialInProc(server))
 	defer store.Close()
 
-	test.MockStore(t, store, 100)
+	test.MockStore(t, store, 30)
 }

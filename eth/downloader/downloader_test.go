@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -112,6 +113,15 @@ func (dl *downloadTester) HasHeader(hash common.Hash, number uint64) bool {
 // HasBlock checks if a block is present in the testers canonical chain.
 func (dl *downloadTester) HasBlock(hash common.Hash, number uint64) bool {
 	return dl.GetBlockByHash(hash) != nil
+}
+
+// HasFastBlock checks if a block is present in the testers canonical chain.
+func (dl *downloadTester) HasFastBlock(hash common.Hash, number uint64) bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	_, ok := dl.ownReceipts[hash]
+	return ok
 }
 
 // GetHeader retrieves a header from the testers canonical chain.
@@ -234,6 +244,7 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (i int, err error) {
 			dl.ownHeaders[block.Hash()] = block.Header()
 		}
 		dl.ownBlocks[block.Hash()] = block
+		dl.ownReceipts[block.Hash()] = make(types.Receipts, 0)
 		dl.stateDb.Put(block.Root().Bytes(), []byte{0x00})
 		dl.ownChainTd[block.Hash()] = new(big.Int).Add(dl.ownChainTd[block.ParentHash()], block.Difficulty())
 	}
@@ -374,28 +385,28 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 // assertOwnChain checks if the local chain contains the correct number of items
 // of the various chain components.
 func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
+	// Mark this method as a helper to report errors at callsite, not in here
+	t.Helper()
+
 	assertOwnForkedChain(t, tester, 1, []int{length})
 }
 
 // assertOwnForkedChain checks if the local forked chain contains the correct
 // number of items of the various chain components.
 func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, lengths []int) {
-	// Initialize the counters for the first fork
-	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]-fsMinFullBlocks
+	// Mark this method as a helper to report errors at callsite, not in here
+	t.Helper()
 
-	if receipts < 0 {
-		receipts = 1
-	}
+	// Initialize the counters for the first fork
+	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]
+
 	// Update the counters for each subsequent fork
 	for _, length := range lengths[1:] {
 		headers += length - common
 		blocks += length - common
-		receipts += length - common - fsMinFullBlocks
+		receipts += length - common
 	}
-	switch tester.downloader.mode {
-	case FullSync:
-		receipts = 1
-	case LightSync:
+	if tester.downloader.mode == LightSync {
 		blocks, receipts = 1, 1
 	}
 	if hs := len(tester.ownHeaders); hs != headers {
@@ -1149,7 +1160,9 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 }
 
 func checkProgress(t *testing.T, d *Downloader, stage string, want ethereum.SyncProgress) {
+	// Mark this method as a helper to report errors at callsite, not in here
 	t.Helper()
+
 	p := d.Progress()
 	p.KnownStates, p.PulledStates = 0, 0
 	want.KnownStates, want.PulledStates = 0, 0
@@ -1478,4 +1491,79 @@ func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int
 		}
 	}
 	return nil
+}
+
+func TestRemoteHeaderRequestSpan(t *testing.T) {
+	testCases := []struct {
+		remoteHeight uint64
+		localHeight  uint64
+		expected     []int
+	}{
+		// Remote is way higher. We should ask for the remote head and go backwards
+		{1500, 1000,
+			[]int{1323, 1339, 1355, 1371, 1387, 1403, 1419, 1435, 1451, 1467, 1483, 1499},
+		},
+		{15000, 13006,
+			[]int{14823, 14839, 14855, 14871, 14887, 14903, 14919, 14935, 14951, 14967, 14983, 14999},
+		},
+		//Remote is pretty close to us. We don't have to fetch as many
+		{1200, 1150,
+			[]int{1149, 1154, 1159, 1164, 1169, 1174, 1179, 1184, 1189, 1194, 1199},
+		},
+		// Remote is equal to us (so on a fork with higher td)
+		// We should get the closest couple of ancestors
+		{1500, 1500,
+			[]int{1497, 1499},
+		},
+		// We're higher than the remote! Odd
+		{1000, 1500,
+			[]int{997, 999},
+		},
+		// Check some weird edgecases that it behaves somewhat rationally
+		{0, 1500,
+			[]int{0, 2},
+		},
+		{6000000, 0,
+			[]int{5999823, 5999839, 5999855, 5999871, 5999887, 5999903, 5999919, 5999935, 5999951, 5999967, 5999983, 5999999},
+		},
+		{0, 0,
+			[]int{0, 2},
+		},
+	}
+	reqs := func(from, count, span int) []int {
+		var r []int
+		num := from
+		for len(r) < count {
+			r = append(r, num)
+			num += span + 1
+		}
+		return r
+	}
+	for i, tt := range testCases {
+		from, count, span, max := calculateRequestSpan(tt.remoteHeight, tt.localHeight)
+		data := reqs(int(from), count, span)
+
+		if max != uint64(data[len(data)-1]) {
+			t.Errorf("test %d: wrong last value %d != %d", i, data[len(data)-1], max)
+		}
+		failed := false
+		if len(data) != len(tt.expected) {
+			failed = true
+			t.Errorf("test %d: length wrong, expected %d got %d", i, len(tt.expected), len(data))
+		} else {
+			for j, n := range data {
+				if n != tt.expected[j] {
+					failed = true
+					break
+				}
+			}
+		}
+		if failed {
+			res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
+			exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
+			fmt.Printf("got: %v\n", res)
+			fmt.Printf("exp: %v\n", exp)
+			t.Errorf("test %d: wrong values", i)
+		}
+	}
 }
