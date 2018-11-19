@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,72 +25,82 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	colorable "github.com/mattn/go-colorable"
+	swarmapi "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+	"github.com/mattn/go-colorable"
 )
-
-var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-// TestCLISwarmUp tests that running 'swarm up' makes the resulting file
-// available from all nodes via the HTTP API
-func TestCLISwarmUp(t *testing.T) {
-	testCLISwarmUp(false, t)
-}
-func TestCLISwarmUpRecursive(t *testing.T) {
-	testCLISwarmUpRecursive(false, t)
-}
-
-// TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
-// available from all nodes via the HTTP API
-func TestCLISwarmUpEncrypted(t *testing.T) {
-	testCLISwarmUp(true, t)
-}
-func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
-	testCLISwarmUpRecursive(true, t)
-}
-
-func testCLISwarmUp(toEncrypt bool, t *testing.T) {
-	log.Info("starting 3 node cluster")
-	cluster := newTestCluster(t, 3)
-	defer cluster.Shutdown()
-
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
+func TestSwarmUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
 	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
+
+	initCluster(t)
+
+	cases := []struct {
+		name string
+		f    func(t *testing.T)
+	}{
+		{"NoEncryption", testNoEncryption},
+		{"Encrypted", testEncrypted},
+		{"RecursiveNoEncryption", testRecursiveNoEncryption},
+		{"RecursiveEncrypted", testRecursiveEncrypted},
+		{"DefaultPathAll", testDefaultPathAll},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, tc.f)
+	}
+}
+
+// testNoEncryption tests that running 'swarm up' makes the resulting file
+// available from all nodes via the HTTP API
+func testNoEncryption(t *testing.T) {
+	testDefault(false, t)
+}
+
+// testEncrypted tests that running 'swarm up --encrypted' makes the resulting file
+// available from all nodes via the HTTP API
+func testEncrypted(t *testing.T) {
+	testDefault(true, t)
+}
+
+func testRecursiveNoEncryption(t *testing.T) {
+	testRecursive(false, t)
+}
+
+func testRecursiveEncrypted(t *testing.T) {
+	testRecursive(true, t)
+}
+
+func testDefault(toEncrypt bool, t *testing.T) {
+	tmpFileName := testutil.TempFileWithContent(t, data)
+	defer os.Remove(tmpFileName)
 
 	// write data to file
-	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	hashRegexp := `[a-f\d]{64}`
 	flags := []string{
 		"--bzzapi", cluster.Nodes[0].URL,
 		"up",
-		tmp.Name()}
+		tmpFileName}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
 			"--encrypt",
-			tmp.Name()}
+			tmpFileName}
 	}
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
@@ -180,18 +189,13 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	}
 }
 
-func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
-	fmt.Println("starting 3 node cluster")
-	cluster := newTestCluster(t, 3)
-	defer cluster.Shutdown()
-
+func testRecursive(toEncrypt bool, t *testing.T) {
 	tmpUploadDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpUploadDir)
 	// create tmp files
-	data := "notsorandomdata"
 	for _, path := range []string{"tmp1", "tmp2"} {
 		if err := ioutil.WriteFile(filepath.Join(tmpUploadDir, path), bytes.NewBufferString(data).Bytes(), 0644); err != nil {
 			t.Fatal(err)
@@ -231,8 +235,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		}
 		defer os.RemoveAll(tmpDownload)
 		bzzLocator := "bzz:/" + hash
-		flagss := []string{}
-		flagss = []string{
+		flagss := []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"down",
 			"--recursive",
@@ -253,7 +256,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 
 			switch mode := fi.Mode(); {
 			case mode.IsRegular():
-				if file, err := swarm.Open(path.Join(tmpDownload, v.Name())); err != nil {
+				if file, err := swarmapi.Open(path.Join(tmpDownload, v.Name())); err != nil {
 					t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
 				} else {
 					ff := make([]byte, len(data))
@@ -274,19 +277,16 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	}
 }
 
-// TestCLISwarmUpDefaultPath tests swarm recursive upload with relative and absolute
+// testDefaultPathAll tests swarm recursive upload with relative and absolute
 // default paths and with encryption.
-func TestCLISwarmUpDefaultPath(t *testing.T) {
-	testCLISwarmUpDefaultPath(false, false, t)
-	testCLISwarmUpDefaultPath(false, true, t)
-	testCLISwarmUpDefaultPath(true, false, t)
-	testCLISwarmUpDefaultPath(true, true, t)
+func testDefaultPathAll(t *testing.T) {
+	testDefaultPath(false, false, t)
+	testDefaultPath(false, true, t)
+	testDefaultPath(true, false, t)
+	testDefaultPath(true, true, t)
 }
 
-func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
-	cluster := newTestCluster(t, 1)
-	defer cluster.Shutdown()
-
+func testDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
 	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
 	if err != nil {
 		t.Fatal(err)
@@ -326,7 +326,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	up.ExpectExit()
 	hash := matches[0]
 
-	client := swarm.NewClient(cluster.Nodes[0].URL)
+	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
 	m, isEncrypted, err := client.DownloadManifest(hash)
 	if err != nil {

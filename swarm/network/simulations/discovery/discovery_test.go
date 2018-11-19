@@ -85,11 +85,12 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
-	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog       = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	nodeCount       = flag.Int("nodes", 10, "number of nodes to create (default 10)")
+	initCount       = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
+	snapshotFile    = flag.String("snapshot", "", "path to create snapshot file in")
+	loglevel        = flag.Int("loglevel", 3, "verbosity of logs")
+	rawlog          = flag.Bool("rawlog", false, "remove terminal formatting from logs")
+	serviceOverride = flag.String("services", "", "remove or add services to the node snapshot; prefix with \"+\" to add, \"-\" to remove; example: +pss,-discovery")
 )
 
 func init() {
@@ -124,22 +125,6 @@ func BenchmarkDiscovery_32_4(b *testing.B)  { benchmarkDiscovery(b, 32, 4) }
 func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
-
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
-	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
-	adapter, err := adapters.NewDockerAdapter()
-	if err != nil {
-		if err == adapters.ErrLinuxOnly {
-			t.Skip(err)
-		} else {
-			t.Fatal(err)
-		}
-	}
-	testDiscoverySimulation(t, nodes, conns, adapter)
-}
 
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
@@ -322,7 +307,25 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	}
 
 	if *snapshotFile != "" {
-		snap, err := net.Snapshot()
+		var err error
+		var snap *simulations.Snapshot
+		if len(*serviceOverride) > 0 {
+			var addServices []string
+			var removeServices []string
+			for _, osvc := range strings.Split(*serviceOverride, ",") {
+				if strings.Index(osvc, "+") == 0 {
+					addServices = append(addServices, osvc[1:])
+				} else if strings.Index(osvc, "-") == 0 {
+					removeServices = append(removeServices, osvc[1:])
+				} else {
+					panic("stick to the rules, you know what they are")
+				}
+			}
+			snap, err = net.SnapshotWithServices(addServices, removeServices)
+		} else {
+			snap, err = net.Snapshot()
+		}
+
 		if err != nil {
 			return nil, errors.New("no shapshot dude")
 		}
@@ -545,8 +548,7 @@ func triggerChecks(trigger chan enode.ID, net *simulations.Network, id enode.ID)
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	node := enode.NewV4(&ctx.Config.PrivateKey.PublicKey, adapters.ExternalIP(), int(ctx.Config.Port), int(ctx.Config.Port))
-	addr := network.NewAddr(node)
+	addr := network.NewAddr(ctx.Config.Node())
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

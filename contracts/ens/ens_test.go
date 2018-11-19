@@ -22,16 +22,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
-	key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	name   = "my name on ENS"
-	hash   = crypto.Keccak256Hash([]byte("my content"))
-	addr   = crypto.PubkeyToAddress(key.PublicKey)
+	key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	name     = "my name on ENS"
+	hash     = crypto.Keccak256Hash([]byte("my content"))
+	addr     = crypto.PubkeyToAddress(key.PublicKey)
+	testAddr = common.HexToAddress("0x1234123412341234123412341234123412341234")
 )
 
 func TestENS(t *testing.T) {
@@ -73,5 +75,20 @@ func TestENS(t *testing.T) {
 	}
 	if vhost != hash {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost.Hex())
+	}
+
+	// set the address for the name
+	if _, err = ens.SetAddr(name, testAddr); err != nil {
+		t.Fatalf("can't set address: %v", err)
+	}
+	contractBackend.Commit()
+
+	// Try to resolve the name to an address
+	recoveredAddr, err := ens.Addr(name)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if vhost != hash {
+		t.Fatalf("resolve error, expected %v, got %v", testAddr.Hex(), recoveredAddr.Hex())
 	}
 }

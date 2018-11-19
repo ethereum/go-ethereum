@@ -19,9 +19,12 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +32,6 @@ import (
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
-
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -103,6 +105,46 @@ func testDbStoreCorrect(n int, chunksize int64, mock bool, t *testing.T) {
 	testStoreCorrect(db, n, chunksize, t)
 }
 
+func TestMarkAccessed(t *testing.T) {
+	db, cleanup, err := newTestDbStore(false, true)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+
+	h := GenerateRandomChunk(ch.DefaultSize)
+
+	db.Put(context.Background(), h)
+
+	var index dpaDBIndex
+	addr := h.Address()
+	idxk := getIndexKey(addr)
+
+	idata, err := db.db.Get(idxk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodeIndex(idata, &index)
+
+	if index.Access != 0 {
+		t.Fatalf("Expected the access index to be %d, but it is %d", 0, index.Access)
+	}
+
+	db.MarkAccessed(addr)
+	db.writeCurrentBatch()
+
+	idata, err = db.db.Get(idxk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decodeIndex(idata, &index)
+
+	if index.Access != 1 {
+		t.Fatalf("Expected the access index to be %d, but it is %d", 1, index.Access)
+	}
+
+}
+
 func TestDbStoreRandom_1(t *testing.T) {
 	testDbStoreRandom(1, 0, false, t)
 }
@@ -111,12 +153,12 @@ func TestDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, false, t)
 }
 
-func TestDbStoreRandom_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, false, t)
+func TestDbStoreRandom_1k(t *testing.T) {
+	testDbStoreRandom(1000, 0, false, t)
 }
 
-func TestDbStoreCorrect_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, false, t)
+func TestDbStoreCorrect_1k(t *testing.T) {
+	testDbStoreCorrect(1000, 4096, false, t)
 }
 
 func TestMockDbStoreRandom_1(t *testing.T) {
@@ -127,12 +169,12 @@ func TestMockDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, true, t)
 }
 
-func TestMockDbStoreRandom_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, true, t)
+func TestMockDbStoreRandom_1k(t *testing.T) {
+	testDbStoreRandom(1000, 0, true, t)
 }
 
-func TestMockDbStoreCorrect_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, true, t)
+func TestMockDbStoreCorrect_1k(t *testing.T) {
+	testDbStoreCorrect(1000, 4096, true, t)
 }
 
 func testDbStoreNotFound(t *testing.T, mock bool) {
@@ -297,27 +339,74 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 }
 
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
-// retrieve only some of them, because garbage collection must have cleared some of them
+// retrieve only some of them, because garbage collection must have partially cleared the store
+// Also tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreCollectGarbage(t *testing.T) {
-	capacity := 500
-	n := 2000
+
+	// below max ronud
+	initialCap := defaultMaxGCRound / 100
+	cap := initialCap / 2
+	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+
+	// at max round
+	cap = initialCap
+	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+
+	// more than max around, not on threshold
+	cap = initialCap + 500
+	t.Run(fmt.Sprintf("A/%d/%d", cap, cap*4), testLDBStoreCollectGarbage)
+	t.Run(fmt.Sprintf("B/%d/%d", cap, cap*4), testLDBStoreRemoveThenCollectGarbage)
+
+}
+
+func testLDBStoreCollectGarbage(t *testing.T) {
+	params := strings.Split(t.Name(), "/")
+	capacity, err := strconv.Atoi(params[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := strconv.Atoi(params[3])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
-	if err != nil {
-		t.Fatal(err.Error())
+	// retrieve the gc round target count for the db capacity
+	ldb.startGC(capacity)
+	roundTarget := ldb.gc.target
+
+	// split put counts to gc target count threshold, and wait for gc to finish in between
+	var allChunks []Chunk
+	remaining := n
+	for remaining > 0 {
+		var putCount int
+		if remaining < roundTarget {
+			putCount = remaining
+		} else {
+			putCount = roundTarget
+		}
+		remaining -= putCount
+		chunks, err := mputRandomChunks(ldb, putCount, int64(ch.DefaultSize))
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		allChunks = append(allChunks, chunks...)
+		log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		waitGc(ctx, ldb)
 	}
-	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
-	// wait for garbage collection to kick in on the responsible actor
-	time.Sleep(1 * time.Second)
-
+	// attempt gets on all put chunks
 	var missing int
-	for _, ch := range chunks {
-		ret, err := ldb.Get(context.Background(), ch.Address())
+	for _, ch := range allChunks {
+		ret, err := ldb.Get(context.TODO(), ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
@@ -333,8 +422,10 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 		log.Trace("got back chunk", "chunk", ret)
 	}
 
-	if missing < n-capacity {
-		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", n-capacity, missing)
+	// all surplus chunks should be missing
+	expectMissing := roundTarget + (((n - capacity) / roundTarget) * roundTarget)
+	if missing != expectMissing {
+		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", expectMissing, missing)
 	}
 
 	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
@@ -367,7 +458,6 @@ func TestLDBStoreAddRemove(t *testing.T) {
 		if i%2 == 0 {
 			// expect even chunks to be missing
 			if err == nil {
-				// if err != ErrChunkNotFound {
 				t.Fatal("expected chunk to be missing, but got no error")
 			}
 		} else {
@@ -383,30 +473,48 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	}
 }
 
-// TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
-func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	capacity := 11
-	surplus := 4
+func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
+
+	params := strings.Split(t.Name(), "/")
+	capacity, err := strconv.Atoi(params[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := strconv.Atoi(params[3])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ldb, cleanup := newLDBStore(t)
+	defer cleanup()
 	ldb.setCapacity(uint64(capacity))
 
-	n := capacity
-
-	chunks := []Chunk{}
-	for i := 0; i < n+surplus; i++ {
+	// put capacity count number of chunks
+	chunks := make([]Chunk, n)
+	for i := 0; i < n; i++ {
 		c := GenerateRandomChunk(ch.DefaultSize)
-		chunks = append(chunks, c)
+		chunks[i] = c
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
 
 	for i := 0; i < n; i++ {
-		ldb.Put(context.TODO(), chunks[i])
+		err := ldb.Put(context.TODO(), chunks[i])
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	waitGc(ctx, ldb)
+
 	// delete all chunks
+	// (only count the ones actually deleted, the rest will have been gc'd)
+	deletes := 0
 	for i := 0; i < n; i++ {
-		ldb.Delete(chunks[i].Address())
+		if ldb.Delete(chunks[i].Address()) == nil {
+			deletes++
+		}
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
@@ -415,37 +523,49 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 		t.Fatalf("ldb.entrCnt expected 0 got %v", ldb.entryCnt)
 	}
 
-	expAccessCnt := uint64(n * 2)
+	// the manual deletes will have increased accesscnt, so we need to add this when we verify the current count
+	expAccessCnt := uint64(n)
 	if ldb.accessCnt != expAccessCnt {
-		t.Fatalf("ldb.accessCnt expected %v got %v", expAccessCnt, ldb.entryCnt)
+		t.Fatalf("ldb.accessCnt expected %v got %v", expAccessCnt, ldb.accessCnt)
 	}
 
-	cleanup()
+	// retrieve the gc round target count for the db capacity
+	ldb.startGC(capacity)
+	roundTarget := ldb.gc.target
 
-	ldb, cleanup = newLDBStore(t)
-	capacity = 10
-	ldb.setCapacity(uint64(capacity))
-	defer cleanup()
+	remaining := n
+	var puts int
+	for remaining > 0 {
+		var putCount int
+		if remaining < roundTarget {
+			putCount = remaining
+		} else {
+			putCount = roundTarget
+		}
+		remaining -= putCount
+		for putCount > 0 {
+			ldb.Put(context.TODO(), chunks[puts])
+			log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n, "puts", puts, "remaining", remaining, "roundtarget", roundTarget)
+			puts++
+			putCount--
+		}
 
-	n = capacity + surplus
-
-	for i := 0; i < n; i++ {
-		ldb.Put(context.TODO(), chunks[i])
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		waitGc(ctx, ldb)
 	}
-
-	// wait for garbage collection
-	time.Sleep(1 * time.Second)
 
 	// expect first surplus chunks to be missing, because they have the smallest access value
-	for i := 0; i < surplus; i++ {
+	expectMissing := roundTarget + (((n - capacity) / roundTarget) * roundTarget)
+	for i := 0; i < expectMissing; i++ {
 		_, err := ldb.Get(context.TODO(), chunks[i].Address())
 		if err == nil {
-			t.Fatal("expected surplus chunk to be missing, but got no error")
+			t.Fatalf("expected surplus chunk %d to be missing, but got no error", i)
 		}
 	}
 
 	// expect last chunks to be present, as they have the largest access value
-	for i := surplus; i < surplus+capacity; i++ {
+	for i := expectMissing; i < n; i++ {
 		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
 		if err != nil {
 			t.Fatalf("chunk %v: expected no error, but got %s", i, err)
@@ -454,4 +574,229 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 			t.Fatal("expected to get the same data back, but got smth else")
 		}
 	}
+}
+
+// TestLDBStoreCollectGarbageAccessUnlikeIndex tests garbage collection where accesscount differs from indexcount
+func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
+
+	capacity := defaultMaxGCRound / 100 * 2
+	n := capacity - 1
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	// set first added capacity/2 chunks to highest accesscount
+	for i := 0; i < capacity/2; i++ {
+		_, err := ldb.Get(context.TODO(), chunks[i].Address())
+		if err != nil {
+			t.Fatalf("fail add chunk #%d - %s: %v", i, chunks[i].Address(), err)
+		}
+	}
+	_, err = mputRandomChunks(ldb, 2, int64(ch.DefaultSize))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// wait for garbage collection to kick in on the responsible actor
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	waitGc(ctx, ldb)
+
+	var missing int
+	for i, ch := range chunks[2 : capacity/2] {
+		ret, err := ldb.Get(context.TODO(), ch.Address())
+		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
+			t.Fatalf("fail find chunk #%d - %s: %v", i, ch.Address(), err)
+		}
+
+		if !bytes.Equal(ret.Data(), ch.Data()) {
+			t.Fatal("expected to get the same data back, but got smth else")
+		}
+		log.Trace("got back chunk", "chunk", ret)
+	}
+
+	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+}
+
+func TestCleanIndex(t *testing.T) {
+	capacity := 5000
+	n := 3
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks, err := mputRandomChunks(ldb, n, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// remove the data of the first chunk
+	po := ldb.po(chunks[0].Address()[:])
+	dataKey := make([]byte, 10)
+	dataKey[0] = keyData
+	dataKey[1] = byte(po)
+	// dataKey[2:10] = first chunk has storageIdx 0 on [2:10]
+	if _, err := ldb.db.Get(dataKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Delete(dataKey); err != nil {
+		t.Fatal(err)
+	}
+
+	// remove the gc index row for the first chunk
+	gcFirstCorrectKey := make([]byte, 9)
+	gcFirstCorrectKey[0] = keyGCIdx
+	if err := ldb.db.Delete(gcFirstCorrectKey); err != nil {
+		t.Fatal(err)
+	}
+
+	// warp the gc data of the second chunk
+	// this data should be correct again after the clean
+	gcSecondCorrectKey := make([]byte, 9)
+	gcSecondCorrectKey[0] = keyGCIdx
+	binary.BigEndian.PutUint64(gcSecondCorrectKey[1:], uint64(1))
+	gcSecondCorrectVal, err := ldb.db.Get(gcSecondCorrectKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warpedGCVal := make([]byte, len(gcSecondCorrectVal)+1)
+	copy(warpedGCVal[1:], gcSecondCorrectVal)
+	if err := ldb.db.Delete(gcSecondCorrectKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Put(gcSecondCorrectKey, warpedGCVal); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ldb.CleanGCIndex(); err != nil {
+		t.Fatal(err)
+	}
+
+	// the index without corresponding data should have been deleted
+	idxKey := make([]byte, 33)
+	idxKey[0] = keyIndex
+	copy(idxKey[1:], chunks[0].Address())
+	if _, err := ldb.db.Get(idxKey); err == nil {
+		t.Fatalf("expected chunk 0 idx to be pruned: %v", idxKey)
+	}
+
+	// the two other indices should be present
+	copy(idxKey[1:], chunks[1].Address())
+	if _, err := ldb.db.Get(idxKey); err != nil {
+		t.Fatalf("expected chunk 1 idx to be present: %v", idxKey)
+	}
+
+	copy(idxKey[1:], chunks[2].Address())
+	if _, err := ldb.db.Get(idxKey); err != nil {
+		t.Fatalf("expected chunk 2 idx to be present: %v", idxKey)
+	}
+
+	// first gc index should still be gone
+	if _, err := ldb.db.Get(gcFirstCorrectKey); err == nil {
+		t.Fatalf("expected gc 0 idx to be pruned: %v", idxKey)
+	}
+
+	// second gc index should still be fixed
+	if _, err := ldb.db.Get(gcSecondCorrectKey); err != nil {
+		t.Fatalf("expected gc 1 idx to be present: %v", idxKey)
+	}
+
+	// third gc index should be unchanged
+	binary.BigEndian.PutUint64(gcSecondCorrectKey[1:], uint64(2))
+	if _, err := ldb.db.Get(gcSecondCorrectKey); err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	c, err := ldb.db.Get(keyEntryCnt)
+	if err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	// entrycount should now be one less
+	entryCount := binary.BigEndian.Uint64(c)
+	if entryCount != 2 {
+		t.Fatalf("expected entrycnt to be 2, was %d", c)
+	}
+
+	// the chunks might accidentally be in the same bin
+	// if so that bin counter will now be 2 - the highest added index.
+	// if not, the total of them will be 3
+	poBins := []uint8{ldb.po(chunks[1].Address()), ldb.po(chunks[2].Address())}
+	if poBins[0] == poBins[1] {
+		poBins = poBins[:1]
+	}
+
+	var binTotal uint64
+	var currentBin [2]byte
+	currentBin[0] = keyDistanceCnt
+	if len(poBins) == 1 {
+		currentBin[1] = poBins[0]
+		c, err := ldb.db.Get(currentBin[:])
+		if err != nil {
+			t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+		}
+		binCount := binary.BigEndian.Uint64(c)
+		if binCount != 2 {
+			t.Fatalf("expected entrycnt to be 2, was %d", binCount)
+		}
+	} else {
+		for _, bin := range poBins {
+			currentBin[1] = bin
+			c, err := ldb.db.Get(currentBin[:])
+			if err != nil {
+				t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+			}
+			binCount := binary.BigEndian.Uint64(c)
+			binTotal += binCount
+
+		}
+		if binTotal != 3 {
+			t.Fatalf("expected sum of bin indices to be 3, was %d", binTotal)
+		}
+	}
+
+	// check that the iterator quits properly
+	chunks, err = mputRandomChunks(ldb, 4100, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	po = ldb.po(chunks[4099].Address()[:])
+	dataKey = make([]byte, 10)
+	dataKey[0] = keyData
+	dataKey[1] = byte(po)
+	binary.BigEndian.PutUint64(dataKey[2:], 4099+3)
+	if _, err := ldb.db.Get(dataKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := ldb.db.Delete(dataKey); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ldb.CleanGCIndex(); err != nil {
+		t.Fatal(err)
+	}
+
+	// entrycount should now be one less of added chunks
+	c, err = ldb.db.Get(keyEntryCnt)
+	if err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+	entryCount = binary.BigEndian.Uint64(c)
+	if entryCount != 4099+2 {
+		t.Fatalf("expected entrycnt to be 2, was %d", c)
+	}
+}
+
+func waitGc(ctx context.Context, ldb *LDBStore) {
+	<-ldb.gc.runC
+	ldb.gc.runC <- struct{}{}
 }

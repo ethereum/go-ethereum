@@ -458,6 +458,9 @@ func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees
 			return nil, nil, nil, err
 		}
 		sessionKey, err := NewSessionKeyPK(privateKey, granteePub, salt)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 
 		hasher := sha3.NewKeccak256()
 		hasher.Write(append(sessionKey, 0))

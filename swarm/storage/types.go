@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -80,6 +79,19 @@ func (a Address) bits(i, j uint) uint {
 	return res
 }
 
+// Proximity(x, y) returns the proximity order of the MSB distance between x and y
+//
+// The distance metric MSB(x, y) of two equal length byte sequences x an y is the
+// value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
+// the binary cast is big endian: most significant bit first (=MSB).
+//
+// Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
+// It is defined as the reverse rank of the integer part of the base 2
+// logarithm of the distance.
+// It is calculated by counting the number of common leading zeros in the (MSB)
+// binary representation of the x^y.
+//
+// (0 farthest, 255 closest, 256 self)
 func Proximity(one, other []byte) (ret int) {
 	b := (MaxPO-1)/8 + 1
 	if b > len(one) {
@@ -231,24 +243,11 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	if dataSize > ch.DefaultSize {
-		dataSize = ch.DefaultSize
-	}
 	for i := 0; i < count; i++ {
-		ch := GenerateRandomChunk(ch.DefaultSize)
+		ch := GenerateRandomChunk(dataSize)
 		chunks = append(chunks, ch)
 	}
 	return chunks
-}
-
-func GenerateRandomData(l int) (r io.Reader, slice []byte) {
-	slice, err := ioutil.ReadAll(io.LimitReader(rand.Reader, int64(l)))
-	if err != nil {
-		panic("rand error")
-	}
-	// log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
-	r = io.LimitReader(bytes.NewReader(slice), int64(l))
-	return r, slice
 }
 
 // Size, Seek, Read, ReadAt

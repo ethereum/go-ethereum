@@ -93,11 +93,17 @@ func testProtocol(t *testing.T) {
 	lctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys

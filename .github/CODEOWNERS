@@ -9,24 +9,27 @@ les/                            @zsfelfoldi
 light/                          @zsfelfoldi
 mobile/                         @karalabe
 p2p/                            @fjl @zsfelfoldi
+p2p/simulations                 @lmars
+p2p/protocols                   @zelig
+swarm/api/http                  @justelad
 swarm/bmt                       @zelig
 swarm/dev                       @lmars
 swarm/fuse                      @jmozah @holisticode
 swarm/grafana_dashboards        @nonsense
 swarm/metrics                   @nonsense @holisticode
 swarm/multihash                 @nolash
-swarm/network/bitvector         @zelig @janos @gbalint
-swarm/network/priorityqueue     @zelig @janos @gbalint
-swarm/network/simulations       @zelig
-swarm/network/stream            @janos @zelig @gbalint @holisticode @justelad
+swarm/network/bitvector         @zelig @janos 
+swarm/network/priorityqueue     @zelig @janos 
+swarm/network/simulations       @zelig @janos
+swarm/network/stream            @janos @zelig @holisticode @justelad
 swarm/network/stream/intervals  @janos
 swarm/network/stream/testing    @zelig
 swarm/pot                       @zelig
 swarm/pss                       @nolash @zelig @nonsense
 swarm/services                  @zelig
 swarm/state                     @justelad
-swarm/storage/encryption        @gbalint @zelig @nagydani
+swarm/storage/encryption        @zelig @nagydani
 swarm/storage/mock              @janos
-swarm/storage/mru               @nolash
+swarm/storage/feed              @nolash @jpeletier
 swarm/testutil                  @lmars
 whisper/                        @gballet @gluk256

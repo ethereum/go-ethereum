@@ -50,26 +50,27 @@ type Config struct {
 	Swap *swap.LocalProfile
 	Pss  *pss.PssParams
 	//*network.SyncParams
-	Contract          common.Address
-	EnsRoot           common.Address
-	EnsAPIs           []string
-	Path              string
-	ListenAddr        string
-	Port              string
-	PublicKey         string
-	BzzKey            string
-	NodeID            string
-	NetworkID         uint64
-	SwapEnabled       bool
-	SyncEnabled       bool
-	SyncingSkipCheck  bool
-	DeliverySkipCheck bool
-	LightNodeEnabled  bool
-	SyncUpdateDelay   time.Duration
-	SwapAPI           string
-	Cors              string
-	BzzAccount        string
-	privateKey        *ecdsa.PrivateKey
+	Contract             common.Address
+	EnsRoot              common.Address
+	EnsAPIs              []string
+	Path                 string
+	ListenAddr           string
+	Port                 string
+	PublicKey            string
+	BzzKey               string
+	NodeID               string
+	NetworkID            uint64
+	SwapEnabled          bool
+	SyncEnabled          bool
+	SyncingSkipCheck     bool
+	DeliverySkipCheck    bool
+	MaxStreamPeerServers int
+	LightNodeEnabled     bool
+	SyncUpdateDelay      time.Duration
+	SwapAPI              string
+	Cors                 string
+	BzzAccount           string
+	privateKey           *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
@@ -80,20 +81,21 @@ func NewConfig() (c *Config) {
 		FileStoreParams:  storage.NewFileStoreParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
-		Swap:              swap.NewDefaultSwapParams(),
-		Pss:               pss.NewPssParams(),
-		ListenAddr:        DefaultHTTPListenAddr,
-		Port:              DefaultHTTPPort,
-		Path:              node.DefaultDataDir(),
-		EnsAPIs:           nil,
-		EnsRoot:           ens.TestNetAddress,
-		NetworkID:         network.DefaultNetworkID,
-		SwapEnabled:       false,
-		SyncEnabled:       true,
-		SyncingSkipCheck:  false,
-		DeliverySkipCheck: true,
-		SyncUpdateDelay:   15 * time.Second,
-		SwapAPI:           "",
+		Swap:                 swap.NewDefaultSwapParams(),
+		Pss:                  pss.NewPssParams(),
+		ListenAddr:           DefaultHTTPListenAddr,
+		Port:                 DefaultHTTPPort,
+		Path:                 node.DefaultDataDir(),
+		EnsAPIs:              nil,
+		EnsRoot:              ens.TestNetAddress,
+		NetworkID:            network.DefaultNetworkID,
+		SwapEnabled:          false,
+		SyncEnabled:          true,
+		SyncingSkipCheck:     false,
+		MaxStreamPeerServers: 10000,
+		DeliverySkipCheck:    true,
+		SyncUpdateDelay:      15 * time.Second,
+		SwapAPI:              "",
 	}
 
 	return

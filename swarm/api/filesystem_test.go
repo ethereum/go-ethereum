@@ -60,7 +60,7 @@ func TestApiDirUpload0(t *testing.T) {
 
 		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash, "index.css")
-		exp = expResponse(content, "text/css", 0)
+		exp = expResponse(content, "text/css; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
 		addr := storage.Address(common.Hex2Bytes(bzzhash))
@@ -140,7 +140,7 @@ func TestApiDirUploadModify(t *testing.T) {
 
 		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash, "index.css")
-		exp = expResponse(content, "text/css", 0)
+		exp = expResponse(content, "text/css; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
 		_, _, _, _, err = api.Get(context.TODO(), nil, addr, "")

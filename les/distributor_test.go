@@ -87,7 +87,7 @@ const (
 	testDistBufLimit       = 10000000
 	testDistMaxCost        = 1000000
 	testDistPeerCount      = 5
-	testDistReqCount       = 50000
+	testDistReqCount       = 5000
 	testDistMaxResendCount = 3
 )
 

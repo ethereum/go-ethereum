@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -84,7 +84,7 @@ func createGlobalStore() (string, *mockdb.GlobalStore, error) {
 	return globalStoreDir, globalStore, nil
 }
 
-func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
+func newStreamerTester(t *testing.T, registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
 	// setup
 	addr := network.RandomAddr() // tested peers peer address
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
@@ -114,7 +114,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	delivery := NewDelivery(to, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
-	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), nil)
+	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), registryOptions, nil)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()
@@ -230,12 +230,7 @@ func generateRandomFile() (string, error) {
 	//generate a random file size between minFileSize and maxFileSize
 	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
 	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
-	b := make([]byte, fileSize*1024)
-	_, err := crand.Read(b)
-	if err != nil {
-		log.Error("Error generating random file.", "err", err)
-		return "", err
-	}
+	b := testutil.RandomBytes(1, fileSize*1024)
 	return string(b), nil
 }
 

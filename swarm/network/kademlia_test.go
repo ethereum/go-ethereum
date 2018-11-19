@@ -46,19 +46,19 @@ func newTestKademlia(b string) *Kademlia {
 	return NewKademlia(base, params)
 }
 
-func newTestKadPeer(k *Kademlia, s string) *Peer {
-	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s)}, k)
+func newTestKadPeer(k *Kademlia, s string, lightNode bool) *Peer {
+	return NewPeer(&BzzPeer{BzzAddr: testKadPeerAddr(s), LightNode: lightNode}, k)
 }
 
 func On(k *Kademlia, ons ...string) {
 	for _, s := range ons {
-		k.On(newTestKadPeer(k, s))
+		k.On(newTestKadPeer(k, s, false))
 	}
 }
 
 func Off(k *Kademlia, offs ...string) {
 	for _, s := range offs {
-		k.Off(newTestKadPeer(k, s))
+		k.Off(newTestKadPeer(k, s, false))
 	}
 }
 
@@ -252,6 +252,56 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+}
+
+// a node should stay in the address book if it's removed from the kademlia
+func TestOffEffectingAddressBookNormalNode(t *testing.T) {
+	k := newTestKademlia("00000000")
+	// peer added to kademlia
+	k.On(newTestKadPeer(k, "01000000", false))
+	// peer should be in the address book
+	if k.addrs.Size() != 1 {
+		t.Fatal("known peer addresses should contain 1 entry")
+	}
+	// peer should be among live connections
+	if k.conns.Size() != 1 {
+		t.Fatal("live peers should contain 1 entry")
+	}
+	// remove peer from kademlia
+	k.Off(newTestKadPeer(k, "01000000", false))
+	// peer should be in the address book
+	if k.addrs.Size() != 1 {
+		t.Fatal("known peer addresses should contain 1 entry")
+	}
+	// peer should not be among live connections
+	if k.conns.Size() != 0 {
+		t.Fatal("live peers should contain 0 entry")
+	}
+}
+
+// a light node should not be in the address book
+func TestOffEffectingAddressBookLightNode(t *testing.T) {
+	k := newTestKademlia("00000000")
+	// light node peer added to kademlia
+	k.On(newTestKadPeer(k, "01000000", true))
+	// peer should not be in the address book
+	if k.addrs.Size() != 0 {
+		t.Fatal("known peer addresses should contain 0 entry")
+	}
+	// peer should be among live connections
+	if k.conns.Size() != 1 {
+		t.Fatal("live peers should contain 1 entry")
+	}
+	// remove peer from kademlia
+	k.Off(newTestKadPeer(k, "01000000", true))
+	// peer should not be in the address book
+	if k.addrs.Size() != 0 {
+		t.Fatal("known peer addresses should contain 0 entry")
+	}
+	// peer should not be among live connections
+	if k.conns.Size() != 0 {
+		t.Fatal("live peers should contain 0 entry")
+	}
 }
 
 func TestSuggestPeerRetries(t *testing.T) {

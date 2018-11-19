@@ -69,7 +69,7 @@ func (s *DBStore) Get(key string, i interface{}) (err error) {
 
 // Put stores an object that implements Binary for a specific key.
 func (s *DBStore) Put(key string, i interface{}) (err error) {
-	bytes := []byte{}
+	var bytes []byte
 
 	marshaler, ok := i.(encoding.BinaryMarshaler)
 	if !ok {

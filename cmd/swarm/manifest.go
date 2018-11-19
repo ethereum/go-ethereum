@@ -28,6 +28,40 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var manifestCommand = cli.Command{
+	Name:               "manifest",
+	CustomHelpTemplate: helpTemplate,
+	Usage:              "perform operations on swarm manifests",
+	ArgsUsage:          "COMMAND",
+	Description:        "Updates a MANIFEST by adding/removing/updating the hash of a path.\nCOMMAND could be: add, update, remove",
+	Subcommands: []cli.Command{
+		{
+			Action:             manifestAdd,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "add",
+			Usage:              "add a new path to the manifest",
+			ArgsUsage:          "<MANIFEST> <path> <hash>",
+			Description:        "Adds a new path to the manifest",
+		},
+		{
+			Action:             manifestUpdate,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "update",
+			Usage:              "update the hash for an already existing path in the manifest",
+			ArgsUsage:          "<MANIFEST> <path> <newhash>",
+			Description:        "Update the hash for an already existing path in the manifest",
+		},
+		{
+			Action:             manifestRemove,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "remove",
+			Usage:              "removes a path from the manifest",
+			ArgsUsage:          "<MANIFEST> <path>",
+			Description:        "Removes a path from the manifest",
+		},
+	},
+}
+
 // manifestAdd adds a new entry to the manifest at the given path.
 // New entry hash, the last argument, must be the hash of a manifest
 // with only one entry, which meta-data will be added to the original manifest.

@@ -35,8 +35,10 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -48,10 +50,10 @@ import (
 )
 
 // ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "3.0.0"
+const ExternalAPIVersion = "4.0.0"
 
 // InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "2.0.0"
+const InternalAPIVersion = "3.0.0"
 
 const legalWarning = `
 WARNING! 
@@ -91,7 +93,7 @@ var (
 	}
 	signerSecretFlag = cli.StringFlag{
 		Name:  "signersecret",
-		Usage: "A file containing the password used to encrypt Clef credentials, e.g. keystore credentials and ruleset hash",
+		Usage: "A file containing the (encrypted) master seed to encrypt Clef data, e.g. keystore credentials and ruleset hash",
 	}
 	dBFlag = cli.StringFlag{
 		Name:  "4bytedb",
@@ -155,18 +157,18 @@ Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
 
-	addCredentialCommand = cli.Command{
-		Action:    utils.MigrateFlags(addCredential),
-		Name:      "addpw",
+	setCredentialCommand = cli.Command{
+		Action:    utils.MigrateFlags(setCredential),
+		Name:      "setpw",
 		Usage:     "Store a credential for a keystore file",
-		ArgsUsage: "<address> <password>",
+		ArgsUsage: "<address>",
 		Flags: []cli.Flag{
 			logLevelFlag,
 			configdirFlag,
 			signerSecretFlag,
 		},
 		Description: `
-The addpw command stores a password for a given address (keyfile). If you invoke it with only one parameter, it will 
+		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
 remove any stored credential for that address (keyfile)
 `,
 	}
@@ -198,7 +200,7 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, addCredentialCommand}
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand}
 
 }
 func main() {
@@ -212,25 +214,45 @@ func initializeSecrets(c *cli.Context) error {
 	if err := initialize(c); err != nil {
 		return err
 	}
-	configDir := c.String(configdirFlag.Name)
+	configDir := c.GlobalString(configdirFlag.Name)
 
 	masterSeed := make([]byte, 256)
-	n, err := io.ReadFull(rand.Reader, masterSeed)
+	num, err := io.ReadFull(rand.Reader, masterSeed)
 	if err != nil {
 		return err
 	}
-	if n != len(masterSeed) {
+	if num != len(masterSeed) {
 		return fmt.Errorf("failed to read enough random")
 	}
+
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	if c.GlobalBool(utils.LightKDFFlag.Name) {
+		n, p = keystore.LightScryptN, keystore.LightScryptP
+	}
+	text := "The master seed of clef is locked with a password. Please give a password. Do not forget this password."
+	var password string
+	for {
+		password = getPassPhrase(text, true)
+		if err := core.ValidatePasswordFormat(password); err != nil {
+			fmt.Printf("invalid password: %v\n", err)
+		} else {
+			break
+		}
+	}
+	cipherSeed, err := encryptSeed(masterSeed, []byte(password), n, p)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt master seed: %v", err)
+	}
+
 	err = os.Mkdir(configDir, 0700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
-	location := filepath.Join(configDir, "secrets.dat")
+	location := filepath.Join(configDir, "masterseed.json")
 	if _, err := os.Stat(location); err == nil {
 		return fmt.Errorf("file %v already exists, will not overwrite", location)
 	}
-	err = ioutil.WriteFile(location, masterSeed, 0400)
+	err = ioutil.WriteFile(location, cipherSeed, 0400)
 	if err != nil {
 		return err
 	}
@@ -255,11 +277,11 @@ func attestFile(ctx *cli.Context) error {
 		return err
 	}
 
-	stretchedKey, err := readMasterKey(ctx)
+	stretchedKey, err := readMasterKey(ctx, nil)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.String(configdirFlag.Name)
+	configDir := ctx.GlobalString(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	confKey := crypto.Keccak256([]byte("config"), stretchedKey)
 
@@ -271,38 +293,36 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
-func addCredential(ctx *cli.Context) error {
+func setCredential(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires at leaste one argument.")
+		utils.Fatalf("This command requires an address to be passed as an argument.")
 	}
 	if err := initialize(ctx); err != nil {
 		return err
 	}
 
-	stretchedKey, err := readMasterKey(ctx)
+	address := ctx.Args().First()
+	password := getPassPhrase("Enter a passphrase to store with this address.", true)
+
+	stretchedKey, err := readMasterKey(ctx, nil)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	configDir := ctx.String(configdirFlag.Name)
+	configDir := ctx.GlobalString(configdirFlag.Name)
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), stretchedKey)[:10]))
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
 	// Initialize the encrypted storages
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-	key := ctx.Args().First()
-	value := ""
-	if len(ctx.Args()) > 1 {
-		value = ctx.Args().Get(1)
-	}
-	pwStorage.Put(key, value)
-	log.Info("Credential store updated", "key", key)
+	pwStorage.Put(address, password)
+	log.Info("Credential store updated", "key", address)
 	return nil
 }
 
 func initialize(c *cli.Context) error {
 	// Set up the logger to print everything
 	logOutput := os.Stdout
-	if c.Bool(stdiouiFlag.Name) {
+	if c.GlobalBool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
 		fmt.Fprintf(logOutput, legalWarning)
@@ -323,26 +343,28 @@ func signer(c *cli.Context) error {
 	var (
 		ui core.SignerUI
 	)
-	if c.Bool(stdiouiFlag.Name) {
+	if c.GlobalBool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
 		ui = core.NewStdIOUI()
 	} else {
 		log.Info("Using CLI as UI-channel")
 		ui = core.NewCommandlineUI()
 	}
-	db, err := core.NewAbiDBFromFiles(c.String(dBFlag.Name), c.String(customDBFlag.Name))
+	fourByteDb := c.GlobalString(dBFlag.Name)
+	fourByteLocal := c.GlobalString(customDBFlag.Name)
+	db, err := core.NewAbiDBFromFiles(fourByteDb, fourByteLocal)
 	if err != nil {
 		utils.Fatalf(err.Error())
 	}
-	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
+	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", fourByteDb, "local", fourByteLocal)
 
 	var (
 		api core.ExternalAPI
 	)
 
-	configDir := c.String(configdirFlag.Name)
-	if stretchedKey, err := readMasterKey(c); err != nil {
-		log.Info("No master seed provided, rules disabled")
+	configDir := c.GlobalString(configdirFlag.Name)
+	if stretchedKey, err := readMasterKey(c, ui); err != nil {
+		log.Info("No master seed provided, rules disabled", "error", err)
 	} else {
 
 		if err != nil {
@@ -361,7 +383,7 @@ func signer(c *cli.Context) error {
 		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
 		//Do we have a rule-file?
-		ruleJS, err := ioutil.ReadFile(c.String(ruleFlag.Name))
+		ruleJS, err := ioutil.ReadFile(c.GlobalString(ruleFlag.Name))
 		if err != nil {
 			log.Info("Could not load rulefile, rules not enabled", "file", "rulefile")
 		} else {
@@ -385,17 +407,15 @@ func signer(c *cli.Context) error {
 	}
 
 	apiImpl := core.NewSignerAPI(
-		c.Int64(utils.NetworkIdFlag.Name),
-		c.String(keystoreFlag.Name),
-		c.Bool(utils.NoUSBFlag.Name),
+		c.GlobalInt64(utils.NetworkIdFlag.Name),
+		c.GlobalString(keystoreFlag.Name),
+		c.GlobalBool(utils.NoUSBFlag.Name),
 		ui, db,
-		c.Bool(utils.LightKDFFlag.Name),
-		c.Bool(advancedMode.Name))
-
+		c.GlobalBool(utils.LightKDFFlag.Name),
+		c.GlobalBool(advancedMode.Name))
 	api = apiImpl
-
 	// Audit logging
-	if logfile := c.String(auditLogFlag.Name); logfile != "" {
+	if logfile := c.GlobalString(auditLogFlag.Name); logfile != "" {
 		api, err = core.NewAuditLogger(logfile, api)
 		if err != nil {
 			utils.Fatalf(err.Error())
@@ -414,13 +434,13 @@ func signer(c *cli.Context) error {
 			Service:   api,
 			Version:   "1.0"},
 	}
-	if c.Bool(utils.RPCEnabledFlag.Name) {
+	if c.GlobalBool(utils.RPCEnabledFlag.Name) {
 
 		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
+		httpEndpoint := fmt.Sprintf("%s:%d", c.GlobalString(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
 		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, rpc.DefaultHTTPTimeouts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
@@ -434,9 +454,9 @@ func signer(c *cli.Context) error {
 		}()
 
 	}
-	if !c.Bool(utils.IPCDisabledFlag.Name) {
+	if !c.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if c.IsSet(utils.IPCPathFlag.Name) {
-			ipcapiURL = c.String(utils.IPCPathFlag.Name)
+			ipcapiURL = c.GlobalString(utils.IPCPathFlag.Name)
 		} else {
 			ipcapiURL = filepath.Join(configDir, "clef.ipc")
 		}
@@ -453,7 +473,7 @@ func signer(c *cli.Context) error {
 
 	}
 
-	if c.Bool(testFlag.Name) {
+	if c.GlobalBool(testFlag.Name) {
 		log.Info("Performing UI test")
 		go testExternalUI(apiImpl)
 	}
@@ -512,36 +532,52 @@ func homeDir() string {
 	}
 	return ""
 }
-func readMasterKey(ctx *cli.Context) ([]byte, error) {
+func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
 	var (
 		file      string
-		configDir = ctx.String(configdirFlag.Name)
+		configDir = ctx.GlobalString(configdirFlag.Name)
 	)
-	if ctx.IsSet(signerSecretFlag.Name) {
-		file = ctx.String(signerSecretFlag.Name)
+	if ctx.GlobalIsSet(signerSecretFlag.Name) {
+		file = ctx.GlobalString(signerSecretFlag.Name)
 	} else {
-		file = filepath.Join(configDir, "secrets.dat")
+		file = filepath.Join(configDir, "masterseed.json")
 	}
 	if err := checkFile(file); err != nil {
 		return nil, err
 	}
-	masterKey, err := ioutil.ReadFile(file)
+	cipherKey, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	if len(masterKey) < 256 {
-		return nil, fmt.Errorf("master key of insufficient length, expected >255 bytes, got %d", len(masterKey))
+	var password string
+	// If ui is not nil, get the password from ui.
+	if ui != nil {
+		resp, err := ui.OnInputRequired(core.UserInputRequest{
+			Title:      "Master Password",
+			Prompt:     "Please enter the password to decrypt the master seed",
+			IsPassword: true})
+		if err != nil {
+			return nil, err
+		}
+		password = resp.Text
+	} else {
+		password = getPassPhrase("Decrypt master seed of clef", false)
 	}
+	masterSeed, err := decryptSeed(cipherKey, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt the master seed of clef")
+	}
+	if len(masterSeed) < 256 {
+		return nil, fmt.Errorf("master seed of insufficient length, expected >255 bytes, got %d", len(masterSeed))
+	}
+
 	// Create vault location
-	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterKey)[:10]))
+	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterSeed)[:10]))
 	err = os.Mkdir(vaultLocation, 0700)
 	if err != nil && !os.IsExist(err) {
 		return nil, err
 	}
-	//!TODO, use KDF to stretch the master key
-	//			stretched_key := stretch_key(master_key)
-
-	return masterKey, nil
+	return masterSeed, nil
 }
 
 // checkFile is a convenience function to check if a file
@@ -617,6 +653,59 @@ func testExternalUI(api *core.SignerAPI) {
 		log.Info("No errors")
 	}
 
+}
+
+// getPassPhrase retrieves the password associated with clef, either fetched
+// from a list of preloaded passphrases, or requested interactively from the user.
+// TODO: there are many `getPassPhrase` functions, it will be better to abstract them into one.
+func getPassPhrase(prompt string, confirmation bool) string {
+	fmt.Println(prompt)
+	password, err := console.Stdin.PromptPassword("Passphrase: ")
+	if err != nil {
+		utils.Fatalf("Failed to read passphrase: %v", err)
+	}
+	if confirmation {
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
+		if err != nil {
+			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
+		}
+		if password != confirm {
+			utils.Fatalf("Passphrases do not match")
+		}
+	}
+	return password
+}
+
+type encryptedSeedStorage struct {
+	Description string              `json:"description"`
+	Version     int                 `json:"version"`
+	Params      keystore.CryptoJSON `json:"params"`
+}
+
+// encryptSeed uses a similar scheme as the keystore uses, but with a different wrapping,
+// to encrypt the master seed
+func encryptSeed(seed []byte, auth []byte, scryptN, scryptP int) ([]byte, error) {
+	cryptoStruct, err := keystore.EncryptDataV3(seed, auth, scryptN, scryptP)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(&encryptedSeedStorage{"Clef seed", 1, cryptoStruct})
+}
+
+// decryptSeed decrypts the master seed
+func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
+	var encSeed encryptedSeedStorage
+	if err := json.Unmarshal(keyjson, &encSeed); err != nil {
+		return nil, err
+	}
+	if encSeed.Version != 1 {
+		log.Warn(fmt.Sprintf("unsupported encryption format of seed: %d, operation will likely fail", encSeed.Version))
+	}
+	seed, err := keystore.DecryptDataV3(encSeed.Params, auth)
+	if err != nil {
+		return nil, err
+	}
+	return seed, err
 }
 
 /**

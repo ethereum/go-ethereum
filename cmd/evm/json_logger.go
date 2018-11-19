@@ -45,14 +45,15 @@ func (l *JSONLogger) CaptureStart(from common.Address, to common.Address, create
 // CaptureState outputs state information on the logger.
 func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	log := vm.StructLog{
-		Pc:         pc,
-		Op:         op,
-		Gas:        gas,
-		GasCost:    cost,
-		MemorySize: memory.Len(),
-		Storage:    nil,
-		Depth:      depth,
-		Err:        err,
+		Pc:            pc,
+		Op:            op,
+		Gas:           gas,
+		GasCost:       cost,
+		MemorySize:    memory.Len(),
+		Storage:       nil,
+		Depth:         depth,
+		RefundCounter: env.StateDB.GetRefund(),
+		Err:           err,
 	}
 	if !l.cfg.DisableMemory {
 		log.Memory = memory.Data()

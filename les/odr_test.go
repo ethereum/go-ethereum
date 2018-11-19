@@ -194,7 +194,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	client.peers.Register(client.rPeer)
 	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	client.peers.lock.Lock()
-	client.rPeer.hasBlock = func(common.Hash, uint64) bool { return true }
+	client.rPeer.hasBlock = func(common.Hash, uint64, bool) bool { return true }
 	client.peers.lock.Unlock()
 	test(5)
 	// still expect all retrievals to pass, now data should be cached locally

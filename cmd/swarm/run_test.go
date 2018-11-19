@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/ecdsa"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -39,7 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 )
+
+var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	// Run the app if we've been exec'd as "swarm-test" in runSwarm.
@@ -52,6 +57,20 @@ func init() {
 	})
 }
 
+const clusterSize = 3
+
+var clusteronce sync.Once
+var cluster *testCluster
+
+func initCluster(t *testing.T) {
+	clusteronce.Do(func() {
+		cluster = newTestCluster(t, clusterSize)
+	})
+}
+
+func serverFunc(api *api.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, "")
+}
 func TestMain(m *testing.M) {
 	// check if we have been reexec'd
 	if reexec.Init() {
@@ -242,7 +261,7 @@ func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
 		"--bzzaccount", bzzaccount,
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", "3",
+		"--verbosity", fmt.Sprint(*loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {
@@ -318,7 +337,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		"--bzzaccount", account.Address.String(),
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,
-		"--verbosity", "3",
+		"--verbosity", fmt.Sprint(*loglevel),
 	)
 	node.Cmd.InputLine(testPassphrase)
 	defer func() {

@@ -83,6 +83,22 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 	return localStore, nil
 }
 
+// isValid returns true if chunk passes any of the LocalStore Validators.
+// isValid also returns true if LocalStore has no Validators.
+func (ls *LocalStore) isValid(chunk Chunk) bool {
+	// by default chunks are valid. if we have 0 validators, then all chunks are valid.
+	valid := true
+
+	// ls.Validators contains a list of one validator per chunk type.
+	// if one validator succeeds, then the chunk is valid
+	for _, v := range ls.Validators {
+		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
+			break
+		}
+	}
+	return valid
+}
+
 // Put is responsible for doing validation and storage of the chunk
 // by using configured ChunkValidators, MemStore and LDBStore.
 // If the chunk is not valid, its GetErrored function will
@@ -96,15 +112,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
-	valid := true
-	// ls.Validators contains a list of one validator per chunk type.
-	// if one validator succeeds, then the chunk is valid
-	for _, v := range ls.Validators {
-		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
-			break
-		}
-	}
-	if !valid {
+	if !ls.isValid(chunk) {
 		return ErrChunkInvalid
 	}
 
@@ -145,6 +153,7 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err e
 
 	if err == nil {
 		metrics.GetOrRegisterCounter("localstore.get.cachehit", nil).Inc(1)
+		go ls.DbStore.MarkAccessed(addr)
 		return chunk, nil
 	}
 
@@ -183,4 +192,52 @@ func (ls *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(Address,
 // Close the local store
 func (ls *LocalStore) Close() {
 	ls.DbStore.Close()
+}
+
+// Migrate checks the datastore schema vs the runtime schema, and runs migrations if they don't match
+func (ls *LocalStore) Migrate() error {
+	actualDbSchema, err := ls.DbStore.GetSchema()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+
+	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", CurrentDbSchema)
+
+	if actualDbSchema == CurrentDbSchema {
+		return nil
+	}
+
+	if actualDbSchema == DbSchemaNone {
+		ls.migrateFromNoneToPurity()
+		actualDbSchema = DbSchemaPurity
+	}
+
+	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
+		return err
+	}
+
+	if actualDbSchema == DbSchemaPurity {
+		if err := ls.migrateFromPurityToHalloween(); err != nil {
+			return err
+		}
+		actualDbSchema = DbSchemaHalloween
+	}
+
+	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ls *LocalStore) migrateFromNoneToPurity() {
+	// delete chunks that are not valid, i.e. chunks that do not pass
+	// any of the ls.Validators
+	ls.DbStore.Cleanup(func(c *chunk) bool {
+		return !ls.isValid(c)
+	})
+}
+
+func (ls *LocalStore) migrateFromPurityToHalloween() error {
+	return ls.DbStore.CleanGCIndex()
 }
