@@ -57,6 +57,17 @@ func init() {
 	})
 }
 
+const clusterSize = 3
+
+var clusteronce sync.Once
+var cluster *testCluster
+
+func initCluster(t *testing.T) {
+	clusteronce.Do(func() {
+		cluster = newTestCluster(t, clusterSize)
+	})
+}
+
 func serverFunc(api *api.API) swarmhttp.TestServer {
 	return swarmhttp.NewServer(api, "")
 }
