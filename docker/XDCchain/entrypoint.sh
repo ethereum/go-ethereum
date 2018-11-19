@@ -28,7 +28,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS XDC_TESTNET; do
+           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -144,9 +144,9 @@ if [[ ! -z $ANNOUNCE_TXS ]]; then
   params="$params --announce-txs"
 fi
 
-# testnet only
-if [[ ! -z $XDC_TESTNET ]]; then
-  params="$params --XDC-testnet"
+# store reward
+if [[ ! -z $STORE_REWARD ]]; then
+  params="$params --store-reward"
 fi
 
 # dump
