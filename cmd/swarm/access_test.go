@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !windows
-
 package main
 
 import (
@@ -28,6 +26,7 @@ import (
 	gorand "math/rand"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -37,8 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	swarmapi "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -49,22 +47,41 @@ const (
 
 var DefaultCurve = crypto.S256()
 
-// TestAccessPassword tests for the correct creation of an ACT manifest protected by a password.
+func TestACT(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	initCluster(t)
+
+	cases := []struct {
+		name string
+		f    func(t *testing.T)
+	}{
+		{"Password", testPassword},
+		{"PK", testPK},
+		{"ACTWithoutBogus", testACTWithoutBogus},
+		{"ACTWithBogus", testACTWithBogus},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, tc.f)
+	}
+}
+
+// testPassword tests for the correct creation of an ACT manifest protected by a password.
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
 // The parties participating - node (publisher), uploads to second node then disappears. Content which was uploaded
 // is then fetched through 2nd node. since the tested code is not key-aware - we can just
 // fetch from the 2nd node using HTTP BasicAuth
-func TestAccessPassword(t *testing.T) {
-	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
-	defer srv.Close()
-
+func testPassword(t *testing.T) {
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
 
 	// upload the file with 'swarm up' and expect a hash
 	up := runSwarm(t,
 		"--bzzapi",
-		srv.URL, //it doesn't matter through which node we upload content
+		cluster.Nodes[0].URL,
 		"up",
 		"--encrypt",
 		dataFilename)
@@ -138,16 +155,17 @@ func TestAccessPassword(t *testing.T) {
 	if a.Publisher != "" {
 		t.Fatal("should be empty")
 	}
-	client := swarm.NewClient(srv.URL)
+
+	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	httpClient := &http.Client{}
+	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
 
-	url := srv.URL + "/" + "bzz:/" + hash
+	httpClient := &http.Client{}
 	response, err := httpClient.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +207,7 @@ func TestAccessPassword(t *testing.T) {
 	//download file with 'swarm down' with wrong password
 	up = runSwarm(t,
 		"--bzzapi",
-		srv.URL,
+		cluster.Nodes[0].URL,
 		"down",
 		"bzz:/"+hash,
 		tmp,
@@ -203,16 +221,12 @@ func TestAccessPassword(t *testing.T) {
 	up.ExpectExit()
 }
 
-// TestAccessPK tests for the correct creation of an ACT manifest between two parties (publisher and grantee).
+// testPK tests for the correct creation of an ACT manifest between two parties (publisher and grantee).
 // The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
 // The parties participating - node (publisher), uploads to second node (which is also the grantee) then disappears.
 // Content which was uploaded is then fetched through the grantee's http proxy. Since the tested code is private-key aware,
 // the test will fail if the proxy's given private key is not granted on the ACT.
-func TestAccessPK(t *testing.T) {
-	// Setup Swarm and upload a test file to it
-	cluster := newTestCluster(t, 2)
-	defer cluster.Shutdown()
-
+func testPK(t *testing.T) {
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
 
@@ -318,7 +332,7 @@ func TestAccessPK(t *testing.T) {
 	if a.Publisher != pkComp {
 		t.Fatal("publisher key did not match")
 	}
-	client := swarm.NewClient(cluster.Nodes[0].URL)
+	client := swarmapi.NewClient(cluster.Nodes[0].URL)
 
 	hash, err := client.UploadManifest(&m, false)
 	if err != nil {
@@ -344,29 +358,24 @@ func TestAccessPK(t *testing.T) {
 	}
 }
 
-// TestAccessACT tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
-func TestAccessACT(t *testing.T) {
-	testAccessACT(t, 0)
+// testACTWithoutBogus tests the creation of the ACT manifest end-to-end, without any bogus entries (i.e. default scenario = 3 nodes 1 unauthorized)
+func testACTWithoutBogus(t *testing.T) {
+	testACT(t, 0)
 }
 
-// TestAccessACTScale tests the creation of the ACT manifest end-to-end, with 1000 bogus entries (i.e. 1000 EC keys + default scenario = 3 nodes 1 unauthorized = 1003 keys in the ACT manifest)
-func TestAccessACTScale(t *testing.T) {
-	testAccessACT(t, 1000)
+// testACTWithBogus tests the creation of the ACT manifest end-to-end, with 100 bogus entries (i.e. 100 EC keys + default scenario = 3 nodes 1 unauthorized = 103 keys in the ACT manifest)
+func testACTWithBogus(t *testing.T) {
+	testACT(t, 100)
 }
 
-// TestAccessACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
+// testACT tests the e2e creation, uploading and downloading of an ACT access control with both EC keys AND password protection
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
 // set and also protects the ACT with a password. the third node should fail decoding the reference as it will not be granted access.
 // the third node then then tries to download using a correct password (and succeeds) then uses a wrong password and fails.
 // the publisher uploads through one of the nodes then disappears.
-func testAccessACT(t *testing.T, bogusEntries int) {
-	// Setup Swarm and upload a test file to it
-	const clusterSize = 3
-	cluster := newTestCluster(t, clusterSize)
-	defer cluster.Shutdown()
-
+func testACT(t *testing.T, bogusEntries int) {
 	var uploadThroughNode = cluster.Nodes[0]
-	client := swarm.NewClient(uploadThroughNode.URL)
+	client := swarmapi.NewClient(uploadThroughNode.URL)
 
 	r1 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
 	nodeToSkip := r1.Intn(clusterSize) // a number between 0 and 2 (node indices in `cluster`)
