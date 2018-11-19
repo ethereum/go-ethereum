@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/contracts"
-	"github.com/ethereum/go-ethereum/contracts/validator/contract"
+	// "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -324,7 +324,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return err, nil
 				}
 				// Get validator.
-				validator, err := contract.NewXDCValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
+				// validator, err := contract.NewXDCValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
 				if err != nil {
 					log.Error("Fail get instance of XDC Validator", "error", err)
 					return err, nil
@@ -332,8 +332,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				// Add reward for coin holders.
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
+					vmenv := core.NewRuntimeEVM(state)
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
+						// err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders2(foudationWalletAddr, vmenv, state, signer, calcReward)
 						if err != nil {
 							log.Error("Fail to calculate reward for holders.", "error", err)
 							return err, nil	
@@ -342,7 +344,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 				rewards["rewards"] = voterResults
-				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+							// log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+							fmt.Println("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			}
 			return nil, rewards
 		}
