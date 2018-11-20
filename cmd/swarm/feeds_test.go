@@ -162,4 +162,37 @@ func TestCLIFeedUpdate(t *testing.T) {
 	if !bytes.Equal(data, retrieved) {
 		t.Fatalf("Received %s, expected %s", retrieved, data)
 	}
+
+	// test publishing a manifest for a different user
+	flags = []string{
+		"--bzzapi", srv.URL,
+		"--bzzaccount", pkFileName,
+		"feed", "create",
+		"--topic", topic.Hex(),
+		"--user", "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // different user
+	}
+
+	log.Info(fmt.Sprintf("Publishing manifest with 'swarm feed create' for a different user"))
+	cmd = runSwarm(t, flags...)
+	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
+	cmd.ExpectExit()
+
+	manifestAddress = matches[0] // read the received feed manifest
+
+	// now let's try to update that user's manifest which we don't have the private key for
+	flags = []string{
+		"--bzzapi", srv.URL,
+		"--bzzaccount", pkFileName,
+		"feed", "update",
+		"--manifest", manifestAddress,
+		hexData}
+
+	// create an update and expect an exit without errors
+	log.Info(fmt.Sprintf("updating a feed with 'swarm feed update'"))
+	cmd = runSwarm(t, flags...)
+	cmd.ExpectRegexp("Fatal:.*") // best way so far to detect a failure.
+	cmd.ExpectExit()
+	if cmd.ExitStatus() == 0 {
+		t.Fatal("Expected nonzero exit code when updating a manifest with the wrong user. Got 0.")
+	}
 }
