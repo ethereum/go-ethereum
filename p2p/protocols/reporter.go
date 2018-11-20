@@ -29,15 +29,14 @@ import (
 //AccountMetrics abstracts away the metrics DB and
 //the reporter to persist metrics
 type AccountingMetrics struct {
-	metricsStore *leveldb.DB
-	reporter     *reporter
+	reporter *reporter
 }
 
 //Close will be called when the node is being shutdown
 //for a graceful cleanup
 func (am *AccountingMetrics) Close() {
-	am.reporter.quit <- struct{}{}
-	am.metricsStore.Close()
+	close(am.reporter.quit)
+	am.reporter.db.Close()
 }
 
 //reporter is an internal structure used to write p2p accounting related
@@ -99,14 +98,13 @@ func NewAccountingMetrics(r metrics.Registry, d time.Duration, path string) *Acc
 	go rep.run()
 
 	m := &AccountingMetrics{
-		metricsStore: db,
-		reporter:     rep,
+		reporter: rep,
 	}
 
 	return m
 }
 
-//run is the go routine which periodically sends the metrics to the configued LevelDB
+//run is the goroutine which periodically sends the metrics to the configured LevelDB
 func (r *reporter) run() {
 	intervalTicker := time.NewTicker(r.interval)
 
@@ -114,7 +112,7 @@ func (r *reporter) run() {
 		select {
 		case <-intervalTicker.C:
 			//at each tick send the metrics
-			if err := r.send(); err != nil {
+			if err := r.save(); err != nil {
 				log.Error("unable to send metrics to LevelDB", "err", err)
 				//If there is an error in writing, exit the routine; we assume here that the error is
 				//severe and don't attempt to write again.
@@ -129,21 +127,30 @@ func (r *reporter) run() {
 }
 
 //send the metrics to the DB
-func (r *reporter) send() error {
+func (r *reporter) save() error {
 	var err error
+	//create a LevelDB Batch
+	batch := leveldb.Batch{}
 	//for each metric in the registry (which is independent)...
 	r.reg.Each(func(name string, i interface{}) {
-		switch metric := i.(type) {
-		//assuming every metric here to be a Counter (separate registry)
-		case metrics.Counter:
+		metric, ok := i.(metrics.Counter)
+		if ok {
+			//assuming every metric here to be a Counter (separate registry)
 			//...create a snapshot...
 			ms := metric.Snapshot()
 			byteVal := make([]byte, 8)
 			binary.BigEndian.PutUint64(byteVal, uint64(ms.Count()))
 			//...and save the value to the DB
-			err = r.db.Put([]byte(name), byteVal, nil)
-		default:
+			batch.Put([]byte(name), byteVal)
 		}
 	})
+	if batch.Len() > 0 {
+		err = r.db.Write(&batch, nil)
+		if err != nil {
+			return err
+		}
+		batch.Reset()
+	}
+
 	return err
 }
