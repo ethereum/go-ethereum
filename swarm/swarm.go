@@ -461,11 +461,12 @@ func (self *Swarm) Stop() error {
 	self.sfs.Stop()
 	stopCounter.Inc(1)
 	self.streamer.Stop()
+
+	err := self.bzz.Stop()
 	if self.stateStore != nil {
 		self.stateStore.Close()
 	}
-
-	return self.bzz.Stop()
+	return err
 }
 
 // implements the node.Service interface
