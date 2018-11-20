@@ -17,7 +17,6 @@
 package shed
 
 import (
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -94,10 +93,25 @@ func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
 	}
 	prefix := []byte{id}
 	return Index{
-		db:              db,
-		prefix:          prefix,
-		encodeKeyFunc:   newIndexEncodeKeyFunc(funcs.EncodeKey, id),
-		decodeKeyFunc:   newDecodeKeyFunc(funcs.DecodeKey),
+		db:     db,
+		prefix: prefix,
+		// This function adjusts Index LevelDB key
+		// by appending the provided index id byte.
+		// This is needed to avoid collisions between keys of different
+		// indexes as all index ids are unique.
+		encodeKeyFunc: func(e IndexItem) (key []byte, err error) {
+			key, err = funcs.EncodeKey(e)
+			if err != nil {
+				return nil, err
+			}
+			return append(append(make([]byte, 0, len(key)+1), prefix...), key...), nil
+		},
+		// This function reverses the encodeKeyFunc constructed key
+		// to transparently work with index keys without their index ids.
+		// It assumes that index keys are prefixed with only one byte.
+		decodeKeyFunc: func(key []byte) (e IndexItem, err error) {
+			return funcs.DecodeKey(key[1:])
+		},
 		encodeValueFunc: funcs.EncodeValue,
 		decodeValueFunc: funcs.DecodeValue,
 	}, nil
@@ -241,69 +255,4 @@ func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 		}
 	}
 	return it.Error()
-}
-
-// NewMockIndex is a helper function to easily construct MockIndex
-// when from the same definition of Index.
-func (f Index) NewMockIndex(store *mock.NodeStore) (m MockIndex) {
-	return MockIndex{
-		store:           store,
-		prefix:          f.prefix,
-		encodeKeyFunc:   f.encodeKeyFunc,
-		decodeKeyFunc:   f.decodeKeyFunc,
-		encodeValueFunc: f.encodeValueFunc,
-		decodeValueFunc: f.decodeValueFunc,
-	}
-}
-
-// IndexInterface defines methods that are required for a simple index
-// that does not use iterations.
-// It can be used when Index should be swapped with MockIndex or any other
-// IndexInterface implementation.
-// In most cases, interface is not needed and it is recommended to use the
-// Index implementation whenever possible.
-type IndexInterface interface {
-	Get(keyFields IndexItem) (out IndexItem, err error)
-	Put(i IndexItem) (err error)
-	PutInBatch(batch *leveldb.Batch, i IndexItem) (err error)
-	Delete(keyFields IndexItem) (err error)
-	DeleteInBatch(batch *leveldb.Batch, keyFields IndexItem) (err error)
-}
-
-// IndexIteratorInterface defines metods for a full index implementation with
-// iterators. Index type implements this type.
-// In most cases, interface is not needed and it is recommended to use the
-// Index implementation whenever possible.
-type IndexIteratorInterface interface {
-	IndexInterface
-	IterateAll(fn IndexIterFunc) (err error)
-	IterateFrom(start IndexItem, fn IndexIterFunc) (err error)
-}
-
-// newIndexEncodeKeyFunc adjusts Index and MockIndex LevelDB key
-// by appending the provided index id byte.
-// This is needed to avoid collisions between keys of different
-// indexes as all index ids are unique.
-func newIndexEncodeKeyFunc(
-	encodeKeyFunc func(fields IndexItem) (key []byte, err error),
-	id byte,
-) (f func(e IndexItem) (key []byte, err error)) {
-	prefix := []byte{id}
-	return func(e IndexItem) (key []byte, err error) {
-		key, err = encodeKeyFunc(e)
-		if err != nil {
-			return nil, err
-		}
-		return append(append(make([]byte, 0, len(key)+1), prefix...), key...), nil
-	}
-}
-
-// newDecodeKeyFunc reverses the newIndexEncodeKeyFunc constructd key
-// to transparently work with index keys without their index ids.
-// This function is used in NewIndex and NewMockIndex constructors.
-// It assumes that index keys are prefixed with only one byte.
-func newDecodeKeyFunc(decodeKeyFunc func(key []byte) (e IndexItem, err error)) (f func(key []byte) (e IndexItem, err error)) {
-	return func(key []byte) (e IndexItem, err error) {
-		return decodeKeyFunc(key[1:])
-	}
 }

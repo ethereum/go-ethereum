@@ -24,9 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -62,29 +59,6 @@ func TestIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testIndex(t, db, index)
-}
-
-// TestIndex_NewMockIndex validates put, get and delete functions of
-// the MockIndex implementation, when constructed with Index.NewMockIndex function.
-func TestIndex_NewMockIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
-	defer cleanupFunc()
-
-	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	globalStore := mem.NewGlobalStore()
-
-	mockIndex := index.NewMockIndex(globalStore.NewNodeStore(common.HexToAddress("12345678")))
-
-	testIndex(t, db, mockIndex)
-}
-
-// testIndex validates put, get and delete functions of a index interface.
-func testIndex(t *testing.T, db *DB, index IndexInterface) {
 	t.Run("put", func(t *testing.T) {
 		want := IndexItem{
 			Address:        []byte("put-hash"),
@@ -196,9 +170,6 @@ func testIndex(t *testing.T, db *DB, index IndexInterface) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		if _, ok := index.(MockIndex); ok {
-			wantErr = mock.ErrNotFound
-		}
 		got, err = index.Get(IndexItem{
 			Address: want.Address,
 		})
@@ -236,9 +207,6 @@ func testIndex(t *testing.T, db *DB, index IndexInterface) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		if _, ok := index.(MockIndex); ok {
-			wantErr = mock.ErrNotFound
-		}
 		got, err = index.Get(IndexItem{
 			Address: want.Address,
 		})
