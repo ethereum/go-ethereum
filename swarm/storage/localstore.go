@@ -194,7 +194,8 @@ func (ls *LocalStore) Close() {
 	ls.DbStore.Close()
 }
 
-// Migrate checks the datastore schema vs the runtime schema, and runs migrations if they don't match
+// Migrate checks the datastore schema vs the runtime schema and runs
+// migrations if they don't match
 func (ls *LocalStore) Migrate() error {
 	actualDbSchema, err := ls.DbStore.GetSchema()
 	if err != nil {
@@ -202,11 +203,11 @@ func (ls *LocalStore) Migrate() error {
 		return err
 	}
 
-	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", CurrentDbSchema)
-
 	if actualDbSchema == CurrentDbSchema {
 		return nil
 	}
+
+	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", CurrentDbSchema)
 
 	if actualDbSchema == DbSchemaNone {
 		ls.migrateFromNoneToPurity()
