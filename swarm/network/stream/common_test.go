@@ -69,19 +69,13 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-func createGlobalStore() (string, *mockdb.GlobalStore, error) {
-	var globalStore *mockdb.GlobalStore
-	globalStoreDir, err := ioutil.TempDir("", "global.store")
-	if err != nil {
-		log.Error("Error initiating global store temp directory!", "err", err)
-		return "", nil, err
-	}
-	globalStore, err = mockdb.NewGlobalStore(globalStoreDir)
+func createGlobalStore() (*mockdb.GlobalStore, error) {
+	globalStore, err := mockdb.NewGlobalStore()
 	if err != nil {
 		log.Error("Error initiating global store!", "err", err)
-		return "", nil, err
+		return nil, err
 	}
-	return globalStoreDir, globalStore, nil
+	return globalStore, nil
 }
 
 func newStreamerTester(t *testing.T, registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {

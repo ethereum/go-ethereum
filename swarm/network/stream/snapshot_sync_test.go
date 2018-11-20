@@ -268,15 +268,13 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		var gDir string
 		var globalStore *mockdb.GlobalStore
 		if *useMockStore {
-			gDir, globalStore, err = createGlobalStore()
+			globalStore, err = createGlobalStore()
 			if err != nil {
 				return fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
 			}
 			defer func() {
-				os.RemoveAll(gDir)
 				err := globalStore.Close()
 				if err != nil {
 					log.Error("Error closing global store! %v", "err", err)
@@ -476,14 +474,12 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			return err
 		}
 
-		var gDir string
 		var globalStore *mockdb.GlobalStore
 		if *useMockStore {
-			gDir, globalStore, err = createGlobalStore()
+			globalStore, err = createGlobalStore()
 			if err != nil {
 				return fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
 			}
-			defer os.RemoveAll(gDir)
 		}
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.

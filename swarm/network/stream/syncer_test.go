@@ -71,7 +71,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			var store storage.ChunkStore
 			var globalStore *mockdb.GlobalStore
-			var gDir, datadir string
+			var datadir string
 
 			node := ctx.Config.Node()
 			addr := network.NewAddr(node)
@@ -79,7 +79,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			addr.OAddr[0] = byte(0)
 
 			if *useMockStore {
-				gDir, globalStore, err = createGlobalStore()
+				globalStore, err = createGlobalStore()
 				if err != nil {
 					return nil, nil, fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
 				}
@@ -99,7 +99,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 					if err != nil {
 						log.Error("Error closing global store! %v", "err", err)
 					}
-					os.RemoveAll(gDir)
 				}
 			}
 			localStore := store.(*storage.LocalStore)

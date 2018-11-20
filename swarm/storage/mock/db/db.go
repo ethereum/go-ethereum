@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,8 +41,8 @@ type GlobalStore struct {
 }
 
 // NewGlobalStore creates a new instance of GlobalStore.
-func NewGlobalStore(path string) (s *GlobalStore, err error) {
-	db, err := leveldb.OpenFile(path, nil)
+func NewGlobalStore() (s *GlobalStore, err error) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
 		return nil, err
 	}

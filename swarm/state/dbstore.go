@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // ErrNotFound is returned when no results are returned from the database
@@ -35,9 +36,11 @@ type DBStore struct {
 	db *leveldb.DB
 }
 
+const openFileLimit = 32
+
 // NewDBStore creates a new instance of DBStore.
 func NewDBStore(path string) (s *DBStore, err error) {
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := leveldb.OpenFile(path, &opt.Options{OpenFilesCacheCapacity: openFileLimit})
 	if err != nil {
 		return nil, err
 	}
