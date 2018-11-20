@@ -29,16 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
-const (
-	defaultMaxProxDisplay = 16
-	defaultMinProxBinSize = 2
-	defaultMinBinSize     = 2
-	defaultMaxBinSize     = 4
-	defaultRetryInterval  = 4200000000 // 4.2 sec
-	defaultMaxRetries     = 42
-	defaultRetryExponent  = 2
-)
-
 /*
 
 Taking the proximity order relative to a fix point x classifies the points in
@@ -78,13 +68,13 @@ type KadParams struct {
 // NewKadParams returns a params struct with default values
 func NewKadParams() *KadParams {
 	return &KadParams{
-		MaxProxDisplay: defaultMaxProxDisplay,
-		MinProxBinSize: defaultMinProxBinSize,
-		MinBinSize:     defaultMinBinSize,
-		MaxBinSize:     defaultMaxBinSize,
-		RetryInterval:  defaultRetryInterval,
-		MaxRetries:     defaultMaxRetries,
-		RetryExponent:  defaultRetryExponent,
+		MaxProxDisplay: 16,
+		MinProxBinSize: 2,
+		MinBinSize:     2,
+		MaxBinSize:     4,
+		RetryInterval:  4200000000, // 4.2 sec
+		MaxRetries:     42,
+		RetryExponent:  2,
 	}
 }
 

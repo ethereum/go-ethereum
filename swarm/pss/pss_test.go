@@ -366,8 +366,11 @@ func TestProxShortCircuit(t *testing.T) {
 	}
 	topic := BytesToTopic([]byte{0x2a})
 	hndlrProxDereg := ps.Register(&topic, &handler{
-		f:    rawHandlerFunc,
-		caps: handlerCapProx | handlerCapRaw,
+		f: rawHandlerFunc,
+		caps: &handlerCaps{
+			raw:  true,
+			prox: true,
+		},
 	})
 	defer hndlrProxDereg()
 
@@ -553,8 +556,11 @@ func TestAddressMatchProx(t *testing.T) {
 	// register it marking prox capability
 	topic := BytesToTopic([]byte{0x2a})
 	hndlrProxDereg := ps.Register(&topic, &handler{
-		f:    rawHandlerFunc,
-		caps: handlerCapProx | handlerCapRaw,
+		f: rawHandlerFunc,
+		caps: &handlerCaps{
+			raw:  true,
+			prox: true,
+		},
 	})
 
 	// test the distances
@@ -583,8 +589,10 @@ func TestAddressMatchProx(t *testing.T) {
 
 	// now add a non prox-capable handler and test
 	ps.Register(&topic, &handler{
-		f:    rawHandlerFunc,
-		caps: handlerCapRaw,
+		f: rawHandlerFunc,
+		caps: &handlerCaps{
+			raw: true,
+		},
 	})
 	receives = 0
 	prevReceive = 0
@@ -982,8 +990,10 @@ func TestRawAllow(t *testing.T) {
 
 	// now wrap the same handler function with raw capabilities and register it
 	hndlrRaw := &handler{
-		f:    rawHandlerFunc,
-		caps: handlerCapRaw,
+		f: rawHandlerFunc,
+		caps: &handlerCaps{
+			raw: true,
+		},
 	}
 	deregRawHandler := ps.Register(&topic, hndlrRaw)
 
@@ -1974,8 +1984,10 @@ func newServices(allowRaw bool) adapters.Services {
 				SetHandshakeController(ps, NewHandshakeParams())
 			}
 			ps.Register(&PingTopic, &handler{
-				f:    pp.Handle,
-				caps: handlerCapRaw,
+				f: pp.Handle,
+				caps: &handlerCaps{
+					raw: true,
+				},
 			})
 			ps.addAPI(rpc.API{
 				Namespace: "psstest",

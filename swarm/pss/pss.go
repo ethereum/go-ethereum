@@ -141,7 +141,7 @@ type Pss struct {
 	handlers         map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu       sync.RWMutex
 	hashPool         sync.Pool
-	topicHandlerCaps map[Topic]byte // caches capabilities of each topic's handlers (see handlerCap* consts in types.go)
+	topicHandlerCaps map[Topic]*handlerCaps // caches capabilities of each topic's handlers (see handlerCap* consts in types.go)
 
 	// process
 	quitC chan struct{}
@@ -183,7 +183,8 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
 		handlers:         make(map[Topic]map[*handler]bool),
-		topicHandlerCaps: make(map[Topic]byte),
+		topicHandlerCaps: make(map[Topic]*handlerCaps),
+
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return sha3.NewKeccak256()
@@ -324,20 +325,36 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 		p.handlers[*topic] = handlers
 		log.Debug("registered handler", "caps", hndlr.caps)
 	}
+	if hndlr.caps == nil {
+		hndlr.caps = &handlerCaps{}
+	}
 	handlers[hndlr] = true
-	p.topicHandlerCaps[*topic] |= hndlr.caps
+	if _, ok := p.topicHandlerCaps[*topic]; !ok {
+		p.topicHandlerCaps[*topic] = &handlerCaps{}
+	}
+	if !p.topicHandlerCaps[*topic].raw && hndlr.caps.raw {
+		p.topicHandlerCaps[*topic].raw = true
+	}
+	if !p.topicHandlerCaps[*topic].prox && hndlr.caps.prox {
+		p.topicHandlerCaps[*topic].prox = true
+	}
 	return func() { p.deregister(topic, hndlr) }
 }
 func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
-	if len(handlers) == 1 {
+	if len(handlers) > 1 {
 		delete(p.handlers, *topic)
 		// topic caps might have changed now that a handler is gone
-		var caps byte
+		caps := &handlerCaps{}
 		for h := range handlers {
-			caps |= h.caps
+			if h.caps.raw {
+				caps.raw = true
+			}
+			if h.caps.prox {
+				caps.prox = true
+			}
 		}
 		p.topicHandlerCaps[*topic] = caps
 		return
@@ -379,7 +396,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.isRaw() {
-		if p.topicHandlerCaps[psstopic]&handlerCapRaw == 0 {
+		if !p.topicHandlerCaps[psstopic].raw {
 			log.Debug("No handler for raw message", "topic", psstopic)
 			return nil
 		}
@@ -390,7 +407,10 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	// - no prox handler on message and partial address matches
 	// - prox handler on message and we are in prox regardless of partial address match
 	// store this result so we don't calculate again on every handler
-	isProx := p.topicHandlerCaps[psstopic]&handlerCapProx != 0
+	var isProx bool
+	if _, ok := p.topicHandlerCaps[psstopic]; ok {
+		isProx = p.topicHandlerCaps[psstopic].prox
+	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
 		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
@@ -457,12 +477,12 @@ func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, raw
 	handlers := p.getHandlers(topic)
 	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
 	for h := range handlers {
-		if h.caps&handlerCapRaw == 0 && raw {
-			log.Trace("norawhandler")
+		if !h.caps.raw && raw {
+			log.Warn("norawhandler")
 			continue
 		}
-		if h.caps&handlerCapProx == 0 && prox {
-			log.Trace("noproxhandler")
+		if !h.caps.prox && prox {
+			log.Warn("noproxhandler")
 			continue
 		}
 		err := (h.f)(payload, peer, asymmetric, keyid)
@@ -750,7 +770,7 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	if err != nil {
 		return err
 	}
-	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic]&handlerCapProx != 0 {
+	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
 		return p.process(pssMsg, true, true)
 	}
 	return nil
@@ -858,8 +878,10 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	if err != nil {
 		return err
 	}
-	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic]&handlerCapProx != 0 {
-		return p.process(pssMsg, true, true)
+	if _, ok := p.topicHandlerCaps[topic]; ok {
+		if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
+			return p.process(pssMsg, true, true)
+		}
 	}
 	return nil
 }

@@ -59,24 +59,22 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool, prox bool
 
 	psssub := notifier.CreateSubscription()
 
-	hndlr := &handler{
-		f: func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			apimsg := &APIMsg{
-				Msg:        hexutil.Bytes(msg),
-				Asymmetric: asymmetric,
-				Key:        keyid,
-			}
-			if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-				log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
-			}
-			return nil
-		},
-	}
+	hndlr := NewHandler(func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+		apimsg := &APIMsg{
+			Msg:        hexutil.Bytes(msg),
+			Asymmetric: asymmetric,
+			Key:        keyid,
+		}
+		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
+			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
+		}
+		return nil
+	})
 	if raw {
-		hndlr.caps |= handlerCapRaw
+		hndlr.caps.raw = true
 	}
 	if prox {
-		hndlr.caps |= handlerCapProx
+		hndlr.caps.prox = true
 	}
 
 	deregf := pssapi.Register(&topic, hndlr)
