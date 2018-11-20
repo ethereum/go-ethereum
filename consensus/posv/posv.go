@@ -214,9 +214,10 @@ type Posv struct {
 	config *params.PosvConfig // Consensus engine configuration parameters
 	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
-	recents             *lru.ARCCache           // Snapshots for recent block to speed up reorgs
-	signatures          *lru.ARCCache           // Signatures of recent blocks to speed up mining
-	validatorSignatures *lru.ARCCache           // Signatures of recent blocks to speed up mining
+	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
+	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
+	validatorSignatures *lru.ARCCache // Signatures of recent blocks to speed up mining
+	verifiedHeaders     *lru.ARCCache
 	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
@@ -239,13 +240,15 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	}
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
-	signatures, _ := lru.NewARC(inmemorySignatures)
-	validatorSignatures, _ := lru.NewARC(inmemorySignatures)
+	signatures, _ := lru.NewARC(inmemorySnapshots)
+	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
+	verifiedHeaders, _ := lru.NewARC(inmemorySnapshots)
 	return &Posv{
 		config:              &conf,
 		db:                  db,
 		recents:             recents,
 		signatures:          signatures,
+		verifiedHeaders:     verifiedHeaders,
 		validatorSignatures: validatorSignatures,
 		proposals:           make(map[common.Address]bool),
 	}
@@ -259,7 +262,7 @@ func (c *Posv) Author(header *types.Header) (common.Address, error) {
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *Posv) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
-	return c.verifyHeader(chain, header, nil)
+	return c.verifyHeaderWithCache(chain, header, nil)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
@@ -271,7 +274,7 @@ func (c *Posv) VerifyHeaders(chain consensus.ChainReader, headers []*types.Heade
 
 	go func() {
 		for i, header := range headers {
-			err := c.verifyHeader(chain, header, headers[:i])
+			err := c.verifyHeaderWithCache(chain, header, headers[:i])
 
 			select {
 			case <-abort:
@@ -281,6 +284,18 @@ func (c *Posv) VerifyHeaders(chain consensus.ChainReader, headers []*types.Heade
 		}
 	}()
 	return abort, results
+}
+
+func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+	_, check := c.verifiedHeaders.Get(header.Hash())
+	if check {
+		return nil
+	}
+	err := c.verifyHeader(chain, header, nil)
+	if err == nil {
+		c.verifiedHeaders.Add(header.Hash(), true)
+	}
+	return err
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules.The
