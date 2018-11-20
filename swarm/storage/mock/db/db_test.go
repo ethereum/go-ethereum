@@ -19,6 +19,8 @@
 package db
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/test"
@@ -27,7 +29,13 @@ import (
 // TestDBStore is running a test.MockStore tests
 // using test.MockStore function.
 func TestDBStore(t *testing.T) {
-	store, err := NewGlobalStore()
+	dir, err := ioutil.TempDir("", "mock_"+t.Name())
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+
+	store, err := NewGlobalStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,13 +47,25 @@ func TestDBStore(t *testing.T) {
 // TestImportExport is running a test.ImportExport tests
 // using test.MockStore function.
 func TestImportExport(t *testing.T) {
-	store1, err := NewGlobalStore()
+	dir1, err := ioutil.TempDir("", "mock_"+t.Name()+"_exporter")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir1)
+
+	store1, err := NewGlobalStore(dir1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store1.Close()
 
-	store2, err := NewGlobalStore()
+	dir2, err := ioutil.TempDir("", "mock_"+t.Name()+"_importer")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir2)
+
+	store2, err := NewGlobalStore(dir2)
 	if err != nil {
 		t.Fatal(err)
 	}
