@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-var typesStandard = EIP712Types{
+var typesStandard = Types{
 	"EIP712Domain": {
 		{
 			"name": "name",
@@ -75,7 +75,7 @@ var typesStandard = EIP712Types{
 
 const primaryType = "Mail"
 
-var domainStandard = EIP712Domain{
+var domainStandard = TypedDataDomain{
 	"Ether Mail",
 	"1",
 	big.NewInt(1),
@@ -169,7 +169,7 @@ func TestHashStruct(t *testing.T) {
 	}
 	domainHash := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if domainHash != "0xf2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f" {
-		t.Errorf("Expected different hashStruct result (got %s)", domainHash)
+		t.Errorf("Expected different domain hashStruct result (got %s)", domainHash)
 	}
 }
 
