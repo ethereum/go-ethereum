@@ -334,10 +334,10 @@
 			"revisionTime": "2017-08-14T17:01:13Z"
 		},
 		{
-			"checksumSHA1": "28UVHMmHx0iqO0XiJsjx+fwILyI=",
+			"checksumSHA1": "CnvImYwD5jNLT4zMkOTN0ivaGA8=",
 			"path": "github.com/rjeczalik/notify",
-			"revision": "c31e5f2cb22b3e4ef3f882f413847669bf2652b9",
-			"revisionTime": "2018-02-03T14:01:15Z"
+			"revision": "352c463f90a00c0cf83b1148f11ada779308f411",
+			"revisionTime": "2018-10-25T23:13:18Z"
 		},
 		{
 			"checksumSHA1": "5uqO4ITTDMklKi3uNaE/D9LQ5nM=",
@@ -610,6 +610,12 @@
 			"revisionTime": "2018-08-08T08:17:46Z"
 		},
 		{
+			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
+			"path": "golang.org/x/sys/cpu",
+			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
+			"revisionTime": "2018-08-08T08:17:46Z"
+		},
+		{
 			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
@@ -770,12 +776,6 @@
 			"path": "gopkg.in/urfave/cli.v1",
 			"revision": "cfb38830724cc34fedffe9a2a29fb54fa9169cd1",
 			"revisionTime": "2017-08-11T01:42:03Z"
-		},
-		{
-			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
-			"path": "golang.org/x/sys/cpu",
-			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
-			"revisionTime": "2018-08-08T08:17:46Z"
 		}
 	],
 	"rootPath": "github.com/ethereum/go-ethereum"
