@@ -24,17 +24,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
-// ServeListener accepts connections on l, serving JSON-RPC on them.
+// ServeListener accepts connections on l, serving IPC-RPC on them.
 func (srv *Server) ServeListener(l net.Listener) error {
 	for {
 		conn, err := l.Accept()
 		if netutil.IsTemporaryError(err) {
-			log.Warn("RPC accept error", "err", err)
+			log.Warn("IPC accept error", "err", err)
 			continue
 		} else if err != nil {
 			return err
 		}
-		log.Trace("Accepted connection", "addr", conn.RemoteAddr())
+		log.Trace("IPC accepted connection")
 		go srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 	}
 }

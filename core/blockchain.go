@@ -445,7 +445,11 @@ func (bc *BlockChain) repair(head **types.Block) error {
 			return nil
 		}
 		// Otherwise rewind one block and recheck state availability there
-		(*head) = bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		block := bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+		if block == nil {
+			return fmt.Errorf("failed to repair block, can not get block at height %d", (*head).NumberU64())
+		}
+		(*head) = block
 	}
 }
 
