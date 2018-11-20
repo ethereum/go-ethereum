@@ -455,16 +455,16 @@ func (self *Swarm) Stop() error {
 	if self.accountingMetrics != nil {
 		self.accountingMetrics.Close()
 	}
-	if self.stateStore != nil {
-		self.stateStore.Close()
-	}
-
 	if self.netStore != nil {
 		self.netStore.Close()
 	}
 	self.sfs.Stop()
 	stopCounter.Inc(1)
 	self.streamer.Stop()
+	if self.stateStore != nil {
+		self.stateStore.Close()
+	}
+
 	return self.bzz.Stop()
 }
 
