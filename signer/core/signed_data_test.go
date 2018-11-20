@@ -73,6 +73,78 @@ var typesStandard = Types{
 	},
 }
 
+var jsonTypedData = `
+    {
+      "types": {
+        "EIP712Domain": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256"
+          },
+          {
+            "name": "verifyingContract",
+            "type": "address"
+          }
+        ],
+        "Person": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "test",
+            "type": "uint8"
+          },
+          {
+            "name": "wallet",
+            "type": "address"
+          }
+        ],
+        "Mail": [
+          {
+            "name": "from",
+            "type": "Person"
+          },
+          {
+            "name": "to",
+            "type": "Person"
+          },
+          {
+            "name": "contents",
+            "type": "string"
+          }
+        ]
+      },
+      "primaryType": "Mail",
+      "domain": {
+        "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+      },
+      "message": {
+        "from": {
+          "name": "Cow",
+		  "test": 3,
+          "wallet": "0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
+        },
+        "to": {
+          "name": "Bob",
+          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        },
+        "contents": "Hello, Bob!"
+      }
+    }
+`
+
 const primaryType = "Mail"
 
 var domainStandard = TypedDataDomain{
@@ -500,82 +572,14 @@ func TestMalformedData4(t *testing.T) {
 	//{
 	//	"test": 65536 <-- test defined as uint8
 	//}
-	jsonTypedData := `
-    {
-      "types": {
-        "EIP712Domain": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "version",
-            "type": "string"
-          },
-          {
-            "name": "chainId",
-            "type": "uint256"
-          },
-          {
-            "name": "verifyingContract",
-            "type": "address"
-          }
-        ],
-        "Person": [
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "test",
-            "type": "uint8"
-          },
-          {
-            "name": "wallet",
-            "type": "address"
-          }
-        ],
-        "Mail": [
-          {
-            "name": "from",
-            "type": "Person"
-          },
-          {
-            "name": "to",
-            "type": "Person"
-          },
-          {
-            "name": "contents",
-            "type": "string"
-          }
-        ]
-      },
-      "primaryType": "Mail",
-      "domain": {
-        "name": "Ether Mail",
-        "version": "1",
-        "chainId": 1,
-        "verifyingContract": "0xCCCcccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
-      },
-      "message": {
-        "from": {
-          "name": "Cow",
-		  "test": 65536,
-          "wallet": "0xcD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
-        },
-        "to": {
-          "name": "Bob",
-          "wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
-        },
-        "contents": "Hello, Bob!"
-      }
-    }
-`
 	var malformedTypedData TypedData
 	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
+	// Set test to something outside uint8
+	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = 65536
+
 	err = malformedTypedData.Validate()
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -584,5 +588,13 @@ func TestMalformedData4(t *testing.T) {
 	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
 	if err == nil || err.Error() != "provided data '65536' doesn't match type 'uint8'" {
 		t.Fatalf("Expected `provided data '65536' doesn't match type 'uint8'`, got %v", err)
+	}
+
+	// Set it to something that should work
+	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = 3
+
+	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
+	if err != nil {
+		t.Fatalf("Expected no err, got %v", err)
 	}
 }
