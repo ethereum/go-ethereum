@@ -80,8 +80,6 @@ jobs:
       - docker push tomochain/tomochain:$TRAVIS_TAG
       - docker tag tomochain/tomochain tomochain/node:latest
       - docker push tomochain/node:latest
-      - docker tag tomochain/tomochain tomochain/node:testnet
-      - docker push tomochain/node:testnet
       - docker tag tomochain/node tomochain/node:$TRAVIS_TAG
       - docker push tomochain/node:$TRAVIS_TAG
 
