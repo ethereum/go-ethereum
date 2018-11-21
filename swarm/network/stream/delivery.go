@@ -255,7 +255,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 			}
 			sp = d.getPeer(id)
 			if sp == nil {
-				log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
+				//log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
 				return true
 			}
 			spID = &id
