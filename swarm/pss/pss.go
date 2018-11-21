@@ -510,11 +510,11 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 		return false
 	}
 
-	minProx := p.Kademlia.NeighbourhoodDepth()
-	depth, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
-	log.Trace("selfpossible", "minprox", minProx, "depth", depth)
+	depth := p.Kademlia.NeighbourhoodDepth()
+	po, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+	log.Trace("selfpossible", "po", po, "depth", depth)
 
-	if minProx <= depth {
+	if po <= depth {
 		return true
 	}
 	return false
@@ -770,6 +770,9 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	if err != nil {
 		return err
 	}
+
+	// if we have a proxhandler on this topic
+	// also deliver message to ourselves
 	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
 		return p.process(pssMsg, true, true)
 	}
