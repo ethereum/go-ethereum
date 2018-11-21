@@ -291,7 +291,7 @@ func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.
 	if check {
 		return nil
 	}
-	err := c.verifyHeader(chain, header, nil)
+	err := c.verifyHeader(chain, header, parents)
 	if err == nil {
 		c.verifiedHeaders.Add(header.Hash(), true)
 	}
