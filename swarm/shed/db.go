@@ -99,7 +99,7 @@ func (db *DB) NewIterator() iterator.Iterator {
 
 // WriteBatch wraps LevelDB Write method to increment metrics counter.
 func (db *DB) WriteBatch(batch *leveldb.Batch) error {
-	metrics.GetOrRegisterCounter("DB.write", nil).Inc(1)
+	metrics.GetOrRegisterCounter("DB.writebatch", nil).Inc(1)
 
 	return db.ldb.Write(batch, nil)
 }
