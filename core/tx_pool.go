@@ -828,7 +828,7 @@ func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction)
 	go func() {
 		for _, btx := range broadcastTxs {
 			pool.specialTxFeed.Send(TxPreEvent{btx})
-			log.Debug("Pooled new special transaction", "hash", tx.Hash(), "from", addr, "to", tx.To(), "nonce", tx.Nonce())
+			log.Trace("Pooled new special transaction", "hash", tx.Hash(), "from", addr, "to", tx.To(), "nonce", tx.Nonce())
 		}
 	}()
 	return true, nil

@@ -651,14 +651,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
 		)
 		// Update the peers total difficulty if better than the previous
-		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
+		_, td := p.Head()
+		currentBlock := pm.blockchain.CurrentBlock()
+		currentTd := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
+		log.Debug("NewBlockMsg", "p", p, "number", request.Block.NumberU64(), "trueTD", trueTD, "td", td, "currentTd", currentTd)
+		if trueTD.Cmp(td) > 0 {
 			p.SetHead(trueHead, trueTD)
 
 			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
 			// a singe block (as the true TD is below the propagated block), however this
 			// scenario should easily be covered by the fetcher.
-			currentBlock := pm.blockchain.CurrentBlock()
-			if trueTD.Cmp(pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())) > 0 {
+			if trueTD.Cmp(currentTd) > 0 {
 				go pm.synchronise(p)
 			}
 		}
@@ -739,7 +742,7 @@ func (pm *ProtocolManager) BroadcastSpecialTx(hash common.Hash, tx *types.Transa
 	for _, peer := range peers {
 		peer.SendSpecialTransactions(tx)
 	}
-	log.Debug("Broadcast special transaction", "hash", hash, "recipients", len(peers))
+	log.Trace("Broadcast special transaction", "hash", hash, "recipients", len(peers))
 }
 
 // Mined broadcast loop

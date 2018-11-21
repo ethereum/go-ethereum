@@ -742,7 +742,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		c.lock.RUnlock()
 	}
 	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, c.signer)
+	header.Difficulty = big.NewInt(1)
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
