@@ -84,8 +84,8 @@ var (
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-		utils.ExitWhenSyncedFlag,
 		utils.SyncModeFlag,
+		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
 		utils.LightPeersFlag,
@@ -339,24 +339,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				if err := stack.Service(&lightEthereum); err != nil {
 					utils.Fatalf("LightEthereum service not running: %v", err)
 				}
-				var mux = stack.EventMux()
-				var sub = mux.Subscribe(downloader.DoneEvent{})
-				<-sub.Chan()
-				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
-				time.Sleep(exitWhenSynced)
-				stack.Stop()
 			} else {
 				var ethereum *eth.Ethereum
 				if err := stack.Service(&ethereum); err != nil {
 					utils.Fatalf("Ethereum service not running: %v", err)
 				}
-				var mux = stack.EventMux()
-				var sub = mux.Subscribe(downloader.DoneEvent{})
-				<-sub.Chan()
-				log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
-				time.Sleep(exitWhenSynced)
-				stack.Stop()
 			}
+			var mux = stack.EventMux()
+			var sub = mux.Subscribe(downloader.DoneEvent{})
+			<-sub.Chan()
+			log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
+			time.Sleep(exitWhenSynced)
+			stack.Stop()
 		}()
 	}
 
