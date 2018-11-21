@@ -1624,7 +1624,7 @@ func (bc *BlockChain) UpdateM1() error {
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
 		if candidate.String() != "0x0000000000000000000000000000000000000000" {
-			ms = append(ms, posv.Masternode{Address: candidate, Stake: v.Uint64()})
+			ms = append(ms, posv.Masternode{Address: candidate, Stake: v})
 		}
 	}
 	if len(ms) == 0 {
@@ -1632,7 +1632,7 @@ func (bc *BlockChain) UpdateM1() error {
 		os.Exit(1)
 	} else {
 		sort.Slice(ms, func(i, j int) bool {
-			return ms[i].Stake >= ms[j].Stake
+			return ms[i].Stake.Cmp(ms[j].Stake) >= 0
 		})
 		log.Info("Ordered list of masternode candidates")
 		for _, m := range ms {

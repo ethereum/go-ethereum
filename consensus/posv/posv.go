@@ -53,7 +53,7 @@ const (
 
 type Masternode struct {
 	Address common.Address
-	Stake   uint64
+	Stake   *big.Int
 }
 
 // Posv proof-of-stake-voting protocol constants.
