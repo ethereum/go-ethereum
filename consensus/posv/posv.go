@@ -370,6 +370,9 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	if parent.Time.Uint64()+c.config.Period > header.Time.Uint64() {
 		return ErrInvalidTimestamp
 	}
+	if header.Number.Uint64() > c.config.Epoch && len(header.Validator) == 0 {
+		return consensus.ErrNoValidatorSignature
+	}
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
 	if err != nil {
@@ -959,7 +962,7 @@ func (c *Posv) RecoverValidator(header *types.Header) (common.Address, error) {
 	// Retrieve the signature from the header.Validator
 	// len equals 65 bytes
 	if len(header.Validator) != extraSeal {
-		return common.Address{}, consensus.ErrMissingValidatorSignature
+		return common.Address{}, consensus.ErrFailValidatorSignature
 	}
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(sigHash(header).Bytes(), header.Validator)
