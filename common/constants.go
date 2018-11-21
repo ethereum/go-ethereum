@@ -14,4 +14,5 @@ const (
 	LimitPenaltyEpoch          = 4
 	BlocksPerYear              = uint64(15768000)
 	LimitThresholdNonceInQueue = 10
+	MinGasPrice                = 2500
 )
