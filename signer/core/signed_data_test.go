@@ -590,8 +590,8 @@ func TestMalformedData4(t *testing.T) {
 		t.Fatalf("Expected `provided data '65536' doesn't match type 'uint8'`, got %v", err)
 	}
 
-	// Set it to something that should work
-	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = 3
+	(malformedTypedData.Message["from"]).(map[string]interface{})["test"] = big.NewInt(3)
+	(malformedTypedData.Message["to"]).(map[string]interface{})["test"] = big.NewInt(4)
 
 	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
 	if err != nil {
