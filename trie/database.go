@@ -86,7 +86,7 @@ type Database struct {
 	flushnodes uint64             // Nodes flushed since last commit
 	flushsize  common.StorageSize // Data storage flushed since last commit
 
-	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. flushlist)
+	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. metadata)
 	preimagesSize common.StorageSize // Storage size of the preimages cache
 
 	lock sync.RWMutex
@@ -147,6 +147,16 @@ type cachedNode struct {
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
 }
+
+// cachedNodeSize is the raw size of a cachedNode data structure without any
+// node data included. It's an approximate size, but should be a lot better
+// than not counting them.
+const cachedNodeSize = 0 +
+	8 + // node interface pointer
+	4 + // byte size of the cached data
+	8 + // number of referencing nodes
+	48 + // empty map of external children
+	2*common.HashLength // previous and next node in flushlist
 
 // rlp returns the raw rlp encoded blob of the cached node, either directly from
 // the cache, or by regenerating it from the collapsed node.
@@ -569,8 +579,8 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*2*common.HashLength)
+	// counted.
+	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
 
 	// If the preimage cache got large enough, push to disk. If it's still small
 	// leave for later to deduplicate writes.
@@ -789,9 +799,9 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 
 	// db.dirtiesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
-	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	var flushlistSize = common.StorageSize((len(db.dirties) - 1) * 2 * common.HashLength)
-	return db.dirtiesSize + flushlistSize, db.preimagesSize
+	// counted.
+	var metadataSize = common.StorageSize((len(db.dirties) - 1) * cachedNodeSize)
+	return db.dirtiesSize + metadataSize, db.preimagesSize
 }
 
 // verifyIntegrity is a debug method to iterate over the entire trie stored in
