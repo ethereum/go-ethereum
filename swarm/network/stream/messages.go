@@ -76,7 +76,16 @@ type RequestSubscriptionMsg struct {
 
 func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscriptionMsg) (err error) {
 	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr, p.ID(), req.Stream))
-	return p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority)
+	if err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority); err != nil {
+		// The error will be sent as a subscribe error message
+		// and will not be returned as it will prevent any new message
+		// exchange between peers over p2p. Instead, error will be returned
+		// only if there is one from sending subscribe error message.
+		err = p.Send(ctx, SubscribeErrorMsg{
+			Error: err.Error(),
+		})
+	}
+	return err
 }
 
 func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err error) {
@@ -149,6 +158,7 @@ type SubscribeErrorMsg struct {
 }
 
 func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
+	//TODO the error should be channeled to whoever calls the subscribe
 	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), req.Error)
 }
 
@@ -347,7 +357,8 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
 			chunk := storage.NewChunk(hash, data)
-			if err := p.Deliver(ctx, chunk, s.priority); err != nil {
+			syncing := true
+			if err := p.Deliver(ctx, chunk, s.priority, syncing); err != nil {
 				return err
 			}
 		}

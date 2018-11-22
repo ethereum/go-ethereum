@@ -50,10 +50,6 @@ type testStore struct {
 	values map[string][]byte
 }
 
-func newTestStore() *testStore {
-	return &testStore{values: make(map[string][]byte)}
-}
-
 func (t *testStore) Load(key string) ([]byte, error) {
 	t.Lock()
 	defer t.Unlock()
@@ -157,17 +153,7 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr, lightNode bool) *
 
 // should test handshakes in one exchange? parallelisation
 func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptest.Disconnect) error {
-	var peers []enode.ID
-	id := rhs.Addr.ID()
-	if len(disconnects) > 0 {
-		for _, d := range disconnects {
-			peers = append(peers, d.Peer)
-		}
-	} else {
-		peers = []enode.ID{id}
-	}
-
-	if err := s.TestExchanges(HandshakeMsgExchange(lhs, rhs, id)...); err != nil {
+	if err := s.TestExchanges(HandshakeMsgExchange(lhs, rhs, rhs.Addr.ID())...); err != nil {
 		return err
 	}
 

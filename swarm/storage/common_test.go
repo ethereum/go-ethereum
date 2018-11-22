@@ -19,7 +19,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"io"
@@ -31,7 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -86,17 +85,6 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 
 func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Chunk, error) {
 	return mput(store, n, GenerateRandomChunk)
-}
-
-func mputChunks(store ChunkStore, chunks ...Chunk) error {
-	i := 0
-	f := func(n int64) Chunk {
-		chunk := chunks[i]
-		i++
-		return chunk
-	}
-	_, err := mput(store, len(chunks), f)
-	return err
 }
 
 func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error) {
@@ -160,10 +148,6 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 		err = fmt.Errorf("timed out after 5 seconds")
 	}
 	return err
-}
-
-func testDataReader(l int) (r io.Reader) {
-	return io.LimitReader(rand.Reader, int64(l))
 }
 
 func (r *brokenLimitedReader) Read(buf []byte) (int, error) {

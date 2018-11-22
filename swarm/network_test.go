@@ -335,7 +335,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 
 		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 			nodeIDs := sim.UpNodeIDs()
-			shuffle(len(nodeIDs), func(i, j int) {
+			rand.Shuffle(len(nodeIDs), func(i, j int) {
 				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 			})
 			for _, id := range nodeIDs {
@@ -404,7 +404,7 @@ func retrieve(
 	nodeStatusM *sync.Map,
 	totalFoundCount *uint64,
 ) (missing uint64) {
-	shuffle(len(files), func(i, j int) {
+	rand.Shuffle(len(files), func(i, j int) {
 		files[i], files[j] = files[j], files[i]
 	})
 
@@ -498,33 +498,4 @@ func retrieve(
 	log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(totalFoundCount), "total errors", errCount)
 
 	return uint64(totalCheckCount) - atomic.LoadUint64(totalFoundCount)
-}
-
-// Backported from stdlib https://golang.org/src/math/rand/rand.go?s=11175:11215#L333
-//
-// Replace with rand.Shuffle from go 1.10 when go 1.9 support is dropped.
-//
-// shuffle pseudo-randomizes the order of elements.
-// n is the number of elements. Shuffle panics if n < 0.
-// swap swaps the elements with indexes i and j.
-func shuffle(n int, swap func(i, j int)) {
-	if n < 0 {
-		panic("invalid argument to Shuffle")
-	}
-
-	// Fisher-Yates shuffle: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-	// Shuffle really ought not be called with n that doesn't fit in 32 bits.
-	// Not only will it take a very long time, but with 2³¹! possible permutations,
-	// there's no way that any PRNG can have a big enough internal state to
-	// generate even a minuscule percentage of the possible permutations.
-	// Nevertheless, the right API signature accepts an int n, so handle it as best we can.
-	i := n - 1
-	for ; i > 1<<31-1-1; i-- {
-		j := int(rand.Int63n(int64(i + 1)))
-		swap(i, j)
-	}
-	for ; i > 0; i-- {
-		j := int(rand.Int31n(int32(i + 1)))
-		swap(i, j)
-	}
 }

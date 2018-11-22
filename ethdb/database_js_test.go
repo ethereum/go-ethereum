@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package state
+// +build js
 
-// Store defines methods required to get, set, delete values for different keys
-// and close the underlying resources.
-type Store interface {
-	Get(key string, i interface{}) (err error)
-	Put(key string, i interface{}) (err error)
-	Delete(key string) (err error)
-	Close() error
-}
+package ethdb_test
+
+import (
+	"github.com/ethereum/go-ethereum/ethdb"
+)
+
+var _ ethdb.Database = &ethdb.LDBDatabase{}

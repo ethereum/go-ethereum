@@ -89,7 +89,7 @@ func (t fakeTable) ReadRandomNodes(buf []*enode.Node) int { return copy(buf, t) 
 // This test checks that dynamic dials are launched from discovery results.
 func TestDialStateDynDial(t *testing.T) {
 	runDialTest(t, dialtest{
-		init: newDialState(nil, nil, fakeTable{}, 5, nil),
+		init: newDialState(enode.ID{}, nil, nil, fakeTable{}, 5, nil),
 		rounds: []round{
 			// A discovery query is launched.
 			{
@@ -236,7 +236,7 @@ func TestDialStateDynDialBootnode(t *testing.T) {
 		newNode(uintID(8), nil),
 	}
 	runDialTest(t, dialtest{
-		init: newDialState(nil, bootnodes, table, 5, nil),
+		init: newDialState(enode.ID{}, nil, bootnodes, table, 5, nil),
 		rounds: []round{
 			// 2 dynamic dials attempted, bootnodes pending fallback interval
 			{
@@ -324,7 +324,7 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(nil, nil, table, 10, nil),
+		init: newDialState(enode.ID{}, nil, nil, table, 10, nil),
 		rounds: []round{
 			// 5 out of 8 of the nodes returned by ReadRandomNodes are dialed.
 			{
@@ -430,7 +430,7 @@ func TestDialStateNetRestrict(t *testing.T) {
 	restrict.Add("127.0.2.0/24")
 
 	runDialTest(t, dialtest{
-		init: newDialState(nil, nil, table, 10, restrict),
+		init: newDialState(enode.ID{}, nil, nil, table, 10, restrict),
 		rounds: []round{
 			{
 				new: []task{
@@ -453,7 +453,7 @@ func TestDialStateStaticDial(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(wantStatic, nil, fakeTable{}, 0, nil),
+		init: newDialState(enode.ID{}, wantStatic, nil, fakeTable{}, 0, nil),
 		rounds: []round{
 			// Static dials are launched for the nodes that
 			// aren't yet connected.
@@ -557,7 +557,7 @@ func TestDialStaticAfterReset(t *testing.T) {
 		},
 	}
 	dTest := dialtest{
-		init:   newDialState(wantStatic, nil, fakeTable{}, 0, nil),
+		init:   newDialState(enode.ID{}, wantStatic, nil, fakeTable{}, 0, nil),
 		rounds: rounds,
 	}
 	runDialTest(t, dTest)
@@ -578,7 +578,7 @@ func TestDialStateCache(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(wantStatic, nil, fakeTable{}, 0, nil),
+		init: newDialState(enode.ID{}, wantStatic, nil, fakeTable{}, 0, nil),
 		rounds: []round{
 			// Static dials are launched for the nodes that
 			// aren't yet connected.
@@ -640,7 +640,7 @@ func TestDialStateCache(t *testing.T) {
 func TestDialResolve(t *testing.T) {
 	resolved := newNode(uintID(1), net.IP{127, 0, 55, 234})
 	table := &resolveMock{answer: resolved}
-	state := newDialState(nil, nil, table, 0, nil)
+	state := newDialState(enode.ID{}, nil, nil, table, 0, nil)
 
 	// Check that the task is generated with an incomplete ID.
 	dest := newNode(uintID(1), nil)

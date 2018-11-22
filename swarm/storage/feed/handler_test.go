@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -505,16 +504,4 @@ func newBobSigner() *GenericSigner {
 func newCharlieSigner() *GenericSigner {
 	privKey, _ := crypto.HexToECDSA("facadefacadefacadefacadefacadefacadefacadefacadefacadefacadefaca")
 	return NewGenericSigner(privKey)
-}
-
-func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
-	chunk, err := rh.chunkStore.Get(context.TODO(), addr)
-	if err != nil {
-		return nil, err
-	}
-	var r Request
-	if err := r.fromChunk(addr, chunk.Data()); err != nil {
-		return nil, err
-	}
-	return r.data, nil
 }

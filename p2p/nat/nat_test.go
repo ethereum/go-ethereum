@@ -28,7 +28,7 @@ import (
 func TestAutoDiscRace(t *testing.T) {
 	ad := startautodisc("thing", func() Interface {
 		time.Sleep(500 * time.Millisecond)
-		return extIP{33, 44, 55, 66}
+		return ExtIP{33, 44, 55, 66}
 	})
 
 	// Spawn a few concurrent calls to ad.ExternalIP.

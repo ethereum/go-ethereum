@@ -29,13 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	colorable "github.com/mattn/go-colorable"
 )
-
-func init() {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-}
 
 type testFile struct {
 	filePath string
@@ -80,6 +74,9 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal(err)
 	}
 	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
 	dirs := []string{
