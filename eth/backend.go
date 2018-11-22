@@ -1,4 +1,3 @@
-
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -235,13 +234,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
 		// Hook prepares validators M2 for the current epoch at checkpoint block
-		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {	
+		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
 			start := time.Now()
 			validators, err := GetValidators(eth.blockchain, signers)
 			if err != nil {
 				return []byte{}, err
 			}
-			header.Validators = validators	
+			header.Validators = validators
 			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			return validators, nil
 		}
@@ -313,7 +312,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
-				fmt.Println("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Error("Fail to get signers for reward checkpoint", "error", err)
 					return err, nil
@@ -333,20 +331,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				// Add reward for coin holders.
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
-					// vmenv := core.NewRuntimeEVM(state)
 					for signer, calcReward := range rewardSigners {
-						 err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
-						// err, rewards := contracts.CalculateRewardForHolders2(foudationWalletAddr, vmenv, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
 						if err != nil {
 							log.Error("Fail to calculate reward for holders.", "error", err)
-							return err, nil	
+							return err, nil
 						}
 						voterResults[signer] = rewards
 					}
 				}
 				rewards["rewards"] = voterResults
-							// log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-							fmt.Println("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			}
 			return nil, rewards
 		}
@@ -435,7 +430,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If proof-of-stake-voting is requested, set it up
+	// If XinFin-DPoS is requested, set it up
 	if chainConfig.XDPoS != nil {
 		return XDPoS.New(chainConfig.XDPoS, db)
 	}

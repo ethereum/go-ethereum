@@ -18,11 +18,8 @@ package eth
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
-	"io/ioutil"
 	"math/big"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -243,18 +240,6 @@ func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{}
 		rewards := c.GetRewards(hash)
 		if rewards != nil {
 			return rewards
-		}
-	} else {
-		header := s.eth.blockchain.GetHeaderByHash(hash)
-		if header != nil {
-			data, err := ioutil.ReadFile(filepath.Join(s.eth.config.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
-			if err == nil {
-				rewards := make(map[string]interface{})
-				err = json.Unmarshal(data, &rewards)
-				if err == nil {
-					return rewards
-				}
-			}
 		}
 	}
 	return make(map[string]interface{})

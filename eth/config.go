@@ -43,7 +43,7 @@ var DefaultConfig = Config{
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 	},
-	NetworkId:     1,
+	NetworkId:     89,
 	LightPeers:    100,
 	DatabaseCache: 768,
 	TrieCache:     256,
@@ -80,8 +80,10 @@ type Config struct {
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
-	SyncMode  downloader.SyncMode	NoPruning bool
-    // Light client options
+	SyncMode  downloader.SyncMode
+	NoPruning bool
+
+	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
 	LightPeers int `toml:",omitempty"` // Maximum number of LES client peers
 
@@ -96,7 +98,7 @@ type Config struct {
 	Etherbase    common.Address `toml:",omitempty"`
 	MinerThreads int            `toml:",omitempty"`
 	ExtraData    []byte         `toml:",omitempty"`
-	GasPrice     *big.Int		
+	GasPrice     *big.Int
 
 	// Ethash options
 	Ethash ethash.Config

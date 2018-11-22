@@ -231,7 +231,7 @@ enum libusb_class_code {
 	LIBUSB_CLASS_PERSONAL_HEALTHCARE = 0x0f,
 
 	/** Diagnostic Device */
-	LIBUSB_CLASS_DIAGNOSTIC_DEVICE = 0xdc,
+	LIBUSB_CLASS_DIAGNOSTIC_DEVICE = 0XDC,
 
 	/** Wireless class */
 	LIBUSB_CLASS_WIRELESS = 0xe0,

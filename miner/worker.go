@@ -1,4 +1,3 @@
-
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -498,7 +497,7 @@ func (self *worker) commitNewWork() {
 		if self.config.XDPoS != nil {
 			// get masternodes set from latest checkpoint
 			c := self.engine.(*XDPoS.XDPoS)
-			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(),self.coinbase)
+			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return
@@ -613,13 +612,12 @@ func (self *worker) commitNewWork() {
 			delete(self.possibleUncles, hash)
 		}
 	}
-        if atomic.LoadInt32(&self.mining) == 1 {
-		// Create the new block to seal with the consensus engine
-		if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
-			log.Error("Failed to finalize block for sealing", "err", err)
-			return
-		}
-		}
+	// Create the new block to seal with the consensus engine
+	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+		log.Error("Failed to finalize block for sealing", "err", err)
+		return
+	}
+	if atomic.LoadInt32(&self.mining) == 1 {
 		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()

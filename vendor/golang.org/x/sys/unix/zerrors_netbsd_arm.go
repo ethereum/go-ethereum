@@ -288,7 +288,7 @@ const (
 	DLT_TZSP                          = 0x80
 	DLT_USB                           = 0xba
 	DLT_USB_LINUX                     = 0xbd
-	DLT_USB_LINUX_MMAPPED             = 0xdc
+	DLT_USB_LINUX_MMAPPED             = 0XDC
 	DLT_WIHART                        = 0xdf
 	DLT_X2E_SERIAL                    = 0xd5
 	DLT_X2E_XORAYA                    = 0xd6

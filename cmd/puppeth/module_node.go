@@ -184,7 +184,7 @@ func (info *nodeInfos) Report() map[string]string {
 			report["Miner account"] = info.etherbase
 		}
 		if info.keyJSON != "" {
-			// Clique XDPoS
+			// XDPoS XinFin-DPoS signer
 			var key struct {
 				Address string `json:"address"`
 			}
@@ -221,7 +221,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 
 	// Container available, retrieve its node ID and its genesis json
 	var out []byte
-	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 geth --exec admin.nodeInfo.id attach", network, kind)); err != nil {
+	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 XDC --exec admin.nodeInfo.id attach", network, kind)); err != nil {
 		return nil, ErrServiceUnreachable
 	}
 	id := bytes.Trim(bytes.TrimSpace(out), "\"")

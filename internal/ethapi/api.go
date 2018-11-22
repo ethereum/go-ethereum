@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -876,12 +876,12 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 			log.Error("Fail to get signers from block signer SC.", "error", err)
 		}
 		// Get block epoc latest.
-		if s.b.ChainConfig().XDPos != nil {
+		if s.b.ChainConfig().XDPoS != nil {
 			engine := s.b.GetEngine()
 			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().XDPoS.Epoch))
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
 			if prevCheckpointBlock != nil {
-				masternodes := engine.(*XDPoS.XDPoS).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().Clique.Epoch)
+				masternodes := engine.(*XDPoS.XDPoS).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().XDPoS.Epoch)
 				countFinality := 0
 				for _, masternode := range masternodes {
 					for _, signer := range signers {

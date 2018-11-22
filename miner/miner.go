@@ -94,7 +94,6 @@ func (self *Miner) update() {
 			if shouldStart {
 				self.Start(self.coinbase)
 			}
-
 		}
 	}
 }

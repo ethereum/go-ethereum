@@ -1,3 +1,18 @@
+// Copyright (c) 2018 XDCchain
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 package randomize
 
 import (
@@ -88,7 +103,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize secret: %v", err)
 			}
-			break
 		case 850:
 			// Set opening.
 			tx, err := contracts.BuildTxOpeningRandomize(nonce, randomizeAddr, randomizeKeyValue)
@@ -103,7 +117,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize opening: %v", err)
 			}
-			break
 
 		case 900:
 			// Get randomize secret from SC.
@@ -124,7 +137,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Error("Can't decrypt secret and opening", err)
 			}
-			break
 		default:
 			tx, err := types.SignTx(types.NewTransaction(nonce, common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, acc1Key)
 			if err != nil {
@@ -134,7 +146,6 @@ func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Can't send tx for create randomize: %v", err)
 			}
-			break
 		}
 		backend.Commit()
 	}

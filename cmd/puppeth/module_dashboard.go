@@ -40,9 +40,7 @@ var dashboardContent = `
 		<meta charset="utf-8">
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-
 		<title>{{.NetworkTitle}}: Ethereum Testnet</title>
-
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/css/custom.min.css" rel="stylesheet">
@@ -64,7 +62,6 @@ var dashboardContent = `
 			}
 		</style>
 	</head>
-
 	<body class="nav-sm" style="overflow-x: hidden">
 		<div class="container body">
 			<div class="main_container">
@@ -263,13 +260,11 @@ var dashboardContent = `
 <pre>
 Enodes bootnodes = new Enodes();{{range .Bootnodes}}
 bootnodes.append(new Enode("{{.}}"));{{end}}
-
 NodeConfig config = new NodeConfig();
 config.setBootstrapNodes(bootnodes);
 config.setEthereumNetworkID({{.NetworkID}});
 config.setEthereumGenesis(genesis);{{if .Ethstats}}
 config.setEthereumNetStats("{{.Ethstats}}");{{end}}
-
 Node node = new Node(getFilesDir() + "/.{{.Network}}", config);
 node.start();
 </pre>
@@ -293,16 +288,13 @@ node.start();
 											<pre>import Geth</pre>
 <pre>
 var error: NSError?
-
 let bootnodes = GethNewEnodesEmpty(){{range .Bootnodes}}
 bootnodes?.append(GethNewEnode("{{.}}", &error)){{end}}
-
 let config = GethNewNodeConfig()
 config?.setBootstrapNodes(bootnodes)
 config?.setEthereumNetworkID({{.NetworkID}})
 config?.setEthereumGenesis(genesis){{if .Ethstats}}
 config?.setEthereumNetStats("{{.Ethstats}}"){{end}}
-
 let datadir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
 let node = GethNewNode(datadir + "/.{{.Network}}", config, &error);
 try! node?.start();
@@ -436,14 +428,12 @@ try! node?.start();
 				</div>
 			</div>
 		</div>
-
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/js/custom.min.js"></script>
 		<script>
 			var load = function(hash) {
 				window.location.hash = hash;
-
 				// Fade out all possible pages (yes, ugly, no, don't care)
 				$("#geth").fadeOut(300)
 				$("#mist").fadeOut(300)
@@ -451,7 +441,6 @@ try! node?.start();
 				$("#other").fadeOut(300)
 				$("#about").fadeOut(300)
 				$("#frame-wrapper").fadeOut(300);
-
 				// Depending on the hash, resolve it into a local or remote URL
 				var url = hash;
 				switch (hash) {
@@ -483,7 +472,6 @@ try! node?.start();
 				var sidebar = $($(".navbar")[0]).width();
 				var limit   = document.body.clientWidth - sidebar;
 				var scale   = limit / 1920;
-
 				$("#frame-wrapper").width(limit);
 				$("#frame-wrapper").height(document.body.clientHeight / scale);
 				$("#frame-wrapper").css({
@@ -492,7 +480,6 @@ try! node?.start();
 				});
 			};
 			$(window).resize(resize);
-
 			if (window.location.hash == "") {
 				var item = $(".side-menu").children()[0];
 				$(item).children()[0].click();
@@ -517,7 +504,6 @@ var dashboardMascot = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01s\x
 // to aggregate various private network services under one easily accessible page.
 var dashboardDockerfile = `
 FROM mhart/alpine-node:latest
-
 RUN \
 	npm install connect serve-static && \
 	\
@@ -526,7 +512,6 @@ RUN \
 	echo 'connect().use(serveStatic("/dashboard")).listen(80, function(){' >> server.js && \
 	echo '    console.log("Server running on 80...");'                     >> server.js && \
 	echo '});'                                                             >> server.js
-
 ADD {{.Network}}.json /dashboard/{{.Network}}.json
 ADD {{.Network}}-cpp.json /dashboard/{{.Network}}-cpp.json
 ADD {{.Network}}-harmony.json /dashboard/{{.Network}}-harmony.json
@@ -534,9 +519,7 @@ ADD {{.Network}}-parity.json /dashboard/{{.Network}}-parity.json
 ADD {{.Network}}-python.json /dashboard/{{.Network}}-python.json
 ADD index.html /dashboard/index.html
 ADD puppeth.png /dashboard/puppeth.png
-
 EXPOSE 80
-
 CMD ["node", "/server.js"]
 `
 

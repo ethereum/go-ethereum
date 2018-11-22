@@ -512,7 +512,7 @@ const (
 	DLT_USBPCAP                    = 0xf9
 	DLT_USB_FREEBSD                = 0xba
 	DLT_USB_LINUX                  = 0xbd
-	DLT_USB_LINUX_MMAPPED          = 0xdc
+	DLT_USB_LINUX_MMAPPED          = 0XDC
 	DLT_USER0                      = 0x93
 	DLT_USER1                      = 0x94
 	DLT_USER10                     = 0x9d
@@ -991,7 +991,7 @@ const (
 	MCL_FUTURE                     = 0x2
 	MNT_ACLS                       = 0x8000000
 	MNT_ASYNC                      = 0x40
-	MNT_AUTOMOUNTED                = 0x200000000
+	MNT_AUXDCUNTED                = 0x200000000
 	MNT_BYFSID                     = 0x8000000
 	MNT_CMDFLAGS                   = 0xd0f0000
 	MNT_DEFEXPORTED                = 0x200

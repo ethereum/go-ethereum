@@ -57,8 +57,8 @@ var (
 )
 
 const (
-	bodyCacheLimit      = 2560
-	blockCacheLimit     = 2560
+	bodyCacheLimit      = 256
+	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
@@ -127,11 +127,11 @@ type BlockChain struct {
 	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	blockCache       *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
-	resultProcess    *lru.Cache
-	calculatingBlock *lru.Cache
-	downloadingBlock *lru.Cache
-	quit             chan struct{} // blockchain quit channel
-	running          int32         // running must be called atomically
+	resultProcess    *lru.Cache     // Cache for processed blocks
+	calculatingBlock *lru.Cache     // Cache for processing blocks
+	downloadingBlock *lru.Cache     // Cache for downloading blocks (avoid duplication from fetcher)
+	quit             chan struct{}  // blockchain quit channel
+	running          int32          // running must be called atomically
 	// procInterrupt must be atomically called
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -981,14 +981,13 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-
 	reorg := externTd.Cmp(localTd) > 0
 	currentBlock = bc.CurrentBlock()
 	if !reorg && externTd.Cmp(localTd) == 0 {
 		// Split same-difficulty blocks by number
 		reorg = block.NumberU64() > currentBlock.NumberU64()
 	}
-		if reorg {
+	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
 			if err := bc.reorg(currentBlock, block); err != nil {
@@ -1666,9 +1665,11 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
+
 Number: %v
 Hash: 0x%x
 %v
+
 Error: %v
 ##############################
 `, bc.chainConfig, block.Number(), block.Hash(), receiptString, err))

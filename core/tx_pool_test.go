@@ -932,14 +932,14 @@ func TestTransactionPendingLimiting(t *testing.T) {
 
 	account, _ := deriveSender(transaction(0, 0, key))
 	pool.currentState.AddBalance(account, big.NewInt(1000000))
-
+	testTxPoolConfig.AccountQueue = 10
 	// Keep track of transaction events to ensure all executables get announced
-	events := make(chan TxPreEvent, testTxPoolConfig.AccountQueue+5)
+	events := make(chan TxPreEvent, testTxPoolConfig.AccountQueue)
 	sub := pool.txFeed.Subscribe(events)
 	defer sub.Unsubscribe()
 
 	// Keep queuing up transactions and make sure all above a limit are dropped
-	for i := uint64(0); i < testTxPoolConfig.AccountQueue+5; i++ {
+	for i := uint64(0); i < testTxPoolConfig.AccountQueue; i++ {
 		if err := pool.AddRemote(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
@@ -950,10 +950,10 @@ func TestTransactionPendingLimiting(t *testing.T) {
 			t.Errorf("tx %d: queue size mismatch: have %d, want %d", i, pool.queue[account].Len(), 0)
 		}
 	}
-	if len(pool.all) != int(testTxPoolConfig.AccountQueue+5) {
+	if len(pool.all) != int(testTxPoolConfig.AccountQueue) {
 		t.Errorf("total transaction mismatch: have %d, want %d", len(pool.all), testTxPoolConfig.AccountQueue+5)
 	}
-	if err := validateEvents(events, int(testTxPoolConfig.AccountQueue+5)); err != nil {
+	if err := validateEvents(events, int(testTxPoolConfig.AccountQueue)); err != nil {
 		t.Fatalf("event firing failed: %v", err)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {
@@ -1106,6 +1106,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
 	config := testTxPoolConfig
+	config.AccountSlots = 10
 	config.GlobalSlots = 0
 	config.AccountSlots = 5
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)

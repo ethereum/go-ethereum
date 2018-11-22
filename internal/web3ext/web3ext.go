@@ -146,7 +146,6 @@ web3._extend({
 });
 `
 
-
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
