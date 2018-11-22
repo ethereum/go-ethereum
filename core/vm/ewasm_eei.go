@@ -60,6 +60,7 @@ const (
 	GasCostCall           = 700
 	GasCostCallValue      = 9000
 	GasCostCallStipend    = 2300
+	GasCostNewAccount     = 25000
 	GasCostLog            = 375
 	GasCostLogData        = 8
 	GasCostLogTopic       = 375
@@ -141,7 +142,7 @@ func (in *InterpreterEWASM) gasAccounting(cost uint64) {
 		panic("nil contract")
 	}
 	if cost > in.contract.Gas {
-		panic("out of gas")
+		panic(fmt.Sprintf("out of gas %d > %d", cost, in.contract.Gas))
 	}
 	in.contract.Gas -= cost
 }
@@ -392,7 +393,6 @@ func getBlockHash(p *exec.Process, in *InterpreterEWASM, number int64, resultOff
 
 func callCommon(in *InterpreterEWASM, contract, targetContract *Contract, input []byte, value *big.Int, snapshot int, gas int64, ro bool) int32 {
 	if in.evm.depth > maxCallDepth {
-		contract.UseGas(contract.Gas)
 		return ErrEEICallFailure
 	}
 
@@ -423,8 +423,6 @@ func callCommon(in *InterpreterEWASM, contract, targetContract *Contract, input 
 }
 
 func call(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset int32, valueOffset int32, dataOffset int32, dataLength int32) int32 {
-	in.gasAccounting(GasCostCall)
-
 	contract := in.contract
 
 	// Get the address of the contract to call
@@ -433,11 +431,27 @@ func call(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset int32,
 	// Get the value. The [spec](https://github.com/ewasm/design/blob/master/eth_interface.md#call)
 	// requires this operation to be U128, which is incompatible with the EVM version that expects
 	// a u256.
-	value := big.NewInt(0).SetBytes(swapEndian(readSize(p, valueOffset, u128Len)))
+	// To be compatible with hera, one must read a u256 value, then check that this is a u128.
+	value := big.NewInt(0).SetBytes(swapEndian(readSize(p, valueOffset, u256Len)))
+	check128bits := big.NewInt(1)
+	check128bits.Lsh(check128bits, 128)
+	if value.Cmp(check128bits) > 0 {
+		return ErrEEICallFailure
+	}
+
+	if in.staticMode == true && value.Cmp(big.NewInt(0)) != 0 {
+		in.gasAccounting(in.contract.Gas)
+		return ErrEEICallFailure
+	}
+
+	in.gasAccounting(GasCostCall)
+
+	if in.evm.depth > maxCallDepth {
+		return ErrEEICallFailure
+	}
 
 	if value.Cmp(big.NewInt(0)) != 0 {
 		in.gasAccounting(GasCostCallValue)
-		gas += GasCostCallStipend
 	}
 
 	// Get the arguments.
@@ -448,31 +462,65 @@ func call(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset int32,
 
 	snapshot := in.StateDB.Snapshot()
 
-	// Check that the contract exists
-	if !in.StateDB.Exist(addr) {
-		// TODO check that no new account creation stuff is required
-		in.StateDB.CreateAccount(addr)
-	}
-
 	// Check that there is enough balance to transfer the value
 	if in.StateDB.GetBalance(contract.Address()).Cmp(value) < 0 {
-		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(addr))
-		in.contract.Gas += GasCostCallStipend
 		return ErrEEICallFailure
 	}
 
+	// Check that the contract exists
+	if !in.StateDB.Exist(addr) {
+		in.gasAccounting(GasCostNewAccount)
+		in.StateDB.CreateAccount(addr)
+	}
+
+	var calleeGas uint64
+	if uint64(gas) > ((63 * contract.Gas) / 64) {
+		calleeGas = contract.Gas - (contract.Gas / 64)
+	} else {
+		calleeGas = uint64(gas)
+	}
+	in.gasAccounting(calleeGas)
+
+	if value.Cmp(big.NewInt(0)) != 0 {
+		calleeGas += GasCostCallStipend
+	}
+
 	// TODO tracing
-	// TODO check that EIP-150 is respected
 
 	// Add amount to recipient
 	in.evm.Transfer(in.StateDB, contract.Address(), addr, value)
 
 	// Load the contract code in a new VM structure
-	targetContract := NewContract(contract, AccountRef(addr), value, uint64(gas))
+	targetContract := NewContract(contract, AccountRef(addr), value, calleeGas)
 	code := in.StateDB.GetCode(addr)
+	if len(code) == 0 {
+		in.contract.Gas += calleeGas
+		return EEICallSuccess
+	}
 	targetContract.SetCallCode(&addr, in.StateDB.GetCodeHash(addr), code)
 
-	return callCommon(in, contract, targetContract, input, value, snapshot, gas, false)
+	savedVM := in.vm
+
+	in.Run(targetContract, input, false)
+
+	in.vm = savedVM
+	in.contract = contract
+
+	// Add leftover gas
+	in.contract.Gas += targetContract.Gas
+	defer func() { in.terminationType = TerminateFinish }()
+
+	switch in.terminationType {
+	case TerminateFinish:
+		return EEICallSuccess
+	case TerminateRevert:
+		in.StateDB.RevertToSnapshot(snapshot)
+		return ErrEEICallRevert
+	default:
+		in.StateDB.RevertToSnapshot(snapshot)
+		contract.UseGas(targetContract.Gas)
+		return ErrEEICallFailure
+	}
 }
 
 func callDataCopy(p *exec.Process, in *InterpreterEWASM, resultOffset int32, dataOffset int32, length int32) {
@@ -573,8 +621,6 @@ func callDelegate(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffse
 }
 
 func callStatic(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset int32, dataOffset int32, dataLength int32) int32 {
-	in.gasAccounting(GasCostCall)
-
 	contract := in.contract
 
 	// Get the address of the contract to call
@@ -590,35 +636,62 @@ func callStatic(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset 
 
 	snapshot := in.StateDB.Snapshot()
 
-	// Check that the contract exists
-	if !in.StateDB.Exist(addr) {
-		// TODO check that no new account creation stuff is required
-		in.StateDB.CreateAccount(addr)
-	}
+	in.gasAccounting(GasCostCall)
 
-	// Check that there is enough balance to transfer the value
-	if in.StateDB.GetBalance(addr).Cmp(value) < 0 {
-		fmt.Printf("Not enough balance: wanted to use %v, got %v\n", value, in.StateDB.GetBalance(addr))
-		in.contract.Gas += GasCostCallStipend
+	if in.evm.depth > maxCallDepth {
 		return ErrEEICallFailure
 	}
 
+	// Check that the contract exists
+	if !in.StateDB.Exist(addr) {
+		in.gasAccounting(GasCostNewAccount)
+		in.StateDB.CreateAccount(addr)
+	}
+
+	calleeGas := uint64(gas)
+	if calleeGas > ((63 * contract.Gas) / 64) {
+		calleeGas -= ((63 * contract.Gas) / 64)
+	}
+	in.gasAccounting(calleeGas)
+
 	// TODO tracing
-	// TODO check that EIP-150 is respected
 
 	// Add amount to recipient
 	in.evm.Transfer(in.StateDB, contract.Address(), addr, value)
 
 	// Load the contract code in a new VM structure
-	targetContract := NewContract(contract, AccountRef(addr), value, uint64(gas))
+	targetContract := NewContract(contract, AccountRef(addr), value, calleeGas)
 	code := in.StateDB.GetCode(addr)
+	if len(code) == 0 {
+		in.contract.Gas += calleeGas
+		return EEICallSuccess
+	}
 	targetContract.SetCallCode(&addr, in.StateDB.GetCodeHash(addr), code)
 
+	savedVM := in.vm
 	saveStatic := in.staticMode
 	in.staticMode = true
 	defer func() { in.staticMode = saveStatic }()
 
-	return callCommon(in, contract, targetContract, input, value, snapshot, gas, true)
+	in.Run(targetContract, input, false)
+
+	in.vm = savedVM
+	in.contract = contract
+
+	// Add leftover gas
+	in.contract.Gas += targetContract.Gas
+
+	switch in.terminationType {
+	case TerminateFinish:
+		return EEICallSuccess
+	case TerminateRevert:
+		in.StateDB.RevertToSnapshot(snapshot)
+		return ErrEEICallRevert
+	default:
+		in.StateDB.RevertToSnapshot(snapshot)
+		contract.UseGas(targetContract.Gas)
+		return ErrEEICallFailure
+	}
 }
 
 func storageStore(p *exec.Process, interpreter *InterpreterEWASM, pathOffset int32, valueOffset int32) {
@@ -904,7 +977,6 @@ func selfDestruct(p *exec.Process, in *InterpreterEWASM, addressOffset int32) {
 	balance := in.StateDB.GetBalance(contract.Address())
 
 	addr := common.BytesToAddress(mem[addressOffset : addressOffset+common.AddressLength])
-	in.StateDB.AddBalance(addr, balance)
 
 	totalGas := in.gasTable.Suicide
 	// If the destination address doesn't exist, add the account creation costs
@@ -913,6 +985,7 @@ func selfDestruct(p *exec.Process, in *InterpreterEWASM, addressOffset int32) {
 	}
 	in.gasAccounting(totalGas)
 
+	in.StateDB.AddBalance(addr, balance)
 	in.StateDB.Suicide(contract.Address())
 
 	// Same as for `revert` and `return`, I need to forcefully terminate

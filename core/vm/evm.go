@@ -420,6 +420,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		for _, interpreter := range evm.interpreters {
 			if interpreter.CanRun(contract.Code) {
 				ret, err = interpreter.PostContractCreation(ret)
+				break
 			}
 		}
 	}
