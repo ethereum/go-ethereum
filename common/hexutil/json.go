@@ -72,8 +72,10 @@ func (b Bytes) String() string {
 	return Encode(b)
 }
 
+// ImplementsGraphQLType returns true if Bytes implements the specified GraphQL type.
 func (b Bytes) ImplementsGraphQLType(name string) bool { return name == "Bytes" }
 
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
 func (b *Bytes) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
@@ -204,8 +206,10 @@ func (b *Big) String() string {
 	return EncodeBig(b.ToInt())
 }
 
+// ImplementsGraphQLType returns true if Big implements the provided GraphQL type.
 func (b Big) ImplementsGraphQLType(name string) bool { return name == "BigInt" }
 
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
 func (b *Big) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {
@@ -268,8 +272,10 @@ func (b Uint64) String() string {
 	return EncodeUint64(uint64(b))
 }
 
+// ImplementsGraphQLType returns true if Uint64 implements the provided GraphQL type.
 func (b Uint64) ImplementsGraphQLType(name string) bool { return name == "Long" }
 
+// UnmarshalGraphQL unmarshals the provided GraphQL query data.
 func (b *Uint64) UnmarshalGraphQL(input interface{}) error {
 	var err error
 	switch input := input.(type) {

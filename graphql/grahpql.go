@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethgraphql
+// Package graphql provides a GraphQL interface to Ethereum node data.
+package graphql
 
 import (
 	"context"
@@ -38,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	graphql "github.com/graph-gophers/graphql-go"
+	graphqlgo "github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
 )
 
@@ -1021,7 +1022,7 @@ func (r *Resolver) Syncing() (*SyncState, error) {
 func NewHandler(be *eth.EthAPIBackend) (http.Handler, error) {
 	q := Resolver{be}
 
-	s, err := graphql.ParseSchema(schema, &q)
+	s, err := graphqlgo.ParseSchema(schema, &q)
 	if err != nil {
 		return nil, err
 	}
@@ -1034,7 +1035,7 @@ func NewHandler(be *eth.EthAPIBackend) (http.Handler, error) {
 	return mux, nil
 }
 
-// Service encapsulates an  ETHGraphQL service.
+// Service encapsulates a GraphQL service.
 type Service struct {
 	endpoint string             // The host:port endpoint for this service.
 	cors     []string           // Allowed CORS domains

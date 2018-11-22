@@ -432,14 +432,24 @@ var (
 		Usage: "Enable the GraphQL server",
 	}
 	GraphQLListenAddrFlag = cli.StringFlag{
-		Name:  "graphqladdr",
+		Name:  "graphql.addr",
 		Usage: "GraphQL server listening interface",
 		Value: node.DefaultGraphQLHost,
 	}
 	GraphQLPortFlag = cli.IntFlag{
-		Name:  "graphqlport",
+		Name:  "graphql.port",
 		Usage: "GraphQL server listening port",
 		Value: node.DefaultGraphQLPort,
+	}
+	GraphQLCORSDomainFlag = cli.StringFlag{
+		Name:  "graphql.rpccorsdomain",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value: "",
+	}
+	GraphQLVirtualHostsFlag = cli.StringFlag{
+		Name:  "graphql.rpcvhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -811,8 +821,13 @@ func setGraphQL(ctx *cli.Context, cfg *node.Config) {
 			cfg.GraphQLHost = ctx.GlobalString(GraphQLListenAddrFlag.Name)
 		}
 	}
-
 	cfg.GraphQLPort = ctx.GlobalInt(GraphQLPortFlag.Name)
+	if ctx.GlobalIsSet(GraphQLCORSDomainFlag.Name) {
+		cfg.GraphQLCors = splitAndTrim(ctx.GlobalString(GraphQLCORSDomainFlag.Name))
+	}
+	if ctx.GlobalIsSet(GraphQLVirtualHostsFlag.Name) {
+		cfg.GraphQLVirtualHosts = splitAndTrim(ctx.GlobalString(GraphQLVirtualHostsFlag.Name))
+	}
 }
 
 // setWS creates the WebSocket RPC listener interface string from the set
