@@ -68,6 +68,10 @@ type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Se
 
 // New creates a new Simulation instance with new
 // simulations.Network initialized with provided services.
+// Services map must have unique keys as service names and
+// every ServiceFunc must return a node.Service of the unique type.
+// This restriction is required by node.Node.Start() function
+// which is used to start node.Service returned by ServiceFunc.
 func New(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[enode.ID]*sync.Map),
