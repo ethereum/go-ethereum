@@ -913,7 +913,7 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	}
 
 	gas, err := ethapi.DoEstimateGas(ctx, r.backend, args.Data, blockNumber)
-	return hexutil.Uint64(gas), err
+	return gas, err
 }
 
 // FilterCritera encapsulates the arguments to `logs` on the root resolver object.
