@@ -162,7 +162,6 @@ func (in *InterpreterEWASM) CanRun(file []byte) bool {
 	}
 
 
-
 	return true
 }
 
@@ -242,7 +241,10 @@ func validateModule(m *wasm.Module) (int, error) {
 // been run. It also validates the module's format before it is to
 // be committed to disk.
 func (in *InterpreterEWASM) PostContractCreation(code []byte) ([]byte, error) {
-	if in.CanRun(code) {
+	// If a REVERT has been encountered, then return the code and
+	if in.terminationType == TerminateRevert {
+		return nil, errExecutionReverted
+	}
 		if in.metering {
 			code, _, err := sentinel(in, code)
 			if len(code) < 5 || err != nil {

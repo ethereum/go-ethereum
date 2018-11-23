@@ -412,7 +412,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.vmConfig.Tracer.CaptureStart(caller.Address(), address, true, codeAndHash.code, gas, value)
 	}
 	start := time.Now()
-
 	ret, err := run(evm, contract, nil, false)
 
 	/* The new contract needs to be metered after it has executed the constructor */

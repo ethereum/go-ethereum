@@ -791,6 +791,7 @@ func sentinel(in *InterpreterEWASM, input []byte) ([]byte, uint64, error) {
 	if err == nil {
 		asBytes = meteredCode.([]byte)
 	}
+
 	return asBytes, savedContract.Gas - in.contract.Gas, err
 }
 
