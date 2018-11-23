@@ -29,9 +29,7 @@ Tomochain is built by the mindset of standing on the giants shoulder.
 We have learned from all advanced technical design concept of many well-known public blockchains on the market and shaped up the platform with our own ingredients.
 See below the overall technical comparison table that we try to make clear the position of Tomochain comparing to some popular blockchains at the top-tier.
 
-![Tomochain](https://cdn-images-1.medium.com/max/1600/1*LkiIWFHPXh-0Whv3Hm1yMQ.png)
-
-**We just updated the number of masternodes accepted in the network to a maximum of 150*
+![Tomochain](https://s3-ap-southeast-1.amazonaws.com/tomochain/tomochainvsgiants.png)
 
 ## Building the source
 
@@ -154,10 +152,9 @@ $ tomo \
 The implementation of the following features is being studied by our research team:
 
 - Layer 2 scalability with state sharding
-- Asynchronize EVM execution
-- Multi-chains interoperabilty
-- Spam filtering
 - DEX integration
+- Spam filtering
+- Multi-chains interoperabilty
 
 ## Contribution and technical discuss
 
