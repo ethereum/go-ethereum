@@ -37,9 +37,6 @@ type IndexItem struct {
 	Data            []byte
 	AccessTimestamp int64
 	StoreTimestamp  int64
-	// UseMockStore is a pointer to identify
-	// an unset state of the field in Join function.
-	UseMockStore *bool
 }
 
 // Join is a helper method to construct a new
@@ -57,9 +54,6 @@ func (i IndexItem) Join(i2 IndexItem) (new IndexItem) {
 	}
 	if i.StoreTimestamp == 0 {
 		i.StoreTimestamp = i2.StoreTimestamp
-	}
-	if i.UseMockStore == nil {
-		i.UseMockStore = i2.UseMockStore
 	}
 	return i
 }
