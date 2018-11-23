@@ -301,33 +301,44 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 // Calculate reward for reward checkpoint.
 func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
-	startBlockNumber := number - (rCheckpoint * 2) + 1
+	prevCheckpoint := number - (rCheckpoint * 2)
+	startBlockNumber := prevCheckpoint + 1
 	endBlockNumber := startBlockNumber + rCheckpoint - 1
 	signers := make(map[common.Address]*rewardLog)
+	prevHeaderCheckpoint := chain.GetHeaderByNumber(prevCheckpoint)
+	masternodes := posv.GetMasternodesFromCheckpointHeader(prevHeaderCheckpoint)
 
-	for i := startBlockNumber; i <= endBlockNumber; i++ {
-		block := chain.GetHeaderByNumber(i)
-		addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
-		if err != nil {
-			log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-			return nil, err
-		}
-		// Filter duplicate address.
-		if len(addrs) > 0 {
-			addrSigners := make(map[common.Address]bool)
-			for _, addr := range addrs {
-				if _, ok := addrSigners[addr]; !ok {
-					addrSigners[addr] = true
-				}
+	if len(masternodes) > 0 {
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+			block := chain.GetHeaderByNumber(i)
+			addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
+			if err != nil {
+				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+				return nil, err
 			}
-			for addr := range addrSigners {
-				_, exist := signers[addr]
-				if exist {
-					signers[addr].Sign++
-				} else {
-					signers[addr] = &rewardLog{1, new(big.Int)}
+			// Filter duplicate address.
+			if len(addrs) > 0 {
+				addrSigners := make(map[common.Address]bool)
+				for _, masternode := range masternodes {
+					for _, addr := range addrs {
+						if addr == masternode {
+							if _, ok := addrSigners[addr]; !ok {
+								addrSigners[addr] = true
+							}
+							break
+						}
+					}
 				}
-				*totalSigner++
+
+				for addr := range addrSigners {
+					_, exist := signers[addr]
+					if exist {
+						signers[addr].Sign++
+					} else {
+						signers[addr] = &rewardLog{1, new(big.Int)}
+					}
+					*totalSigner++
+				}
 			}
 		}
 	}
