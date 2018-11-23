@@ -297,8 +297,8 @@ func (s *Store) PutSchema(name string) (err error) {
 }
 
 // Close closes the underlying database.
-func (s *Store) Close() {
-	s.db.Close()
+func (s *Store) Close() error {
+	return s.db.Close()
 }
 
 // Example_store constructs a simple storage implementation using shed package.
@@ -313,6 +313,7 @@ func Example_store() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer s.Close()
 
 	ch := storage.GenerateRandomChunk(1024)
 	err = s.Put(context.Background(), ch)
