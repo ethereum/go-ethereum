@@ -514,10 +514,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	po, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
-	if po <= depth {
-		return true
-	}
-	return false
+	return depth <= po
 }
 
 /////////////////////////////////////////////////////////////////////

@@ -55,8 +55,7 @@ import (
 
 var (
 	initOnce        = sync.Once{}
-	debugdebugflag  = flag.Bool("vv", false, "veryverbose")
-	debugflag       = flag.Bool("v", false, "verbose")
+	loglevel        = flag.Int("loglevel", 2, "logging verbosity")
 	longrunning     = flag.Bool("longrunning", false, "do run long-running tests")
 	w               *whisper.Whisper
 	wapi            *whisper.PublicWhisperAPI
@@ -79,16 +78,9 @@ func init() {
 func initTest() {
 	initOnce.Do(
 		func() {
-			loglevel := log.LvlInfo
-			if *debugflag {
-				loglevel = log.LvlDebug
-			} else if *debugdebugflag {
-				loglevel = log.LvlTrace
-			}
-
 			psslogmain = log.New("psslog", "*")
 			hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-			hf := log.LvlFilterHandler(loglevel, hs)
+			hf := log.LvlFilterHandler(log.Lvl(*loglevel), hs)
 			h := log.CallerFileHandler(hf)
 			log.Root().SetHandler(h)
 
