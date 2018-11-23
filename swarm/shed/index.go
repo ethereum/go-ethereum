@@ -39,10 +39,10 @@ type IndexItem struct {
 	StoreTimestamp  int64
 }
 
-// Join is a helper method to construct a new
+// Merge is a helper method to construct a new
 // IndexItem by filling up fields with default values
 // of a particular IndexItem with values from another one.
-func (i IndexItem) Join(i2 IndexItem) (new IndexItem) {
+func (i IndexItem) Merge(i2 IndexItem) (new IndexItem) {
 	if i.Address == nil {
 		i.Address = i2.Address
 	}
@@ -133,7 +133,7 @@ func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
 	if err != nil {
 		return out, err
 	}
-	return out.Join(keyFields), nil
+	return out.Merge(keyFields), nil
 }
 
 // Put accepts IndexItem to encode information from it
@@ -212,7 +212,7 @@ func (f Index) IterateAll(fn IndexIterFunc) (err error) {
 		if err != nil {
 			return err
 		}
-		stop, err := fn(keyIndexItem.Join(valueIndexItem))
+		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
 		if err != nil {
 			return err
 		}
@@ -246,7 +246,7 @@ func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 		if err != nil {
 			return err
 		}
-		stop, err := fn(keyIndexItem.Join(valueIndexItem))
+		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
 		if err != nil {
 			return err
 		}
