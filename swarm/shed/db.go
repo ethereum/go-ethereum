@@ -71,23 +71,39 @@ func NewDB(path string) (db *DB, err error) {
 
 // Put wraps LevelDB Put method to increment metrics counter.
 func (db *DB) Put(key []byte, value []byte) (err error) {
+	err = db.ldb.Put(key, value, nil)
+	if err != nil {
+		metrics.GetOrRegisterCounter("DB.putFail", nil).Inc(1)
+		return err
+	}
 	metrics.GetOrRegisterCounter("DB.put", nil).Inc(1)
-
-	return db.ldb.Put(key, value, nil)
+	return nil
 }
 
 // Get wraps LevelDB Get method to increment metrics counter.
 func (db *DB) Get(key []byte) (value []byte, err error) {
+	value, err = db.ldb.Get(key, nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			metrics.GetOrRegisterCounter("DB.getNotFound", nil).Inc(1)
+		} else {
+			metrics.GetOrRegisterCounter("DB.getFail", nil).Inc(1)
+		}
+		return nil, err
+	}
 	metrics.GetOrRegisterCounter("DB.get", nil).Inc(1)
-
-	return db.ldb.Get(key, nil)
+	return value, nil
 }
 
 // Delete wraps LevelDB Delete method to increment metrics counter.
-func (db *DB) Delete(key []byte) error {
+func (db *DB) Delete(key []byte) (err error) {
+	err = db.ldb.Delete(key, nil)
+	if err != nil {
+		metrics.GetOrRegisterCounter("DB.deleteFail", nil).Inc(1)
+		return err
+	}
 	metrics.GetOrRegisterCounter("DB.delete", nil).Inc(1)
-
-	return db.ldb.Delete(key, nil)
+	return nil
 }
 
 // NewIterator wraps LevelDB NewIterator method to increment metrics counter.
@@ -98,10 +114,14 @@ func (db *DB) NewIterator() iterator.Iterator {
 }
 
 // WriteBatch wraps LevelDB Write method to increment metrics counter.
-func (db *DB) WriteBatch(batch *leveldb.Batch) error {
+func (db *DB) WriteBatch(batch *leveldb.Batch) (err error) {
+	err = db.ldb.Write(batch, nil)
+	if err != nil {
+		metrics.GetOrRegisterCounter("DB.writebatchFail", nil).Inc(1)
+		return err
+	}
 	metrics.GetOrRegisterCounter("DB.writebatch", nil).Inc(1)
-
-	return db.ldb.Write(batch, nil)
+	return nil
 }
 
 // Close closes LevelDB database.
