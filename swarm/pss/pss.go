@@ -332,10 +332,10 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	if _, ok := p.topicHandlerCaps[*topic]; !ok {
 		p.topicHandlerCaps[*topic] = &handlerCaps{}
 	}
-	if !p.topicHandlerCaps[*topic].raw && hndlr.caps.raw {
+	if hndlr.caps.raw {
 		p.topicHandlerCaps[*topic].raw = true
 	}
-	if !p.topicHandlerCaps[*topic].prox && hndlr.caps.prox {
+	if hndlr.caps.prox {
 		p.topicHandlerCaps[*topic].prox = true
 	}
 	return func() { p.deregister(topic, hndlr) }
