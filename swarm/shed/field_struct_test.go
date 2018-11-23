@@ -22,7 +22,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// TestStructField validates put and unmarshal operations
+// TestStructField validates put and get operations
 // of the StructField.
 func TestStructField(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
@@ -37,9 +37,9 @@ func TestStructField(t *testing.T) {
 		A string
 	}
 
-	t.Run("unmarshal empty", func(t *testing.T) {
+	t.Run("get empty", func(t *testing.T) {
 		var s complexStructure
-		err := complexField.Unmarshal(&s)
+		err := complexField.Get(&s)
 		if err != leveldb.ErrNotFound {
 			t.Fatalf("got error %v, want %v", err, leveldb.ErrNotFound)
 		}
@@ -58,7 +58,7 @@ func TestStructField(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got complexStructure
-		err = complexField.Unmarshal(&got)
+		err = complexField.Get(&got)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +75,7 @@ func TestStructField(t *testing.T) {
 				t.Fatal(err)
 			}
 			var got complexStructure
-			err = complexField.Unmarshal(&got)
+			err = complexField.Get(&got)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,7 +96,7 @@ func TestStructField(t *testing.T) {
 			t.Fatal(err)
 		}
 		var got complexStructure
-		err := complexField.Unmarshal(&got)
+		err := complexField.Get(&got)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +115,7 @@ func TestStructField(t *testing.T) {
 				t.Fatal(err)
 			}
 			var got complexStructure
-			err := complexField.Unmarshal(&got)
+			err := complexField.Get(&got)
 			if err != nil {
 				t.Fatal(err)
 			}
