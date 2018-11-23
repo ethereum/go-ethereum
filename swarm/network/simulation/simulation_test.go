@@ -210,29 +210,11 @@ func (t *noopService) Stop() error {
 // of a different type then noopService to test
 // multiple services on one node.
 func noopService2Func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-	return newNoopService2(), nil, nil
+	return new(noopService2), nil, nil
 }
 
 // noopService2 is the service that does not do anything
 // but implements node.Service interface.
-type noopService2 struct{}
-
-func newNoopService2() node.Service {
-	return &noopService2{}
-}
-
-func (t *noopService2) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{}
-}
-
-func (t *noopService2) APIs() []rpc.API {
-	return []rpc.API{}
-}
-
-func (t *noopService2) Start(server *p2p.Server) error {
-	return nil
-}
-
-func (t *noopService2) Stop() error {
-	return nil
+type noopService2 struct {
+	noopService
 }
