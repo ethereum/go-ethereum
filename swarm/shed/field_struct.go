@@ -41,7 +41,7 @@ func (db *DB) NewStructField(name string) (f StructField, err error) {
 	}, nil
 }
 
-// Unmarshal unmarshals data fromt he database to a provided val.
+// Unmarshal unmarshals data fromt the database to a provided val.
 // If the data is not found leveldb.ErrNotFound is returned.
 func (f StructField) Unmarshal(val interface{}) (err error) {
 	b, err := f.db.Get(f.key)

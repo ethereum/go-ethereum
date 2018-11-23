@@ -173,7 +173,7 @@ func (f Index) PutInBatch(batch *leveldb.Batch, i IndexItem) (err error) {
 }
 
 // Delete accepts IndexItem to remove a key/value pair
-// form the database based on its fields.
+// from the database based on its fields.
 func (f Index) Delete(keyFields IndexItem) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {

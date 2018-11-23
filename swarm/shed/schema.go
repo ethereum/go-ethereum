@@ -56,10 +56,10 @@ type indexSpec struct {
 // a particular field form the schema definition.
 func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	if name == "" {
-		return nil, errors.New("filed name can not be blank")
+		return nil, errors.New("field name can not be blank")
 	}
 	if fieldType == "" {
-		return nil, errors.New("filed type can not be blank")
+		return nil, errors.New("field type can not be blank")
 	}
 	s, err := db.getSchema()
 	if err != nil {

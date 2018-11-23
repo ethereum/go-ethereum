@@ -27,7 +27,7 @@ type StringField struct {
 	key []byte
 }
 
-// NewStringField retruns a new Instance fo StringField.
+// NewStringField retruns a new Instance of StringField.
 // It validates its name and type against the database schema.
 func (db *DB) NewStringField(name string) (f StringField, err error) {
 	key, err := db.schemaFieldKey(name, "string")
