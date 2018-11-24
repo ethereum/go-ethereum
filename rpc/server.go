@@ -345,7 +345,7 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 
 	if err := codec.Write(response); err != nil {
 		log.Error(fmt.Sprintf("RPC exec %v\n", err))
-			codec.Close()
+		codec.Close()
 	}
 
 	// when request was a subscribe request this allows these subscriptions to be actived
