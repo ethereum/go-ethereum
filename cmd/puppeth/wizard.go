@@ -104,6 +104,28 @@ func (w *wizard) readString() string {
 	}
 }
 
+// readYesNo reads a yes or no from stdin, returning boolean true for yes
+func (w *wizard) readYesNo(def bool) bool {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		text = strings.ToLower(strings.TrimSpace(text))
+		if text == "y" || text == "yes" {
+			return true
+		}
+		if text == "n" || text == "no" {
+			return false
+		}
+		if len(text) == 0 {
+			return def
+		}
+		fmt.Println("Valid answers: y, yes, n, no or leave empty for default")
+	}
+}
+
 // readDefaultString reads a single line from stdin, trimming if from spaces. If
 // an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultString(def string) string {

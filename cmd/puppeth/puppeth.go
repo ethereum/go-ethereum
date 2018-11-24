@@ -18,11 +18,15 @@
 package main
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -43,6 +47,14 @@ func main() {
 			Usage: "log level to emit to the screen",
 		},
 	}
+	app.Commands = []cli.Command{
+		cli.Command{
+			Action:    utils.MigrateFlags(convert),
+			Name:      "convert",
+			Usage:     "Convert from geth genesis into chainspecs for other nodes.",
+			ArgsUsage: "<geth-genesis.json>",
+		},
+	}
 	app.Action = func(c *cli.Context) error {
 		// Set up the logger to print everything and the random generator
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
@@ -57,4 +69,24 @@ func main() {
 		return nil
 	}
 	app.Run(os.Args)
+}
+
+func convert(ctx *cli.Context) error {
+	// Ensure we have a source genesis
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	if len(ctx.Args()) != 1 {
+		utils.Fatalf("No geth genesis provided")
+	}
+	blob, err := ioutil.ReadFile(ctx.Args().First())
+	if err != nil {
+		utils.Fatalf("Could not read file: %v", err)
+	}
+
+	var genesis core.Genesis
+	if err := json.Unmarshal(blob, &genesis); err != nil {
+		utils.Fatalf("Failed parsing genesis: %v", err)
+	}
+	basename := strings.TrimRight(ctx.Args().First(), ".json")
+	convertGenesis(&genesis, basename, basename, []string{})
+	return nil
 }

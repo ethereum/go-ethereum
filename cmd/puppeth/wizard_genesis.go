@@ -114,9 +114,13 @@ func (w *wizard) makeGenesis() {
 		}
 		break
 	}
-	// Add a batch of precompile balances to avoid them getting deleted
-	for i := int64(0); i < 256; i++ {
-		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
+	fmt.Println()
+	fmt.Println("Should the precompile-addresses (0x1 .. 0xff) be pre-funded with 1 wei? (advisable yes)")
+	if w.readYesNo(true) {
+		// Add a batch of precompile balances to avoid them getting deleted
+		for i := int64(0); i < 256; i++ {
+			genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
+		}
 	}
 	// Query the user for some custom extras
 	fmt.Println()
@@ -136,47 +140,57 @@ func (w *wizard) manageGenesis() {
 	// Figure out whether to modify or export the genesis
 	fmt.Println()
 	fmt.Println(" 1. Modify existing fork rules")
-	fmt.Println(" 2. Export genesis configuration")
+	fmt.Println(" 2. Export genesis configurations")
 	fmt.Println(" 3. Remove genesis configuration")
 
 	choice := w.read()
-	switch {
-	case choice == "1":
+	switch choice {
+	case "1":
 		// Fork rule updating requested, iterate over each fork
 		fmt.Println()
 		fmt.Printf("Which block should Homestead come into effect? (default = %v)\n", w.conf.Genesis.Config.HomesteadBlock)
 		w.conf.Genesis.Config.HomesteadBlock = w.readDefaultBigInt(w.conf.Genesis.Config.HomesteadBlock)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP150 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP150Block)
+		fmt.Printf("Which block should EIP150 (Tangerine Whistle) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP150Block)
 		w.conf.Genesis.Config.EIP150Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP150Block)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP155 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP155Block)
+		fmt.Printf("Which block should EIP155 (Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP155Block)
 		w.conf.Genesis.Config.EIP155Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP155Block)
 
 		fmt.Println()
-		fmt.Printf("Which block should EIP158 come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP158Block)
+		fmt.Printf("Which block should EIP158/161 (also Spurious Dragon) come into effect? (default = %v)\n", w.conf.Genesis.Config.EIP158Block)
 		w.conf.Genesis.Config.EIP158Block = w.readDefaultBigInt(w.conf.Genesis.Config.EIP158Block)
 
 		fmt.Println()
 		fmt.Printf("Which block should Byzantium come into effect? (default = %v)\n", w.conf.Genesis.Config.ByzantiumBlock)
 		w.conf.Genesis.Config.ByzantiumBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ByzantiumBlock)
 
+		fmt.Println()
+		fmt.Printf("Which block should Constantinople come into effect? (default = %v)\n", w.conf.Genesis.Config.ByzantiumBlock)
+		w.conf.Genesis.Config.ConstantinopleBlock = w.readDefaultBigInt(w.conf.Genesis.Config.ConstantinopleBlock)
+
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")
 		fmt.Printf("Chain configuration updated:\n\n%s\n", out)
 
-	case choice == "2":
+	case "2":
 		// Save whatever genesis configuration we currently have
 		fmt.Println()
-		fmt.Printf("Which file to save the genesis into? (default = %s.json)\n", w.network)
+		fmt.Printf("Which base filename to save the genesis specifications into? (default = %s)\n", w.network)
 		out, _ := json.MarshalIndent(w.conf.Genesis, "", "  ")
-		if err := ioutil.WriteFile(w.readDefaultString(fmt.Sprintf("%s.json", w.network)), out, 0644); err != nil {
+		basename := w.readDefaultString(fmt.Sprintf("%s.json", w.network))
+
+		gethJson := fmt.Sprintf("%s.json", basename)
+		if err := ioutil.WriteFile((gethJson), out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
 		}
-		log.Info("Exported existing genesis block")
+		log.Info("Saved geth genesis as %v", gethJson)
+		if err := convertGenesis(w.conf.Genesis, basename, w.network, w.conf.bootnodes); err != nil {
+			log.Error("Conversion failed", "err", err)
+		}
 
-	case choice == "3":
+	case "3":
 		// Make sure we don't have any services running
 		if len(w.conf.servers()) > 0 {
 			log.Error("Genesis reset requires all services and servers torn down")
@@ -186,8 +200,31 @@ func (w *wizard) manageGenesis() {
 
 		w.conf.Genesis = nil
 		w.conf.flush()
-
 	default:
 		log.Error("That's not something I can do")
 	}
+}
+
+func saveGenesis(basename, client string, spec interface{}) {
+	filename := fmt.Sprintf("%s-%s.json", basename, client)
+	out, _ := json.Marshal(spec)
+	if err := ioutil.WriteFile(filename, out, 0644); err != nil {
+		log.Error("failed to save genesis file", "client", client, "err", err)
+	}
+	log.Info("saved chainspec", "client", client, "filename", filename)
+}
+
+func convertGenesis(genesis *core.Genesis, basename string, network string, bootnodes []string) error {
+	if spec, err := newAlethGenesisSpec(network, genesis); err == nil {
+		saveGenesis(basename, "aleth", spec)
+	} else {
+		log.Error("failed to create chain spec", "client", "aleth", "err", err)
+	}
+	if spec, err := newParityChainSpec(network, genesis, []string{}); err == nil {
+		saveGenesis(basename, "parity", spec)
+	} else {
+		log.Error("failed to create chain spec", "client", "parity", "err", err)
+	}
+	saveGenesis(basename, "harmony", genesis)
+	return nil
 }
