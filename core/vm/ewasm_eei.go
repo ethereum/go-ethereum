@@ -439,6 +439,13 @@ func call(p *exec.Process, in *InterpreterEWASM, gas int64, addressOffset int32,
 		return ErrEEICallFailure
 	}
 
+	// Fail if the account's balance is greater than 128bits as discussed
+	// in https://github.com/ewasm/hera/issues/456
+	if in.StateDB.GetBalance(contract.Address()).Cmp(check128bits) > 0 {
+		in.gasAccounting(contract.Gas)
+		return ErrEEICallRevert
+	}
+
 	if in.staticMode == true && value.Cmp(big.NewInt(0)) != 0 {
 		in.gasAccounting(in.contract.Gas)
 		return ErrEEICallFailure

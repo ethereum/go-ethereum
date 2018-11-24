@@ -109,7 +109,6 @@ func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]by
 
 	in.contract = contract
 	in.contract.Input = input
-	initialGas := contract.Gas
 
 	module, err := wasm.ReadModule(bytes.NewReader(contract.Code), WrappedModuleResolver(in))
 	if err != nil {
@@ -130,7 +129,6 @@ func (in *InterpreterEWASM) Run(contract *Contract, input []byte, ro bool) ([]by
 		in.terminationType = TerminateInvalid
 		return nil, err
 	}
-
 
 	// Check input and output types
 	sig := module.FunctionIndexSpace[mainIndex].Sig
