@@ -141,9 +141,9 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks        *lru.Cache // Bad block cache
-	IPCEndpoint      string
-	Client           *ethclient.Client // Global ipc client instance.
+	badBlocks   *lru.Cache // Bad block cache
+	IPCEndpoint string
+	Client      *ethclient.Client // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1221,7 +1221,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				}
 			}
 		}
-
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
@@ -1428,9 +1427,8 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 		events = append(events, ChainHeadEvent{block})
 		log.Debug("New ChainHeadEvent from fetcher ", "number", block.NumberU64(), "hash", block.Hash())
 	}
-
 	return events, coalescedLogs, nil
-}	
+}
 
 // insertStats tracks and reports on block insertion.
 type insertStats struct {
@@ -1660,11 +1658,9 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
-
 Number: %v
 Hash: 0x%x
 %v
-
 Error: %v
 ##############################
 `, bc.chainConfig, block.Number(), block.Hash(), receiptString, err))
