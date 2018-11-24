@@ -244,7 +244,8 @@ func (in *InterpreterEWASM) PostContractCreation(code []byte) ([]byte, error) {
 		return nil, errExecutionReverted
 	}
 		if in.metering {
-			code, _, err := sentinel(in, code)
+			meteredCode, _, err := sentinel(in, code)
+			code = meteredCode
 			if len(code) < 5 || err != nil {
 				return nil, fmt.Errorf("Error metering the generated contract code, err=%v", err)
 			}
