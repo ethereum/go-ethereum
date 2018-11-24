@@ -1,3 +1,18 @@
+// Copyright (c) 2018 XDCchain
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 package contracts
 
 import (
@@ -298,7 +313,8 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 			block := chain.GetHeaderByNumber(i)
 			addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
 			if err != nil {
-				log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+				return nil, err
 			}
 			// Filter duplicate address.
 			if len(addrs) > 0 {
@@ -395,7 +411,8 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 	opts := new(bind.CallOpts)
 	voters, err := validator.GetVoters(opts, masterAddr)
 	if err != nil {
-		log.Crit("Fail to get voters", "error", err)
+		log.Error("Fail to get voters", "error", err)
+		return nil, err
 	}
 
 	if len(voters) > 0 {
@@ -407,7 +424,8 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		for _, voteAddr := range voters {
 			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
 			if err != nil {
-				log.Crit("Fail to get vote capacity", "error", err)
+				log.Error("Fail to get vote capacity", "error", err)
+				return nil, err
 			}
 
 			totalCap.Add(totalCap, voterCap)

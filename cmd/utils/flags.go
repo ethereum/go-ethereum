@@ -74,8 +74,10 @@ SUBCOMMANDS:
 
 func init() {
 	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
+
 VERSION:
    {{.Version}}
+
 COMMANDS:
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
@@ -1084,7 +1086,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
 		cfg.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
 		if _, err := os.Stat(cfg.StoreRewardFolder); os.IsNotExist(err) {
