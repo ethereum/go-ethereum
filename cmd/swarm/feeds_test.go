@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -69,7 +68,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 		hexData}
 
 	// create an update and expect an exit without errors
-	log.Info(fmt.Sprintf("updating a feed with 'swarm feed update'"))
+	log.Info("updating a feed with 'swarm feed update'")
 	cmd := runSwarm(t, flags...)
 	cmd.ExpectExit()
 
@@ -116,7 +115,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 		"--user", address.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("getting feed info with 'swarm feed info'"))
+	log.Info("getting feed info with 'swarm feed info'")
 	cmd = runSwarm(t, flags...)
 	_, matches := cmd.ExpectRegexp(`.*`) // regex hack to extract stdout
 	cmd.ExpectExit()
@@ -141,7 +140,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 		"--topic", topic.Hex(),
 	}
 
-	log.Info(fmt.Sprintf("Publishing manifest with 'swarm feed create'"))
+	log.Info("Publishing manifest with 'swarm feed create'")
 	cmd = runSwarm(t, flags...)
 	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
 	cmd.ExpectExit()
@@ -166,13 +165,12 @@ func TestCLIFeedUpdate(t *testing.T) {
 	// test publishing a manifest for a different user
 	flags = []string{
 		"--bzzapi", srv.URL,
-		"--bzzaccount", pkFileName,
 		"feed", "create",
 		"--topic", topic.Hex(),
 		"--user", "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", // different user
 	}
 
-	log.Info(fmt.Sprintf("Publishing manifest with 'swarm feed create' for a different user"))
+	log.Info("Publishing manifest with 'swarm feed create' for a different user")
 	cmd = runSwarm(t, flags...)
 	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
 	cmd.ExpectExit()
@@ -187,8 +185,8 @@ func TestCLIFeedUpdate(t *testing.T) {
 		"--manifest", manifestAddress,
 		hexData}
 
-	// create an update and expect an exit without errors
-	log.Info(fmt.Sprintf("updating a feed with 'swarm feed update'"))
+	// create an update and expect an error given there is a user mismatch
+	log.Info("updating a feed with 'swarm feed update'")
 	cmd = runSwarm(t, flags...)
 	cmd.ExpectRegexp("Fatal:.*") // best way so far to detect a failure.
 	cmd.ExpectExit()
