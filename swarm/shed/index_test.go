@@ -143,6 +143,40 @@ func TestIndex(t *testing.T) {
 		})
 	})
 
+	t.Run("put in batch twice", func(t *testing.T) {
+		// ensure that the last item of items with the same db keys
+		// is actually saved
+		batch := new(leveldb.Batch)
+		address := []byte("put-in-batch-twice-hash")
+
+		// put the first item
+		index.PutInBatch(batch, IndexItem{
+			Address:        address,
+			Data:           []byte("DATA"),
+			StoreTimestamp: time.Now().UTC().UnixNano(),
+		})
+
+		want := IndexItem{
+			Address:        address,
+			Data:           []byte("New DATA"),
+			StoreTimestamp: time.Now().UTC().UnixNano(),
+		}
+		// then put the item that will produce the same key
+		// but different value in the database
+		index.PutInBatch(batch, want)
+		db.WriteBatch(batch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := index.Get(IndexItem{
+			Address: address,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkIndexItem(t, got, want)
+	})
+
 	t.Run("delete", func(t *testing.T) {
 		want := IndexItem{
 			Address:        []byte("delete-hash"),
