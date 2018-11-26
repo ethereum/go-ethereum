@@ -243,7 +243,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// input offset is the bytes offset for packed output
 	inputOffset := 0
 	for _, abiArg := range abiArgs {
-		inputOffset += getOffset(abiArg.Type)
+		inputOffset += getDynamicTypeOffset(abiArg.Type)
 	}
 	var ret []byte
 	for i, a := range args {
