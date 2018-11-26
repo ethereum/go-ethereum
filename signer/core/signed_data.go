@@ -74,7 +74,6 @@ type TypedData struct {
 	PrimaryType string           `json:"primaryType"`
 	Domain      TypedDataDomain  `json:"domain"`
 	Message     TypedDataMessage `json:"message"`
-	Output      bytes.Buffer
 }
 
 type Type []map[string]string
@@ -266,16 +265,13 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	if err != nil {
 		return nil, err
 	}
-	typedData.Output.Reset()
-	typedData.Output.WriteString(fmt.Sprintf("%s {\n", typedData.PrimaryType))
 	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
 	if err != nil {
 		return nil, err
 	}
-	typedData.Output.Truncate(typedData.Output.Len() - 2)
-	typedData.Output.WriteString(fmt.Sprintf("\n}"))
 	sighash := crypto.Keccak256([]byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))))
-	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: typedData.Output.String(), Hash: sighash}
+	output := typedData.PrettyPrint()
+	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: output, Hash: sighash}
 	signature, err := api.Sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
@@ -377,8 +373,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-			typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
-			typedData.Output.WriteString(fmt.Sprintf("\"%s\": [ %s\n", field["name"], encType))
 
 			arrayBuffer := bytes.Buffer{}
 			parsedType := strings.Split(encType, "[")[0]
@@ -394,7 +388,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					}
 					arrayBuffer.Write(encodedData)
 				} else {
-					encValue, err := typedData.HandlePrimitiveValue(encType, encValue, depth)
+					encValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
 					if err != nil {
 						return nil, err
 					}
@@ -406,27 +400,21 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 				}
 			}
 
-			typedData.Output.Truncate(typedData.Output.Len() - 2)
-			typedData.Output.WriteString(fmt.Sprintf("\n%s],\n", strings.Repeat("\u00a0", depth*2)))
 			buffer.Write(crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field["type"]] != nil {
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-			typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
-			typedData.Output.WriteString(fmt.Sprintf("\"%s\": { %s\n", field["name"], encType))
 
 			encodedData, err := typedData.EncodeData(field["type"], mapValue, depth+1)
 			if err != nil {
 				return nil, err
 			}
 
-			typedData.Output.Truncate(typedData.Output.Len() - 2)
-			typedData.Output.WriteString(fmt.Sprintf("\n%s},\n", strings.Repeat("\u00a0", depth*2)))
 			buffer.Write(crypto.Keccak256(encodedData))
 		} else {
-			primitiveEncValue, err := typedData.HandlePrimitiveValue(encType, encValue, depth)
+			primitiveEncValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -438,16 +426,14 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		}
 	}
 
-	return buffer.Bytes(), nil // https://github.com/ethereumjs/ethereumjs-abi/blob/master/lib/index.js#L336
+	return buffer.Bytes(), nil
 }
 
-// handlePrimitiveValues deals with the primitive values found
+// EncodePrimitiveValue deals with the primitive values found
 // while searching through the typed data
-func (typedData *TypedData) HandlePrimitiveValue(encType string, encValue interface{}, depth int) (interface{}, error) {
+func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) (interface{}, error) {
 	var primitiveEncValue interface{}
 
-	typedData.Output.WriteString(strings.Repeat("\u00a0", depth*2))
-	typedData.Output.WriteString(fmt.Sprintf("\"%s\": ", encType))
 	switch encType {
 	case "address":
 		bytesValue := hexutil.Bytes{}
@@ -463,7 +449,6 @@ func (typedData *TypedData) HandlePrimitiveValue(encType string, encValue interf
 			bytesValue = append(bytesValue, _byte)
 		}
 		primitiveEncValue = bytesValue
-		typedData.Output.WriteString(fmt.Sprintf("%s,\n", addressValue.String()))
 	case "bool":
 		var int64Val int64
 		boolValue, ok := encValue.(bool)
@@ -474,14 +459,12 @@ func (typedData *TypedData) HandlePrimitiveValue(encType string, encValue interf
 			int64Val = 1
 		}
 		primitiveEncValue = abi.U256(big.NewInt(int64Val))
-		typedData.Output.WriteString(fmt.Sprintf("%t,\n", boolValue))
 	case "bytes", "string":
 		bytesValue, err := bytesValueOf(encValue)
 		if err != nil {
 			return nil, dataMismatchError(encType, encValue)
 		}
 		primitiveEncValue = crypto.Keccak256(bytesValue)
-		typedData.Output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
 	default:
 		if strings.HasPrefix(encType, "bytes") {
 			sizeStr := strings.TrimPrefix(encType, "bytes")
@@ -495,14 +478,12 @@ func (typedData *TypedData) HandlePrimitiveValue(encType string, encValue interf
 			}
 			bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
 			primitiveEncValue = bytesValue
-			typedData.Output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
 		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
 			bigIntValue, ok := encValue.(*big.Int)
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
 			primitiveEncValue = abi.U256(bigIntValue)
-			typedData.Output.WriteString(fmt.Sprintf("%d,\n", bigIntValue))
 		} else {
 			return nil, fmt.Errorf("unrecognized type '%s'", encType)
 		}
@@ -622,6 +603,95 @@ func (typedData *TypedData) Map() map[string]interface{} {
 		"message":     typedData.Message,
 	}
 	return dataMap
+}
+
+// PrettyPrint generates a nice output to help the users
+// of clef present data in their apps
+func (typedData *TypedData) PrettyPrint() string {
+	output := bytes.Buffer{}
+
+	output.WriteString(fmt.Sprintf("%s {\n", "Domain"))
+	output.WriteString(typedData.PrettyPrintData("EIP712Domain", typedData.Domain.Map(), 1))
+	output.Truncate(output.Len() - 2)
+	output.WriteString(fmt.Sprintf("\n}\n"))
+
+	output.WriteString(fmt.Sprintf("%s {\n", typedData.PrimaryType))
+	output.WriteString(typedData.PrettyPrintData(typedData.PrimaryType, typedData.Message, 1))
+	output.Truncate(output.Len() - 2)
+	output.WriteString(fmt.Sprintf("\n}"))
+
+	return output.String()
+}
+
+// PrettyPrintData generates a formatted output for the
+// given data
+func (typedData *TypedData) PrettyPrintData(primaryType string, data map[string]interface{}, depth int) string {
+	output := bytes.Buffer{}
+
+	// Add field contents. Structs and arrays have special handlers.
+	for _, field := range typedData.Types[primaryType] {
+		encType := field["type"]
+		encName := field["name"]
+		encValue := data[encName]
+
+		if encType[len(encType)-1:] == "]" {
+			arrayValue, _ := encValue.([]interface{})
+			parsedType := strings.Split(encType, "[")[0]
+			for _, item := range arrayValue {
+				if typedData.Types[parsedType] != nil {
+					mapValue, _ := item.(map[string]interface{})
+					mapOutput := typedData.PrettyPrintData(parsedType, mapValue, depth+1)
+					output.WriteString(mapOutput)
+				} else {
+					primitiveOutput := typedData.PrettyPrintPrimitiveValue(encType, encName, encValue, depth)
+					output.WriteString(primitiveOutput)
+				}
+			}
+		} else if typedData.Types[field["type"]] != nil {
+			output.WriteString(strings.Repeat("\u00a0", depth*2))
+			output.WriteString(fmt.Sprintf("\"%s\": { %s\n", field["name"], encType))
+
+			mapValue, _ := encValue.(map[string]interface{})
+			mapOutput := typedData.PrettyPrintData(field["type"], mapValue, depth+1)
+			output.WriteString(mapOutput)
+
+			output.Truncate(output.Len() - 2)
+			output.WriteString(fmt.Sprintf("\n%s},\n", strings.Repeat("\u00a0", depth*2)))
+		} else {
+			primitiveOutput := typedData.PrettyPrintPrimitiveValue(encType, encName, encValue, depth)
+			output.WriteString(primitiveOutput)
+		}
+	}
+
+	return output.String()
+}
+
+// PrettyPrintPrimitiveValue generates a formatted output for the
+// given primitive value
+func (typedData *TypedData) PrettyPrintPrimitiveValue(encType string, encName string, encValue interface{}, depth int) string {
+	output := bytes.Buffer{}
+	output.WriteString(strings.Repeat("\u00a0", depth*2))
+	output.WriteString(fmt.Sprintf("\"%s\": ", encName))
+
+	switch encType {
+	case "address":
+		stringValue, _ := encValue.(string)
+		addressValue := common.HexToAddress(stringValue)
+		output.WriteString(fmt.Sprintf("%s,\n", addressValue.String()))
+	case "bool":
+		boolValue, _ := encValue.(bool)
+		output.WriteString(fmt.Sprintf("%t,\n", boolValue))
+	case "bytes", "string":
+		output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
+	default:
+		if strings.HasPrefix(encType, "bytes") {
+			output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
+		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
+			bigIntValue, _ := encValue.(*big.Int)
+			output.WriteString(fmt.Sprintf("%d,\n", bigIntValue))
+		}
+	}
+	return output.String()
 }
 
 // Validate checks if the types object is conformant to the specs
