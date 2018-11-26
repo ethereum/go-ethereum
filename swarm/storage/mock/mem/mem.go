@@ -83,6 +83,22 @@ func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 	return nil
 }
 
+// Delete removes the chunk data for node with address addr.
+func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int
+	if _, ok := s.nodes[string(key)]; ok {
+		delete(s.nodes[string(key)], addr)
+		count = len(s.nodes[string(key)])
+	}
+	if count == 0 {
+		delete(s.data, string(key))
+	}
+	return nil
+}
+
 // HasKey returns whether a node with addr contains the key.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
 	s.mu.Lock()
