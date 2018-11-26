@@ -81,8 +81,8 @@ type Header struct {
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        *big.Int       `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
-	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+	MixDigest   common.Hash    `json:"mixHash"`
+	Nonce       BlockNonce     `json:"nonce"`
 }
 
 // field type overrides for gencodec
