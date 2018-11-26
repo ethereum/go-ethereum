@@ -19,7 +19,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"io"
@@ -31,7 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -149,10 +148,6 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 		err = fmt.Errorf("timed out after 5 seconds")
 	}
 	return err
-}
-
-func testDataReader(l int) (r io.Reader) {
-	return io.LimitReader(rand.Reader, int64(l))
 }
 
 func (r *brokenLimitedReader) Read(buf []byte) (int, error) {

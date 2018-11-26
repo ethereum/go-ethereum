@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -244,24 +243,11 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	if dataSize > ch.DefaultSize {
-		dataSize = ch.DefaultSize
-	}
 	for i := 0; i < count; i++ {
-		ch := GenerateRandomChunk(ch.DefaultSize)
+		ch := GenerateRandomChunk(dataSize)
 		chunks = append(chunks, ch)
 	}
 	return chunks
-}
-
-func GenerateRandomData(l int) (r io.Reader, slice []byte) {
-	slice, err := ioutil.ReadAll(io.LimitReader(rand.Reader, int64(l)))
-	if err != nil {
-		panic("rand error")
-	}
-	// log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
-	r = io.LimitReader(bytes.NewReader(slice), int64(l))
-	return r, slice
 }
 
 // Size, Seek, Read, ReadAt

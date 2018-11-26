@@ -18,9 +18,7 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -30,7 +28,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -38,7 +35,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	mockmem "github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 const dataChunkCount = 200
@@ -50,7 +49,7 @@ func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
 }
 
-func createMockStore(globalStore *mockdb.GlobalStore, id enode.ID, addr *network.BzzAddr) (lstore storage.ChunkStore, datadir string, err error) {
+func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.BzzAddr) (lstore storage.ChunkStore, datadir string, err error) {
 	address := common.BytesToAddress(id.Bytes())
 	mockStore := globalStore.NewNodeStore(address)
 	params := storage.NewDefaultLocalStoreParams()
@@ -62,6 +61,9 @@ func createMockStore(globalStore *mockdb.GlobalStore, id enode.ID, addr *network
 	params.Init(datadir)
 	params.BaseKey = addr.Over()
 	lstore, err = storage.NewLocalStore(params, mockStore)
+	if err != nil {
+		return nil, "", err
+	}
 	return lstore, datadir, nil
 }
 
@@ -69,8 +71,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			var store storage.ChunkStore
-			var globalStore *mockdb.GlobalStore
-			var gDir, datadir string
+			var datadir string
 
 			node := ctx.Config.Node()
 			addr := network.NewAddr(node)
@@ -78,11 +79,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			addr.OAddr[0] = byte(0)
 
 			if *useMockStore {
-				gDir, globalStore, err = createGlobalStore()
-				if err != nil {
-					return nil, nil, fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
-				}
-				store, datadir, err = createMockStore(globalStore, node.ID(), addr)
+				store, datadir, err = createMockStore(mockmem.NewGlobalStore(), node.ID(), addr)
 			} else {
 				store, datadir, err = createTestLocalStorageForID(node.ID(), addr)
 			}
@@ -93,13 +90,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			cleanup = func() {
 				store.Close()
 				os.RemoveAll(datadir)
-				if *useMockStore {
-					err := globalStore.Close()
-					if err != nil {
-						log.Error("Error closing global store! %v", "err", err)
-					}
-					os.RemoveAll(gDir)
-				}
 			}
 			localStore := store.(*storage.LocalStore)
 			netStore, err := storage.NewNetStore(localStore, nil)
@@ -114,8 +104,10 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			bucket.Store(bucketKeyDelivery, delivery)
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingAutoSubscribe,
 				SkipCheck: skipCheck,
-			})
+			}, nil)
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
@@ -147,13 +139,13 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		disconnections := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+			simulation.NewPeerEventsFilter().Drop(),
 		)
 
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 					t.Fatal(d.Error)
 				}
 			}
@@ -178,7 +170,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 				fileStore := item.(*storage.FileStore)
 				size := chunkCount * chunkSize
-				_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+				_, wait, err := fileStore.Store(ctx, testutil.RandomReader(j, size), int64(size), false)
 				if err != nil {
 					t.Fatal(err.Error())
 				}
