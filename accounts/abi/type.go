@@ -194,7 +194,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 
 		// calculate offset if any
 		offset := 0
-		offsetReq := offsetRequired(*t.Elem)
+		offsetReq := isDynamicType(*t.Elem)
 		if offsetReq {
 			offset = getDynamicTypeOffset(*t.Elem) * v.Len()
 		}
@@ -224,22 +224,25 @@ func (t Type) requiresLengthPrefix() bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy
 }
 
-// offsetRequired returns true if the type is considered dynamic
-func offsetRequired(t Type) bool {
+// isDynamicType returns true if the type is dynamic.
+// StringTy, BytesTy, and SliceTy(irrespective of slice element type) are dynamic types
+// ArrayTy is considered dynamic if and only if the Array element is a dynamic type.
+// This function recursively checks the type for slice and array elements.
+func isDynamicType(t Type) bool {
 	// dynamic types
 	// array is also a dynamic type if the array type is dynamic
-	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && offsetRequired(*t.Elem))
+	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && isDynamicType(*t.Elem))
 }
 
 // getDynamicTypeOffset returns the offset for the type.
-// See offsetRequired to know which types are considered dynamic.
-// if the type t is an array and element type is not a dynamic type, then we consider it a static type and
+// See `isDynamicType` to know which types are considered dynamic.
+// If the type t is an array and element type is not a dynamic type, then we consider it a static type and
 // return 32 * size of array since length prefix is not required.
 // If t is a dynamic type or element type(for slices and arrays) is dynamic, then we simply return 32 as offset.
 func getDynamicTypeOffset(t Type) int {
 	// if it is an array and there are no dynamic types
 	// then the array is static type
-	if t.T == ArrayTy && !offsetRequired(*t.Elem) {
+	if t.T == ArrayTy && !isDynamicType(*t.Elem) {
 		return 32 * t.Size
 	}
 	return 32
