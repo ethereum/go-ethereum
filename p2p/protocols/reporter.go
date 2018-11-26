@@ -128,7 +128,6 @@ func (r *reporter) run() {
 
 //send the metrics to the DB
 func (r *reporter) save() error {
-	var err error
 	//create a LevelDB Batch
 	batch := leveldb.Batch{}
 	//for each metric in the registry (which is independent)...
@@ -144,13 +143,5 @@ func (r *reporter) save() error {
 			batch.Put([]byte(name), byteVal)
 		}
 	})
-	if batch.Len() > 0 {
-		err = r.db.Write(&batch, nil)
-		if err != nil {
-			return err
-		}
-		batch.Reset()
-	}
-
-	return err
+	return r.db.Write(&batch, nil)
 }
