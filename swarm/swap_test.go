@@ -19,6 +19,7 @@ package swarm
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -29,7 +30,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -37,6 +37,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+)
+
+var (
+	printStats     = flag.Bool("printstats", false, "print swap stats")
+	bucketKeySwarm = simulation.BucketKey("swarm")
 )
 
 //In TestSwapNetworkSymmetricFileUpload we set up a network with arbitrary number of nodes
@@ -110,7 +115,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 		}
 
 		nodeIDs := sim.UpNodeIDs()
-		shuffle(len(nodeIDs), func(i, j int) {
+		rand.Shuffle(len(nodeIDs), func(i, j int) {
 			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 		})
 		//upload a file for every node
@@ -186,17 +191,6 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
 				}
 			}
-			//NOTE: this are currently metrics over ALL nodes, not per node
-			fmt.Println(fmt.Sprintf("Total units credited: %d", metrics.Get("account.balance.credit").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Total units debited: %d", metrics.Get("account.balance.debit").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Total bytes credited: %d", metrics.Get("account.bytes.credit").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Total bytes debited: %d", metrics.Get("account.bytes.debit").(metrics.Counter).Count()))
-			//fmt.Println(fmt.Sprintf("Cheques issued: %d", metrics.Get("account.cheques.issued").(metrics.Counter).Count()))
-			//fmt.Println(fmt.Sprintf("Cheques received: %d", metrics.Get("account.cheques.received").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Number of messages credited: %d", metrics.Get("account.msg.credit").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Number of messages debited: %d", metrics.Get("account.msg.debit").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Peers dropped: %d", metrics.Get("account.peerdrops").(metrics.Counter).Count()))
-			fmt.Println(fmt.Sprintf("Number of times node dropped itself: %d", metrics.Get("account.selfdrops").(metrics.Counter).Count()))
 		}
 
 		//now iterate the whole map
@@ -308,7 +302,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		}
 
 		nodeIDs := sim.UpNodeIDs()
-		shuffle(len(nodeIDs), func(i, j int) {
+		rand.Shuffle(len(nodeIDs), func(i, j int) {
 			nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 		})
 		for i, id := range nodeIDs {

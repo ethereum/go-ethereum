@@ -42,6 +42,8 @@ var (
 	mPeerDrops metrics.Counter
 	//how many times local node overdrafted and dropped
 	mSelfDrops metrics.Counter
+
+	MetricsRegistry metrics.Registry
 )
 
 //Prices defines how prices are being passed on to the accounting instance
@@ -114,18 +116,18 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 //at the passed interval writes the metrics to a LevelDB
 func SetupAccountingMetrics(reportInterval time.Duration, path string) *AccountingMetrics {
 	//create an empty registry
-	registry := metrics.NewRegistry()
+	MetricsRegistry = metrics.NewRegistry()
 	//instantiate the metrics
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", registry)
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", registry)
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", registry)
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", registry)
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", registry)
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", registry)
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", registry)
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", registry)
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", MetricsRegistry)
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", MetricsRegistry)
+	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", MetricsRegistry)
+	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", MetricsRegistry)
+	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", MetricsRegistry)
+	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", MetricsRegistry)
+	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", MetricsRegistry)
+	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", MetricsRegistry)
 	//create the DB and start persisting
-	return NewAccountingMetrics(registry, reportInterval, path)
+	return NewAccountingMetrics(MetricsRegistry, reportInterval, path)
 }
 
 //Implement Hook.Send

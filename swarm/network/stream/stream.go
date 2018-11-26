@@ -775,24 +775,24 @@ type StreamerPrices struct {
 	registry    *Registry
 }
 
+//Price implements the accounting interface and returns the price for a specific message
 func (spo *StreamerPrices) Price(msg interface{}) *protocols.Price {
 	typ := reflect.TypeOf(msg).Elem()
 	return spo.priceMatrix[typ]
 }
 
+//createPriceOracle sets up a matrix which can be queried to get
+//the price for a message via the Price method
 func (r *Registry) createPriceOracle() {
-
 	po := &StreamerPrices{
 		registry: r,
 	}
 	po.priceMatrix = map[reflect.Type]*protocols.Price{
-
 		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): &protocols.Price{
 			Value:   uint64(100),
 			PerByte: true,
 			Payer:   protocols.Receiver,
 		},
-
 		reflect.TypeOf(RetrieveRequestMsg{}): &protocols.Price{
 			Value:   uint64(10),
 			PerByte: false,
