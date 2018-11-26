@@ -472,7 +472,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
-		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		err = fmt.Errorf("Not found: could not find resource '%s'", path)
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
