@@ -81,14 +81,15 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock       sync.RWMutex
-	*KadParams          // Kademlia configuration parameters
-	base       []byte   // immutable baseaddress of the table
-	addrs      *pot.Pot // pots container for known peer addresses
-	conns      *pot.Pot // pots container for live peer connections
-	depth      uint8    // stores the last current depth of saturation
-	nDepth     int      // stores the last neighbourhood depth
-	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
-	addrCountC chan int // returned by AddrCountC function to signal peer count change
+	*KadParams                                         // Kademlia configuration parameters
+	base       []byte                                  // immutable baseaddress of the table
+	addrs      *pot.Pot                                // pots container for known peer addresses
+	conns      *pot.Pot                                // pots container for live peer connections
+	depth      uint8                                   // stores the last current depth of saturation
+	nDepth     int                                     // stores the last neighbourhood depth
+	nDepthC    chan int                                // returned by DepthC function to signal neighbourhood depth change
+	addrCountC chan int                                // returned by AddrCountC function to signal peer count change
+	Pof        func(pot.Val, pot.Val, int) (int, bool) // function for calculating kademlia routing distance between two addresses
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -103,6 +104,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
+		Pof:       pof,
 	}
 }
 
@@ -289,6 +291,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 // neighbourhood depth on each change.
 // Not receiving from the returned channel will block On function
 // when the neighbourhood depth is changed.
+// TODO: Why is this exported, and if it should be; why can't we have more subscribers than one?
 func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 	k.lock.Lock()
 	defer k.lock.Unlock()
@@ -429,7 +432,12 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 // neighbourhoodDepth returns the proximity order that defines the distance of
 // the nearest neighbour set with cardinality >= MinProxBinSize
 // if there is altogether less than MinProxBinSize peers it returns 0
-// caller must hold the lock
+func (k *Kademlia) NeighbourhoodDepth() (depth int) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	return k.neighbourhoodDepth()
+}
+
 func (k *Kademlia) neighbourhoodDepth() (depth int) {
 	if k.conns.Size() < k.MinProxBinSize {
 		return 0
