@@ -169,13 +169,17 @@ func feedUpdate(ctx *cli.Context) {
 		query = new(feed.Query)
 		query.User = signer.Address()
 		query.Topic = getTopic(ctx)
-
 	}
 
 	// Retrieve a feed update request
 	updateRequest, err = client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving feed status: %s", err.Error())
+	}
+
+	// Check that the provided signer matches the request to sign
+	if updateRequest.User != signer.Address() {
+		utils.Fatalf("Signer address does not match the update request")
 	}
 
 	// set the new data
