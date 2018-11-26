@@ -25,6 +25,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
@@ -70,6 +73,76 @@ func Register(k *Kademlia, regs ...string) {
 	err := k.Register(as...)
 	if err != nil {
 		panic(err.Error())
+	}
+}
+
+// tests the validity of neighborhood depth calculations
+//
+// in particular, it tests that if there are one or more consecutive
+// empty bins above the farthest "nearest neighbor-peer" then
+// the depth should be set at the farthest of those empty bins
+//
+// TODO: Make test adapt to change in MinProxBinSize
+func TestNeighbourhoodDepth(t *testing.T) {
+	baseAddressBytes := RandomAddr().OAddr
+	kad := NewKademlia(baseAddressBytes, NewKadParams())
+
+	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
+
+	closerAddress := pot.RandomAddressAt(baseAddress, 7)
+	closerPeer := newTestDiscoveryPeer(closerAddress, kad)
+	kad.On(closerPeer)
+	depth := kad.NeighbourhoodDepth()
+	if depth != 0 {
+		t.Fatalf("expected depth 0, was %d", depth)
+	}
+
+	sameAddress := pot.RandomAddressAt(baseAddress, 7)
+	samePeer := newTestDiscoveryPeer(sameAddress, kad)
+	kad.On(samePeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 0 {
+		t.Fatalf("expected depth 0, was %d", depth)
+	}
+
+	midAddress := pot.RandomAddressAt(baseAddress, 4)
+	midPeer := newTestDiscoveryPeer(midAddress, kad)
+	kad.On(midPeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 5 {
+		t.Fatalf("expected depth 5, was %d", depth)
+	}
+
+	kad.Off(midPeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 0 {
+		t.Fatalf("expected depth 0, was %d", depth)
+	}
+
+	fartherAddress := pot.RandomAddressAt(baseAddress, 1)
+	fartherPeer := newTestDiscoveryPeer(fartherAddress, kad)
+	kad.On(fartherPeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 2 {
+		t.Fatalf("expected depth 2, was %d", depth)
+	}
+
+	midSameAddress := pot.RandomAddressAt(baseAddress, 4)
+	midSamePeer := newTestDiscoveryPeer(midSameAddress, kad)
+	kad.Off(closerPeer)
+	kad.On(midPeer)
+	kad.On(midSamePeer)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 2 {
+		t.Fatalf("expected depth 2, was %d", depth)
+	}
+
+	kad.Off(fartherPeer)
+	log.Trace(kad.string())
+	time.Sleep(time.Millisecond)
+	depth = kad.NeighbourhoodDepth()
+	if depth != 0 {
+		t.Fatalf("expected depth 0, was %d", depth)
 	}
 }
 
@@ -376,7 +449,7 @@ func TestKademliaHiveString(t *testing.T) {
 	Register(k, "10000000", "10000001")
 	k.MaxProxDisplay = 8
 	h := k.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n000  0                              |  2 8100 (0) 8000 (0)\n============ DEPTH: 1 ==========================================\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[104:] != h[104:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}
@@ -643,4 +716,18 @@ func TestKademliaCase5(t *testing.T) {
 		"5dd5c77dd9006a800478fcebb02d48d4036389e7d3c8f6a83b97dbad13f4c0a9",
 		"78fafa0809929a1279ece089a51d12457c2d8416dff859aeb2ccc24bb50df5ec", "1dd39b1257e745f147cbbc3cadd609ccd6207c41056dbc4254bba5d2527d3ee5", "5f61dd66d4d94aec8fcc3ce0e7885c7edf30c43143fa730e2841c5d28e3cd081", "8aa8b0472cb351d967e575ad05c4b9f393e76c4b01ef4b3a54aac5283b78abc9", "4502f385152a915b438a6726ce3ea9342e7a6db91a23c2f6bee83a885ed7eb82", "718677a504249db47525e959ef1784bed167e1c46f1e0275b9c7b588e28a3758", "7c54c6ed1f8376323896ed3a4e048866410de189e9599dd89bf312ca4adb96b5", "18e03bd3378126c09e799a497150da5c24c895aedc84b6f0dbae41fc4bac081a", "23db76ac9e6e58d9f5395ca78252513a7b4118b4155f8462d3d5eec62486cadc", "40ae0e8f065e96c7adb7fa39505136401f01780481e678d718b7f6dbb2c906ec", "c1539998b8bae19d339d6bbb691f4e9daeb0e86847545229e80fe0dffe716e92", "ed139d73a2699e205574c08722ca9f030ad2d866c662f1112a276b91421c3cb9", "5bdb19584b7a36d09ca689422ef7e6bb681b8f2558a6b2177a8f7c812f631022", "636c9de7fe234ffc15d67a504c69702c719f626c17461d3f2918e924cd9d69e2", "de4455413ff9335c440d52458c6544191bd58a16d85f700c1de53b62773064ea", "de1963310849527acabc7885b6e345a56406a8f23e35e436b6d9725e69a79a83", "a80a50a467f561210a114cba6c7fb1489ed43a14d61a9edd70e2eb15c31f074d", "7804f12b8d8e6e4b375b242058242068a3809385e05df0e64973cde805cf729c", "60f9aa320c02c6f2e6370aa740cf7cea38083fa95fca8c99552cda52935c1520", "d8da963602390f6c002c00ce62a84b514edfce9ebde035b277a957264bb54d21", "8463d93256e026fe436abad44697152b9a56ac8e06a0583d318e9571b83d073c", "9a3f78fcefb9a05e40a23de55f6153d7a8b9d973ede43a380bf46bb3b3847de1", "e3bb576f4b3760b9ca6bff59326f4ebfc4a669d263fb7d67ab9797adea54ed13", "4d5cdbd6dcca5bdf819a0fe8d175dc55cc96f088d37462acd5ea14bc6296bdbe", "5a0ed28de7b5258c727cb85447071c74c00a5fbba9e6bc0393bc51944d04ab2a", "61e4ddb479c283c638f4edec24353b6cc7a3a13b930824aad016b0996ca93c47", "7e3610868acf714836cafaaa7b8c009a9ac6e3a6d443e5586cf661530a204ee2", "d74b244d4345d2c86e30a097105e4fb133d53c578320285132a952cdaa64416e", "cfeed57d0f935bfab89e3f630a7c97e0b1605f0724d85a008bbfb92cb47863a8", "580837af95055670e20d494978f60c7f1458dc4b9e389fc7aa4982b2aca3bce3", "df55c0c49e6c8a83d82dfa1c307d3bf6a20e18721c80d8ec4f1f68dc0a137ced", "5f149c51ce581ba32a285439a806c063ced01ccd4211cd024e6a615b8f216f95", "1eb76b00aeb127b10dd1b7cd4c3edeb4d812b5a658f0feb13e85c4d2b7c6fe06", "7a56ba7c3fb7cbfb5561a46a75d95d7722096b45771ec16e6fa7bbfab0b35dfe", "4bae85ad88c28470f0015246d530adc0cd1778bdd5145c3c6b538ee50c4e04bd", "afd1892e2a7145c99ec0ebe9ded0d3fec21089b277a68d47f45961ec5e39e7e0", "953138885d7b36b0ef79e46030f8e61fd7037fbe5ce9e0a94d728e8c8d7eab86", "de761613ef305e4f628cb6bf97d7b7dc69a9d513dc233630792de97bcda777a6", "3f3087280063d09504c084bbf7fdf984347a72b50d097fd5b086ffabb5b3fb4c", "7d18a94bb1ebfdef4d3e454d2db8cb772f30ca57920dd1e402184a9e598581a0", "a7d6fbdc9126d9f10d10617f49fb9f5474ffe1b229f76b7dd27cebba30eccb5d", "fad0246303618353d1387ec10c09ee991eb6180697ed3470ed9a6b377695203d", "1cf66e09ea51ee5c23df26615a9e7420be2ac8063f28f60a3bc86020e94fe6f3", "8269cdaa153da7c358b0b940791af74d7c651cd4d3f5ed13acfe6d0f2c539e7f", "90d52eaaa60e74bf1c79106113f2599471a902d7b1c39ac1f55b20604f453c09", "9788fd0c09190a3f3d0541f68073a2f44c2fcc45bb97558a7c319f36c25a75b3", "10b68fc44157ecfdae238ee6c1ce0333f906ad04d1a4cb1505c8e35c3c87fbb0", "e5284117fdf3757920475c786e0004cb00ba0932163659a89b36651a01e57394", "403ad51d911e113dcd5f9ff58c94f6d278886a2a4da64c3ceca2083282c92de3",
 	)
+}
+
+func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
+	rw := &p2p.MsgPipeRW{}
+	p := p2p.NewPeer(enode.ID{}, "foo", []p2p.Cap{})
+	pp := protocols.NewPeer(p, rw, &protocols.Spec{})
+	bp := &BzzPeer{
+		Peer: pp,
+		BzzAddr: &BzzAddr{
+			OAddr: addr.Bytes(),
+			UAddr: []byte(fmt.Sprintf("%x", addr[:])),
+		},
+	}
+	return NewPeer(bp, kad)
 }

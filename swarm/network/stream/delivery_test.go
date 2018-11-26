@@ -453,6 +453,8 @@ func TestDeliveryFromNodes(t *testing.T) {
 }
 
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
+
+	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			node := ctx.Config.Node()

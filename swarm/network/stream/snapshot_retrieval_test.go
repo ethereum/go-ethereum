@@ -246,6 +246,7 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runRetrievalTest(chunkCount int, nodeCount int) error {
+
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
