@@ -142,7 +142,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 
 	log.Info("Publishing manifest with 'swarm feed create'")
 	cmd = runSwarm(t, flags...)
-	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
+	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`)
 	cmd.ExpectExit()
 
 	manifestAddress := matches[0] // read the received feed manifest
@@ -172,7 +172,7 @@ func TestCLIFeedUpdate(t *testing.T) {
 
 	log.Info("Publishing manifest with 'swarm feed create' for a different user")
 	cmd = runSwarm(t, flags...)
-	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`) // regex hack to extract stdout
+	_, matches = cmd.ExpectRegexp(`[a-f\d]{64}`)
 	cmd.ExpectExit()
 
 	manifestAddress = matches[0] // read the received feed manifest
