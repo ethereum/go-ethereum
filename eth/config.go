@@ -124,9 +124,6 @@ type Config struct {
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
 
-	// Specify time to exit after syncing
-	ExitWhenSynced time.Duration
-
 	// Type of the EWASM interpreter ("" for detault)
 	EWASMInterpreter string
 	// Type of the EVM interpreter ("" for default)

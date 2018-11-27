@@ -44,7 +44,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		DocRoot                 string `toml:"-"`
-		ExitWhenSynced          time.Duration
 		EWASMInterpreter        string
 		EVMInterpreter          string
 	}
@@ -74,7 +73,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.ExitWhenSynced = c.ExitWhenSynced
 	enc.EWASMInterpreter = c.EWASMInterpreter
 	enc.EVMInterpreter = c.EVMInterpreter
 	return &enc, nil
@@ -108,7 +106,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		DocRoot                 *string `toml:"-"`
-		ExitWhenSynced          *time.Duration
 		EWASMInterpreter        *string
 		EVMInterpreter          *string
 	}
@@ -191,8 +188,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
 	}
-	if dec.ExitWhenSynced != nil {
-		c.ExitWhenSynced = *dec.ExitWhenSynced
 	if dec.EWASMInterpreter != nil {
 		c.EWASMInterpreter = *dec.EWASMInterpreter
 	}
