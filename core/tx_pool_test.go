@@ -1108,7 +1108,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	config := testTxPoolConfig
 	config.AccountSlots = 10
 	config.GlobalSlots = 0
-
+	config.AccountSlots = 5
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
 

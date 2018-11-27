@@ -272,7 +272,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
-				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
+				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, nil)
 
 				self.current.commitTransactions(self.mux, txset, specialTxs, self.chain, self.coinbase)
 				self.currentMu.Unlock()
@@ -465,7 +465,7 @@ func (self *worker) commitNewWork() {
 
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
-
+	var signers map[common.Address]struct{}
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
@@ -479,6 +479,7 @@ func (self *worker) commitNewWork() {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
 			}
+			signers = snap.Signers
 			preIndex, curIndex, ok, err := posv.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
@@ -576,7 +577,7 @@ func (self *worker) commitNewWork() {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
-	txs, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
+	txs, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
 	work.commitTransactions(self.mux, txs, specialTxs, self.chain, self.coinbase)
 
 	// compute uncles for the new block.
