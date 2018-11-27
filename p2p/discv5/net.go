@@ -571,8 +571,7 @@ loop:
 				if n.state == unknown {
 					net.ping(n, n.addr())
 				}
-				return nil
-				
+				return nil				
 			})
 
 		case <-statsDump.C:
