@@ -188,17 +188,16 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config        TxPoolConfig
-	chainconfig   *params.ChainConfig
-	chain         blockChain
-	gasPrice      *big.Int
-	txFeed        event.Feed
-	specialTxFeed event.Feed
-	scope         event.SubscriptionScope
-	chainHeadCh   chan ChainHeadEvent
-	chainHeadSub  event.Subscription
-	signer        types.Signer
-	mu            sync.RWMutex
+	config       TxPoolConfig
+	chainconfig  *params.ChainConfig
+	chain        blockChain
+	gasPrice     *big.Int
+	txFeed       event.Feed
+	scope        event.SubscriptionScope
+	chainHeadCh  chan ChainHeadEvent
+	chainHeadSub event.Subscription
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	currentState  *state.StateDB      // Current state in the blockchain head
 	pendingState  *state.ManagedState // Pending state tracking virtual nonces
@@ -456,12 +455,6 @@ func (pool *TxPool) Stop() {
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeTxPreEvent(ch chan<- TxPreEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
-}
-
-// SubscribeSpecialTxPreEvent registers a subscription of TxPreEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeSpecialTxPreEvent(ch chan<- TxPreEvent) event.Subscription {
-	return pool.scope.Track(pool.specialTxFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -830,8 +823,7 @@ func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction)
 	broadcastTxs = append(broadcastTxs, tx)
 	go func() {
 		for _, btx := range broadcastTxs {
-			pool.specialTxFeed.Send(TxPreEvent{btx})
-			log.Trace("Pooled new special transaction", "hash", tx.Hash(), "from", addr, "to", tx.To(), "nonce", tx.Nonce())
+			pool.txFeed.Send(TxPreEvent{btx})
 		}
 	}()
 	return true, nil
