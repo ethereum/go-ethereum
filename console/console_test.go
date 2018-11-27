@@ -19,7 +19,6 @@ package console
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -153,33 +152,6 @@ func (env *tester) Close(t *testing.T) {
 		t.Errorf("failed to stop embedded node: %v", err)
 	}
 	os.RemoveAll(env.workspace)
-}
-
-// Tests that the node lists the correct welcome message, notably that it contains
-// the instance name, coinbase account, block number, data directory and supported
-// console modules.
-func TestWelcome(t *testing.T) {
-	tester := newTester(t, nil)
-	defer tester.Close(t)
-
-	tester.console.Welcome()
-
-	output := tester.output.String()
-	if want := "Welcome"; !strings.Contains(output, want) {
-		t.Fatalf("console output missing welcome message: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("instance: %s", testInstance); !strings.Contains(output, want) {
-		t.Fatalf("console output missing instance: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("coinbase: %s", testAddress); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
-	if want := "at block: 0"; !strings.Contains(output, want) {
-		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("datadir: %s", tester.workspace); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
 }
 
 // Tests that JavaScript statement evaluation works as intended.
