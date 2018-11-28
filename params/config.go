@@ -49,10 +49,10 @@ var (
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
 	MainnetTrustedCheckpoint = &TrustedCheckpoint{
 		Name:         "mainnet",
-		SectionIndex: 203,
-		SectionHead:  common.HexToHash("0xc9e05fc67c6a9815adc8072eb18805b53da53a9a6a273e05541e1b7542cf937a"),
-		CHTRoot:      common.HexToHash("0xb85f42447d59f7c3e6679b9a37ed983593fd52efd6251b883592662e95769d5b"),
-		BloomRoot:    common.HexToHash("0xf93d50cb4c49b403c6fd33cd60896d3b36184275be0a51bae4df5e8844ac624c"),
+		SectionIndex: 206,
+		SectionHead:  common.HexToHash("0x9fa677c7c0580136f5a86d9b2fd29b112e531f0284396298b8809bcb6787b538"),
+		CHTRoot:      common.HexToHash("0x7f32dfb29e341b4c8c10ea2e06a812bcea470366f635b7a8b3d0856684cd76f4"),
+		BloomRoot:    common.HexToHash("0x0169e174f0a8172aec217556d8a25c7ba7ca52aacff170325230a75740ff1eaf"),
 	}
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
@@ -73,10 +73,10 @@ var (
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.
 	TestnetTrustedCheckpoint = &TrustedCheckpoint{
 		Name:         "testnet",
-		SectionIndex: 134,
-		SectionHead:  common.HexToHash("0x17053ecbe045bebefaa01e7716cc85a4e22647e181416cc1098ccbb73a088931"),
-		CHTRoot:      common.HexToHash("0x4d2b86422e46ed76f0e3f50f06632c409f809c8375e53c8bc0f782bcb93dd49a"),
-		BloomRoot:    common.HexToHash("0xccba62232ee56c2967afc58f136a47ba7dc545ae586e6be666430d94516306c7"),
+		SectionIndex: 136,
+		SectionHead:  common.HexToHash("0xe5d80bb08d92bbc12dfe510c64cba01eafcbb4ba585e7c7ab7f8a93c6f295ab3"),
+		CHTRoot:      common.HexToHash("0xe3ca77ab0cb51eec74f4f7458e36aee207c68768387b39cb0bcff0940a6264d8"),
+		BloomRoot:    common.HexToHash("0x30c8eeadac5539d3dcd6e88915d1a07cb2f3a1d6ebe7e553e3ee783c04c68c2d"),
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
@@ -100,10 +100,10 @@ var (
 	// RinkebyTrustedCheckpoint contains the light client trusted checkpoint for the Rinkeby test network.
 	RinkebyTrustedCheckpoint = &TrustedCheckpoint{
 		Name:         "rinkeby",
-		SectionIndex: 100,
-		SectionHead:  common.HexToHash("0xf18f9b43e16f37b12e68818536ffe455ff18d676274ffdd856a8520ed61bb514"),
-		CHTRoot:      common.HexToHash("0x473f5d603b1fedad75d97fd58692130b9ac9ade1aca01eb9363d79bd1c43c791"),
-		BloomRoot:    common.HexToHash("0xa39ced3ddbb87e909c7531df2afb6414bea9c9a60ab94da9c6b467535f05326e"),
+		SectionIndex: 103,
+		SectionHead:  common.HexToHash("0x9f38b903852831bf4fa7992f7fd43d8b26da2deb82b421fb845cf6faee54e056"),
+		CHTRoot:      common.HexToHash("0x2d710c2cea468d2e604838000d658ee213e4abb07f90c4f71f5cd7f8510aa708"),
+		BloomRoot:    common.HexToHash("0xcc401060280c2cc82697ea5ecef8cac61e52063c37533a2e9609332419704d5f"),
 	}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
