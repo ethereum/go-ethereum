@@ -40,10 +40,12 @@ import (
 
 // I am intentionally duplicating these constants different from downloader.SyncMode integer values, to ensure the
 // backwards compatibility where the mobile node defaults to LightSync.
-const SyncModeUnset = 0 // will be treated as SyncModeLightSync
-const SyncModeFullSync = 1
-const SyncModeFastSync = 2
-const SyncModeLightSync = 3
+const (
+	SyncModeUnset = iota // will be treated as SyncModeLightSync
+	SyncModeFullSync
+	SyncModeFastSync
+	SyncModeLightSync
+)
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
 // node embedded into a mobile process. The available values are a subset of the
@@ -166,24 +168,18 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
+		syncMode := getSyncMode(config.SyncMode)
 		ethConf := eth.DefaultConfig
 		ethConf.Genesis = genesis
-		ethConf.SyncMode = downloader.LightSync
+		ethConf.SyncMode = syncMode
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, &ethConf)
-		}); err != nil {
+		if err := rawStack.Register(getEthereumServiceConstructor(syncMode, &ethConf)); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
-			if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-				var lesServ *les.LightEthereum
-				ctx.Service(&lesServ)
-
-				return ethstats.New(config.EthereumNetStats, nil, lesServ)
-			}); err != nil {
+			if err := rawStack.Register(getEthStatsServiceConstructor(syncMode, config)); err != nil {
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}
@@ -199,6 +195,49 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	return &Node{rawStack}, nil
 }
 
+func getEthereumServiceConstructor(syncMode downloader.SyncMode, ethConf *eth.Config) node.ServiceConstructor {
+	return func(ctx *node.ServiceContext) (node.Service, error) {
+		switch syncMode {
+		// Full-node for full sync and fast sync
+		case downloader.FullSync:
+			fallthrough
+		case downloader.FastSync:
+			return eth.New(ctx, ethConf)
+		// Light node for light sync
+		case downloader.LightSync:
+			return les.New(ctx, ethConf)
+		default:
+			panic(fmt.Sprintf("Unexpected sync mode: %v", syncMode))
+		}
+	}
+}
+
+func getEthStatsServiceConstructor(syncMode downloader.SyncMode, config *NodeConfig) node.ServiceConstructor {
+	return func(ctx *node.ServiceContext) (node.Service, error) {
+		switch syncMode {
+		case downloader.FullSync:
+			fallthrough
+		case downloader.FastSync:
+			var ethServ *eth.Ethereum
+			ctx.Service(&ethServ)
+			err := ctx.Service(&ethServ)
+			if err != nil {
+				return nil, fmt.Errorf("netstats init: %v", err)
+			}
+			return ethstats.New(config.EthereumNetStats, ethServ, nil)
+		case downloader.LightSync:
+			var lesServ *les.LightEthereum
+			err := ctx.Service(&lesServ)
+			if err != nil {
+				return nil, fmt.Errorf("netstats init: %v", err)
+			}
+			return ethstats.New(config.EthereumNetStats, nil, lesServ)
+		default:
+			panic(fmt.Sprintf("Unexpected sync mode: %v", syncMode))
+		}
+	}
+}
+
 func getSyncMode(syncMode int) downloader.SyncMode {
 	switch syncMode {
 	case SyncModeFullSync:
@@ -207,8 +246,8 @@ func getSyncMode(syncMode int) downloader.SyncMode {
 		return downloader.FastSync
 	case SyncModeUnset:
 		fallthrough
-		// If unset, default to light sync.
-		// This maintains backward compatibility.
+	// If unset, default to light sync.
+	// This maintains backward compatibility.
 	case SyncModeLightSync:
 		return downloader.LightSync
 	default:
