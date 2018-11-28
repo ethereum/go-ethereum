@@ -122,6 +122,10 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 			var wait func(context.Context) error
 			ctx := context.TODO()
 			hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
+			if err != nil {
+				errors[i] = err
+				return
+			}
 			if hash != nil {
 				list[i].Hash = hash.Hex()
 			}

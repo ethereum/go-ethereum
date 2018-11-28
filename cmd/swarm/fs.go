@@ -24,16 +24,50 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"gopkg.in/urfave/cli.v1"
 )
 
+var fsCommand = cli.Command{
+	Name:               "fs",
+	CustomHelpTemplate: helpTemplate,
+	Usage:              "perform FUSE operations",
+	ArgsUsage:          "fs COMMAND",
+	Description:        "Performs FUSE operations by mounting/unmounting/listing mount points. This assumes you already have a Swarm node running locally. For all operation you must reference the correct path to bzzd.ipc in order to communicate with the node",
+	Subcommands: []cli.Command{
+		{
+			Action:             mount,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "mount",
+			Usage:              "mount a swarm hash to a mount point",
+			ArgsUsage:          "swarm fs mount <manifest hash> <mount point>",
+			Description:        "Mounts a Swarm manifest hash to a given mount point. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+		{
+			Action:             unmount,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "unmount",
+			Usage:              "unmount a swarmfs mount",
+			ArgsUsage:          "swarm fs unmount <mount point>",
+			Description:        "Unmounts a swarmfs mount residing at <mount point>. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+		{
+			Action:             listMounts,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "list",
+			Usage:              "list swarmfs mounts",
+			ArgsUsage:          "swarm fs list",
+			Description:        "Lists all mounted swarmfs volumes. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+		},
+	},
+}
+
 func mount(cliContext *cli.Context) {
 	args := cliContext.Args()
 	if len(args) < 2 {
-		utils.Fatalf("Usage: swarm fs mount --ipcpath <path to bzzd.ipc> <manifestHash> <file name>")
+		utils.Fatalf("Usage: swarm fs mount <manifestHash> <file name>")
 	}
 
 	client, err := dialRPC(cliContext)
@@ -60,7 +94,7 @@ func unmount(cliContext *cli.Context) {
 	args := cliContext.Args()
 
 	if len(args) < 1 {
-		utils.Fatalf("Usage: swarm fs unmount --ipcpath <path to bzzd.ipc> <mount path>")
+		utils.Fatalf("Usage: swarm fs unmount <mount path>")
 	}
 	client, err := dialRPC(cliContext)
 	if err != nil {
@@ -108,20 +142,21 @@ func listMounts(cliContext *cli.Context) {
 }
 
 func dialRPC(ctx *cli.Context) (*rpc.Client, error) {
-	var endpoint string
+	endpoint := getIPCEndpoint(ctx)
+	log.Info("IPC endpoint", "path", endpoint)
+	return rpc.Dial(endpoint)
+}
 
-	if ctx.IsSet(utils.IPCPathFlag.Name) {
-		endpoint = ctx.String(utils.IPCPathFlag.Name)
-	} else {
-		utils.Fatalf("swarm ipc endpoint not specified")
-	}
+func getIPCEndpoint(ctx *cli.Context) string {
+	cfg := defaultNodeConfig
+	utils.SetNodeConfig(ctx, &cfg)
 
-	if endpoint == "" {
-		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
-	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
+	endpoint := cfg.IPCEndpoint()
+
+	if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
 		// Backwards compatibility with geth < 1.5 which required
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	return endpoint
 }

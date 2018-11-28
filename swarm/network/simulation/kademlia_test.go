@@ -28,6 +28,7 @@ import (
 )
 
 func TestWaitTillHealthy(t *testing.T) {
+
 	sim := New(map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())

@@ -157,18 +157,18 @@ Whenever you make an edit to the rule file, you need to use attestation to tell
 Clef that the file is 'safe' to execute.`,
 	}
 
-	addCredentialCommand = cli.Command{
-		Action:    utils.MigrateFlags(addCredential),
-		Name:      "addpw",
+	setCredentialCommand = cli.Command{
+		Action:    utils.MigrateFlags(setCredential),
+		Name:      "setpw",
 		Usage:     "Store a credential for a keystore file",
-		ArgsUsage: "<address> <password>",
+		ArgsUsage: "<address>",
 		Flags: []cli.Flag{
 			logLevelFlag,
 			configdirFlag,
 			signerSecretFlag,
 		},
 		Description: `
-The addpw command stores a password for a given address (keyfile). If you invoke it with only one parameter, it will 
+		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
 remove any stored credential for that address (keyfile)
 `,
 	}
@@ -200,7 +200,7 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, addCredentialCommand}
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand}
 
 }
 func main() {
@@ -293,13 +293,16 @@ func attestFile(ctx *cli.Context) error {
 	return nil
 }
 
-func addCredential(ctx *cli.Context) error {
+func setCredential(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires at leaste one argument.")
+		utils.Fatalf("This command requires an address to be passed as an argument.")
 	}
 	if err := initialize(ctx); err != nil {
 		return err
 	}
+
+	address := ctx.Args().First()
+	password := getPassPhrase("Enter a passphrase to store with this address.", true)
 
 	stretchedKey, err := readMasterKey(ctx, nil)
 	if err != nil {
@@ -311,13 +314,8 @@ func addCredential(ctx *cli.Context) error {
 
 	// Initialize the encrypted storages
 	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-	key := ctx.Args().First()
-	value := ""
-	if len(ctx.Args()) > 1 {
-		value = ctx.Args().Get(1)
-	}
-	pwStorage.Put(key, value)
-	log.Info("Credential store updated", "key", key)
+	pwStorage.Put(address, password)
+	log.Info("Credential store updated", "key", address)
 	return nil
 }
 

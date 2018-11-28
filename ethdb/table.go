@@ -14,35 +14,38 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package filter
+package ethdb
 
-type Generic struct {
-	Str1, Str2, Str3 string
-	Data             map[string]struct{}
-
-	Fn func(data interface{})
+type table struct {
+	db     Database
+	prefix string
 }
 
-// self = registered, f = incoming
-func (self Generic) Compare(f Filter) bool {
-	var strMatch, dataMatch = true, true
-
-	filter := f.(Generic)
-	if (len(self.Str1) > 0 && filter.Str1 != self.Str1) ||
-		(len(self.Str2) > 0 && filter.Str2 != self.Str2) ||
-		(len(self.Str3) > 0 && filter.Str3 != self.Str3) {
-		strMatch = false
+// NewTable returns a Database object that prefixes all keys with a given
+// string.
+func NewTable(db Database, prefix string) Database {
+	return &table{
+		db:     db,
+		prefix: prefix,
 	}
-
-	for k := range self.Data {
-		if _, ok := filter.Data[k]; !ok {
-			return false
-		}
-	}
-
-	return strMatch && dataMatch
 }
 
-func (self Generic) Trigger(data interface{}) {
-	self.Fn(data)
+func (dt *table) Put(key []byte, value []byte) error {
+	return dt.db.Put(append([]byte(dt.prefix), key...), value)
+}
+
+func (dt *table) Has(key []byte) (bool, error) {
+	return dt.db.Has(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Get(key []byte) ([]byte, error) {
+	return dt.db.Get(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Delete(key []byte) error {
+	return dt.db.Delete(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Close() {
+	// Do nothing; don't close the underlying DB.
 }

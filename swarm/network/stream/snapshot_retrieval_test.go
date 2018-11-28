@@ -127,10 +127,10 @@ func retrievalStreamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s no
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-		DoSync:          true,
+		Retrieval:       RetrievalEnabled,
+		Syncing:         SyncingAutoSubscribe,
 		SyncUpdateDelay: 3 * time.Second,
-		DoRetrieve:      true,
-	})
+	}, nil)
 
 	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 	bucket.Store(bucketKeyFileStore, fileStore)
@@ -217,7 +217,7 @@ func runFileRetrievalTest(nodeCount int) error {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
 					//check that we can read the file size and that it corresponds to the generated file size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(len(randomFiles[i])) {
-						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id)
+						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id)
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
 					}
@@ -246,6 +246,7 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runRetrievalTest(chunkCount int, nodeCount int) error {
+
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -308,7 +309,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
 					//check that we can read the chunk size and that it corresponds to the generated chunk size
 					if s, err := reader.Size(ctx, nil); err != nil || s != int64(chunkSize) {
-						log.Warn("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
+						log.Debug("Retrieve error", "err", err, "hash", hash, "nodeId", id, "size", s)
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
 					}

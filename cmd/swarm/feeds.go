@@ -31,6 +31,68 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var feedCommand = cli.Command{
+	CustomHelpTemplate: helpTemplate,
+	Name:               "feed",
+	Usage:              "(Advanced) Create and update Swarm Feeds",
+	ArgsUsage:          "<create|update|info>",
+	Description:        "Works with Swarm Feeds",
+	Subcommands: []cli.Command{
+		{
+			Action:             feedCreateManifest,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "create",
+			Usage:              "creates and publishes a new feed manifest",
+			Description: `creates and publishes a new feed manifest pointing to a specified user's updates about a particular topic.
+					The feed topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this feed allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						this feed tracks a discussion about that contract.
+					The --user flag allows to have this manifest refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)`,
+			Flags: []cli.Flag{SwarmFeedNameFlag, SwarmFeedTopicFlag, SwarmFeedUserFlag},
+		},
+		{
+			Action:             feedUpdate,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "update",
+			Usage:              "updates the content of an existing Swarm Feed",
+			ArgsUsage:          "<0x Hex data>",
+			Description: `publishes a new update on the specified topic
+					The feed topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this feed allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						this feed tracks a discussion about that contract.
+					
+					If you have a manifest, you can specify it with --manifest to refer to the feed,
+					instead of using --topic / --name
+					`,
+			Flags: []cli.Flag{SwarmFeedManifestFlag, SwarmFeedNameFlag, SwarmFeedTopicFlag},
+		},
+		{
+			Action:             feedInfo,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "info",
+			Usage:              "obtains information about an existing Swarm feed",
+			Description: `obtains information about an existing Swarm feed
+					The topic can be specified directly with the --topic flag as an hex string
+					If no topic is specified, the default topic (zero) will be used
+					The --name flag can be used to specify subtopics with a specific name.
+					The --user flag allows to refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)
+					If you have a manifest, you can specify it with --manifest instead of --topic / --name / ---user
+					to refer to the feed`,
+			Flags: []cli.Flag{SwarmFeedManifestFlag, SwarmFeedNameFlag, SwarmFeedTopicFlag, SwarmFeedUserFlag},
+		},
+	},
+}
+
 func NewGenericSigner(ctx *cli.Context) feed.Signer {
 	return feed.NewGenericSigner(getPrivKey(ctx))
 }
@@ -107,13 +169,17 @@ func feedUpdate(ctx *cli.Context) {
 		query = new(feed.Query)
 		query.User = signer.Address()
 		query.Topic = getTopic(ctx)
-
 	}
 
 	// Retrieve a feed update request
 	updateRequest, err = client.GetFeedRequest(query, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving feed status: %s", err.Error())
+	}
+
+	// Check that the provided signer matches the request to sign
+	if updateRequest.User != signer.Address() {
+		utils.Fatalf("Signer address does not match the update request")
 	}
 
 	// set the new data

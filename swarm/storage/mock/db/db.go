@@ -86,6 +86,13 @@ func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 	return s.db.Write(batch, nil)
 }
 
+// Delete removes the chunk reference to node with address addr.
+func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
+	batch := new(leveldb.Batch)
+	batch.Delete(nodeDBKey(addr, key))
+	return s.db.Write(batch, nil)
+}
+
 // HasKey returns whether a node with addr contains the key.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
 	has, err := s.db.Has(nodeDBKey(addr, key), nil)

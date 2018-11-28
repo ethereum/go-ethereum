@@ -143,7 +143,7 @@ func (q *queue) Reset() {
 	q.resultOffset = 0
 }
 
-// Close marks the end of the sync, unblocking WaitResults.
+// Close marks the end of the sync, unblocking Results.
 // It may be called even if the queue is already closed.
 func (q *queue) Close() {
 	q.lock.Lock()
@@ -325,7 +325,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		}
 		// Make sure no duplicate requests are executed
 		if _, ok := q.blockTaskPool[hash]; ok {
-			log.Warn("Header  already scheduled for block fetch", "number", header.Number, "hash", hash)
+			log.Warn("Header already scheduled for block fetch", "number", header.Number, "hash", hash)
 			continue
 		}
 		if _, ok := q.receiptTaskPool[hash]; ok {
@@ -545,7 +545,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
 	if progress {
-		// Wake WaitResults, resultCache was modified
+		// Wake Results, resultCache was modified
 		q.active.Signal()
 	}
 	// Assemble and return the block download request
@@ -664,11 +664,10 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 			}
 			// Add the peer to the expiry report along the number of failed requests
 			expiries[id] = len(request.Headers)
+
+			// Remove the expired requests from the pending pool directly
+			delete(pendPool, id)
 		}
-	}
-	// Remove the expired requests from the pending pool
-	for id := range expiries {
-		delete(pendPool, id)
 	}
 	return expiries
 }
@@ -857,7 +856,7 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 			taskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 	}
-	// Wake up WaitResults
+	// Wake up Results
 	if accepted > 0 {
 		q.active.Signal()
 	}

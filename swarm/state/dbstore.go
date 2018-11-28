@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 // ErrNotFound is returned when no results are returned from the database
@@ -29,6 +30,15 @@ var ErrNotFound = errors.New("ErrorNotFound")
 
 // ErrInvalidArgument is returned when the argument type does not match the expected type
 var ErrInvalidArgument = errors.New("ErrorInvalidArgument")
+
+// Store defines methods required to get, set, delete values for different keys
+// and close the underlying resources.
+type Store interface {
+	Get(key string, i interface{}) (err error)
+	Put(key string, i interface{}) (err error)
+	Delete(key string) (err error)
+	Close() error
+}
 
 // DBStore uses LevelDB to store values.
 type DBStore struct {
@@ -44,6 +54,17 @@ func NewDBStore(path string) (s *DBStore, err error) {
 	return &DBStore{
 		db: db,
 	}, nil
+}
+
+// NewInmemoryStore returns a new instance of DBStore. To be used only in tests and simulations.
+func NewInmemoryStore() *DBStore {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	if err != nil {
+		panic(err)
+	}
+	return &DBStore{
+		db: db,
+	}
 }
 
 // Get retrieves a persisted value for a specific key. If there is no results
@@ -69,7 +90,7 @@ func (s *DBStore) Get(key string, i interface{}) (err error) {
 
 // Put stores an object that implements Binary for a specific key.
 func (s *DBStore) Put(key string, i interface{}) (err error) {
-	bytes := []byte{}
+	var bytes []byte
 
 	marshaler, ok := i.(encoding.BinaryMarshaler)
 	if !ok {

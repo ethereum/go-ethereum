@@ -79,46 +79,6 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
-/*
-Proximity(x, y) returns the proximity order of the MSB distance between x and y
-
-The distance metric MSB(x, y) of two equal length byte sequences x an y is the
-value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
-the binary cast is big endian: most significant bit first (=MSB).
-
-Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
-It is defined as the reverse rank of the integer part of the base 2
-logarithm of the distance.
-It is calculated by counting the number of common leading zeros in the (MSB)
-binary representation of the x^y.
-
-(0 farthest, 255 closest, 256 self)
-*/
-func proximity(one, other Address) (ret int, eq bool) {
-	return posProximity(one, other, 0)
-}
-
-// posProximity(a, b, pos) returns proximity order of b wrt a (symmetric) pretending
-// the first pos bits match, checking only bits index >= pos
-func posProximity(one, other Address, pos int) (ret int, eq bool) {
-	for i := pos / 8; i < len(one); i++ {
-		if one[i] == other[i] {
-			continue
-		}
-		oxo := one[i] ^ other[i]
-		start := 0
-		if i == pos/8 {
-			start = pos % 8
-		}
-		for j := start; j < 8; j++ {
-			if (oxo>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j, false
-			}
-		}
-	}
-	return len(one) * 8, true
-}
-
 // ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.

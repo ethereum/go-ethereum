@@ -91,7 +91,7 @@ invoking methods with the following info:
   * [x] Version info about the signer
   * [x] Address of API (http/ipc)
   * [ ] List of known accounts
-* [ ] Have a default timeout on signing operations, so that if the user has not answered withing e.g. 60 seconds, the request is rejected.
+* [ ] Have a default timeout on signing operations, so that if the user has not answered within e.g. 60 seconds, the request is rejected.
 * [ ] `account_signRawTransaction`
 * [ ] `account_bulkSignTransactions([] transactions)` should
    * only exist if enabled via config/flag
@@ -129,7 +129,7 @@ The signer listens to HTTP requests on `rpcaddr`:`rpcport`, with the same JSONRP
 expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
 Some of these call can require user interaction. Clients must be aware that responses
-may be delayed significanlty or may never be received if a users decides to ignore the confirmation request.
+may be delayed significantly or may never be received if a users decides to ignore the confirmation request.
 
 The External API is **untrusted** : it does not accept credentials over this api, nor does it expect
 that requests have any authority.
@@ -862,7 +862,7 @@ A UI should conform to the following rules.
 * A UI SHOULD inform the user about the `SHA256` or `MD5` hash of the binary being executed
 * A UI SHOULD NOT maintain a secondary storage of data, e.g. list of accounts
   * The signer provides accounts
-* A UI SHOULD, to the best extent possible, use static linking / bundling, so that requried libraries are bundled
+* A UI SHOULD, to the best extent possible, use static linking / bundling, so that required libraries are bundled
 along with the UI.
 
 

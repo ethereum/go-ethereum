@@ -151,7 +151,7 @@ func TestListRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	resp, err := r.ApproveListing(&core.ListRequest{
+	resp, _ := r.ApproveListing(&core.ListRequest{
 		Accounts: accs,
 		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	})
@@ -515,7 +515,7 @@ func TestLimitWindow(t *testing.T) {
 		r.OnApprovedTx(response)
 	}
 	// Fourth should fail
-	resp, err := r.ApproveTx(dummyTx(h))
+	resp, _ := r.ApproveTx(dummyTx(h))
 	if resp.Approved {
 		t.Errorf("Expected check to resolve to 'Reject'")
 	}
@@ -609,8 +609,8 @@ func TestContextIsCleared(t *testing.T) {
 		t.Fatalf("Failed to load bootstrap js: %v", err)
 	}
 	tx := dummyTxWithV(0)
-	r1, err := r.ApproveTx(tx)
-	r2, err := r.ApproveTx(tx)
+	r1, _ := r.ApproveTx(tx)
+	r2, _ := r.ApproveTx(tx)
 	if r1.Approved != r2.Approved {
 		t.Errorf("Expected execution context to be cleared between executions")
 	}

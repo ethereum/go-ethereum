@@ -7,14 +7,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 )
 
-type contextKey int
-
-const (
-	uriKey contextKey = iota
-)
+type uriKey struct{}
 
 func GetRUID(ctx context.Context) string {
-	v, ok := ctx.Value(sctx.HTTPRequestIDKey).(string)
+	v, ok := ctx.Value(sctx.HTTPRequestIDKey{}).(string)
 	if ok {
 		return v
 	}
@@ -22,11 +18,11 @@ func GetRUID(ctx context.Context) string {
 }
 
 func SetRUID(ctx context.Context, ruid string) context.Context {
-	return context.WithValue(ctx, sctx.HTTPRequestIDKey, ruid)
+	return context.WithValue(ctx, sctx.HTTPRequestIDKey{}, ruid)
 }
 
 func GetURI(ctx context.Context) *api.URI {
-	v, ok := ctx.Value(uriKey).(*api.URI)
+	v, ok := ctx.Value(uriKey{}).(*api.URI)
 	if ok {
 		return v
 	}
@@ -34,5 +30,5 @@ func GetURI(ctx context.Context) *api.URI {
 }
 
 func SetURI(ctx context.Context, uri *api.URI) context.Context {
-	return context.WithValue(ctx, uriKey, uri)
+	return context.WithValue(ctx, uriKey{}, uri)
 }

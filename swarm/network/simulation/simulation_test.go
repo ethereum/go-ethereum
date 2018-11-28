@@ -205,3 +205,16 @@ func (t *noopService) Start(server *p2p.Server) error {
 func (t *noopService) Stop() error {
 	return nil
 }
+
+// a helper function for most basic noop service
+// of a different type then noopService to test
+// multiple services on one node.
+func noopService2Func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+	return new(noopService2), nil, nil
+}
+
+// noopService2 is the service that does not do anything
+// but implements node.Service interface.
+type noopService2 struct {
+	noopService
+}

@@ -18,10 +18,8 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"testing"
@@ -29,13 +27,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func TestIntervalsLive(t *testing.T) {
@@ -54,6 +52,8 @@ func TestIntervalsLiveAndHistory(t *testing.T) {
 }
 
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
+
+	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodes := 2
 	chunkCount := dataChunkCount
 	externalStreamName := "externalStream"
@@ -83,8 +83,10 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingRegisterOnly,
 				SkipCheck: skipCheck,
-			})
+			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
@@ -128,7 +130,8 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		fileStore := item.(*storage.FileStore)
 
 		size := chunkCount * chunkSize
-		_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+
+		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
 			log.Error("Store error: %v", "err", err)
 			t.Fatal(err)
@@ -152,7 +155,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		disconnections := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+			simulation.NewPeerEventsFilter().Drop(),
 		)
 
 		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
@@ -163,7 +166,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 					t.Fatal(d.Error)
 				}
 			}
@@ -345,8 +348,6 @@ func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*
 
 func (c *testExternalClient) Close() {}
 
-const testExternalServerBatchSize = 10
-
 type testExternalServer struct {
 	t         string
 	keyFunc   func(key []byte, index uint64)
@@ -366,17 +367,11 @@ func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key
 	}
 }
 
+func (s *testExternalServer) SessionIndex() (uint64, error) {
+	return s.sessionAt, nil
+}
+
 func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	if from == 0 && to == 0 {
-		from = s.sessionAt
-		to = s.sessionAt + testExternalServerBatchSize
-	}
-	if to-from > testExternalServerBatchSize {
-		to = from + testExternalServerBatchSize - 1
-	}
-	if from >= s.maxKeys && to > s.maxKeys {
-		return nil, 0, 0, nil, io.EOF
-	}
 	if to > s.maxKeys {
 		to = s.maxKeys
 	}
