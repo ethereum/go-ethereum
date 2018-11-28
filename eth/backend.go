@@ -230,19 +230,16 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.protocolManager.fetcher.SetSignHook(signHook)
 		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
-		// Hook prepares validators M2 for the current epoch
-		c.HookValidator = func(header *types.Header, signers []common.Address) error {
+		// Hook prepares validators M2 for the current epoch at checkpoint block
+		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
 			start := time.Now()
-			number := header.Number.Int64()
-			if number > 0 && number%common.EpocBlockRandomize == 0 {
-				validators, err := GetValidators(eth.blockchain, signers)
-				if err != nil {
-					return err
-				}
-				header.Validators = validators
+			validators, err := GetValidators(eth.blockchain, signers)
+			if err != nil {
+				return []byte{}, err
 			}
+			header.Validators = validators
 			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-			return nil
+			return validators, nil
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them

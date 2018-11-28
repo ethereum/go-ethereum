@@ -46,7 +46,6 @@ import (
 
 const (
 	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
 	M2ByteLength       = 4
 )
 
@@ -224,7 +223,7 @@ type Posv struct {
 
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookValidator func(header *types.Header, signers []common.Address) error
+	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs func(header *types.Header, signers []common.Address) error
 }
 
@@ -768,7 +767,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	}
 	header.Extra = header.Extra[:extraVanity]
 	masternodes := snap.GetSigners()
-	if number%c.config.Epoch == 0 {
+	if number > 0 && number%c.config.Epoch == 0 {
 		if c.HookPenalty != nil {
 			penMasternodes, err := c.HookPenalty(chain, number)
 			if err != nil {
@@ -792,6 +791,13 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		for _, masternode := range masternodes {
 			header.Extra = append(header.Extra, masternode[:]...)
 		}
+		if c.HookValidator != nil {
+			validators, err := c.HookValidator(header, masternodes)
+			if err != nil {
+				return err
+			}
+			header.Validators = validators
+		}
 	}
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
@@ -803,12 +809,6 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(c.config.Period))
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
-	}
-	if c.HookValidator != nil {
-		c.HookValidator(header, masternodes)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
