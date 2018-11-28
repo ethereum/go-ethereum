@@ -78,6 +78,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 		BlockCacheCapacity:     cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
 		Filter:                 filter.NewBloomFilter(10),
+		NoSync:                 true,
 	})
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
@@ -371,7 +372,9 @@ func (b *ldbBatch) Delete(key []byte) error {
 }
 
 func (b *ldbBatch) Write() error {
-	return b.db.Write(b.b, nil)
+	return b.db.Write(b.b, &opt.WriteOptions{
+		Sync: false,
+	})
 }
 
 func (b *ldbBatch) ValueSize() int {
