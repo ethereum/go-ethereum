@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
+	utils2 "github.com/elizabethengelman/go-ethereum/cmd/utils"
 )
 
 var (
@@ -178,6 +179,11 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
+
+	if ctx.GlobalBool(utils2.StateDiffFlag.Name) {
+		utils2.RegisterStateDiffService(stack)
+	}
+
 	return stack
 }
 

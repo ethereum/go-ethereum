@@ -58,6 +58,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/elizabethengelman/go-ethereum/statediff"
 )
 
 var (
@@ -181,6 +183,10 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	StateDiffFlag = cli.BoolFlag{
+		Name:  "stateDiff",
+		Usage: "Store state diffing",
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
@@ -1323,6 +1329,64 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
+}
+
+func RegisterStateDiffService(stack *node.Node) {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		var ethServ *eth.Ethereum
+		ctx.Service(&ethServ)
+		chainDb := ethServ.ChainDb()
+		blockchain := ethServ.BlockChain()
+		fmt.Println("registering state differ")
+
+		return NewStateDiffService(chainDb, blockchain)
+	}); err != nil {
+		Fatalf("Failed to register State Differ", err)
+	}
+}
+
+type StateDiffService struct {
+	StateDiffBuilder *statediff.StateDiffBuilder
+	Blockchain       *core.BlockChain
+}
+
+func NewStateDiffService(db ethdb.Database, blockchain *core.BlockChain) (StateDiffService, error) {
+	diffBuilder, _ := statediff.NewStateDiffBuilder(db)
+	return StateDiffService{
+		StateDiffBuilder: diffBuilder,
+		Blockchain:       blockchain,
+	}, nil
+}
+
+func (StateDiffService) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{}
+}
+
+func (StateDiffService) APIs() []rpc.API {
+	return []rpc.API{}
+}
+
+func (sds StateDiffService) Start(server *p2p.Server) error {
+	fmt.Println("starting state diff service")
+	blockChannel := make(chan core.ChainHeadEvent)
+	sds.Blockchain.SubscribeChainHeadEvent(blockChannel)
+
+	for {
+		select {
+			case <-blockChannel:
+				headOfChainEvent := <-blockChannel
+				currentBlock := headOfChainEvent.Block
+				blockNumber := currentBlock.Number()
+				stateDiff, _ := sds.StateDiffBuilder.CreateStateDiff(currentBlock.Root(), currentBlock.Root(), *blockNumber, currentBlock.Hash())
+				fmt.Println(stateDiff)
+			}
+	}
+	return nil
+}
+
+func (StateDiffService) Stop() error {
+	fmt.Println("stopping state differ")
+	return nil
 }
 
 func SetupMetrics(ctx *cli.Context) {
