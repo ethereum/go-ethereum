@@ -788,12 +788,12 @@ func (r *Registry) createPriceOracle() {
 		registry: r,
 	}
 	po.priceMatrix = map[reflect.Type]*protocols.Price{
-		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): &protocols.Price{
+		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): {
 			Value:   uint64(100),
 			PerByte: true,
 			Payer:   protocols.Receiver,
 		},
-		reflect.TypeOf(RetrieveRequestMsg{}): &protocols.Price{
+		reflect.TypeOf(RetrieveRequestMsg{}): {
 			Value:   uint64(10),
 			PerByte: false,
 			Payer:   protocols.Sender,
