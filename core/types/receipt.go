@@ -36,10 +36,10 @@ var (
 
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
-	ReceiptStatusFailed = uint64(0)
+	ReceiptStatusFailed = uint64(1)
 
 	// ReceiptStatusSuccessful is the status code of a transaction if execution succeeded.
-	ReceiptStatusSuccessful = uint64(1)
+	ReceiptStatusSuccessful = uint64(0)
 )
 
 // Receipt represents the results of a transaction.
