@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	colorable "github.com/mattn/go-colorable"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -57,9 +56,9 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 
 func cliUploadAndSync(c *cli.Context) error {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
+	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "kb", filesize) }(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
 
