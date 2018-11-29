@@ -243,6 +243,8 @@ func (in *InterpreterEWASM) PostContractCreation(code []byte) ([]byte, error) {
 	if in.terminationType == TerminateRevert {
 		return nil, errExecutionReverted
 	}
+
+	if in.CanRun(code) {
 		if in.metering {
 			meteredCode, _, err := sentinel(in, code)
 			code = meteredCode
