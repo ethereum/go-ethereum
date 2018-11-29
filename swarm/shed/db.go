@@ -63,7 +63,8 @@ type DB struct {
 
 // NewDB constructs a new DB and validates the schema
 // if it exists in database on the given path.
-func NewDB(path string) (db *DB, err error) {
+// prefix is used for metrics collection for the given DB.
+func NewDB(path string, prefix string) (db *DB, err error) {
 	ldb, err := leveldb.OpenFile(path, &opt.Options{
 		OpenFilesCacheCapacity: openFileLimit,
 	})
@@ -88,7 +89,7 @@ func NewDB(path string) (db *DB, err error) {
 		}
 	}
 
-	db.Meter("shed/db")
+	db.Meter(prefix)
 
 	return db, nil
 }
