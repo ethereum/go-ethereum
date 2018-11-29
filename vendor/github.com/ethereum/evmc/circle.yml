@@ -1,0 +1,143 @@
+version: 2
+jobs:
+
+  lint:
+    docker:
+    - image: ethereum/cpp-build-env
+    steps:
+    - checkout
+    - run:
+        name: "Check code format"
+        command: |
+          find examples include lib test -name '*.hpp' -o -name '*.cpp' -o -name '*.h' -o -name '*.c' | xargs clang-format -i
+          git diff --color --exit-code
+    - run:
+        name: "Run codespell"
+        command: |
+          sudo pip3 install --upgrade pip setuptools
+          sudo pip3 install codespell
+          codespell --quiet-level=4 --ignore-words=./.codespell-whitelist
+
+  build: &build
+    docker:
+      - image: ethereum/cpp-build-env
+    steps:
+      - checkout
+      - run:
+          name: "Configure"
+          working_directory: ~/build
+          command: cmake ../project -DCMAKE_INSTALL_PREFIX=~/install -DBUILD_SHARED_LIBS=ON -DEVMC_EXAMPLES=ON -DEVMC_TESTING=ON
+      - run:
+          name: "Build"
+          command: cmake --build ~/build
+      - run:
+          name: "Unit tests"
+          working_directory: ~/build/test
+          command: ./evmc-test
+      - run:
+          name: "Test"
+          command: cmake --build ~/build --target test
+      - run:
+          name: "Install"
+          command: cmake --build ~/build --target install
+      - run:
+          name: "Package"
+          command: |
+            cmake --build ~/build --target package
+            mkdir ~/package
+            mv ~/build/evmc-*.tar.gz ~/package
+      - store_artifacts:
+          path: ~/package
+          destination: package
+      - run:
+          name: "Test CMake package config"
+          command: |
+            mkdir ~/build-example-evmc && cd ~/build-example-evmc
+            cmake ~/project/examples/use_evmc_in_cmake -DCMAKE_PREFIX_PATH=~/install
+            cmake --build .
+
+            mkdir ~/build-example-instructions && cd ~/build-example-instructions
+            cmake ~/project/examples/use_instructions_in_cmake -DCMAKE_PREFIX_PATH=~/install
+            cmake --build .
+      - run:
+          name: "Run evmc-vmtester libevmc-example-vm.so"
+          command: ~/install/bin/evmc-vmtester ~/install/lib/libevmc-example-vm.so
+
+  build-clang-3.8:
+    <<: *build
+    environment:
+      CC: clang-3.8
+      CXX: clang++-3.8
+
+  test-docs:
+    docker:
+      - image: ethereum/cpp-build-env
+    steps:
+      - checkout
+      - run:
+          name: "Test documentation"
+          command: |
+            cat Doxyfile | sed 's/HTML_OUTPUT            = ./HTML_OUTPUT            = ..\/docs/' | doxygen - > doxygen.log 2> doxygen.warnings
+            if [ -s doxygen.warnings ]; then
+              printf '\n\nDoxygen warnings:\n\n'
+              cat doxygen.warnings
+              exit 1
+            fi
+            cat doxygen.log
+      - store_artifacts:
+          path: ~/docs
+          destination: docs
+
+  upload-docs:
+    docker:
+      - image: ethereum/cpp-build-env
+    steps:
+      - checkout
+      - run:
+          name: "Generate documentation"
+          command: doxygen Doxyfile
+      - run:
+          name: "Upload documentation"
+          command: |
+            git config user.email "docs-bot@ethereum.org"
+            git config user.name "Documentation Bot"
+            git add --all
+            git commit -m "Update docs"
+            git push -f "https://$GITHUB_TOKEN@github.com/ethereum/evmc.git" HEAD:gh-pages
+
+  bindings-go-1.10:
+    docker:
+      - image: circleci/golang:1.10
+    steps: &bindings-go-steps
+      - checkout
+      - run:
+          name: "Go Build"
+          command: |
+            go get -v github.com/ethereum/go-ethereum/common
+            go build -v ./bindings/go/evmc
+            go vet -v ./bindings/go/evmc
+
+  bindings-go-1.9:
+    docker:
+      - image: circleci/golang:1.9
+    steps: *bindings-go-steps
+
+
+workflows:
+  version: 2
+  evmc:
+    jobs:
+      - lint
+      - build
+      - build-clang-3.8
+      - bindings-go-1.10
+      - bindings-go-1.9
+      - test-docs
+      - upload-docs:
+          requires:
+            - test-docs
+          filters:
+            branches:
+              only:
+                - master
+                - docs

@@ -1,0 +1,58 @@
+version: "{build}"
+branches:
+  only:
+  - master
+  - /release\/.*/
+  - appveyor
+  - hunter
+configuration:
+  - Release
+environment:
+  matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      GENERATOR: "Visual Studio 15 2017 Win64"
+
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      GENERATOR: "Visual Studio 14 2015 Win64"
+
+    - GO: true
+cache:
+  - C:\.hunter\_Base\Cache -> cmake\HunterConfig.cmake
+
+before_build:
+- ps: >-
+    if ($env:GENERATOR) {
+      if (!(test-path build)) { mkdir build }
+      cd build
+      cmake -Wno-dev -G "$env:GENERATOR" .. -DBUILD_SHARED_LIBS=ON -DEVMC_EXAMPLES=ON -DEVMC_TESTING=ON -DCMAKE_INSTALL_PREFIX=C:\install
+    }
+
+build_script:
+- ps: >-
+    if ($env:GENERATOR) {
+      cmake --build . --config $env:CONFIGURATION --target install
+    }
+    elseif ($env:GO) {
+      $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+      $env:GOPATH = "C:\Users\appveyor\go"
+
+      mkdir $env:GOPATH
+      gcc --version
+      go env
+      go get github.com/ethereum/go-ethereum/common
+
+      copy include/evmc/evmc.h bindings/go/evmc
+      copy include/evmc/helpers.h bindings/go/evmc
+      copy include/evmc/loader.h bindings/go/evmc
+      copy lib/loader/loader.c bindings/go/evmc
+
+      go build ./bindings/go/evmc
+    }
+
+after_build:
+- ps: >-
+    if ($env:GENERATOR) {
+      cd C:\projects\evmc\build\test
+      Release\evmc-test.exe
+      C:\install\bin\evmc-vmtester.exe C:\install\bin\evmc-example-vm.dll
+    }
