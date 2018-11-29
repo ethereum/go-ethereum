@@ -63,8 +63,8 @@ type DB struct {
 
 // NewDB constructs a new DB and validates the schema
 // if it exists in database on the given path.
-// prefix is used for metrics collection for the given DB.
-func NewDB(path string, prefix string) (db *DB, err error) {
+// metricsPrefix is used for metrics collection for the given DB.
+func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 	ldb, err := leveldb.OpenFile(path, &opt.Options{
 		OpenFilesCacheCapacity: openFileLimit,
 	})
@@ -89,7 +89,7 @@ func NewDB(path string, prefix string) (db *DB, err error) {
 		}
 	}
 
-	db.Meter(prefix)
+	db.Meter(metricsPrefix)
 
 	return db, nil
 }
@@ -151,6 +151,7 @@ func (db *DB) WriteBatch(batch *leveldb.Batch) (err error) {
 
 // Close closes LevelDB database.
 func (db *DB) Close() (err error) {
+	close(db.quitChan)
 	return db.ldb.Close()
 }
 
