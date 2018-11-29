@@ -29,6 +29,7 @@ var (
 	endpoints        []string
 	includeLocalhost bool
 	cluster          string
+	appName          string
 	scheme           string
 	filesize         int
 	from             int
@@ -48,6 +49,12 @@ func main() {
 			Value:       "prod",
 			Usage:       "cluster to point to (prod or a given namespace)",
 			Destination: &cluster,
+		},
+		cli.StringFlag{
+			Name:        "app",
+			Value:       "swarm",
+			Usage:       "application to point to (swarm or swarm-private)",
+			Destination: &appName,
 		},
 		cli.IntFlag{
 			Name:        "cluster-from",
@@ -107,5 +114,6 @@ func main() {
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
+		os.Exit(1)
 	}
 }
