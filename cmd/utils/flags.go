@@ -890,7 +890,7 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 				Fatalf("Invalid miner etherbase: %v", err)
 			}
 			cfg.Etherbase = account.Address
-		}else{
+		} else {
 			Fatalf("No etherbase configured")
 		}
 	}
@@ -991,7 +991,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	setDataDir(ctx, cfg)
 
-	if ctx.GlobalIsSet(	ExternalSignerFlag.Name){
+	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)
 	}
 
@@ -1176,7 +1176,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	var ks *keystore.KeyStore
-	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0{
+	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
 	}
 	setEtherbase(ctx, ks, cfg)

@@ -18,6 +18,9 @@ package external
 
 import (
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -28,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
-	"math/big"
-	"sync"
 )
 
 type ExternalBackend struct {
