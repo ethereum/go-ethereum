@@ -22,9 +22,82 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
+
+func TestSnapshot(t *testing.T) {
+	protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
+	adapter := adapters.NewSimAdapter(adapters.Services{
+		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			svc := NewNoopService()
+			protoCMap[ctx.Config.ID] = svc.C
+			return svc, nil
+		},
+	})
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "noopwoop",
+	})
+	defer network.Shutdown()
+
+	nodeCount := 20
+	ids := make([]enode.ID, nodeCount)
+	for i := 0; i < nodeCount; i++ {
+		conf := adapters.RandomNodeConfig()
+		node, err := network.NewNodeWithConfig(conf)
+		if err != nil {
+			t.Fatalf("error creating node: %s", err)
+		}
+		if err := network.Start(node.ID()); err != nil {
+			t.Fatalf("error starting node: %s", err)
+		}
+		ids[i] = node.ID()
+	}
+
+	go func() {
+		for i, id := range ids {
+			peerID := ids[(i+1)%len(ids)]
+			if err := network.Connect(id, peerID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}()
+
+	evC := make(chan *Event)
+	sub := network.Events().Subscribe(evC)
+	defer sub.Unsubscribe()
+
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+
+	connEventCount := nodeCount
+OUTER:
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case ev := <-evC:
+			if ev.Type == EventTypeConn && !ev.Control {
+				connEventCount--
+				log.Debug("ev", "count", connEventCount)
+				if connEventCount == 0 {
+					break OUTER
+				}
+			}
+		}
+	}
+
+	for nodid, peers := range protoCMap {
+		for peerid, peerC := range peers {
+			log.Debug("getting ", "node", nodid, "peer", peerid)
+			<-peerC
+		}
+	}
+
+	t.Logf("ok")
+}
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
 // connected in a ring topology, checks that all nodes successfully handshake
