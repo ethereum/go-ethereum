@@ -267,10 +267,10 @@
 			"revisionTime": "2017-04-30T22:20:11Z"
 		},
 		{
-			"checksumSHA1": "UpjhOUZ1+0zNt+iIvdtECSHXmTs=",
+			"checksumSHA1": "6XsjAARQFvlW6dS15al0ibTFPOQ=",
 			"path": "github.com/karalabe/hid",
-			"revision": "f00545f9f3748e591590be3732d913c77525b10f",
-			"revisionTime": "2017-08-21T10:38:37Z",
+			"revision": "d815e0c1a2e2082a287a2806bc90bc8fc7b276a9",
+			"revisionTime": "2018-11-28T19:21:57Z",
 			"tree": true
 		},
 		{
