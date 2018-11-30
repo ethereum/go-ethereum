@@ -164,6 +164,10 @@ func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) err
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
 
+func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) error {
+	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
+}
+
 func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
 	topics, _, err := pssapi.Pss.GetPublickeyPeers(pubkeyhex)
 	return topics, err
