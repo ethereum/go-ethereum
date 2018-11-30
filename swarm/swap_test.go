@@ -146,7 +146,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 		//every node has a map to all nodes it had interactions
 		//each entry in the map is a map of the other node with all the balances
 		balancesMap := make(map[enode.ID]map[enode.ID]int64)
@@ -204,24 +204,20 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			//iterate the submap
 			for n, balanceKwithN := range mapForK {
 				//iterate the main map again
-				for subK, mapForSubK := range balancesMap {
-					//if the node and the peer are the same...
-					if n == subK {
-						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
-						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-						//...check that they have the same balance in Abs terms and that it is not 0
-						if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
-							log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-							success = false
-						}
-					}
+				mapForSubK := balancesMap[n]
+				log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+				log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+				//...check that they have the same balance in Abs terms and that it is not 0
+				if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+					log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
+					success = false
 				}
 			}
 		}
 		if success {
 			return nil
 		}
-		return errors.New("some conditions could not be met")
+		return errors.New("Expected balances to be symmetrical, but they were not")
 	})
 
 	if result.Error != nil {
@@ -330,7 +326,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(3 * time.Second)
 
 		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
@@ -375,15 +371,12 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		success := true
 		for k, mapForK := range balancesMap {
 			for n, balanceKwithN := range mapForK {
-				for subK, mapForSubK := range balancesMap {
-					if n == subK {
-						log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
-						log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-						if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
-							log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-							success = false
-						}
-					}
+				mapForSubK := balancesMap[n]
+				log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+				log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+				if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+					log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
+					success = false
 				}
 			}
 		}
