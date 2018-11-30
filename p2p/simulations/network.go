@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -707,6 +709,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 
 // Load loads a network snapshot
 func (net *Network) Load(snap *Snapshot) error {
+	// Start nodes.
 	for _, n := range snap.Nodes {
 		if _, err := net.NewNodeWithConfig(n.Node.Config); err != nil {
 			return err
@@ -718,6 +721,78 @@ func (net *Network) Load(snap *Snapshot) error {
 			return err
 		}
 	}
+
+	// Prepare connection events counter.
+	allConnected := make(chan struct{})     // closed when all connections are established
+	eventLoopStarted := make(chan struct{}) // ensures that event loop is started before it is closed
+	done := make(chan struct{})             // ensures that the event loop goroutine is terminated
+	defer close(done)
+
+	go func() {
+		// Subscribe to event channel.
+		events := make(chan *Event)
+		sub := net.Events().Subscribe(events)
+		defer sub.Unsubscribe()
+
+		// Expected number of connections.
+		total := len(snap.Conns)
+		// counter tracks the current number of connections.
+		var counter int
+
+		// once is a closed channel that is read in the event loop below
+		// only once.
+		// It ensures that eventLoopStarted is closed which signals that
+		// it is safe to call connect method on the network without the
+		// possibility to miss a few first connection events.
+		once := make(chan struct{})
+		// Close once channel so that it can be read from in the event loop.
+		close(once)
+
+		for {
+			select {
+			case e := <-events:
+				// Detect only connection events.
+				if e.Type != EventTypeConn {
+					continue
+				}
+				// Detect only "connect" events of all connection events.
+				if !e.Conn.Up {
+					continue
+				}
+				// Check that the connection is from the snapshot.
+				for _, conn := range snap.Conns {
+					if conn.One == e.Conn.One && conn.Other == e.Conn.Other {
+						counter++
+
+						if counter == total {
+							// Signal that all nodes are connected.
+							close(allConnected)
+							return
+						}
+
+						break
+					}
+				}
+			case <-once:
+				// Set once to nil as nil channel never blocks forever.
+				// This ensures that this for loop never gets into this part
+				// of the code again.
+				once = nil
+				// Proceed with connecting the nodes, as we are ready to
+				// detect events.
+				close(eventLoopStarted)
+			case <-done:
+				// Load function returned, terminate this goroutine.
+				return
+			}
+		}
+	}()
+
+	// Do not proceed until the goroutine with the event loop actually is ready
+	// to receive events.
+	<-eventLoopStarted
+
+	// Start connecting.
 	for _, conn := range snap.Conns {
 
 		if !net.GetNode(conn.One).Up || !net.GetNode(conn.Other).Up {
@@ -725,9 +800,17 @@ func (net *Network) Load(snap *Snapshot) error {
 			//so it would result in the snapshot `Load` to fail
 			continue
 		}
-		if err := net.Connect(conn.One, conn.Other); err != nil {
+		if err := net.Connect(conn.One, conn.Other); err != nil && !strings.Contains(err.Error(), "already connected") {
 			return err
 		}
+	}
+
+	select {
+	// Wait until all connections from the snapshot are established.
+	case <-allConnected:
+	// Make sure that we do not wait forever.
+	case <-time.After(120 * time.Second):
+		return errors.New("snapshot connections not established")
 	}
 	return nil
 }
