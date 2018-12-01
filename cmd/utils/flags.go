@@ -113,6 +113,11 @@ func NewApp(gitCommit, usage string) *cli.App {
 
 var (
 	// General settings
+	CommitTxWhenNotMiningFlag = DirectoryFlag{
+		Name:  "committxwhennotmining",
+		Usage: "Always commit transactions",
+		Value: DirectoryString{node.DefaultDataDir()},
+	}
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -896,6 +901,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
+	}
+	if ctx.GlobalIsSet(CommitTxWhenNotMiningFlag.Name) {
+		cfg.CommitTxWhenNotMining = ctx.GlobalBool(CommitTxWhenNotMiningFlag.Name)
 	}
 }
 
