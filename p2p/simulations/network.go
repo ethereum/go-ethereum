@@ -736,8 +736,9 @@ func (net *Network) Load(snap *Snapshot) error {
 
 		// Expected number of connections.
 		total := len(snap.Conns)
-		// counter tracks the current number of connections.
-		var counter int
+		// Set of all established connections from the snapshot, not other connections.
+		// Key array element 0 is the connection One field value, and element 1 connection Other field.
+		connections := make(map[[2]enode.ID]struct{}, total)
 
 		// once is a closed channel that is read in the event loop below
 		// only once.
@@ -755,16 +756,20 @@ func (net *Network) Load(snap *Snapshot) error {
 				if e.Type != EventTypeConn {
 					continue
 				}
-				// Detect only "connect" events of all connection events.
+				connection := [2]enode.ID{e.Conn.One, e.Conn.Other}
+				// Nodes are still not connected or have been disconnected.
 				if !e.Conn.Up {
+					// Delete the connection from the set of established connections.
+					// This will prevent false positive in case disconnections happen.
+					delete(connections, connection)
 					continue
 				}
 				// Check that the connection is from the snapshot.
 				for _, conn := range snap.Conns {
 					if conn.One == e.Conn.One && conn.Other == e.Conn.Other {
-						counter++
-
-						if counter == total {
+						// Add the connection to the set of established connections.
+						connections[connection] = struct{}{}
+						if len(connections) == total {
 							// Signal that all nodes are connected.
 							close(allConnected)
 							return
