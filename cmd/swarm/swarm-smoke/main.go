@@ -45,8 +45,8 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:        "cluster-endpoint",
-			Value:       "testing",
-			Usage:       "cluster to point to (local, open or testing)",
+			Value:       "prod",
+			Usage:       "cluster to point to (prod or a given namespace)",
 			Destination: &cluster,
 		},
 		cli.IntFlag{

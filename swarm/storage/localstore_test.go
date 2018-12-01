@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
@@ -143,4 +144,68 @@ func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []
 		hs = append(hs, chunk.Address())
 	}
 	return hs, errs
+}
+
+// TestGetFrequentlyAccessedChunkWontGetGarbageCollected tests that the most
+// frequently accessed chunk is not garbage collected from LDBStore, i.e.,
+// from disk when we are at the capacity and garbage collector runs. For that
+// we start putting random chunks into the DB while continuously accessing the
+// chunk we care about then check if we can still retrieve it from disk.
+func TestGetFrequentlyAccessedChunkWontGetGarbageCollected(t *testing.T) {
+	ldbCap := defaultGCRatio
+	store, cleanup := setupLocalStore(t, ldbCap)
+	defer cleanup()
+
+	var chunks []Chunk
+	for i := 0; i < ldbCap; i++ {
+		chunks = append(chunks, GenerateRandomChunk(ch.DefaultSize))
+	}
+
+	mostAccessed := chunks[0].Address()
+	for _, chunk := range chunks {
+		if err := store.Put(context.Background(), chunk); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := store.Get(context.Background(), mostAccessed); err != nil {
+			t.Fatal(err)
+		}
+		// Add time for MarkAccessed() to be able to finish in a separate Goroutine
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	store.DbStore.collectGarbage()
+	if _, err := store.DbStore.Get(context.Background(), mostAccessed); err != nil {
+		t.Logf("most frequntly accessed chunk not found on disk (key: %v)", mostAccessed)
+		t.Fatal(err)
+	}
+
+}
+
+func setupLocalStore(t *testing.T, ldbCap int) (ls *LocalStore, cleanup func()) {
+	t.Helper()
+
+	var err error
+	datadir, err := ioutil.TempDir("", "storage")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := &LocalStoreParams{
+		StoreParams: NewStoreParams(uint64(ldbCap), uint(ldbCap), nil, nil),
+	}
+	params.Init(datadir)
+
+	store, err := NewLocalStore(params, nil)
+	if err != nil {
+		_ = os.RemoveAll(datadir)
+		t.Fatal(err)
+	}
+
+	cleanup = func() {
+		store.Close()
+		_ = os.RemoveAll(datadir)
+	}
+
+	return store, cleanup
 }

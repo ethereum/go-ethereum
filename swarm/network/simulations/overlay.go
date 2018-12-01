@@ -64,12 +64,12 @@ func init() {
 
 type Simulation struct {
 	mtx    sync.Mutex
-	stores map[enode.ID]*state.InmemoryStore
+	stores map[enode.ID]state.Store
 }
 
 func NewSimulation() *Simulation {
 	return &Simulation{
-		stores: make(map[enode.ID]*state.InmemoryStore),
+		stores: make(map[enode.ID]state.Store),
 	}
 }
 

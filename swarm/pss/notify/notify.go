@@ -113,7 +113,7 @@ func NewController(ps *pss.Pss) *Controller {
 		notifiers:     make(map[string]*notifier),
 		subscriptions: make(map[string]*subscription),
 	}
-	ctrl.pss.Register(&controlTopic, ctrl.Handler)
+	ctrl.pss.Register(&controlTopic, pss.NewHandler(ctrl.Handler))
 	return ctrl
 }
 
@@ -336,7 +336,7 @@ func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	// \TODO keep track of and add actual address
 	updaterAddr := pss.PssAddress([]byte{})
 	c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
-	c.pss.Register(&topic, c.Handler)
+	c.pss.Register(&topic, pss.NewHandler(c.Handler))
 	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 }
 

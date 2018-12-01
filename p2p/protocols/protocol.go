@@ -381,7 +381,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 // * arguments
 //   * context
 //   * the local handshake to be sent to the remote peer
-//   * funcion to be called on the remote handshake (can be nil)
+//   * function to be called on the remote handshake (can be nil)
 // * expects a remote handshake back of the same type
 // * the dialing peer needs to send the handshake first and then waits for remote
 // * the listening peer waits for the remote handshake and then sends it

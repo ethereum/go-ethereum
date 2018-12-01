@@ -149,37 +149,39 @@ func (f *lightFetcher) syncLoop() {
 			s := requesting
 			requesting = false
 			var (
-				rq    *distReq
-				reqID uint64
+				rq      *distReq
+				reqID   uint64
+				syncing bool
 			)
 
 			if !f.syncing && !(newAnnounce && s) {
-				rq, reqID = f.nextRequest()
+				rq, reqID, syncing = f.nextRequest()
 			}
-
-			syncing := f.syncing
 			f.lock.Unlock()
 
 			if rq != nil {
 				requesting = true
-				_, ok := <-f.pm.reqDist.queue(rq)
-				if !ok {
+				if _, ok := <-f.pm.reqDist.queue(rq); ok {
+					if syncing {
+						f.lock.Lock()
+						f.syncing = true
+						f.lock.Unlock()
+					} else {
+						go func() {
+							time.Sleep(softRequestTimeout)
+							f.reqMu.Lock()
+							req, ok := f.requested[reqID]
+							if ok {
+								req.timeout = true
+								f.requested[reqID] = req
+							}
+							f.reqMu.Unlock()
+							// keep starting new requests while possible
+							f.requestChn <- false
+						}()
+					}
+				} else {
 					f.requestChn <- false
-				}
-
-				if !syncing {
-					go func() {
-						time.Sleep(softRequestTimeout)
-						f.reqMu.Lock()
-						req, ok := f.requested[reqID]
-						if ok {
-							req.timeout = true
-							f.requested[reqID] = req
-						}
-						f.reqMu.Unlock()
-						// keep starting new requests while possible
-						f.requestChn <- false
-					}()
 				}
 			}
 		case reqID := <-f.timeoutChn:
@@ -219,6 +221,7 @@ func (f *lightFetcher) syncLoop() {
 			f.checkSyncedHeaders(p)
 			f.syncing = false
 			f.lock.Unlock()
+			f.requestChn <- false
 		}
 	}
 }
@@ -417,7 +420,7 @@ func (f *lightFetcher) requestedID(reqID uint64) bool {
 
 // nextRequest selects the peer and announced head to be requested next, amount
 // to be downloaded starting from the head backwards is also returned
-func (f *lightFetcher) nextRequest() (*distReq, uint64) {
+func (f *lightFetcher) nextRequest() (*distReq, uint64, bool) {
 	var (
 		bestHash    common.Hash
 		bestAmount  uint64
@@ -427,19 +430,17 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 	bestHash, bestAmount, bestTd, bestSyncing = f.findBestRequest()
 
 	if bestTd == f.maxConfirmedTd {
-		return nil, 0
+		return nil, 0, false
 	}
-
-	f.syncing = bestSyncing
 
 	var rq *distReq
 	reqID := genReqID()
-	if f.syncing {
+	if bestSyncing {
 		rq = f.newFetcherDistReqForSync(bestHash)
 	} else {
 		rq = f.newFetcherDistReq(bestHash, reqID, bestAmount)
 	}
-	return rq, reqID
+	return rq, reqID, bestSyncing
 }
 
 // findBestRequest finds the best head to request that has been announced by but not yet requested from a known peer.
@@ -496,6 +497,9 @@ func (f *lightFetcher) newFetcherDistReqForSync(bestHash common.Hash) *distReq {
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
+			f.lock.Lock()
+			defer f.lock.Unlock()
+
 			if p.isOnlyAnnounce {
 				return false
 			}
@@ -528,6 +532,9 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
+			f.lock.Lock()
+			defer f.lock.Unlock()
+
 			if p.isOnlyAnnounce {
 				return false
 			}
@@ -541,7 +548,7 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 		},
 		request: func(dp distPeer) func() {
 			p := dp.(*peer)
-
+			f.lock.Lock()
 			fp := f.peers[p]
 			if fp != nil {
 				n := fp.nodeByHash[bestHash]
@@ -549,6 +556,7 @@ func (f *lightFetcher) newFetcherDistReq(bestHash common.Hash, reqID uint64, bes
 					n.requested = true
 				}
 			}
+			f.lock.Unlock()
 
 			cost := p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
 			p.fcServer.QueueRequest(reqID, cost)

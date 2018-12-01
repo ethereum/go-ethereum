@@ -81,15 +81,7 @@ func TestULCReceiveAnnounce(t *testing.T) {
 		Td:     td.Add(td, big.NewInt(1)),
 	}
 	announce.sign(f.Key)
-
 	lPeer.SendAnnounce(announce)
-	time.Sleep(time.Millisecond)
-
-	l.PM.peers.lock.Lock()
-	if len(l.PM.peers.peers) == 0 {
-		t.Fatal("peer list after receiving message should not be empty")
-	}
-	l.PM.peers.lock.Unlock()
 }
 
 func TestULCShouldNotSyncWithTwoPeersOneHaveEmptyChain(t *testing.T) {

@@ -9,9 +9,9 @@ les/                            @zsfelfoldi
 light/                          @zsfelfoldi
 mobile/                         @karalabe
 p2p/                            @fjl @zsfelfoldi
-p2p/simulations 		@lmars
-p2p/protocols 			@zelig
-swarm/api/http			@justelad
+p2p/simulations                 @lmars
+p2p/protocols                   @zelig
+swarm/api/http                  @justelad
 swarm/bmt                       @zelig
 swarm/dev                       @lmars
 swarm/fuse                      @jmozah @holisticode

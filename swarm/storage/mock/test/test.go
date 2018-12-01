@@ -72,6 +72,31 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 				}
 			}
 		}
+		t.Run("delete", func(t *testing.T) {
+			chunkAddr := storage.Address([]byte("1234567890abcd"))
+			for _, addr := range addrs {
+				err := globalStore.Put(addr, chunkAddr, []byte("data"))
+				if err != nil {
+					t.Fatalf("put data to store %s key %s: %v", addr.Hex(), chunkAddr.Hex(), err)
+				}
+			}
+			firstNodeAddr := addrs[0]
+			if err := globalStore.Delete(firstNodeAddr, chunkAddr); err != nil {
+				t.Fatalf("delete from store %s key %s: %v", firstNodeAddr.Hex(), chunkAddr.Hex(), err)
+			}
+			for i, addr := range addrs {
+				_, err := globalStore.Get(addr, chunkAddr)
+				if i == 0 {
+					if err != mock.ErrNotFound {
+						t.Errorf("get data from store %s key %s: expected mock.ErrNotFound error, got %v", addr.Hex(), chunkAddr.Hex(), err)
+					}
+				} else {
+					if err != nil {
+						t.Errorf("get data from store %s key %s: %v", addr.Hex(), chunkAddr.Hex(), err)
+					}
+				}
+			}
+		})
 	})
 
 	t.Run("NodeStore", func(t *testing.T) {
@@ -114,6 +139,34 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 				}
 			}
 		}
+		t.Run("delete", func(t *testing.T) {
+			chunkAddr := storage.Address([]byte("1234567890abcd"))
+			var chosenStore *mock.NodeStore
+			for addr, store := range nodes {
+				if chosenStore == nil {
+					chosenStore = store
+				}
+				err := store.Put(chunkAddr, []byte("data"))
+				if err != nil {
+					t.Fatalf("put data to store %s key %s: %v", addr.Hex(), chunkAddr.Hex(), err)
+				}
+			}
+			if err := chosenStore.Delete(chunkAddr); err != nil {
+				t.Fatalf("delete key %s: %v", chunkAddr.Hex(), err)
+			}
+			for addr, store := range nodes {
+				_, err := store.Get(chunkAddr)
+				if store == chosenStore {
+					if err != mock.ErrNotFound {
+						t.Errorf("get data from store %s key %s: expected mock.ErrNotFound error, got %v", addr.Hex(), chunkAddr.Hex(), err)
+					}
+				} else {
+					if err != nil {
+						t.Errorf("get data from store %s key %s: %v", addr.Hex(), chunkAddr.Hex(), err)
+					}
+				}
+			}
+		})
 	})
 }
 
