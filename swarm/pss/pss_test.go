@@ -1064,7 +1064,7 @@ func testSendRaw(t *testing.T) {
 
 	// send and verify delivery
 	lmsg := []byte("plugh")
-	err = clients[1].Call(nil, "pss_sendRaw", loaddrhex, topic, lmsg)
+	err = clients[1].Call(nil, "pss_sendRaw", loaddrhex, topic, hexutil.Encode(lmsg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,7 +1077,7 @@ func testSendRaw(t *testing.T) {
 		t.Fatalf("test message (left) timed out: %v", cerr)
 	}
 	rmsg := []byte("xyzzy")
-	err = clients[0].Call(nil, "pss_sendRaw", roaddrhex, topic, rmsg)
+	err = clients[0].Call(nil, "pss_sendRaw", roaddrhex, topic, hexutil.Encode(rmsg))
 	if err != nil {
 		t.Fatal(err)
 	}
