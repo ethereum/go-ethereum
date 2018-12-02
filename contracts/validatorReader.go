@@ -52,13 +52,14 @@ func GetCandidates(statedb *state.StateDB, parsed abi.ABI) []common.Address {
 
 func GetCandidateOwner(statedb *state.StateDB, parsed abi.ABI, candidate common.Address) common.Address {
 	start := time.Now()
+	fmt.Printf("--------GetCandidateOwner---------\n")
 
 	slot := slotValidatorMapping["validatorsState"]
 	// validatorsState[_candidate].owner;
 	locValidatorsState := getLocMappingAtKey(candidate.Hash(), slot)
 	locCandidateOwner := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(0)))
 	ret := statedb.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BigToHash(locCandidateOwner))
-	fmt.Printf("ret hex: %v\n", ret.Hex())
+	fmt.Printf("ret: %v\n", common.HexToAddress(ret.Hex()).Hex())
 
 	elapsed := time.Since(start)
 	fmt.Printf("Execution time: %s\n", elapsed)
@@ -82,6 +83,7 @@ func GetCandidateCap(statedb *state.StateDB, parsed abi.ABI, candidate common.Ad
 
 func GetVoters(statedb *state.StateDB, parsed abi.ABI, candidate common.Address) []common.Address {
 	start := time.Now()
+	fmt.Printf("--------GetVoters---------\n")
 
 	//mapping(address => address[]) voters;
 	slot := slotValidatorMapping["voters"]
