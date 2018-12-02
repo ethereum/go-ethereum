@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	validatorContract "github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -72,7 +73,7 @@ func GetCandidateCap(statedb *state.StateDB, parsed abi.ABI, candidate common.Ad
 	slot := slotValidatorMapping["validatorsState"]
 	// validatorsState[_candidate].cap;
 	locValidatorsState := getLocMappingAtKey(candidate.Hash(), slot)
-	locCandidateCap := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(2)))
+	locCandidateCap := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(1)))
 	ret := statedb.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BigToHash(locCandidateCap))
 	fmt.Printf("ret hex: %v\n", ret.Hex())
 
@@ -113,9 +114,10 @@ func GetVoterCap(state *state.StateDB, candidate, voter common.Address) *big.Int
 	fmt.Printf("--------GetVoterCap---------\n")
 	slot := slotValidatorMapping["validatorsState"]
 	locValidatorsState := getLocMappingAtKey(candidate.Hash(), slot)
-	locCandidateVoters := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(3)))
-	locVoters := getLocMappingAtKey(voter.Hash(), locCandidateVoters.Uint64())
-	ret := state.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BigToHash(locVoters))
+	locCandidateVoters := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(2)))
+	retByte := crypto.Keccak256(voter.Hash().Bytes(), common.BigToHash(locCandidateVoters).Bytes())
+	ret := state.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BytesToHash(retByte))
+	fmt.Printf("voter: %v - cap: %v\n", voter.Hex(), ret.Big().String())
 	elapsed := time.Since(start)
 	fmt.Printf("Execution time: %s\n", elapsed)
 	return ret.Big()
