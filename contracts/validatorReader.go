@@ -50,7 +50,7 @@ func GetCandidates(statedb *state.StateDB, parsed abi.ABI) []common.Address {
 	return rets
 }
 
-func GetCandidateOwner(statedb *state.StateDB, parsed abi.ABI, candidate common.Address) common.Address {
+func GetCandidateOwner(statedb *state.StateDB, candidate common.Address) common.Address {
 	start := time.Now()
 	fmt.Printf("--------GetCandidateOwner---------\n")
 
@@ -81,7 +81,7 @@ func GetCandidateCap(statedb *state.StateDB, parsed abi.ABI, candidate common.Ad
 	return ret.Hex()
 }
 
-func GetVoters(statedb *state.StateDB, parsed abi.ABI, candidate common.Address) []common.Address {
+func GetVoters(statedb *state.StateDB, candidate common.Address) []common.Address {
 	start := time.Now()
 	fmt.Printf("--------GetVoters---------\n")
 

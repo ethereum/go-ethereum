@@ -20,7 +20,7 @@ var (
 	ParsedBlockSignerABI, _ = abi.JSON(strings.NewReader(blockSignerContract.BlockSignerABI))
 )
 
-func GetSigners(statedb *state.StateDB, parsed abi.ABI, block *types.Block) []common.Address {
+func GetSigners(statedb *state.StateDB, block *types.Block) []common.Address {
 	methodName := "getSigners"
 	fmt.Printf("---%s---\n", methodName)
 	start := time.Now()
