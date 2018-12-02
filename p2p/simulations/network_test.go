@@ -32,18 +32,25 @@ import (
 // Tests that a created snapshot with a minimal service only contains the expected connections
 // and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
-	protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
+
+	// PART I
+	// create snapshot from ring network
+
+	// this is a minimal service, whose protocol will take exactly one message OR close of connection before quitting
+	//protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			svc := NewNoopService(false)
-			protoCMap[ctx.Config.ID] = svc.C
-			return svc, nil
+			//			svc := NewNoopService(false)
+			//			protoCMap[ctx.Config.ID] = svc.C
+			//			return svc, nil
+			return NewNoopService(false), nil
 		},
 	})
+
+	// create network
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "noopwoop",
 	})
-
 	// \todo consider making a member of network, set to true threadsafe when shutdown
 	runningOne := true
 	defer func() {
@@ -52,6 +59,7 @@ func TestSnapshot(t *testing.T) {
 		}
 	}()
 
+	// create and start nodes
 	nodeCount := 20
 	ids := make([]enode.ID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
@@ -66,6 +74,13 @@ func TestSnapshot(t *testing.T) {
 		ids[i] = node.ID()
 	}
 
+	// subscribe to peer events
+	evC := make(chan *Event)
+	sub := network.Events().Subscribe(evC)
+	defer sub.Unsubscribe()
+
+	// connect nodes in a ring
+	// spawn separate thread to avoid deadlock in the event listeners
 	go func() {
 		for i, id := range ids {
 			peerID := ids[(i+1)%len(ids)]
@@ -75,13 +90,9 @@ func TestSnapshot(t *testing.T) {
 		}
 	}()
 
-	evC := make(chan *Event)
-	sub := network.Events().Subscribe(evC)
-	defer sub.Unsubscribe()
-
+	// collect connection events up to expected number
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
 	defer cancel()
-
 	checkIds := make(map[enode.ID][]enode.ID)
 	connEventCount := nodeCount
 OUTER:
@@ -91,6 +102,8 @@ OUTER:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
+
+				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
 				}
@@ -105,6 +118,7 @@ OUTER:
 		}
 	}
 
+	// create snapshot of current network
 	snap, err := network.Snapshot()
 	if err != nil {
 		t.Fatal(err)
@@ -121,17 +135,19 @@ OUTER:
 	}
 
 	// wait for all protocols to signal to close down
-	for nodid, peers := range protoCMap {
-		for peerid, peerC := range peers {
-			log.Debug("getting ", "node", nodid, "peer", peerid)
-			<-peerC
-		}
-	}
+	//	for nodid, peers := range protoCMap {
+	//		for peerid, peerC := range peers {
+	//			log.Debug("getting ", "node", nodid, "peer", peerid)
+	//			<-peerC
+	//		}
+	//	}
+
+	// shut down sim network
 	runningOne = false
 	sub.Unsubscribe()
 	network.Shutdown()
 
-	// check that we have all expected connections in snapshot
+	// check that we have all the expected connections in the snapshot
 	for nodid, nodConns := range checkIds {
 		for _, nodConn := range nodConns {
 			var match bool
@@ -153,12 +169,14 @@ OUTER:
 
 	// PART II
 	// load snapshot and verify that exactly same connections are formed
-	protoCMap = make(map[enode.ID]map[enode.ID]chan struct{})
+
+	//protoCMap = make(map[enode.ID]map[enode.ID]chan struct{})
 	adapter = adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			svc := NewNoopService(false)
-			protoCMap[ctx.Config.ID] = svc.C
-			return svc, nil
+			//			svc := NewNoopService(false)
+			//			protoCMap[ctx.Config.ID] = svc.C
+			//			return svc, nil
+			return NewNoopService(false), nil
 		},
 	})
 	network = NewNetwork(adapter, &NetworkConfig{
@@ -168,10 +186,13 @@ OUTER:
 		network.Shutdown()
 	}()
 
+	// subscribe to peer events
 	evC = make(chan *Event)
 	sub = network.Events().Subscribe(evC)
 	defer sub.Unsubscribe()
 
+	// load the snapshot
+	// spawn separate thread to avoid deadlock in the event listeners
 	go func() {
 		err = network.Load(snap)
 		if err != nil {
@@ -179,6 +200,7 @@ OUTER:
 		}
 	}()
 
+	// collect connection events up to expected number
 	ctx, cancel = context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
 
@@ -190,6 +212,8 @@ OUTER_TWO:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
+
+				// fail on any disconnect
 				if !ev.Conn.Up {
 					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
 				}
@@ -205,6 +229,35 @@ OUTER_TWO:
 		}
 	}
 
+	// check that we have all expected connections in the network
+	for _, snapConn := range snap.Conns {
+		var match bool
+		for nodid, nodConns := range checkIds {
+			for _, nodConn := range nodConns {
+				if snapConn.One == nodid && snapConn.Other == nodConn {
+					match = true
+					break
+				} else if snapConn.Other == nodid && snapConn.One == nodConn {
+					match = true
+					break
+				}
+			}
+		}
+		if !match {
+			t.Fatalf("network missing conn %v -> %v", snapConn.One, snapConn.Other)
+		}
+	}
+
+	// verify that network didn't generate any other additional connection events after the ones we have collected within a reasonable period of time
+	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+	case ev := <-evC:
+		if ev.Type == EventTypeConn {
+			t.Fatalf("Superfluous conn found %v -> %v", ev.Conn.One, ev.Conn.Other)
+		}
+	}
 }
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
