@@ -333,6 +333,18 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultSturebyGenesisBlock returns the Stureby network genesis block.
+func DefaultSturebyGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.SturebyChainConfig,
+		Timestamp:  1503979373,
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000b4dc0ffee"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(131072),
+		Alloc:      decodePrealloc(sturebyAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {

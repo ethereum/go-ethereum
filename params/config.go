@@ -28,6 +28,7 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
+	SturebyGenesisHash = common.HexToHash("0xb06eff1eb9361d32e2e5eeb5d345c074758e94be130e02e0785e3560cec57db9")
 )
 
 var (
@@ -104,6 +105,21 @@ var (
 		SectionHead:  common.HexToHash("0x9f38b903852831bf4fa7992f7fd43d8b26da2deb82b421fb845cf6faee54e056"),
 		CHTRoot:      common.HexToHash("0x2d710c2cea468d2e604838000d658ee213e4abb07f90c4f71f5cd7f8510aa708"),
 		BloomRoot:    common.HexToHash("0xcc401060280c2cc82697ea5ecef8cac61e52063c37533a2e9609332419704d5f"),
+	}
+
+	// SturebyChainConfig contains the chain parameters to run a node on the Stureby test network.
+	SturebyChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(314158),
+		HomesteadBlock:      big.NewInt(10000),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(15000),
+		EIP150Hash:          common.HexToHash("0x22c19ef3a46ce303fb7bbe5eb646c4ea588b43597baf5102fd3912859556df41"),
+		EIP155Block:         big.NewInt(23000),
+		EIP158Block:         big.NewInt(23000),
+		ByzantiumBlock:      big.NewInt(30000),
+		ConstantinopleBlock: big.NewInt(40000),
+		Ethash:              new(EthashConfig),
 	}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
