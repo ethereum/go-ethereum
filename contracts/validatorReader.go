@@ -106,3 +106,17 @@ func GetVoters(statedb *state.StateDB, candidate common.Address) []common.Addres
 	fmt.Printf("Execution time: %s\n", elapsed)
 	return rets
 }
+
+func GetVoterCap(state *state.StateDB, candidate, voter common.Address) *big.Int {
+	//validatorsState[_candidate].voters[_voter]
+	start := time.Now()
+	fmt.Printf("--------GetVoterCap---------\n")
+	slot := slotValidatorMapping["validatorsState"]
+	locValidatorsState := getLocMappingAtKey(candidate.Hash(), slot)
+	locCandidateVoters := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(3)))
+	locVoters := getLocMappingAtKey(voter.Hash(), locCandidateVoters.Uint64())
+	ret := state.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BigToHash(locVoters))
+	elapsed := time.Since(start)
+	fmt.Printf("Execution time: %s\n", elapsed)
+	return ret.Big()
+}
