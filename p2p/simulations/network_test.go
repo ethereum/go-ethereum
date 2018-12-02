@@ -18,6 +18,7 @@ package simulations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -28,11 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// Tests that a created snapshot with a minimal service only contains the expected connections
+// and that a network when loaded with this snapshot only contains those same connections
 func TestSnapshot(t *testing.T) {
 	protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			svc := NewNoopService()
+			svc := NewNoopService(false)
 			protoCMap[ctx.Config.ID] = svc.C
 			return svc, nil
 		},
@@ -40,7 +43,14 @@ func TestSnapshot(t *testing.T) {
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "noopwoop",
 	})
-	defer network.Shutdown()
+
+	// \todo consider making a member of network, set to true threadsafe when shutdown
+	runningOne := true
+	defer func() {
+		if runningOne {
+			network.Shutdown()
+		}
+	}()
 
 	nodeCount := 20
 	ids := make([]enode.ID, nodeCount)
@@ -72,6 +82,7 @@ func TestSnapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
 	defer cancel()
 
+	checkIds := make(map[enode.ID][]enode.ID)
 	connEventCount := nodeCount
 OUTER:
 	for {
@@ -80,6 +91,11 @@ OUTER:
 			t.Fatal(ctx.Err())
 		case ev := <-evC:
 			if ev.Type == EventTypeConn && !ev.Control {
+				if !ev.Conn.Up {
+					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
+				}
+				checkIds[ev.Conn.One] = append(checkIds[ev.Conn.One], ev.Conn.Other)
+				checkIds[ev.Conn.Other] = append(checkIds[ev.Conn.Other], ev.Conn.One)
 				connEventCount--
 				log.Debug("ev", "count", connEventCount)
 				if connEventCount == 0 {
@@ -89,14 +105,106 @@ OUTER:
 		}
 	}
 
+	snap, err := network.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("snapshot taken", "nodes", len(snap.Nodes), "conns", len(snap.Conns), "json", string(j))
+
+	// verify that the snap element numbers check out
+	if len(checkIds) != len(snap.Conns) || len(checkIds) != len(snap.Nodes) {
+		t.Fatalf("snapshot wrong node,conn counts %d,%d != %d", len(snap.Nodes), len(snap.Conns), len(checkIds))
+	}
+
+	// wait for all protocols to signal to close down
 	for nodid, peers := range protoCMap {
 		for peerid, peerC := range peers {
 			log.Debug("getting ", "node", nodid, "peer", peerid)
 			<-peerC
 		}
 	}
+	runningOne = false
+	sub.Unsubscribe()
+	network.Shutdown()
 
-	t.Logf("ok")
+	// check that we have all expected connections in snapshot
+	for nodid, nodConns := range checkIds {
+		for _, nodConn := range nodConns {
+			var match bool
+			for _, snapConn := range snap.Conns {
+				if snapConn.One == nodid && snapConn.Other == nodConn {
+					match = true
+					break
+				} else if snapConn.Other == nodid && snapConn.One == nodConn {
+					match = true
+					break
+				}
+			}
+			if !match {
+				t.Fatalf("snapshot missing conn %v -> %v", nodid, nodConn)
+			}
+		}
+	}
+	log.Info("snapshot checked")
+
+	// PART II
+	// load snapshot and verify that exactly same connections are formed
+	protoCMap = make(map[enode.ID]map[enode.ID]chan struct{})
+	adapter = adapters.NewSimAdapter(adapters.Services{
+		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			svc := NewNoopService(false)
+			protoCMap[ctx.Config.ID] = svc.C
+			return svc, nil
+		},
+	})
+	network = NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "noopwoop",
+	})
+	defer func() {
+		network.Shutdown()
+	}()
+
+	evC = make(chan *Event)
+	sub = network.Events().Subscribe(evC)
+	defer sub.Unsubscribe()
+
+	go func() {
+		err = network.Load(snap)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	ctx, cancel = context.WithTimeout(context.TODO(), time.Second*3)
+	defer cancel()
+
+	connEventCount = nodeCount
+OUTER_TWO:
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case ev := <-evC:
+			if ev.Type == EventTypeConn && !ev.Control {
+				if !ev.Conn.Up {
+					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
+				}
+				log.Debug("conn", "on", ev.Conn.One, "other", ev.Conn.Other)
+				checkIds[ev.Conn.One] = append(checkIds[ev.Conn.One], ev.Conn.Other)
+				checkIds[ev.Conn.Other] = append(checkIds[ev.Conn.Other], ev.Conn.One)
+				connEventCount--
+				log.Debug("ev", "count", connEventCount)
+				if connEventCount == 0 {
+					break OUTER_TWO
+				}
+			}
+		}
+	}
+
 }
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
