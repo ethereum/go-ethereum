@@ -174,6 +174,7 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		db.retrievalIndex.DeleteInBatch(b.Batch, item)
 		db.pullIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.DeleteInBatch(b.Batch, item)
+		db.sizeCounter.DecInBatch(b.Batch)
 
 	default:
 		return ErrInvalidMode
