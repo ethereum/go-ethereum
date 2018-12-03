@@ -26,10 +26,40 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+// TestWithRetrievalCompositeIndex checks if optional argument
+// WithRetrievalCompositeIndex to New constructor is setting the
+// correct state.
+func TestWithRetrievalCompositeIndex(t *testing.T) {
+	t.Run("set true", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+		defer cleanupFunc()
+
+		if !db.useRetrievalCompositeIndex {
+			t.Error("useRetrievalCompositeIndex is not set to true")
+		}
+	})
+	t.Run("set false", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(false))
+		defer cleanupFunc()
+
+		if db.useRetrievalCompositeIndex {
+			t.Error("useRetrievalCompositeIndex is not set to false")
+		}
+	})
+	t.Run("unset", func(t *testing.T) {
+		db, cleanupFunc := newTestDB(t)
+		defer cleanupFunc()
+
+		if db.useRetrievalCompositeIndex {
+			t.Error("useRetrievalCompositeIndex is not set to false")
+		}
+	})
+}
+
 // newTestDB is a helper function that constructs a
 // temporary database and returns a cleanup function that must
 // be called to remove the data.
-func newTestDB(t *testing.T) (db *DB, cleanupFunc func()) {
+func newTestDB(t *testing.T, opts ...Option) (db *DB, cleanupFunc func()) {
 	t.Helper()
 
 	dir, err := ioutil.TempDir("", "shed-test")
@@ -41,7 +71,7 @@ func newTestDB(t *testing.T) (db *DB, cleanupFunc func()) {
 	if _, err := rand.Read(baseKey); err != nil {
 		t.Fatal(err)
 	}
-	db, err = New(dir, baseKey)
+	db, err = New(dir, baseKey, opts...)
 	if err != nil {
 		cleanupFunc()
 		t.Fatal(err)

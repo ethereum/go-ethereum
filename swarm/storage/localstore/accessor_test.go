@@ -25,13 +25,28 @@ import (
 )
 
 // TestAccessors tests most basic Put and Get functionalities
-// for different accessors. This test validates that the chunk
-// is retrievable from the database, not if all indexes are set
-// correctly.
+// for different accessors.
 func TestAccessors(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
+	testAccessors(t, db)
+}
+
+// TestAccessors tests most basic Put and Get functionalities
+// for different accessors by using retrieval composite index.
+func TestAccessors_WithRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testAccessors(t, db)
+}
+
+// testAccessors tests most basic Put and Get functionalities
+// for different accessors. This test validates that the chunk
+// is retrievable from the database, not if all indexes are set
+// correctly.
+func testAccessors(t *testing.T, db *DB) {
 	for _, m := range []Mode{
 		ModeSyncing,
 		ModeUpload,

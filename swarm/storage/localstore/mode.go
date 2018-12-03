@@ -64,9 +64,16 @@ func ModeName(m Mode) (name string) {
 // This function utilizes different indexes depending on
 // the Mode.
 func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err error) {
-	out, err = db.retrievalIndex.Get(item)
-	if err != nil {
-		return out, err
+	if db.useRetrievalCompositeIndex {
+		out, err = db.retrievalCompositeIndex.Get(item)
+		if err != nil {
+			return out, err
+		}
+	} else {
+		out, err = db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return out, err
+		}
 	}
 	switch mode {
 	case ModeRequest:
@@ -137,7 +144,11 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// put to indexes: retrieve, pull
 		item.StoreTimestamp = now()
 		item.AccessTimestamp = now()
-		db.retrievalIndex.PutInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+		}
 		db.pullIndex.PutInBatch(b.Batch, item)
 		db.sizeCounter.IncInBatch(b.Batch)
 
@@ -145,7 +156,11 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// put to indexes: retrieve, push, pull
 		item.StoreTimestamp = now()
 		item.AccessTimestamp = now()
-		db.retrievalIndex.PutInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+		}
 		db.pullIndex.PutInBatch(b.Batch, item)
 		db.pushIndex.PutInBatch(b.Batch, item)
 
@@ -153,13 +168,23 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// put to indexes: retrieve, gc
 		item.StoreTimestamp = now()
 		item.AccessTimestamp = now()
-		db.retrievalIndex.PutInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+		}
 		db.gcIndex.PutInBatch(b.Batch, item)
 
 	case ModeSynced:
 		// delete from push, insert to gc
 		item.StoreTimestamp = now()
-		db.retrievalIndex.PutInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+		}
 		db.pushIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.PutInBatch(b.Batch, item)
 
@@ -167,12 +192,22 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// update accessTimeStamp in retrieve, gc
 		db.gcIndex.DeleteInBatch(b.Batch, item)
 		item.AccessTimestamp = now()
-		db.retrievalIndex.PutInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+		}
 		db.gcIndex.PutInBatch(b.Batch, item)
 
 	case modeRemoval:
 		// delete from retrieve, pull, gc
-		db.retrievalIndex.DeleteInBatch(b.Batch, item)
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.DeleteInBatch(b.Batch, item)
+		} else {
+			db.retrievalDataIndex.DeleteInBatch(b.Batch, item)
+			db.retrievalAccessIndex.DeleteInBatch(b.Batch, item)
+		}
 		db.pullIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.DeleteInBatch(b.Batch, item)
 		db.sizeCounter.DecInBatch(b.Batch)
