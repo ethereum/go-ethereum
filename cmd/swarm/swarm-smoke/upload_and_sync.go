@@ -40,11 +40,11 @@ import (
 
 func generateEndpoints(scheme string, cluster string, app string, from int, to int) {
 	if cluster == "prod" {
-		for port := from; port <= to; port++ {
+		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, port))
 		}
 	} else {
-		for port := from; port <= to; port++ {
+		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, port, cluster))
 		}
 	}
@@ -58,6 +58,21 @@ func cliUploadAndSync(c *cli.Context) error {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
+	errc := make(chan error)
+	go func() {
+		errc <- uploadAndSync(c)
+	}()
+
+	select {
+	case err := <-errc:
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+
+}
+
+func uploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "kb", filesize) }(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
