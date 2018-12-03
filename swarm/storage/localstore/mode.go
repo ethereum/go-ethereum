@@ -184,7 +184,6 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
 		} else {
 			db.retrievalDataIndex.PutInBatch(b.Batch, item)
-			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
 		}
 		db.pushIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.PutInBatch(b.Batch, item)

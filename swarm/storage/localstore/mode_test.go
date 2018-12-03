@@ -34,7 +34,7 @@ func TestModeSyncing(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	testModeSyncing(t, db)
+	testModeSyncingValues(t, db)
 }
 
 // TestModeSyncing_withRetrievalCompositeIndex validates internal
@@ -44,11 +44,11 @@ func TestModeSyncing_withRetrievalCompositeIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
 	defer cleanupFunc()
 
-	testModeSyncing(t, db)
+	testModeSyncingValues(t, db)
 }
 
-// testModeSyncing validates ModeSyncing on the provided DB.
-func testModeSyncing(t *testing.T, db *DB) {
+// testModeSyncingValues validates ModeSyncing on the provided DB.
+func testModeSyncingValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeSyncing)
 
 	chunk := generateRandomChunk()
@@ -70,9 +70,9 @@ func testModeSyncing(t *testing.T, db *DB) {
 
 	wantSize++
 
-	t.Run("retrieve indexes", testRetrieveIndexes(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("retrieve indexes", testRetrieveIndexesValues(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("pull index", testPullIndex(db, chunk, wantTimestamp))
+	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp))
 
 	t.Run("size counter", testSizeCounter(db, wantSize))
 }
@@ -83,7 +83,7 @@ func TestModeUpload(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	testModeUpload(t, db)
+	testModeUploadValues(t, db)
 }
 
 // TestModeUpload_withRetrievalCompositeIndex validates internal
@@ -93,11 +93,11 @@ func TestModeUpload_withRetrievalCompositeIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
 	defer cleanupFunc()
 
-	testModeUpload(t, db)
+	testModeUploadValues(t, db)
 }
 
-// testModeUpload validates ModeUpload on the provided DB.
-func testModeUpload(t *testing.T, db *DB) {
+// testModeUploadValues validates ModeUpload on the provided DB.
+func testModeUploadValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeUpload)
 
 	chunk := generateRandomChunk()
@@ -119,18 +119,65 @@ func testModeUpload(t *testing.T, db *DB) {
 
 	wantSize++
 
-	t.Run("retrieve indexes", testRetrieveIndexes(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("retrieve indexes", testRetrieveIndexesValues(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("pull index", testPullIndex(db, chunk, wantTimestamp))
+	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp))
 
-	t.Run("push index", testPullIndex(db, chunk, wantTimestamp))
+	t.Run("push index", testPullIndexValues(db, chunk, wantTimestamp))
 
 	t.Run("size counter", testSizeCounter(db, wantSize))
 }
 
-// testRetrieveIndexes returns a test function that validates if the right
+// TestModeRequest validates internal data operations and state
+// for ModeRequest on DB with default configuration.
+func TestModeRequest(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	testModeRequestValues(t, db)
+}
+
+// TestModeRequest_withRetrievalCompositeIndex validates internal
+// data operations and state for ModeRequest on DB with
+// retrieval composite index enabled.
+func TestModeRequest_withRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testModeRequestValues(t, db)
+}
+
+// testModeRequestValues validates ModeRequest on the provided DB.
+func testModeRequestValues(t *testing.T, db *DB) {
+	a := db.Accessor(ModeRequest)
+
+	chunk := generateRandomChunk()
+
+	wantTimestamp := time.Now().UTC().UnixNano()
+	now = func() (t int64) {
+		return wantTimestamp
+	}
+
+	wantSize, err := db.sizeCounter.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantSize++
+
+	t.Run("retrieve indexes", testRetrieveIndexesValuesWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+
+	t.Run("gc index", testGCIndexValues(db, chunk, wantTimestamp, wantTimestamp))
+}
+
+// testRetrieveIndexesValues returns a test function that validates if the right
 // chunk values are in the retrieval indexes.
-func testRetrieveIndexes(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func testRetrieveIndexesValues(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		if db.useRetrievalCompositeIndex {
 			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
@@ -155,9 +202,36 @@ func testRetrieveIndexes(db *DB, chunk storage.Chunk, storeTimestamp, accessTime
 	}
 }
 
-// testPullIndex returns a test function that validates if the right
+// testRetrieveIndexesValuesWithAccess returns a test function that validates if the right
+// chunk values are in the retrieval indexes when access time must be stored.
+func testRetrieveIndexesValuesWithAccess(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		if db.useRetrievalCompositeIndex {
+			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
+		} else {
+			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+
+			// access index should not be set
+			item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+		}
+	}
+}
+
+// testPullIndexValues returns a test function that validates if the right
 // chunk values are in the pull index.
-func testPullIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+func testPullIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.IndexItem{
 			Address:        chunk.Address(),
@@ -170,9 +244,9 @@ func testPullIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *te
 	}
 }
 
-// testPushIndex returns a test function that validates if the right
+// testPushIndexValues returns a test function that validates if the right
 // chunk values are in the push index.
-func testPushIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+func testPushIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pushIndex.Get(shed.IndexItem{
 			Address:        chunk.Address(),
@@ -182,6 +256,22 @@ func testPushIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *te
 			t.Fatal(err)
 		}
 		validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+	}
+}
+
+// testGCIndexValues returns a test function that validates if the right
+// chunk values are in the push index.
+func testGCIndexValues(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		item, err := db.gcIndex.Get(shed.IndexItem{
+			Address:         chunk.Address(),
+			StoreTimestamp:  storeTimestamp,
+			AccessTimestamp: accessTimestamp,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateItem(t, item, chunk.Address(), nil, storeTimestamp, accessTimestamp)
 	}
 }
 
