@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	// ErrInvalidMode is retuned when an unkonw Mode
+	// ErrInvalidMode is retuned when an unknown Mode
 	// is provided to the function.
 	ErrInvalidMode = errors.New("invalid mode")
 	// ErrDBClosed is returned when database is closed.
@@ -183,7 +183,7 @@ func New(path string, baseKey []byte) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// start goroutine what writes batches
+	// start goroutine that writes batches
 	go db.writeBatches()
 	return db, nil
 }

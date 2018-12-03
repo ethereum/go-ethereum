@@ -40,7 +40,7 @@ const (
 )
 
 // ModeName returns a descriptive name of a Mode.
-// If the Mode is not know, a blank string is returned.
+// If the Mode is not known, a blank string is returned.
 func ModeName(m Mode) (name string) {
 	switch m {
 	case ModeSyncing:
@@ -60,7 +60,7 @@ func ModeName(m Mode) (name string) {
 }
 
 // access is called by an Accessor with a specific Mode.
-// This function utilizes differnet indexes depending on
+// This function utilizes different indexes depending on
 // the Mode.
 func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err error) {
 	out, err = db.retrievalIndex.Get(item)
@@ -79,7 +79,7 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 }
 
 // update is called by an Accessor with a specific Mode.
-// This function calles updateBatch to perform operations
+// This function calls updateBatch to perform operations
 // on indexes and fields within a single batch.
 func (db *DB) update(ctx context.Context, mode Mode, item shed.IndexItem) error {
 	db.mu.RLock()

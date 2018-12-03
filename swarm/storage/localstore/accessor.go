@@ -40,12 +40,12 @@ func (db *DB) Accessor(mode Mode) *Accessor {
 	}
 }
 
-// Put overwrites the underlying DB Put method for the specific mode of update.
+// Put uses the underlying DB for the specific mode of update to store the chunk.
 func (u *Accessor) Put(ctx context.Context, ch storage.Chunk) error {
 	return u.db.update(ctx, u.mode, chunkToItem(ch))
 }
 
-// Get overwrites the underlying DB Get method for the specific mode of access.
+// Get uses the underlying DB for the specific mode of access to get the chunk.
 func (u *Accessor) Get(_ context.Context, addr storage.Address) (chunk storage.Chunk, err error) {
 	item := addressToItem(addr)
 	out, err := u.db.access(u.mode, item)
