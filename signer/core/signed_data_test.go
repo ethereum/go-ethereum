@@ -598,3 +598,33 @@ func TestMalformedData4(t *testing.T) {
 		t.Fatalf("Expected no err, got %v", err)
 	}
 }
+
+func TestFormatter(t *testing.T) {
+
+	var d TypedData
+	err := json.Unmarshal([]byte(jsonTypedData), &d)
+	if err != nil {
+		t.Fatalf("unmarshalling failed %v", err)
+	}
+
+	//x := PrettyPrintPrimitiveValue("address", "wallet", "0x123123123", 1)
+	//fmt.Printf(x)
+	//y := FormatPrimitiveValue("address", "wallet", "0x123123123")
+	//fmt.Printf("%v\n", y)
+
+	//fmt.Printf(d.PrettyPrintData(d.PrimaryType,d.Message, 1))
+
+	//formatted := d.FormatData(d.PrimaryType,d.Message)
+	//for _,item := range formatted{
+	//	fmt.Printf("%v\n", item.Pprint(0))
+	//}
+
+	formatted := d.Format()
+	for _, item := range formatted {
+		fmt.Printf("%v\n", item.Pprint(0))
+	}
+
+	j, _ := json.Marshal(formatted)
+	fmt.Printf("%v\n", string(j))
+
+}
