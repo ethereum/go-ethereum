@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -57,7 +56,6 @@ type DB struct {
 	diskReadMeter    metrics.Meter // Meter for measuring the effective amount of data read
 	diskWriteMeter   metrics.Meter // Meter for measuring the effective amount of data written
 
-	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 }
 
@@ -89,7 +87,13 @@ func NewDB(path string, metricsPrefix string) (db *DB, err error) {
 		}
 	}
 
-	db.Meter(metricsPrefix)
+	// Configure meters for DB
+	db.configure(metricsPrefix)
+
+	// Create a quit channel for the periodic metrics collector and run it
+	db.quitChan = make(chan chan error)
+
+	go db.meter(10 * time.Second)
 
 	return db, nil
 }
@@ -155,8 +159,8 @@ func (db *DB) Close() (err error) {
 	return db.ldb.Close()
 }
 
-// Meter configures the database metrics collectors
-func (db *DB) Meter(prefix string) {
+// Configure configures the database metrics collectors
+func (db *DB) configure(prefix string) {
 	// Initialize all the metrics collector at the requested prefix
 	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
 	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
@@ -165,13 +169,6 @@ func (db *DB) Meter(prefix string) {
 	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
 	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
 	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
-
-	// Create a quit channel for the periodic collector and run it
-	db.quitLock.Lock()
-	db.quitChan = make(chan chan error)
-	db.quitLock.Unlock()
-
-	go db.meter(10 * time.Second)
 }
 
 func (db *DB) meter(refresh time.Duration) {
