@@ -389,7 +389,6 @@ func BenchmarkMinimalService(b *testing.B) {
 func benchmarkMinimalServiceTmp(b *testing.B) {
 
 	// stop timer to discard setup time pollution
-	b.StopTimer()
 	args := strings.Split(b.Name(), "/")
 	nodeCount, err := strconv.ParseInt(args[2], 10, 16)
 	if err != nil {
@@ -429,7 +428,7 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 		}
 
 		// ready, set, go
-		b.StartTimer()
+		b.ResetTimer()
 
 		// connect nodes in a ring
 		for i, id := range ids {
