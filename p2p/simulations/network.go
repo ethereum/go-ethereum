@@ -725,31 +725,23 @@ func (net *Network) Load(snap *Snapshot) error {
 	}
 
 	// Prepare connection events counter.
-	allConnected := make(chan struct{})     // closed when all connections are established
-	eventLoopStarted := make(chan struct{}) // ensures that event loop is started before it is closed
-	done := make(chan struct{})             // ensures that the event loop goroutine is terminated
+	allConnected := make(chan struct{}) // closed when all connections are established
+	done := make(chan struct{})         // ensures that the event loop goroutine is terminated
 	defer close(done)
 
-	go func() {
-		// Subscribe to event channel.
-		events := make(chan *Event)
-		sub := net.Events().Subscribe(events)
-		defer sub.Unsubscribe()
+	// Subscribe to event channel.
+	// It needs to be done outside of the event loop goroutine (created below)
+	// to ensure that the event channel is blocking before connect calls are made.
+	events := make(chan *Event)
+	sub := net.Events().Subscribe(events)
+	defer sub.Unsubscribe()
 
+	go func() {
 		// Expected number of connections.
 		total := len(snap.Conns)
 		// Set of all established connections from the snapshot, not other connections.
 		// Key array element 0 is the connection One field value, and element 1 connection Other field.
 		connections := make(map[[2]enode.ID]struct{}, total)
-
-		// once is a closed channel that is read in the event loop below
-		// only once.
-		// It ensures that eventLoopStarted is closed which signals that
-		// it is safe to call connect method on the network without the
-		// possibility to miss a few first connection events.
-		once := make(chan struct{})
-		// Close once channel so that it can be read from in the event loop.
-		close(once)
 
 		for {
 			select {
@@ -785,24 +777,12 @@ func (net *Network) Load(snap *Snapshot) error {
 						break
 					}
 				}
-			case <-once:
-				// Set once to nil as nil channel never blocks forever.
-				// This ensures that this for loop never gets into this part
-				// of the code again.
-				once = nil
-				// Proceed with connecting the nodes, as we are ready to
-				// detect events.
-				close(eventLoopStarted)
 			case <-done:
 				// Load function returned, terminate this goroutine.
 				return
 			}
 		}
 	}()
-
-	// Do not proceed until the goroutine with the event loop actually is ready
-	// to receive events.
-	<-eventLoopStarted
 
 	// Start connecting.
 	for _, conn := range snap.Conns {
