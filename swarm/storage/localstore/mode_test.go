@@ -25,6 +25,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestModeSyncing validates internal data operations and state
@@ -48,9 +49,6 @@ func TestModeSyncing_withRetrievalCompositeIndex(t *testing.T) {
 
 // testModeSyncing validates ModeSyncing on the provided DB.
 func testModeSyncing(t *testing.T, db *DB) {
-	db, cleanupFunc := newTestDB(t)
-	defer cleanupFunc()
-
 	a := db.Accessor(ModeSyncing)
 
 	chunk := generateRandomChunk()
@@ -72,19 +70,80 @@ func testModeSyncing(t *testing.T, db *DB) {
 
 	wantSize++
 
-	t.Run("retrieve indexes", func(t *testing.T) {
+	t.Run("retrieve indexes", testRetrieveIndexes(db, chunk, wantTimestamp, wantTimestamp))
+
+	t.Run("pull index", testPullIndex(db, chunk, wantTimestamp))
+
+	t.Run("size counter", testSizeCounter(db, wantSize))
+}
+
+// TestModeUpload validates internal data operations and state
+// for ModeUpload on DB with default configuration.
+func TestModeUpload(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	testModeUpload(t, db)
+}
+
+// TestModeUpload_withRetrievalCompositeIndex validates internal
+// data operations and state for ModeUpload on DB with
+// retrieval composite index enabled.
+func TestModeUpload_withRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testModeUpload(t, db)
+}
+
+// testModeUpload validates ModeUpload on the provided DB.
+func testModeUpload(t *testing.T, db *DB) {
+	a := db.Accessor(ModeUpload)
+
+	chunk := generateRandomChunk()
+
+	wantTimestamp := time.Now().UTC().UnixNano()
+	now = func() (t int64) {
+		return wantTimestamp
+	}
+
+	wantSize, err := db.sizeCounter.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantSize++
+
+	t.Run("retrieve indexes", testRetrieveIndexes(db, chunk, wantTimestamp, wantTimestamp))
+
+	t.Run("pull index", testPullIndex(db, chunk, wantTimestamp))
+
+	t.Run("push index", testPullIndex(db, chunk, wantTimestamp))
+
+	t.Run("size counter", testSizeCounter(db, wantSize))
+}
+
+// testRetrieveIndexes returns a test function that validates if the right
+// chunk values are in the retrieval indexes.
+func testRetrieveIndexes(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
 		if db.useRetrievalCompositeIndex {
 			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), wantTimestamp, wantTimestamp)
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
 		} else {
 			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), wantTimestamp, 0)
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
 
 			// access index should not be set
 			wantErr := leveldb.ErrNotFound
@@ -93,20 +152,43 @@ func testModeSyncing(t *testing.T, db *DB) {
 				t.Errorf("got error %v, want %v", err, wantErr)
 			}
 		}
-	})
+	}
+}
 
-	t.Run("pull index", func(t *testing.T) {
+// testPullIndex returns a test function that validates if the right
+// chunk values are in the pull index.
+func testPullIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.IndexItem{
 			Address:        chunk.Address(),
-			StoreTimestamp: wantTimestamp,
+			StoreTimestamp: storeTimestamp,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), nil, wantTimestamp, 0)
-	})
+		validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+	}
+}
 
-	t.Run("size counter", func(t *testing.T) {
+// testPushIndex returns a test function that validates if the right
+// chunk values are in the push index.
+func testPushIndex(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		item, err := db.pushIndex.Get(shed.IndexItem{
+			Address:        chunk.Address(),
+			StoreTimestamp: storeTimestamp,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+	}
+}
+
+// testSizeCounter returns a test function that validates the expected
+// value from sizeCounter field.
+func testSizeCounter(db *DB, wantSize uint64) func(t *testing.T) {
+	return func(t *testing.T) {
 		got, err := db.sizeCounter.Get()
 		if err != nil {
 			t.Fatal(err)
@@ -114,7 +196,7 @@ func testModeSyncing(t *testing.T, db *DB) {
 		if got != wantSize {
 			t.Errorf("got size counter value %v, want %v", got, wantSize)
 		}
-	})
+	}
 }
 
 // validateItem is a helper function that checks IndexItem values.

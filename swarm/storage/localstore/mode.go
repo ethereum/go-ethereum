@@ -163,6 +163,7 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		}
 		db.pullIndex.PutInBatch(b.Batch, item)
 		db.pushIndex.PutInBatch(b.Batch, item)
+		db.sizeCounter.IncInBatch(b.Batch)
 
 	case ModeRequest:
 		// put to indexes: retrieve, gc
