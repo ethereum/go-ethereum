@@ -99,6 +99,44 @@ func (f Uint64Field) IncInBatch(batch *leveldb.Batch) (val uint64, err error) {
 	return val, nil
 }
 
+// Dec decrements a uint64 value in the database.
+// This operation is not goroutine save.
+// The field is protected from overflow to a negative value.
+func (f Uint64Field) Dec() (val uint64, err error) {
+	val, err = f.Get()
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			val = 0
+		} else {
+			return 0, err
+		}
+	}
+	if val != 0 {
+		val--
+	}
+	return val, f.Put(val)
+}
+
+// DecInBatch decrements a uint64 value in the batch
+// by retreiving a value from the database, not the same batch.
+// This operation is not goroutine save.
+// The field is protected from overflow to a negative value.
+func (f Uint64Field) DecInBatch(batch *leveldb.Batch) (val uint64, err error) {
+	val, err = f.Get()
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			val = 0
+		} else {
+			return 0, err
+		}
+	}
+	if val != 0 {
+		val--
+	}
+	f.PutInBatch(batch, val)
+	return val, nil
+}
+
 // encode transforms uint64 to 8 byte long
 // slice in big endian encoding.
 func encodeUint64(val uint64) (b []byte) {
