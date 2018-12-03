@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -389,6 +391,82 @@ func triggerChecks(ctx context.Context, ids []enode.ID, trigger chan enode.ID, i
 			}
 		case <-ctx.Done():
 			return
+		}
+	}
+}
+
+// \todo: refactor to implement shapshots
+// and connect configuration methods once these are moved from
+// swarm/network/simulations/connect.go
+func BenchmarkMinimalService(b *testing.B) {
+	b.Run("ring/32", benchmarkMinimalServiceTmp)
+}
+
+func benchmarkMinimalServiceTmp(b *testing.B) {
+
+	// stop timer to discard setup time pollution
+	b.StopTimer()
+	args := strings.Split(b.Name(), "/")
+	nodeCount, err := strconv.ParseInt(args[2], 10, 16)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		// this is a minimal service, whose protocol will close a channel upon run of protocol
+		// making it possible to bench the time it takes for the service to start and protocol actually to be run
+		protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
+		adapter := adapters.NewSimAdapter(adapters.Services{
+			"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+				svc := NewNoopService(true)
+				protoCMap[ctx.Config.ID] = svc.C
+				return svc, nil
+			},
+		})
+
+		// create network
+		network := NewNetwork(adapter, &NetworkConfig{
+			DefaultService: "noopwoop",
+		})
+		defer network.Shutdown()
+
+		// create and start nodes
+		ids := make([]enode.ID, nodeCount)
+		for i := 0; i < int(nodeCount); i++ {
+			conf := adapters.RandomNodeConfig()
+			node, err := network.NewNodeWithConfig(conf)
+			if err != nil {
+				b.Fatalf("error creating node: %s", err)
+			}
+			if err := network.Start(node.ID()); err != nil {
+				b.Fatalf("error starting node: %s", err)
+			}
+			ids[i] = node.ID()
+		}
+
+		// ready, set, go
+		b.StartTimer()
+
+		// connect nodes in a ring
+		for i, id := range ids {
+			peerID := ids[(i+1)%len(ids)]
+			if err := network.Connect(id, peerID); err != nil {
+				b.Fatal(err)
+			}
+		}
+
+		// wait for all protocols to signal to close down
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+		defer cancel()
+		for nodid, peers := range protoCMap {
+			for peerid, peerC := range peers {
+				log.Debug("getting ", "node", nodid, "peer", peerid)
+				select {
+				case <-ctx.Done():
+					b.Fatal(ctx.Err())
+				case <-peerC:
+				}
+			}
 		}
 	}
 }
