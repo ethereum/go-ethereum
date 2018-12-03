@@ -33,7 +33,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
 
-	generateEndpoints(scheme, cluster, from, to)
+	generateEndpoints(scheme, cluster, appName, from, to)
 
 	log.Info("generating and uploading feeds to " + endpoints[0] + " and syncing")
 
