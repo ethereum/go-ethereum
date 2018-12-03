@@ -96,7 +96,17 @@ func New(cfg *Config) *Whisper {
 		cfg = &DefaultConfig
 	}
 
-	whisper := newDefaultWhisper()
+	whisper := &Whisper{
+		privateKeys:   make(map[string]*ecdsa.PrivateKey),
+		symKeys:       make(map[string][]byte),
+		envelopes:     make(map[common.Hash]*Envelope),
+		expirations:   make(map[uint32]mapset.Set),
+		peers:         make(map[*Peer]struct{}),
+		messageQueue:  make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
+		quit:          make(chan struct{}),
+		syncAllowance: DefaultSyncAllowance,
+	}
 
 	whisper.filters = NewFilters(whisper)
 
@@ -121,20 +131,6 @@ func New(cfg *Config) *Whisper {
 	}
 
 	return whisper
-}
-
-func newDefaultWhisper() *Whisper {
-	return &Whisper{
-		privateKeys:   make(map[string]*ecdsa.PrivateKey),
-		symKeys:       make(map[string][]byte),
-		envelopes:     make(map[common.Hash]*Envelope),
-		expirations:   make(map[uint32]mapset.Set),
-		peers:         make(map[*Peer]struct{}),
-		messageQueue:  make(chan *Envelope, messageQueueLimit),
-		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
-		quit:          make(chan struct{}),
-		syncAllowance: DefaultSyncAllowance,
-	}
 }
 
 // MinPow returns the PoW value required by this node.

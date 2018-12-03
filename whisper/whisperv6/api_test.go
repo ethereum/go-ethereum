@@ -23,8 +23,7 @@ import (
 )
 
 func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
-	w := newDefaultWhisper()
-	w.filters = NewFilters(w)
+	w := New(nil)
 
 	keyID, err := w.GenerateSymKey()
 	if err != nil {
