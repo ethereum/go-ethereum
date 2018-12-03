@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -104,28 +105,6 @@ func (w *wizard) readString() string {
 	}
 }
 
-// readYesNo reads a yes or no from stdin, returning boolean true for yes
-func (w *wizard) readYesNo(def bool) bool {
-	for {
-		fmt.Printf("> ")
-		text, err := w.in.ReadString('\n')
-		if err != nil {
-			log.Crit("Failed to read user input", "err", err)
-		}
-		text = strings.ToLower(strings.TrimSpace(text))
-		if text == "y" || text == "yes" {
-			return true
-		}
-		if text == "n" || text == "no" {
-			return false
-		}
-		if len(text) == 0 {
-			return def
-		}
-		fmt.Println("Valid answers: y, yes, n, no or leave empty for default")
-	}
-}
-
 // readDefaultString reads a single line from stdin, trimming if from spaces. If
 // an empty line is entered, the default value is returned.
 func (w *wizard) readDefaultString(def string) string {
@@ -138,6 +117,47 @@ func (w *wizard) readDefaultString(def string) string {
 		return text
 	}
 	return def
+}
+
+// readDefaultYesNo reads a single line from stdin, trimming if from spaces and
+// interpreting it as a 'yes' or a 'no'. If an empty line is entered, the default
+// value is returned.
+func (w *wizard) readDefaultYesNo(def bool) bool {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.ToLower(strings.TrimSpace(text)); text == "" {
+			return def
+		}
+		if text == "y" || text == "yes" {
+			return true
+		}
+		if text == "n" || text == "no" {
+			return false
+		}
+		log.Error("Invalid input, expected 'y', 'yes', 'n', 'no' or empty")
+	}
+}
+
+// readURL reads a single line from stdin, trimming if from spaces and trying to
+// interpret it as a URL (http, https or file).
+func (w *wizard) readURL() *url.URL {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		uri, err := url.Parse(strings.TrimSpace(text))
+		if err != nil {
+			log.Error("Invalid input, expected URL", "err", err)
+			continue
+		}
+		return uri
+	}
 }
 
 // readInt reads a single line from stdin, trimming if from spaces, enforcing it
