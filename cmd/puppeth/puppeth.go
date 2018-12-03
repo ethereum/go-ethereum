@@ -49,8 +49,8 @@ func main() {
 		rand.Seed(time.Now().UnixNano())
 
 		network := c.String("network")
-		if strings.Contains(network, " ") || strings.Contains(network, "-") {
-			log.Crit("No spaces or hyphens allowed in network name")
+		if strings.Contains(network, " ") || strings.Contains(network, "-") || strings.ToLower(network) != network {
+			log.Crit("No spaces, hyphens or capital letters allowed in network name")
 		}
 		// Start the wizard and relinquish control
 		makeWizard(c.String("network")).run()
