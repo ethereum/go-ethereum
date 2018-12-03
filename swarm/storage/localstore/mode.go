@@ -33,10 +33,11 @@ const (
 	ModeUpload
 	ModeRequest
 	ModeSynced
-	ModeAccess
-	// Q: this mode is not needed,
-	// as it will be used only internally for GC.
-	ModeRemoval
+	// this modes are internal only
+	// they can be removed completely
+	// if accessors are not used internally
+	modeAccess
+	modeRemoval
 )
 
 // ModeName returns a descriptive name of a Mode.
@@ -51,9 +52,9 @@ func ModeName(m Mode) (name string) {
 		return "request"
 	case ModeSynced:
 		return "synced"
-	case ModeAccess:
+	case modeAccess:
 		return "access"
-	case ModeRemoval:
+	case modeRemoval:
 		return "removal"
 	}
 	return ""
@@ -162,14 +163,14 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		db.pushIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.PutInBatch(b.Batch, item)
 
-	case ModeAccess:
+	case modeAccess:
 		// update accessTimeStamp in retrieve, gc
 		db.gcIndex.DeleteInBatch(b.Batch, item)
 		item.AccessTimestamp = now()
 		db.retrievalIndex.PutInBatch(b.Batch, item)
 		db.gcIndex.PutInBatch(b.Batch, item)
 
-	case ModeRemoval:
+	case modeRemoval:
 		// delete from retrieve, pull, gc
 		db.retrievalIndex.DeleteInBatch(b.Batch, item)
 		db.pullIndex.DeleteInBatch(b.Batch, item)

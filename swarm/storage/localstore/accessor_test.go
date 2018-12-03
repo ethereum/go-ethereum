@@ -37,7 +37,7 @@ func TestAccessors(t *testing.T) {
 		ModeUpload,
 		ModeRequest,
 		ModeSynced,
-		ModeAccess,
+		modeAccess,
 	} {
 		t.Run(ModeName(m), func(t *testing.T) {
 			a := db.Accessor(m)
@@ -61,7 +61,7 @@ func TestAccessors(t *testing.T) {
 
 	// Removal mode is a special case as it removes the chunk
 	// from the database.
-	t.Run(ModeName(ModeRemoval), func(t *testing.T) {
+	t.Run(ModeName(modeRemoval), func(t *testing.T) {
 		a := db.Accessor(ModeUpload)
 
 		want := generateRandomChunk()
@@ -80,7 +80,7 @@ func TestAccessors(t *testing.T) {
 			t.Errorf("got chunk data %x, want %x", got.Data(), want.Data())
 		}
 
-		a = db.Accessor(ModeRemoval)
+		a = db.Accessor(modeRemoval)
 
 		// removal accessor actually removes the chunk on Put
 		err = a.Put(context.Background(), want)
