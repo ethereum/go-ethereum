@@ -33,9 +33,10 @@ func TestAccessors(t *testing.T) {
 	testAccessors(t, db)
 }
 
-// TestAccessors tests most basic Put and Get functionalities
-// for different accessors by using retrieval composite index.
-func TestAccessors_WithRetrievalCompositeIndex(t *testing.T) {
+// TestAccessors_withRetrievalCompositeIndex tests most basic
+// Put and Get functionalities for different accessors
+// by using retrieval composite index.
+func TestAccessors_withRetrievalCompositeIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
 	defer cleanupFunc()
 
