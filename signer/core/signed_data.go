@@ -425,7 +425,6 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			buffer.Write(bytesValue)
 		}
 	}
-
 	return buffer.Bytes(), nil
 }
 
@@ -609,87 +608,109 @@ func (typedData *TypedData) Map() map[string]interface{} {
 // of clef present data in their apps
 func (typedData *TypedData) PrettyPrint() string {
 	output := bytes.Buffer{}
-
-	output.WriteString(fmt.Sprintf("%s {\n", "Domain"))
-	output.WriteString(typedData.PrettyPrintData("EIP712Domain", typedData.Domain.Map(), 1))
-	output.Truncate(output.Len() - 2)
-	output.WriteString(fmt.Sprintf("\n}\n"))
-
-	output.WriteString(fmt.Sprintf("%s {\n", typedData.PrimaryType))
-	output.WriteString(typedData.PrettyPrintData(typedData.PrimaryType, typedData.Message, 1))
-	output.Truncate(output.Len() - 2)
-	output.WriteString(fmt.Sprintf("\n}"))
-
+	formatted := typedData.Format()
+	for _, item := range formatted {
+		output.WriteString(fmt.Sprintf("%v\n", item.Pprint(0)))
+	}
 	return output.String()
 }
 
-// PrettyPrintData generates a formatted output for the
-// given data
-func (typedData *TypedData) PrettyPrintData(primaryType string, data map[string]interface{}, depth int) string {
-	output := bytes.Buffer{}
+// Format returns a representation of d, which can be easily displayed by a user-interface
+// without in-depth knowledge about 712 rules
+func (typedData *TypedData) Format() []*NameValueType {
+	var nvts []*NameValueType
+	nvts = append(nvts, &NameValueType{
+		Name:  "EIP712Domain",
+		Value: typedData.formatData("EIP712Domain", typedData.Domain.Map()),
+		Typ:   "domain",
+	})
+	nvts = append(nvts, &NameValueType{
+		Name:  typedData.PrimaryType,
+		Value: typedData.formatData(typedData.PrimaryType, typedData.Message),
+		Typ:   "primary type",
+	})
+	return nvts
+}
+
+func (typedData *TypedData) formatData(primaryType string, data map[string]interface{}) []*NameValueType {
+	var output []*NameValueType
 
 	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {
 		encType := field["type"]
 		encName := field["name"]
 		encValue := data[encName]
-
+		item := &NameValueType{
+			Name: encName,
+			Typ:  encType,
+		}
 		if encType[len(encType)-1:] == "]" {
 			arrayValue, _ := encValue.([]interface{})
 			parsedType := strings.Split(encType, "[")[0]
-			for _, item := range arrayValue {
+			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
-					mapValue, _ := item.(map[string]interface{})
-					mapOutput := typedData.PrettyPrintData(parsedType, mapValue, depth+1)
-					output.WriteString(mapOutput)
+					mapValue, _ := v.(map[string]interface{})
+					mapOutput := typedData.formatData(parsedType, mapValue)
+					item.Value = mapOutput
 				} else {
-					primitiveOutput := typedData.PrettyPrintPrimitiveValue(encType, encName, encValue, depth)
-					output.WriteString(primitiveOutput)
+					primitiveOutput := formatPrimitiveValue(encType, encValue)
+					item.Value = primitiveOutput
 				}
 			}
 		} else if typedData.Types[field["type"]] != nil {
-			output.WriteString(strings.Repeat("\u00a0", depth*2))
-			output.WriteString(fmt.Sprintf("\"%s\": { %s\n", field["name"], encType))
-
 			mapValue, _ := encValue.(map[string]interface{})
-			mapOutput := typedData.PrettyPrintData(field["type"], mapValue, depth+1)
-			output.WriteString(mapOutput)
-
-			output.Truncate(output.Len() - 2)
-			output.WriteString(fmt.Sprintf("\n%s},\n", strings.Repeat("\u00a0", depth*2)))
+			mapOutput := typedData.formatData(field["type"], mapValue)
+			item.Value = mapOutput
 		} else {
-			primitiveOutput := typedData.PrettyPrintPrimitiveValue(encType, encName, encValue, depth)
-			output.WriteString(primitiveOutput)
+			primitiveOutput := formatPrimitiveValue(encType, encValue)
+			item.Value = primitiveOutput
 		}
+		output = append(output, item)
 	}
-
-	return output.String()
+	return output
 }
 
-// PrettyPrintPrimitiveValue generates a formatted output for the
-// given primitive value
-func (typedData *TypedData) PrettyPrintPrimitiveValue(encType string, encName string, encValue interface{}, depth int) string {
-	output := bytes.Buffer{}
-	output.WriteString(strings.Repeat("\u00a0", depth*2))
-	output.WriteString(fmt.Sprintf("\"%s\": ", encName))
-
+func formatPrimitiveValue(encType string, encValue interface{}) string {
 	switch encType {
 	case "address":
 		stringValue, _ := encValue.(string)
-		addressValue := common.HexToAddress(stringValue)
-		output.WriteString(fmt.Sprintf("%s,\n", addressValue.String()))
+		return common.HexToAddress(stringValue).String()
 	case "bool":
 		boolValue, _ := encValue.(bool)
-		output.WriteString(fmt.Sprintf("%t,\n", boolValue))
+		return fmt.Sprintf("%t", boolValue)
 	case "bytes", "string":
-		output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
-	default:
-		if strings.HasPrefix(encType, "bytes") {
-			output.WriteString(fmt.Sprintf("\"%s\",\n", encValue))
-		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
-			bigIntValue, _ := encValue.(*big.Int)
-			output.WriteString(fmt.Sprintf("%d,\n", bigIntValue))
+		return fmt.Sprintf("%s", encValue)
+	}
+	if strings.HasPrefix(encType, "bytes") {
+		return fmt.Sprintf("%s", encValue)
+	} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
+		bigIntValue, _ := encValue.(*big.Int)
+		return fmt.Sprintf("%d (0x%x)", bigIntValue, bigIntValue)
+	}
+	return "NA"
+}
+
+// NameValueType is a very simple struct with Name, Value and Type. It's meant for simple
+// json structures used to communicate signing-info about typed data with the UI
+type NameValueType struct {
+	Name  string      `json:"name"`
+	Value interface{} `json:"value"`
+	Typ   string      `json:"type"`
+}
+
+// Pprint returns a pretty-printed version of nvt
+func (nvt *NameValueType) Pprint(depth int) string {
+	output := bytes.Buffer{}
+	output.WriteString(strings.Repeat("\u00a0", depth*2))
+	output.WriteString(fmt.Sprintf("%s [%s]: ", nvt.Name, nvt.Typ))
+	if nvts, ok := nvt.Value.([]*NameValueType); ok {
+		output.WriteString("\n")
+		for _, next := range nvts {
+			sublevel := next.Pprint(depth + 1)
+			output.WriteString(sublevel)
 		}
+	} else {
+		output.WriteString(fmt.Sprintf("%s\n", nvt.Value))
 	}
 	return output.String()
 }
