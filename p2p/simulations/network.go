@@ -754,6 +754,11 @@ func (net *Network) Load(snap *Snapshot) error {
 		for {
 			select {
 			case e := <-events:
+				// Ignore control events as they do not represent
+				// connect or disconnect (Up) state change.
+				if e.Control {
+					continue
+				}
 				// Detect only connection events.
 				if e.Type != EventTypeConn {
 					continue
