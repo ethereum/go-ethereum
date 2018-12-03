@@ -642,9 +642,17 @@ function ApproveSignData(r){
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
 
 	fmt.Printf("address %v %v\n", addr.String(), addr.Original())
+
+	nvt := []*core.NameValueType{
+		{
+			Name:  "message",
+			Typ:   "text/plain",
+			Value: msg,
+		},
+	}
 	resp, err := r.ApproveSignData(&core.SignDataRequest{
 		Address: *addr,
-		Message: msg,
+		Message: nvt,
 		Hash:    hash,
 		Meta:    core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 		Rawdata: raw,

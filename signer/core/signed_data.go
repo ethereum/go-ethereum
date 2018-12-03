@@ -169,7 +169,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 		sighash, msg := SignTextValidator(validatorData)
 		message := []*NameValueType{
-			&NameValueType{
+			{
 				Name:  "message",
 				Typ:   "text",
 				Value: msg,
@@ -191,7 +191,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			return nil, err
 		}
 		message := []*NameValueType{
-			&NameValueType{
+			{
 				Name:  "Clique block",
 				Typ:   "clique",
 				Value: fmt.Sprintf("clique block %d [0x%x]", header.Number, header.Hash()),
@@ -207,7 +207,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 		sighash, msg := SignTextPlain(plainData)
 		message := []*NameValueType{
-			&NameValueType{
+			{
 				Name:  "message",
 				Typ:   "text/plain",
 				Value: msg,
