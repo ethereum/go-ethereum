@@ -39,12 +39,8 @@ func TestSnapshot(t *testing.T) {
 	// create snapshot from ring network
 
 	// this is a minimal service, whose protocol will take exactly one message OR close of connection before quitting
-	//protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			//			svc := NewNoopService(false)
-			//			protoCMap[ctx.Config.ID] = svc.C
-			//			return svc, nil
 			return NewNoopService(false), nil
 		},
 	})
@@ -136,14 +132,6 @@ OUTER:
 		t.Fatalf("snapshot wrong node,conn counts %d,%d != %d", len(snap.Nodes), len(snap.Conns), len(checkIds))
 	}
 
-	// wait for all protocols to signal to close down
-	//	for nodid, peers := range protoCMap {
-	//		for peerid, peerC := range peers {
-	//			log.Debug("getting ", "node", nodid, "peer", peerid)
-	//			<-peerC
-	//		}
-	//	}
-
 	// shut down sim network
 	runningOne = false
 	sub.Unsubscribe()
@@ -172,12 +160,8 @@ OUTER:
 	// PART II
 	// load snapshot and verify that exactly same connections are formed
 
-	//protoCMap = make(map[enode.ID]map[enode.ID]chan struct{})
 	adapter = adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			//			svc := NewNoopService(false)
-			//			protoCMap[ctx.Config.ID] = svc.C
-			//			return svc, nil
 			return NewNoopService(false), nil
 		},
 	})
