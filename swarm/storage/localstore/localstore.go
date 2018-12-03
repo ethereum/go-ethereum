@@ -323,6 +323,13 @@ func (db *DB) po(addr storage.Address) (bin uint8) {
 
 // now is a helper function that returns a current unix timestamp
 // in UTC timezone.
-func now() (t int64) {
-	return time.Now().UTC().UnixNano()
+// It is set in the init function for usage in production, and
+// optionally overridden in tests for data validation.
+var now func() int64
+
+func init() {
+	// set the now function
+	now = func() (t int64) {
+		return time.Now().UTC().UnixNano()
+	}
 }
