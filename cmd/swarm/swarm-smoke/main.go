@@ -144,11 +144,6 @@ func main() {
 		},
 	}
 
-	// wait for metrics reporter to push latest measurements
-	defer func() {
-		time.Sleep(collectionInterval + 1*time.Second)
-	}()
-
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 	app.Before = func(ctx *cli.Context) error {
@@ -158,8 +153,15 @@ func main() {
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
+
+		// wait for metrics reporter to push latest measurements
+		time.Sleep(collectionInterval + 1*time.Second)
+
 		os.Exit(1)
 	}
+
+	// wait for metrics reporter to push latest measurements
+	time.Sleep(collectionInterval + 1*time.Second)
 }
 
 func setupMetrics(ctx *cli.Context) {
