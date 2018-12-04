@@ -32,6 +32,10 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+var (
+	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+)
+
 const (
 	collectionInterval = 5 * time.Second
 )
@@ -170,6 +174,7 @@ func setupMetrics(ctx *cli.Context) {
 
 		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, collectionInterval, endpoint, database, username, password, "swarm-smoke.", map[string]string{
 			"host":     hosttag,
+			"version":  gitCommit,
 			"filesize": fmt.Sprintf("%v", filesize),
 		})
 	}
