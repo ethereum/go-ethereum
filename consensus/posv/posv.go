@@ -806,23 +806,14 @@ func (c *Posv) UpdateMasternodes(chain consensus.ChainReader, header *types.Head
 	if err != nil {
 		return err
 	}
-	currentSigners := snap.GetSigners()
-	proposedSigners := make(map[common.Address]struct{})
-	// count all addresses in ms to be masternode
+	newSigners := make(map[common.Address]struct{})
 	for _, m := range ms {
-		proposedSigners[m.Address] = struct{}{}
-		snap.Signers[m.Address] = struct{}{}
+		newSigners[m.Address] = struct{}{}
 	}
-	// deactivate current masternodes which aren't in ms
-	for _, s := range currentSigners {
-		if _, ok := proposedSigners[s]; !ok {
-			delete(snap.Signers, s)
-		}
-	}
+	snap.Signers = newSigners
 	nm := []string{}
-	newSigners := snap.GetSigners()
-	for _, n := range newSigners {
-		nm = append(nm, n.String())
+	for _, n := range ms {
+		nm = append(nm, n.Address.String())
 	}
 	c.recents.Add(snap.Hash, snap)
 	log.Info("New set of masternodes has been updated to snapshot", "number", snap.Number, "hash", snap.Hash, "new masternodes", nm)
