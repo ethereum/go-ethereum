@@ -26,11 +26,29 @@ const (
 	feedRandomDataLength = 8
 )
 
-// TODO: retrieve with manifest + extract repeating code
 func cliFeedUploadAndSync(c *cli.Context) error {
-
+	feedUploadAndSyncCount.Inc(1)
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))))
 
+	errc := make(chan error)
+	go func() {
+		errc <- feedUploadAndSync(c)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			feedUploadAndSyncFailCount.Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		feedUploadAndSyncTimeout.Inc(1)
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+// TODO: retrieve with manifest + extract repeating code
+func feedUploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
