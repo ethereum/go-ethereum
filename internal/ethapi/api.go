@@ -493,7 +493,8 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 }
 
 // BlockNumber returns the block number of the chain head.
-return s.b.GetRewardByHash(hash)
+func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]interface{} {
+	return s.b.GetRewardByHash(hash)
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -859,22 +860,34 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	if err != nil {
 		log.Error("Fail to connect IPC client for block status", "error", err)
 	}
+
 	var signers []common.Address
 	var filterSigners []common.Address
 	finality := int32(0)
 	if b.Number().Int64() > 0 {
-		engine := s.b.GetEngine()
-		addrBlockSigner := common.HexToAddress(common.BlockSigners)
-		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
-		if err != nil {
-			log.Error("Fail to get signers from block signer SC.", "error", err)
+		curBlockNumber := b.Number().Uint64()
+		prevBlockNumber := curBlockNumber + (common.MergeSignRange - (curBlockNumber % common.MergeSignRange))
+		latestBlockNumber := s.b.CurrentBlock().Number().Uint64()
+		if prevBlockNumber >= latestBlockNumber || !s.b.ChainConfig().IsTIP2019(b.Number()) {
+			prevBlockNumber = curBlockNumber
 		}
-		// Get block epoc latest.
-		if s.b.ChainConfig().XDPoS != nil {
-			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().XDPoS.Epoch))
-			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
+		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+			prevBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(prevBlockNumber))
+			addrBlockSigner := common.HexToAddress(common.BlockSigners)
+			signers, err = contracts.GetSignersByExecutingEVM(addrBlockSigner, client, prevBlock.Hash())
+			if err != nil {
+				log.Error("Fail to get signers from block signer SC.", "error", err)
+				return nil, err
+			}
+			validator, _ := engine.RecoverValidator(b.Header())
+			creator, _ := engine.RecoverSigner(b.Header())
+			signers = append(signers, validator)
+			signers = append(signers, creator)
+			// Get block epoc latest.
+			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().XDPoS.Epoch)
+			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
 			if prevCheckpointBlock != nil {
-				masternodes := engine.(*XDPoS.XDPoS).GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), b.Number().Uint64(), s.b.ChainConfig().XDPoS.Epoch)
+				masternodes := engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XDPoS.Epoch)
 				countFinality := 0
 				for _, masternode := range masternodes {
 					for _, signer := range signers {
