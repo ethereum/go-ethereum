@@ -55,6 +55,7 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 }
 
 func cliUploadAndSync(c *cli.Context) error {
+	smokeUploadAndSyncCount.Inc(1)
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
@@ -65,15 +66,21 @@ func cliUploadAndSync(c *cli.Context) error {
 
 	select {
 	case err := <-errc:
+		if err != nil {
+			smokeUploadAndSyncFailCount.Inc(1)
+		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
+		smokeUploadAndSyncTimeout.Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 
 }
 
 func uploadAndSync(c *cli.Context) error {
-	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "kb", filesize) }(time.Now())
+	defer func(now time.Time) {
+		log.Info("total time", "time", time.Since(now), "kb", filesize)
+	}(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
 
