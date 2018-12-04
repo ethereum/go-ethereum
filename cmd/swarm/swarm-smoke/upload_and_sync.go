@@ -34,6 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pborman/uuid"
+	metrics "github.com/rcrowley/go-metrics"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -55,9 +56,12 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 }
 
 func cliUploadAndSync(c *cli.Context) error {
-	smokeUploadAndSyncCount.Inc(1)
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+
+	setupMetrics(c)
+
+	metrics.GetOrRegisterCounter("upload-and-sync", nil).Inc(1)
 
 	errc := make(chan error)
 	go func() {
@@ -67,19 +71,21 @@ func cliUploadAndSync(c *cli.Context) error {
 	select {
 	case err := <-errc:
 		if err != nil {
-			smokeUploadAndSyncFailCount.Inc(1)
+			metrics.GetOrRegisterCounter("upload-and-sync.fail", nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		smokeUploadAndSyncTimeout.Inc(1)
+		metrics.GetOrRegisterCounter("upload-and-sync.timeout", nil).Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
-
 }
 
 func uploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) {
-		log.Info("total time", "time", time.Since(now), "kb", filesize)
+		totalTime := time.Since(now)
+
+		log.Info("total time", "time", totalTime, "kb", filesize)
+		metrics.GetOrRegisterCounter("upload-and-sync.time", nil).Inc(int64(totalTime))
 	}(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
