@@ -44,6 +44,12 @@ var (
 	verbosity        int
 	timeout          int
 )
+var (
+	smokeUploadAndSyncCount     = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.count", nil)
+	smokeUploadAndSyncFailCount = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.fail.count", nil)
+	smokeUploadAndSyncRunTime   = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.time", nil)
+	smokeUploadAndSyncTimeout   = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.timeout", nil)
+)
 
 func main() {
 
