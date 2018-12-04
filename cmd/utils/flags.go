@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus"
-	//"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/XDPoS"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -1243,17 +1243,17 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if config.XDPoS != nil {
 		engine = XDPoS.New(config.XDPoS, chainDb)
 	} else {
-		//engine = ethash.NewFaker()
-		//if !ctx.GlobalBool(FakePoWFlag.Name) {
-		//	engine = ethash.New(ethash.Config{
-		//		CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
-		//		CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
-		//		CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
-		//		DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
-		//		DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
-		//		DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
-		//	})
-		//}
+		engine = ethash.NewFaker()
+		if !ctx.GlobalBool(FakePoWFlag.Name) {
+			engine = ethash.New(ethash.Config{
+				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
+				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+			})
+		}
 		Fatalf("Only support XDPoS consensus")
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
