@@ -19,7 +19,6 @@ package stream
 import (
 	"context"
 	"errors"
-
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -245,7 +244,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 			return nil, nil, fmt.Errorf("source peer %v not found", spID.String())
 		}
 	} else {
-		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int, nn bool) bool {
+		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 			id := p.ID()
 			if p.LightNode {
 				// skip light nodes

@@ -232,7 +232,7 @@ func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturatio
 	t.Helper()
 	kid := common.Bytes2Hex(k.BaseAddr())
 	addrs := [][]byte{k.BaseAddr()}
-	k.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
+	k.EachAddr(nil, 255, func(addr *BzzAddr, po int) bool {
 		addrs = append(addrs, addr.Address())
 		return true
 	})

@@ -103,7 +103,7 @@ func TestHiveStatePersistance(t *testing.T) {
 
 	pp.Start(s1.Server)
 	i := 0
-	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int, nn bool) bool {
+	pp.Kademlia.EachAddr(nil, 256, func(addr *BzzAddr, po int) bool {
 		delete(peers, addr.String())
 		i++
 		return true
