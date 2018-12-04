@@ -30,11 +30,16 @@ import (
 const (
 	HashLength          = 32
 	AddressLength       = 20
-	MasternodeVotingSMC = "0x0000000000000000000000000000000000000088"
 	BlockSigners        = "0x0000000000000000000000000000000000000089"
+	MasternodeVotingSMC = "0x0000000000000000000000000000000000000088"
 	RandomizeSMC        = "0x0000000000000000000000000000000000000090"
 	FoudationAddr       = "0x0000000000000000000000000000000000000068"
 	TeamAddr            = "0x0000000000000000000000000000000000000099"
+	VoteMethod          = "0x6dd7d8ea"
+	UnvoteMethod        = "0x02aa9be2"
+	ProposeMethod       = "0x01267951"
+	ResignMethod        = "0xae6e43f5"
+	SignMethod          = "0xe341eaa4"
 )
 
 var (
@@ -44,6 +49,11 @@ var (
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
+
+type Vote struct {
+	Masternode Address
+	Voter      Address
+}
 
 func BytesToHash(b []byte) Hash {
 	var h Hash
