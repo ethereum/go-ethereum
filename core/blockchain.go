@@ -507,8 +507,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 	bc.currentBlock.Store(block)
 
 	// save cache BlockSigners
-	engine := bc.Engine().(*XDPoS.XDPoS)
-	engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+	if bc.chainConfig.XDPoS != nil {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+	}
 
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
@@ -1828,7 +1830,7 @@ func (bc *BlockChain) UpdateM1() error {
 		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewTomoValidator(addr, client)
+	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
 		return err
 	}
