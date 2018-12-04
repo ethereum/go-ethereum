@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
@@ -34,10 +33,6 @@ import (
 
 var (
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-)
-
-const (
-	collectionInterval = 5 * time.Second
 )
 
 var (
@@ -149,22 +144,20 @@ func main() {
 	app.Before = func(ctx *cli.Context) error {
 		return nil
 	}
+	app.After = func(ctx *cli.Context) error {
+		emitMetrics(ctx)
+		return nil
+	}
 
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
 
-		// wait for metrics reporter to push latest measurements
-		time.Sleep(collectionInterval + 1*time.Second)
-
 		os.Exit(1)
 	}
-
-	// wait for metrics reporter to push latest measurements
-	time.Sleep(collectionInterval + 1*time.Second)
 }
 
-func setupMetrics(ctx *cli.Context) {
+func emitMetrics(ctx *cli.Context) {
 	if gethmetrics.Enabled {
 		var (
 			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
@@ -174,7 +167,7 @@ func setupMetrics(ctx *cli.Context) {
 			hosttag  = ctx.GlobalString(swarmmetrics.MetricsInfluxDBHostTagFlag.Name)
 		)
 
-		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, collectionInterval, endpoint, database, username, password, "swarm-smoke.", map[string]string{
+		influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", map[string]string{
 			"host":     hosttag,
 			"version":  gitCommit,
 			"filesize": fmt.Sprintf("%v", filesize),
