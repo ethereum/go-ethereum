@@ -506,7 +506,11 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 	bc.currentBlock.Store(block)
 
-		// If the block is better than our head or is on a different chain, force update heads
+	// save cache BlockSigners
+	engine := bc.Engine().(*XDPoS.XDPoS)
+	engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+
+	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
 
@@ -1069,11 +1073,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 		bc.downloadingBlock.Add(block.Hash(), true)
 	}
-	st, err := bc.State()
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	abort, results := bc.engine.VerifyHeaders(bc, st, headers, seals)
+	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
 
 	// Iterate over the blocks and insert when the verifier permits
@@ -1250,11 +1250,7 @@ func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
-	state, err := bc.State()
-	if err != nil {
-		return err
-	}
-	err = bc.engine.VerifyHeader(bc, state, block.Header(), false)
+	err = bc.engine.VerifyHeader(bc, block.Header(), false)
 	if err != nil {
 		return err
 	}
@@ -1684,11 +1680,7 @@ Error: %v
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	start := time.Now()
-	state, err := bc.State()
-	if err != nil {
-		return 0, err
-	}
-	if i, err := bc.hc.ValidateHeaderChain(chain, state, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
 	}
 
@@ -1836,7 +1828,7 @@ func (bc *BlockChain) UpdateM1() error {
 		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewXDCValidator(addr, client)
+	validator, err := contractValidator.NewTomoValidator(addr, client)
 	if err != nil {
 		return err
 	}
