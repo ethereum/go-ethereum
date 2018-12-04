@@ -552,7 +552,11 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		header.Coinbase = self.coinbase
 	}
-	if err := self.engine.Prepare(self.chain, self.current.state, header); err != nil {
+	state := &state.StateDB{}
+	if self.current != nil {
+		state = self.current.state
+	}
+	if err := self.engine.Prepare(self.chain, state, header); err != nil {
 		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}
@@ -612,12 +616,12 @@ func (self *worker) commitNewWork() {
 			delete(self.possibleUncles, hash)
 		}
 	}
-	// Create the new block to seal with the consensus engine
-	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
-		log.Error("Failed to finalize block for sealing", "err", err)
-		return
-	}
 	if atomic.LoadInt32(&self.mining) == 1 {
+		// Create the new block to seal with the consensus engine
+		if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+			log.Error("Failed to finalize block for sealing", "err", err)
+			return
+		}
 		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()
