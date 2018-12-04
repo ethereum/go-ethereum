@@ -59,8 +59,6 @@ func cliUploadAndSync(c *cli.Context) error {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	setupMetrics(c)
-
 	metrics.GetOrRegisterCounter("upload-and-sync", nil).Inc(1)
 
 	errc := make(chan error)
