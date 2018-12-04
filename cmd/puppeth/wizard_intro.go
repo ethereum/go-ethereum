@@ -131,7 +131,20 @@ func (w *wizard) run() {
 
 		case choice == "2":
 			if w.conf.Genesis == nil {
-				w.makeGenesis()
+				fmt.Println()
+				fmt.Println("What would you like to do? (default = create)")
+				fmt.Println(" 1. Create new genesis from scratch")
+				fmt.Println(" 2. Import already existing genesis")
+
+				choice := w.read()
+				switch {
+				case choice == "" || choice == "1":
+					w.makeGenesis()
+				case choice == "2":
+					w.importGenesis()
+				default:
+					log.Error("That's not something I can do")
+				}
 			} else {
 				w.manageGenesis()
 			}
@@ -149,7 +162,6 @@ func (w *wizard) run() {
 			} else {
 				w.manageComponents()
 			}
-
 		default:
 			log.Error("That's not something I can do")
 		}
