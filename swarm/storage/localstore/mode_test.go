@@ -73,7 +73,7 @@ func testModeSyncingValues(t *testing.T, db *DB) {
 
 	t.Run("retrieve indexes", testRetrieveIndexesValues(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp))
+	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp, nil))
 
 	t.Run("size counter", testSizeCounter(db, wantSize))
 }
@@ -123,9 +123,9 @@ func testModeUploadValues(t *testing.T, db *DB) {
 
 	t.Run("retrieve indexes", testRetrieveIndexesValues(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp))
+	t.Run("pull index", testPullIndexValues(db, chunk, wantTimestamp, nil))
 
-	t.Run("push index", testPullIndexValues(db, chunk, wantTimestamp))
+	t.Run("push index", testPushIndexValues(db, chunk, wantTimestamp, nil))
 
 	t.Run("size counter", testSizeCounter(db, wantSize))
 }
@@ -277,7 +277,7 @@ func testModeAccessValues(t *testing.T, db *DB) {
 
 		t.Run("gc index", testGCIndexValues(db, chunk, uploadTimestamp, uploadTimestamp))
 
-		t.Run("gc index count", testGCIndexCount(db, 1))
+		t.Run("gc index count", testIndexItemsCount(db.gcIndex, 1))
 	})
 
 	t.Run("second get", func(t *testing.T) {
@@ -303,8 +303,85 @@ func testModeAccessValues(t *testing.T, db *DB) {
 
 		t.Run("gc index", testGCIndexValues(db, chunk, uploadTimestamp, accessTimestamp))
 
-		t.Run("gc index count", testGCIndexCount(db, 1))
+		t.Run("gc index count", testIndexItemsCount(db.gcIndex, 1))
 	})
+}
+
+// TestModeRemoval validates internal data operations and state
+// for ModeRemoval on DB with default configuration.
+func TestModeRemoval(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	testModeRemovalValues(t, db)
+}
+
+// TestModeRemoval_withRetrievalCompositeIndex validates internal
+// data operations and state for ModeRemoval on DB with
+// retrieval composite index enabled.
+func TestModeRemoval_withRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testModeRemovalValues(t, db)
+}
+
+// testModeRemovalValues validates ModeRemoval index values on the provided DB.
+func testModeRemovalValues(t *testing.T, db *DB) {
+	a := db.Accessor(ModeUpload)
+
+	chunk := generateRandomChunk()
+
+	err := a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a = db.Accessor(modeRemoval)
+
+	wantSize, err := db.sizeCounter.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantSize--
+
+	err = a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("retrieve indexes", func(t *testing.T) {
+		wantErr := leveldb.ErrNotFound
+		if db.useRetrievalCompositeIndex {
+			_, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
+			if err != wantErr {
+				t.Errorf("got error %v, want %v", err, wantErr)
+			}
+			t.Run("retrieve index count", testIndexItemsCount(db.retrievalCompositeIndex, 0))
+		} else {
+			_, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+			if err != wantErr {
+				t.Errorf("got error %v, want %v", err, wantErr)
+			}
+			t.Run("retrieve data index count", testIndexItemsCount(db.retrievalDataIndex, 0))
+
+			// access index should not be set
+			_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+			if err != wantErr {
+				t.Errorf("got error %v, want %v", err, wantErr)
+			}
+			t.Run("retrieve access index count", testIndexItemsCount(db.retrievalAccessIndex, 0))
+		}
+	})
+
+	t.Run("pull index", testPullIndexValues(db, chunk, 0, leveldb.ErrNotFound))
+
+	t.Run("pull index count", testIndexItemsCount(db.pullIndex, 0))
+
+	t.Run("gc index count", testIndexItemsCount(db.gcIndex, 0))
+
+	t.Run("size counter", testSizeCounter(db, wantSize))
 }
 
 // testRetrieveIndexesValues returns a test function that validates if the right
@@ -363,16 +440,18 @@ func testRetrieveIndexesValuesWithAccess(db *DB, chunk storage.Chunk, storeTimes
 
 // testPullIndexValues returns a test function that validates if the right
 // chunk values are in the pull index.
-func testPullIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+func testPullIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.IndexItem{
 			Address:        chunk.Address(),
 			StoreTimestamp: storeTimestamp,
 		})
-		if err != nil {
-			t.Fatal(err)
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
 		}
-		validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		if err == nil {
+			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		}
 	}
 }
 
@@ -409,17 +488,17 @@ func testGCIndexValues(db *DB, chunk storage.Chunk, storeTimestamp, accessTimest
 	}
 }
 
-// testGCIndexCount returns a test function that validates if
-// gc index contains expected number of key/value pairs.
-func testGCIndexCount(db *DB, want int) func(t *testing.T) {
+// testIndexItemsCount returns a test function that validates if
+// an index contains expected number of key/value pairs.
+func testIndexItemsCount(i shed.Index, want int) func(t *testing.T) {
 	return func(t *testing.T) {
 		var c int
-		db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		i.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
 			c++
 			return
 		})
 		if c != want {
-			t.Errorf("got %v item in gc index, want %v", c, want)
+			t.Errorf("got %v items in index, want %v", c, want)
 		}
 	}
 }

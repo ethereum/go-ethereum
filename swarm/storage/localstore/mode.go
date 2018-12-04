@@ -81,7 +81,6 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 	switch mode {
 	case ModeRequest, modeAccess:
 		// update the access counter
-		// Q: can we do this asynchronously
 		return out, db.update(context.TODO(), mode, out)
 	default:
 		// all other modes are not updating the index
@@ -89,7 +88,8 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 	return out, nil
 }
 
-// update is called by an Accessor with a specific Mode.
+// update is called by an Accessor with a specific Mode,
+// and also in access for updating access timestamp and gc index.
 // This function calls updateBatch to perform operations
 // on indexes and fields within a single batch.
 func (db *DB) update(ctx context.Context, mode Mode, item shed.IndexItem) error {
@@ -146,8 +146,8 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 	case ModeSyncing:
 		// put to indexes: retrieve, pull
 		item.StoreTimestamp = now()
-		item.AccessTimestamp = now()
 		if db.useRetrievalCompositeIndex {
+			item.AccessTimestamp = now()
 			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
 		} else {
 			db.retrievalDataIndex.PutInBatch(b.Batch, item)
@@ -158,8 +158,8 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 	case ModeUpload:
 		// put to indexes: retrieve, push, pull
 		item.StoreTimestamp = now()
-		item.AccessTimestamp = now()
 		if db.useRetrievalCompositeIndex {
+			item.AccessTimestamp = now()
 			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
 		} else {
 			db.retrievalDataIndex.PutInBatch(b.Batch, item)
@@ -254,24 +254,25 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// a property of a chunk provided to Accessor.Put.
 		if db.useRetrievalCompositeIndex {
 			i, err := db.retrievalCompositeIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-			case leveldb.ErrNotFound:
-				item.AccessTimestamp = now()
-			default:
+			if err != nil {
 				return err
 			}
+			item.StoreTimestamp = i.StoreTimestamp
+			item.AccessTimestamp = i.AccessTimestamp
 		} else {
 			i, err := db.retrievalAccessIndex.Get(item)
 			switch err {
 			case nil:
 				item.AccessTimestamp = i.AccessTimestamp
 			case leveldb.ErrNotFound:
-				item.AccessTimestamp = now()
 			default:
 				return err
 			}
+			i, err = db.retrievalDataIndex.Get(item)
+			if err != nil {
+				return err
+			}
+			item.StoreTimestamp = i.StoreTimestamp
 		}
 		if db.useRetrievalCompositeIndex {
 			db.retrievalCompositeIndex.DeleteInBatch(b.Batch, item)

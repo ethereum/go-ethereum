@@ -235,7 +235,6 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 			return nil, nil
 		},
 		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
-			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
 			return e, nil
 		},
 	})
