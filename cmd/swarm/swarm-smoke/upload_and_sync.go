@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/pborman/uuid"
-	metrics "github.com/rcrowley/go-metrics"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
