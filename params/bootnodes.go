@@ -47,6 +47,12 @@ var RinkebyBootnodes = []string{
 	"enode://b6b28890b006743680c52e64e0d16db57f28124885595fa03a562be1d2bf0f3a1da297d56b13da25fb992888fd556d4c1a27b1f39d531bde7de1921c90061cc6@159.89.28.211:30303", // AKASHA
 }
 
+// GangnamBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Gangnam test network.
+var GangnamBootnodes = []string{
+	"enode://0db62aeb5a7c7516dc562cbceff318cf1a28a139367c5a3e0fba100948b815e41cbcbc593bfa7ee0c473f644c8845ce676af9e99a2d48e8c31fd306c47573462@115.68.99.108:30403", // Geth Pool
+}
+
 // DiscoveryV5Bootnodes are the enode URLs of the P2P bootstrap nodes for the
 // experimental RLPx v5 topic-discovery network.
 var DiscoveryV5Bootnodes = []string{

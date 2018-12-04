@@ -333,6 +333,19 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultGangnamGenesisBlock returns the Gangnam network genesis block.
+func DefaultGangnamGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.GangnamChainConfig,
+		Nonce:      66,
+		Timestamp:  1543910400,
+		ExtraData:  hexutil.MustDecode("0x476f6c64656e20457468657265756d20546573746e657420303031"),
+		GasLimit:   8000000,
+		Difficulty: big.NewInt(131072),
+		Alloc:      decodePrealloc(gangnamAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
