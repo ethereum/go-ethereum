@@ -886,97 +886,85 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	return nil
 }
 
+// tries to send a message, returns true if successful
+func (p *Pss) trySend(sp *network.Peer, msg *PssMsg) bool {
+	var isPssEnabled bool
+	info := sp.Info()
+	for _, capability := range info.Caps {
+		if capability == p.capstring {
+			isPssEnabled = true
+			break
+		}
+	}
+	if !isPssEnabled {
+		log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+		return false
+	}
+
+	// get the protocol peer from the forwarding peer cache
+	p.fwdPoolMu.RLock()
+	pp := p.fwdPool[sp.Info().ID]
+	p.fwdPoolMu.RUnlock()
+
+	err := pp.Send(context.TODO(), msg)
+	if err != nil {
+		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
+		log.Error(err.Error())
+	}
+
+	return err == nil
+}
+
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
 // The recipient address can be of any length, and the byte slice will be matched to the MSB slice
 // of the peer address of the equivalent length.
+// If the recipient address (or partial address) is within the neighbourhood depth of the forwarding
+// node, then it will be forwarded to all the nearest neighbours of the forwarding node. In case of
+// partial address, it should be forwarded to all the peers matching the partial address, if there
+// are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
+// forwarding fails, the node should try to forward it to the next best peer, until the message is
+// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
-
+	sent := 0               // number of successful sends
+	var isDstInProxBin bool // is destination address within the neighbourhood depth of the forwarding peer
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
-
-	// send with kademlia
-	// find the closest peer to the recipient and attempt to send
-
-	// number of sends performed. enables us to evaluate whether send was at all successful
-	sent := 0
-
-	// TODO: debug, remove in production
-	// calculate proximity to recipient address
-	ponow, _ := p.Kademlia.Pof(p.BaseAddr(), to, 0)
-
-	// The effective depth is the same as nearest neighbor depth OR
-	// the amount of address bytes in the neighbor, whichever is shallower
-	// this term aliasing has the effect of considering ALL connected peers
-	// who match the address prefix as nearest neighbors, and we will forward
-	// to all of them.
-	effectiveDepth := p.Kademlia.NeighbourhoodDepth()
-	darkRadius := len(msg.To) * 8
-	if darkRadius < addressLength*8 && effectiveDepth > darkRadius {
-		effectiveDepth = darkRadius
+	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+	luminousRadius := len(msg.To) * 8
+	if luminousRadius >= neighbourhoodDepth {
+		pof := pot.DefaultPof(neighbourhoodDepth)
+		_, isDstInProxBin = pof(to, p.BaseAddr(), 0)
 	}
 
-	// Set to depth on the first successful send
-	cutoffDepth := 0
-
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, isproxbin bool) bool {
-		info := sp.Info()
-
-		// the cutoffDepth will be set after the first successful send.
-		// that means that before a send has been made OR the peer returned
-		// is still within the effective depth, we will pass through this check
-		if po < cutoffDepth {
-			return false
-		}
-
-		// check if the peer is running pss
-		var ispss bool
-		for _, cap := range info.Caps {
-			if cap == p.capstring {
-				ispss = true
-				break
+	if isDstInProxBin {
+		// forward to all the nearest neighbours of the forwarding node
+		p.Kademlia.EachConn(p.BaseAddr(), addressLength*8, func(sp *network.Peer, _ int, isproxbin bool) bool {
+			if isproxbin {
+				if p.trySend(sp, msg) {
+					sent++
+				}
 			}
-		}
-		if !ispss {
-			log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
-			return true
-		}
+			mustContinue := isproxbin
+			return mustContinue
+		})
+	}
 
-		// get the protocol peer from the forwarding peer cache
-		p.fwdPoolMu.RLock()
-		pp := p.fwdPool[sp.Info().ID]
-		p.fwdPoolMu.RUnlock()
-
-		// TODO: debug, remove in production
-		// calculate proximity from returned kademlia peer to destination and log it
-		powill, _ := p.Kademlia.Pof(sp.Address(), to, 0)
-		log.Debug("forward", "topic", label(msg.Payload.Topic[:]), "self", label(p.BaseAddr()), "to", label(sp.Address()), "dest", label(to), "po", ponow, "advance", powill-ponow)
-		println(p.Kademlia.String())
-
-		// attempt to send the message
-		// short circuit to next iteration pass when it fails
-		err := pp.Send(context.TODO(), msg)
-		if err != nil {
-			metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
-			log.Error(err.Error())
-			return true
-		}
-		sent++
-
-		// If the po is at addresslength (TODO: how can it be greater?)
-		// it means that the peer address is identical to the message address
-		// and that peer must be  the final recipient
-		// further forwarding is thus not needed
-		if po >= addressLength*8 {
-			return false
-		}
-
-		// activate the cutoff when we have a successful send
-		if sent == 1 {
-			cutoffDepth = effectiveDepth
-		}
-		return true
-	})
+	if !isDstInProxBin || sent == 0 {
+		// in case of partial address, msg should be forwarded to all the peers matching the partial
+		// address, if there are any; otherwise only to one peer, closest to the recipient address.
+		// in any case, msg must be sent to at least one peer.
+		p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
+			isAddrMatch := (po == luminousRadius)
+			if isAddrMatch || sent == 0 {
+				if p.trySend(sp, msg) {
+					sent++
+				}
+			}
+			mustContinue := (isAddrMatch || sent == 0)
+			return mustContinue
+		})
+	}
 
 	// if we failed to send to anyone, re-insert message in the send-queue
 	if sent == 0 {
