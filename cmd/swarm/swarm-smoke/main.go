@@ -20,6 +20,8 @@ import (
 	"os"
 	"sort"
 
+	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
+
 	"github.com/ethereum/go-ethereum/log"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -99,6 +101,9 @@ func main() {
 			Destination: &timeout,
 		},
 	}
+
+	app.Flags = append(app.Flags, swarmmetrics.Flags[0])
+	app.Flags = append(app.Flags, swarmmetrics.Flags[1:]...)
 
 	app.Commands = []cli.Command{
 		{
