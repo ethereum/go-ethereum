@@ -17,8 +17,8 @@
 package main
 
 import (
+	"fmt"
 	"os"
-	"runtime"
 	"sort"
 	"time"
 
@@ -30,6 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	cli "gopkg.in/urfave/cli.v1"
+)
+
+const (
+	collectionInterval = 5 * time.Second
 )
 
 var (
@@ -45,14 +49,9 @@ var (
 	timeout          int
 )
 var (
-	feedUploadAndSyncCount      = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.count", nil)
-	feedUploadAndSyncFailCount  = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.fail.count", nil)
-	feedUploadAndSyncRunTime    = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.time", nil)
-	feedUploadAndSyncTimeout    = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.timeout", nil)
-	smokeUploadAndSyncCount     = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.count", nil)
-	smokeUploadAndSyncFailCount = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.fail.count", nil)
-	smokeUploadAndSyncRunTime   = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.time", nil)
-	smokeUploadAndSyncTimeout   = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.timeout", nil)
+	feedUploadAndSyncCount     = gethmetrics.NewRegisteredCounter("feed-and-sync", nil)
+	feedUploadAndSyncFailCount = gethmetrics.NewRegisteredCounter("feed-and-sync.fail", nil)
+	feedUploadAndSyncTimeout   = gethmetrics.NewRegisteredCounter("feed-and-sync.timeout", nil)
 )
 
 func main() {
@@ -141,11 +140,14 @@ func main() {
 		},
 	}
 
+	// wait for metrics reporter to push latest measurements
+	defer func() {
+		time.Sleep(collectionInterval + 1*time.Second)
+	}()
+
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
 	app.Before = func(ctx *cli.Context) error {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-		setupMetrics(ctx)
 		return nil
 	}
 
@@ -166,11 +168,9 @@ func setupMetrics(ctx *cli.Context) {
 			hosttag  = ctx.GlobalString(swarmmetrics.MetricsInfluxDBHostTagFlag.Name)
 		)
 
-		// Start system runtime metrics collection
-		go gethmetrics.CollectProcessMetrics(2 * time.Second)
-
-		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
-			"host": hosttag,
+		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, collectionInterval, endpoint, database, username, password, "swarm-smoke.", map[string]string{
+			"host":     hosttag,
+			"filesize": fmt.Sprintf("%v", filesize),
 		})
 	}
 }
