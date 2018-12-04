@@ -1,13 +1,7 @@
 package contracts
 
 import (
-	"fmt"
-	"strings"
-	"time"
-
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	blockSignerContract "github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,13 +11,9 @@ var (
 		"blockSigners": 0,
 		"blocks":       1,
 	}
-	ParsedBlockSignerABI, _ = abi.JSON(strings.NewReader(blockSignerContract.BlockSignerABI))
 )
 
 func GetSigners(statedb *state.StateDB, block *types.Block) []common.Address {
-	methodName := "getSigners"
-	fmt.Printf("---%s---\n", methodName)
-	start := time.Now()
 	slot := slotBlockSignerMapping["blockSigners"]
 	keys := []common.Hash{}
 	keyArrSlot := getLocMappingAtKey(block.Hash(), slot)
@@ -37,10 +27,7 @@ func GetSigners(statedb *state.StateDB, block *types.Block) []common.Address {
 	for _, key := range keys {
 		ret := statedb.GetState(common.HexToAddress(common.BlockSigners), key)
 		rets = append(rets, common.HexToAddress(ret.Hex()))
-		fmt.Printf("%v\n", common.HexToAddress(ret.Hex()).Hex())
 	}
 
-	elapsed := time.Since(start)
-	fmt.Printf("Execution time: %s\n", elapsed)
 	return rets
 }
