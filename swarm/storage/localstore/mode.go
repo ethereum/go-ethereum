@@ -70,16 +70,19 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 			return out, err
 		}
 	} else {
+		// No need to get access timestamp here as it is used
+		// only for some of Modes in update and access time
+		// is not property of the chunk returned by the Accessor.Get.
 		out, err = db.retrievalDataIndex.Get(item)
 		if err != nil {
 			return out, err
 		}
 	}
 	switch mode {
-	case ModeRequest:
+	case ModeRequest, modeAccess:
 		// update the access counter
 		// Q: can we do this asynchronously
-		return out, db.update(context.TODO(), mode, item)
+		return out, db.update(context.TODO(), mode, out)
 	default:
 		// all other modes are not updating the index
 	}
@@ -180,6 +183,9 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 	case ModeSynced:
 		// delete from push, insert to gc
 		item.StoreTimestamp = now()
+		// need to get access timestamp here as it is not
+		// provided by the access function, and it is not
+		// a property of a chunk provided to Accessor.Put.
 		if db.useRetrievalCompositeIndex {
 			i, err := db.retrievalCompositeIndex.Get(item)
 			switch err {
@@ -206,18 +212,67 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 
 	case modeAccess:
 		// update accessTimeStamp in retrieve, gc
+
+		// need to get access timestamp here as it is not
+		// provided by the access function, and it is not
+		// a property of a chunk provided to Accessor.Put.
+		if db.useRetrievalCompositeIndex {
+			i, err := db.retrievalCompositeIndex.Get(item)
+			if err != nil {
+				return err
+			}
+			item.AccessTimestamp = i.AccessTimestamp
+		} else {
+			i, err := db.retrievalAccessIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				item.AccessTimestamp = now()
+			default:
+				return err
+			}
+		}
+		// delete current entry from the gc index
 		db.gcIndex.DeleteInBatch(b.Batch, item)
+		// update access timestamp
 		item.AccessTimestamp = now()
+		// update retrieve access index
 		if db.useRetrievalCompositeIndex {
 			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
 		} else {
-			db.retrievalDataIndex.PutInBatch(b.Batch, item)
 			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
 		}
+		// add new entry to gc index
 		db.gcIndex.PutInBatch(b.Batch, item)
 
 	case modeRemoval:
 		// delete from retrieve, pull, gc
+
+		// need to get access timestamp here as it is not
+		// provided by the access function, and it is not
+		// a property of a chunk provided to Accessor.Put.
+		if db.useRetrievalCompositeIndex {
+			i, err := db.retrievalCompositeIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				item.AccessTimestamp = now()
+			default:
+				return err
+			}
+		} else {
+			i, err := db.retrievalAccessIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				item.AccessTimestamp = now()
+			default:
+				return err
+			}
+		}
 		if db.useRetrievalCompositeIndex {
 			db.retrievalCompositeIndex.DeleteInBatch(b.Batch, item)
 		} else {

@@ -47,13 +47,14 @@ func TestModeSyncing_withRetrievalCompositeIndex(t *testing.T) {
 	testModeSyncingValues(t, db)
 }
 
-// testModeSyncingValues validates ModeSyncing on the provided DB.
+// testModeSyncingValues validates ModeSyncing index values on the provided DB.
 func testModeSyncingValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeSyncing)
 
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
+	defer func(n func() int64) { now = n }(now)
 	now = func() (t int64) {
 		return wantTimestamp
 	}
@@ -96,13 +97,14 @@ func TestModeUpload_withRetrievalCompositeIndex(t *testing.T) {
 	testModeUploadValues(t, db)
 }
 
-// testModeUploadValues validates ModeUpload on the provided DB.
+// testModeUploadValues validates ModeUpload index values on the provided DB.
 func testModeUploadValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeUpload)
 
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
+	defer func(n func() int64) { now = n }(now)
 	now = func() (t int64) {
 		return wantTimestamp
 	}
@@ -147,13 +149,14 @@ func TestModeRequest_withRetrievalCompositeIndex(t *testing.T) {
 	testModeRequestValues(t, db)
 }
 
-// testModeRequestValues validates ModeRequest on the provided DB.
+// testModeRequestValues validates ModeRequest index values on the provided DB.
 func testModeRequestValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeRequest)
 
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
+	defer func(n func() int64) { now = n }(now)
 	now = func() (t int64) {
 		return wantTimestamp
 	}
@@ -187,13 +190,14 @@ func TestModeSynced_withRetrievalCompositeIndex(t *testing.T) {
 	testModeSyncedValues(t, db)
 }
 
-// testModeSyncedValues validates ModeSynced on the provided DB.
+// testModeSyncedValues validates ModeSynced index values on the provided DB.
 func testModeSyncedValues(t *testing.T, db *DB) {
 	a := db.Accessor(ModeSyncing)
 
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
+	defer func(n func() int64) { now = n }(now)
 	now = func() (t int64) {
 		return wantTimestamp
 	}
@@ -215,6 +219,92 @@ func testModeSyncedValues(t *testing.T, db *DB) {
 	t.Run("push index", testPushIndexValues(db, chunk, wantTimestamp, leveldb.ErrNotFound))
 
 	t.Run("gc index", testGCIndexValues(db, chunk, wantTimestamp, wantTimestamp))
+}
+
+// TestModeAccess validates internal data operations and state
+// for ModeAccess on DB with default configuration.
+func TestModeAccess(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	testModeAccessValues(t, db)
+}
+
+// TestModeAccess_withRetrievalCompositeIndex validates internal
+// data operations and state for ModeAccess on DB with
+// retrieval composite index enabled.
+func TestModeAccess_withRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testModeAccessValues(t, db)
+}
+
+// testModeAccessValues validates ModeAccess index values on the provided DB.
+func testModeAccessValues(t *testing.T, db *DB) {
+	a := db.Accessor(ModeUpload)
+
+	chunk := generateRandomChunk()
+
+	uploadTimestamp := time.Now().UTC().UnixNano()
+	defer func(n func() int64) { now = n }(now)
+	now = func() (t int64) {
+		return uploadTimestamp
+	}
+
+	err := a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a = db.Accessor(modeAccess)
+
+	t.Run("first get", func(t *testing.T) {
+		got, err := a.Get(context.Background(), chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !bytes.Equal(chunk.Address(), got.Address()) {
+			t.Errorf("got chunk address %x, want %s", chunk.Address(), got.Address())
+		}
+
+		if !bytes.Equal(chunk.Data(), got.Data()) {
+			t.Errorf("got chunk data %x, want %s", chunk.Data(), got.Data())
+		}
+
+		t.Run("retrieve indexes", testRetrieveIndexesValuesWithAccess(db, chunk, uploadTimestamp, uploadTimestamp))
+
+		t.Run("gc index", testGCIndexValues(db, chunk, uploadTimestamp, uploadTimestamp))
+
+		t.Run("gc index count", testGCIndexCount(db, 1))
+	})
+
+	t.Run("second get", func(t *testing.T) {
+		accessTimestamp := time.Now().UTC().UnixNano()
+		now = func() (t int64) {
+			return accessTimestamp
+		}
+
+		got, err := a.Get(context.Background(), chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !bytes.Equal(chunk.Address(), got.Address()) {
+			t.Errorf("got chunk address %x, want %s", chunk.Address(), got.Address())
+		}
+
+		if !bytes.Equal(chunk.Data(), got.Data()) {
+			t.Errorf("got chunk data %x, want %s", chunk.Data(), got.Data())
+		}
+
+		t.Run("retrieve indexes", testRetrieveIndexesValuesWithAccess(db, chunk, uploadTimestamp, accessTimestamp))
+
+		t.Run("gc index", testGCIndexValues(db, chunk, uploadTimestamp, accessTimestamp))
+
+		t.Run("gc index count", testGCIndexCount(db, 1))
+	})
 }
 
 // testRetrieveIndexesValues returns a test function that validates if the right
@@ -316,6 +406,21 @@ func testGCIndexValues(db *DB, chunk storage.Chunk, storeTimestamp, accessTimest
 			t.Fatal(err)
 		}
 		validateItem(t, item, chunk.Address(), nil, storeTimestamp, accessTimestamp)
+	}
+}
+
+// testGCIndexCount returns a test function that validates if
+// gc index contains expected number of key/value pairs.
+func testGCIndexCount(db *DB, want int) func(t *testing.T) {
+	return func(t *testing.T) {
+		var c int
+		db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+			c++
+			return
+		})
+		if c != want {
+			t.Errorf("got %v item in gc index, want %v", c, want)
+		}
 	}
 }
 
