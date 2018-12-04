@@ -45,6 +45,10 @@ var (
 	timeout          int
 )
 var (
+	feedUploadAndSyncCount      = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.count", nil)
+	feedUploadAndSyncFailCount  = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.fail.count", nil)
+	feedUploadAndSyncRunTime    = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.time", nil)
+	feedUploadAndSyncTimeout    = gethmetrics.NewRegisteredCounter("swarm-smoke.feed-and-sync.timeout", nil)
 	smokeUploadAndSyncCount     = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.count", nil)
 	smokeUploadAndSyncFailCount = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.fail.count", nil)
 	smokeUploadAndSyncRunTime   = gethmetrics.NewRegisteredCounter("swarm-smoke.upload-and-sync.time", nil)
