@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -335,42 +334,28 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 	return results, nil
 }
 
+type addressMap map[common.Hash]common.Address
+
 type AccountRangeResult struct {
-	Preimages []common.Hash               `json:"preimages"`
-	Next      common.Hash                 `json:"nextKey"`
+	AddressMap addressMap `json:"addressMap"`
 }
 
-func accountRange(st state.Trie, start *common.Hash, maxResults int) (AccountRangeResult, error) {
+func accountRange(st state.Trie, start *common.Hash, maxResult int) (AccountRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(start[:]))
-	result := AccountRangeResult{Preimages: []common.Hash{}, Next: common.Hash{}}
-	zeros := make([]byte, common.HashLength)
-
-	if bytes.Equal(start.Bytes()[:], zeros) {
-		start = nil
+	result := AccountRangeResult{AddressMap: addressMap{}}
+	for i := 0; i < maxResult && it.Next(); i++ {
+		key := st.GetKey(it.Key)
+		// If key is nil, that means it wasn't found in the preimage database.
+		// This is not a problem, because we still return the hash of the key together with
+		// address zero and the client can very easily determine that the hash of the addres zero
+		// is not matching, which means it wasn't found.
+		result.AddressMap[common.BytesToHash(it.Key)] = common.BytesToAddress(key)
 	}
-
-	if maxResults > 100 {
-		maxResults = 100
-	}
-
-	// dont return the first account preimage
-	if !it.Next() && start != &(common.Hash{}) {
-		return result, nil
-	}
-
-	for i := 0; i < maxResults-1 && it.Next(); i++ {
-		result.Preimages = append(result.Preimages, common.BytesToHash(it.Key))
-	}
-
-	if it.Next() {
-		result.Next = common.BytesToHash(it.Key)
-	}
-
 	return result, nil
 }
 
-//enumerate and return account preimages in the state at the current block
-func (api *PrivateDebugAPI) AccountRange(ctx context.Context, startAddr *common.Hash, maxResults int) (AccountRangeResult, error) {
+//block hash or number, tx index, start address hash, max results
+func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, blockNr rpc.BlockNumber, txIndex int, startAddr *common.Hash, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB = nil
 	var err error = nil
 	var block = api.eth.blockchain.CurrentBlock()
