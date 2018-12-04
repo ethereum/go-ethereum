@@ -101,12 +101,11 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 	var nodeStatusM sync.Map
 	var totalFoundCount uint64
 
-	//connect all nodes in a chain
-	_, err := sim.AddNodesAndConnectChain(nodeCount)
+	//upload a snapshot
+	err := sim.UploadSnapshot(fmt.Sprintf("network/stream/testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		//wait for kademlia to be healthy
@@ -276,7 +275,8 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 	var nodeStatusM sync.Map
 	var totalFoundCount uint64
 
-	_, err := sim.AddNodesAndConnectChain(nodeCount)
+	//upload a snapshot
+	err := sim.UploadSnapshot(fmt.Sprintf("network/stream/testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatal(err)
 	}
