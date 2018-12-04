@@ -18,8 +18,13 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"sort"
+	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	gethmetrics "github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -102,8 +107,14 @@ func main() {
 		},
 	}
 
-	app.Flags = append(app.Flags, swarmmetrics.Flags[0])
-	app.Flags = append(app.Flags, swarmmetrics.Flags[1:]...)
+	app.Flags = append(app.Flags, []cli.Flag{
+		utils.MetricsEnabledFlag,
+		swarmmetrics.MetricsInfluxDBEndpointFlag,
+		swarmmetrics.MetricsInfluxDBDatabaseFlag,
+		swarmmetrics.MetricsInfluxDBUsernameFlag,
+		swarmmetrics.MetricsInfluxDBPasswordFlag,
+		swarmmetrics.MetricsInfluxDBHostTagFlag,
+	}...)
 
 	app.Commands = []cli.Command{
 		{
@@ -122,10 +133,34 @@ func main() {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
+	app.Before = func(ctx *cli.Context) error {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+		setupMetrics(ctx)
+		return nil
+	}
 
 	err := app.Run(os.Args)
 	if err != nil {
 		log.Error(err.Error())
 		os.Exit(1)
+	}
+}
+
+func setupMetrics(ctx *cli.Context) {
+	if gethmetrics.Enabled {
+		var (
+			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.GlobalString(swarmmetrics.MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.GlobalString(swarmmetrics.MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.GlobalString(swarmmetrics.MetricsInfluxDBPasswordFlag.Name)
+			hosttag  = ctx.GlobalString(swarmmetrics.MetricsInfluxDBHostTagFlag.Name)
+		)
+
+		// Start system runtime metrics collection
+		go gethmetrics.CollectProcessMetrics(2 * time.Second)
+
+		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
+			"host": hosttag,
+		})
 	}
 }
