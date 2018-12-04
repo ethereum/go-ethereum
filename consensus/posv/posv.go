@@ -261,20 +261,20 @@ func (c *Posv) Author(header *types.Header) (common.Address, error) {
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (c *Posv) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
-	return c.verifyHeaderWithCache(chain, header, nil)
+func (c *Posv) VerifyHeader(chain consensus.ChainReader, header *types.Header, fullVerify bool) error {
+	return c.verifyHeaderWithCache(chain, header, nil, fullVerify)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (c *Posv) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (c *Posv) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, fullVerifies []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	go func() {
 		for i, header := range headers {
-			err := c.verifyHeaderWithCache(chain, header, headers[:i])
+			err := c.verifyHeaderWithCache(chain, header, headers[:i], fullVerifies[i])
 
 			select {
 			case <-abort:
@@ -286,12 +286,12 @@ func (c *Posv) VerifyHeaders(chain consensus.ChainReader, headers []*types.Heade
 	return abort, results
 }
 
-func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	_, check := c.verifiedHeaders.Get(header.Hash())
 	if check {
 		return nil
 	}
-	err := c.verifyHeader(chain, header, parents)
+	err := c.verifyHeader(chain, header, parents, fullVerify)
 	if err == nil {
 		c.verifiedHeaders.Add(header.Hash(), true)
 	}
@@ -302,15 +302,19 @@ func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	if header.Number == nil {
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
-
-	// Don't waste time checking blocks from the future
-	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
-		return consensus.ErrFutureBlock
+	if fullVerify {
+		if header.Number.Uint64() > c.config.Epoch && len(header.Validator) == 0 {
+			return consensus.ErrNoValidatorSignature
+		}
+		// Don't waste time checking blocks from the future
+		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+			return consensus.ErrFutureBlock
+		}
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
 	checkpoint := (number % c.config.Epoch) == 0
@@ -359,14 +363,14 @@ func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 		return err
 	}
 	// All basic checks passed, verify cascading fields
-	return c.verifyCascadingFields(chain, header, parents)
+	return c.verifyCascadingFields(chain, header, parents, fullVerify)
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
 // rather depend on a batch of previous headers. The caller may optionally pass
 // in a batch of parents (ascending order) to avoid looking those up from the
 // database. This is useful for concurrently verifying a batch of new headers.
-func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	// The genesis block is the always valid dead-end
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -384,9 +388,6 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	if parent.Time.Uint64()+c.config.Period > header.Time.Uint64() {
 		return ErrInvalidTimestamp
-	}
-	if header.Number.Uint64() > c.config.Epoch && len(header.Validator) == 0 {
-		return consensus.ErrNoValidatorSignature
 	}
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
@@ -429,7 +430,7 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 		}
 	}
 	// All basic checks passed, verify the seal and return
-	return c.verifySeal(chain, header, parents)
+	return c.verifySeal(chain, header, parents, fullVerify)
 }
 
 func (c *Posv) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
@@ -533,7 +534,7 @@ func (c *Posv) snapshot(chain consensus.ChainReader, number uint64, hash common.
 		// If we're at block zero, make a snapshot
 		if number == 0 {
 			genesis := chain.GetHeaderByNumber(0)
-			if err := c.VerifyHeader(chain, genesis, false); err != nil {
+			if err := c.VerifyHeader(chain, genesis, true); err != nil {
 				return nil, err
 			}
 			signers := make([]common.Address, (len(genesis.Extra)-extraVanity-extraSeal)/common.AddressLength)
@@ -598,7 +599,7 @@ func (c *Posv) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
 func (c *Posv) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
-	return c.verifySeal(chain, header, nil)
+	return c.verifySeal(chain, header, nil, true)
 }
 
 // verifySeal checks whether the signature contained in the header satisfies the
@@ -607,7 +608,7 @@ func (c *Posv) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 // from.
 // verifySeal also checks the pair of creator-validator set in the header satisfies
 // the double validation.
-func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -663,7 +664,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 
 	// header must contain validator info following double validation design
 	// start checking from epoch 2nd.
-	if header.Number.Uint64() > c.config.Epoch {
+	if header.Number.Uint64() > c.config.Epoch && fullVerify {
 		validator, err := c.RecoverValidator(header)
 		if err != nil {
 			return err

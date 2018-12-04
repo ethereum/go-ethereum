@@ -170,7 +170,6 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	currentBlock := pm.blockchain.CurrentBlock()
 	td := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	pHead, pTd := peer.Head()
-	log.Debug("ProtocolManager synchronise ", "p", peer, "pTd", pTd, "currentTd", td)
 	if pTd.Cmp(td) <= 0 {
 		return
 	}

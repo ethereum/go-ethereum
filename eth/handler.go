@@ -170,16 +170,26 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
-	inserter := func(blocks types.Blocks) (int, error) {
+	inserter := func(block *types.Block) error {
 		// If fast sync is running, deny importing weird blocks
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
-			log.Warn("Discarded bad propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
+			log.Warn("Discarded bad propagated block", "number", block.Number(), "hash", block.Hash())
+			return nil
 		}
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
-		return manager.blockchain.InsertChain(blocks)
+		return manager.blockchain.InsertBlock(block)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+
+	prepare := func(block *types.Block) error {
+		// If fast sync is running, deny importing weird blocks
+		if atomic.LoadUint32(&manager.fastSync) == 1 {
+			log.Warn("Discarded bad propagated block", "number", block.Number(), "hash", block.Hash())
+			return nil
+		}
+		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
+		return manager.blockchain.PrepareBlock(block)
+	}
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
 
 	return manager, nil
 }
