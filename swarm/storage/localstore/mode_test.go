@@ -158,19 +158,61 @@ func testModeRequestValues(t *testing.T, db *DB) {
 		return wantTimestamp
 	}
 
-	wantSize, err := db.sizeCounter.Get()
+	err := a.Put(context.Background(), chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Run("retrieve indexes", testRetrieveIndexesValuesWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+
+	t.Run("gc index", testGCIndexValues(db, chunk, wantTimestamp, wantTimestamp))
+}
+
+// TestModeSynced validates internal data operations and state
+// for ModeSynced on DB with default configuration.
+func TestModeSynced(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	testModeSyncedValues(t, db)
+}
+
+// TestModeSynced_withRetrievalCompositeIndex validates internal
+// data operations and state for ModeSynced on DB with
+// retrieval composite index enabled.
+func TestModeSynced_withRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+	defer cleanupFunc()
+
+	testModeSyncedValues(t, db)
+}
+
+// testModeSyncedValues validates ModeSynced on the provided DB.
+func testModeSyncedValues(t *testing.T, db *DB) {
+	a := db.Accessor(ModeSyncing)
+
+	chunk := generateRandomChunk()
+
+	wantTimestamp := time.Now().UTC().UnixNano()
+	now = func() (t int64) {
+		return wantTimestamp
+	}
+
+	err := a.Put(context.Background(), chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a = db.Accessor(ModeSynced)
 
 	err = a.Put(context.Background(), chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wantSize++
+	t.Run("retrieve indexes", testRetrieveIndexesValues(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("retrieve indexes", testRetrieveIndexesValuesWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+	t.Run("push index", testPushIndexValues(db, chunk, wantTimestamp, leveldb.ErrNotFound))
 
 	t.Run("gc index", testGCIndexValues(db, chunk, wantTimestamp, wantTimestamp))
 }
@@ -246,16 +288,18 @@ func testPullIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64) func
 
 // testPushIndexValues returns a test function that validates if the right
 // chunk values are in the push index.
-func testPushIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64) func(t *testing.T) {
+func testPushIndexValues(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pushIndex.Get(shed.IndexItem{
 			Address:        chunk.Address(),
 			StoreTimestamp: storeTimestamp,
 		})
-		if err != nil {
-			t.Fatal(err)
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
 		}
-		validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		if err == nil {
+			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		}
 	}
 }
 

@@ -181,9 +181,25 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 		// delete from push, insert to gc
 		item.StoreTimestamp = now()
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+			i, err := db.retrievalCompositeIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				item.AccessTimestamp = now()
+			default:
+				return err
+			}
 		} else {
-			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			i, err := db.retrievalAccessIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				item.AccessTimestamp = now()
+			default:
+				return err
+			}
 		}
 		db.pushIndex.DeleteInBatch(b.Batch, item)
 		db.gcIndex.PutInBatch(b.Batch, item)

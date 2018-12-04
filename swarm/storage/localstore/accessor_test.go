@@ -52,7 +52,6 @@ func testAccessors(t *testing.T, db *DB) {
 		ModeSyncing,
 		ModeUpload,
 		ModeRequest,
-		ModeSynced,
 		modeAccess,
 	} {
 		t.Run(ModeName(m), func(t *testing.T) {
@@ -74,6 +73,25 @@ func testAccessors(t *testing.T, db *DB) {
 			}
 		})
 	}
+
+	// Synced mode does not put the item to retrieval index.
+	t.Run(ModeName(ModeSynced), func(t *testing.T) {
+		a := db.Accessor(ModeSynced)
+
+		chunk := generateRandomChunk()
+
+		// first put a random chunk to the database
+		err := a.Put(context.Background(), chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wantError := storage.ErrChunkNotFound
+		_, err = a.Get(context.Background(), chunk.Address())
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
+		}
+	})
 
 	// Removal mode is a special case as it removes the chunk
 	// from the database.
