@@ -27,7 +27,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -59,6 +59,9 @@ var (
 	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain
 	maxResultsProcess = 2048      // Number of content download results to import at once into the chain
+
+	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
+	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
 
 	fsHeaderCheckFrequency = 100             // Verification frequency of the downloaded headers during fast sync
 	fsHeaderSafetyNet      = 2048            // Number of headers to discard in case a chain violation is detected
@@ -96,6 +99,7 @@ type Downloader struct {
 	mode SyncMode       // Synchronisation mode defining the strategy used (per sync cycle)
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
+	genesis uint64   // Genesis block number to limit sync to (e.g. light client CHT)
 	queue   *queue   // Scheduler for selecting the hashes to download
 	peers   *peerSet // Set of active peers from which download can proceed
 	stateDB ethdb.Database
@@ -178,6 +182,9 @@ type BlockChain interface {
 	// HasBlock verifies a block's presence in the local chain.
 	HasBlock(common.Hash, uint64) bool
 
+	// HasFastBlock verifies a fast block's presence in the local chain.
+	HasFastBlock(common.Hash, uint64) bool
+
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
 
@@ -224,7 +231,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		stateCh:        make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
 		syncStatsState: stateSyncStats{
-			processed: core.GetTrieSyncProgress(stateDb),
+			processed: rawdb.ReadFastTrieProgress(stateDb),
 		},
 		trackStateReq: make(chan *stateReq),
 	}
@@ -306,7 +313,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	d.cancelLock.RUnlock()
 
 	if master {
-		d.Cancel()
+		d.cancel()
 	}
 	return nil
 }
@@ -427,7 +434,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 	height := latest.Number.Uint64()
 
-	origin, err := d.findAncestor(p, height)
+	origin, err := d.findAncestor(p, latest)
 	if err != nil {
 		return err
 	}
@@ -501,8 +508,10 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 	return err
 }
 
-// Cancel cancels all of the operations and resets the queue.
-func (d *Downloader) Cancel() {
+// cancel aborts all of the operations and resets the queue. However, cancel does
+// not wait for the running download goroutines to finish. This method should be
+// used when cancelling the downloads from inside the downloader.
+func (d *Downloader) cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -514,6 +523,12 @@ func (d *Downloader) Cancel() {
 		}
 	}
 	d.cancelLock.Unlock()
+}
+
+// Cancel aborts all of the operations and waits for all download goroutines to
+// finish before returning.
+func (d *Downloader) Cancel() {
+	d.cancel()
 	d.cancelWg.Wait()
 }
 
@@ -576,41 +591,107 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 	}
 }
 
+// calculateRequestSpan calculates what headers to request from a peer when trying to determine the
+// common ancestor.
+// It returns parameters to be used for peer.RequestHeadersByNumber:
+//  from - starting block number
+//  count - number of headers to request
+//  skip - number of headers to skip
+// and also returns 'max', the last block which is expected to be returned by the remote peers,
+// given the (from,count,skip)
+func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
+	var (
+		from     int
+		count    int
+		MaxCount = MaxHeaderFetch / 16
+	)
+	// requestHead is the highest block that we will ask for. If requestHead is not offset,
+	// the highest block that we will get is 16 blocks back from head, which means we
+	// will fetch 14 or 15 blocks unnecessarily in the case the height difference
+	// between us and the peer is 1-2 blocks, which is most common
+	requestHead := int(remoteHeight) - 1
+	if requestHead < 0 {
+		requestHead = 0
+	}
+	// requestBottom is the lowest block we want included in the query
+	// Ideally, we want to include just below own head
+	requestBottom := int(localHeight - 1)
+	if requestBottom < 0 {
+		requestBottom = 0
+	}
+	totalSpan := requestHead - requestBottom
+	span := 1 + totalSpan/MaxCount
+	if span < 2 {
+		span = 2
+	}
+	if span > 16 {
+		span = 16
+	}
+
+	count = 1 + totalSpan/span
+	if count > MaxCount {
+		count = MaxCount
+	}
+	if count < 2 {
+		count = 2
+	}
+	from = requestHead - (count-1)*span
+	if from < 0 {
+		from = 0
+	}
+	max := from + (count-1)*span
+	return int64(from), count, span - 1, uint64(max)
+}
+
 // findAncestor tries to locate the common ancestor link of the local chain and
 // a remote peers blockchain. In the general case when our node was in sync and
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
-func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, error) {
+func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
 	// Figure out the valid ancestor range to prevent rewrite attacks
-	floor, ceil := int64(-1), d.lightchain.CurrentHeader().Number.Uint64()
+	var (
+		floor        = int64(-1)
+		localHeight  uint64
+		remoteHeight = remoteHeader.Number.Uint64()
+	)
+	switch d.mode {
+	case FullSync:
+		localHeight = d.blockchain.CurrentBlock().NumberU64()
+	case FastSync:
+		localHeight = d.blockchain.CurrentFastBlock().NumberU64()
+	default:
+		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
+	}
+	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
+	if localHeight >= MaxForkAncestry {
+		// We're above the max reorg threshold, find the earliest fork point
+		floor = int64(localHeight - MaxForkAncestry)
 
-	if d.mode == FullSync {
-		ceil = d.blockchain.CurrentBlock().NumberU64()
-	} else if d.mode == FastSync {
-		ceil = d.blockchain.CurrentFastBlock().NumberU64()
+		// If we're doing a light sync, ensure the floor doesn't go below the CHT, as
+		// all headers before that point will be missing.
+		if d.mode == LightSync {
+			// If we dont know the current CHT position, find it
+			if d.genesis == 0 {
+				header := d.lightchain.CurrentHeader()
+				for header != nil {
+					d.genesis = header.Number.Uint64()
+					if floor >= int64(d.genesis)-1 {
+						break
+					}
+					header = d.lightchain.GetHeaderByHash(header.ParentHash)
+				}
+			}
+			// We already know the "genesis" block number, cap floor to that
+			if floor < int64(d.genesis)-1 {
+				floor = int64(d.genesis) - 1
+			}
+		}
 	}
-	if ceil >= MaxForkAncestry {
-		floor = int64(ceil - MaxForkAncestry)
-	}
-	p.log.Debug("Looking for common ancestor", "local", ceil, "remote", height)
+	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
-	// Request the topmost blocks to short circuit binary ancestor lookup
-	head := ceil
-	if head > height {
-		head = height
-	}
-	from := int64(head) - int64(MaxHeaderFetch)
-	if from < 0 {
-		from = 0
-	}
-	// Span out with 15 block gaps into the future to catch bad head reports
-	limit := 2 * MaxHeaderFetch / 16
-	count := 1 + int((int64(ceil)-from)/16)
-	if count > limit {
-		count = limit
-	}
-	go p.peer.RequestHeadersByNumber(uint64(from), count, 15, false)
+	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
+	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
 	number, hash := uint64(0), common.Hash{}
@@ -636,9 +717,10 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 				return 0, errEmptyHeaderSet
 			}
 			// Make sure the peer's reply conforms to the request
-			for i := 0; i < len(headers); i++ {
-				if number := headers[i].Number.Int64(); number != from+int64(i)*16 {
-					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", from+int64(i)*16, "received", number)
+			for i, header := range headers {
+				expectNumber := from + int64(i)*int64((skip+1))
+				if number := header.Number.Int64(); number != expectNumber {
+					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, errInvalidChain
 				}
 			}
@@ -646,18 +728,24 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
 				// Skip any headers that underflow/overflow our requested set
-				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > ceil {
+				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > max {
 					continue
 				}
 				// Otherwise check if we already know the header or not
-				if (d.mode == FullSync && d.blockchain.HasBlock(headers[i].Hash(), headers[i].Number.Uint64())) || (d.mode != FullSync && d.lightchain.HasHeader(headers[i].Hash(), headers[i].Number.Uint64())) {
-					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
+				h := headers[i].Hash()
+				n := headers[i].Number.Uint64()
 
-					// If every header is known, even future ones, the peer straight out lied about its head
-					if number > height && i == limit-1 {
-						p.log.Warn("Lied about chain head", "reported", height, "found", number)
-						return 0, errStallingPeer
-					}
+				var known bool
+				switch d.mode {
+				case FullSync:
+					known = d.blockchain.HasBlock(h, n)
+				case FastSync:
+					known = d.blockchain.HasFastBlock(h, n)
+				default:
+					known = d.lightchain.HasHeader(h, n)
+				}
+				if known {
+					number, hash = n, h
 					break
 				}
 			}
@@ -672,7 +760,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 		}
 	}
 	// If the head fetch already found an ancestor, return
-	if !common.EmptyHash(hash) {
+	if hash != (common.Hash{}) {
 		if int64(number) <= floor {
 			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
 			return 0, errInvalidAncestor
@@ -681,10 +769,12 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
-	start, end := uint64(0), head
+	start, end := uint64(0), remoteHeight
 	if floor > 0 {
 		start = uint64(floor)
 	}
+	p.log.Trace("Binary searching for common ancestor", "start", start, "end", end)
+
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
@@ -715,16 +805,29 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 				arrived = true
 
 				// Modify the search interval based on the response
-				if (d.mode == FullSync && !d.blockchain.HasBlock(headers[0].Hash(), headers[0].Number.Uint64())) || (d.mode != FullSync && !d.lightchain.HasHeader(headers[0].Hash(), headers[0].Number.Uint64())) {
+				h := headers[0].Hash()
+				n := headers[0].Number.Uint64()
+
+				var known bool
+				switch d.mode {
+				case FullSync:
+					known = d.blockchain.HasBlock(h, n)
+				case FastSync:
+					known = d.blockchain.HasFastBlock(h, n)
+				default:
+					known = d.lightchain.HasHeader(h, n)
+				}
+				if !known {
 					end = check
 					break
 				}
-				header := d.lightchain.GetHeaderByHash(headers[0].Hash()) // Independent of sync mode, header surely exists
+				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
 				if header.Number.Uint64() != check {
 					p.log.Debug("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
 					return 0, errBadPeer
 				}
 				start = check
+				hash = h
 
 			case <-timeout:
 				p.log.Debug("Waiting for search header timed out", "elapsed", ttl)
@@ -835,6 +938,30 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				}
 				headers = filled[proced:]
 				from += uint64(proced)
+			} else {
+				// If we're closing in on the chain head, but haven't yet reached it, delay
+				// the last few headers so mini reorgs on the head don't cause invalid hash
+				// chain errors.
+				if n := len(headers); n > 0 {
+					// Retrieve the current head we're at
+					head := uint64(0)
+					if d.mode == LightSync {
+						head = d.lightchain.CurrentHeader().Number.Uint64()
+					} else {
+						head = d.blockchain.CurrentFastBlock().NumberU64()
+						if full := d.blockchain.CurrentBlock().NumberU64(); head < full {
+							head = full
+						}
+					}
+					// If the head is way older than this batch, delay the last few headers
+					if head+uint64(reorgProtThreshold) < headers[n-1].Number.Uint64() {
+						delay := reorgProtHeaderDelay
+						if delay > n {
+							delay = n
+						}
+						headers = headers[:n-delay]
+					}
+				}
 			}
 			// Insert all the new headers and fetch the next batch
 			if len(headers) > 0 {
@@ -845,8 +972,18 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 					return errCancelHeaderFetch
 				}
 				from += uint64(len(headers))
+				getHeaders(from)
+			} else {
+				// No headers delivered, or all of them being delayed, sleep a bit and retry
+				p.log.Trace("All headers delayed, waiting")
+				select {
+				case <-time.After(fsHeaderContCheck):
+					getHeaders(from)
+					continue
+				case <-d.cancelCh:
+					return errCancelHeaderFetch
+				}
 			}
-			getHeaders(from)
 
 		case <-timeout.C:
 			if d.dropPeer == nil {
@@ -892,7 +1029,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 	var (
 		deliver = func(packet dataPack) (int, error) {
 			pack := packet.(*headerPack)
-			return d.queue.DeliverHeaders(pack.peerId, pack.headers, d.headerProcCh)
+			return d.queue.DeliverHeaders(pack.peerID, pack.headers, d.headerProcCh)
 		}
 		expire   = func() map[string]int { return d.queue.ExpireHeaders(d.requestTTL()) }
 		throttle = func() bool { return false }
@@ -922,7 +1059,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 	var (
 		deliver = func(packet dataPack) (int, error) {
 			pack := packet.(*bodyPack)
-			return d.queue.DeliverBodies(pack.peerId, pack.transactions, pack.uncles)
+			return d.queue.DeliverBodies(pack.peerID, pack.transactions, pack.uncles)
 		}
 		expire   = func() map[string]int { return d.queue.ExpireBodies(d.requestTTL()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchBodies(req) }
@@ -946,7 +1083,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 	var (
 		deliver = func(packet dataPack) (int, error) {
 			pack := packet.(*receiptPack)
-			return d.queue.DeliverReceipts(pack.peerId, pack.receipts)
+			return d.queue.DeliverReceipts(pack.peerID, pack.receipts)
 		}
 		expire   = func() map[string]int { return d.queue.ExpireReceipts(d.requestTTL()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchReceipts(req) }
@@ -1197,7 +1334,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				}
 				// If no headers were retrieved at all, the peer violated its TD promise that it had a
 				// better chain compared to ours. The only exception is if its promised blocks were
-				// already imported by other means (e.g. fecher):
+				// already imported by other means (e.g. fetcher):
 				//
 				// R <remote peer>, L <local node>: Both at block 10
 				// R: Mine block 11, and propagate it to L
@@ -1366,7 +1503,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 	defer stateSync.Cancel()
 	go func() {
 		if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
-			d.queue.Close() // wake up WaitResults
+			d.queue.Close() // wake up Results
 		}
 	}()
 	// Figure out the ideal pivot block. Note, that this goalpost may move if the
@@ -1424,7 +1561,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 				defer stateSync.Cancel()
 				go func() {
 					if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
-						d.queue.Close() // wake up WaitResults
+						d.queue.Close() // wake up Results
 					}
 				}()
 				oldPivot = P

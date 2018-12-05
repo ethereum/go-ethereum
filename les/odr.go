@@ -28,19 +28,18 @@ import (
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
 	db                                         ethdb.Database
+	indexerConfig                              *light.IndexerConfig
 	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
 	retriever                                  *retrieveManager
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, config *light.IndexerConfig, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:               db,
-		chtIndexer:       chtIndexer,
-		bloomTrieIndexer: bloomTrieIndexer,
-		bloomIndexer:     bloomIndexer,
-		retriever:        retriever,
-		stop:             make(chan struct{}),
+		db:            db,
+		indexerConfig: config,
+		retriever:     retriever,
+		stop:          make(chan struct{}),
 	}
 }
 
@@ -52,6 +51,13 @@ func (odr *LesOdr) Stop() {
 // Database returns the backing database
 func (odr *LesOdr) Database() ethdb.Database {
 	return odr.db
+}
+
+// SetIndexers adds the necessary chain indexers to the ODR backend
+func (odr *LesOdr) SetIndexers(chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer) {
+	odr.chtIndexer = chtIndexer
+	odr.bloomTrieIndexer = bloomTrieIndexer
+	odr.bloomIndexer = bloomIndexer
 }
 
 // ChtIndexer returns the CHT chain indexer
@@ -67,6 +73,11 @@ func (odr *LesOdr) BloomTrieIndexer() *core.ChainIndexer {
 // BloomIndexer returns the bloombits chain indexer
 func (odr *LesOdr) BloomIndexer() *core.ChainIndexer {
 	return odr.bloomIndexer
+}
+
+// IndexerConfig returns the indexer config.
+func (odr *LesOdr) IndexerConfig() *light.IndexerConfig {
+	return odr.indexerConfig
 }
 
 const (

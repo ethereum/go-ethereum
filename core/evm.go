@@ -84,7 +84,7 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 	}
 }
 
-// CanTransfer checks wether there are enough funds in the address' account to make a transfer.
+// CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0

@@ -4,6 +4,7 @@ package gosigar
 
 import (
 	"io/ioutil"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -95,6 +96,10 @@ func (self *ProcFDUsage) Get(pid int) error {
 	self.Open = uint64(len(fds))
 
 	return nil
+}
+
+func (self *HugeTLBPages) Get() error {
+	return ErrNotImplemented{runtime.GOOS}
 }
 
 func parseCpuStat(self *Cpu, line string) error {

@@ -17,9 +17,8 @@
 package tests
 
 import (
-	"testing"
-
 	"math/big"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
@@ -27,7 +26,7 @@ import (
 
 var (
 	mainnetChainConfig = params.ChainConfig{
-		ChainId:        big.NewInt(1),
+		ChainID:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(1150000),
 		DAOForkBlock:   big.NewInt(1920000),
 		DAOForkSupport: true,
@@ -71,6 +70,9 @@ func TestDifficulty(t *testing.T) {
 	dt.config("Frontier", *params.TestnetChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
+	dt.config("Constantinople", params.ChainConfig{
+		ConstantinopleBlock: big.NewInt(0),
+	})
 	dt.config("difficulty.json", mainnetChainConfig)
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {

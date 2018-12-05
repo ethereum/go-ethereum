@@ -12,6 +12,11 @@ synchronised with the chain or a particular Ethereum node that has no built-in (
 Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
 or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
 
+Check out 
+
+* the [tutorial](tutorial.md) for some concrete examples on how the signer works.
+* the [setup docs](docs/setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
+
 
 ## Command line flags
 Clef accepts the following command line options:
@@ -49,7 +54,6 @@ Example:
 signer -keystore /my/keystore -chainid 4
 ```
 
-Check out the [tutorial](tutorial.md) for some concrete examples on how the signer works.
 
 ## Security model
 
@@ -87,7 +91,7 @@ invoking methods with the following info:
   * [x] Version info about the signer
   * [x] Address of API (http/ipc)
   * [ ] List of known accounts
-* [ ] Have a default timeout on signing operations, so that if the user has not answered withing e.g. 60 seconds, the request is rejected.
+* [ ] Have a default timeout on signing operations, so that if the user has not answered within e.g. 60 seconds, the request is rejected.
 * [ ] `account_signRawTransaction`
 * [ ] `account_bulkSignTransactions([] transactions)` should
    * only exist if enabled via config/flag
@@ -125,7 +129,7 @@ The signer listens to HTTP requests on `rpcaddr`:`rpcport`, with the same JSONRP
 expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
 Some of these call can require user interaction. Clients must be aware that responses
-may be delayed significanlty or may never be received if a users decides to ignore the confirmation request.
+may be delayed significantly or may never be received if a users decides to ignore the confirmation request.
 
 The External API is **untrusted** : it does not accept credentials over this api, nor does it expect
 that requests have any authority.
@@ -858,7 +862,17 @@ A UI should conform to the following rules.
 * A UI SHOULD inform the user about the `SHA256` or `MD5` hash of the binary being executed
 * A UI SHOULD NOT maintain a secondary storage of data, e.g. list of accounts
   * The signer provides accounts
-* A UI SHOULD, to the best extent possible, use static linking / bundling, so that requried libraries are bundled
+* A UI SHOULD, to the best extent possible, use static linking / bundling, so that required libraries are bundled
 along with the UI.
 
 
+### UI Implementations 
+
+There are a couple of implementation for a UI. We'll try to keep this list up to date. 
+
+| Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
+| ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |
+| QtSigner| https://github.com/holiman/qtsigner/| Python3/QT-based| :+1:| :+1:| :+1:| :+1:| :+1:| :x: |  :+1: (partially)|
+| GtkSigner| https://github.com/holiman/gtksigner| Python3/GTK-based| :+1:| :x:| :x:| :+1:| :+1:| :x: |  :x: |
+| Frame | https://github.com/floating/frame/commits/go-signer| Electron-based| :x:| :x:| :x:| :x:| ?| :x: |  :x: |
+| Clef UI| https://github.com/kyokan/clef-ui| Golang/QT-based| :+1:| :+1:| :x:| :+1:| :+1:| :x: |  :+1: (approve tx only)|

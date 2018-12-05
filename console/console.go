@@ -60,7 +60,7 @@ type Config struct {
 	Preload  []string     // Absolute paths to JavaScript files to preload
 }
 
-// Console is a JavaScript interpreted runtime environment. It is a fully fleged
+// Console is a JavaScript interpreted runtime environment. It is a fully fledged
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
@@ -73,6 +73,8 @@ type Console struct {
 	printer  io.Writer    // Output writer to serialize any display strings to
 }
 
+// New initializes a JavaScript interpreted runtime environment and sets defaults
+// with the config struct.
 func New(config Config) (*Console, error) {
 	// Handle unset config values gracefully
 	if config.Prompter == nil {
@@ -312,7 +314,7 @@ func (c *Console) Interactive() {
 		input     = ""                // Current user input
 		scheduler = make(chan string) // Channel to send the next prompt on and receive the input
 	)
-	// Start a goroutine to listen for promt requests and send back inputs
+	// Start a goroutine to listen for prompt requests and send back inputs
 	go func() {
 		for {
 			// Read the next user input

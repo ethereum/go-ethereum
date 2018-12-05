@@ -1,18 +1,18 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 find_files() {
-  find . -not \( \
+  find . ! \( \
       \( \
-        -wholename '.github' \
-        -o -wholename './build/_workspace' \
-        -o -wholename './build/bin' \
-        -o -wholename './crypto/bn256' \
-        -o -wholename '*/vendor/*' \
+        -path '.github' \
+        -o -path './build/_workspace' \
+        -o -path './build/bin' \
+        -o -path './crypto/bn256' \
+        -o -path '*/vendor/*' \
       \) -prune \
     \) -name '*.go'
 }
 
-GOFMT="gofmt -s -w";
-GOIMPORTS="goimports -w";
-find_files | xargs $GOFMT;
-find_files | xargs $GOIMPORTS;
+GOFMT="gofmt -s -w"
+GOIMPORTS="goimports -w"
+find_files | xargs $GOFMT
+find_files | xargs $GOIMPORTS

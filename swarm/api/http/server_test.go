@@ -14,39 +14,457 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http_test
+package http
 
 import (
+	"archive/tar"
 	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"math/big"
+	"mime/multipart"
 	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"strconv"
 	"strings"
-	"sync"
 	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestBzzGetPath(t *testing.T) {
+func init() {
+	loglevel := flag.Int("loglevel", 2, "loglevel")
+	flag.Parse()
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+}
 
+func serverFunc(api *api.API) TestServer {
+	return NewServer(api, "")
+}
+
+func newTestSigner() (*feed.GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return feed.NewGenericSigner(privKey), nil
+}
+
+// Test the transparent resolving of feed updates with bzz:// scheme
+//
+// First upload data to bzz:, and store the Swarm hash to the resulting manifest in a feed update.
+// This effectively uses a feed to store a pointer to content rather than the content itself
+// Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
+func TestBzzWithFeed(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	// Initialize Swarm test server
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	// put together some data for our test:
+	dataBytes := []byte(`
+	//
+	// Create some data our manifest will point to. Data that could be very big and wouldn't fit in a feed update.
+	// So what we are going to do is upload it to Swarm bzz:// and obtain a **manifest hash** pointing to it:
+	//
+	// MANIFEST HASH --> DATA
+	//
+	// Then, we store that **manifest hash** into a Swarm Feed update. Once we have done this,
+	// we can use the **feed manifest hash** in bzz:// instead, this way: bzz://feed-manifest-hash.
+	//
+	// FEED MANIFEST HASH --> MANIFEST HASH --> DATA
+	//
+	// Given that we can update the feed at any time with a new **manifest hash** but the **feed manifest hash**
+	// stays constant, we have effectively created a fixed address to changing content. (Applause)
+	//
+	// FEED MANIFEST HASH (the same) --> MANIFEST HASH(2) --> DATA(2) ...
+	//
+	`)
+
+	// POST data to bzz and get back a content-addressed **manifest hash** pointing to it.
+	resp, err := http.Post(fmt.Sprintf("%s/bzz:/", srv.URL), "text/plain", bytes.NewReader([]byte(dataBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	manifestAddressHex, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manifestAddress := common.FromHex(string(manifestAddressHex))
+
+	log.Info("added data", "manifest", string(manifestAddressHex))
+
+	// At this point we have uploaded the data and have a manifest pointing to it
+	// Now store that manifest address in a feed update.
+	// We also want a feed manifest, so we can use it to refer to the feed.
+
+	// First, create a topic for our feed:
+	topic, _ := feed.NewTopic("interesting topic indeed", nil)
+
+	// Create a feed update request:
+	updateRequest := feed.NewFirstRequest(topic)
+
+	// Store the **manifest address** as data into the feed update.
+	updateRequest.SetData(manifestAddress)
+
+	// Sign the update
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	log.Info("added data", "data", common.ToHex(manifestAddress))
+
+	// Build the feed update http request:
+	feedUpdateURL, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := feedUpdateURL.Query()
+	body := updateRequest.AppendValues(query) // this adds all query parameters and returns the data to be posted
+	query.Set("manifest", "1")                // indicate we want a feed manifest back
+	feedUpdateURL.RawQuery = query.Encode()
+
+	// submit the feed update request to Swarm
+	resp, err = http.Post(feedUpdateURL.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+
+	feedManifestAddressHex, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	feedManifestAddress := &storage.Address{}
+	err = json.Unmarshal(feedManifestAddressHex, feedManifestAddress)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", feedManifestAddressHex, err)
+	}
+
+	correctManifestAddrHex := "747c402e5b9dc715a25a4393147512167bab018a007fad7cdcd9adc7fce1ced2"
+	if feedManifestAddress.Hex() != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestAddress.Hex())
+	}
+
+	// get bzz manifest transparent feed update resolve
+	getBzzURL := fmt.Sprintf("%s/bzz:/%s", srv.URL, feedManifestAddress)
+	resp, err = http.Get(getBzzURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	retrievedData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(retrievedData, []byte(dataBytes)) {
+		t.Fatalf("retrieved data mismatch, expected %x, got %x", dataBytes, retrievedData)
+	}
+}
+
+// Test Swarm feeds using the raw update methods
+func TestBzzFeed(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	signer, _ := newTestSigner()
+
+	defer srv.Close()
+
+	// data of update 1
+	update1Data := testutil.RandomBytes(1, 666)
+	update1Timestamp := srv.CurrentTime
+	//data for update 2
+	update2Data := []byte("foo")
+
+	topic, _ := feed.NewTopic("foo.eth", nil)
+	updateRequest := feed.NewFirstRequest(topic)
+	updateRequest.SetData(update1Data)
+
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+
+	// creates feed and sets update 1
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	urlQuery := testUrl.Query()
+	body := updateRequest.AppendValues(urlQuery) // this adds all query parameters
+	urlQuery.Set("manifest", "1")                // indicate we want a manifest back
+	testUrl.RawQuery = urlQuery.Encode()
+
+	resp, err := http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsrcResp := &storage.Address{}
+	err = json.Unmarshal(b, rsrcResp)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
+	}
+
+	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
+	if rsrcResp.Hex() != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+	}
+
+	// get the manifest
+	testRawUrl := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testRawUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := &api.Manifest{}
+	err = json.Unmarshal(b, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Entries) != 1 {
+		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
+	}
+	correctFeedHex := "0x666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	if manifest.Entries[0].Feed.Hex() != correctFeedHex {
+		t.Fatalf("Expected manifest Feed '%s', got '%s'", correctFeedHex, manifest.Entries[0].Feed.Hex())
+	}
+
+	// take the chance to have bzz: crash on resolving a feed update that does not contain
+	// a swarm hash:
+	testBzzUrl := fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testBzzUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("Expected error status since feed update does not contain a Swarm hash. Received 200 OK")
+	}
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get non-existent name, should fail
+	testBzzResUrl := fmt.Sprintf("%s/bzz-feed:/bar", srv.URL)
+	resp, err = http.Get(testBzzResUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("Expected get non-existent feed manifest to fail with StatusNotFound (404), got %d", resp.StatusCode)
+	}
+
+	resp.Body.Close()
+
+	// get latest update through bzz-feed directly
+	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
+	}
+
+	// update 2
+	// Move the clock ahead 1 second
+	srv.CurrentTime++
+	log.Info("update 2")
+
+	// 1.- get metadata about this feed
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s/", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl + "?meta=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Get feed metadata returned %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRequest = &feed.Request{}
+	if err = updateRequest.UnmarshalJSON(b); err != nil {
+		t.Fatalf("Error decoding feed metadata: %s", err)
+	}
+	updateRequest.SetData(update2Data)
+	if err = updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	testUrl, err = url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	urlQuery = testUrl.Query()
+	body = updateRequest.AppendValues(urlQuery) // this adds all query parameters
+	goodQueryParameters := urlQuery.Encode()    // save the query parameters for a second attempt
+
+	// create bad query parameters in which the signature is missing
+	urlQuery.Del("signature")
+	testUrl.RawQuery = urlQuery.Encode()
+
+	// 1st attempt with bad query parameters in which the signature is missing
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	expectedCode := http.StatusBadRequest
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
+	}
+
+	// 2nd attempt with bad query parameters in which the signature is of incorrect length
+	urlQuery.Set("signature", "0xabcd") // should be 130 hex chars
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	expectedCode = http.StatusBadRequest
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
+	}
+
+	// 3rd attempt, with good query parameters:
+	testUrl.RawQuery = goodQueryParameters
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	expectedCode = http.StatusOK
+	if resp.StatusCode != expectedCode {
+		t.Fatalf("Update returned %s. Expected %d", resp.Status, expectedCode)
+	}
+
+	// get latest update through bzz-feed directly
+	log.Info("get update 1.2")
+	testBzzResUrl = fmt.Sprintf("%s/bzz-feed:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(update2Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
+	}
+
+	// test manifest-less queries
+	log.Info("get first update in update1Timestamp via direct query")
+	query := feed.NewQuery(&updateRequest.Feed, update1Timestamp, lookup.NoClue)
+
+	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	values := urlq.Query()
+	query.AppendValues(values) // this adds feed query parameters
+	urlq.RawQuery = values.Encode()
+	resp, err = http.Get(urlq.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
+	}
+
+}
+
+func TestBzzGetPath(t *testing.T) {
+	testBzzGetPath(false, t)
+	testBzzGetPath(true, t)
+}
+
+func testBzzGetPath(encrypted bool, t *testing.T) {
 	var err error
 
 	testmanifest := []string{
-		`{"entries":[{"path":"a/","hash":"674af7073604ebfc0282a4ab21e5ef1a3c22913866879ebc0816f8a89896b2ed","contentType":"application/bzz-manifest+json","status":0}]}`,
-		`{"entries":[{"path":"a","hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","contentType":"","status":0},{"path":"b/","hash":"0a87b1c3e4bf013686cdf107ec58590f2004610ee58cc2240f26939f691215f5","contentType":"application/bzz-manifest+json","status":0}]}`,
 		`{"entries":[{"path":"b","hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","contentType":"","status":0},{"path":"c","hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","contentType":"","status":0}]}`,
+		`{"entries":[{"path":"a","hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","contentType":"","status":0},{"path":"b/","hash":"<key0>","contentType":"application/bzz-manifest+json","status":0}]}`,
+		`{"entries":[{"path":"a/","hash":"<key1>","contentType":"application/bzz-manifest+json","status":0}]}`,
 	}
 
 	testrequests := make(map[string]int)
-	testrequests["/"] = 0
+	testrequests["/"] = 2
 	testrequests["/a/"] = 1
-	testrequests["/a/b/"] = 2
+	testrequests["/a/b/"] = 0
 	testrequests["/x"] = 0
 	testrequests[""] = 0
 
@@ -54,23 +472,31 @@ func TestBzzGetPath(t *testing.T) {
 
 	reader := [3]*bytes.Reader{}
 
-	key := [3]storage.Key{}
+	addr := [3]storage.Address{}
 
-	srv := testutil.NewTestSwarmServer(t)
+	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
-
-	wg := &sync.WaitGroup{}
 
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
-		key[i], err = srv.Dpa.Store(reader[i], int64(len(mf)), wg, nil)
+		var wait func(context.Context) error
+		ctx := context.TODO()
+		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted)
 		if err != nil {
 			t.Fatal(err)
 		}
-		wg.Wait()
+		for j := i + 1; j < len(testmanifest); j++ {
+			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
+		}
+		err = wait(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	_, err = http.Get(srv.URL + "/bzz-raw:/" + common.ToHex(key[0])[2:] + "/a")
+	rootRef := addr[2].Hex()
+
+	_, err = http.Get(srv.URL + "/bzz-raw:/" + rootRef + "/a")
 	if err != nil {
 		t.Fatalf("Failed to connect to proxy: %v", err)
 	}
@@ -80,8 +506,8 @@ func TestBzzGetPath(t *testing.T) {
 		var respbody []byte
 
 		url := srv.URL + "/bzz-raw:/"
-		if k[:] != "" {
-			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
+		if k != "" {
+			url += rootRef + "/" + k[1:] + "?content_type=text/plain"
 		}
 		resp, err = http.Get(url)
 		if err != nil {
@@ -89,12 +515,15 @@ func TestBzzGetPath(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		respbody, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Error while reading response body: %v", err)
+		}
 
 		if string(respbody) != testmanifest[v] {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {
-				if k[:] == r {
+				if k == r {
 					isexpectedfailrequest = true
 				}
 			}
@@ -109,8 +538,8 @@ func TestBzzGetPath(t *testing.T) {
 		var respbody []byte
 
 		url := srv.URL + "/bzz-hash:/"
-		if k[:] != "" {
-			url += common.ToHex(key[0])[2:] + "/" + k[1:]
+		if k != "" {
+			url += rootRef + "/" + k[1:]
 		}
 		resp, err = http.Get(url)
 		if err != nil {
@@ -122,39 +551,52 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != key[v].String() {
+		if string(respbody) != addr[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {
-				if k[:] == r {
+				if k == r {
 					isexpectedfailrequest = true
 				}
 			}
 			if !isexpectedfailrequest {
-				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
+				t.Fatalf("Response body does not match, expected: %v, got %v", addr[v], string(respbody))
 			}
 		}
 	}
 
+	ref := addr[2].Hex()
+
 	for _, c := range []struct {
-		path string
-		json string
-		html string
+		path          string
+		json          string
+		pageFragments []string
 	}{
 		{
 			path: "/",
 			json: `{"common_prefixes":["a/"]}`,
-			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\t\t<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"data:image/png;base64,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\"/>\n\t<title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\t<tr>\n\t  <td><a href=\"a/\">a/</a></td>\n\t  <td>DIR</td>\n\t  <td>-</td>\n\t</tr>\n      \n\n      \n  </table>\n  <hr>\n</body>\n",
+			pageFragments: []string{
+				fmt.Sprintf("Swarm index of bzz:/%s/", ref),
+				`<a class="normal-link" href="a/">a/</a>`,
+			},
 		},
 		{
 			path: "/a/",
 			json: `{"common_prefixes":["a/b/"],"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/a","mod_time":"0001-01-01T00:00:00Z"}]}`,
-			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\t\t<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"data:image/png;base64,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\"/>\n\t<title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\t<tr>\n\t  <td><a href=\"b/\">b/</a></td>\n\t  <td>DIR</td>\n\t  <td>-</td>\n\t</tr>\n      \n\n      \n\t<tr>\n\t  <td><a href=\"a\">a</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n  </table>\n  <hr>\n</body>\n",
+			pageFragments: []string{
+				fmt.Sprintf("Swarm index of bzz:/%s/a/", ref),
+				`<a class="normal-link" href="b/">b/</a>`,
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/a">a</a>`, ref),
+			},
 		},
 		{
 			path: "/a/b/",
 			json: `{"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/b","mod_time":"0001-01-01T00:00:00Z"},{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/c","mod_time":"0001-01-01T00:00:00Z"}]}`,
-			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\t\t<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAAB5CAYAAAAZD150AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAVlpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IlhNUCBDb3JlIDUuNC4wIj4KICAgPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICAgICAgPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KTMInWQAAFzFJREFUeAHtnXuwJFV9x7vnzrKwIC95w/ImYFkxlZgiGswCIiCGxPhHCEIwmIemUqYwJkYrJmXlUZRa+IpAWYYEk4qJD4gJGAmoiBIxMQFRQCkXdhdCeL+fYdk7nc+ne87dvnPn0TPTPdNzmd/W2X6fc76/7/n9zjm/PrcniuYy18BcA3MNzDUw18BcA3MNzDUw18BcA3MNrGYNLERroyMAeNQ0QcbTLPxFUfaOOx4Wbd12ThRHp0TJ4s5RFF8RtVoXg/2BSeOfk12lxtc0fjva1jibItZEDf4li3u3i3sqipOPRIvRp6ssvjPvhc4Tq/y4Ab71pEXS1oqw7hw1mz8XJc2LoiQ6iTJaaTkxth0l69jXwNayOZ10AvubSQ+RrFOl8mKy7EOiRuN3UfjrUfItUaN1SbQt+lqp2m02T4payS9HSfxK8k1IGdEWkln2Xuzldd7keBunrsO1f4r9b5Mqk3zBlRUy9Ywb0TtQ6O9Tjx1JkvA8SSXfiJK5Fj1MGkf2jBYWzo9a8Y+TiQRaxnLpTnb+HuvzDerzLk4+mb9Q1v5qduPrUPvxURx/DiWeicK2W1lKdCT2Q7n+VqzuOei5m+Nnh1TsPtGahbOiaOFCrHn/vs8ud+PdbrWLOZr6vIX6PEF97uH4uW43jnpudVp2Mzo1ajV+AwPbgGJUYr4/1Or+jxSwu90R5f6QQdPnaBK603zD4LCLNJsnkusfcUXXrKfoL4MtOzxvfXegPrdGjeRjlHEVx4PrE57us11tlr0b/fKlKIq+OTqsjXulS80sO5Dtbdugfnf4Py5qxGenxEeppbez6LJpte6LFuIWlvhT3J/Pq8vNnBps2eE562t97A608G+xnZMdtMN2H+z3LSj+n9g3cNGN4Nzt9tddCZK0ncnnrChuHBElySaOH8k/mNtf5Pr3onWtL0WthfWUuA/XGGX3KHsw2ZYtqc9Rs4dIW2m4mxjwXd8+z2Y8mXXLXoDk38Eaz4c7+2VJzLvsXtrpRXa43+svh/TTIf1QSP0Rx0+Ei8u2L0RPM6i6hn77e9SFhsJzGWnLG9wgshvpeOEJnn+6nX+D8u+ck51p43hIvhyS38DhHiQJKiqDyDYfG42WeiAk3oO93uLJ3tK6P0pa1zK/vj5aSI6FtF15Zjvhvcle5F69xzMkywxdAk+US7aDgVmSbMTaaFwM0VdS8QNIQTll4TA/SdKd3kvS0oqWgRveeku0uO2NjM4v5TmDJda52/MSqyXfy3YrqXJxEDArcjB92Dvh4RdIjoC1hLJFUp6BAPMOBHQjalC5SdR6wfj3FVFjDV1Bcg698S7ka172y0+3y5DwiRncxAoC1OjSiN6LJTNQSd5MJruQnDqVLbrTB0mPkXEgetwy7oH0T2LppzOrv4bMnif/B0hPsS/pozSkketUZ8s2KPIq3OH5ONWjQVgFwSpO69KajVpVpfzHom3b3hctNHajwR5OOUbyLGt7n85B1VJPspvRydFi/Hba/gYUoFLKJlqPpmXx9ikdBRcZsHH7WLIjZT1F472TXHaFZ6dqO5Gsx0SkbmTvS7/8caYbG1CMJGt1Vciz5O5UKuRflUV31t1yJPdx2jDlp2MPw6wTsfA6ke1U47Pg1mVXqfwXyP1Bypg2dgiOXcDwKJgPZPsSknGPyoiv0wAtZlz6CERsAXB4v1tV/apsTFS/sIgP7xLfTdrMPhbfc6pWONNeN1alzF7lDTqfuTkHS3F0FzcbbHixCG/cUtLvAHBZs4Fluqsb2fnK+XpBS6fVp4Mo+7q6WGS+nmXvE8SJf0imDxKGlfTS3Pq0+61BipJc+9j7gOzI1bCoS3tKUwB51U3st9cwar+Kgeq/sR8GkWPXs+5kbwcYpy/yXWQg2U5brPtqI905yEPRttbfgm0jqVSZHbID7CyUeRc078kpo2lrSFWSbt6lWRd5dYreizdcLI1K4m9F2xa/zHEleGaP7Kzftj933ZgDuZcwc9W9q7QylWRevLeKd+d/lgMnt3I84M0XdwwnNlQCRvHVkOwiBaZh1ckskh20kfXnCQpKI1Opa9fFlxWRWsvSpoPIex1pbxIWxyvVVuv9lGFAZlxp0ohc8PgZMqpkgWFnBWeZ7DwWB3H/g/IMTGjlvoceRbDmBuu/kj2waBf0x9o2/ysvYN1n8ELmtbzFugDHrrsddlWqgy/z3Bw1WeGyNbrNjCclFl4XIagSn0Fl7IdHEQc3W0nh9aQvG2zMna7dt1sheBHK8R5IiPdlcwBbYtc5iZdWwNh3MyuITyFtIN7F0qTCrp0GGB8TLbQuixaTf+HJ+3MlTGQ3a7MTKWpgIQ0W8H2Bu1B4KaIFaeW7k/I4bRBbOBcauv0yHiE+iPvDOS7nJE7oV00rRFd8O57gPK78YMXV5Sesg3GNKgd7y0vsOKpzUKWjqkMfZoM43Xu20CGz3nw2TuOSxqGQfVhPovP3r9x3FejReKSv8gLnQ1w+ZuUtS2csf2pEW4vuLXmpfhPdGdeNd6us1sRy33RlyHPs69bXsIjwWQjGktN+WXff6eo5lZPMjfda4xZI/Ele5JxK3jSc5Cae7uYJcplOfjfv3iZf+vISy3bjy3PffkQ/2zgaeosP4nq78e25bt9Tp48S/TqZba1i+6tlNL5d1Sv3Mut23VcUP8hlRu4t57YOxPbhWNL7W/bKPHud0fpd9eJfiNSui1ztZKtw5rCxUyTduKTuQMK1J3eRHoBwR+Au8ldGIT00JgM8z5KH/XIt9VrLSqn1EgSlx/eQj4v7guS7LfdZAJjcDcf3YYjHQLVTrmEJd9WLixTDc/kyQrm12K42slU0wQ8jXLELIIq+FtW138zgah8oO5DkXN+8AoHsLhPPO4WzITkQqy3B+VqvFrKDsiE4NmDie2DPhfN5zL32mZm0HuaJx0l7ECo9hBs7FwSanyQb3rRfLtqYuHX6slrIJmoW/y/qDNOjYUjOs+Bz9rkP82UG30IdSjogd4MNgYHekoxazlIGk9yZdbIZdMX2l1pz+YqPkzvo0/kbrnivNskzZcmdDWkWyXaEjZtOp1H2mVpi+URnmlI//M1XYhRuDclpmttefTmX6iuzSDZz5XTwFbRaFdGd+dtFmCTbvrzqcimiXJkFslWq1mu/bFDEgdE0Fe1oX9K1cufs06wLxReXupPdLShSB+Xqxp1yOeqX8MHxdW6attSZbIMi9pX2y4HgsJ223kL5DtgC6evYr9OLpVDHpW3dyNaS80ERLahuBC8pL7cj6TZKrVz3rl5rV+86kU28Or6Tce56FOUaL5VVO4VRp15iXXXriqtlbLS1knq5nVZyDV8KJDqVuAhAK69CxGw4tIrpkx+9uZFlR39A/s7/ayV1tZyXQvovwcdPoC0XEYbIWBnKY+qU8KYrDXWWkZ+NR690G/H1L2DP3ykj0yryqCvZAavfUTkNZ34cJ3SRZVhjmWQzKIs3QvKlNMfvUj8Ha7WVupMdFHdU1Gy8DapdQDgu4WWRjbdJ/oEIwGXUyThA7aUOfbarPwdZhMt8voJr541T+rUCnxmV9HH6bAe0z7DG7N9x3H9BDXTZReqxJ/e5eGKqMk2y/bq+X0F6P256X1T2X2iiv4W0WndA+k2QzouP5Cjux0oLKTuv5FHIdrC4EyRfB8kfpcR/5dgR9yDxC4zvaWPcv42xzPHHoPKXXZ+OG1+ITuNN0gXUZD+SS3lcAcr3OpN30/ddx3ERa/GjtOfy3CvS5/mvoIzgxvkcxkLrI4wa/HuvYpJ+GTn+MDeLUc/lHyeI8b1g/BrHRTByW3kyabJfA0HvAOepQHDAZTDClm7SehzwXM3fP13E/rdJReRl5MmH5ZbWbJtnPylCtnrBZcd3UcVroOlyjgflG8rky8bpLxbkMeqxnHdnHiJinXmrdSHHN4SHJrGdFNmHo4A/h+RXA8p1XvmAQyA74NXNYu3xDSiEZ9Lf0AjXem13IHZ1DKtLzsBeDuYmX5b0kkFk2zXwfPIZSP4q+w/3yqjjvBj/lOd+lvNiFFeQQHY4Dhj/A4x/xslN4UKV26rJXktbfifEkbA9NNEFTCfZ+Vt4JrkYm9LSi/SRMf35aTxzOvdLWjfpRzZ/MpT8J+V9nAcZFxSSHcB4HvB+j7u13G4YO8nOZyzGT1LmJzhZBGP+2aH2bWFVyDpeCZxJoOFvUMIbKSBvyZ3l6R5NPST268M/jxr96sIWbgohye73J8lGCLsBK/Odc7d14WLehRRI8djI1818uf9CrPmzHA+aHXALXc5C9Cs8dwkY38RxP4yW1Q/jBjCeXhijpY8g5Vv2QgS58btR5eHUR0X2AZnWuJ9lB0iZxSTRj/i884dxkFeHCwO2B0H6L+JT7D7CGCFv2by4iLew3uxTUHUL9xQhWVR4jvgPwXgkzxTB2M+yA4SAcSMYLxgCY3h+4LYssq3oelr5BSj2BPbz/dWgShQhO58HFht/k77uPZzcQgoWmr+nc//HCMqcy517cWEtj2jxkJ98Hkv+R/YHNUjzU1fraTwf4rmT2B8GYxGyLSMIf3AYXY+HEuNmUpH6hWd7bssg24HJuSjgNynFl/j9BkfdKjIs2eZhf4wVJn+HGiRroycHyAI/rgZJrdfQUB7jub/nfteWF5FD2xh/i5vtHobFOCzZ1mkUjD7XU8YjuxH9CQ3+zeSuxdj6ilhZZ2VGIds8rPsC/7P6M+HzF9EHOS5S/s7cZzSrmLU0/IUffiQm4lMbo2MchWyKW4bxi9T4A+06eG1oGYXsHZiBnsgPlv0lpRkGHMaddavgqGTn86LvxUobvFrcFn2dfZU7jqwB4/FgdIRsQx4X46hk5zEEjAaeruXC0BiHI7tJf9xqvB0Dej2FhQFPvkKj7JdBtuU6bqA/jr/CgOuvUch1nhxaMoxvA+NpPFsWxjLIFop8OWbhj//Tn5e0YReWomTzoyiNC1CAo1qiXMO3qj41KovsUISjY+ar8U30zX/M/uZwYcB2PzAS3kyDIrr6oS2nT/5lkR2KCBhvBuP7OLkpXOi39aF+sgv28i5G2Q6C1pO8v0i/2C/Pzmv2ncX6z84nux9bP0KdRNLi+NexhRY1vpXjXvNgMZ7HvZ9Pn8meLRuj+VWB0RnQW8Ho92O+3wcjlzK3kO50+Y8fMIk/TTYncc3RZ9kKCEWWbdkhX7d6Lqcx32EQ5yDrCU/mZB3WfAnQ3sA559hVYSzbsnMQUoy8keObaklyJheezF/M79vP9ZImLd7R7kZueJrU795eeUzzvET7c02bqLnTGLufTmlynegZwZpsdeisYtycctUd4xJm3V0vCa7HD8r5VWBbjNOPfs/0ymvS531l+hiFOsWSdLH0slrdqxiZwqXLgWcHo/H77GsPASNQektR4uwVGPTwNipJvyvmWx2nAr0U2LvE6q4I2H7ZLyG4htu6ea6orHqMRclWYZnisq8D8is26apP56BKHUgPrTwMhIYhOkOxyjEOQ3ZQiFtXXegmn4TmfdkaQhxFuTw2tvglhEfJpcypkpUSo685/Vnj/djOPMZRyVYZkmvfeC/KcF66G8ntJKzcsh09+xkqlzVV2dD8UmLAuDtlBdKrxlk6xnHIBncq9nUq3PfNKsI3SuZbhTJUgJ+Q1OLCdLBKoikmlU6MDuIc4c8UxjLIztQh8Iz0zewZM9cKypzK2BdryT3nkaEiFW4Dxi2ziLFMsoOOtQL70KdRiIS7KmTUyJtWK8mOsJ3rG6suswGR3UiSx2j35Z8olYXRGUUl3qoKstWelXXu+hDbxyH9pWzzS4E4HCiSGn5G0SibUgeis5psx/gwJxzE6c2ckobZQLiv39YGorcyshcwVkK0laiKbPMOEoIyRrBCfx6u9do6ElaJDsIqA9+r8BHOZ0GZjHRnJ0X0OnGMRSo1AvYVj4QBzl1YgG7PxOvIZVaQeYOspRvA0UJmgWiqmYp1NTxbW4yTIlttZMRlLsv+XLduUCYQ6odeJTnMl8N5Ts2MDML4BBiduUwF4yTJzjOmC7OfykjPwpsqYBYJzuPK79cO4zTIDoQyuuZ7ZrEx9sRRu7H2adQnT1BZ+3mMfg+VgVjiAG6qGCetXJXA9Cm+n63ujBFo4opUpxuORh2dGpgZdRrDo1OXLhjTvysXo8lgjJgnjnGSZBttYoTd8+uEXpdw31ipDK0gWAi7MyEOKokx9MQoiED6xDFWTbZk2RfTP6df8y8aFPE9tEqRcFOdRYySTAg3foStYdwi8QAxqg9nJRPBWCXZAlYBD7KVOKWIErwvNJKgEK2gqli05Y0q4rEhP8B2FIw2koAxkF5FvD3FVxXZAI/vowRDnOO6Yj2D+Ui2/XnRBsOtlUrZGJ12aumVYSyTbEnVhT0Gv8bGbaHjEk0WqZiP/bmkB9c+8QEOZecxgrPUwE/A6JglWHmpGMsgOxCKu05J1jUp4Xx2VM7/NiAblBYg6br3SYhYLFuMklx1UKQSjOOSrQKcL+uy7bOqIJhsV4jlGje3zNCfr7ippBPTxhhcu93YWDIK2YFQ3E1qyaFfDufHqtAQD1ueXsT5ujh0fWUO4sy/DhhtbPbnYhsL47BkqwBaWmrJKtmKTJpkilwh9ue6Vvu4cQc44nHwdS/bumC0TmNjHIZslZkPGNSBZKq0JDa8cYMyAaOvV+vSkJcAtus0MsZBZDvN0VWGEbb9R91IpkorJMxdHcTp+vqJeCTWhuwsImCsO85hMKb4B5Ad21c4FXB0qNRdAVkts3raSB3EBfLCtc4trjrexMlZxzgw/mAf10ue5w/FbuWP+w6EYt89D8ysV0YDztvHjj3S7FKGDRPC+XBdI/kAe3d2uUeMt08AY4iDd6nCWKfaXim+u43xjn65FbHUBmPdV/FH+K+D9CPITEspS3Cf6as/CS9LxMQSqJiG2voivfjXOdbK+0nAeBIYj+TGkjG68DJxTX1ZEjD6jfOA0fFGXylCdsiAT080j4uS1tmc0CMMzDw82GdbNtl6H9aD8aG87MsLuvFhxE+IvJofU/9VHioRY6lki5HGyIfyFtOGXBjjMGQHpe3EVwTPobBXcEKLHGQ14blu27LIVgH8kUJyI7W5kH1XwYwjYoTwFCNeYlyMpZAdMPJFiRQjL5mGk1HIDiUchUJORCHHcsJ8RiF9XLJVwAIkX4tFXkl7vy1UrqTtkW2MP0N+Y2Aci2wxNtsYrxgH4zhkq09d3SHtr/zvx77hy2FkHLKZVjH4Wmx9kAI3kcroVrrVXYwHtzHuz/4IGEcmm2ljvKWNcTNlO8ceWcYle3vBzeapGPfJzFgZjKQCkQNlWLLb9XWRQOufoffygSWUeUOzeQrlngLG3cjWuhTEOBTZASNz/hTjZWVBKI/srEZ74PY2MEA6ETW4wC7MXXvVdxiytWQV8CVIvpoMeQM1Fdm9jfG1xTEWJpspqG/VUozXgO6BMhGWTbZ1M8/dUMibaPgb2O/neoqQbX7+ZMNVjAr+in0HJkUsitsqE+u0axvj8ewPwDiQbPPjQz/Jl8F4Cfu+Ri0do4VUKUfT151Fte3P7fs6AXDcc57twIT+Me2XL2L/dlIdxV8mOruN0YhkF4w9yZ4oxqrJlhy/VXRstNg4GZs/hmNjukEh3ci2TmuJat2KO7sCm/kmx8MOinhkohIwGngSo3PfHMYVZOcxXtnGWGYgpyv4SZAdCjZg8dPtgIUvJ5yqdZJtS+drDsknUMA32LdhzJKI8ZVgJA6RvoBpY1xGthiZORD4yYIiE8M4SbIDaX5o7lws4GWcIGacunEDF3yJKflvqP4o+1rGLMtOYPw1ML4cEASeEkfvvl8Qo4Gfj6X7/DdJmQbZAZ9BmRNQxOsIwX4XBVzBhR+Ei6tkG4IyjNxb38fqxwqKzLpOHLTtRRrwqnWmYYpx71WOcaYJmld+roG5BuYamGtgroG5BuYamJoG/h/ff6XOIB4wOAAAAABJRU5ErkJggg==\"/>\n\t<title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/b/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/b/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\n      \n\t<tr>\n\t  <td><a href=\"b\">b</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n\t<tr>\n\t  <td><a href=\"c\">c</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n  </table>\n  <hr>\n</body>\n",
+			pageFragments: []string{
+				fmt.Sprintf("Swarm index of bzz:/%s/a/b/", ref),
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/b/b">b</a>`, ref),
+				fmt.Sprintf(`<a class="normal-link" href="/bzz:/%s/a/b/c">c</a>`, ref),
+			},
 		},
 		{
 			path: "/x",
@@ -165,8 +607,8 @@ func TestBzzGetPath(t *testing.T) {
 	} {
 		k := c.path
 		url := srv.URL + "/bzz-list:/"
-		if k[:] != "" {
-			url += common.ToHex(key[0])[2:] + "/" + k[1:]
+		if k != "" {
+			url += rootRef + "/" + k[1:]
 		}
 		t.Run("json list "+c.path, func(t *testing.T) {
 			resp, err := http.Get(url)
@@ -184,7 +626,7 @@ func TestBzzGetPath(t *testing.T) {
 				isexpectedfailrequest := false
 
 				for _, r := range expectedfailrequests {
-					if k[:] == r {
+					if k == r {
 						isexpectedfailrequest = true
 					}
 				}
@@ -204,21 +646,25 @@ func TestBzzGetPath(t *testing.T) {
 				t.Fatalf("HTTP request: %v", err)
 			}
 			defer resp.Body.Close()
-			respbody, err := ioutil.ReadAll(resp.Body)
+			b, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("Read response body: %v", err)
 			}
 
-			if string(respbody) != c.html {
-				isexpectedfailrequest := false
+			body := string(b)
 
-				for _, r := range expectedfailrequests {
-					if k[:] == r {
-						isexpectedfailrequest = true
+			for _, f := range c.pageFragments {
+				if !strings.Contains(body, f) {
+					isexpectedfailrequest := false
+
+					for _, r := range expectedfailrequests {
+						if k == r {
+							isexpectedfailrequest = true
+						}
 					}
-				}
-				if !isexpectedfailrequest {
-					t.Errorf("Response list body %q does not match, expected: %q, got %q", k, c.html, string(respbody))
+					if !isexpectedfailrequest {
+						t.Errorf("Response list body %q does not contain %q: body %q", k, f, body)
+					}
 				}
 			}
 		})
@@ -233,11 +679,11 @@ func TestBzzGetPath(t *testing.T) {
 	}
 
 	nonhashresponses := []string{
-		"error resolving name: no DNS to resolve name: &#34;name&#34;",
-		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		`cannot resolve name: no DNS to resolve name: "name"`,
+		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
+		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
+		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
+		`cannot resolve nonhash: no DNS to resolve name: "nonhash"`,
 	}
 
 	for i, url := range nonhashtests {
@@ -258,14 +704,150 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
+}
 
+func TestBzzTar(t *testing.T) {
+	testBzzTar(false, t)
+	testBzzTar(true, t)
+}
+
+func testBzzTar(encrypted bool, t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+	fileNames := []string{"tmp1.txt", "tmp2.lock", "tmp3.rtf"}
+	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
+
+	buf := &bytes.Buffer{}
+	tw := tar.NewWriter(buf)
+	defer tw.Close()
+
+	for i, v := range fileNames {
+		size := int64(len(fileContents[i]))
+		hdr := &tar.Header{
+			Name:    v,
+			Mode:    0644,
+			Size:    size,
+			ModTime: time.Now(),
+			Xattrs: map[string]string{
+				"user.swarm.content-type": "text/plain",
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		// copy the file into the tar stream
+		n, err := io.Copy(tw, bytes.NewBufferString(fileContents[i]))
+		if err != nil {
+			t.Fatal(err)
+		} else if n != size {
+			t.Fatal("size mismatch")
+		}
+	}
+
+	//post tar stream
+	url := srv.URL + "/bzz:/"
+	if encrypted {
+		url = url + "encrypt"
+	}
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-tar")
+	client := &http.Client{}
+	resp2, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp2.Status)
+	}
+	swarmHash, err := ioutil.ReadAll(resp2.Body)
+	resp2.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// now do a GET to get a tarball back
+	req, err = http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s", string(swarmHash)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Accept", "application/x-tar")
+	resp2, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+
+	if h := resp2.Header.Get("Content-Type"); h != "application/x-tar" {
+		t.Fatalf("Content-Type header expected: application/x-tar, got: %s", h)
+	}
+
+	expectedFileName := string(swarmHash) + ".tar"
+	expectedContentDisposition := fmt.Sprintf("inline; filename=\"%s\"", expectedFileName)
+	if h := resp2.Header.Get("Content-Disposition"); h != expectedContentDisposition {
+		t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
+	}
+
+	file, err := ioutil.TempFile("", "swarm-downloaded-tarball")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(file.Name())
+	_, err = io.Copy(file, resp2.Body)
+	if err != nil {
+		t.Fatalf("error getting tarball: %v", err)
+	}
+	file.Sync()
+	file.Close()
+
+	tarFileHandle, err := os.Open(file.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(tarFileHandle)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("error reading tar stream: %s", err)
+		}
+		bb := make([]byte, hdr.Size)
+		_, err = tr.Read(bb)
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		passed := false
+		for i, v := range fileNames {
+			if v == hdr.Name {
+				if string(bb) == fileContents[i] {
+					passed = true
+					break
+				}
+			}
+		}
+		if !passed {
+			t.Fatalf("file %s did not pass content assertion", hdr.Name)
+		}
+	}
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without
 // a trailing slash gets redirected to include the trailing slash so that
 // relative URLs work as expected.
 func TestBzzRootRedirect(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testBzzRootRedirect(false, t)
+}
+func TestBzzRootRedirectEncrypted(t *testing.T) {
+	testBzzRootRedirect(true, t)
+}
+
+func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
@@ -279,7 +861,7 @@ func TestBzzRootRedirect(t *testing.T) {
 			Size:        int64(len(data)),
 		},
 	}
-	hash, err := client.Upload(file, "")
+	hash, err := client.Upload(file, "", toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,4 +899,415 @@ func TestBzzRootRedirect(t *testing.T) {
 	if !bytes.Equal(gotData, data) {
 		t.Fatalf("expected response to equal %q, got %q", data, gotData)
 	}
+}
+
+func TestMethodsNotAllowed(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+	databytes := "bar"
+	for _, c := range []struct {
+		url  string
+		code int
+	}{
+		{
+			url:  fmt.Sprintf("%s/bzz-list:/", srv.URL),
+			code: http.StatusMethodNotAllowed,
+		}, {
+			url:  fmt.Sprintf("%s/bzz-hash:/", srv.URL),
+			code: http.StatusMethodNotAllowed,
+		},
+		{
+			url:  fmt.Sprintf("%s/bzz-immutable:/", srv.URL),
+			code: http.StatusMethodNotAllowed,
+		},
+	} {
+		res, _ := http.Post(c.url, "text/plain", bytes.NewReader([]byte(databytes)))
+		if res.StatusCode != c.code {
+			t.Fatalf("should have failed. requested url: %s, expected code %d, got %d", c.url, c.code, res.StatusCode)
+		}
+	}
+
+}
+
+func httpDo(httpMethod string, url string, reqBody io.Reader, headers map[string]string, verbose bool, t *testing.T) (*http.Response, string) {
+	// Build the Request
+	req, err := http.NewRequest(httpMethod, url, reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	if verbose {
+		t.Log(req.Method, req.URL, req.Header, req.Body)
+	}
+
+	// Send Request out
+	httpClient := &http.Client{}
+	res, err := httpClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the HTTP Body
+	buffer, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body := string(buffer)
+
+	return res, body
+}
+
+func TestGet(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	for _, testCase := range []struct {
+		uri                string
+		method             string
+		headers            map[string]string
+		expectedStatusCode int
+		assertResponseBody string
+		verbose            bool
+	}{
+		{
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
+			expectedStatusCode: http.StatusOK,
+			assertResponseBody: "Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution",
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "application/json"},
+			expectedStatusCode: http.StatusOK,
+			assertResponseBody: "Swarm: Please request a valid ENS or swarm hash with the appropriate bzz scheme",
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/robots.txt", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{"Accept": "text/html"},
+			expectedStatusCode: http.StatusOK,
+			assertResponseBody: "User-agent: *\nDisallow: /",
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/nonexistent_path", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusNotFound,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz:asdf/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusNotFound,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/tbz2/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusNotFound,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz-rack:/", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusNotFound,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz-ls", srv.URL),
+			method:             "GET",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusNotFound,
+			verbose:            false,
+		}} {
+		t.Run("GET "+testCase.uri, func(t *testing.T) {
+			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected status code %d but got %d", testCase.expectedStatusCode, res.StatusCode)
+			}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Fatalf("expected response to be: %s but got: %s", testCase.assertResponseBody, body)
+			}
+		})
+	}
+}
+
+func TestModify(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	swarmClient := swarm.NewClient(srv.URL)
+	data := []byte("data")
+	file := &swarm.File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+		ManifestEntry: api.ManifestEntry{
+			Path:        "",
+			ContentType: "text/plain",
+			Size:        int64(len(data)),
+		},
+	}
+
+	hash, err := swarmClient.Upload(file, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, testCase := range []struct {
+		uri                   string
+		method                string
+		headers               map[string]string
+		requestBody           []byte
+		expectedStatusCode    int
+		assertResponseBody    string
+		assertResponseHeaders map[string]string
+		verbose               bool
+	}{
+		{
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "DELETE",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusOK,
+			assertResponseBody: "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731",
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusMethodNotAllowed,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, hash),
+			method:             "PUT",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusMethodNotAllowed,
+			verbose:            false,
+		},
+		{
+			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			method:             "PATCH",
+			headers:            map[string]string{},
+			expectedStatusCode: http.StatusMethodNotAllowed,
+			verbose:            false,
+		},
+		{
+			uri:                   fmt.Sprintf("%s/bzz-raw:/", srv.URL),
+			method:                "POST",
+			headers:               map[string]string{},
+			requestBody:           []byte("POSTdata"),
+			expectedStatusCode:    http.StatusOK,
+			assertResponseHeaders: map[string]string{"Content-Length": "64"},
+			verbose:               false,
+		},
+		{
+			uri:                   fmt.Sprintf("%s/bzz-raw:/encrypt", srv.URL),
+			method:                "POST",
+			headers:               map[string]string{},
+			requestBody:           []byte("POSTdata"),
+			expectedStatusCode:    http.StatusOK,
+			assertResponseHeaders: map[string]string{"Content-Length": "128"},
+			verbose:               false,
+		},
+	} {
+		t.Run(testCase.method+" "+testCase.uri, func(t *testing.T) {
+			reqBody := bytes.NewReader(testCase.requestBody)
+			res, body := httpDo(testCase.method, testCase.uri, reqBody, testCase.headers, testCase.verbose, t)
+
+			if res.StatusCode != testCase.expectedStatusCode {
+				t.Fatalf("expected status code %d but got %d, %s", testCase.expectedStatusCode, res.StatusCode, body)
+			}
+			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
+				t.Log(body)
+				t.Fatalf("expected response %s but got %s", testCase.assertResponseBody, body)
+			}
+			for key, value := range testCase.assertResponseHeaders {
+				if res.Header.Get(key) != value {
+					t.Logf("expected %s=%s in HTTP response header but got %s", key, value, res.Header.Get(key))
+				}
+			}
+		})
+	}
+}
+
+func TestMultiPartUpload(t *testing.T) {
+	// POST /bzz:/ Content-Type: multipart/form-data
+	verbose := false
+	// Setup Swarm
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+
+	buf := new(bytes.Buffer)
+	form := multipart.NewWriter(buf)
+	form.WriteField("name", "John Doe")
+	file1, _ := form.CreateFormFile("cv", "cv.txt")
+	file1.Write([]byte("John Doe's Credentials"))
+	file2, _ := form.CreateFormFile("profile_picture", "profile.jpg")
+	file2.Write([]byte("imaginethisisjpegdata"))
+	form.Close()
+
+	headers := map[string]string{
+		"Content-Type":   form.FormDataContentType(),
+		"Content-Length": strconv.Itoa(buf.Len()),
+	}
+	res, body := httpDo("POST", url, buf, headers, verbose, t)
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected POST multipart/form-data to return 200, but it returned %d", res.StatusCode)
+	}
+	if len(body) != 64 {
+		t.Fatalf("expected POST multipart/form-data to return a 64 char manifest but the answer was %d chars long", len(body))
+	}
+}
+
+// TestBzzGetFileWithResolver tests fetching a file using a mocked ENS resolver
+func TestBzzGetFileWithResolver(t *testing.T) {
+	resolver := newTestResolveValidator("")
+	srv := NewTestSwarmServer(t, serverFunc, resolver)
+	defer srv.Close()
+	fileNames := []string{"dir1/tmp1.txt", "dir2/tmp2.lock", "dir3/tmp3.rtf"}
+	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
+
+	buf := &bytes.Buffer{}
+	tw := tar.NewWriter(buf)
+
+	for i, v := range fileNames {
+		size := len(fileContents[i])
+		hdr := &tar.Header{
+			Name:    v,
+			Mode:    0644,
+			Size:    int64(size),
+			ModTime: time.Now(),
+			Xattrs: map[string]string{
+				"user.swarm.content-type": "text/plain",
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+
+		// copy the file into the tar stream
+		n, err := io.WriteString(tw, fileContents[i])
+		if err != nil {
+			t.Fatal(err)
+		} else if n != size {
+			t.Fatal("size mismatch")
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	//post tar stream
+	url := srv.URL + "/bzz:/"
+
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-tar")
+	client := &http.Client{}
+	serverResponse, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if serverResponse.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", serverResponse.Status)
+	}
+	swarmHash, err := ioutil.ReadAll(serverResponse.Body)
+	serverResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// set the resolved hash to be the swarm hash of what we've just uploaded
+	hash := common.HexToHash(string(swarmHash))
+	resolver.hash = &hash
+	for _, v := range []struct {
+		addr                string
+		path                string
+		expectedStatusCode  int
+		expectedContentType string
+		expectedFileName    string
+	}{
+		{
+			addr:                string(swarmHash),
+			path:                fileNames[0],
+			expectedStatusCode:  http.StatusOK,
+			expectedContentType: "text/plain",
+			expectedFileName:    path.Base(fileNames[0]),
+		},
+		{
+			addr:                "somebogusensname",
+			path:                fileNames[0],
+			expectedStatusCode:  http.StatusOK,
+			expectedContentType: "text/plain",
+			expectedFileName:    path.Base(fileNames[0]),
+		},
+	} {
+		req, err := http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s/%s", v.addr, v.path), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		serverResponse, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer serverResponse.Body.Close()
+		if serverResponse.StatusCode != v.expectedStatusCode {
+			t.Fatalf("expected %d, got %d", v.expectedStatusCode, serverResponse.StatusCode)
+		}
+
+		if h := serverResponse.Header.Get("Content-Type"); h != v.expectedContentType {
+			t.Fatalf("Content-Type header expected: %s, got %s", v.expectedContentType, h)
+		}
+
+		expectedContentDisposition := fmt.Sprintf("inline; filename=\"%s\"", v.expectedFileName)
+		if h := serverResponse.Header.Get("Content-Disposition"); h != expectedContentDisposition {
+			t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
+		}
+
+	}
+}
+
+// testResolver implements the Resolver interface and either returns the given
+// hash if it is set, or returns a "name not found" error
+type testResolveValidator struct {
+	hash *common.Hash
+}
+
+func newTestResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
+	if addr != "" {
+		hash := common.HexToHash(addr)
+		r.hash = &hash
+	}
+	return r
+}
+
+func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
+	if t.hash == nil {
+		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
+	}
+	return *t.hash, nil
+}
+
+func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
+	return
+}
+func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
+	return
 }

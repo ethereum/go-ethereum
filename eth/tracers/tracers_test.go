@@ -159,8 +159,7 @@ func TestCallTracer(t *testing.T) {
 				GasLimit:    uint64(test.Context.GasLimit),
 				GasPrice:    tx.GasPrice(),
 			}
-			db, _ := ethdb.NewMemDatabase()
-			statedb := tests.MakePreState(db, test.Genesis.Alloc)
+			statedb := tests.MakePreState(ethdb.NewMemDatabase(), test.Genesis.Alloc)
 
 			// Create the tracer, the EVM environment and run it
 			tracer, err := New("callTracer")

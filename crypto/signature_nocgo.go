@@ -88,7 +88,7 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 		return false
 	}
 	// Reject malleable signatures. libsecp256k1 does this check but btcec doesn't.
-	if sig.S.Cmp(secp256k1_halfN) > 0 {
+	if sig.S.Cmp(secp256k1halfN) > 0 {
 		return false
 	}
 	return sig.Verify(hash, key)

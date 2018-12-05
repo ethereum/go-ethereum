@@ -25,28 +25,48 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
+
+func serverFunc(api *api.API) swarmhttp.TestServer {
+	return swarmhttp.NewServer(api, "")
+}
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientUploadDownloadRaw(false, t)
+}
+func TestClientUploadDownloadRawEncrypted(t *testing.T) {
+	testClientUploadDownloadRaw(true, t)
+}
+
+func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
 
 	// upload some raw data
 	data := []byte("foo123")
-	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check we can download the same data
-	res, err := client.DownloadRaw(hash)
+	res, isEncrypted, err := client.DownloadRaw(hash)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if isEncrypted != toEncrypt {
+		t.Fatalf("Expected encyption status %v got %v", toEncrypt, isEncrypted)
 	}
 	defer res.Close()
 	gotData, err := ioutil.ReadAll(res)
@@ -61,7 +81,15 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
 // manifests
 func TestClientUploadDownloadFiles(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientUploadDownloadFiles(false, t)
+}
+
+func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
+	testClientUploadDownloadFiles(true, t)
+}
+
+func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -74,7 +102,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest)
+		hash, err := client.Upload(file, manifest, toEncrypt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +187,7 @@ func newTestDirectory(t *testing.T) string {
 // TestClientUploadDownloadDirectory tests uploading and downloading a
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -167,8 +195,8 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 	// upload the directory
 	client := NewClient(srv.URL)
-	defaultPath := filepath.Join(dir, testDirFiles[0])
-	hash, err := client.UploadDirectory(dir, defaultPath, "")
+	defaultPath := testDirFiles[0]
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -201,7 +229,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmp)
-	if err := client.DownloadDirectory(hash, "", tmp); err != nil {
+	if err := client.DownloadDirectory(hash, "", tmp, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range testDirFiles {
@@ -217,20 +245,28 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 // TestClientFileList tests listing files in a swarm manifest
 func TestClientFileList(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	testClientFileList(false, t)
+}
+
+func TestClientFileListEncrypted(t *testing.T) {
+	testClientFileList(true, t)
+}
+
+func testClientFileList(toEncrypt bool, t *testing.T) {
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "")
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
 
 	ls := func(prefix string) []string {
-		list, err := client.List(hash, prefix)
+		list, err := client.List(hash, prefix, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +311,7 @@ func TestClientFileList(t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
@@ -321,5 +357,233 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 	for _, file := range testDirFiles {
 		checkDownloadFile(file)
+	}
+}
+
+func newTestSigner() (*feed.GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return feed.NewGenericSigner(privKey), nil
+}
+
+// Test the transparent resolving of feed updates with bzz:// scheme
+//
+// First upload data to bzz:, and store the Swarm hash to the resulting manifest in a feed update.
+// This effectively uses a feed to store a pointer to content rather than the content itself
+// Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
+func TestClientBzzWithFeed(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	// Initialize a Swarm test server
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	swarmClient := NewClient(srv.URL)
+	defer srv.Close()
+
+	// put together some data for our test:
+	dataBytes := []byte(`
+	//
+	// Create some data our manifest will point to. Data that could be very big and wouldn't fit in a feed update.
+	// So what we are going to do is upload it to Swarm bzz:// and obtain a **manifest hash** pointing to it:
+	//
+	// MANIFEST HASH --> DATA
+	//
+	// Then, we store that **manifest hash** into a Swarm Feed update. Once we have done this,
+	// we can use the **feed manifest hash** in bzz:// instead, this way: bzz://feed-manifest-hash.
+	//
+	// FEED MANIFEST HASH --> MANIFEST HASH --> DATA
+	//
+	// Given that we can update the feed at any time with a new **manifest hash** but the **feed manifest hash**
+	// stays constant, we have effectively created a fixed address to changing content. (Applause)
+	//
+	// FEED MANIFEST HASH (the same) --> MANIFEST HASH(2) --> DATA(2)
+	//
+	`)
+
+	// Create a virtual File out of memory containing the above data
+	f := &File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(dataBytes)),
+		ManifestEntry: api.ManifestEntry{
+			ContentType: "text/plain",
+			Mode:        0660,
+			Size:        int64(len(dataBytes)),
+		},
+	}
+
+	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
+	manifestAddressHex, err := swarmClient.Upload(f, "", false)
+	if err != nil {
+		t.Fatalf("Error creating manifest: %s", err)
+	}
+
+	// convert the hex-encoded manifest hash to a 32-byte slice
+	manifestAddress := common.FromHex(manifestAddressHex)
+
+	if len(manifestAddress) != storage.AddressLength {
+		t.Fatalf("Something went wrong. Got a hash of an unexpected length. Expected %d bytes. Got %d", storage.AddressLength, len(manifestAddress))
+	}
+
+	// Now create a **feed manifest**. For that, we need a topic:
+	topic, _ := feed.NewTopic("interesting topic indeed", nil)
+
+	// Build a feed request to update data
+	request := feed.NewFirstRequest(topic)
+
+	// Put the 32-byte address of the manifest into the feed update
+	request.SetData(manifestAddress)
+
+	// Sign the update
+	if err := request.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	// Publish the update and at the same time request a **feed manifest** to be created
+	feedManifestAddressHex, err := swarmClient.CreateFeedWithManifest(request)
+	if err != nil {
+		t.Fatalf("Error creating feed manifest: %s", err)
+	}
+
+	// Check we have received the exact **feed manifest** to be expected
+	// given the topic and user signing the updates:
+	correctFeedManifestAddrHex := "747c402e5b9dc715a25a4393147512167bab018a007fad7cdcd9adc7fce1ced2"
+	if feedManifestAddressHex != correctFeedManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctFeedManifestAddrHex, feedManifestAddressHex)
+	}
+
+	// Check we get a not found error when trying to get feed updates with a made-up manifest
+	_, err = swarmClient.QueryFeed(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	if err != ErrNoFeedUpdatesFound {
+		t.Fatalf("Expected to receive ErrNoFeedUpdatesFound error. Got: %s", err)
+	}
+
+	// If we query the feed directly we should get **manifest hash** back:
+	reader, err := swarmClient.QueryFeed(nil, correctFeedManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving feed updates: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//Check that indeed the **manifest hash** is retrieved
+	if !bytes.Equal(manifestAddress, gotData) {
+		t.Fatalf("Expected: %v, got %v", manifestAddress, gotData)
+	}
+
+	// Now the final test we were looking for: Use bzz://<feed-manifest> and that should resolve all manifests
+	// and return the original data directly:
+	f, err = swarmClient.Download(feedManifestAddressHex, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotData, err = ioutil.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that we get back the original data:
+	if !bytes.Equal(dataBytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", manifestAddress, gotData)
+	}
+}
+
+// TestClientCreateUpdateFeed will check that feeds can be created and updated via the HTTP client.
+func TestClientCreateUpdateFeed(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
+	client := NewClient(srv.URL)
+	defer srv.Close()
+
+	// set raw data for the feed update
+	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
+
+	// our feed topic name
+	topic, _ := feed.NewTopic("El Quijote", nil)
+	createRequest := feed.NewFirstRequest(topic)
+
+	createRequest.SetData(databytes)
+	if err := createRequest.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	feedManifestHash, err := client.CreateFeedWithManifest(createRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correctManifestAddrHex := "0e9b645ebc3da167b1d56399adc3276f7a08229301b72a03336be0e7d4b71882"
+	if feedManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestHash)
+	}
+
+	reader, err := client.QueryFeed(nil, correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving feed updates: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
+	// define different data
+	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
+
+	updateRequest, err := client.GetFeedRequest(nil, correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving update request template: %s", err)
+	}
+
+	updateRequest.SetData(databytes)
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatalf("Error signing update: %s", err)
+	}
+
+	if err = client.UpdateFeed(updateRequest); err != nil {
+		t.Fatalf("Error updating feed: %s", err)
+	}
+
+	reader, err = client.QueryFeed(nil, correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving feed updates: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
+	// now try retrieving feed updates without a manifest
+
+	fd := &feed.Feed{
+		Topic: topic,
+		User:  signer.Address(),
+	}
+
+	lookupParams := feed.NewQueryLatest(fd, lookup.NoClue)
+	reader, err = client.QueryFeed(lookupParams, "")
+	if err != nil {
+		t.Fatalf("Error retrieving feed updates: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
 	}
 }

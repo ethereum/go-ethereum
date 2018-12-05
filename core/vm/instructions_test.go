@@ -17,10 +17,12 @@
 package vm
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -30,19 +32,23 @@ type twoOperandTest struct {
 	expected string
 }
 
-func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
+func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
-		pc    = uint64(0)
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		pc             = uint64(0)
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
+
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
 	for i, test := range tests {
 		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
 		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
 		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
 		stack.push(x)
 		stack.push(shift)
-		opFn(&pc, env, nil, nil, stack)
+		opFn(&pc, evmInterpreter, nil, nil, stack)
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
@@ -50,13 +56,13 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 		// Check pool usage
 		// 1.pool is not allowed to contain anything on the stack
 		// 2.pool is not allowed to contain the same pointers twice
-		if env.interpreter.intPool.pool.len() > 0 {
+		if evmInterpreter.intPool.pool.len() > 0 {
 
 			poolvals := make(map[*big.Int]struct{})
 			poolvals[actual] = struct{}{}
 
-			for env.interpreter.intPool.pool.len() > 0 {
-				key := env.interpreter.intPool.get()
+			for evmInterpreter.intPool.pool.len() > 0 {
+				key := evmInterpreter.intPool.get()
 				if _, exist := poolvals[key]; exist {
 					t.Errorf("Testcase %d, pool contains double-entry", i)
 				}
@@ -64,13 +70,18 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 			}
 		}
 	}
+	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func TestByteOp(t *testing.T) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
+
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
 	tests := []struct {
 		v        string
 		th       uint64
@@ -91,12 +102,13 @@ func TestByteOp(t *testing.T) {
 		th := new(big.Int).SetUint64(test.th)
 		stack.push(val)
 		stack.push(th)
-		opByte(&pc, env, nil, nil, stack)
+		opByte(&pc, evmInterpreter, nil, nil, stack)
 		actual := stack.pop()
 		if actual.Cmp(test.expected) != 0 {
 			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.v, test.th, test.expected, actual)
 		}
 	}
+	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func TestSHL(t *testing.T) {
@@ -196,11 +208,15 @@ func TestSLT(t *testing.T) {
 	testTwoOperandOp(t, tests, opSlt)
 }
 
-func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
+func opBenchmark(bench *testing.B, op func(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
 	)
+
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
 	// convert args
 	byteArgs := make([][]byte, len(args))
 	for i, arg := range args {
@@ -213,9 +229,10 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contr
 			a := new(big.Int).SetBytes(arg)
 			stack.push(a)
 		}
-		op(&pc, env, nil, nil, stack)
+		op(&pc, evmInterpreter, nil, nil, stack)
 		stack.pop()
 	}
+	poolOfIntPools.put(evmInterpreter.intPool)
 }
 
 func BenchmarkOpAdd64(b *testing.B) {
@@ -424,4 +441,149 @@ func BenchmarkOpSAR(b *testing.B) {
 func BenchmarkOpIsZero(b *testing.B) {
 	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
 	opBenchmark(b, opIszero, x)
+}
+
+func TestOpMstore(t *testing.T) {
+	var (
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		mem            = NewMemory()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+	)
+
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
+	mem.Resize(64)
+	pc := uint64(0)
+	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
+	stack.pushN(new(big.Int).SetBytes(common.Hex2Bytes(v)), big.NewInt(0))
+	opMstore(&pc, evmInterpreter, nil, mem, stack)
+	if got := common.Bytes2Hex(mem.Get(0, 32)); got != v {
+		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
+	}
+	stack.pushN(big.NewInt(0x1), big.NewInt(0))
+	opMstore(&pc, evmInterpreter, nil, mem, stack)
+	if common.Bytes2Hex(mem.Get(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
+		t.Fatalf("Mstore failed to overwrite previous value")
+	}
+	poolOfIntPools.put(evmInterpreter.intPool)
+}
+
+func BenchmarkOpMstore(bench *testing.B) {
+	var (
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		mem            = NewMemory()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+	)
+
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
+	mem.Resize(64)
+	pc := uint64(0)
+	memStart := big.NewInt(0)
+	value := big.NewInt(0x1337)
+
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		stack.pushN(value, memStart)
+		opMstore(&pc, evmInterpreter, nil, mem, stack)
+	}
+	poolOfIntPools.put(evmInterpreter.intPool)
+}
+
+func BenchmarkOpSHA3(bench *testing.B) {
+	var (
+		env            = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		mem            = NewMemory()
+		evmInterpreter = NewEVMInterpreter(env, env.vmConfig)
+	)
+	env.interpreter = evmInterpreter
+	evmInterpreter.intPool = poolOfIntPools.get()
+	mem.Resize(32)
+	pc := uint64(0)
+	start := big.NewInt(0)
+
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		stack.pushN(big.NewInt(32), start)
+		opSha3(&pc, evmInterpreter, nil, mem, stack)
+	}
+	poolOfIntPools.put(evmInterpreter.intPool)
+}
+
+func TestCreate2Addreses(t *testing.T) {
+	type testcase struct {
+		origin   string
+		salt     string
+		code     string
+		expected string
+	}
+
+	for i, tt := range []testcase{
+		{
+			origin:   "0x0000000000000000000000000000000000000000",
+			salt:     "0x0000000000000000000000000000000000000000",
+			code:     "0x00",
+			expected: "0x4d1a2e2bb4f88f0250f26ffff098b0b30b26bf38",
+		},
+		{
+			origin:   "0xdeadbeef00000000000000000000000000000000",
+			salt:     "0x0000000000000000000000000000000000000000",
+			code:     "0x00",
+			expected: "0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3",
+		},
+		{
+			origin:   "0xdeadbeef00000000000000000000000000000000",
+			salt:     "0xfeed000000000000000000000000000000000000",
+			code:     "0x00",
+			expected: "0xD04116cDd17beBE565EB2422F2497E06cC1C9833",
+		},
+		{
+			origin:   "0x0000000000000000000000000000000000000000",
+			salt:     "0x0000000000000000000000000000000000000000",
+			code:     "0xdeadbeef",
+			expected: "0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e",
+		},
+		{
+			origin:   "0x00000000000000000000000000000000deadbeef",
+			salt:     "0xcafebabe",
+			code:     "0xdeadbeef",
+			expected: "0x60f3f640a8508fC6a86d45DF051962668E1e8AC7",
+		},
+		{
+			origin:   "0x00000000000000000000000000000000deadbeef",
+			salt:     "0xcafebabe",
+			code:     "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+			expected: "0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C",
+		},
+		{
+			origin:   "0x0000000000000000000000000000000000000000",
+			salt:     "0x0000000000000000000000000000000000000000",
+			code:     "0x",
+			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
+		},
+	} {
+
+		origin := common.BytesToAddress(common.FromHex(tt.origin))
+		salt := common.BytesToHash(common.FromHex(tt.salt))
+		code := common.FromHex(tt.code)
+		codeHash := crypto.Keccak256(code)
+		address := crypto.CreateAddress2(origin, salt, codeHash)
+		/*
+			stack          := newstack()
+			// salt, but we don't need that for this test
+			stack.push(big.NewInt(int64(len(code)))) //size
+			stack.push(big.NewInt(0)) // memstart
+			stack.push(big.NewInt(0)) // value
+			gas, _ := gasCreate2(params.GasTable{}, nil, nil, stack, nil, 0)
+			fmt.Printf("Example %d\n* address `0x%x`\n* salt `0x%x`\n* init_code `0x%x`\n* gas (assuming no mem expansion): `%v`\n* result: `%s`\n\n", i,origin, salt, code, gas, address.String())
+		*/
+		expected := common.BytesToAddress(common.FromHex(tt.expected))
+		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
+			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
+		}
+
+	}
 }
