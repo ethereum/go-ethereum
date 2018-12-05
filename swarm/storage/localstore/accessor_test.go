@@ -19,28 +19,72 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 )
 
 // TestAccessors tests most basic Put and Get functionalities
 // for different accessors.
 func TestAccessors(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testAccessors(t, db)
 }
 
-// TestAccessors_withRetrievalCompositeIndex tests most basic
+// TestAccessors_useRetrievalCompositeIndex tests most basic
 // Put and Get functionalities for different accessors
 // by using retrieval composite index.
-func TestAccessors_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestAccessors_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testAccessors(t, db)
+}
+
+// TestAccessors_mockStore tests most basic Put and Get
+// functionalities for different accessors with the mock store
+// as the storage for chunk data.
+func TestAccessors_mockStore(t *testing.T) {
+	globalStore := mem.NewGlobalStore()
+
+	addr := common.BytesToAddress(make([]byte, 32))
+
+	db, cleanupFunc := newTestDB(t, &Options{
+		MockStore: globalStore.NewNodeStore(addr),
+	})
+	defer cleanupFunc()
+
+	testAccessors(t, db)
+
+	// testAccessors leaves 5 chunks in global store
+	checkGlobalStoreChunkCount(t, globalStore, 5)
+}
+
+// TestAccessors_mockStore_useRetrievalCompositeIndex tests
+// most basic Put and Get functionalities for different accessors
+// with the mock store as the storage for chunk data and by using
+// retrieval composite index.
+func TestAccessors_mockStore_useRetrievalCompositeIndex(t *testing.T) {
+	globalStore := mem.NewGlobalStore()
+
+	addr := common.BytesToAddress(make([]byte, 32))
+
+	db, cleanupFunc := newTestDB(t, &Options{
+		MockStore:                  globalStore.NewNodeStore(addr),
+		UseRetrievalCompositeIndex: true,
+	})
+	defer cleanupFunc()
+
+	testAccessors(t, db)
+
+	// testAccessors leaves 5 chunks in global store
+	checkGlobalStoreChunkCount(t, globalStore, 5)
 }
 
 // testAccessors tests most basic Put and Get functionalities
@@ -152,4 +196,18 @@ func testAccessors(t *testing.T, db *DB) {
 			t.Errorf("got error %v, expected %v", err, wantErr)
 		}
 	})
+}
+
+// checkGlobalStoreChunkCount counts the number of chunks
+// in a global mock store to validate it against the expected value.
+func checkGlobalStoreChunkCount(t *testing.T, s mock.ImportExporter, want int) {
+	t.Helper()
+
+	n, err := s.Export(ioutil.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != want {
+		t.Errorf("got %v chunks, want %v", n, want)
+	}
 }

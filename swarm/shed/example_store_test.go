@@ -84,7 +84,7 @@ func New(path string) (s *Store, err error) {
 			value = append(b, fields.Data...)
 			return value, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
 			e.Data = value[8:]
 			return e, nil
@@ -108,7 +108,7 @@ func New(path string) (s *Store, err error) {
 			binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
 			return b, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
 			return e, nil
 		},
@@ -134,7 +134,7 @@ func New(path string) (s *Store, err error) {
 		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			return e, nil
 		},
 	})

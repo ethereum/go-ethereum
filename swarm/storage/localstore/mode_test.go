@@ -31,17 +31,17 @@ import (
 // TestModeSyncing validates internal data operations and state
 // for ModeSyncing on DB with default configuration.
 func TestModeSyncing(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeSyncingValues(t, db)
 }
 
-// TestModeSyncing_withRetrievalCompositeIndex validates internal
+// TestModeSyncing_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeSyncing on DB with
 // retrieval composite index enabled.
-func TestModeSyncing_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeSyncing_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeSyncingValues(t, db)
@@ -81,17 +81,17 @@ func testModeSyncingValues(t *testing.T, db *DB) {
 // TestModeUpload validates internal data operations and state
 // for ModeUpload on DB with default configuration.
 func TestModeUpload(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeUploadValues(t, db)
 }
 
-// TestModeUpload_withRetrievalCompositeIndex validates internal
+// TestModeUpload_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeUpload on DB with
 // retrieval composite index enabled.
-func TestModeUpload_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeUpload_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeUploadValues(t, db)
@@ -133,17 +133,17 @@ func testModeUploadValues(t *testing.T, db *DB) {
 // TestModeRequest validates internal data operations and state
 // for ModeRequest on DB with default configuration.
 func TestModeRequest(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeRequestValues(t, db)
 }
 
-// TestModeRequest_withRetrievalCompositeIndex validates internal
+// TestModeRequest_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeRequest on DB with
 // retrieval composite index enabled.
-func TestModeRequest_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeRequest_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeRequestValues(t, db)
@@ -174,17 +174,17 @@ func testModeRequestValues(t *testing.T, db *DB) {
 // TestModeSynced validates internal data operations and state
 // for ModeSynced on DB with default configuration.
 func TestModeSynced(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeSyncedValues(t, db)
 }
 
-// TestModeSynced_withRetrievalCompositeIndex validates internal
+// TestModeSynced_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeSynced on DB with
 // retrieval composite index enabled.
-func TestModeSynced_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeSynced_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeSyncedValues(t, db)
@@ -224,17 +224,17 @@ func testModeSyncedValues(t *testing.T, db *DB) {
 // TestModeAccess validates internal data operations and state
 // for ModeAccess on DB with default configuration.
 func TestModeAccess(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeAccessValues(t, db)
 }
 
-// TestModeAccess_withRetrievalCompositeIndex validates internal
+// TestModeAccess_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeAccess on DB with
 // retrieval composite index enabled.
-func TestModeAccess_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeAccess_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeAccessValues(t, db)
@@ -310,17 +310,17 @@ func testModeAccessValues(t *testing.T, db *DB) {
 // TestModeRemoval validates internal data operations and state
 // for ModeRemoval on DB with default configuration.
 func TestModeRemoval(t *testing.T) {
-	db, cleanupFunc := newTestDB(t)
+	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
 	testModeRemovalValues(t, db)
 }
 
-// TestModeRemoval_withRetrievalCompositeIndex validates internal
+// TestModeRemoval_useRetrievalCompositeIndex validates internal
 // data operations and state for ModeRemoval on DB with
 // retrieval composite index enabled.
-func TestModeRemoval_withRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, WithRetrievalCompositeIndex(true))
+func TestModeRemoval_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
 	defer cleanupFunc()
 
 	testModeRemovalValues(t, db)

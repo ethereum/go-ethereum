@@ -42,7 +42,7 @@ var retrievalIndexFuncs = IndexFuncs{
 		value = append(b, fields.Data...)
 		return value, nil
 	},
-	DecodeValue: func(value []byte) (e IndexItem, err error) {
+	DecodeValue: func(keyItem IndexItem, value []byte) (e IndexItem, err error) {
 		e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
 		e.Data = value[8:]
 		return e, nil

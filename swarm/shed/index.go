@@ -77,7 +77,7 @@ type Index struct {
 	encodeKeyFunc   func(fields IndexItem) (key []byte, err error)
 	decodeKeyFunc   func(key []byte) (e IndexItem, err error)
 	encodeValueFunc func(fields IndexItem) (value []byte, err error)
-	decodeValueFunc func(value []byte) (e IndexItem, err error)
+	decodeValueFunc func(keyFields IndexItem, value []byte) (e IndexItem, err error)
 }
 
 // IndexFuncs structure defines functions for encoding and decoding
@@ -86,7 +86,7 @@ type IndexFuncs struct {
 	EncodeKey   func(fields IndexItem) (key []byte, err error)
 	DecodeKey   func(key []byte) (e IndexItem, err error)
 	EncodeValue func(fields IndexItem) (value []byte, err error)
-	DecodeValue func(value []byte) (e IndexItem, err error)
+	DecodeValue func(keyFields IndexItem, value []byte) (e IndexItem, err error)
 }
 
 // NewIndex returns a new Index instance with defined name and
@@ -135,7 +135,7 @@ func (f Index) Get(keyFields IndexItem) (out IndexItem, err error) {
 	if err != nil {
 		return out, err
 	}
-	out, err = f.decodeValueFunc(value)
+	out, err = f.decodeValueFunc(keyFields, value)
 	if err != nil {
 		return out, err
 	}
@@ -210,15 +210,15 @@ func (f Index) IterateAll(fn IndexIterFunc) (err error) {
 		if key[0] != f.prefix[0] {
 			break
 		}
-		keyIndexItem, err := f.decodeKeyFunc(key)
+		keyItem, err := f.decodeKeyFunc(key)
 		if err != nil {
 			return err
 		}
-		valueIndexItem, err := f.decodeValueFunc(it.Value())
+		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
 		if err != nil {
 			return err
 		}
-		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
+		stop, err := fn(keyItem.Merge(valueItem))
 		if err != nil {
 			return err
 		}
@@ -244,15 +244,15 @@ func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 		if key[0] != f.prefix[0] {
 			break
 		}
-		keyIndexItem, err := f.decodeKeyFunc(key)
+		keyItem, err := f.decodeKeyFunc(key)
 		if err != nil {
 			return err
 		}
-		valueIndexItem, err := f.decodeValueFunc(it.Value())
+		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
 		if err != nil {
 			return err
 		}
-		stop, err := fn(keyIndexItem.Merge(valueIndexItem))
+		stop, err := fn(keyItem.Merge(valueItem))
 		if err != nil {
 			return err
 		}

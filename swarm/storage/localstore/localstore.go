@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
 const (
@@ -73,36 +74,26 @@ type DB struct {
 	close        chan struct{} // closed on Close, signals other goroutines to terminate
 }
 
-// Option is a function that sets optional field values on DB.
-// It is used as a variadic parameter to New constructor.
-type Option func(*DB)
-
-// WithRetrievalCompositeIndex is the optional variadic parameter to New constructor
-// to use the single retrieval composite index instead two separate for data
-// and access timestamp. This option is used for benchmarking this two types of
-// retrieval schemas for performance. Composite retrieval index performes less seeks
-// on retrieval as it has two times less key/value pairs then alternative approach,
-// but it needs to write chunk data on every access timestamp change.
-func WithRetrievalCompositeIndex(use bool) Option {
-	return func(db *DB) {
-		db.useRetrievalCompositeIndex = use
-	}
+// Options struct holds optional parameters for configuring DB.
+type Options struct {
+	UseRetrievalCompositeIndex bool
+	MockStore                  *mock.NodeStore
 }
 
 // New returns a new DB.  All fields and indexes are initialized
 // and possible conflicts with schema from existing database is checked.
 // One goroutine for writing batches is created.
-func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
-	db = &DB{
-		baseKey:      baseKey,
-		batch:        newBatch(),
-		writeTrigger: make(chan struct{}, 1),
-		close:        make(chan struct{}),
-		writeDone:    make(chan struct{}),
+func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
+	if o == nil {
+		o = new(Options)
 	}
-
-	for _, o := range opts {
-		o(db)
+	db = &DB{
+		baseKey:                    baseKey,
+		useRetrievalCompositeIndex: o.UseRetrievalCompositeIndex,
+		batch:                      newBatch(),
+		writeTrigger:               make(chan struct{}, 1),
+		close:                      make(chan struct{}),
+		writeDone:                  make(chan struct{}),
 	}
 
 	db.shed, err = shed.NewDB(path)
@@ -119,6 +110,42 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 		return nil, err
 	}
 	if db.useRetrievalCompositeIndex {
+		var (
+			encodeValueFunc func(fields shed.IndexItem) (value []byte, err error)
+			decodeValueFunc func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error)
+		)
+		if o.MockStore != nil {
+			encodeValueFunc = func(fields shed.IndexItem) (value []byte, err error) {
+				b := make([]byte, 16)
+				binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
+				binary.BigEndian.PutUint64(b[8:16], uint64(fields.AccessTimestamp))
+				err = o.MockStore.Put(fields.Address, fields.Data)
+				if err != nil {
+					return nil, err
+				}
+				return b, nil
+			}
+			decodeValueFunc = func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
+				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+				e.Data, err = o.MockStore.Get(keyIndexItem.Address)
+				return e, err
+			}
+		} else {
+			encodeValueFunc = func(fields shed.IndexItem) (value []byte, err error) {
+				b := make([]byte, 16)
+				binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
+				binary.BigEndian.PutUint64(b[8:16], uint64(fields.AccessTimestamp))
+				value = append(b, fields.Data...)
+				return value, nil
+			}
+			decodeValueFunc = func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
+				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+				e.Data = value[16:]
+				return e, nil
+			}
+		}
 		// Index storing chunk data with stored and access timestamps.
 		db.retrievalCompositeIndex, err = db.shed.NewIndex("Hash->StoredTimestamp|AccessTimestamp|Data", shed.IndexFuncs{
 			EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
@@ -128,24 +155,45 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 				e.Address = key
 				return e, nil
 			},
-			EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
-				b := make([]byte, 16)
-				binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
-				binary.BigEndian.PutUint64(b[8:16], uint64(fields.AccessTimestamp))
-				value = append(b, fields.Data...)
-				return value, nil
-			},
-			DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
-				e.Data = value[16:]
-				return e, nil
-			},
+			EncodeValue: encodeValueFunc,
+			DecodeValue: decodeValueFunc,
 		})
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		var (
+			encodeValueFunc func(fields shed.IndexItem) (value []byte, err error)
+			decodeValueFunc func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error)
+		)
+		if o.MockStore != nil {
+			encodeValueFunc = func(fields shed.IndexItem) (value []byte, err error) {
+				b := make([]byte, 8)
+				binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
+				err = o.MockStore.Put(fields.Address, fields.Data)
+				if err != nil {
+					return nil, err
+				}
+				return b, nil
+			}
+			decodeValueFunc = func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
+				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+				e.Data, err = o.MockStore.Get(keyIndexItem.Address)
+				return e, err
+			}
+		} else {
+			encodeValueFunc = func(fields shed.IndexItem) (value []byte, err error) {
+				b := make([]byte, 8)
+				binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
+				value = append(b, fields.Data...)
+				return value, nil
+			}
+			decodeValueFunc = func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
+				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+				e.Data = value[8:]
+				return e, nil
+			}
+		}
 		// Index storing actual chunk address, data and store timestamp.
 		db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
 			EncodeKey: func(fields shed.IndexItem) (key []byte, err error) {
@@ -155,17 +203,8 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 				e.Address = key
 				return e, nil
 			},
-			EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
-				b := make([]byte, 8)
-				binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-				value = append(b, fields.Data...)
-				return value, nil
-			},
-			DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.Data = value[8:]
-				return e, nil
-			},
+			EncodeValue: encodeValueFunc,
+			DecodeValue: decodeValueFunc,
 		})
 		if err != nil {
 			return nil, err
@@ -185,7 +224,7 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 				binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
 				return b, nil
 			},
-			DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+			DecodeValue: func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
 				return e, nil
 			},
@@ -211,7 +250,7 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			return e, nil
 		},
 	})
@@ -234,7 +273,7 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			return e, nil
 		},
 	})
@@ -259,7 +298,7 @@ func New(path string, baseKey []byte, opts ...Option) (db *DB, err error) {
 		EncodeValue: func(fields shed.IndexItem) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(value []byte) (e shed.IndexItem, err error) {
+		DecodeValue: func(keyIndexItem shed.IndexItem, value []byte) (e shed.IndexItem, err error) {
 			return e, nil
 		},
 	})
