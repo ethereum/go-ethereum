@@ -357,7 +357,7 @@ func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountR
 }
 
 //block hash or number, tx index, start address hash, max results
-func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, txIndex int, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
+func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB = nil
 	var err error = nil
 	var block = api.eth.blockchain.CurrentBlock()
