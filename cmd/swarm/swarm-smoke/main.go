@@ -141,12 +141,8 @@ func main() {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
-	app.Before = func(ctx *cli.Context) error {
-		return nil
-	}
 	app.After = func(ctx *cli.Context) error {
-		emitMetrics(ctx)
-		return nil
+		return emitMetrics(ctx)
 	}
 
 	err := app.Run(os.Args)
@@ -157,7 +153,7 @@ func main() {
 	}
 }
 
-func emitMetrics(ctx *cli.Context) {
+func emitMetrics(ctx *cli.Context) error {
 	if gethmetrics.Enabled {
 		var (
 			endpoint = ctx.GlobalString(swarmmetrics.MetricsInfluxDBEndpointFlag.Name)
@@ -166,8 +162,7 @@ func emitMetrics(ctx *cli.Context) {
 			password = ctx.GlobalString(swarmmetrics.MetricsInfluxDBPasswordFlag.Name)
 			hosttag  = ctx.GlobalString(swarmmetrics.MetricsInfluxDBHostTagFlag.Name)
 		)
-
-		influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", map[string]string{
+		return influxdb.InfluxDBWithTagsOnce(gethmetrics.DefaultRegistry, endpoint, database, username, password, "swarm-smoke.", map[string]string{
 			"host":     hosttag,
 			"version":  gitCommit,
 			"filesize": fmt.Sprintf("%v", filesize),
