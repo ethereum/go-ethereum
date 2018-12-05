@@ -760,6 +760,7 @@ func (net *Network) Load(snap *Snapshot) error {
 					// Delete the connection from the set of established connections.
 					// This will prevent false positive in case disconnections happen.
 					delete(connections, connection)
+					log.Warn("load snapshot: unexpected disconnection", "one", e.Conn.One, "other", e.Conn.Other)
 					continue
 				}
 				// Check that the connection is from the snapshot.
