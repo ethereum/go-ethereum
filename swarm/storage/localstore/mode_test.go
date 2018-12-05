@@ -19,6 +19,8 @@ package localstore
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -382,6 +384,89 @@ func testModeRemovalValues(t *testing.T, db *DB) {
 	t.Run("gc index count", testIndexItemsCount(db.gcIndex, 0))
 
 	t.Run("size counter", testSizeCounter(db, wantSize))
+}
+
+// TestDB_pullIndex validates the ordering of keys in pull index.
+// Pull index key contains PO prefix which is calculated from
+// DB base key and chunk address. This is not an IndexItem field
+// which are checked in Mode tests.
+// This test uploads chunks, sorts them in expected order and
+// validates that pull index iterator will iterate it the same
+// order.
+func TestDB_pullIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	a := db.Accessor(ModeUpload)
+
+	chunkCount := 50
+
+	// a wrapper around Chunk to keep
+	// store timestamp for sorting
+	type testChunk struct {
+		storage.Chunk
+		storeTimestamp int64
+	}
+
+	chunks := make([]testChunk, chunkCount)
+
+	// upload random chunks
+	for i := 0; i < chunkCount; i++ {
+		chunk := generateRandomChunk()
+
+		err := a.Put(context.Background(), chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chunks[i] = testChunk{
+			Chunk: chunk,
+			// this timestamp is not the same as in
+			// the index, but given that uploads
+			// are sequential and that only ordering
+			// of events matter, this information is
+			// sufficient
+			storeTimestamp: now(),
+		}
+	}
+
+	// check if all chunks are stored
+	testIndexItemsCount(db.pullIndex, chunkCount)
+
+	// sort uploaded chunk is an expected pull index keys order
+	// "PO|StoredTimestamp|Hash"
+	sort.Slice(chunks, func(i, j int) (less bool) {
+		poi := storage.Proximity(db.baseKey, chunks[i].Address())
+		poj := storage.Proximity(db.baseKey, chunks[j].Address())
+		if poi < poj {
+			return true
+		}
+		if poi > poj {
+			return false
+		}
+		if chunks[i].storeTimestamp < chunks[j].storeTimestamp {
+			return true
+		}
+		if chunks[i].storeTimestamp > chunks[j].storeTimestamp {
+			return false
+		}
+		return bytes.Compare(chunks[i].Address(), chunks[j].Address()) == -1
+	})
+
+	// iterate over all items
+	var cursor int
+	err := db.pullIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		want := chunks[cursor].Address()
+		got := item.Address
+		if !bytes.Equal(got, want) {
+			return true, fmt.Errorf("got address %x at position %v, want %x", got, cursor, want)
+		}
+		cursor++
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // testRetrieveIndexesValues returns a test function that validates if the right
