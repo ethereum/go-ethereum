@@ -931,6 +931,9 @@ func (p *Pss) forward(msg *PssMsg) error {
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
+
+	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
+	// but the luminosity is less. here luminosity equals the number of bits present in the destination address.
 	luminousRadius := len(msg.To) * 8
 	if luminousRadius >= neighbourhoodDepth {
 		pof := pot.DefaultPof(neighbourhoodDepth)
@@ -939,13 +942,14 @@ func (p *Pss) forward(msg *PssMsg) error {
 
 	if isDstInProxBin {
 		// forward to all the nearest neighbours of the forwarding node
-		p.Kademlia.EachConn(p.BaseAddr(), addressLength*8, func(sp *network.Peer, _ int, isproxbin bool) bool {
-			if isproxbin {
+		p.Kademlia.EachConn(nil, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
+			isPeerInProxBin := (po >= neighbourhoodDepth)
+			if isPeerInProxBin {
 				if p.trySend(sp, msg) {
 					sent++
 				}
 			}
-			mustContinue := isproxbin
+			mustContinue := isPeerInProxBin
 			return mustContinue
 		})
 	}
@@ -955,7 +959,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		// address, if there are any; otherwise only to one peer, closest to the recipient address.
 		// in any case, msg must be sent to at least one peer.
 		p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
-			isAddrMatch := (po == luminousRadius)
+			isAddrMatch := (po >= luminousRadius)
 			if isAddrMatch || sent == 0 {
 				if p.trySend(sp, msg) {
 					sent++
