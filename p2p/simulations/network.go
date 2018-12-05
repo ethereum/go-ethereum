@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -792,7 +791,7 @@ func (net *Network) Load(snap *Snapshot) error {
 			//so it would result in the snapshot `Load` to fail
 			continue
 		}
-		if err := net.Connect(conn.One, conn.Other); err != nil && !strings.Contains(err.Error(), "already connected") {
+		if err := net.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
 	}
