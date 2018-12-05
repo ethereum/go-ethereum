@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -334,28 +335,29 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 	return results, nil
 }
 
-type addressMap map[common.Hash]common.Address
-
 type AccountRangeResult struct {
-	AddressMap addressMap `json:"addressMap"`
+	Addresses []common.Address `json:"addresses"`
+	Next common.Address `json:"next"`
 }
 
-func accountRange(st state.Trie, start *common.Hash, maxResult int) (AccountRangeResult, error) {
-	it := trie.NewIterator(st.NodeIterator(start[:]))
-	result := AccountRangeResult{AddressMap: addressMap{}}
+func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountRangeResult, error) {
+	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
+	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
-		key := st.GetKey(it.Key)
-		// If key is nil, that means it wasn't found in the preimage database.
-		// This is not a problem, because we still return the hash of the key together with
-		// address zero and the client can very easily determine that the hash of the addres zero
-		// is not matching, which means it wasn't found.
-		result.AddressMap[common.BytesToHash(it.Key)] = common.BytesToAddress(key)
+		if preimage := st.GetKey(it.Key); preimage != nil {
+			result.Addresses = append(result.Addresses, common.BytesToAddress(preimage))
+		}
 	}
+
+	if it.Next() {
+		result.Next = common.BytesToAddress(st.GetKey(it.Key))
+	}
+
 	return result, nil
 }
 
 //block hash or number, tx index, start address hash, max results
-func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, blockNr rpc.BlockNumber, txIndex int, startAddr *common.Hash, maxResults int) (AccountRangeResult, error) {
+func (api *PrivateDebugAPI) AccountRangeAt(ctx context.Context, txIndex int, startAddr *common.Address, maxResults int) (AccountRangeResult, error) {
 	var statedb *state.StateDB = nil
 	var err error = nil
 	var block = api.eth.blockchain.CurrentBlock()

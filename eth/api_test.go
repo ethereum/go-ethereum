@@ -19,9 +19,7 @@ package eth
 import (
 	"reflect"
 	"testing"
-        "math/big"
 
-        "github.com/ethereum/go-ethereum/crypto"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
