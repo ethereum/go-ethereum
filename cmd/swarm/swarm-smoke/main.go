@@ -168,4 +168,6 @@ func emitMetrics(ctx *cli.Context) error {
 			"filesize": fmt.Sprintf("%v", filesize),
 		})
 	}
+
+	return nil
 }
