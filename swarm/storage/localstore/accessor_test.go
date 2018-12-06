@@ -95,7 +95,6 @@ func testAccessors(t *testing.T, db *DB) {
 	for _, m := range []Mode{
 		ModeSyncing,
 		ModeUpload,
-		ModeRequest,
 	} {
 		t.Run(ModeName(m), func(t *testing.T) {
 			a := db.Accessor(m)
@@ -136,29 +135,34 @@ func testAccessors(t *testing.T, db *DB) {
 		}
 	})
 
-	// Access mode is a special as it does not store the chunk
-	// in the database.
-	t.Run(ModeName(modeAccess), func(t *testing.T) {
-		a := db.Accessor(ModeUpload)
+	// Request and access modes are special as they do not store
+	// chunks in the database.
+	for _, m := range []Mode{
+		ModeRequest,
+		modeAccess,
+	} {
+		t.Run(ModeName(m), func(t *testing.T) {
+			a := db.Accessor(ModeUpload)
 
-		want := generateRandomChunk()
+			want := generateRandomChunk()
 
-		// first put a random chunk to the database
-		err := a.Put(context.Background(), want)
-		if err != nil {
-			t.Fatal(err)
-		}
+			// first put a random chunk to the database
+			err := a.Put(context.Background(), want)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		a = db.Accessor(modeAccess)
+			a = db.Accessor(ModeRequest)
 
-		got, err := a.Get(context.Background(), want.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(got.Data(), want.Data()) {
-			t.Errorf("got chunk data %x, want %x", got.Data(), want.Data())
-		}
-	})
+			got, err := a.Get(context.Background(), want.Address())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got.Data(), want.Data()) {
+				t.Errorf("got chunk data %x, want %x", got.Data(), want.Data())
+			}
+		})
+	}
 
 	// Removal mode is a special case as it removes the chunk
 	// from the database.
