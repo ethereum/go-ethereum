@@ -117,6 +117,7 @@ func uploadAndSync(c *cli.Context) error {
 
 	wg := sync.WaitGroup{}
 	if single {
+		rand.Seed(time.Now().UTC().UnixNano())
 		randIndex := 1 + rand.Intn(len(endpoints)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
