@@ -339,7 +339,7 @@ func (w *wizard) makeGenesis() {
 	}
 	// Add a batch of precompile balances to avoid them getting deleted
 	for i := int64(0); i < 2; i++ {
-		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
+		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(0)}
 	}
 	// Query the user for some custom extras
 	fmt.Println()
