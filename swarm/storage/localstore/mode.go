@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"encoding/hex"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
@@ -169,6 +170,11 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 				// set access time for gc index
 				item.AccessTimestamp = now()
 				db.retrievalCompositeIndex.PutInBatch(batch, item)
+			} else {
+				// the chunk is accessed before
+				// remove the current gc index item
+				db.gcIndex.DeleteInBatch(batch, item)
+				atomic.AddInt64(&db.gcSize, -1)
 			}
 		} else {
 			i, err := db.retrievalDataIndex.Get(item)
@@ -190,6 +196,7 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 			case nil:
 				item.AccessTimestamp = i.AccessTimestamp
 				db.gcIndex.DeleteInBatch(batch, item)
+				atomic.AddInt64(&db.gcSize, -1)
 			case leveldb.ErrNotFound:
 				// the chunk is not accessed before
 			default:
@@ -200,6 +207,7 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 		}
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
+		atomic.AddInt64(&db.gcSize, 1)
 
 	case modeAccess:
 		// putting a chunk on mode access does not do anything
@@ -241,6 +249,11 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 		}
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
+		// TODO: optimize in garbage collection
+		// get is too expensive operation
+		if _, err := db.gcIndex.Get(item); err == nil {
+			atomic.AddInt64(&db.gcSize, -1)
+		}
 
 	default:
 		return ErrInvalidMode

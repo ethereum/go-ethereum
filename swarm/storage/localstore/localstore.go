@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
@@ -62,6 +63,9 @@ type DB struct {
 	pullIndex shed.Index
 	// garbage collection index
 	gcIndex shed.Index
+
+	// number of elements in garbage collection index
+	gcSize int64
 
 	baseKey []byte
 
@@ -288,6 +292,13 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 	})
+	// count number of elements in garbage collection index
+	var gcSize int64
+	db.gcIndex.IterateAll(func(_ shed.IndexItem) (stop bool, err error) {
+		gcSize++
+		return false, nil
+	})
+	atomic.AddInt64(&db.gcSize, gcSize)
 	if err != nil {
 		return nil, err
 	}

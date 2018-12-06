@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -170,6 +171,8 @@ func testModeRequestValues(t *testing.T, db *DB) {
 		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 
 	// set chunk to synced state
@@ -197,6 +200,8 @@ func testModeRequestValues(t *testing.T, db *DB) {
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, uploadTimestamp))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 
 	t.Run("second get", func(t *testing.T) {
@@ -223,6 +228,8 @@ func testModeRequestValues(t *testing.T, db *DB) {
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, accessTimestamp))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 }
 
@@ -274,6 +281,10 @@ func testModeSyncedValues(t *testing.T, db *DB) {
 	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, leveldb.ErrNotFound))
 
 	t.Run("gc index", newGCIndexTest(db, chunk, wantTimestamp, wantTimestamp))
+
+	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
 // TestModeAccess validates internal data operations and state
@@ -331,6 +342,8 @@ func testModeAccessValues(t *testing.T, db *DB) {
 		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 
 	// set chunk to synced state
@@ -358,6 +371,8 @@ func testModeAccessValues(t *testing.T, db *DB) {
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, uploadTimestamp))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 
 	t.Run("second get", func(t *testing.T) {
@@ -384,6 +399,8 @@ func testModeAccessValues(t *testing.T, db *DB) {
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, accessTimestamp))
 
 		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
 	})
 }
 
@@ -453,6 +470,9 @@ func testModeRemovalValues(t *testing.T, db *DB) {
 	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, 0))
 
 	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+
+	t.Run("gc size", newIndexGCSizeTest(db))
+
 }
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
@@ -568,6 +588,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		// the chunk is not synced
 		// should not be in the garbace collection index
 		newIndexItemsCountTest(db.gcIndex, 0)(t)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("request unsynced", func(t *testing.T) {
@@ -583,6 +605,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		// the chunk is not synced
 		// should not be in the garbace collection index
 		newIndexItemsCountTest(db.gcIndex, 0)(t)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("sync one chunk", func(t *testing.T) {
@@ -597,6 +621,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 
 		// the chunk is synced and should be in gc index
 		newIndexItemsCountTest(db.gcIndex, 1)(t)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("sync all chunks", func(t *testing.T) {
@@ -610,6 +636,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		}
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("access one chunk", func(t *testing.T) {
@@ -628,6 +656,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		chunks = append(chunks, c)
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("request one chunk", func(t *testing.T) {
@@ -646,6 +676,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		chunks = append(chunks, c)
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("random chunk access", func(t *testing.T) {
@@ -663,6 +695,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		}
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("random chunk request", func(t *testing.T) {
@@ -680,6 +714,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		}
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 
 	t.Run("remove one chunk", func(t *testing.T) {
@@ -696,6 +732,8 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		chunks = append(chunks[:i], chunks[i+1:]...)
 
 		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+
+		newIndexGCSizeTest(db)(t)
 	})
 }
 
@@ -815,6 +853,20 @@ func newIndexItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 		})
 		if c != want {
 			t.Errorf("got %v items in index, want %v", c, want)
+		}
+	}
+}
+
+func newIndexGCSizeTest(db *DB) func(t *testing.T) {
+	return func(t *testing.T) {
+		var want int64
+		db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+			want++
+			return
+		})
+		got := atomic.LoadInt64(&db.gcSize)
+		if got != want {
+			t.Errorf("got gc size %v, want %v", got, want)
 		}
 	}
 }
