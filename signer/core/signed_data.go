@@ -96,6 +96,7 @@ type TypedDataDomain struct {
 }
 
 var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[])?$`)
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[])?$`)
 
 // Sign receives a request and produces a signature
 
@@ -747,15 +748,19 @@ func (types *Types) Validate() error {
 			}
 			firstChar := []rune(typeVal)[0]
 			if unicode.IsUpper(firstChar) {
-				if (*types)[typeVal] == nil {
-					return fmt.Errorf("referenced type '%s' is undefined", typeVal)
+				if (*types)[typeVal] != nil {
+					if !typedDataReferenceTypeRegexp.MatchString(typeVal) {
+						return fmt.Errorf("unknown reference type '%s", typeVal)
+					}
+				} else {
+					return fmt.Errorf("reference type '%s' is undefined", typeVal)
 				}
 			} else {
 				if !typedDataRegexp.MatchString(typeVal) {
 					if (*types)[typeVal] != nil {
-						return fmt.Errorf("referenced type '%s' must be capitalized", typeVal)
+						return fmt.Errorf("reference type '%s' must be capitalized", typeVal)
 					} else {
-						return fmt.Errorf("unknown atomic type '%s'", typeVal)
+						return fmt.Errorf("unknown type '%s'", typeVal)
 					}
 				}
 			}
