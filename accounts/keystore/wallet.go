@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -91,9 +92,9 @@ func (w *keystoreWallet) signHash(account accounts.Account, hash []byte) ([]byte
 	return w.keystore.SignHash(account, hash)
 }
 
-// SignCliqueHeader implements accounts.Wallet, attempting to sign the given clique header
-func (w *keystoreWallet) SignCliqueHeader(account accounts.Account, header *types.Header) ([]byte, error) {
-	return w.signHash(account, accounts.CliqueHash(header).Bytes())
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
+func (w *keystoreWallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
+	return w.signHash(account, crypto.Keccak256(data))
 }
 
 func (w *keystoreWallet) SignText(account accounts.Account, text []byte) ([]byte, error) {

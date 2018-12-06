@@ -18,6 +18,7 @@ package external
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"sync"
 
@@ -151,11 +152,11 @@ func (api *ExternalSigner) signHash(account accounts.Account, hash []byte) ([]by
 	return []byte{}, fmt.Errorf("operation not supported on external signers")
 }
 
-// SignCliqueHeader implements accounts.Wallet, attempting to sign the given clique header
-func (api *ExternalSigner) SignCliqueHeader(account accounts.Account, header *types.Header) ([]byte, error) {
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
+func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	// TODO! Replace this with a call to clef SignData with correct mime-type for Clique, once we
 	// have that in place
-	return api.signHash(account, accounts.CliqueHash(header).Bytes())
+	return api.signHash(account, crypto.Keccak256(data))
 }
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {

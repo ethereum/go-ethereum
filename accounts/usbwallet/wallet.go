@@ -20,6 +20,7 @@ package usbwallet
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"io"
 	"math/big"
 	"sync"
@@ -501,9 +502,9 @@ func (w *wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 	return nil, accounts.ErrNotSupported
 }
 
-// SignCliqueHeader implements accounts.Wallet, attempting to sign the given clique header
-func (w *wallet) SignCliqueHeader(account accounts.Account, header *types.Header) ([]byte, error) {
-	return w.signHash(account, accounts.CliqueHash(header).Bytes())
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
+func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
+	return w.signHash(account, crypto.Keccak256(data))
 }
 
 func (w *wallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
