@@ -18,13 +18,16 @@ package main
 
 import (
 	"fmt"
+	"net/http/httptrace"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -119,6 +122,8 @@ func main() {
 		swarmmetrics.MetricsInfluxDBHostTagFlag,
 	}...)
 
+	app.Flags = append(app.Flags, tracing.Flags...)
+
 	app.Commands = []cli.Command{
 		{
 			Name:    "upload_and_sync",
@@ -136,6 +141,12 @@ func main() {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	sort.Sort(cli.CommandsByName(app.Commands))
+
+	app.Before = func(ctx *cli.Context) error {
+		tracing.Setup(ctx)
+		return nil
+	}
+
 	app.After = func(ctx *cli.Context) error {
 		return emitMetrics(ctx)
 	}
@@ -165,4 +176,58 @@ func emitMetrics(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+func getClientTrace(testName, ruid string, tn *time.Time) *httptrace.ClientTrace {
+	trace := &httptrace.ClientTrace{
+		GetConn: func(_ string) {
+			log.Trace(testName+" - http get", "event", "GetConn", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.getconn", nil).Update(time.Since(*tn))
+		},
+		GotConn: func(_ httptrace.GotConnInfo) {
+			log.Trace(testName+" - http get", "event", "GotConn", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.gotconn", nil).Update(time.Since(*tn))
+		},
+		PutIdleConn: func(err error) {
+			log.Trace(testName+" - http get", "event", "PutIdleConn", "ruid", ruid, "err", err)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.putidle", nil).Update(time.Since(*tn))
+		},
+		GotFirstResponseByte: func() {
+			log.Trace(testName+" - http get", "event", "GotFirstResponseByte", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.firstbyte", nil).Update(time.Since(*tn))
+		},
+		Got100Continue: func() {
+			log.Trace(testName+" - http get", "event", "Got100Continue", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.got100continue", nil).Update(time.Since(*tn))
+		},
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			log.Trace(testName+" - http get", "event", "DNSStart", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.dnsstart", nil).Update(time.Since(*tn))
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			log.Trace(testName+" - http get", "event", "DNSDone", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.dnsdone", nil).Update(time.Since(*tn))
+		},
+		ConnectStart: func(network, addr string) {
+			log.Trace(testName+" - http get", "event", "ConnectStart", "ruid", ruid, "network", network, "addr", addr)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.connectstart", nil).Update(time.Since(*tn))
+		},
+		ConnectDone: func(network, addr string, err error) {
+			log.Trace(testName+" - http get", "event", "ConnectDone", "ruid", ruid, "network", network, "addr", addr, "err", err)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.connectdone", nil).Update(time.Since(*tn))
+		},
+		WroteHeaders: func() {
+			log.Trace(testName+" - http get", "event", "WroteHeaders(request)", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.wroteheaders", nil).Update(time.Since(*tn))
+		},
+		Wait100Continue: func() {
+			log.Trace(testName+" - http get", "event", "Wait100Continue", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.wait100continue", nil).Update(time.Since(*tn))
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			log.Trace(testName+" - http get", "event", "WroteRequest", "ruid", ruid)
+			gethmetrics.GetOrRegisterResettingTimer(testName+".fetch.clienttrace.wroterequest", nil).Update(time.Since(*tn))
+		},
+	}
+	return trace
 }

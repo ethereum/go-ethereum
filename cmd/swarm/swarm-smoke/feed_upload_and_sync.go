@@ -307,9 +307,7 @@ func feedUploadAndSync(c *cli.Context) error {
 }
 
 func fetchFeed(topic string, user string, endpoint string, original []byte, ruid string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx, sp := spancontext.StartSpan(ctx, "feed-and-sync.fetch")
+	ctx, sp := spancontext.StartSpan(context.Background(), "feed-and-sync.fetch")
 	defer sp.Finish()
 
 	log.Trace("sleeping", "ruid", ruid)
@@ -317,7 +315,7 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 
 	log.Trace("http get request (feed)", "ruid", ruid, "api", endpoint, "topic", topic, "user", user)
 
-	tn := time.Now()
+	var tn time.Time
 	reqUri := endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user
 	req, _ := http.NewRequest("GET", reqUri, nil)
 
@@ -326,62 +324,14 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header))
 
-	trace := &httptrace.ClientTrace{
-		GetConn: func(_ string) {
-			log.Trace("http get request (feed) - GetConn")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.getconn", nil).Update(time.Since(tn))
-		},
-		GotConn: func(_ httptrace.GotConnInfo) {
-			log.Trace("http get request (feed) - GotConn")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.gotconn", nil).Update(time.Since(tn))
-		},
-		PutIdleConn: func(err error) {
-			log.Trace("http get request (feed) - PutIdleConn", "err", err)
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.putidle", nil).Update(time.Since(tn))
-		},
-		GotFirstResponseByte: func() {
-			log.Trace("http get request (feed) - GotFirstResponseByte")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.firstbyte", nil).Update(time.Since(tn))
-		},
-		Got100Continue: func() {
-			log.Trace("http get request (feed) - Got100Continue")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.got100continue", nil).Update(time.Since(tn))
-		},
-		DNSStart: func(_ httptrace.DNSStartInfo) {
-			log.Trace("http get request (feed) - DNSStart")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.dnsstart", nil).Update(time.Since(tn))
-		},
-		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			log.Trace("http get request (feed) - DNSDone")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.dnsdone", nil).Update(time.Since(tn))
-		},
-		ConnectStart: func(network, addr string) {
-			log.Trace("http get request (feed) - ConnectStart", "network", network, "addr", addr)
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.connectstart", nil).Update(time.Since(tn))
-		},
-		ConnectDone: func(network, addr string, err error) {
-			log.Trace("http get request (feed) - ConnectDone", "network", network, "addr", addr, "err", err)
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.connectdone", nil).Update(time.Since(tn))
-		},
-		WroteHeaders: func() {
-			log.Trace("http get request (feed) - WroteHeaders(request)")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.wroteheaders", nil).Update(time.Since(tn))
-		},
-		Wait100Continue: func() {
-			log.Trace("http get request (feed) - Wait100Continue")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.wait100continue", nil).Update(time.Since(tn))
-		},
+	trace := getClientTrace("feed-and-sync", ruid, &tn)
 
-		WroteRequest: func(_ httptrace.WroteRequestInfo) {
-			log.Trace("http get request (feed) - WroteRequest")
-			metrics.GetOrRegisterResettingTimer("feed-and-sync.fetch.clienttrace.wroterequest", nil).Update(time.Since(tn))
-		},
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
 
 	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
+	tn = time.Now()
 	res, err := transport.RoundTrip(req)
 	if err != nil {
 		log.Error(err.Error(), "ruid", ruid)

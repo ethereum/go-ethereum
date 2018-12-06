@@ -138,16 +138,14 @@ func uploadAndSync(c *cli.Context) error {
 
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
 func fetch(hash string, endpoint string, original []byte, ruid string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx, sp := spancontext.StartSpan(ctx, "upload-and-sync.fetch")
+	ctx, sp := spancontext.StartSpan(context.Background(), "upload-and-sync.fetch")
 	defer sp.Finish()
 
 	log.Trace("sleeping", "ruid", ruid)
 	time.Sleep(3 * time.Second)
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
 
-	tn := time.Now()
+	var tn time.Time
 	reqUri := endpoint + "/bzz:/" + hash + "/"
 	req, _ := http.NewRequest("GET", reqUri, nil)
 
@@ -156,61 +154,14 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header))
 
-	trace := &httptrace.ClientTrace{
-		GetConn: func(_ string) {
-			log.Trace("http get request - GetConn")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.getconn", nil).Update(time.Since(tn))
-		},
-		GotConn: func(_ httptrace.GotConnInfo) {
-			log.Trace("http get request - GotConn")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.gotconn", nil).Update(time.Since(tn))
-		},
-		PutIdleConn: func(err error) {
-			log.Trace("http get request - PutIdleConn", "err", err)
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.putidle", nil).Update(time.Since(tn))
-		},
-		GotFirstResponseByte: func() {
-			log.Trace("http get request - GotFirstResponseByte")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.firstbyte", nil).Update(time.Since(tn))
-		},
-		Got100Continue: func() {
-			log.Trace("http get request - Got100Continue")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.got100continue", nil).Update(time.Since(tn))
-		},
-		DNSStart: func(_ httptrace.DNSStartInfo) {
-			log.Trace("http get request - DNSStart")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.dnsstart", nil).Update(time.Since(tn))
-		},
-		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			log.Trace("http get request - DNSDone")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.dnsdone", nil).Update(time.Since(tn))
-		},
-		ConnectStart: func(network, addr string) {
-			log.Trace("http get request - ConnectStart", "network", network, "addr", addr)
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.connectstart", nil).Update(time.Since(tn))
-		},
-		ConnectDone: func(network, addr string, err error) {
-			log.Trace("http get request - ConnectDone", "network", network, "addr", addr, "err", err)
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.connectdone", nil).Update(time.Since(tn))
-		},
-		WroteHeaders: func() {
-			log.Trace("http get request - WroteHeaders(request)")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.wroteheaders", nil).Update(time.Since(tn))
-		},
-		Wait100Continue: func() {
-			log.Trace("http get request - Wait100Continue")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.wait100continue", nil).Update(time.Since(tn))
-		},
-		WroteRequest: func(_ httptrace.WroteRequestInfo) {
-			log.Trace("http get request - WroteRequest")
-			metrics.GetOrRegisterResettingTimer("upload-and-sync.fetch.clienttrace.wroterequest", nil).Update(time.Since(tn))
-		},
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	trace := getClientTrace("upload-and-sync", ruid, &tn)
+
+	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
 
 	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
+	tn = time.Now()
 	res, err := transport.RoundTrip(req)
 	if err != nil {
 		log.Error(err.Error(), "ruid", ruid)
