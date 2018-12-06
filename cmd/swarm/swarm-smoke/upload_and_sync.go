@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/md5"
 	crand "crypto/rand"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -145,12 +144,12 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	req, _ := http.NewRequest("GET", reqUri, nil)
 	trace := &httptrace.ClientTrace{
 		GetConn:              func(_ string) { log.Trace("http get request - GetConn") },
-		GotConn:              func(_GotConnInfo) { log.Trace("http get request - GotConn") },
+		GotConn:              func(_ httptrace.GotConnInfo) { log.Trace("http get request - GotConn") },
 		PutIdleConn:          func(err error) { log.Trace("http get request - PutIdleConn", "err", err) },
 		GotFirstResponseByte: func() { log.Trace("http get request - GotFirstResponseByte") },
 		Got100Continue:       func() { log.Trace("http get request - Got100Continue") },
-		DNSStart:             func(_ DNSStartInfo) { log.Trace("http get request - DNSStart") },
-		DNSDone:              func(_ DNSDoneInfo) { log.Trace("http get request - DNSDone") },
+		DNSStart:             func(_ httptrace.DNSStartInfo) { log.Trace("http get request - DNSStart") },
+		DNSDone:              func(_ httptrace.DNSDoneInfo) { log.Trace("http get request - DNSDone") },
 		ConnectStart: func(network, addr string) {
 			log.Trace("http get request - ConnectStart", "network", network, "addr", addr)
 		},
@@ -160,11 +159,11 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		WroteHeaders:    func() { log.Trace("http get request - WroteHeaders(request)") },
 		Wait100Continue: func() { log.Trace("http get request - Wait100Continue") },
 
-		WroteRequest: func(_ WroteRequestInfo) { log.Trace("http get request - WroteRequest") },
+		WroteRequest: func(_ httptrace.WroteRequestInfo) { log.Trace("http get request - WroteRequest") },
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	transport := http.DefaultTransport
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	res, err := transport.RoundTrip(req)
 	if err != nil {
 		log.Error(err.Error(), "ruid", ruid)

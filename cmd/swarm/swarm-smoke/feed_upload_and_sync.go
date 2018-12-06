@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -314,12 +313,12 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 	req, _ := http.NewRequest("GET", reqUri, nil)
 	trace := &httptrace.ClientTrace{
 		GetConn:              func(_ string) { log.Trace("http get request (feed) - GetConn") },
-		GotConn:              func(_GotConnInfo) { log.Trace("http get request (feed) - GotConn") },
+		GotConn:              func(_ httptrace.GotConnInfo) { log.Trace("http get request (feed) - GotConn") },
 		PutIdleConn:          func(err error) { log.Trace("http get request (feed) - PutIdleConn", "err", err) },
 		GotFirstResponseByte: func() { log.Trace("http get request (feed) - GotFirstResponseByte") },
 		Got100Continue:       func() { log.Trace("http get request (feed) - Got100Continue") },
-		DNSStart:             func(_ DNSStartInfo) { log.Trace("http get request (feed) - DNSStart") },
-		DNSDone:              func(_ DNSDoneInfo) { log.Trace("http get request (feed) - DNSDone") },
+		DNSStart:             func(_ httptrace.DNSStartInfo) { log.Trace("http get request (feed) - DNSStart") },
+		DNSDone:              func(_ httptrace.DNSDoneInfo) { log.Trace("http get request (feed) - DNSDone") },
 		ConnectStart: func(network, addr string) {
 			log.Trace("http get request (feed) - ConnectStart", "network", network, "addr", addr)
 		},
@@ -330,11 +329,11 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 		WroteHeaders:    func() { log.Trace("http get request (feed) - WroteHeaders(request)") },
 		Wait100Continue: func() { log.Trace("http get request (feed) - Wait100Continue") },
 
-		WroteRequest: func(_ WroteRequestInfo) { log.Trace("http get request (feed) - WroteRequest") },
+		WroteRequest: func(_ httptrace.WroteRequestInfo) { log.Trace("http get request (feed) - WroteRequest") },
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	transport := http.DefaultTransport
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	res, err := transport.RoundTrip(req)
 	if err != nil {
