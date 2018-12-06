@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -73,9 +74,15 @@ func ParseURI(h http.Handler) http.Handler {
 
 func InitLoggingResponseWriter(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tn := time.Now()
+
 		writer := newLoggingResponseWriter(w)
 		h.ServeHTTP(writer, r)
-		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode)
+
+		ts := time.Since(tn)
+		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts*time.Millisecond)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).Update(ts)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.%d.time", r.Method, writer.statusCode), nil).Update(ts)
 	})
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	colorable "github.com/mattn/go-colorable"
 	"github.com/pborman/uuid"
@@ -29,7 +30,7 @@ const (
 )
 
 func cliFeedUploadAndSync(c *cli.Context) error {
-	feedUploadAndSyncCount.Inc(1)
+	metrics.GetOrRegisterCounter("feed-and-sync", nil).Inc(1)
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))))
 
 	errc := make(chan error)
@@ -40,11 +41,11 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 	select {
 	case err := <-errc:
 		if err != nil {
-			feedUploadAndSyncFailCount.Inc(1)
+			metrics.GetOrRegisterCounter("feed-and-sync.fail", nil).Inc(1)
 		}
 		return err
 	case <-time.After(time.Duration(timeout) * time.Second):
-		feedUploadAndSyncTimeout.Inc(1)
+		metrics.GetOrRegisterCounter("feed-and-sync.timeout", nil).Inc(1)
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
 }

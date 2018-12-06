@@ -47,11 +47,6 @@ var (
 	verbosity        int
 	timeout          int
 )
-var (
-	feedUploadAndSyncCount     = gethmetrics.NewRegisteredCounter("feed-and-sync", nil)
-	feedUploadAndSyncFailCount = gethmetrics.NewRegisteredCounter("feed-and-sync.fail", nil)
-	feedUploadAndSyncTimeout   = gethmetrics.NewRegisteredCounter("feed-and-sync.timeout", nil)
-)
 
 func main() {
 
