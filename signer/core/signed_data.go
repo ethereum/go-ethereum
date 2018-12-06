@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 	"mime"
 	"reflect"
@@ -76,9 +77,30 @@ type TypedData struct {
 	Message     TypedDataMessage `json:"message"`
 }
 
-type Type []map[string]string
+type Type struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
 
-type Types map[string]Type
+func (t *Type) isArray() bool {
+	return strings.HasSuffix(t.Type, "[]")
+}
+
+// typeName returns the canonical name of the type. If the type is 'Person[]', then
+// this method returns 'Person'
+func (t *Type) typeName() string {
+	if strings.HasSuffix(t.Type, "[]") {
+		return strings.TrimSuffix(t.Type, "[]")
+	}
+	return t.Type
+}
+
+func (t *Type) isReferenceType() bool {
+	// Reference types must have a leading uppercase characer
+	return unicode.IsUpper([]rune(t.Type)[0])
+}
+
+type Types map[string][]Type
 
 type TypePriority struct {
 	Type  string
@@ -331,7 +353,7 @@ func (typedData *TypedData) Dependencies(primaryType string, found []string) []s
 	}
 	found = append(found, primaryType)
 	for _, field := range typedData.Types[primaryType] {
-		for _, dep := range typedData.Dependencies(field["type"], found) {
+		for _, dep := range typedData.Dependencies(field.Type, found) {
 			if !includes(found, dep) {
 				found = append(found, dep)
 			}
@@ -357,9 +379,9 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 		buffer.WriteString(dep)
 		buffer.WriteString("(")
 		for _, obj := range typedData.Types[dep] {
-			buffer.WriteString(obj["type"])
+			buffer.WriteString(obj.Type)
 			buffer.WriteString(" ")
-			buffer.WriteString(obj["name"])
+			buffer.WriteString(obj.Name)
 			buffer.WriteString(",")
 		}
 		buffer.Truncate(buffer.Len() - 1)
@@ -389,8 +411,8 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {
-		encType := field["type"]
-		encValue := data[field["name"]]
+		encType := field.Type
+		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
 			arrayValue, ok := encValue.([]interface{})
 			if !ok {
@@ -411,11 +433,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					}
 					arrayBuffer.Write(encodedData)
 				} else {
-					encValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
-					if err != nil {
-						return nil, err
-					}
-					bytesValue, err := bytesValueOf(encValue)
+					bytesValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
 					if err != nil {
 						return nil, err
 					}
@@ -424,28 +442,22 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			}
 
 			buffer.Write(crypto.Keccak256(arrayBuffer.Bytes()))
-		} else if typedData.Types[field["type"]] != nil {
+		} else if typedData.Types[field.Type] != nil {
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-
-			encodedData, err := typedData.EncodeData(field["type"], mapValue, depth+1)
+			encodedData, err := typedData.EncodeData(field.Type, mapValue, depth+1)
 			if err != nil {
 				return nil, err
 			}
-
 			buffer.Write(crypto.Keccak256(encodedData))
 		} else {
-			primitiveEncValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
+			byteValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
 			if err != nil {
 				return nil, err
 			}
-			bytesValue, err := bytesValueOf(primitiveEncValue)
-			if err != nil {
-				return nil, err
-			}
-			buffer.Write(bytesValue)
+			buffer.Write(byteValue)
 		}
 	}
 	return buffer.Bytes(), nil
@@ -453,93 +465,70 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // EncodePrimitiveValue deals with the primitive values found
 // while searching through the typed data
-func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) (interface{}, error) {
-	var primitiveEncValue interface{}
+func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
 
 	switch encType {
 	case "address":
-		bytesValue := hexutil.Bytes{}
-		for i := 0; i < 12; i++ {
-			bytesValue = append(bytesValue, 0)
-		}
 		stringValue, ok := encValue.(string)
 		if !ok || !common.IsHexAddress(stringValue) {
 			return nil, dataMismatchError(encType, encValue)
 		}
-		addressValue := common.HexToAddress(stringValue)
-		for _, _byte := range addressValue {
-			bytesValue = append(bytesValue, _byte)
-		}
-		primitiveEncValue = bytesValue
+		retval := make([]byte, 32)
+		copy(retval[12:], common.HexToAddress(stringValue).Bytes())
+		return retval, nil
 	case "bool":
-		var int64Val int64
 		boolValue, ok := encValue.(bool)
 		if !ok {
 			return nil, dataMismatchError(encType, encValue)
 		}
 		if boolValue {
-			int64Val = 1
+			return math.PaddedBigBytes(common.Big1, 32), nil
 		}
-		primitiveEncValue = abi.U256(big.NewInt(int64Val))
-	case "bytes", "string":
-		bytesValue, err := bytesValueOf(encValue)
-		if err != nil {
+		return math.PaddedBigBytes(common.Big0, 32), nil
+	case "string":
+		strVal, ok := encValue.(string)
+		if !ok {
 			return nil, dataMismatchError(encType, encValue)
 		}
-		primitiveEncValue = crypto.Keccak256(bytesValue)
-	default:
-		if strings.HasPrefix(encType, "bytes") {
-			sizeStr := strings.TrimPrefix(encType, "bytes")
-			size, _ := strconv.Atoi(sizeStr)
-			bytesValue := hexutil.Bytes{}
-			for i := 0; i < 32-size; i++ {
-				bytesValue = append(bytesValue, 0)
-			}
-			if _, ok := encValue.(hexutil.Bytes); !ok {
-				return nil, dataMismatchError(encType, encValue)
-			}
-			bytesValue = append(bytesValue, encValue.(hexutil.Bytes)...)
-			primitiveEncValue = bytesValue
-		} else if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
-			bigIntValue, ok := encValue.(*big.Int)
-			if !ok {
-				return nil, dataMismatchError(encType, encValue)
-			}
-			primitiveEncValue = abi.U256(bigIntValue)
+		return crypto.Keccak256([]byte(strVal)), nil
+	case "bytes":
+		bytesValue, ok := encValue.([]byte)
+		if !ok {
+			return nil, dataMismatchError(encType, encValue)
+		}
+		return crypto.Keccak256(bytesValue), nil
+	}
+	// bytes32 etc
+	if strings.HasPrefix(encType, "bytes") {
+		sizeStr := strings.TrimPrefix(encType, "bytes")
+		size, err := strconv.Atoi(sizeStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid size on bytes: %v", sizeStr)
+		}
+		if size < 0 || size > 32 {
+			return nil, fmt.Errorf("invalid size on bytes: %d", size)
+		}
+		if byteval, ok := encValue.(hexutil.Bytes); !ok {
+			return nil, dataMismatchError(encType, encValue)
 		} else {
-			return nil, fmt.Errorf("unrecognized type '%s'", encType)
+			return math.PaddedBigBytes(new(big.Int).SetBytes(byteval), 32), nil
 		}
 	}
-	return primitiveEncValue, nil
+	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
+		bigIntValue, ok := encValue.(*big.Int)
+		if !ok {
+			return nil, dataMismatchError(encType, encValue)
+		}
+		return abi.U256(bigIntValue), nil
+	}
+	return nil, fmt.Errorf("unrecognized type '%s'", encType)
+
 }
 
 // dataMismatchError generates an error for a mismatch between
 // the provided type and data
 func dataMismatchError(encType string, encValue interface{}) error {
 	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
-}
-
-// bytesValuesOf returns the bytes value of the given interface
-func bytesValueOf(_interface interface{}) (hexutil.Bytes, error) {
-	bytesValue, ok := _interface.(hexutil.Bytes)
-	if ok {
-		return bytesValue, nil
-	}
-
-	switch reflect.TypeOf(_interface) {
-	case reflect.TypeOf(hexutil.Bytes{}):
-		return _interface.(hexutil.Bytes), nil
-	case reflect.TypeOf([]byte{}):
-		return hexutil.Bytes(_interface.([]byte)), nil
-	case reflect.TypeOf([]uint8{}):
-		return _interface.([]uint8), nil
-	case reflect.TypeOf(string("")):
-		return hexutil.Bytes(_interface.(string)), nil
-	default:
-		break
-	}
-
-	return nil, fmt.Errorf("unrecognized type '%T'", _interface)
 }
 
 // EcRecover recovers the address associated with the given sig.
@@ -660,32 +649,31 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 
 	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {
-		encType := field["type"]
-		encName := field["name"]
+		encName := field.Name
 		encValue := data[encName]
 		item := &NameValueType{
 			Name: encName,
-			Typ:  encType,
+			Typ:  field.Type,
 		}
-		if encType[len(encType)-1:] == "]" {
+		if field.isArray() {
 			arrayValue, _ := encValue.([]interface{})
-			parsedType := strings.Split(encType, "[")[0]
+			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
 					mapValue, _ := v.(map[string]interface{})
 					mapOutput := typedData.formatData(parsedType, mapValue)
 					item.Value = mapOutput
 				} else {
-					primitiveOutput := formatPrimitiveValue(encType, encValue)
+					primitiveOutput := formatPrimitiveValue(field.Type, encValue)
 					item.Value = primitiveOutput
 				}
 			}
-		} else if typedData.Types[field["type"]] != nil {
+		} else if typedData.Types[field.Type] != nil {
 			mapValue, _ := encValue.(map[string]interface{})
-			mapOutput := typedData.formatData(field["type"], mapValue)
+			mapOutput := typedData.formatData(field.Type, mapValue)
 			item.Value = mapOutput
 		} else {
-			primitiveOutput := formatPrimitiveValue(encType, encValue)
+			primitiveOutput := formatPrimitiveValue(field.Type, encValue)
 			item.Value = primitiveOutput
 		}
 		output = append(output, item)
@@ -739,30 +727,22 @@ func (nvt *NameValueType) Pprint(depth int) string {
 }
 
 // Validate checks if the types object is conformant to the specs
-func (types *Types) Validate() error {
-	for typeKey, typeArr := range *types {
+func (t Types) Validate() error {
+	for typeKey, typeArr := range t {
 		for _, typeObj := range typeArr {
-			typeVal := typeObj["type"]
-			if typeKey == typeVal {
-				return fmt.Errorf("type '%s' cannot reference itself", typeVal)
+			if typeKey == typeObj.Type {
+				return fmt.Errorf("type '%s' cannot reference itself", typeObj.Type)
 			}
-			firstChar := []rune(typeVal)[0]
-			if unicode.IsUpper(firstChar) {
-				if (*types)[typeVal] != nil {
-					if !typedDataReferenceTypeRegexp.MatchString(typeVal) {
-						return fmt.Errorf("unknown reference type '%s", typeVal)
-					}
-				} else {
-					return fmt.Errorf("reference type '%s' is undefined", typeVal)
+			if typeObj.isReferenceType() {
+				if _, exist := t[typeObj.Type]; !exist {
+					return fmt.Errorf("reference type '%s' is undefined", typeObj.Type)
 				}
-			} else {
-				if !typedDataRegexp.MatchString(typeVal) {
-					if (*types)[typeVal] != nil {
-						return fmt.Errorf("reference type '%s' must be capitalized", typeVal)
-					} else {
-						return fmt.Errorf("unknown type '%s'", typeVal)
-					}
+				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
+					return fmt.Errorf("unknown reference type '%s", typeObj.Type)
 				}
+
+			} else if !typedDataRegexp.MatchString(typeObj.Type) {
+				return fmt.Errorf("unknown type '%s'", typeObj.Type)
 			}
 		}
 	}
