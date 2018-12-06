@@ -13,7 +13,7 @@ type AccountingApi struct {
 }
 
 // NewAccountingApi creates a new AccountingApi
-// If m is not nil, it will be used to get accounting metrics
+// m will be used to check if accounting metrics is enabled
 func NewAccountingApi(m *AccountingMetrics) *AccountingApi {
 	return &AccountingApi{m}
 }
