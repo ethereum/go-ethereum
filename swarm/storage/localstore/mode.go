@@ -82,7 +82,7 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 	switch mode {
 	case ModeRequest, modeAccess:
 		// update the access timestamp and fc index
-		return out, db.update(mode, out)
+		return out, db.updateOnAccess(mode, out)
 	default:
 		// all other modes are not updating the index
 	}
@@ -95,7 +95,8 @@ var (
 )
 
 // update performs different operations on fields and indexes
-// depending on the provided Mode.
+// depending on the provided Mode. It is called in accessor
+// put function.
 // It protects parallel updates of items with the same address
 // with updateLocks map and waiting using a simple for loop.
 func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
@@ -139,39 +140,8 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 		db.pushIndex.PutInBatch(batch, item)
 
 	case ModeRequest:
-		// update accessTimeStamp in retrieve, gc
-
-		if db.useRetrievalCompositeIndex {
-			// access timestamp is already populated
-			// in the provided item, passed from access function.
-		} else {
-			i, err := db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-			case leveldb.ErrNotFound:
-				// no chunk accesses
-			default:
-				return err
-			}
-		}
-		if item.AccessTimestamp == 0 {
-			// chunk is not yes synced
-			// do not add it to the gc index
-			return nil
-		}
-		// delete current entry from the gc index
-		db.gcIndex.DeleteInBatch(batch, item)
-		// update access timestamp
-		item.AccessTimestamp = now()
-		// update retrieve access index
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalAccessIndex.PutInBatch(batch, item)
-		}
-		// add new entry to gc index
-		db.gcIndex.PutInBatch(batch, item)
+		// putting a chunk on mode request does not do anything
+		return nil
 
 	case ModeSynced:
 		// delete from push, insert to gc
@@ -231,43 +201,9 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
 
-	// Q: modeAccess and ModeRequest are very similar,  why do we need both?
 	case modeAccess:
-		// update accessTimeStamp in retrieve, pull, gc
-
-		if db.useRetrievalCompositeIndex {
-			// access timestamp is already populated
-			// in the provided item, passed from access function.
-		} else {
-			i, err := db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-			case leveldb.ErrNotFound:
-				// no chunk accesses
-			default:
-				return err
-			}
-		}
-		// Q: why do we need to update this index?
-		db.pullIndex.PutInBatch(batch, item)
-		if item.AccessTimestamp == 0 {
-			// chunk is not yes synced
-			// do not add it to the gc index
-			return nil
-		}
-		// delete current entry from the gc index
-		db.gcIndex.DeleteInBatch(batch, item)
-		// update access timestamp
-		item.AccessTimestamp = now()
-		// update retrieve access index
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalAccessIndex.PutInBatch(batch, item)
-		}
-		// add new entry to gc index
-		db.gcIndex.PutInBatch(batch, item)
+		// putting a chunk on mode access does not do anything
+		return nil
 
 	case modeRemoval:
 		// delete from retrieve, pull, gc
@@ -305,6 +241,112 @@ func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
 		}
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
+
+	default:
+		return ErrInvalidMode
+	}
+
+	return db.shed.WriteBatch(batch)
+}
+
+// updateOnAccess is called in access function and performs
+// different operations on fields and indexes depending on
+// the provided Mode.
+// This function is separated from the update function to prevent
+// changes on calling accessor put function in access and request modes.
+// It protects parallel updates of items with the same address
+// with updateLocks map and waiting using a simple for loop.
+func (db *DB) updateOnAccess(mode Mode, item shed.IndexItem) (err error) {
+	// protect parallel updates
+	start := time.Now()
+	lockKey := hex.EncodeToString(item.Address)
+	for {
+		_, loaded := db.updateLocks.LoadOrStore(lockKey, struct{}{})
+		if !loaded {
+			break
+		}
+		time.Sleep(updateLockCheckDelay)
+		if time.Since(start) > updateLockTimeout {
+			return ErrUpdateLockTimeout
+		}
+	}
+	defer db.updateLocks.Delete(lockKey)
+
+	batch := new(leveldb.Batch)
+
+	switch mode {
+	case ModeRequest:
+		// update accessTimeStamp in retrieve, gc
+
+		if db.useRetrievalCompositeIndex {
+			// access timestamp is already populated
+			// in the provided item, passed from access function.
+		} else {
+			i, err := db.retrievalAccessIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				// no chunk accesses
+			default:
+				return err
+			}
+		}
+		if item.AccessTimestamp == 0 {
+			// chunk is not yes synced
+			// do not add it to the gc index
+			return nil
+		}
+		// delete current entry from the gc index
+		db.gcIndex.DeleteInBatch(batch, item)
+		// update access timestamp
+		item.AccessTimestamp = now()
+		// update retrieve access index
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
+		} else {
+			db.retrievalAccessIndex.PutInBatch(batch, item)
+		}
+		// add new entry to gc index
+		db.gcIndex.PutInBatch(batch, item)
+
+	// Q: modeAccess and ModeRequest are very similar,  why do we need both?
+	case modeAccess:
+		// update accessTimeStamp in retrieve, pull, gc
+
+		if db.useRetrievalCompositeIndex {
+			// access timestamp is already populated
+			// in the provided item, passed from access function.
+		} else {
+			i, err := db.retrievalAccessIndex.Get(item)
+			switch err {
+			case nil:
+				item.AccessTimestamp = i.AccessTimestamp
+			case leveldb.ErrNotFound:
+				// no chunk accesses
+			default:
+				return err
+			}
+		}
+		// Q: why do we need to update this index?
+		db.pullIndex.PutInBatch(batch, item)
+		if item.AccessTimestamp == 0 {
+			// chunk is not yes synced
+			// do not add it to the gc index
+			return nil
+		}
+		// delete current entry from the gc index
+		db.gcIndex.DeleteInBatch(batch, item)
+		// update access timestamp
+		item.AccessTimestamp = now()
+		// update retrieve access index
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
+		} else {
+			db.retrievalAccessIndex.PutInBatch(batch, item)
+		}
+		// add new entry to gc index
+		db.gcIndex.PutInBatch(batch, item)
 
 	default:
 		return ErrInvalidMode
