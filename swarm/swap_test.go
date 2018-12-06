@@ -51,15 +51,18 @@ var (
 func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 	//default hardcoded network size
 	nodeCount := 16
+	//every node has a map to all nodes it had interactions
+	//each entry in the map is a map of the other node with all the balances
+	balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
 	//setup the simulation
 	//use a complete node setup via `NewSwam`
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
-			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
+			config.Port = ""
 
-			dir, err := ioutil.TempDir("", "swap-network-test-node"+config.Port)
+			dir, err := ioutil.TempDir("", "swap-network-test-node")
 			if err != nil {
 				return nil, nil, err
 			}
@@ -92,14 +95,9 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			return swarm, cleanup, nil
 		},
 	})
-	defer sim.Close()
 
 	ctx := context.Background()
 	files := make([]file, 0)
-
-	var checkStatusM sync.Map
-	var nodeStatusM sync.Map
-	var totalFoundCount uint64
 
 	//upload a snapshot
 	err := sim.UploadSnapshot(fmt.Sprintf("network/stream/testing/snapshot_%d.json", nodeCount))
@@ -140,15 +138,12 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 		for {
-			if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+			//we use a special retrieve function for swap which is optimized for parallel requests
+			//but does not leave many cascaded requests floating around
+			if retrieveForSwap(sim, files) == 0 {
 				break
 			}
 		}
-
-		time.Sleep(3 * time.Second)
-		//every node has a map to all nodes it had interactions
-		//each entry in the map is a map of the other node with all the balances
-		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
 		//iterate all nodes
 		for _, node := range sim.NodeIDs() {
@@ -182,45 +177,46 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			balancesMap[node] = subBalances
 		}
 
-		//print all the balances if requested
-		if *printStats {
-			for k, v := range balancesMap {
-				fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
-				for kk, vv := range v {
-					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
-				}
-			}
-		}
-
-		//now iterate the whole map
-		//and check that every node k has the same
-		//balance with a peer as that peer with the node,
-		//but in inverted signs
-
-		//iterate the map
-		success := true
-		for k, mapForK := range balancesMap {
-			//iterate the submap
-			for n, balanceKwithN := range mapForK {
-				//iterate the main map again
-				mapForSubK := balancesMap[n]
-				log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
-				log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-				//...check that they have the same balance in Abs terms and that it is not 0
-				if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
-					log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-					success = false
-				}
-			}
-		}
-		if success {
-			return nil
-		}
-		return errors.New("Expected balances to be symmetrical, but they were not")
+		return nil
 	})
 
+	sim.Close()
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+	//print all the balances if requested
+	if *printStats {
+		for k, v := range balancesMap {
+			fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
+			for kk, vv := range v {
+				fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
+			}
+		}
+	}
+
+	//now iterate the whole map
+	//and check that every node k has the same
+	//balance with a peer as that peer with the node,
+	//but in inverted signs
+
+	//iterate the map
+	success := true
+	for k, mapForK := range balancesMap {
+		//iterate the submap
+		for n, balanceKwithN := range mapForK {
+			//iterate the main map again
+			mapForSubK := balancesMap[n]
+			log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+			log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+			//...check that they have the same balance in Abs terms and that it is not 0
+			if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+				log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
+				success = false
+			}
+		}
+	}
+	if !success {
+		t.Fatal("Expected balances to be symmetrical, but they were not")
 	}
 	log.Debug("test terminated")
 }
@@ -229,16 +225,18 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 //but this time the number and size of files are random
 func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 	nodeCount := 16
+	balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
-			config.Port = strconv.Itoa(8500 + rand.Intn(9999))
+			config.Port = ""
 
-			dir, err := ioutil.TempDir("", "swap-network-test-node"+config.Port)
+			dir, err := ioutil.TempDir("", "swap-network-test-node")
 			if err != nil {
 				return nil, nil, err
 			}
+
 			cleanup = func() {
 				err := os.RemoveAll(dir)
 				if err != nil {
@@ -270,10 +268,6 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 
 	ctx := context.Background()
 	files := make([]file, 0)
-
-	var checkStatusM sync.Map
-	var nodeStatusM sync.Map
-	var totalFoundCount uint64
 
 	//upload a snapshot
 	err := sim.UploadSnapshot(fmt.Sprintf("network/stream/testing/snapshot_%d.json", nodeCount))
@@ -321,14 +315,12 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
 		for {
-			if retrieve(sim, files, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
+			//we use a special retrieve function for swap which is optimized for parallel requests
+			//but does not leave many cascaded requests floating around
+			if retrieveForSwap(sim, files) == 0 {
 				break
 			}
 		}
-
-		time.Sleep(3 * time.Second)
-
-		balancesMap := make(map[enode.ID]map[enode.ID]int64)
 
 		for _, node := range sim.NodeIDs() {
 			item, ok := sim.NodeItem(node, bucketKeySwarm)
@@ -355,41 +347,41 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 			balancesMap[node] = subBalances
 		}
 
-		if *printStats {
-			for k, v := range balancesMap {
-				fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
-				for kk, vv := range v {
-					fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
-				}
-			}
-		}
+		return nil
 
-		/*
-			Assuming that in this case, balances should be symmetric too	I
-		*/
-
-		success := true
-		for k, mapForK := range balancesMap {
-			for n, balanceKwithN := range mapForK {
-				mapForSubK := balancesMap[n]
-				log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
-				log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
-				if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
-					log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-					success = false
-				}
-			}
-		}
-
-		if success {
-			return nil
-		}
-
-		return errors.New("some conditions could not be met")
 	})
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+	if *printStats {
+		for k, v := range balancesMap {
+			fmt.Println(fmt.Sprintf("node %s balances:", k.TerminalString()))
+			for kk, vv := range v {
+				fmt.Println(fmt.Sprintf(".........with node %s: balance %d", kk.TerminalString(), vv))
+			}
+		}
+	}
+
+	/*
+		Assuming that in this case, balances should be symmetric too	I
+	*/
+
+	success := true
+	for k, mapForK := range balancesMap {
+		for n, balanceKwithN := range mapForK {
+			mapForSubK := balancesMap[n]
+			log.Trace(fmt.Sprintf("balance of %s with %s: %d", k.TerminalString(), n.TerminalString(), balanceKwithN))
+			log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
+			if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
+				log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
+				success = false
+			}
+		}
+	}
+
+	if !success {
+		t.Fatal("Expected balances to be symmetrical, but they were not")
 	}
 	log.Debug("test terminated")
 }
@@ -413,4 +405,64 @@ func uploadRandomFileSize(swarm *Swarm, size int) (storage.Address, string, erro
 		err = wait(ctx)
 	}
 	return k, data, err
+}
+
+// retrieveForSwap is a special retrieve function for swap tests which is slightly
+// optimized for parallel request but does not leave many cascaded requests floating around
+func retrieveForSwap(
+	sim *simulation.Simulation,
+	files []file,
+) (missing uint64) {
+	rand.Shuffle(len(files), func(i, j int) {
+		files[i], files[j] = files[j], files[i]
+	})
+
+	lock := &sync.Mutex{}
+
+	nodeIDs := sim.UpNodeIDs()
+
+	totalFoundCount := uint64(0)
+	totalCheckCount := uint64(len(nodeIDs) * len(files))
+
+	for _, id := range nodeIDs {
+
+		waitGrp := sync.WaitGroup{}
+		swarm := sim.Service("swarm", id).(*Swarm)
+		for _, f := range files {
+			f := f
+			waitGrp.Add(1)
+			go func() {
+				defer waitGrp.Done()
+				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", totalFoundCount)
+
+				r, _, _, _, err := swarm.api.Get(context.TODO(), api.NOOPDecrypt, f.addr, "/")
+				if err != nil {
+					log.Error("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+					return
+				}
+				d, err := ioutil.ReadAll(r)
+				if err != nil {
+					log.Error("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+					return
+				}
+				data := string(d)
+				if data != f.data {
+					log.Error("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
+					return
+				}
+				log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", totalFoundCount)
+
+				lock.Lock()
+				defer lock.Unlock()
+				totalFoundCount++
+
+				log.Debug("status", "totalCheckCount", totalCheckCount, "totalFoundCount", totalFoundCount)
+			}()
+		}
+		waitGrp.Wait()
+	}
+
+	log.Info("check stats", "total check count", totalCheckCount, "total files found", totalFoundCount)
+
+	return totalCheckCount - totalFoundCount
 }
