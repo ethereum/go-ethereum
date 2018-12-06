@@ -41,8 +41,8 @@ func (db *DB) Accessor(mode Mode) *Accessor {
 }
 
 // Put uses the underlying DB for the specific mode of update to store the chunk.
-func (u *Accessor) Put(ctx context.Context, ch storage.Chunk) error {
-	return u.db.update(ctx, u.mode, chunkToItem(ch))
+func (u *Accessor) Put(_ context.Context, ch storage.Chunk) error {
+	return u.db.update(u.mode, chunkToItem(ch))
 }
 
 // Get uses the underlying DB for the specific mode of access to get the chunk.

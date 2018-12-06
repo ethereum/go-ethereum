@@ -17,7 +17,8 @@
 package localstore
 
 import (
-	"context"
+	"encoding/hex"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -81,96 +82,67 @@ func (db *DB) access(mode Mode, item shed.IndexItem) (out shed.IndexItem, err er
 	switch mode {
 	case ModeRequest, modeAccess:
 		// update the access timestamp and fc index
-		return out, db.update(context.TODO(), mode, out)
+		return out, db.update(mode, out)
 	default:
 		// all other modes are not updating the index
 	}
 	return out, nil
 }
 
-// update is called by an Accessor with a specific Mode,
-// and also in access for updating access timestamp and gc index.
-// This function calls updateBatch to perform operations
-// on indexes and fields within a single batch.
-func (db *DB) update(ctx context.Context, mode Mode, item shed.IndexItem) error {
-	db.mu.RLock()
-	b := db.batch
-	db.mu.RUnlock()
+var (
+	updateLockTimeout    = 3 * time.Second
+	updateLockCheckDelay = 30 * time.Microsecond
+)
 
-	// check if the database is not closed
-	select {
-	case <-db.close:
-		return ErrDBClosed
-	default:
-	}
-
-	// call the update with the provided mode
-	err := db.updateBatch(b, mode, item)
-	if err != nil {
-		return err
-	}
-	// trigger the writeBatches loop
-	select {
-	case db.writeTrigger <- struct{}{}:
-	default:
-	}
-	// wait for batch to be written and return batch error
-	// this is in order for Put calls to be synchronous
-	select {
-	case <-b.Done:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return b.Err
-}
-
-// batch wraps leveldb.Batch extending it with a done channel.
-type batch struct {
-	*leveldb.Batch
-	Done chan struct{} // to signal when batch is written
-	Err  error         // error resulting from write
-}
-
-// newBatch constructs a new batch.
-func newBatch() *batch {
-	return &batch{
-		Batch: new(leveldb.Batch),
-		Done:  make(chan struct{}),
-	}
-}
-
-// updateBatch performs different operations on fields and indexes
+// update performs different operations on fields and indexes
 // depending on the provided Mode.
-func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) {
+// It protects parallel updates of items with the same address
+// with updateLocks map and waiting using a simple for loop.
+func (db *DB) update(mode Mode, item shed.IndexItem) (err error) {
+	// protect parallel updates
+	start := time.Now()
+	lockKey := hex.EncodeToString(item.Address)
+	for {
+		_, loaded := db.updateLocks.LoadOrStore(lockKey, struct{}{})
+		if !loaded {
+			break
+		}
+		time.Sleep(updateLockCheckDelay)
+		if time.Since(start) > updateLockTimeout {
+			return ErrUpdateLockTimeout
+		}
+	}
+	defer db.updateLocks.Delete(lockKey)
+
+	batch := new(leveldb.Batch)
+
 	switch mode {
 	case ModeSyncing:
 		// put to indexes: retrieve, pull
 		item.StoreTimestamp = now()
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
 		} else {
-			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			db.retrievalDataIndex.PutInBatch(batch, item)
 		}
-		db.pullIndex.PutInBatch(b.Batch, item)
-		db.sizeCounter.IncInBatch(b.Batch)
+		db.pullIndex.PutInBatch(batch, item)
 
 	case ModeUpload:
 		// put to indexes: retrieve, push, pull
 		item.StoreTimestamp = now()
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
 		} else {
-			db.retrievalDataIndex.PutInBatch(b.Batch, item)
+			db.retrievalDataIndex.PutInBatch(batch, item)
 		}
-		db.pullIndex.PutInBatch(b.Batch, item)
-		db.pushIndex.PutInBatch(b.Batch, item)
-		db.sizeCounter.IncInBatch(b.Batch)
+		db.pullIndex.PutInBatch(batch, item)
+		db.pushIndex.PutInBatch(batch, item)
 
 	case ModeRequest:
 		// update accessTimeStamp in retrieve, gc
 
 		if db.useRetrievalCompositeIndex {
-			// access timestap is already populated
+			// access timestamp is already populated
 			// in the provided item, passed from access function.
 		} else {
 			i, err := db.retrievalAccessIndex.Get(item)
@@ -189,17 +161,17 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 			return nil
 		}
 		// delete current entry from the gc index
-		db.gcIndex.DeleteInBatch(b.Batch, item)
+		db.gcIndex.DeleteInBatch(batch, item)
 		// update access timestamp
 		item.AccessTimestamp = now()
 		// update retrieve access index
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
 		} else {
-			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(batch, item)
 		}
 		// add new entry to gc index
-		db.gcIndex.PutInBatch(b.Batch, item)
+		db.gcIndex.PutInBatch(batch, item)
 
 	case ModeSynced:
 		// delete from push, insert to gc
@@ -215,7 +187,7 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 					// no need to update gc index
 					// just delete from the push index
 					// if it is there
-					db.pushIndex.DeleteInBatch(b.Batch, item)
+					db.pushIndex.DeleteInBatch(batch, item)
 					return nil
 				}
 				return err
@@ -226,7 +198,7 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 				// the chunk is not accessed before
 				// set access time for gc index
 				item.AccessTimestamp = now()
-				db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+				db.retrievalCompositeIndex.PutInBatch(batch, item)
 			}
 		} else {
 			i, err := db.retrievalDataIndex.Get(item)
@@ -236,7 +208,7 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 					// no need to update gc index
 					// just delete from the push index
 					// if it is there
-					db.pushIndex.DeleteInBatch(b.Batch, item)
+					db.pushIndex.DeleteInBatch(batch, item)
 					return nil
 				}
 				return err
@@ -247,24 +219,24 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 			switch err {
 			case nil:
 				item.AccessTimestamp = i.AccessTimestamp
-				db.gcIndex.DeleteInBatch(b.Batch, item)
+				db.gcIndex.DeleteInBatch(batch, item)
 			case leveldb.ErrNotFound:
 				// the chunk is not accessed before
 			default:
 				return err
 			}
 			item.AccessTimestamp = now()
-			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(batch, item)
 		}
-		db.pushIndex.DeleteInBatch(b.Batch, item)
-		db.gcIndex.PutInBatch(b.Batch, item)
+		db.pushIndex.DeleteInBatch(batch, item)
+		db.gcIndex.PutInBatch(batch, item)
 
 	// Q: modeAccess and ModeRequest are very similar,  why do we need both?
 	case modeAccess:
 		// update accessTimeStamp in retrieve, pull, gc
 
 		if db.useRetrievalCompositeIndex {
-			// access timestap is already populated
+			// access timestamp is already populated
 			// in the provided item, passed from access function.
 		} else {
 			i, err := db.retrievalAccessIndex.Get(item)
@@ -278,24 +250,24 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 			}
 		}
 		// Q: why do we need to update this index?
-		db.pullIndex.PutInBatch(b.Batch, item)
+		db.pullIndex.PutInBatch(batch, item)
 		if item.AccessTimestamp == 0 {
 			// chunk is not yes synced
 			// do not add it to the gc index
 			return nil
 		}
 		// delete current entry from the gc index
-		db.gcIndex.DeleteInBatch(b.Batch, item)
+		db.gcIndex.DeleteInBatch(batch, item)
 		// update access timestamp
 		item.AccessTimestamp = now()
 		// update retrieve access index
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(b.Batch, item)
+			db.retrievalCompositeIndex.PutInBatch(batch, item)
 		} else {
-			db.retrievalAccessIndex.PutInBatch(b.Batch, item)
+			db.retrievalAccessIndex.PutInBatch(batch, item)
 		}
 		// add new entry to gc index
-		db.gcIndex.PutInBatch(b.Batch, item)
+		db.gcIndex.PutInBatch(batch, item)
 
 	case modeRemoval:
 		// delete from retrieve, pull, gc
@@ -326,17 +298,17 @@ func (db *DB) updateBatch(b *batch, mode Mode, item shed.IndexItem) (err error) 
 			item.StoreTimestamp = i.StoreTimestamp
 		}
 		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.DeleteInBatch(b.Batch, item)
+			db.retrievalCompositeIndex.DeleteInBatch(batch, item)
 		} else {
-			db.retrievalDataIndex.DeleteInBatch(b.Batch, item)
-			db.retrievalAccessIndex.DeleteInBatch(b.Batch, item)
+			db.retrievalDataIndex.DeleteInBatch(batch, item)
+			db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		}
-		db.pullIndex.DeleteInBatch(b.Batch, item)
-		db.gcIndex.DeleteInBatch(b.Batch, item)
-		db.sizeCounter.DecInBatch(b.Batch)
+		db.pullIndex.DeleteInBatch(batch, item)
+		db.gcIndex.DeleteInBatch(batch, item)
 
 	default:
 		return ErrInvalidMode
 	}
-	return nil
+
+	return db.shed.WriteBatch(batch)
 }

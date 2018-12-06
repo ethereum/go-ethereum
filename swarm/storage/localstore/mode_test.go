@@ -62,23 +62,14 @@ func testModeSyncingValues(t *testing.T, db *DB) {
 		return wantTimestamp
 	}
 
-	wantSize, err := db.sizeCounter.Get()
+	err := a.Put(context.Background(), chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	err = a.Put(context.Background(), chunk)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantSize++
 
 	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
 
 	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
-
-	t.Run("size counter", testSizeCounter(db, wantSize))
 }
 
 // TestModeUpload validates internal data operations and state
@@ -112,25 +103,16 @@ func testModeUploadValues(t *testing.T, db *DB) {
 		return wantTimestamp
 	}
 
-	wantSize, err := db.sizeCounter.Get()
+	err := a.Put(context.Background(), chunk)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	err = a.Put(context.Background(), chunk)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantSize++
 
 	t.Run("retrieve indexes", newRetrieveIndexesTest(db, chunk, wantTimestamp, 0))
 
 	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
 
 	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, nil))
-
-	t.Run("size counter", testSizeCounter(db, wantSize))
 }
 
 // TestModeRequest validates internal data operations and state
@@ -437,13 +419,6 @@ func testModeRemovalValues(t *testing.T, db *DB) {
 
 	a = db.Accessor(modeRemoval)
 
-	wantSize, err := db.sizeCounter.Get()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantSize--
-
 	err = a.Put(context.Background(), chunk)
 	if err != nil {
 		t.Fatal(err)
@@ -478,8 +453,6 @@ func testModeRemovalValues(t *testing.T, db *DB) {
 	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, 0))
 
 	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
-
-	t.Run("size counter", testSizeCounter(db, wantSize))
 }
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
@@ -871,20 +844,6 @@ func testIndexItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, so
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-// testSizeCounter returns a test function that validates the expected
-// value from sizeCounter field.
-func testSizeCounter(db *DB, wantSize uint64) func(t *testing.T) {
-	return func(t *testing.T) {
-		got, err := db.sizeCounter.Get()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != wantSize {
-			t.Errorf("got size counter value %v, want %v", got, wantSize)
-		}
 	}
 }
 

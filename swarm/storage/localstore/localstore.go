@@ -27,17 +27,16 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
-const (
-	// maximal time for DB.Close must return
-	closeTimeout = 10 * time.Second
-)
-
 var (
 	// ErrInvalidMode is retuned when an unknown Mode
 	// is provided to the function.
 	ErrInvalidMode = errors.New("invalid mode")
 	// ErrDBClosed is returned when database is closed.
 	ErrDBClosed = errors.New("db closed")
+	// ErrUpdateLockTimeout is returned when the same chunk
+	// is updated in parallel and one of the updates
+	// takse longer then the configured timeout duration.
+	ErrUpdateLockTimeout = errors.New("update lock timeout")
 )
 
 // DB is the local store implementation and holds
@@ -46,8 +45,7 @@ type DB struct {
 	shed *shed.DB
 
 	// fields
-	schemaName  shed.StringField
-	sizeCounter shed.Uint64Field
+	schemaName shed.StringField
 
 	// this flag is for banchmarking two types of retrieval indexes
 	// - single retrieval composite index retrievalCompositeIndex
@@ -67,11 +65,7 @@ type DB struct {
 
 	baseKey []byte
 
-	batch        *batch        // current batch
-	mu           sync.RWMutex  // mutex for accessing current batch
-	writeTrigger chan struct{} // channel to signal current write batch
-	writeDone    chan struct{} // closed when writeBatches function returns
-	close        chan struct{} // closed on Close, signals other goroutines to terminate
+	updateLocks sync.Map
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -90,10 +84,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db = &DB{
 		baseKey:                    baseKey,
 		useRetrievalCompositeIndex: o.UseRetrievalCompositeIndex,
-		batch:                      newBatch(),
-		writeTrigger:               make(chan struct{}, 1),
-		close:                      make(chan struct{}),
-		writeDone:                  make(chan struct{}),
 	}
 
 	db.shed, err = shed.NewDB(path)
@@ -102,10 +92,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 	// Identify current storage schema by arbitrary name.
 	db.schemaName, err = db.shed.NewStringField("schema-name")
-	if err != nil {
-		return nil, err
-	}
-	db.sizeCounter, err = db.shed.NewUint64Field("size")
 	if err != nil {
 		return nil, err
 	}
@@ -305,52 +291,12 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// start goroutine that writes batches
-	go db.writeBatches()
 	return db, nil
 }
 
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
-	// signal other goroutines that
-	// the database is closing
-	close(db.close)
-	select {
-	// wait for writeBatches to write
-	// the last batch
-	case <-db.writeDone:
-	// closing timeout
-	case <-time.After(closeTimeout):
-	}
 	return db.shed.Close()
-}
-
-// writeBatches is a forever loop handing out the current batch apply
-// the batch when the db is free.
-func (db *DB) writeBatches() {
-	// close the writeDone channel
-	// so the DB.Close can return
-	defer close(db.writeDone)
-
-	write := func() {
-		db.mu.Lock()
-		b := db.batch
-		db.batch = newBatch()
-		db.mu.Unlock()
-		b.Err = db.shed.WriteBatch(b.Batch)
-		close(b.Done)
-	}
-	for {
-		select {
-		case <-db.writeTrigger:
-			write()
-		case <-db.close:
-			// check it there is a batch
-			// left to be written
-			write()
-			return
-		}
-	}
 }
 
 // po computes the proximity order between the address
