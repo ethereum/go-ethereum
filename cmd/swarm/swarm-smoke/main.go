@@ -45,10 +45,12 @@ var (
 	appName          string
 	scheme           string
 	filesize         int
+	syncDelay        int
 	from             int
 	to               int
 	verbosity        int
 	timeout          int
+	single           bool
 )
 
 func main() {
@@ -100,6 +102,12 @@ func main() {
 			Destination: &filesize,
 		},
 		cli.IntFlag{
+			Name:        "sync-delay",
+			Value:       5,
+			Usage:       "duration of delay in seconds to wait for content to be synced",
+			Destination: &syncDelay,
+		},
+		cli.IntFlag{
 			Name:        "verbosity",
 			Value:       1,
 			Usage:       "verbosity",
@@ -110,6 +118,11 @@ func main() {
 			Value:       120,
 			Usage:       "timeout in seconds after which kill the process",
 			Destination: &timeout,
+		},
+		cli.BoolFlag{
+			Name:        "single",
+			Usage:       "whether to fetch content from a single node or from all nodes",
+			Destination: &single,
 		},
 	}
 

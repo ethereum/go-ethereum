@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"os"
@@ -112,10 +113,11 @@ func uploadAndSync(c *cli.Context) error {
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(time.Duration(syncDelay) * time.Second)
 
 	wg := sync.WaitGroup{}
-	for _, endpoint := range endpoints {
+	if single {
+		randIndex := 1 + rand.Intn(len(endpoints)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
@@ -128,7 +130,23 @@ func uploadAndSync(c *cli.Context) error {
 				wg.Done()
 				return
 			}
-		}(endpoint, ruid)
+		}(endpoints[randIndex], ruid)
+	} else {
+		for _, endpoint := range endpoints {
+			ruid := uuid.New()[:8]
+			wg.Add(1)
+			go func(endpoint string, ruid string) {
+				for {
+					err := fetch(hash, endpoint, fhash, ruid)
+					if err != nil {
+						continue
+					}
+
+					wg.Done()
+					return
+				}
+			}(endpoint, ruid)
+		}
 	}
 	wg.Wait()
 	log.Info("all endpoints synced random file successfully")
