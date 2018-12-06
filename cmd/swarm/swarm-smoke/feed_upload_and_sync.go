@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"strings"
@@ -306,10 +308,39 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 	time.Sleep(3 * time.Second)
 
 	log.Trace("http get request (feed)", "ruid", ruid, "api", endpoint, "topic", topic, "user", user)
-	res, err := http.Get(endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user)
+
+	reqUri := endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user
+	req, _ := http.NewRequest("GET", reqUri, nil)
+	trace := &httptrace.ClientTrace{
+		GetConn:              func(_ string) { log.Trace("http get request (feed) - GetConn") },
+		GotConn:              func(_GotConnInfo) { log.Trace("http get request (feed) - GotConn") },
+		PutIdleConn:          func(err error) { log.Trace("http get request (feed) - PutIdleConn", "err", err) },
+		GotFirstResponseByte: func() { log.Trace("http get request (feed) - GotFirstResponseByte") },
+		Got100Continue:       func() { log.Trace("http get request (feed) - Got100Continue") },
+		DNSStart:             func(_ DNSStartInfo) { log.Trace("http get request (feed) - DNSStart") },
+		DNSDone:              func(_ DNSDoneInfo) { log.Trace("http get request (feed) - DNSDone") },
+		ConnectStart: func(network, addr string) {
+			log.Trace("http get request (feed) - ConnectStart", "network", network, "addr", addr)
+		},
+		ConnectDone: func(network, addr string, err error) {
+			log.Trace("http get request (feed) - ConnectDone", "network", network, "addr", addr, "err", err)
+
+		},
+		WroteHeaders:    func() { log.Trace("http get request (feed) - WroteHeaders(request)") },
+		Wait100Continue: func() { log.Trace("http get request (feed) - Wait100Continue") },
+
+		WroteRequest: func(_ WroteRequestInfo) { log.Trace("http get request (feed) - WroteRequest") },
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	transport := http.DefaultTransport
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	res, err := transport.RoundTrip(req)
 	if err != nil {
+		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
+
 	log.Trace("http get response (feed)", "ruid", ruid, "api", endpoint, "topic", topic, "user", user, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {

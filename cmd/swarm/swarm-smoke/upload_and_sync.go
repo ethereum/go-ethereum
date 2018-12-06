@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"strings"
@@ -139,12 +140,34 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	time.Sleep(3 * time.Second)
 
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
-	res, err := client.Get(endpoint + "/bzz:/" + hash + "/")
+
+	reqUri := endpoint + "/bzz:/" + hash + "/"
+	req, _ := http.NewRequest("GET", reqUri, nil)
+	trace := &httptrace.ClientTrace{
+		GetConn:              func(_ string) { log.Trace("http get request - GetConn") },
+		GotConn:              func(_GotConnInfo) { log.Trace("http get request - GotConn") },
+		PutIdleConn:          func(err error) { log.Trace("http get request - PutIdleConn", "err", err) },
+		GotFirstResponseByte: func() { log.Trace("http get request - GotFirstResponseByte") },
+		Got100Continue:       func() { log.Trace("http get request - Got100Continue") },
+		DNSStart:             func(_ DNSStartInfo) { log.Trace("http get request - DNSStart") },
+		DNSDone:              func(_ DNSDoneInfo) { log.Trace("http get request - DNSDone") },
+		ConnectStart: func(network, addr string) {
+			log.Trace("http get request - ConnectStart", "network", network, "addr", addr)
+		},
+		ConnectDone: func(network, addr string, err error) {
+			log.Trace("http get request - ConnectDone", "network", network, "addr", addr, "err", err)
+		},
+		WroteHeaders:    func() { log.Trace("http get request - WroteHeaders(request)") },
+		Wait100Continue: func() { log.Trace("http get request - Wait100Continue") },
+
+		WroteRequest: func(_ WroteRequestInfo) { log.Trace("http get request - WroteRequest") },
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	transport := http.DefaultTransport
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	res, err := transport.RoundTrip(req)
 	if err != nil {
-		log.Warn(err.Error(), "ruid", ruid)
+		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
 	log.Trace("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
