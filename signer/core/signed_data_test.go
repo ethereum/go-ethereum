@@ -463,8 +463,8 @@ func TestMalformedData2(t *testing.T) {
 
 	malformedTypedData.Types["Mail"][2]["type"] = "Blahonga"
 	err = malformedTypedData.Validate()
-	if err == nil || err.Error() != "referenced type 'Blahonga' is undefined" {
-		t.Fatalf("Expected `referenced type 'Blahonga' is undefined`, got %v", err)
+	if err == nil || err.Error() != "reference type 'Blahonga' is undefined" {
+		t.Fatalf("Expected `reference type 'Blahonga' is undefined`, got %v", err)
 	}
 	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
 	if err == nil || err.Error() != "unrecognized type 'Blahonga'" {
@@ -555,8 +555,8 @@ func TestMalformedData3(t *testing.T) {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
 	err = malformedTypedData.Validate()
-	if err == nil || err.Error() != "unknown atomic type 'uint256 ... and now for something completely different'" {
-		t.Fatalf("Expected `unknown atomic type 'uint256 ... and now for something completely different'`, got %v", err)
+	if err == nil || err.Error() != "unknown type 'uint256 ... and now for something completely different'" {
+		t.Fatalf("Expected `unknown type 'uint256 ... and now for something completely different'`, got %v", err)
 	}
 
 	malformedTypedData.Types["EIP712Domain"][2]["type"] = "uint256"
