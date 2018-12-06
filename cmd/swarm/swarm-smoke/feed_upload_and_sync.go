@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"fmt"
 	"io"
@@ -18,8 +19,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	colorable "github.com/mattn/go-colorable"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -304,6 +307,11 @@ func feedUploadAndSync(c *cli.Context) error {
 }
 
 func fetchFeed(topic string, user string, endpoint string, original []byte, ruid string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx, sp := spancontext.StartSpan(ctx, "feed-and-sync.fetch")
+	defer sp.Finish()
+
 	log.Trace("sleeping", "ruid", ruid)
 	time.Sleep(3 * time.Second)
 
@@ -312,6 +320,12 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 	tn := time.Now()
 	reqUri := endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user
 	req, _ := http.NewRequest("GET", reqUri, nil)
+
+	opentracing.GlobalTracer().Inject(
+		sp.Context(),
+		opentracing.HTTPHeaders,
+		opentracing.HTTPHeadersCarrier(req.Header))
+
 	trace := &httptrace.ClientTrace{
 		GetConn: func(_ string) {
 			log.Trace("http get request (feed) - GetConn")
@@ -365,6 +379,7 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	transport := http.DefaultTransport
+
 	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 
 	res, err := transport.RoundTrip(req)

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	crand "crypto/rand"
 	"errors"
@@ -34,6 +35,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -135,14 +138,24 @@ func uploadAndSync(c *cli.Context) error {
 
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
 func fetch(hash string, endpoint string, original []byte, ruid string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx, sp := spancontext.StartSpan(ctx, "upload-and-sync.fetch")
+	defer sp.Finish()
+
 	log.Trace("sleeping", "ruid", ruid)
 	time.Sleep(3 * time.Second)
-
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
 
 	tn := time.Now()
 	reqUri := endpoint + "/bzz:/" + hash + "/"
 	req, _ := http.NewRequest("GET", reqUri, nil)
+
+	opentracing.GlobalTracer().Inject(
+		sp.Context(),
+		opentracing.HTTPHeaders,
+		opentracing.HTTPHeadersCarrier(req.Header))
+
 	trace := &httptrace.ClientTrace{
 		GetConn: func(_ string) {
 			log.Trace("http get request - GetConn")
@@ -195,7 +208,9 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	transport := http.DefaultTransport
+
 	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
 	res, err := transport.RoundTrip(req)
 	if err != nil {
 		log.Error(err.Error(), "ruid", ruid)
