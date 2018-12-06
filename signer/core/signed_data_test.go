@@ -31,44 +31,44 @@ import (
 var typesStandard = Types{
 	"EIP712Domain": {
 		{
-			"name": "name",
-			"type": "string",
+			Name: "name",
+			Type: "string",
 		},
 		{
-			"name": "version",
-			"type": "string",
+			Name: "version",
+			Type: "string",
 		},
 		{
-			"name": "chainId",
-			"type": "uint256",
+			Name: "chainId",
+			Type: "uint256",
 		},
 		{
-			"name": "verifyingContract",
-			"type": "address",
+			Name: "verifyingContract",
+			Type: "address",
 		},
 	},
 	"Person": {
 		{
-			"name": "name",
-			"type": "string",
+			Name: "name",
+			Type: "string",
 		},
 		{
-			"name": "wallet",
-			"type": "address",
+			Name: "wallet",
+			Type: "address",
 		},
 	},
 	"Mail": {
 		{
-			"name": "from",
-			"type": "Person",
+			Name: "from",
+			Type: "Person",
 		},
 		{
-			"name": "to",
-			"type": "Person",
+			Name: "to",
+			Type: "Person",
 		},
 		{
-			"name": "contents",
-			"type": "string",
+			Name: "contents",
+			Type: "string",
 		},
 	},
 }
@@ -461,7 +461,7 @@ func TestMalformedData2(t *testing.T) {
 		t.Errorf("Expected `provided data 'Hello, Bob!' doesn't match type 'Person'`, got %v", err)
 	}
 
-	malformedTypedData.Types["Mail"][2]["type"] = "Blahonga"
+	malformedTypedData.Types["Mail"][2].Type = "Blahonga"
 	err = malformedTypedData.Validate()
 	if err == nil || err.Error() != "reference type 'Blahonga' is undefined" {
 		t.Fatalf("Expected `reference type 'Blahonga' is undefined`, got %v", err)
@@ -559,7 +559,7 @@ func TestMalformedData3(t *testing.T) {
 		t.Fatalf("Expected `unknown type 'uint256 ... and now for something completely different'`, got %v", err)
 	}
 
-	malformedTypedData.Types["EIP712Domain"][2]["type"] = "uint256"
+	malformedTypedData.Types["EIP712Domain"][2].Type = "uint256"
 	malformedTypedData.Message["blahonga"] = "zonk bonk"
 	_, err = malformedTypedData.HashStruct(malformedTypedData.PrimaryType, malformedTypedData.Message)
 	if err == nil || err.Error() != "there is extra data provided in the message" {
@@ -627,4 +627,89 @@ func TestFormatter(t *testing.T) {
 	j, _ := json.Marshal(formatted)
 	fmt.Printf("%v\n", string(j))
 
+}
+
+func TestMalformedData5(t *testing.T) {
+	var jsonTypedData = `
+    {
+      "types": {
+        "EIP712Domain": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+             "name": "version",
+            "type": "string"
+          },
+          {
+             "name": "chainId",
+            "type": "uint256"
+          },
+          {
+             "name": "verifyingContract",
+            "type": "address"
+          }
+        ],
+        "Person": [
+          {
+             "name": "name",
+            "type": "string"
+          },
+          {
+             "name": "wallet",
+            "type": "address"
+          }
+        ],
+        "Person[]": [
+          {
+             "name": "baz",
+            "type": "string"
+          }],
+        "Mail": [
+          {
+             "name": "from",
+            "type": "Person"
+          },
+          {
+             "name": "to",
+            "type": "Person[]"
+          },
+          {
+             "name": "contents",
+            "type": "string"
+          }
+        ]
+      },
+      "primaryType": "Mail",
+      "domain": {
+         "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
+      },
+      "message": {
+        "from": {
+           "name": "Cow",
+          "wallet": "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826"
+        },
+        "to": {"baz": "foo"},
+        "contents": "Hello, Bob!"
+      }
+    }
+
+`
+	var malformedTypedData TypedData
+	err := json.Unmarshal([]byte(jsonTypedData), &malformedTypedData)
+	if err != nil {
+		t.Fatalf("unmarshalling failed %v", err)
+	}
+	err = malformedTypedData.Validate()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	_, err = malformedTypedData.HashStruct("EIP712Domain", malformedTypedData.Domain.Map())
+	if err == nil {
+		t.Errorf("Expected an error, got %v", err)
+	}
 }
