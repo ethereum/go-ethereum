@@ -36,7 +36,7 @@ var (
 	ErrDBClosed = errors.New("db closed")
 	// ErrUpdateLockTimeout is returned when the same chunk
 	// is updated in parallel and one of the updates
-	// takse longer then the configured timeout duration.
+	// takes longer then the configured timeout duration.
 	ErrUpdateLockTimeout = errors.New("update lock timeout")
 )
 
@@ -74,8 +74,21 @@ type DB struct {
 
 // Options struct holds optional parameters for configuring DB.
 type Options struct {
+	// UseRetrievalCompositeIndex option is for banchmarking
+	// two types of retrieval indexes:
+	// - single retrieval composite index retrievalCompositeIndex
+	// - two separated indexes for data and access time
+	//   - retrievalDataIndex
+	//   - retrievalAccessIndex
+	// It should be temporary until the decision is reached
+	// about the retrieval index structure.
 	UseRetrievalCompositeIndex bool
-	MockStore                  *mock.NodeStore
+	// MockStore is a mock node store that is used to store
+	// chunk data in a central store. It can be used to reduce
+	// total storage space requirements in testing large number
+	// of swarm nodes with chunk data deduplication provided by
+	// the mock global store.
+	MockStore *mock.NodeStore
 }
 
 // New returns a new DB.  All fields and indexes are initialized
