@@ -156,6 +156,12 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
 			common.IsTestnet = true
 	}
+
+		// Check rollback hash exist.
+		if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
+			common.RollbackHash = common.HexToHash(rollbackHash)
+		}
+	
 	// read passwords from enviroment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {

@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	slotValidatorMapping  = map[string]uint64{
+	slotValidatorMapping = map[string]uint64{
 		"withdrawsState":         0,
 		"validatorsState":        1,
 		"voters":                 2,
