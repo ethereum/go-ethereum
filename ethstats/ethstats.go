@@ -704,7 +704,7 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 			Active:   true,
 			Mining:   mining,
 			Hashrate: hashrate,
-			Peers:    s.server.PeerCount(),
+			Peers:    s.eth.GetPeer(),
 			GasPrice: gasprice,
 			Syncing:  syncing,
 			Uptime:   100,
