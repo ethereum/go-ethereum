@@ -29,14 +29,15 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
-	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 
@@ -91,21 +92,20 @@ func uploadAndSync(c *cli.Context) error {
 	}(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
+	seed := int(time.Now().UnixNano() / 1e6)
+	log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-	log.Info("uploading to " + endpoints[0] + " and syncing")
-
-	f, cleanup := generateRandomFile(filesize * 1000)
-	defer cleanup()
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 	t1 := time.Now()
-	hash, err := upload(f, endpoints[0])
+	hash, err := upload(&randomBytes, endpoints[0])
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 	metrics.GetOrRegisterCounter("upload-and-sync.upload-time", nil).Inc(int64(time.Since(t1)))
 
-	fhash, err := digest(f)
+	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -214,16 +214,19 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 }
 
 // upload is uploading a file `f` to `endpoint` via the `swarm up` cmd
-func upload(f *os.File, endpoint string) (string, error) {
-	var out bytes.Buffer
-	cmd := exec.Command("swarm", "--bzzapi", endpoint, "up", f.Name())
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		return "", err
+func upload(dataBytes *[]byte, endpoint string) (string, error) {
+	swarm := client.NewClient(endpoint)
+	f := &client.File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(*dataBytes)),
+		ManifestEntry: api.ManifestEntry{
+			ContentType: "text/plain",
+			Mode:        0660,
+			Size:        int64(len(*dataBytes)),
+		},
 	}
-	hash := strings.TrimRight(out.String(), "\r\n")
-	return hash, nil
+
+	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
+	return swarm.Upload(f, "", false)
 }
 
 func digest(r io.Reader) ([]byte, error) {
@@ -245,28 +248,4 @@ func generateRandomData(datasize int) ([]byte, error) {
 		return nil, errors.New("short read")
 	}
 	return b, nil
-}
-
-// generateRandomFile is creating a temporary file with the requested byte size
-func generateRandomFile(size int) (f *os.File, teardown func()) {
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		panic(err)
-	}
-
-	// callback for tmp file cleanup
-	teardown = func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
-	}
-
-	buf := make([]byte, size)
-	_, err = crand.Read(buf)
-	if err != nil {
-		panic(err)
-	}
-	ioutil.WriteFile(tmp.Name(), buf, 0755)
-
-	return tmp, teardown
 }

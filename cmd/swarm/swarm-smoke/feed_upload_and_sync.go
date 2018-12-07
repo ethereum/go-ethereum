@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
@@ -227,12 +228,12 @@ func feedUploadAndSync(c *cli.Context) error {
 	log.Info("all endpoints synced random data successfully")
 
 	// upload test file
-	log.Info("uploading to " + endpoints[0] + " and syncing")
+	seed := int(time.Now().UnixNano() / 1e6)
+	log.Info("feed uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-	f, cleanup := generateRandomFile(filesize * 1000)
-	defer cleanup()
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	hash, err := upload(f, endpoints[0])
+	hash, err := upload(&randomBytes, endpoints[0])
 	if err != nil {
 		return err
 	}
@@ -241,7 +242,7 @@ func feedUploadAndSync(c *cli.Context) error {
 		return err
 	}
 	multihashHex := hexutil.Encode(hashBytes)
-	fileHash, err := digest(f)
+	fileHash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
 		return err
 	}
