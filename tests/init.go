@@ -52,6 +52,7 @@ var Forks = map[string]*params.ChainConfig{
 		EIP158Block:    big.NewInt(0),
 		DAOForkBlock:   big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
+		EWASMBlock:     big.NewInt(0),
 	},
 	"Constantinople": {
 		ChainID:             big.NewInt(1),
