@@ -336,20 +336,20 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 }
 
 type AccountRangeResult struct {
-	Addresses    []common.Address `json:"addresses"`
-	Next         common.Address   `json:"next"`
-	Preimages    []common.Hash    `json:"preimages"`
-	NextPreimage common.Hash      `json:"nextPreimage"`
+	Addresses []common.Address `json:"addresses"`
+	Next      common.Address   `json:"next"`
+	Images    []common.Hash    `json:"preimages"`
+	NextImage common.Hash      `json:"nextPreimage"`
 }
 
 func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(crypto.Keccak256(start[:])))
-	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}, Preimages: []common.Hash{}, NextPreimage: common.Hash{}}
+	result := AccountRangeResult{Addresses: []common.Address{}, Next: common.Address{}, Images: []common.Hash{}, NextImage: common.Hash{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			result.Addresses = append(result.Addresses, common.BytesToAddress(preimage))
 		} else {
-			result.Preimages = append(result.Preimages, common.BytesToHash(preimage))
+			result.Images = append(result.Images, common.BytesToHash(it.Key))
 		}
 	}
 
@@ -357,9 +357,8 @@ func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountR
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			result.Next = common.BytesToAddress(st.GetKey(preimage))
 		} else {
-			result.NextPreimage = common.BytesToHash(preimage)
+			result.NextImage = common.BytesToHash(it.Key)
 		}
-
 	}
 
 	return result, nil
