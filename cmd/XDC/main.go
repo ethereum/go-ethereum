@@ -123,6 +123,7 @@ var (
 		configFileFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
+		utils.RollbackFlag,
 	}
 
 	rpcFlags = []cli.Flag{
