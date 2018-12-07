@@ -173,7 +173,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header))
 
-	trace := getClientTrace("upload-and-sync", ruid, &tn)
+	trace := client.GetClientTrace("upload-and-sync - http get", "upload-and-sync", ruid, &tn)
 
 	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
