@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -92,12 +93,14 @@ type ProtocolManager struct {
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
-	wg sync.WaitGroup
+	wg       sync.WaitGroup
+	knownTxs *lru.Cache
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+	knownTxs, _ := lru.New(maxKnownTxs)
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
@@ -110,6 +113,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+		knownTxs:    knownTxs,
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -668,12 +672,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		var unkownTxs []*types.Transaction
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
 			if tx == nil {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkTransaction(tx.Hash())
+			exist, _ := pm.knownTxs.ContainsOrAdd(tx.Hash(), true)
+			if !exist {
+				unkownTxs = append(unkownTxs, tx)
+			} else {
+				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce(), "to", tx.To())
+			}
 		}
 		pm.txpool.AddRemotes(txs)
 
