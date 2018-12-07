@@ -165,8 +165,8 @@ func (h *Hive) Run(p *BzzPeer) error {
 			// otherwise just send depth to new peer
 			dp.NotifyDepth(depth)
 		}
+		NotifyPeer(p.BzzAddr, h.Kademlia)
 	}
-	NotifyPeer(p.BzzAddr, h.Kademlia)
 	defer h.Off(dp)
 	return dp.Run(dp.HandleMsg)
 }
