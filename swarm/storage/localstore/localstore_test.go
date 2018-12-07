@@ -205,6 +205,22 @@ func generateFakeRandomChunk() storage.Chunk {
 func TestGenerateFakeRandomChunk(t *testing.T) {
 	c1 := generateFakeRandomChunk()
 	c2 := generateFakeRandomChunk()
+	addrLen := len(c1.Address())
+	if addrLen != 32 {
+		t.Errorf("first chunk address length %v, want %v", addrLen, 32)
+	}
+	dataLen := len(c1.Data())
+	if dataLen != ch.DefaultSize {
+		t.Errorf("first chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	}
+	addrLen = len(c2.Address())
+	if addrLen != 32 {
+		t.Errorf("second chunk address length %v, want %v", addrLen, 32)
+	}
+	dataLen = len(c2.Data())
+	if dataLen != ch.DefaultSize {
+		t.Errorf("second chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	}
 	if bytes.Equal(c1.Address(), c2.Address()) {
 		t.Error("fake chunks addresses do not differ")
 	}
