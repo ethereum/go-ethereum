@@ -583,18 +583,21 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
-	specialTxCount := 0
 	// won't grasp txs at checkpoint
+	var (
+		txs *types.TransactionsByPriceAndNonce
+		specialTxs types.Transactions
+	)
 	if self.config.XDPoS != nil && header.Number.Uint64() % self.config.XDPoS.Epoch != 0 {
 		pending, err := self.eth.TxPool().Pending()
 		if err != nil {
 			log.Error("Failed to fetch pending transactions", "err", err)
 			return
 		}
-		txs, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
-		specialTxCount = len(specialTxs)
-		work.commitTransactions(self.mux, txs, specialTxs, self.chain, self.coinbase)
+		txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
 	}
+	work.commitTransactions(self.mux, txs, specialTxs, self.chain, self.coinbase)
+
 
 	// compute uncles for the new block.
 	var (
@@ -626,7 +629,7 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special-txs", specialTxCount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special-txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
@@ -700,6 +703,10 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// If we don't have enough gas for any further transactions then we're done
 		if gp.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "gp", gp)
+			break
+		}
+		if txs == nil {
+			log.Info("this block has no transaction")
 			break
 		}
 		// Retrieve the next transaction and abort if all done
