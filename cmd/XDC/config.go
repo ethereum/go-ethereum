@@ -28,6 +28,7 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -36,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -154,15 +154,23 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 
 	// Check testnet is enable.
 	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
-			common.IsTestnet = true
+		common.IsTestnet = true
 	}
 
-		// Check rollback hash exist.
-		if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
-			common.RollbackHash = common.HexToHash(rollbackHash)
+	// Check rollback hash exist.
+	if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
+		common.RollbackHash = common.HexToHash(rollbackHash)
+	}
+
+	// Check GasPrice
+	common.MinGasPrice = common.DefaultMinGasPrice
+	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
+		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+			common.MinGasPrice = gasPrice
 		}
-	
-	// read passwords from enviroment
+	}
+
+	// read passwords from environment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
 		if trimmed := strings.TrimSpace(env); trimmed != "" {
