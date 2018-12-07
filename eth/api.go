@@ -28,13 +28,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -336,10 +336,10 @@ func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, 
 }
 
 type AccountRangeResult struct {
-	Addresses []common.Address `json:"addresses"`
-	Next common.Address `json:"next"`
-	Preimages []common.Hash `json:"preimages"`
-	NextPreimage common.Hash `json:"nextPreimage"`
+	Addresses    []common.Address `json:"addresses"`
+	Next         common.Address   `json:"next"`
+	Preimages    []common.Hash    `json:"preimages"`
+	NextPreimage common.Hash      `json:"nextPreimage"`
 }
 
 func accountRange(st state.Trie, start *common.Address, maxResult int) (AccountRangeResult, error) {
