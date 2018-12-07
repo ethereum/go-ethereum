@@ -683,7 +683,7 @@ func TestMalformedData5(t *testing.T) {
       },
       "primaryType": "Mail",
       "domain": {
-         "name": "Ether Mail",
+		"name": "Ether Mail",
         "version": "1",
         "chainId": 1,
         "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC"
@@ -709,7 +709,7 @@ func TestMalformedData5(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 	_, err = malformedTypedData.HashStruct("EIP712Domain", malformedTypedData.Domain.Map())
-	if err == nil {
-		t.Errorf("Expected an error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
 	}
 }

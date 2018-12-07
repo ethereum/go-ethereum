@@ -21,15 +21,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 	"mime"
-	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -508,10 +508,10 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if size < 0 || size > 32 {
 			return nil, fmt.Errorf("invalid size on bytes: %d", size)
 		}
-		if byteval, ok := encValue.(hexutil.Bytes); !ok {
+		if byteValue, ok := encValue.(hexutil.Bytes); !ok {
 			return nil, dataMismatchError(encType, encValue)
 		} else {
-			return math.PaddedBigBytes(new(big.Int).SetBytes(byteval), 32), nil
+			return math.PaddedBigBytes(new(big.Int).SetBytes(byteValue), 32), nil
 		}
 	}
 	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
