@@ -174,6 +174,6 @@ exec XDC $params \
   --wsport 8546 \
   --wsorigins "*" \
   --mine \
-  --gasprice "2500" \
+  --gasprice "250000000" \
   --targetgaslimit "84000000" \
   "$@"
