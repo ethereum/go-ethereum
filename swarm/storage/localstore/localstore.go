@@ -48,7 +48,7 @@ type DB struct {
 	// fields
 	schemaName shed.StringField
 
-	// this flag is for banchmarking two types of retrieval indexes
+	// this flag is for benchmarking two types of retrieval indexes
 	// - single retrieval composite index retrievalCompositeIndex
 	// - two separated indexes for data and access time
 	//   - retrievalDataIndex
@@ -74,7 +74,7 @@ type DB struct {
 
 // Options struct holds optional parameters for configuring DB.
 type Options struct {
-	// UseRetrievalCompositeIndex option is for banchmarking
+	// UseRetrievalCompositeIndex option is for benchmarking
 	// two types of retrieval indexes:
 	// - single retrieval composite index retrievalCompositeIndex
 	// - two separated indexes for data and access time
@@ -305,6 +305,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
 	// count number of elements in garbage collection index
 	var gcSize int64
 	db.gcIndex.IterateAll(func(_ shed.IndexItem) (stop bool, err error) {
@@ -312,9 +315,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return false, nil
 	})
 	atomic.AddInt64(&db.gcSize, gcSize)
-	if err != nil {
-		return nil, err
-	}
 	return db, nil
 }
 
