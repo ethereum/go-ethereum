@@ -352,12 +352,12 @@ func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
-	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
-	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
-			return errInvalidDifficulty
-		}
-	}
+	//// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	//if number > 0 {
+	//	if header.Difficulty.Int64() != 1 {
+	//		return errInvalidDifficulty
+	//	}
+	//}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -483,30 +483,35 @@ func WhoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) 
 	return m, nil
 }
 
-func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (int, int, bool, error) {
+func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header) (int, int, int, bool, error) {
+	masternodes := c.GetMasternodes(chain, parent)
+	snap, err := c.GetSnapshot(chain, parent)
+	if err != nil {
+		log.Error("Failed when trying to commit new work", "err", err)
+		return 0, -1, -1, false, err
+	}
 	if len(masternodes) == 0 {
-		return -1, -1, true, nil
+		return 0, -1, -1, false, errors.New("Not found master nodes")
 	}
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
-	var err error
 	preIndex := -1
-	if header.Number.Uint64() != 0 {
-		pre, err = WhoIsCreator(snap, header)
+	if parent.Number.Uint64() != 0 {
+		pre, err = WhoIsCreator(snap, parent)
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, 0, false, err
 		}
 		preIndex = position(masternodes, pre)
 	}
-	curIndex := position(masternodes, cur)
-	log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	curIndex := position(masternodes, c.signer)
+	log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", c.signer, "position", curIndex)
 	for i, s := range masternodes {
 		fmt.Printf("%d - %s\n", i, s.String())
 	}
 	if (preIndex+1)%len(masternodes) == curIndex {
-		return preIndex, curIndex, true, nil
+		return len(masternodes), preIndex, curIndex, true, nil
 	}
-	return preIndex, curIndex, false, nil
+	return len(masternodes), preIndex, curIndex, false, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -625,6 +630,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	if err != nil {
 		return err
 	}
+	log.Debug("verify seal block", "number", header.Number, "hash", header.Hash(), "difficulty", header.Difficulty)
 	masternodes := c.GetMasternodes(chain, header)
 	mstring := []string{}
 	for _, m := range masternodes {
@@ -742,9 +748,13 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		}
 		c.lock.RUnlock()
 	}
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
 	// Set the correct difficulty
-	header.Difficulty = big.NewInt(1)
-
+	header.Difficulty = c.CalcDifficulty(chain, 0, parent)
+	log.Debug("CalcDifficulty ", "number", header.Number, "difficulty", header.Difficulty)
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
@@ -782,10 +792,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.MixDigest = common.Hash{}
 
 	// Ensure the timestamp has the correct delay
-	parent := chain.GetHeader(header.ParentHash, number-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
+
 	header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(c.config.Period))
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
@@ -928,22 +935,23 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (c *Posv) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	snap, err := c.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+	len, preIndex, curIndex, _, err := c.YourTurn(chain, parent)
 	if err != nil {
-		return nil
+		return big.NewInt(int64(len + curIndex - preIndex))
 	}
-	return CalcDifficulty(snap, c.signer)
+	return big.NewInt(int64(len - Hop(len, preIndex, curIndex)))
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
-	if snap.inturn(snap.Number+1, signer) {
-		return new(big.Int).Set(diffInTurn)
-	}
-	return new(big.Int).Set(diffNoTurn)
-}
+//func CalcDifficulty(snap *Snapshot, parent *types.Header, signer common.Address) *big.Int {
+//
+//	if snap.inturn(snap.Number+1, signer) {
+//		return new(big.Int).Set(diffInTurn)
+//	}
+//	return new(big.Int).Set(diffNoTurn)
+//}
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow
 // controlling the signer voting.
@@ -1056,4 +1064,15 @@ func ExtractValidatorsFromBytes(byteValidators []byte) []int64 {
 	}
 
 	return validators
+}
+
+func Hop(len, pre, cur int) int {
+	switch {
+	case pre < cur:
+		return cur - (pre + 1)
+	case pre > cur:
+		return (len - pre) + (cur - 1)
+	default:
+		return len - 1
+	}
 }
