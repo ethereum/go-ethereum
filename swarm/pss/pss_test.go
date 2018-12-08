@@ -164,7 +164,7 @@ func TestCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
+	keys, _ := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if err != nil {
 		t.Fatal(err)
@@ -183,21 +183,21 @@ func TestCache(t *testing.T) {
 		PoW:      defaultWhisperPoW,
 		Payload:  data,
 	}
-	woutmsg, err := whisper.NewSentMessage(wparams)
-	env, err := woutmsg.Wrap(wparams)
+	woutmsg, _ := whisper.NewSentMessage(wparams)
+	env, _ := woutmsg.Wrap(wparams)
 	msg := &PssMsg{
 		Payload: env,
 		To:      to,
 	}
 	wparams.Payload = datatwo
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envtwo, err := woutmsg.Wrap(wparams)
+	woutmsg, _ = whisper.NewSentMessage(wparams)
+	envtwo, _ := woutmsg.Wrap(wparams)
 	msgtwo := &PssMsg{
 		Payload: envtwo,
 		To:      to,
 	}
 	wparams.Payload = datathree
-	woutmsg, err = whisper.NewSentMessage(wparams)
+	woutmsg, _ = whisper.NewSentMessage(wparams)
 	envthree, err := woutmsg.Wrap(wparams)
 	msgthree := &PssMsg{
 		Payload: envthree,
@@ -1052,13 +1052,13 @@ func testSendRaw(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, true, false)
+	lsub, _ := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, true, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, true, false)
+	rsub, _ := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, true, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1151,13 +1151,13 @@ func testSendSym(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false, false)
+	lsub, _ := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
+	rsub, _ := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1266,13 +1266,13 @@ func testSendAsym(t *testing.T) {
 	lmsgC := make(chan APIMsg)
 	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer lcancel()
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false, false)
+	lsub, _ := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic, false, false)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer rcancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
+	rsub, _ := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1603,7 +1603,7 @@ func TestDeduplication(t *testing.T) {
 	rmsgC := make(chan APIMsg)
 	rctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
 	defer cancel()
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
+	rsub, _ := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic, false, false)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -1660,8 +1660,8 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, _ := wapi.NewKeyPair(ctx)
+	privkey, _ := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
@@ -1704,8 +1704,8 @@ func benchmarkAsymKeySend(b *testing.B) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, _ := wapi.NewKeyPair(ctx)
+	privkey, _ := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
@@ -1750,8 +1750,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	var keyid string
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, _ := wapi.NewKeyPair(ctx)
+	privkey, _ := w.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1833,8 +1833,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	addr := make([]PssAddress, keycount)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	keys, err := wapi.NewKeyPair(ctx)
-	privkey, err := w.GetPrivateKey(keys)
+	keys, _ := wapi.NewKeyPair(ctx)
+	privkey, _ := w.GetPrivateKey(keys)
 	if cachesize > 0 {
 		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
@@ -1953,8 +1953,8 @@ func newServices(allowRaw bool) adapters.Services {
 
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			keys, err := wapi.NewKeyPair(ctxlocal)
-			privkey, err := w.GetPrivateKey(keys)
+			keys, _ := wapi.NewKeyPair(ctxlocal)
+			privkey, _ := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
