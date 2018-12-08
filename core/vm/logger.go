@@ -29,8 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// Storage represents a contract's storage.
 type Storage map[common.Hash]common.Hash
 
+// Copy duplicates the current storage.
 func (s Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range s {
@@ -54,16 +56,17 @@ type LogConfig struct {
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc         uint64                      `json:"pc"`
-	Op         OpCode                      `json:"op"`
-	Gas        uint64                      `json:"gas"`
-	GasCost    uint64                      `json:"gasCost"`
-	Memory     []byte                      `json:"memory"`
-	MemorySize int                         `json:"memSize"`
-	Stack      []*big.Int                  `json:"stack"`
-	Storage    map[common.Hash]common.Hash `json:"-"`
-	Depth      int                         `json:"depth"`
-	Err        error                       `json:"-"`
+	Pc            uint64                      `json:"pc"`
+	Op            OpCode                      `json:"op"`
+	Gas           uint64                      `json:"gas"`
+	GasCost       uint64                      `json:"gasCost"`
+	Memory        []byte                      `json:"memory"`
+	MemorySize    int                         `json:"memSize"`
+	Stack         []*big.Int                  `json:"stack"`
+	Storage       map[common.Hash]common.Hash `json:"-"`
+	Depth         int                         `json:"depth"`
+	RefundCounter uint64                      `json:"refund"`
+	Err           error                       `json:"-"`
 }
 
 // overrides for gencodec
@@ -76,10 +79,12 @@ type structLogMarshaling struct {
 	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
 
+// OpName formats the operand name in a human-readable format.
 func (s *StructLog) OpName() string {
 	return s.Op.String()
 }
 
+// ErrorString formats the log's error as a string.
 func (s *StructLog) ErrorString() string {
 	if s.Err != nil {
 		return s.Err.Error()
@@ -124,6 +129,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
+// CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (l *StructLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
 	return nil
 }
@@ -172,16 +178,19 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		storage = l.changedValues[contract.Address()].Copy()
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, err}
+	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, env.StateDB.GetRefund(), err}
 
 	l.logs = append(l.logs, log)
 	return nil
 }
 
+// CaptureFault implements the Tracer interface to trace an execution fault
+// while running an opcode.
 func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	return nil
 }
 
+// CaptureEnd is called after the call finishes to finalize the tracing.
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	l.output = output
 	l.err = err

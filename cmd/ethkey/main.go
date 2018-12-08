@@ -38,6 +38,7 @@ func init() {
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,
+		commandChangePassphrase,
 		commandSignMessage,
 		commandVerifyMessage,
 	}

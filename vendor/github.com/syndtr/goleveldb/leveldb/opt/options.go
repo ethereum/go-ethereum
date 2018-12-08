@@ -158,6 +158,12 @@ type Options struct {
 	// The default value is 8MiB.
 	BlockCacheCapacity int
 
+	// BlockCacheEvictRemoved allows enable forced-eviction on cached block belonging
+	// to removed 'sorted table'.
+	//
+	// The default if false.
+	BlockCacheEvictRemoved bool
+
 	// BlockRestartInterval is the number of keys between restart points for
 	// delta encoding of keys.
 	//
@@ -382,6 +388,13 @@ func (o *Options) GetBlockCacheCapacity() int {
 		return 0
 	}
 	return o.BlockCacheCapacity
+}
+
+func (o *Options) GetBlockCacheEvictRemoved() bool {
+	if o == nil {
+		return false
+	}
+	return o.BlockCacheEvictRemoved
 }
 
 func (o *Options) GetBlockRestartInterval() int {

@@ -250,23 +250,6 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	return f.PoW <= 0 || envelope.pow >= f.PoW
 }
 
-func matchSingleTopic(topic TopicType, bt []byte) bool {
-	if len(bt) > TopicLength {
-		bt = bt[:TopicLength]
-	}
-
-	if len(bt) < TopicLength {
-		return false
-	}
-
-	for j, b := range bt {
-		if topic[j] != b {
-			return false
-		}
-	}
-	return true
-}
-
 // IsPubKeyEqual checks that two public keys are equal
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	if !ValidatePublicKey(a) {

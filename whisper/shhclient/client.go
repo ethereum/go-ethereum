@@ -159,9 +159,9 @@ func (sc *Client) DeleteSymmetricKey(ctx context.Context, id string) error {
 }
 
 // Post a message onto the network.
-func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) error {
-	var ignored bool
-	return sc.c.CallContext(ctx, &ignored, "shh_post", message)
+func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) (string, error) {
+	var hash string
+	return hash, sc.c.CallContext(ctx, &hash, "shh_post", message)
 }
 
 // SubscribeMessages subscribes to messages that match the given criteria. This method

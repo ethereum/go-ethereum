@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -34,7 +35,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
 )
 
 type Statistics struct {
@@ -63,7 +63,7 @@ type Whisper struct {
 
 	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
-	expirations map[uint32]*set.SetNonTS  // Message expiration pool
+	expirations map[uint32]mapset.Set     // Message expiration pool
 
 	peerMu sync.RWMutex       // Mutex to sync the active peer set
 	peers  map[*Peer]struct{} // Set of currently active peers
@@ -90,7 +90,7 @@ func New(cfg *Config) *Whisper {
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
 		envelopes:    make(map[common.Hash]*Envelope),
-		expirations:  make(map[uint32]*set.SetNonTS),
+		expirations:  make(map[uint32]mapset.Set),
 		peers:        make(map[*Peer]struct{}),
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
@@ -291,7 +291,7 @@ func (w *Whisper) AddKeyPair(key *ecdsa.PrivateKey) (string, error) {
 	return id, nil
 }
 
-// HasKeyPair checks if the the whisper node is configured with the private key
+// HasKeyPair checks if the whisper node is configured with the private key
 // of the specified public pair.
 func (w *Whisper) HasKeyPair(id string) bool {
 	w.keyMu.RLock()
@@ -499,7 +499,7 @@ func (w *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
 		if err != nil {
-			log.Warn("message loop", "peer", p.peer.ID(), "err", err)
+			log.Info("message loop", "peer", p.peer.ID(), "err", err)
 			return err
 		}
 		if packet.Size > w.MaxMessageSize() {
@@ -608,9 +608,9 @@ func (w *Whisper) add(envelope *Envelope) (bool, error) {
 	if !alreadyCached {
 		w.envelopes[hash] = envelope
 		if w.expirations[envelope.Expiry] == nil {
-			w.expirations[envelope.Expiry] = set.NewNonTS()
+			w.expirations[envelope.Expiry] = mapset.NewThreadUnsafeSet()
 		}
-		if !w.expirations[envelope.Expiry].Has(hash) {
+		if !w.expirations[envelope.Expiry].Contains(hash) {
 			w.expirations[envelope.Expiry].Add(hash)
 		}
 	}
@@ -717,7 +717,7 @@ func (w *Whisper) expire() {
 				w.stats.messagesCleared++
 				w.stats.memoryCleared += sz
 				w.stats.memoryUsed -= sz
-				return true
+				return false
 			})
 			w.expirations[expiry].Clear()
 			delete(w.expirations, expiry)

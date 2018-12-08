@@ -23,6 +23,7 @@ import (
 // OpCode is an EVM opcode
 type OpCode byte
 
+// IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
 	switch op {
 	case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
@@ -31,12 +32,13 @@ func (op OpCode) IsPush() bool {
 	return false
 }
 
+// IsStaticJump specifies if an opcode is JUMP.
 func (op OpCode) IsStaticJump() bool {
 	return op == JUMP
 }
 
+// 0x0 range - arithmetic ops.
 const (
-	// 0x0 range - arithmetic ops
 	STOP OpCode = iota
 	ADD
 	MUL
@@ -51,6 +53,7 @@ const (
 	SIGNEXTEND
 )
 
+// 0x10 range - comparison ops.
 const (
 	LT OpCode = iota + 0x10
 	GT
@@ -70,8 +73,8 @@ const (
 	SHA3 = 0x20
 )
 
+// 0x30 range - closure state.
 const (
-	// 0x30 range - closure state
 	ADDRESS OpCode = 0x30 + iota
 	BALANCE
 	ORIGIN
@@ -87,10 +90,11 @@ const (
 	EXTCODECOPY
 	RETURNDATASIZE
 	RETURNDATACOPY
+	EXTCODEHASH
 )
 
+// 0x40 range - block operations.
 const (
-	// 0x40 range - block operations
 	BLOCKHASH OpCode = 0x40 + iota
 	COINBASE
 	TIMESTAMP
@@ -99,8 +103,8 @@ const (
 	GASLIMIT
 )
 
+// 0x50 range - 'storage' and execution.
 const (
-	// 0x50 range - 'storage' and execution
 	POP OpCode = 0x50 + iota
 	MLOAD
 	MSTORE
@@ -115,8 +119,8 @@ const (
 	JUMPDEST
 )
 
+// 0x60 range.
 const (
-	// 0x60 range
 	PUSH1 OpCode = 0x60 + iota
 	PUSH2
 	PUSH3
@@ -183,6 +187,7 @@ const (
 	SWAP16
 )
 
+// 0xa0 range - logging ops.
 const (
 	LOG0 OpCode = 0xa0 + iota
 	LOG1
@@ -191,29 +196,30 @@ const (
 	LOG4
 )
 
-// unofficial opcodes used for parsing
+// unofficial opcodes used for parsing.
 const (
 	PUSH OpCode = 0xb0 + iota
 	DUP
 	SWAP
 )
 
+// 0xf0 range - closures.
 const (
-	// 0xf0 range - closures
 	CREATE OpCode = 0xf0 + iota
 	CALL
 	CALLCODE
 	RETURN
 	DELEGATECALL
+	CREATE2
 	STATICCALL = 0xfa
 
 	REVERT       = 0xfd
 	SELFDESTRUCT = 0xff
 )
 
-// Since the opcodes aren't all in order we can't use a regular slice
+// Since the opcodes aren't all in order we can't use a regular slice.
 var opCodeToString = map[OpCode]string{
-	// 0x0 range - arithmetic ops
+	// 0x0 range - arithmetic ops.
 	STOP:       "STOP",
 	ADD:        "ADD",
 	MUL:        "MUL",
@@ -232,7 +238,7 @@ var opCodeToString = map[OpCode]string{
 	ISZERO:     "ISZERO",
 	SIGNEXTEND: "SIGNEXTEND",
 
-	// 0x10 range - bit ops
+	// 0x10 range - bit ops.
 	AND:    "AND",
 	OR:     "OR",
 	XOR:    "XOR",
@@ -243,10 +249,10 @@ var opCodeToString = map[OpCode]string{
 	ADDMOD: "ADDMOD",
 	MULMOD: "MULMOD",
 
-	// 0x20 range - crypto
+	// 0x20 range - crypto.
 	SHA3: "SHA3",
 
-	// 0x30 range - closure state
+	// 0x30 range - closure state.
 	ADDRESS:        "ADDRESS",
 	BALANCE:        "BALANCE",
 	ORIGIN:         "ORIGIN",
@@ -262,8 +268,9 @@ var opCodeToString = map[OpCode]string{
 	EXTCODECOPY:    "EXTCODECOPY",
 	RETURNDATASIZE: "RETURNDATASIZE",
 	RETURNDATACOPY: "RETURNDATACOPY",
+	EXTCODEHASH:    "EXTCODEHASH",
 
-	// 0x40 range - block operations
+	// 0x40 range - block operations.
 	BLOCKHASH:  "BLOCKHASH",
 	COINBASE:   "COINBASE",
 	TIMESTAMP:  "TIMESTAMP",
@@ -271,7 +278,7 @@ var opCodeToString = map[OpCode]string{
 	DIFFICULTY: "DIFFICULTY",
 	GASLIMIT:   "GASLIMIT",
 
-	// 0x50 range - 'storage' and execution
+	// 0x50 range - 'storage' and execution.
 	POP: "POP",
 	//DUP:     "DUP",
 	//SWAP:    "SWAP",
@@ -287,7 +294,7 @@ var opCodeToString = map[OpCode]string{
 	GAS:      "GAS",
 	JUMPDEST: "JUMPDEST",
 
-	// 0x60 range - push
+	// 0x60 range - push.
 	PUSH1:  "PUSH1",
 	PUSH2:  "PUSH2",
 	PUSH3:  "PUSH3",
@@ -360,12 +367,13 @@ var opCodeToString = map[OpCode]string{
 	LOG3:   "LOG3",
 	LOG4:   "LOG4",
 
-	// 0xf0 range
+	// 0xf0 range.
 	CREATE:       "CREATE",
 	CALL:         "CALL",
 	RETURN:       "RETURN",
 	CALLCODE:     "CALLCODE",
 	DELEGATECALL: "DELEGATECALL",
+	CREATE2:      "CREATE2",
 	STATICCALL:   "STATICCALL",
 	REVERT:       "REVERT",
 	SELFDESTRUCT: "SELFDESTRUCT",
@@ -429,6 +437,7 @@ var stringToOp = map[string]OpCode{
 	"EXTCODECOPY":    EXTCODECOPY,
 	"RETURNDATASIZE": RETURNDATASIZE,
 	"RETURNDATACOPY": RETURNDATACOPY,
+	"EXTCODEHASH":    EXTCODEHASH,
 	"BLOCKHASH":      BLOCKHASH,
 	"COINBASE":       COINBASE,
 	"TIMESTAMP":      TIMESTAMP,
@@ -517,6 +526,7 @@ var stringToOp = map[string]OpCode{
 	"LOG3":           LOG3,
 	"LOG4":           LOG4,
 	"CREATE":         CREATE,
+	"CREATE2":        CREATE2,
 	"CALL":           CALL,
 	"RETURN":         RETURN,
 	"CALLCODE":       CALLCODE,
@@ -524,6 +534,7 @@ var stringToOp = map[string]OpCode{
 	"SELFDESTRUCT":   SELFDESTRUCT,
 }
 
+// StringToOp finds the opcode whose name is stored in `str`.
 func StringToOp(str string) OpCode {
 	return stringToOp[str]
 }

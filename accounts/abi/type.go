@@ -103,7 +103,12 @@ func NewType(t string) (typ Type, err error) {
 		return typ, err
 	}
 	// parse the type and size of the abi-type.
-	parsedType := typeRegex.FindAllStringSubmatch(t, -1)[0]
+	matches := typeRegex.FindAllStringSubmatch(t, -1)
+	if len(matches) == 0 {
+		return Type{}, fmt.Errorf("invalid type '%v'", t)
+	}
+	parsedType := matches[0]
+
 	// varSize is the size of the variable
 	var varSize int
 	if len(parsedType[3]) > 0 {
@@ -178,27 +183,67 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	if t.T == SliceTy || t.T == ArrayTy {
-		var packed []byte
+	switch t.T {
+	case SliceTy, ArrayTy:
+		var ret []byte
 
+		if t.requiresLengthPrefix() {
+			// append length
+			ret = append(ret, packNum(reflect.ValueOf(v.Len()))...)
+		}
+
+		// calculate offset if any
+		offset := 0
+		offsetReq := isDynamicType(*t.Elem)
+		if offsetReq {
+			offset = getDynamicTypeOffset(*t.Elem) * v.Len()
+		}
+		var tail []byte
 		for i := 0; i < v.Len(); i++ {
 			val, err := t.Elem.pack(v.Index(i))
 			if err != nil {
 				return nil, err
 			}
-			packed = append(packed, val...)
+			if !offsetReq {
+				ret = append(ret, val...)
+				continue
+			}
+			ret = append(ret, packNum(reflect.ValueOf(offset))...)
+			offset += len(val)
+			tail = append(tail, val...)
 		}
-		if t.T == SliceTy {
-			return packBytesSlice(packed, v.Len()), nil
-		} else if t.T == ArrayTy {
-			return packed, nil
-		}
+		return append(ret, tail...), nil
+	default:
+		return packElement(t, v), nil
 	}
-	return packElement(t, v), nil
 }
 
 // requireLengthPrefix returns whether the type requires any sort of length
 // prefixing.
 func (t Type) requiresLengthPrefix() bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy
+}
+
+// isDynamicType returns true if the type is dynamic.
+// StringTy, BytesTy, and SliceTy(irrespective of slice element type) are dynamic types
+// ArrayTy is considered dynamic if and only if the Array element is a dynamic type.
+// This function recursively checks the type for slice and array elements.
+func isDynamicType(t Type) bool {
+	// dynamic types
+	// array is also a dynamic type if the array type is dynamic
+	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && isDynamicType(*t.Elem))
+}
+
+// getDynamicTypeOffset returns the offset for the type.
+// See `isDynamicType` to know which types are considered dynamic.
+// If the type t is an array and element type is not a dynamic type, then we consider it a static type and
+// return 32 * size of array since length prefix is not required.
+// If t is a dynamic type or element type(for slices and arrays) is dynamic, then we simply return 32 as offset.
+func getDynamicTypeOffset(t Type) int {
+	// if it is an array and there are no dynamic types
+	// then the array is static type
+	if t.T == ArrayTy && !isDynamicType(*t.Elem) {
+		return 32 * t.Size
+	}
+	return 32
 }

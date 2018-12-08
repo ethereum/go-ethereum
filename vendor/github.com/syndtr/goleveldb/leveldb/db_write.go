@@ -89,7 +89,11 @@ func (db *DB) flush(n int) (mdb *memDB, mdbFree int, err error) {
 			return false
 		case tLen >= pauseTrigger:
 			delayed = true
+			// Set the write paused flag explicitly.
+			atomic.StoreInt32(&db.inWritePaused, 1)
 			err = db.compTriggerWait(db.tcompCmdC)
+			// Unset the write paused flag.
+			atomic.StoreInt32(&db.inWritePaused, 0)
 			if err != nil {
 				return false
 			}
