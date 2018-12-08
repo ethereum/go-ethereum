@@ -204,7 +204,7 @@ func TestIndex(t *testing.T) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(IndexItem{
+		_, err = index.Get(IndexItem{
 			Address: want.Address,
 		})
 		if err != wantErr {
@@ -241,7 +241,7 @@ func TestIndex(t *testing.T) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(IndexItem{
+		_, err = index.Get(IndexItem{
 			Address: want.Address,
 		})
 		if err != wantErr {
