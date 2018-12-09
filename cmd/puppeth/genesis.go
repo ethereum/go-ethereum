@@ -54,7 +54,7 @@ type alethGenesisSpec struct {
 		BlockReward             *hexutil.Big           `json:"blockReward"`
 		NetworkID               hexutil.Uint64         `json:"networkID"`
 		ChainID                 hexutil.Uint64         `json:"chainID"`
-		AllowFutureBlocks       bool                   `json:"allowFutureBlocks""`
+		AllowFutureBlocks       bool                   `json:"allowFutureBlocks"`
 	} `json:"params"`
 
 	Genesis struct {
