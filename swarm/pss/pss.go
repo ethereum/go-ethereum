@@ -926,49 +926,29 @@ func (p *Pss) trySend(sp *network.Peer, msg *PssMsg) bool {
 // successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
-	sent := 0               // number of successful sends
-	var isDstInProxBin bool // is destination address within the neighbourhood depth of the forwarding peer
+	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
 	// but the luminosity is less. here luminosity equals the number of bits present in the destination address.
-	luminousRadius := len(msg.To) * 8
-	if luminousRadius >= neighbourhoodDepth {
-		pof := pot.DefaultPof(neighbourhoodDepth)
-		_, isDstInProxBin = pof(to, p.BaseAddr(), 0)
+	luminosityRadius := len(msg.To) * 8
+	pof := pot.DefaultPof(neighbourhoodDepth) // pof function matching up to neighbourhoodDepth bits (pof <= neighbourhoodDepth)
+	depth, _ := pof(to, p.BaseAddr(), 0)
+	if depth > luminosityRadius {
+		depth = luminosityRadius
 	}
 
-	if isDstInProxBin {
-		// forward to all the nearest neighbours of the forwarding node
-		p.Kademlia.EachConn(nil, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
-			isPeerInProxBin := (po >= neighbourhoodDepth)
-			if isPeerInProxBin {
-				if p.trySend(sp, msg) {
-					sent++
-				}
-			}
-			mustContinue := isPeerInProxBin
-			return mustContinue
-		})
-	}
-
-	if !isDstInProxBin || sent == 0 {
-		// in case of partial address, msg should be forwarded to all the peers matching the partial
-		// address, if there are any; otherwise only to one peer, closest to the recipient address.
-		// in any case, msg must be sent to at least one peer.
-		p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
-			isAddrMatch := (po >= luminousRadius)
-			if isAddrMatch || sent == 0 {
-				if p.trySend(sp, msg) {
-					sent++
-				}
-			}
-			mustContinue := (isAddrMatch || sent == 0)
-			return mustContinue
-		})
-	}
+	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
+		if po < depth && sent > 0 {
+			return false // stop iterating
+		}
+		if p.trySend(sp, msg) {
+			sent++
+		}
+		return true // continue
+	})
 
 	// if we failed to send to anyone, re-insert message in the send-queue
 	if sent == 0 {
