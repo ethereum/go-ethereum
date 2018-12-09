@@ -35,10 +35,6 @@ func (w *wizard) deployExplorer() {
 		log.Error("No ethstats server configured")
 		return
 	}
-	if w.conf.Genesis.Config.Ethash == nil {
-		log.Error("Only ethash network supported")
-		return
-	}
 	// Select the server to interact with
 	server := w.selectServer()
 	if server == "" {
@@ -55,12 +51,8 @@ func (w *wizard) deployExplorer() {
 	}
 	existed := err == nil
 
-	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootnodes)
-	if err != nil {
-		log.Error("Failed to create chain spec for explorer", "err", err)
-		return
-	}
-	chain, _ := json.MarshalIndent(chainspec, "", "  ")
+	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
+	infos.networkId = w.conf.Genesis.Config.ChainID.Int64()
 
 	// Figure out which port to listen on
 	fmt.Println()
@@ -75,11 +67,20 @@ func (w *wizard) deployExplorer() {
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
 	if infos.datadir == "" {
-		fmt.Printf("Where should data be stored on the remote machine?\n")
+		fmt.Printf("Where should node data be stored on the remote machine?\n")
 		infos.datadir = w.readString()
 	} else {
-		fmt.Printf("Where should data be stored on the remote machine? (default = %s)\n", infos.datadir)
+		fmt.Printf("Where should node data be stored on the remote machine? (default = %s)\n", infos.datadir)
 		infos.datadir = w.readDefaultString(infos.datadir)
+	}
+	// Figure out where the user wants to store the persistent data for backend database
+	fmt.Println()
+	if infos.dbdir == "" {
+		fmt.Printf("Where should postgres data be stored on the remote machine?\n")
+		infos.dbdir = w.readString()
+	} else {
+		fmt.Printf("Where should postgres data be stored on the remote machine? (default = %s)\n", infos.dbdir)
+		infos.dbdir = w.readDefaultString(infos.datadir)
 	}
 	// Figure out which port to listen on
 	fmt.Println()
@@ -102,7 +103,7 @@ func (w *wizard) deployExplorer() {
 		fmt.Printf("Should the explorer be built from scratch (y/n)? (default = no)\n")
 		nocache = w.readDefaultYesNo(false)
 	}
-	if out, err := deployExplorer(client, w.network, chain, infos, nocache); err != nil {
+	if out, err := deployExplorer(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy explorer container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
