@@ -4,10 +4,12 @@ import (
 	"errors"
 )
 
+// Textual version number of accounting API
 const AccountingVersion = "1.0"
 
 var errNoAccountingMetrics = errors.New("accounting metrics not enabled")
 
+// AccountingApi provides an API to access account related information
 type AccountingApi struct {
 	metrics *AccountingMetrics
 }
