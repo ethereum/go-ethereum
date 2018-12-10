@@ -188,17 +188,16 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config        TxPoolConfig
-	chainconfig   *params.ChainConfig
-	chain         blockChain
-	gasPrice      *big.Int
-	txFeed        event.Feed
-	specialTxFeed event.Feed
-	scope         event.SubscriptionScope
-	chainHeadCh   chan ChainHeadEvent
-	chainHeadSub  event.Subscription
-	signer        types.Signer
-	mu            sync.RWMutex
+	config       TxPoolConfig
+	chainconfig  *params.ChainConfig
+	chain        blockChain
+	gasPrice     *big.Int
+	txFeed       event.Feed
+	scope        event.SubscriptionScope
+	chainHeadCh  chan ChainHeadEvent
+	chainHeadSub event.Subscription
+	signer       types.Signer
+	mu           sync.RWMutex
 
 	currentState  *state.StateDB      // Current state in the blockchain head
 	pendingState  *state.ManagedState // Pending state tracking virtual nonces
@@ -458,12 +457,6 @@ func (pool *TxPool) SubscribeTxPreEvent(ch chan<- TxPreEvent) event.Subscription
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
-// SubscribeSpecialTxPreEvent registers a subscription of TxPreEvent and
-// starts sending event to the given channel.
-func (pool *TxPool) SubscribeSpecialTxPreEvent(ch chan<- TxPreEvent) event.Subscription {
-	return pool.scope.Track(pool.specialTxFeed.Subscribe(ch))
-}
-
 // GasPrice returns the current gas price enforced by the transaction pool.
 func (pool *TxPool) GasPrice() *big.Int {
 	pool.mu.RLock()
@@ -654,11 +647,12 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, err
 	}
 	from, _ := types.Sender(pool.signer, tx) // already validated
-	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) {
+	if tx.IsSpecialTransaction() && pool.IsMasterNode != nil && pool.IsMasterNode(from) && pool.pendingState.GetNonce(from) == tx.Nonce() {
 		return pool.promoteSpecialTx(from, tx)
 	}
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
+		log.Debug("Add transaction to pool full", "hash", hash, "nonce", tx.Nonce())
 		// If the new transaction is underpriced, don't accept it
 		if pool.priced.Underpriced(tx, pool.locals) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
@@ -819,21 +813,7 @@ func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction)
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
-	broadcastTxs := types.Transactions{}
-	for i := tx.Nonce() - 1; i > 0; i-- {
-		before := list.txs.Get(i)
-		if before == nil || before.IsSpecialTransaction() {
-			break
-		}
-		broadcastTxs = append(broadcastTxs, before)
-	}
-	broadcastTxs = append(broadcastTxs, tx)
-	go func() {
-		for _, btx := range broadcastTxs {
-			pool.specialTxFeed.Send(TxPreEvent{btx})
-			log.Trace("Pooled new special transaction", "hash", tx.Hash(), "from", addr, "to", tx.To(), "nonce", tx.Nonce())
-		}
-	}()
+	go pool.txFeed.Send(TxPreEvent{tx})
 	return true, nil
 }
 
@@ -887,9 +867,6 @@ func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
 
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
-	for _, tx := range txs {
-		types.CacheSigner(pool.signer, tx)
-	}
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
