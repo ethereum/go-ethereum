@@ -183,6 +183,8 @@ OUTER:
 	// to fail the test in the event for loop if that happens
 	// before all connection events are counted.
 	loadDoneC := make(chan struct{})
+	// Channel that signals when all connections are established.
+	connsC := make(chan struct{})
 
 	go func() {
 		// collect connection events up to expected number
@@ -237,6 +239,9 @@ OUTER:
 				t.Fatalf("network missing conn %v -> %v", snapConn.One, snapConn.Other)
 			}
 		}
+
+		// close the channel to signal that all connections are established
+		close(connsC)
 	}()
 
 	// load the snapshot
@@ -247,6 +252,13 @@ OUTER:
 	}
 	// signal the event for event loop that Load function has returned
 	close(loadDoneC)
+
+	// wait for all connections
+	select {
+	case <-connsC:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timing out waiting for connections")
+	}
 
 	// verify that network didn't generate any other additional connection events after the ones we have collected within a reasonable period of time
 	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
