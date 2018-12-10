@@ -24,8 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
@@ -68,12 +67,12 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 	disconnections := sim.PeerEvents(
 		context.Background(),
 		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
+		simulation.NewPeerEventsFilter().Drop(),
 	)
 
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 			panic("unexpected disconnect")
 			cancelSimRun()
 		}
@@ -145,7 +144,7 @@ func sendSimTerminatedEvent(sim *simulation.Simulation) {
 //can visualize messages like SendOfferedMsg, WantedHashesMsg, DeliveryMsg
 func TestSnapshotSyncWithServer(t *testing.T) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
+	//t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodeCount, chunkCount, sim := setupSim(simServiceMap)
 	defer sim.Close()
 
@@ -153,9 +152,9 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 
 	conf := &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
-	conf.idToChunksMap = make(map[discover.NodeID][]int)
+	conf.idToChunksMap = make(map[enode.ID][]int)
 	//map of overlay address to discover ID
-	conf.addrToIDMap = make(map[string]discover.NodeID)
+	conf.addrToIDMap = make(map[string]enode.ID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
@@ -168,9 +167,9 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	defer cancelSimRun()
 
 	//setup filters in the event feed
-	offeredHashesFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(1)
-	wantedFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(2)
-	deliveryFilter := simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeMsgRecv).Protocol("stream").MsgCode(6)
+	offeredHashesFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(1)
+	wantedFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(2)
+	deliveryFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(10)
 	eventC := sim.PeerEvents(ctx, sim.UpNodeIDs(), offeredHashesFilter, wantedFilter, deliveryFilter)
 
 	quit := make(chan struct{})
@@ -186,27 +185,29 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 			if e.Error != nil {
 				t.Fatal(e.Error)
 			}
-			if *e.Event.MsgCode == uint64(1) {
+			if e.Event.Msg.Code == uint64(1) {
 				evt := &simulations.Event{
 					Type:    EventTypeChunkOffered,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
 				}
 				sim.Net.Events().Send(evt)
-			} else if *e.Event.MsgCode == uint64(2) {
+			} else if e.Event.Msg.Code == uint64(2) {
 				evt := &simulations.Event{
 					Type:    EventTypeChunkWanted,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
 				}
 				sim.Net.Events().Send(evt)
-			} else if *e.Event.MsgCode == uint64(6) {
+			} else if e.Event.Msg.Code == uint64(10) {
 				evt := &simulations.Event{
 					Type:    EventTypeChunkDelivered,
 					Node:    sim.Net.GetNode(e.NodeID),
 					Control: false,
 				}
 				sim.Net.Events().Send(evt)
+			} else {
+				fmt.Println(fmt.Sprintf("msg code: %d", e.Event.Msg.Code))
 			}
 		}
 	}()

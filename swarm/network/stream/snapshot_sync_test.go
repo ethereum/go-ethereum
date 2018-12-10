@@ -183,7 +183,7 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
+	//t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
@@ -266,6 +266,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 			}
 			sim.Net.Events().Send(evt)
 		}
+		fmt.Println(hashes)
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
