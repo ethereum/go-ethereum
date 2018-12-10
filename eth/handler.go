@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -311,17 +310,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}()
 	}
-
 	// If we have any explicit whitelist block hashes, request them
-	for bn := range pm.whitelist {
-		p.Log().Debug("Requesting whitelist block", "number", bn)
-		if err := p.RequestHeadersByNumber(bn, 1, 0, false); err != nil {
-			p.Log().Error("whitelist request failed", "err", err, "number", bn, "peer", p.id)
+	for number := range pm.whitelist {
+		if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
 			return err
 		}
 	}
-
-	// main loop. handle incoming messages.
+	// Handle incoming messages until the connection is torn down
 	for {
 		if err := pm.handleMsg(p); err != nil {
 			p.Log().Debug("Ethereum message handling failed", "err", err)
@@ -466,16 +461,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Filter out any explicitly requested headers, deliver the rest to the downloader
 		filter := len(headers) == 1
 		if filter {
-			// Check for any responses not matching our whitelist
-			if expected, ok := pm.whitelist[headers[0].Number.Uint64()]; ok {
-				actual := headers[0].Hash()
-				if !bytes.Equal(expected.Bytes(), actual.Bytes()) {
-					p.Log().Info("Dropping peer with non-matching whitelist block", "number", headers[0].Number.Uint64(), "hash", actual, "expected", expected)
-					return errors.New("whitelist block mismatch")
-				}
-				p.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", expected)
-			}
-
 			// If it's a potential DAO fork check, validate against the rules
 			if p.forkDrop != nil && pm.chainconfig.DAOForkBlock.Cmp(headers[0].Number) == 0 {
 				// Disable the fork drop timer
@@ -489,6 +474,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				}
 				p.Log().Debug("Verified to be on the same side of the DAO fork")
 				return nil
+			}
+			// Otherwise if it's a whitelisted block, validate against the set
+			if want, ok := pm.whitelist[headers[0].Number.Uint64()]; ok {
+				if hash := headers[0].Hash(); want != hash {
+					p.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
+					return errors.New("whitelist block mismatch")
+				}
+				p.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", want)
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(p.id, headers, time.Now())

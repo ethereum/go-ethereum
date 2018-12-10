@@ -1077,30 +1077,25 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 }
 
 func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
-	if ctx.GlobalIsSet(WhitelistFlag.Name) {
-		entries := strings.Split(ctx.String(WhitelistFlag.Name), ",")
-		whitelist := make(map[uint64]common.Hash)
-		for _, entry := range entries {
-			split := strings.SplitN(entry, "=", 2)
-			if len(split) != 2 {
-				Fatalf("invalid whitelist entry: %s", entry)
-			}
-
-			bn, err := strconv.ParseUint(split[0], 0, 64)
-			if err != nil {
-				Fatalf("Invalid whitelist block number %s: %v", split[0], err)
-			}
-
-			hash := common.Hash{}
-			err = hash.UnmarshalText([]byte(split[1]))
-			if err != nil {
-				Fatalf("Invalid whitelist hash %s: %v", split[1], err)
-			}
-
-			whitelist[bn] = hash
+	whitelist := ctx.GlobalString(WhitelistFlag.Name)
+	if whitelist == "" {
+		return
+	}
+	cfg.Whitelist = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(whitelist, ",") {
+		parts := strings.Split(entry, "=")
+		if len(parts) != 2 {
+			Fatalf("Invalid whitelist entry: %s", entry)
 		}
-
-		cfg.Whitelist = whitelist
+		number, err := strconv.ParseUint(parts[0], 0, 64)
+		if err != nil {
+			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+		}
+		var hash common.Hash
+		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
+			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+		}
+		cfg.Whitelist[number] = hash
 	}
 }
 
