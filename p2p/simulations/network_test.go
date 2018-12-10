@@ -41,7 +41,7 @@ func TestSnapshot(t *testing.T) {
 	// this is a minimal service, whose protocol will take exactly one message OR close of connection before quitting
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			return NewNoopService(false), nil
+			return NewNoopService(nil), nil
 		},
 	})
 
@@ -162,7 +162,7 @@ OUTER:
 
 	adapter = adapters.NewSimAdapter(adapters.Services{
 		"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			return NewNoopService(false), nil
+			return NewNoopService(nil), nil
 		},
 	})
 	network = NewNetwork(adapter, &NetworkConfig{
@@ -173,24 +173,25 @@ OUTER:
 	}()
 
 	// subscribe to peer events
-	evC = make(chan *Event)
+	// every node up and conn up event will generate one additional control event
+	// therefore multiply the count by two
+	evC = make(chan *Event, (len(snap.Conns)*2)+(len(snap.Nodes)*2))
 	sub = network.Events().Subscribe(evC)
 	defer sub.Unsubscribe()
 
 	// load the snapshot
 	// spawn separate thread to avoid deadlock in the event listeners
-	go func() {
-		err = network.Load(snap)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
+	err = network.Load(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// collect connection events up to expected number
 	ctx, cancel = context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
 
 	connEventCount = nodeCount
+
 OUTER_TWO:
 	for {
 		select {
@@ -401,8 +402,8 @@ func benchmarkMinimalServiceTmp(b *testing.B) {
 		protoCMap := make(map[enode.ID]map[enode.ID]chan struct{})
 		adapter := adapters.NewSimAdapter(adapters.Services{
 			"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
-				svc := NewNoopService(true)
-				protoCMap[ctx.Config.ID] = svc.C
+				protoCMap[ctx.Config.ID] = make(map[enode.ID]chan struct{})
+				svc := NewNoopService(protoCMap[ctx.Config.ID])
 				return svc, nil
 			},
 		})
