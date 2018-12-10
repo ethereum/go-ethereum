@@ -21,7 +21,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -1105,12 +1107,120 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 			}
 		}
 	}
-
 	// print some output
 	for p, subs := range fakeSubscriptions {
 		log.Debug(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
 		for _, bin := range subs {
 			log.Debug(fmt.Sprintf("%d,", bin))
 		}
+	}
+}
+
+/*
+TestGetSubscriptionsRPC sets up a simulation network of 16 nodes,
+starts the simulation, waits for SyncUpdateDelay in order to kick off
+stream registration, then tests that there are subscriptions.
+If provided with the `-printstats = true` option, it will print
+the information of who is subscribed to who to STDOUT
+*/
+func TestGetSubscriptionsRPC(t *testing.T) {
+	//arbitrarily set to 16
+	nodeCount := 16
+	//set the syncUpdateDelay for sync registrations to start
+	syncUpdateDelay := 500 * time.Millisecond
+	//create a standard sim
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			n := ctx.Config.Node()
+			addr := network.NewAddr(n)
+			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+			if err != nil {
+				return nil, nil, err
+			}
+			localStore := store.(*storage.LocalStore)
+			netStore, err := storage.NewNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
+			//configure so that sync registrations actually happen
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval:       RetrievalEnabled,
+				Syncing:         SyncingAutoSubscribe, //enable sync registrations
+				SyncUpdateDelay: syncUpdateDelay,
+			}, nil)
+
+			bucket.Store(bucketKeyRegistry, r)
+			cleanup = func() {
+				os.RemoveAll(datadir)
+				netStore.Close()
+				r.Close()
+			}
+
+			return r, cleanup, nil
+
+		},
+	})
+	defer sim.Close()
+
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelSimRun()
+
+	//upload a snapshot
+	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//wait till healthy
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		//we need to wait for some time until registrations are finished...
+		time.Sleep(syncUpdateDelay + 1*time.Second)
+		nodes := sim.Net.Nodes
+
+		//iterate all nodes
+		for _, node := range nodes {
+			//create rpc client
+			client, err := node.Client()
+			if err != nil {
+				t.Fatalf("create node 1 rpc client fail: %v", err)
+			}
+
+			item, ok := sim.NodeItem(node.ID(), bucketKeyRegistry)
+			if !ok {
+				return fmt.Errorf("No registry")
+			}
+			registry := item.(*Registry)
+			//ask it for subscriptions
+			pstreams := make(map[string][]string)
+			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
+			if err != nil {
+				t.Fatal(err)
+			}
+			//lenght of the subscriptions can not be smaller than number of peers
+			if len(pstreams) < len(registry.peers) {
+				t.Fatal("No subscriptions have been made")
+			}
+			//if enabled, print stats to STDOUT
+			if *printstats {
+				fmt.Println(fmt.Sprintf("node %s subscriptions:", node.String()))
+				for p, ps := range pstreams {
+					fmt.Println(fmt.Sprintf("...with node %s: ", p))
+					for _, s := range ps {
+						fmt.Println(fmt.Sprintf("......%s", s))
+					}
+				}
+			}
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
 	}
 }
