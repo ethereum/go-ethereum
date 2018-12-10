@@ -76,9 +76,9 @@ var (
 
 		CreateBySuicide: 25000,
 	}
-	// GasTableConstantinople contain the gas re-prices for
+	// GasTableEIP1052 contain the gas re-prices for
 	// the constantinople phase.
-	GasTableConstantinople = GasTable{
+	GasTableEIP1052 = GasTable{
 		ExtcodeSize: 700,
 		ExtcodeCopy: 700,
 		ExtcodeHash: 400,

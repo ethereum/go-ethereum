@@ -121,7 +121,7 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
 	// The legacy gas metering only takes into consideration the current state
-	if !evm.chainRules.IsConstantinople {
+	if !evm.chainRules.IsEIP1283 {
 		// This checks for 3 scenario's and calculates gas accordingly:
 		//
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)

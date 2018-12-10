@@ -111,17 +111,130 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{
+		big.NewInt(1337), // ChainID
+
+		big.NewInt(0), // HomesteadBlock
+		nil,           // EIP7Block
+
+		nil,   // DAOForkBlock
+		false, // DAOForkSupport
+
+		big.NewInt(0), // EIP150Block
+		common.Hash{}, // EIP150Hash
+		big.NewInt(0), // EIP155Block
+		big.NewInt(0), // EIP158Block
+
+		big.NewInt(0), // ByzantiumBlock
+		nil,           // EIP140Block
+		nil,           // EIP658Block
+		nil,           // EIP100Block
+		nil,           // EIP198Block
+		nil,           // EIP212Block
+		nil,           // EIP213Block
+		nil,           // EIP214Block
+		nil,           // EIP211Block
+		nil,           // EIP649Block
+		nil,           // EIP684Block
+
+		big.NewInt(0), // ConstantinopleBlock
+		nil,           // EIP145Block
+		nil,           // EIP1014Block
+		nil,           // EIP1052Block
+		nil,           // EIP1283Block
+		nil,           // EIP1234Block
+
+		nil,               // EWASMBlock
+		new(EthashConfig), // Ethash
+		nil,               // Clique
+	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{
+		big.NewInt(1337), // ChainID
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
-	TestRules       = TestChainConfig.Rules(new(big.Int))
+		big.NewInt(0), // HomesteadBlock
+		nil,           // EIP7Block
+
+		nil,   // DAOForkBlock
+		false, // DAOForkSupport
+
+		big.NewInt(0), // EIP150Block
+		common.Hash{}, // EIP150Hash
+		big.NewInt(0), // EIP155Block
+		big.NewInt(0), // EIP158Block
+
+		big.NewInt(0), // ByzantiumBlock
+		nil,           // EIP140Block
+		nil,           // EIP658Block
+		nil,           // EIP100Block
+		nil,           // EIP198Block
+		nil,           // EIP212Block
+		nil,           // EIP213Block
+		nil,           // EIP214Block
+		nil,           // EIP211Block
+		nil,           // EIP649Block
+		nil,           // EIP684Block
+
+		big.NewInt(0), // ConstantinopleBlock
+		nil,           // EIP145Block
+		nil,           // EIP1014Block
+		nil,           // EIP1052Block
+		nil,           // EIP1283Block
+		nil,           // EIP1234Block
+
+		nil, // EWASMBlock
+		nil, // Ethash
+		&CliqueConfig{
+			Period: 0,
+			Epoch:  30000,
+		},
+	}
+
+	// TestChainConfig is used for tests.
+	TestChainConfig = &ChainConfig{
+		big.NewInt(1), // ChainID
+
+		big.NewInt(0), // HomesteadBlock
+		nil,           // EIP7Block
+
+		nil,   // DAOForkBlock
+		false, // DAOForkSupport
+
+		big.NewInt(0), // EIP150Block
+		common.Hash{}, // EIP150Hash
+		big.NewInt(0), // EIP155Block
+		big.NewInt(0), // EIP158Block
+
+		big.NewInt(0), // ByzantiumBlock
+		nil,           // EIP140Block
+		nil,           // EIP658Block
+		nil,           // EIP100Block
+		nil,           // EIP198Block
+		nil,           // EIP212Block
+		nil,           // EIP213Block
+		nil,           // EIP214Block
+		nil,           // EIP211Block
+		nil,           // EIP649Block
+		nil,           // EIP684Block
+
+		big.NewInt(0), // ConstantinopleBlock
+		nil,           // EIP145Block
+		nil,           // EIP1014Block
+		nil,           // EIP1052Block
+		nil,           // EIP1283Block
+		nil,           // EIP1234Block
+
+		nil,               // EWASMBlock
+		new(EthashConfig), // Ethash
+		nil,               // Clique
+	}
+
+	TestRules = TestChainConfig.Rules(new(big.Int))
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -145,6 +258,10 @@ type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // chainId identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	//
+	// DELEGATECALL
+	// https://eips.ethereum.org/EIPS/eip-7
+	EIP7Block *big.Int `json:"eip7Block,omitempy"`
 
 	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
 	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
@@ -156,24 +273,16 @@ type ChainConfig struct {
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
-	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
-	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
-	EWASMBlock          *big.Int `json:"ewasmBlock,omitempty"`          // EWASM switch block (nil = no fork, 0 = already activated)
-
-	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
-
-	// Homestead
-
-	// DELEGATECALL
-	// https://eips.ethereum.org/EIPS/eip-7
-	EIP7Block *big.Int `json:"eip7Block,omitempy"`
-
 	// Byzantium
 	// https://github.com/ethereum/go-ethereum/releases/tag/v1.7.0
+	ByzantiumBlock *big.Int `json:"byzantiumBlock,omitempty"` // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	//
+	// REVERT instruction
+	// https://eips.ethereum.org/EIPS/eip-140
+	EIP140Block *big.Int `json:"eip140Block,omitempty"`
 	// transaction receipt status
+	// https://github.com/ethereum/EIPs/issues/98
+	// https://github.com/ethereum/EIPs/issues/98#issuecomment-318670322
 	// https://github.com/ethereum/EIPs/issues/658
 	EIP658Block *big.Int `json:"eip658Block,omitempty"`
 	// Change difficulty adjustment to target mean block time including uncles
@@ -194,15 +303,16 @@ type ChainConfig struct {
 	// RETURNDATACOPY, RETURNDATASIZE
 	// https://github.com/ethereum/EIPs/issues/211
 	EIP211Block *big.Int `json:"eip211Block,omitempty"`
-	// metropolis diff bomb delay
+	// metropolis diff bomb delay and reducing block reward
 	// https://github.com/ethereum/EIPs/issues/649
 	EIP649Block *big.Int `json:"eip649Block,omitempty"`
 	// prevent overwriting contracts
+	// NOTE(whilei): NOT CONFIGURABLE
 	// https://github.com/ethereum/EIPs/issues/684
 	EIP684Block *big.Int `json:"eip684Block,omitempty"`
 
-	// Constantinople
 	// https://github.com/ethereum/pm/wiki/Constantinople-Progress-Tracker
+	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 	//
 	// bitwise shifts
 	// https://eips.ethereum.org/EIPS/eip-145
@@ -219,6 +329,12 @@ type ChainConfig struct {
 	// constantinople difficulty bomb delay and block reward adjustment
 	// https://eips.ethereum.org/EIPS/eip-1234
 	EIP1234Block *big.Int `json:"eip1234Block,omitempty"`
+
+	EWASMBlock *big.Int `json:"ewasmBlock,omitempty"` // EWASM switch block (nil = no fork, 0 = already activated)
+
+	// Various consensus engines
+	Ethash *EthashConfig `json:"ethash,omitempty"`
+	Clique *CliqueConfig `json:"clique,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -294,9 +410,29 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 	return isForked(c.EIP158Block, num)
 }
 
-// IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
+// IsByzantium returns whether num is either equal to the Byzantium fork block or greater,
+// or whether the configured params satisfy all requirements fulfilling the Byzantium fork.
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
-	return isForked(c.ByzantiumBlock, num)
+	return isForked(c.ConstantinopleBlock, num) || func(n *big.Int) bool {
+		for _, block := range []*big.Int{
+			c.EIP198Block,
+			c.EIP212Block,
+			c.EIP213Block,
+			c.EIP214Block,
+			c.EIP211Block,
+			c.EIP649Block,
+			c.EIP684Block,
+		} {
+			if !isForked(block, n) {
+				return false
+			}
+		}
+		return true
+	}(num)
+}
+
+func (c *ChainConfig) IsEIP140(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP140Block, num)
 }
 
 // Embedding transaction status code in receipts
@@ -337,9 +473,23 @@ func (c *ChainConfig) IsEIP684(num *big.Int) bool {
 	return c.IsByzantium(num) || isForked(c.EIP684Block, num)
 }
 
-// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
+// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater,
+// or whether configured params satisfy all requirements fulfilling the Constantinople fork.
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
-	return isForked(c.ConstantinopleBlock, num)
+	return isForked(c.ConstantinopleBlock, num) || func(n *big.Int) bool {
+		for _, block := range []*big.Int{
+			c.EIP145Block,
+			c.EIP1014Block,
+			c.EIP1052Block,
+			c.EIP1283Block,
+			c.EIP1234Block,
+		} {
+			if !isForked(block, n) {
+				return false
+			}
+		}
+		return true
+	}(num)
 }
 
 func (c *ChainConfig) IsEIP145(num *big.Int) bool {
@@ -375,8 +525,8 @@ func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 		return GasTableHomestead
 	}
 	switch {
-	case c.IsConstantinople(num):
-		return GasTableConstantinople
+	case c.IsEIP1052(num):
+		return GasTableEIP1052
 	case c.IsEIP158(num):
 		return GasTableEIP158
 	case c.IsEIP150(num):
@@ -499,9 +649,11 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                   *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium, IsConstantinople             bool
+	ChainID                                                                                                         *big.Int
+	IsHomestead, IsEIP7                                                                                             bool
+	IsEIP150, IsEIP155, IsEIP158                                                                                    bool
+	IsByzantium, IsEIP140, IsEIP658, IsEIP100, IsEIP198, IsEIP212, IsEIP213, IsEIP214, IsEIP211, IsEIP649, IsEIP684 bool
+	IsConstantinople, IsEIP145, IsEIP1014, IsEIP1052, IsEIP1283, IsEIP1234                                          bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -511,12 +663,32 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		chainID = new(big.Int)
 	}
 	return Rules{
-		ChainID:          new(big.Int).Set(chainID),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
+		ChainID: new(big.Int).Set(chainID),
+
+		IsHomestead: c.IsHomestead(num),
+		IsEIP7:      c.IsEIP7(num),
+
+		IsEIP150: c.IsEIP150(num),
+		IsEIP155: c.IsEIP155(num),
+		IsEIP158: c.IsEIP158(num),
+
+		IsByzantium: c.IsByzantium(num),
+		IsEIP140:    c.IsEIP140(num),
+		IsEIP658:    c.IsEIP658(num),
+		IsEIP100:    c.IsEIP100(num),
+		IsEIP198:    c.IsEIP198(num),
+		IsEIP212:    c.IsEIP212(num),
+		IsEIP213:    c.IsEIP213(num),
+		IsEIP214:    c.IsEIP214(num),
+		IsEIP211:    c.IsEIP211(num),
+		IsEIP649:    c.IsEIP649(num),
+		IsEIP684:    c.IsEIP684(num),
+
 		IsConstantinople: c.IsConstantinople(num),
+		IsEIP145:         c.IsEIP145(num),
+		IsEIP1014:        c.IsEIP1014(num),
+		IsEIP1052:        c.IsEIP1052(num),
+		IsEIP1283:        c.IsEIP1283(num),
+		IsEIP1234:        c.IsEIP1234(num),
 	}
 }

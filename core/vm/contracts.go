@@ -46,9 +46,8 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 }
 
-// PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
-// contracts used in the Byzantium release.
-var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
+// AllPrecompiledContracts returns all possible precompiled contracts.
+var AllPrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
@@ -57,6 +56,22 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{6}): &bn256Add{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{},
+}
+
+// PrecompiledContracts returns the corresponding set of precompiled contracts for a given chain config and block number.
+func PrecompiledContracts(config *params.ChainConfig, num *big.Int) map[common.Address]PrecompiledContract {
+	var contracts = PrecompiledContractsHomestead
+	if config.IsEIP198(num) {
+		contracts[common.BytesToAddress([]byte{5})] = &bigModExp{}
+	}
+	if config.IsEIP212(num) {
+		contracts[common.BytesToAddress([]byte{8})] = &bn256Pairing{}
+	}
+	if config.IsEIP213(num) {
+		contracts[common.BytesToAddress([]byte{6})] = &bn256Add{}
+		contracts[common.BytesToAddress([]byte{7})] = &bn256ScalarMul{}
+	}
+	return contracts
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.

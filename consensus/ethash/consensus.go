@@ -313,9 +313,9 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsConstantinople(next):
+	case config.IsEIP1234(next):
 		return calcDifficultyConstantinople(time, parent)
-	case config.IsByzantium(next):
+	case config.IsEIP100(next):
 		return calcDifficultyByzantium(time, parent)
 	case config.IsHomestead(next):
 		return calcDifficultyHomestead(time, parent)
@@ -608,10 +608,10 @@ var (
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number) {
+	if config.IsEIP649(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
-	if config.IsConstantinople(header.Number) {
+	if config.IsEIP1234(header.Number) {
 		blockReward = ConstantinopleBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
