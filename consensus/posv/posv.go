@@ -46,8 +46,6 @@ import (
 
 const (
 	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
-	wiggleTime         = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 	M2ByteLength       = 4
 )
 
@@ -58,8 +56,7 @@ type Masternode struct {
 
 // Posv proof-of-stake-voting protocol constants.
 var (
-	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
-	blockPeriod = uint64(15)    // Default minimum difference between two consecutive block's timestamps
+	epochLength = uint64(900) // Default number of blocks after which to checkpoint and reset the pending votes
 
 	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -226,11 +223,11 @@ type Posv struct {
 
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookValidator func(header *types.Header, signers []common.Address) error
+	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs func(header *types.Header, signers []common.Address) error
 }
 
-// New creates a Posv proof-of-stake-voting consensus engine with the initial
+// New creates a PoSV proof-of-stake-voting consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	// Set any missing consensus parameters to their defaults
@@ -348,7 +345,7 @@ func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
 	}
-	// Ensure that the block doesn't contain any uncles which are meaningless in PoA
+	// Ensure that the block doesn't contain any uncles which are meaningless in PoSV
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
@@ -466,7 +463,7 @@ func (c *Posv) GetMasternodes(chain consensus.ChainReader, header *types.Header)
 
 func (c *Posv) GetPeriod() uint64 { return c.config.Period }
 
-func WhoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) {
+func whoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) {
 	if header.Number.Uint64() == 0 {
 		return common.Address{}, errors.New("Don't take block 0")
 	}
@@ -491,7 +488,7 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 	// masternode[0] has chance to create block 1
 	preIndex := -1
 	if parent.Number.Uint64() != 0 {
-		pre, err = WhoIsCreator(snap, parent)
+		pre, err = whoIsCreator(snap, parent)
 		if err != nil {
 			return 0, 0, 0, false, err
 		}
@@ -769,30 +766,37 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:extraVanity]
-	signers := snap.GetSigners()
-	if number%c.config.Epoch == 0 {
+	masternodes := snap.GetSigners()
+	if number > 0 && number%c.config.Epoch == 0 {
 		if c.HookPenalty != nil {
-			penSigners, err := c.HookPenalty(chain, number)
+			penMasternodes, err := c.HookPenalty(chain, number)
 			if err != nil {
 				return err
 			}
-			if len(penSigners) > 0 {
-				// Keep remove penalty signer out of signer list.
-				signers = common.RemoveItemFromArray(signers, penSigners)
-				for _, address := range penSigners {
-					log.Debug("Penalty Info", "address", address, "number", number)
+			if len(penMasternodes) > 0 {
+				// penalize bad masternode(s)
+				masternodes = common.RemoveItemFromArray(masternodes, penMasternodes)
+				for _, address := range penMasternodes {
+					log.Debug("Penalty status", "address", address, "block number", number)
 				}
-				header.Penalties = common.ExtractAddressToBytes(penSigners)
+				header.Penalties = common.ExtractAddressToBytes(penMasternodes)
 			}
 		}
-		// Prevent penaltied signer in 4 epocs ago jump into signer list.
+		// Prevent penalized masternode(s) within 4 recent epochs
 		for i := 1; i <= common.LimitPenaltyEpoch; i++ {
 			if number > uint64(i)*c.config.Epoch {
-				signers = RemovePenaltiesFromBlock(chain, signers, number-uint64(i)*c.config.Epoch)
+				masternodes = RemovePenaltiesFromBlock(chain, masternodes, number-uint64(i)*c.config.Epoch)
 			}
 		}
-		for _, signer := range signers {
-			header.Extra = append(header.Extra, signer[:]...)
+		for _, masternode := range masternodes {
+			header.Extra = append(header.Extra, masternode[:]...)
+		}
+		if c.HookValidator != nil {
+			validators, err := c.HookValidator(header, masternodes)
+			if err != nil {
+				return err
+			}
+			header.Validators = validators
 		}
 	}
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
@@ -806,12 +810,6 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	if header.Time.Int64() < time.Now().Unix() {
 		header.Time = big.NewInt(time.Now().Unix())
 	}
-	if c.HookValidator != nil {
-		c.HookValidator(header, signers)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -823,11 +821,11 @@ func (c *Posv) UpdateMasternodes(chain consensus.ChainReader, header *types.Head
 	if err != nil {
 		return err
 	}
-	newSigners := make(map[common.Address]struct{})
+	newMasternodes := make(map[common.Address]struct{})
 	for _, m := range ms {
-		newSigners[m.Address] = struct{}{}
+		newMasternodes[m.Address] = struct{}{}
 	}
-	snap.Signers = newSigners
+	snap.Signers = newMasternodes
 	nm := []string{}
 	for _, n := range ms {
 		nm = append(nm, n.Address.String())
@@ -841,7 +839,6 @@ func (c *Posv) UpdateMasternodes(chain consensus.ChainReader, header *types.Head
 // rewards given, and returns the final block.
 func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
-	// FIXME: unit Ether could be too plump
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
@@ -851,7 +848,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 		}
 	}
 
-	// No block rewards in PoA, so the state remains as is and uncles are dropped
+	// the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
@@ -916,7 +913,7 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 				if limit := uint64(2); number < limit || seen > number-limit {
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
-						log.Info("Debugging", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
+						log.Info("len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 						log.Info("Signed recently, must wait for others")
 						<-stop
 						return nil, nil
@@ -1007,18 +1004,18 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 }
 
 // Extract validators from byte array.
-func RemovePenaltiesFromBlock(chain consensus.ChainReader, signers []common.Address, epochNumber uint64) []common.Address {
+func RemovePenaltiesFromBlock(chain consensus.ChainReader, masternodes []common.Address, epochNumber uint64) []common.Address {
 	if epochNumber <= 0 {
-		return signers
+		return masternodes
 	}
 	header := chain.GetHeaderByNumber(epochNumber)
 	block := chain.GetBlock(header.Hash(), epochNumber)
 	penalties := block.Penalties()
 	if penalties != nil {
 		prevPenalties := common.ExtractAddressFromBytes(penalties)
-		signers = common.RemoveItemFromArray(signers, prevPenalties)
+		masternodes = common.RemoveItemFromArray(masternodes, prevPenalties)
 	}
-	return signers
+	return masternodes
 }
 
 // Get masternodes address from checkpoint Header.
