@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -37,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -169,21 +167,10 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+			addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval:       RetrievalDisabled,
@@ -199,9 +186,8 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 			bucket.Store(bucketKeyRegistry, tr)
 
 			cleanup = func() {
-				netStore.Close()
 				tr.Close()
-				os.RemoveAll(datadir)
+				clean()
 			}
 
 			return tr, cleanup, nil

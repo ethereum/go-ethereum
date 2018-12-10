@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -457,26 +456,10 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			node := ctx.Config.Node()
-			addr := network.NewAddr(node)
-			store, datadir, err := createTestLocalStorageForID(node.ID(), addr)
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
@@ -485,11 +468,12 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)
 
-			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
+			cleanup = func() {
+				r.Close()
+				clean()
+			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()
@@ -644,25 +628,10 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			node := ctx.Config.Node()
-			addr := network.NewAddr(node)
-			store, datadir, err := createTestLocalStorageForID(node.ID(), addr)
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
@@ -670,12 +639,14 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
 			}, nil)
+			bucket.Store(bucketKeyRegistry, r)
 
-			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
+			cleanup = func() {
+				r.Close()
+				clean()
+			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()
