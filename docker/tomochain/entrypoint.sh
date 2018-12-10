@@ -139,6 +139,11 @@ else
   echo "WS_SECRET not set, will not report to netstats server."
 fi
 
+# annonce txs
+if [[ ! -z $ANNOUNCE_TXS ]]; then
+  params="$params --announce-txs"
+fi
+
 # dump
 echo "dump: $IDENTITY $account $BOOTNODES"
 
@@ -151,7 +156,7 @@ exec tomo $params \
   --identity $IDENTITY \
   --password ./password \
   --port 30303 \
-  --maxpeers 50 \
+  --maxpeers 25 \
   --txpool.globalqueue 5000 \
   --txpool.globalslots 5000 \
   --rpc \
