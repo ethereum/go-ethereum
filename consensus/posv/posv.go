@@ -485,7 +485,7 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 		return 0, -1, -1, false, err
 	}
 	if len(masternodes) == 0 {
-		return 0, -1, -1, false, errors.New("Not found master nodes")
+		return 0, -1, -1, false, errors.New("Masternodes not found")
 	}
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1

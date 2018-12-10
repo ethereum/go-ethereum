@@ -37,5 +37,5 @@ var (
 
 	ErrNotFoundM1 = errors.New("list M1 not found ")
 
-	ErrStopPreparingBlock = errors.New("stop calculate a block not vrified M2")
+	ErrStopPreparingBlock = errors.New("stop calculating a block not verified by M2")
 )
