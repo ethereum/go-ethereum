@@ -27,6 +27,7 @@ ENV NETWORK_ID '89'
 ENV WS_SECRET ''
 ENV NETSTATS_HOST 'netstats-server'
 ENV NETSTATS_PORT '3000'
+ENV ANNOUNCE_TXS ''
 
 RUN apk add --no-cache ca-certificates
 
