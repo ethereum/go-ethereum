@@ -46,6 +46,7 @@ var (
 	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
 	chunks       = flag.Int("chunks", 0, "number of chunks")
+	printstats   = flag.Bool("printstats", false, "print results to STDOUT")
 	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
 	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 
