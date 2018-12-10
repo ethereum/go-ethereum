@@ -481,7 +481,7 @@ type UploadFn func(file *File) error
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
 func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
-	ctx, sp := spancontext.StartSpan(context.Background(), "swarm.api.client.tarupload")
+	ctx, sp := spancontext.StartSpan(context.Background(), "api.client.tarupload")
 	defer sp.Finish()
 
 	var tn time.Time
