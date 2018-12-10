@@ -352,12 +352,6 @@ func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
-	//// Ensure that the block's difficulty is meaningful (may not be correct at this point)
-	//if number > 0 {
-	//	if header.Difficulty.Int64() != 1 {
-	//		return errInvalidDifficulty
-	//	}
-	//}
 	// If all checks passed, validate any special fields for hard forks
 	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
 		return err
@@ -483,7 +477,7 @@ func WhoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) 
 	return m, nil
 }
 
-func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header) (int, int, int, bool, error) {
+func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	masternodes := c.GetMasternodes(chain, parent)
 	snap, err := c.GetSnapshot(chain, parent)
 	if err != nil {
@@ -503,8 +497,10 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header) (int,
 		}
 		preIndex = position(masternodes, pre)
 	}
-	curIndex := position(masternodes, c.signer)
-	log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", c.signer, "position", curIndex)
+	curIndex := position(masternodes, signer)
+	if signer == c.signer {
+		log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", signer, "position", curIndex)
+	}
 	for i, s := range masternodes {
 		fmt.Printf("%d - %s\n", i, s.String())
 	}
@@ -630,7 +626,20 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	if err != nil {
 		return err
 	}
-	log.Debug("verify seal block", "number", header.Number, "hash", header.Hash(), "difficulty", header.Difficulty, "creator", creator)
+	var parent *types.Header
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+	difficulty := c.calcDifficulty(chain, parent, creator)
+	log.Debug("verify seal block", "number", header.Number, "hash", header.Hash(), "block difficulty", header.Difficulty, "calc difficulty", difficulty, "creator", creator)
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if number > 0 {
+		if header.Difficulty.Int64() != difficulty.Int64() {
+			return errInvalidDifficulty
+		}
+	}
 	masternodes := c.GetMasternodes(chain, header)
 	mstring := []string{}
 	for _, m := range masternodes {
@@ -753,7 +762,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 		return consensus.ErrUnknownAncestor
 	}
 	// Set the correct difficulty
-	header.Difficulty = c.CalcDifficulty(chain, 0, parent)
+	header.Difficulty = c.calcDifficulty(chain, parent, c.signer)
 	log.Debug("CalcDifficulty ", "number", header.Number, "difficulty", header.Difficulty)
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < extraVanity {
@@ -935,23 +944,16 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (c *Posv) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	len, preIndex, curIndex, _, err := c.YourTurn(chain, parent)
+	return c.calcDifficulty(chain, parent, c.signer)
+}
+
+func (c *Posv) calcDifficulty(chain consensus.ChainReader, parent *types.Header, signer common.Address) *big.Int {
+	len, preIndex, curIndex, _, err := c.YourTurn(chain, parent, signer)
 	if err != nil {
 		return big.NewInt(int64(len + curIndex - preIndex))
 	}
 	return big.NewInt(int64(len - Hop(len, preIndex, curIndex)))
 }
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
-// that a new block should have based on the previous blocks in the chain and the
-// current signer.
-//func CalcDifficulty(snap *Snapshot, parent *types.Header, signer common.Address) *big.Int {
-//
-//	if snap.inturn(snap.Number+1, signer) {
-//		return new(big.Int).Set(diffInTurn)
-//	}
-//	return new(big.Int).Set(diffNoTurn)
-//}
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow
 // controlling the signer voting.
