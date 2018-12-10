@@ -388,11 +388,13 @@ web3._extend({
 			name: 'standardTraceBadBlockToFile',
 			call: 'debug_standardTraceBadBlockToFile',
 			params: 2,
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'standardTraceBlockToFile',
 			call: 'debug_standardTraceBlockToFile',
 			params: 2,
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'traceBlockByNumber',
