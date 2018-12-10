@@ -175,9 +175,69 @@ OUTER:
 	// subscribe to peer events
 	// every node up and conn up event will generate one additional control event
 	// therefore multiply the count by two
-	evC = make(chan *Event, (len(snap.Conns)*2)+(len(snap.Nodes)*2))
+	evC = make(chan *Event)
 	sub = network.Events().Subscribe(evC)
 	defer sub.Unsubscribe()
+
+	// Channel that is signalling when the Load function returns
+	// to fail the test in the event for loop if that happens
+	// before all connection events are counted.
+	loadDoneC := make(chan struct{})
+
+	go func() {
+		// collect connection events up to expected number
+		ctx, cancel = context.WithTimeout(context.TODO(), time.Second*3)
+		defer cancel()
+
+		connEventCount = nodeCount
+
+	OUTER_TWO:
+		for {
+			select {
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case ev := <-evC:
+				if ev.Type == EventTypeConn && !ev.Control {
+
+					// fail on any disconnect
+					if !ev.Conn.Up {
+						t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
+					}
+					log.Debug("conn", "on", ev.Conn.One, "other", ev.Conn.Other)
+					checkIds[ev.Conn.One] = append(checkIds[ev.Conn.One], ev.Conn.Other)
+					checkIds[ev.Conn.Other] = append(checkIds[ev.Conn.Other], ev.Conn.One)
+					connEventCount--
+					log.Debug("ev", "count", connEventCount)
+					if connEventCount == 0 {
+						break OUTER_TWO
+					}
+				}
+			case <-loadDoneC:
+				// if load function returns before all expected events are caught.
+				// fail the test
+				t.Fatal("load function returned before all connections are established")
+			}
+		}
+
+		// check that we have all expected connections in the network
+		for _, snapConn := range snap.Conns {
+			var match bool
+			for nodid, nodConns := range checkIds {
+				for _, nodConn := range nodConns {
+					if snapConn.One == nodid && snapConn.Other == nodConn {
+						match = true
+						break
+					} else if snapConn.Other == nodid && snapConn.One == nodConn {
+						match = true
+						break
+					}
+				}
+			}
+			if !match {
+				t.Fatalf("network missing conn %v -> %v", snapConn.One, snapConn.Other)
+			}
+		}
+	}()
 
 	// load the snapshot
 	// spawn separate thread to avoid deadlock in the event listeners
@@ -185,55 +245,8 @@ OUTER:
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// collect connection events up to expected number
-	ctx, cancel = context.WithTimeout(context.TODO(), time.Second*3)
-	defer cancel()
-
-	connEventCount = nodeCount
-
-OUTER_TWO:
-	for {
-		select {
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		case ev := <-evC:
-			if ev.Type == EventTypeConn && !ev.Control {
-
-				// fail on any disconnect
-				if !ev.Conn.Up {
-					t.Fatalf("unexpected disconnect: %v -> %v", ev.Conn.One, ev.Conn.Other)
-				}
-				log.Debug("conn", "on", ev.Conn.One, "other", ev.Conn.Other)
-				checkIds[ev.Conn.One] = append(checkIds[ev.Conn.One], ev.Conn.Other)
-				checkIds[ev.Conn.Other] = append(checkIds[ev.Conn.Other], ev.Conn.One)
-				connEventCount--
-				log.Debug("ev", "count", connEventCount)
-				if connEventCount == 0 {
-					break OUTER_TWO
-				}
-			}
-		}
-	}
-
-	// check that we have all expected connections in the network
-	for _, snapConn := range snap.Conns {
-		var match bool
-		for nodid, nodConns := range checkIds {
-			for _, nodConn := range nodConns {
-				if snapConn.One == nodid && snapConn.Other == nodConn {
-					match = true
-					break
-				} else if snapConn.Other == nodid && snapConn.One == nodConn {
-					match = true
-					break
-				}
-			}
-		}
-		if !match {
-			t.Fatalf("network missing conn %v -> %v", snapConn.One, snapConn.Other)
-		}
-	}
+	// signal the event for event loop that Load function has returned
+	close(loadDoneC)
 
 	// verify that network didn't generate any other additional connection events after the ones we have collected within a reasonable period of time
 	ctx, cancel = context.WithTimeout(context.TODO(), time.Second)
@@ -241,7 +254,7 @@ OUTER_TWO:
 	select {
 	case <-ctx.Done():
 	case ev := <-evC:
-		if ev.Type == EventTypeConn {
+		if ev.Type == EventTypeConn && !ev.Control {
 			t.Fatalf("Superfluous conn found %v -> %v", ev.Conn.One, ev.Conn.Other)
 		}
 	}
