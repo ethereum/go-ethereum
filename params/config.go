@@ -163,6 +163,62 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// Homestead
+
+	// DELEGATECALL
+	// https://eips.ethereum.org/EIPS/eip-7
+	EIP7Block *big.Int `json:"eip7Block,omitempy"`
+
+	// Byzantium
+	// https://github.com/ethereum/go-ethereum/releases/tag/v1.7.0
+	//
+	// transaction receipt status
+	// https://github.com/ethereum/EIPs/issues/658
+	EIP658Block *big.Int `json:"eip658Block,omitempty"`
+	// Change difficulty adjustment to target mean block time including uncles
+	// https://github.com/ethereum/EIPs/issues/100
+	EIP100Block *big.Int `json:"eip100Block,omitempty"`
+	// Create bigint_modexp
+	// https://github.com/ethereum/EIPs/issues/198
+	EIP198Block *big.Int `json:"eip198Block,omitempty"`
+	// Precompiled contract for pairing check
+	// https://github.com/ethereum/EIPs/issues/212
+	EIP212Block *big.Int `json:"eip212Block,omitempty"`
+	// Precompiled contracts for addition and scalar multiplication on the elliptic curve alt_bn128
+	// https://github.com/ethereum/EIPs/issues/213
+	EIP213Block *big.Int `json:"eip213Block,omitempty"`
+	// STATICCALL
+	// https://github.com/ethereum/EIPs/issues/214
+	EIP214Block *big.Int `json:"eip214Block,omitempty"`
+	// RETURNDATACOPY, RETURNDATASIZE
+	// https://github.com/ethereum/EIPs/issues/211
+	EIP211Block *big.Int `json:"eip211Block,omitempty"`
+	// metropolis diff bomb delay
+	// https://github.com/ethereum/EIPs/issues/649
+	EIP649Block *big.Int `json:"eip649Block,omitempty"`
+	// prevent overwriting contracts
+	// https://github.com/ethereum/EIPs/issues/684
+	EIP684Block *big.Int `json:"eip684Block,omitempty"`
+
+	// Constantinople
+	// https://github.com/ethereum/pm/wiki/Constantinople-Progress-Tracker
+	//
+	// bitwise shifts
+	// https://eips.ethereum.org/EIPS/eip-145
+	EIP145Block *big.Int `json:"eip145Block,omitempty"`
+	// skinny create2
+	// https://eips.ethereum.org/EIPS/eip-1014
+	EIP1014Block *big.Int `json:"eip1014Block,omitempty"`
+	// extcodehash
+	// https://eips.ethereum.org/EIPS/eip-1052
+	EIP1052Block *big.Int `json:"eip1052Block,omitempty"`
+	// net gas metering
+	// https://eips.ethereum.org/EIPS/eip-1283
+	EIP1283Block *big.Int `json:"eip1283Block,omitempty"`
+	// constantinople difficulty bomb delay and block reward adjustment
+	// https://eips.ethereum.org/EIPS/eip-1234
+	EIP1234Block *big.Int `json:"eip1234Block,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -214,6 +270,10 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	return isForked(c.HomesteadBlock, num)
 }
 
+func (c *ChainConfig) IsEIP7(num *big.Int) bool {
+	return c.IsHomestead(num) || isForked(c.EIP7Block, num)
+}
+
 // IsDAOFork returns whether num is either equal to the DAO fork block or greater.
 func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
 	return isForked(c.DAOForkBlock, num)
@@ -239,9 +299,67 @@ func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 	return isForked(c.ByzantiumBlock, num)
 }
 
+// Embedding transaction status code in receipts
+func (c *ChainConfig) IsEIP658(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP658Block, num)
+}
+
+// Change difficulty adjustment to target mean block time including uncles
+func (c *ChainConfig) IsEIP100(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP100Block, num)
+}
+
+func (c *ChainConfig) IsEIP198(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP198Block, num)
+}
+
+func (c *ChainConfig) IsEIP212(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP212Block, num)
+}
+
+func (c *ChainConfig) IsEIP213(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP213Block, num)
+}
+
+func (c *ChainConfig) IsEIP214(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP214Block, num)
+}
+
+func (c *ChainConfig) IsEIP211(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP211Block, num)
+}
+
+func (c *ChainConfig) IsEIP649(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP649Block, num)
+}
+
+func (c *ChainConfig) IsEIP684(num *big.Int) bool {
+	return c.IsByzantium(num) || isForked(c.EIP684Block, num)
+}
+
 // IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
+}
+
+func (c *ChainConfig) IsEIP145(num *big.Int) bool {
+	return c.IsConstantinople(num) || isForked(c.EIP145Block, num)
+}
+
+func (c *ChainConfig) IsEIP1014(num *big.Int) bool {
+	return c.IsConstantinople(num) || isForked(c.EIP1014Block, num)
+}
+
+func (c *ChainConfig) IsEIP1052(num *big.Int) bool {
+	return c.IsConstantinople(num) || isForked(c.EIP1052Block, num)
+}
+
+func (c *ChainConfig) IsEIP1283(num *big.Int) bool {
+	return c.IsConstantinople(num) || isForked(c.EIP1283Block, num)
+}
+
+func (c *ChainConfig) IsEIP1234(num *big.Int) bool {
+	return c.IsConstantinople(num) || isForked(c.EIP1234Block, num)
 }
 
 // IsEWASM returns whether num represents a block number after the EWASM fork
