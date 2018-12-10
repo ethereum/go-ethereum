@@ -483,6 +483,7 @@ func WhoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) 
 }
 
 func YourTurn(masternodes []common.Address, snap *Snapshot, header *types.Header, cur common.Address) (int, int, bool, error) {
+	masternodes = masternodes[:len(masternodes)/2+1]
 	if len(masternodes) == 0 {
 		return -1, -1, true, nil
 	}
