@@ -630,7 +630,7 @@ func (c *Posv) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	if err != nil {
 		return err
 	}
-	log.Debug("verify seal block", "number", header.Number, "hash", header.Hash(), "difficulty", header.Difficulty)
+	log.Debug("verify seal block", "number", header.Number, "hash", header.Hash(), "difficulty", header.Difficulty, "creator", creator)
 	masternodes := c.GetMasternodes(chain, header)
 	mstring := []string{}
 	for _, m := range masternodes {

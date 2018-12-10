@@ -113,10 +113,9 @@ func NewApp(gitCommit, usage string) *cli.App {
 
 var (
 	// General settings
-	CommitTxWhenNotMiningFlag = DirectoryFlag{
-		Name:  "committxwhennotmining",
+	AnnounceTxsFlag = cli.BoolFlag{
+		Name:  "announce-txs",
 		Usage: "Always commit transactions",
-		Value: DirectoryString{node.DefaultDataDir()},
 	}
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -902,8 +901,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
 	}
-	if ctx.GlobalIsSet(CommitTxWhenNotMiningFlag.Name) {
-		cfg.CommitTxWhenNotMining = ctx.GlobalBool(CommitTxWhenNotMiningFlag.Name)
+	if ctx.GlobalIsSet(AnnounceTxsFlag.Name) {
+		cfg.AnnounceTxs = ctx.GlobalBool(AnnounceTxsFlag.Name)
 	}
 }
 
