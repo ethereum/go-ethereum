@@ -42,7 +42,7 @@ var (
 		EIP155Block:         big.NewInt(2675000),
 		EIP158Block:         big.NewInt(2675000),
 		ByzantiumBlock:      big.NewInt(4370000),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(7080000),
 		Ethash:              new(EthashConfig),
 	}
 
@@ -90,7 +90,7 @@ var (
 		EIP155Block:         big.NewInt(3),
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(3660663),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
