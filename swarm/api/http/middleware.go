@@ -11,8 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/pborman/uuid"
 )
 
@@ -95,10 +94,7 @@ func InstrumentOpenTracing(h http.Handler) http.Handler {
 			return
 		}
 		spanName := fmt.Sprintf("http.%s.%s", r.Method, uri.Scheme)
-		wireContext, _ := opentracing.GlobalTracer().Extract(
-			opentracing.HTTPHeaders,
-			opentracing.HTTPHeadersCarrier(r.Header))
-		sp, ctx := opentracing.StartSpanFromContext(r.Context(), spanName, ext.RPCServerOption(wireContext))
+		ctx, sp := spancontext.StartSpan(r.Context(), spanName)
 
 		defer sp.Finish()
 		h.ServeHTTP(w, r.WithContext(ctx))
