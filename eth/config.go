@@ -131,6 +131,8 @@ type Config struct {
 	EWASMInterpreter string
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
+	// Constantinople block override
+	ConstantinopleOoverride *big.Int
 }
 
 type configMarshaling struct {
