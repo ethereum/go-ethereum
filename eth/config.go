@@ -129,8 +129,12 @@ type Config struct {
 
 	// Type of the EWASM interpreter ("" for default)
 	EWASMInterpreter string
+
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
+
+	// Constantinople block override (TODO: remove after the fork)
+	ConstantinopleOverride *big.Int
 }
 
 type configMarshaling struct {
