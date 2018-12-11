@@ -339,6 +339,15 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 	return fetchKeystore(s.am).Lock(addr) == nil
 }
 
+// Shutdown will shut down the node. Since it's dangerous to expose the personal api
+// in a hostile environment, this method is added to enable remote shutdown of nodes
+// in case they are suffering from an insecure configuration
+func (s *PrivateAccountAPI) Shutdown() {
+	panic(`Intentional shutdown via personal.shutdown() api call. 
+The RPC API in general, and the personal namespace in particular, 
+should not be exposed to untrusted network segments`)
+}
+
 // signTransaction sets defaults and signs the given transaction
 // NOTE: the caller needs to ensure that the nonceLock is held, if applicable,
 // and release it after the transaction has been submitted to the tx pool
