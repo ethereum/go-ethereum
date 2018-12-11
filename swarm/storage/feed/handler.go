@@ -82,9 +82,8 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // Validate is a chunk validation method
 // If it looks like a feed update, the chunk address is checked against the userAddr of the update's signature
 // It implements the storage.ChunkValidator interface
-func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
-	dataLength := len(data)
-	if dataLength < minimumSignedUpdateLength {
+func (h *Handler) Validate(chunk storage.Chunk) bool {
+	if len(chunk.Data()) < minimumSignedUpdateLength {
 		return false
 	}
 
@@ -94,8 +93,8 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	// First, deserialize the chunk
 	var r Request
-	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Debug("Invalid feed update chunk", "addr", chunkAddr.Hex(), "err", err.Error())
+	if err := r.fromChunk(chunk); err != nil {
+		log.Debug("Invalid feed update chunk", "addr", chunk.Address(), "err", err)
 		return false
 	}
 
@@ -198,7 +197,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		}
 
 		var request Request
-		if err := request.fromChunk(chunk.Address(), chunk.Data()); err != nil {
+		if err := request.fromChunk(chunk); err != nil {
 			return nil, nil
 		}
 		if request.Time <= timeLimit {
