@@ -250,7 +250,7 @@ func eeiFuncs(in *InterpreterEWASM) []wasm.Function {
 			Body: &wasm.FunctionBody{},
 		},
 		{
-			Sig:  &eeiTypes.Entries[2],
+			Sig:  &eeiTypes.Entries[1],
 			Host: reflect.ValueOf(func(p *exec.Process, r int32) { getCallValue(p, in, r) }),
 			Body: &wasm.FunctionBody{},
 		},
@@ -300,7 +300,7 @@ func eeiFuncs(in *InterpreterEWASM) []wasm.Function {
 			Body: &wasm.FunctionBody{},
 		},
 		{
-			Sig:  &eeiTypes.Entries[5],
+			Sig:  &eeiTypes.Entries[1],
 			Host: reflect.ValueOf(func(p *exec.Process, v int32) { getTxGasPrice(p, in, v) }),
 			Body: &wasm.FunctionBody{},
 		},
