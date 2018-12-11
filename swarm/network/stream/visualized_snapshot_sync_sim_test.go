@@ -155,10 +155,11 @@ func sendSimTerminatedEvent(sim *simulation.Simulation) {
 //It also sends some custom events so that the frontend
 //can visualize messages like SendOfferedMsg, WantedHashesMsg, DeliveryMsg
 func TestSnapshotSyncWithServer(t *testing.T) {
-
-	feedwrap := &netWrapper{}
 	//t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
-	//nodeCount, chunkCount, sim := setupSim(simServiceMap)
+
+	//define a wrapper object to be able to pass around data
+	wrapper := &netWrapper{}
+
 	nodeCount := *nodes
 	chunkCount := *chunks
 
@@ -166,6 +167,9 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 		nodeCount = 32
 		chunkCount = 1
 	}
+
+	log.Info(fmt.Sprintf("Running the simulation with %d nodes and %d chunks", nodeCount, chunkCount))
+
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			n := ctx.Config.Node()
@@ -192,7 +196,7 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 
 			tr := &testRegistry{
 				Registry: r,
-				w:        feedwrap,
+				w:        wrapper,
 			}
 
 			bucket.Store(bucketKeyRegistry, tr)
@@ -205,7 +209,8 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 
 			return tr, cleanup, nil
 		},
-	}).WithServer(":8888")
+	}).WithServer(":8888") //start with the HTTP server
+
 	defer sim.Close()
 
 	log.Info("Initializing test config")
@@ -217,8 +222,8 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	conf.addrToIDMap = make(map[string]enode.ID)
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
-
-	feedwrap.setNetwork(sim.Net)
+	//pass the network to the wrapper object
+	wrapper.setNetwork(sim.Net)
 	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		panic(err)
@@ -227,54 +232,6 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	ctx, cancelSimRun := watchSim(sim)
 	defer cancelSimRun()
 
-	/*
-			//setup filters in the event feed
-			offeredHashesFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(1)
-			wantedFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(2)
-			deliveryFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(10)
-			eventC := sim.PeerEvents(ctx, sim.UpNodeIDs(), offeredHashesFilter, wantedFilter, deliveryFilter)
-
-		quit := make(chan struct{})
-
-			go func() {
-				for e := range eventC {
-					select {
-					case <-quit:
-						fmt.Println("quitting event loop")
-						return
-					default:
-					}
-					if e.Error != nil {
-						t.Fatal(e.Error)
-					}
-
-					if e.Event.Msg.Code == uint64(1) {
-						evt := &simulations.Event{
-							Type:    EventTypeChunkOffered,
-							Node:    sim.Net.GetNode(e.NodeID),
-							Control: false,
-						}
-						go sim.Net.Events().Send(evt)
-					} else if e.Event.Msg.Code == uint64(2) {
-						evt := &simulations.Event{
-							Type:    EventTypeChunkWanted,
-							Node:    sim.Net.GetNode(e.NodeID),
-							Control: false,
-						}
-						go sim.Net.Events().Send(evt)
-					} else if e.Event.Msg.Code == uint64(10) {
-						evt := &simulations.Event{
-							Type:    EventTypeChunkDelivered,
-							Node:    sim.Net.GetNode(e.NodeID),
-							Control: false,
-						}
-						go sim.Net.Events().Send(evt)
-					} else {
-						fmt.Println(fmt.Sprintf("msg code: %d", e.Event.Msg.Code))
-					}
-				}
-			}()
-	*/
 	//run the sim
 	result := runSim(conf, ctx, sim, chunkCount)
 
@@ -292,27 +249,36 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	log.Info("Simulation ended")
 }
 
+//testRegistry embeds registry
+//it allows to replace the protocol run function
 type testRegistry struct {
 	*Registry
 	w *netWrapper
 }
 
+//Protocols replaces the protocol's run function
 func (tr *testRegistry) Protocols() []p2p.Protocol {
 	regProto := tr.Registry.Protocols()
+	//set the `stream` protocol's run function with the testRegistry's one
 	regProto[0].Run = tr.runProto
 	return regProto
 }
 
+//runProto is the new overwritten protocol's run function for this test
 func (tr *testRegistry) runProto(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	//create a custom rw message ReadWriter
 	testRw := &testMsgReadWriter{
 		MsgReadWriter: rw,
 		Peer:          p,
 		w:             tr.w,
 		Registry:      tr.Registry,
 	}
+	//now run the actual upper layer `Registry`'s protocol function
 	return tr.runProtocol(p, testRw)
 }
 
+//testMsgReadWriter is a custom rw
+//it will allow us to re-use the message twice
 type testMsgReadWriter struct {
 	*Registry
 	p2p.MsgReadWriter
@@ -320,26 +286,33 @@ type testMsgReadWriter struct {
 	w *netWrapper
 }
 
+//netWrapper wrapper object so we can pass data around
 type netWrapper struct {
 	net *simulations.Network
 }
 
+//set the network to the wrapper for later use (used inside the custom rw)
 func (w *netWrapper) setNetwork(n *simulations.Network) {
 	w.net = n
 }
 
+//get he network from the wrapper (used inside the custom rw)
 func (w *netWrapper) getNetwork() *simulations.Network {
 	return w.net
 }
 
 // ReadMsg reads a message from the underlying MsgReadWriter and emits a
 // "message received" event
+//we do this because we are interested in the Payload of the message for custom use
+//in this test, but messages can only be consumed once (stream io.Reader)
 func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
+	//read the message from the underlying rw
 	msg, err := ev.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err
 	}
 
+	//don't do anything with message codes we actually are not needing/reading
 	subCodes := []uint64{1, 2, 10}
 	found := false
 	for _, c := range subCodes {
@@ -347,10 +320,16 @@ func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 			found = true
 		}
 	}
+	//just return if not a msg code we are interested in
 	if !found {
 		return msg, nil
 	}
 
+	//we use a io.TeeReader so that we can read the message twice
+	//the Payload is a io.Reader, so if we read from it, the actual protocol handler
+	//cannot access it anymore.
+	//But we need that handler to be able to consume the message as normal,
+	//as if we would not do anything here with that message
 	var buf bytes.Buffer
 	tee := io.TeeReader(msg.Payload, &buf)
 
@@ -360,21 +339,26 @@ func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 		ReceivedAt: msg.ReceivedAt,
 		Payload:    tee,
 	}
+	//assign the copy for later use
 	msg.Payload = &buf
 
+	//now let's look into the message
 	var wmsg protocols.WrappedMsg
 	err = mcp.Decode(&wmsg)
 	if err != nil {
 		log.Error(err.Error())
 		return msg, err
 	}
+	//create a new message from the code
 	val, ok := ev.Registry.GetSpec().NewMsg(mcp.Code)
 	if !ok {
 		return msg, errors.New(fmt.Sprintf("Invalid message code: %v", msg.Code))
 	}
+	//decode it
 	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
 		return msg, errors.New(fmt.Sprintf("Decoding error <= %v: %v", msg, err))
 	}
+	//now for every message type we are interested in, create a custom event and send it
 	var evt *simulations.Event
 	switch val := val.(type) {
 	case *OfferedHashesMsg:
@@ -389,7 +373,6 @@ func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 			Type:    EventTypeChunkWanted,
 			Node:    ev.w.getNetwork().GetNode(ev.ID()),
 			Control: false,
-			Data:    val.Want,
 		}
 	case *ChunkDeliveryMsgSyncing:
 		evt = &simulations.Event{
@@ -400,6 +383,7 @@ func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 		}
 	}
 	if evt != nil {
+		//send custom event to feed; frontend will listen to it and display
 		ev.w.getNetwork().Events().Send(evt)
 	}
 	return msg, nil
