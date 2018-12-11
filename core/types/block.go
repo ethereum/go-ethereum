@@ -125,6 +125,30 @@ func (h *Header) HashNoNonce() common.Hash {
 	})
 }
 
+// HashNoNonce returns the hash which is used as input for the proof-of-work search.
+func (h *Header) HashNoValidator() common.Hash {
+	return rlpHash([]interface{}{
+		h.ParentHash,
+		h.UncleHash,
+		h.Coinbase,
+		h.Root,
+		h.TxHash,
+		h.ReceiptHash,
+		h.Bloom,
+		h.Difficulty,
+		h.Number,
+		h.GasLimit,
+		h.GasUsed,
+		h.Time,
+		h.Extra,
+		h.MixDigest,
+		h.Nonce,
+		h.Validators,
+		[]byte{},
+		h.Penalties,
+	})
+}
+
 // Size returns the approximate memory used by all internal contents. It is used
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
@@ -336,6 +360,9 @@ func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles} }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()
+}
+func (b *Block) HashNoValidator() common.Hash {
+	return b.header.HashNoValidator()
 }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding

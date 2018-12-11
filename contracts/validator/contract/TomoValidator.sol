@@ -98,7 +98,7 @@ contract TomoValidator {
         maxValidatorNumber = _maxValidatorNumber;
         candidateWithdrawDelay = _candidateWithdrawDelay;
         voterWithdrawDelay = _voterWithdrawDelay;
-        candidateCount = candidateCount.add(_candidates.length);
+        candidateCount = _candidates.length;
 
         for (uint256 i = 0; i < _candidates.length; i++) {
             candidates.push(_candidates[i]);
@@ -108,7 +108,7 @@ contract TomoValidator {
                 cap: _caps[i]
             });
             voters[_candidates[i]].push(_firstOwner);
-            validatorsState[candidates[i]].voters[_firstOwner] = minCandidateCap;
+            validatorsState[_candidates[i]].voters[_firstOwner] = minCandidateCap;
         }
     }
 
@@ -120,7 +120,7 @@ contract TomoValidator {
             isCandidate: true,
             cap: cap
         });
-        validatorsState[_candidate].voters[msg.sender] = msg.value;
+        validatorsState[_candidate].voters[msg.sender] = validatorsState[_candidate].voters[msg.sender].add(msg.value);
         candidateCount = candidateCount.add(1);
         voters[_candidate].push(msg.sender);
         emit Propose(msg.sender, _candidate, msg.value);

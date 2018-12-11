@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/golang-lru"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -82,8 +83,6 @@ type ProtocolManager struct {
 	eventMux      *event.TypeMux
 	txCh          chan core.TxPreEvent
 	txSub         event.Subscription
-	specialTxCh   chan core.TxPreEvent
-	specialTxSub  event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
 	// channels for fetcher, syncer, txsyncLoop
@@ -94,12 +93,14 @@ type ProtocolManager struct {
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
-	wg sync.WaitGroup
+	wg       sync.WaitGroup
+	knownTxs *lru.Cache
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+	knownTxs, _ := lru.New(maxKnownTxs)
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
@@ -112,6 +113,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+		knownTxs:    knownTxs,
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -168,16 +170,26 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
-	inserter := func(blocks types.Blocks) (int, error) {
+	inserter := func(block *types.Block) error {
 		// If fast sync is running, deny importing weird blocks
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
-			log.Warn("Discarded bad propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
+			log.Warn("Discarded bad propagated block", "number", block.Number(), "hash", block.Hash())
+			return nil
 		}
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
-		return manager.blockchain.InsertChain(blocks)
+		return manager.blockchain.InsertBlock(block)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+
+	prepare := func(block *types.Block) error {
+		// If fast sync is running, deny importing weird blocks
+		if atomic.LoadUint32(&manager.fastSync) == 1 {
+			log.Warn("Discarded bad propagated block", "number", block.Number(), "hash", block.Hash())
+			return nil
+		}
+		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
+		return manager.blockchain.PrepareBlock(block)
+	}
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, prepare, manager.removePeer)
 
 	return manager, nil
 }
@@ -209,11 +221,6 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
 	go pm.txBroadcastLoop()
 
-	// broadcast special transactions
-	pm.specialTxCh = make(chan core.TxPreEvent, txChanSize)
-	pm.specialTxSub = pm.txpool.SubscribeSpecialTxPreEvent(pm.specialTxCh)
-	go pm.specialTxBroadcastLoop()
-
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
@@ -227,7 +234,6 @@ func (pm *ProtocolManager) Stop() {
 	log.Info("Stopping Ethereum protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
-	pm.specialTxSub.Unsubscribe()  // quits specialTxBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	// Quit the sync loop.
@@ -651,17 +657,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
 		)
 		// Update the peers total difficulty if better than the previous
-		_, td := p.Head()
-		currentBlock := pm.blockchain.CurrentBlock()
-		currentTd := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-		log.Debug("NewBlockMsg", "p", p, "number", request.Block.NumberU64(), "trueTD", trueTD, "td", td, "currentTd", currentTd)
-		if trueTD.Cmp(td) > 0 {
+		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
 			p.SetHead(trueHead, trueTD)
 
 			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
 			// a singe block (as the true TD is below the propagated block), however this
 			// scenario should easily be covered by the fetcher.
-			if trueTD.Cmp(currentTd) > 0 {
+			currentBlock := pm.blockchain.CurrentBlock()
+			if trueTD.Cmp(pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())) > 0 {
 				go pm.synchronise(p)
 			}
 		}
@@ -676,12 +679,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		var unkownTxs []*types.Transaction
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
 			if tx == nil {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkTransaction(tx.Hash())
+			exist, _ := pm.knownTxs.ContainsOrAdd(tx.Hash(), true)
+			if !exist {
+				unkownTxs = append(unkownTxs, tx)
+			} else {
+				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce(), "to", tx.To())
+			}
 		}
 		pm.txpool.AddRemotes(txs)
 
@@ -735,24 +745,14 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
-func (pm *ProtocolManager) BroadcastSpecialTx(hash common.Hash, tx *types.Transaction) {
-	// Broadcast transaction to a batch of peers not knowing about it
-	peers := pm.peers.PeersWithoutTx(hash)
-	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
-	for _, peer := range peers {
-		peer.SendSpecialTransactions(tx)
-	}
-	log.Trace("Broadcast special transaction", "hash", hash, "recipients", len(peers))
-}
-
 // Mined broadcast loop
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
-			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
-			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+			self.BroadcastBlock(ev.Block, true) // First propagate block to peers
+			//self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
 }
@@ -765,19 +765,6 @@ func (self *ProtocolManager) txBroadcastLoop() {
 
 			// Err() channel will be closed when unsubscribing.
 		case <-self.txSub.Err():
-			return
-		}
-	}
-}
-
-func (self *ProtocolManager) specialTxBroadcastLoop() {
-	for {
-		select {
-		case event := <-self.specialTxCh:
-			self.BroadcastSpecialTx(event.Tx.Hash(), event.Tx)
-
-			// Err() channel will be closed when unsubscribing.
-		case <-self.specialTxSub.Err():
 			return
 		}
 	}

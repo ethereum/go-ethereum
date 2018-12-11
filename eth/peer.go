@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/fatih/set.v0"
@@ -141,15 +140,6 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
-func (p *peer) SendSpecialTransactions(tx *types.Transaction) error {
-	p.knownTxs.Add(tx.Hash())
-	if p.pairRw != nil {
-		return p2p.Send(p.pairRw, TxMsg, types.Transactions{tx})
-	} else {
-		return p2p.Send(p.rw, TxMsg, types.Transactions{tx})
-	}
-}
-
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
@@ -168,81 +158,123 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	p.knownBlocks.Add(block.Hash())
 	if p.pairRw != nil {
-		log.Trace("p2p send new block to the pairRw connection", "p", p, "number", block.NumberU64())
 		return p2p.Send(p.pairRw, NewBlockMsg, []interface{}{block, td})
 	} else {
 		return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 	}
-
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.
 func (p *peer) SendBlockHeaders(headers []*types.Header) error {
-	return p2p.Send(p.rw, BlockHeadersMsg, headers)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, BlockHeadersMsg, headers)
+	} else {
+		return p2p.Send(p.rw, BlockHeadersMsg, headers)
+	}
 }
 
 // SendBlockBodies sends a batch of block contents to the remote peer.
 func (p *peer) SendBlockBodies(bodies []*blockBody) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, BlockBodiesMsg, blockBodiesData(bodies))
+	} else {
+		return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
+	}
 }
 
 // SendBlockBodiesRLP sends a batch of block contents to the remote peer from
 // an already RLP encoded format.
 func (p *peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
-	return p2p.Send(p.rw, BlockBodiesMsg, bodies)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, BlockBodiesMsg, bodies)
+	} else {
+		return p2p.Send(p.rw, BlockBodiesMsg, bodies)
+	}
 }
 
 // SendNodeDataRLP sends a batch of arbitrary internal data, corresponding to the
 // hashes requested.
 func (p *peer) SendNodeData(data [][]byte) error {
-	return p2p.Send(p.rw, NodeDataMsg, data)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, NodeDataMsg, data)
+	} else {
+		return p2p.Send(p.rw, NodeDataMsg, data)
+	}
 }
 
 // SendReceiptsRLP sends a batch of transaction receipts, corresponding to the
 // ones requested from an already RLP encoded format.
 func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
-	return p2p.Send(p.rw, ReceiptsMsg, receipts)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, ReceiptsMsg, receipts)
+	} else {
+		return p2p.Send(p.rw, ReceiptsMsg, receipts)
+	}
 }
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *peer) RequestOneHeader(hash common.Hash) error {
 	p.Log().Debug("Fetching single header", "hash", hash)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+	} else {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+	}
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	} else {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	}
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
-	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	} else {
+		return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+	}
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *peer) RequestBodies(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
-	return p2p.Send(p.rw, GetBlockBodiesMsg, hashes)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetBlockBodiesMsg, hashes)
+	} else {
+		return p2p.Send(p.rw, GetBlockBodiesMsg, hashes)
+	}
 }
 
 // RequestNodeData fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
 func (p *peer) RequestNodeData(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of state data", "count", len(hashes))
-	return p2p.Send(p.rw, GetNodeDataMsg, hashes)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetNodeDataMsg, hashes)
+	} else {
+		return p2p.Send(p.rw, GetNodeDataMsg, hashes)
+	}
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
-	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
+	if p.pairRw != nil {
+		return p2p.Send(p.pairRw, GetReceiptsMsg, hashes)
+	} else {
+		return p2p.Send(p.rw, GetReceiptsMsg, hashes)
+	}
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,

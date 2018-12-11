@@ -55,7 +55,7 @@ const (
 	// timeout waiting for M1
 	waitPeriod = 10
 	// timeout for checkpoint.
-	waitPeriodCheckpoint = 60
+	waitPeriodCheckpoint = 30
 )
 
 // Agent can register themself with the worker
@@ -130,11 +130,13 @@ type worker struct {
 	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 
 	// atomic status counters
-	mining int32
-	atWork int32
+	mining                int32
+	atWork                int32
+	announceTxs           bool
+	lastParentBlockCommit string
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, announceTxs bool) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -151,9 +153,12 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		announceTxs:    announceTxs,
 	}
-	// Subscribe TxPreEvent for tx pool
-	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
+	if worker.announceTxs {
+		// Subscribe TxPreEvent for tx pool
+		worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
+	}
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
@@ -248,23 +253,47 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	defer self.txSub.Unsubscribe()
+	if self.announceTxs {
+		defer self.txSub.Unsubscribe()
+	}
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
-
+	timeout := time.NewTimer(waitPeriod * time.Second)
+	c := make(chan struct{})
+	finish := make(chan struct{})
+	defer close(finish)
+	defer timeout.Stop()
+	go func() {
+		for {
+			// A real event arrived, process interesting content
+			select {
+			case <-timeout.C:
+				c <- struct{}{}
+			case <-finish:
+				return
+			}
+		}
+	}()
 	for {
 		// A real event arrived, process interesting content
 		select {
-		// Handle ChainHeadEvent
+		case <-c:
+			if atomic.LoadInt32(&self.mining) == 1 {
+				self.commitNewWork()
+			}
+			timeout.Reset(waitPeriod * time.Second)
+			// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
+			timeout.Reset(waitPeriod * time.Second)
 
 			// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
-			self.uncleMu.Lock()
-			self.possibleUncles[ev.Block.Hash()] = ev.Block
-			self.uncleMu.Unlock()
-
+			if self.config.Posv == nil {
+				self.uncleMu.Lock()
+				self.possibleUncles[ev.Block.Hash()] = ev.Block
+				self.uncleMu.Unlock()
+			}
 			// Handle TxPreEvent
 		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
@@ -282,9 +311,6 @@ func (self *worker) update() {
 					self.commitNewWork()
 				}
 			}
-			// System stopped
-		case <-self.txSub.Err():
-			return
 		case <-self.chainHeadSub.Err():
 			return
 		case <-self.chainSideSub.Err():
@@ -422,13 +448,15 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		createdAt: time.Now(),
 	}
 
-	// when 08 is processed ancestors contain 07 (quick block)
-	for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
-		for _, uncle := range ancestor.Uncles() {
-			work.family.Add(uncle.Hash())
+	if self.config.Posv == nil {
+		// when 08 is processed ancestors contain 07 (quick block)
+		for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
+			for _, uncle := range ancestor.Uncles() {
+				work.family.Add(uncle.Hash())
+			}
+			work.family.Add(ancestor.Hash())
+			work.ancestors.Add(ancestor.Hash())
 		}
-		work.family.Add(ancestor.Hash())
-		work.ancestors.Add(ancestor.Hash())
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -444,17 +472,6 @@ func abs(x int64) int64 {
 	return x
 }
 
-func hop(len, pre, cur int) int {
-	switch {
-	case pre < cur:
-		return cur - (pre + 1)
-	case pre > cur:
-		return (len - pre) + (cur - 1)
-	default:
-		return len - 1
-	}
-}
-
 func (self *worker) commitNewWork() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -466,6 +483,13 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	var signers map[common.Address]struct{}
+	if parent.Hash().Hex() == self.lastParentBlockCommit {
+		return
+	}
+	if !self.announceTxs && atomic.LoadInt32(&self.mining) == 0 {
+		return
+	}
+
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
@@ -473,14 +497,7 @@ func (self *worker) commitNewWork() {
 		if self.config.Posv != nil {
 			// get masternodes set from latest checkpoint
 			c := self.engine.(*posv.Posv)
-			masternodes := c.GetMasternodes(self.chain, parent.Header())
-			snap, err := c.GetSnapshot(self.chain, parent.Header())
-			if err != nil {
-				log.Error("Failed when trying to commit new work", "err", err)
-				return
-			}
-			signers = snap.Signers
-			preIndex, curIndex, ok, err := posv.YourTurn(masternodes, snap, parent.Header(), self.coinbase)
+			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(),self.coinbase)
 			if err != nil {
 				log.Error("Failed when trying to commit new work", "err", err)
 				return
@@ -496,31 +513,22 @@ func (self *worker) commitNewWork() {
 					// you're not allowed to create this block
 					return
 				}
-				h := hop(len(masternodes), preIndex, curIndex)
+				h := posv.Hop(len, preIndex, curIndex)
 				gap := waitPeriod * int64(h)
 				// Check nearest checkpoint block in hop range.
 				nearest := self.config.Posv.Epoch - (parent.Header().Number.Uint64() % self.config.Posv.Epoch)
 				if uint64(h) >= nearest {
-					gap += waitPeriodCheckpoint
+					gap = waitPeriodCheckpoint * int64(h)
 				}
 				log.Info("Distance from the parent block", "seconds", gap, "hops", h)
-			L:
-				select {
-				case newBlock := <-self.chainHeadCh:
-					self.chainHeadCh <- newBlock
-					if newBlock.Block.NumberU64() > parent.NumberU64() {
-						log.Info("New block has came already. Skip this turn", "new block", newBlock.Block.NumberU64(), "current block", parent.NumberU64())
-						return
-					}
-				case <-time.After(time.Duration(gap) * time.Second):
-					// wait enough. It's my turn
-					log.Info("Wait enough. It's my turn", "waited seconds", gap)
-					break L
+				waitedTime := time.Now().Unix() - parent.Header().Time.Int64()
+				if gap > waitedTime {
+					return
 				}
+				log.Info("Wait enough. It's my turn", "waited seconds", waitedTime)
 			}
 		}
 	}
-
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
 		tstamp = parent.Time().Int64() + 1
@@ -545,7 +553,7 @@ func (self *worker) commitNewWork() {
 		header.Coinbase = self.coinbase
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
+		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
@@ -585,32 +593,34 @@ func (self *worker) commitNewWork() {
 		uncles    []*types.Header
 		badUncles []common.Hash
 	)
-	for hash, uncle := range self.possibleUncles {
-		if len(uncles) == 2 {
-			break
-		}
-		if err := self.commitUncle(work, uncle.Header()); err != nil {
-			log.Trace("Bad uncle found and will be removed", "hash", hash)
-			log.Trace(fmt.Sprint(uncle))
+	if self.config.Posv == nil {
+		for hash, uncle := range self.possibleUncles {
+			if len(uncles) == 2 {
+				break
+			}
+			if err := self.commitUncle(work, uncle.Header()); err != nil {
+				log.Trace("Bad uncle found and will be removed", "hash", hash)
+				log.Trace(fmt.Sprint(uncle))
 
-			badUncles = append(badUncles, hash)
-		} else {
-			log.Debug("Committing new uncle to block", "hash", hash)
-			uncles = append(uncles, uncle.Header())
+				badUncles = append(badUncles, hash)
+			} else {
+				log.Debug("Committing new uncle to block", "hash", hash)
+				uncles = append(uncles, uncle.Header())
+			}
 		}
-	}
-	for _, hash := range badUncles {
-		delete(self.possibleUncles, hash)
+		for _, hash := range badUncles {
+			delete(self.possibleUncles, hash)
+		}
 	}
 	// Create the new block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
-	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
+		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
 	self.push(work)
 }
@@ -634,7 +644,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 
 	var coalescedLogs []*types.Log
-
 	// first priority for special Txs
 	for _, tx := range specialTxs {
 		if gp.Gas() < params.TxGas && tx.Gas() > 0 {
@@ -654,6 +663,11 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		nonce := env.state.GetNonce(from)
+		if nonce != tx.Nonce() {
+			log.Trace("Skipping account with special transaction invalide nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", tx.To())
+			continue
+		}
 		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrNonceTooLow:
@@ -663,7 +677,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
-
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -675,7 +688,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			log.Debug("Add Special Transaction failed, account skipped", "hash", tx.Hash(), "sender", from, "nonce", tx.Nonce(), "to", tx.To(), "err", err)
 		}
 	}
-
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if gp.Gas() < params.TxGas {
@@ -696,13 +708,24 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
-
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
-
+		nonce := env.state.GetNonce(from)
+		if nonce > tx.Nonce() {
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+			continue
+		}
+		if nonce < tx.Nonce() {
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+			continue
+		}
 		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrGasLimitReached:
@@ -717,7 +740,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
 		case nil:
@@ -733,7 +756,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			txs.Shift()
 		}
 	}
-
 	if len(coalescedLogs) > 0 || env.tcount > 0 {
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can

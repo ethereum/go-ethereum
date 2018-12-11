@@ -173,7 +173,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, ctx.GetConfig().AnnounceTxs)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.ApiBackend = &EthApiBackend{eth, nil}
@@ -203,47 +203,43 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			return nil
 		}
 
-		appendM2HeaderHook := func(block *types.Block) (*types.Block, error) {
+		appendM2HeaderHook := func(block *types.Block) (*types.Block, bool, error) {
 			eb, err := eth.Etherbase()
 			if err != nil {
 				log.Error("Cannot get etherbase for append m2 header", "err", err)
-				return block, fmt.Errorf("etherbase missing: %v", err)
+				return block, false, fmt.Errorf("etherbase missing: %v", err)
 			}
 			m1, err := c.RecoverSigner(block.Header())
 			if err != nil {
-				return block, fmt.Errorf("can't get block creator: %v", err)
+				return block, false, fmt.Errorf("can't get block creator: %v", err)
 			}
 			m2, err := c.GetValidator(m1, eth.blockchain, block.Header())
 			if err != nil {
-				return block, fmt.Errorf("can't get block validator: %v", err)
+				return block, false, fmt.Errorf("can't get block validator: %v", err)
 			}
 			if m2 == eb {
 				wallet, _ := eth.accountManager.Find(accounts.Account{Address: eb})
 				header := block.Header()
 				sighash, _ := wallet.SignHash(accounts.Account{Address: eb}, posv.SigHash(header).Bytes())
 				header.Validator = sighash
-				block = types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles())
+				return types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles()), true, nil
 			}
-
-			return block, nil
+			return block, false, nil
 		}
 
 		eth.protocolManager.fetcher.SetSignHook(signHook)
 		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
-		// Hook prepares validators M2 for the current epoch
-		c.HookValidator = func(header *types.Header, signers []common.Address) error {
+		// Hook prepares validators M2 for the current epoch at checkpoint block
+		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
 			start := time.Now()
-			number := header.Number.Int64()
-			if number > 0 && number%common.EpocBlockRandomize == 0 {
-				validators, err := GetValidators(eth.blockchain, signers)
-				if err != nil {
-					return err
-				}
-				header.Validators = validators
+			validators, err := GetValidators(eth.blockchain, signers)
+			if err != nil {
+				return []byte{}, err
 			}
+			header.Validators = validators
 			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-			return nil
+			return validators, nil
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them
@@ -301,8 +297,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if foudationWalletAddr == (common.Address{}) {
 				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
 			}
-			start := time.Now()
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
+				start := time.Now()
 				// Get signers in blockSigner smartcontract.
 				addr := common.HexToAddress(common.BlockSigners)
 				// Get reward inflation.
@@ -334,8 +330,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 				}
+				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			}
-			log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			return nil
 		}
 
@@ -359,7 +355,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			currentHeader := eth.blockchain.CurrentHeader()
 			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
 			if err != nil {
-				log.Error("Can't get snap shot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex())
+				log.Error("Can't get snapshot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex())
 				return false
 			}
 			if _, ok := snap.Signers[address]; ok {

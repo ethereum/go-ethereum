@@ -113,6 +113,10 @@ func NewApp(gitCommit, usage string) *cli.App {
 
 var (
 	// General settings
+	AnnounceTxsFlag = cli.BoolFlag{
+		Name:  "announce-txs",
+		Usage: "Always commit transactions",
+	}
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -896,6 +900,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
+	}
+	if ctx.GlobalIsSet(AnnounceTxsFlag.Name) {
+		cfg.AnnounceTxs = ctx.GlobalBool(AnnounceTxsFlag.Name)
 	}
 }
 
