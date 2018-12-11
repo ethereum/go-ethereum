@@ -266,7 +266,6 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 			}
 			sim.Net.Events().Send(evt)
 		}
-		fmt.Println(hashes)
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 

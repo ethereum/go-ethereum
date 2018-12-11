@@ -19,15 +19,27 @@
 package stream
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -84,7 +96,7 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 //This test requests bogus hashes into the network
 func TestNonExistingHashesWithServer(t *testing.T) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
+	//t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodeCount, _, sim := setupSim(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -144,8 +156,56 @@ func sendSimTerminatedEvent(sim *simulation.Simulation) {
 //can visualize messages like SendOfferedMsg, WantedHashesMsg, DeliveryMsg
 func TestSnapshotSyncWithServer(t *testing.T) {
 
+	feedwrap := &netWrapper{}
 	//t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
-	nodeCount, chunkCount, sim := setupSim(simServiceMap)
+	//nodeCount, chunkCount, sim := setupSim(simServiceMap)
+	nodeCount := *nodes
+	chunkCount := *chunks
+
+	if nodeCount == 0 || chunkCount == 0 {
+		nodeCount = 32
+		chunkCount = 1
+	}
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			n := ctx.Config.Node()
+			addr := network.NewAddr(n)
+			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+			if err != nil {
+				return nil, nil, err
+			}
+			bucket.Store(bucketKeyStore, store)
+			localStore := store.(*storage.LocalStore)
+			netStore, err := storage.NewNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
+
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval:       RetrievalDisabled,
+				Syncing:         SyncingAutoSubscribe,
+				SyncUpdateDelay: 3 * time.Second,
+			}, nil)
+
+			tr := &testRegistry{
+				Registry: r,
+				w:        feedwrap,
+			}
+
+			bucket.Store(bucketKeyRegistry, tr)
+
+			cleanup = func() {
+				netStore.Close()
+				tr.Close()
+				os.RemoveAll(datadir)
+			}
+
+			return tr, cleanup, nil
+		},
+	}).WithServer(":8888")
 	defer sim.Close()
 
 	log.Info("Initializing test config")
@@ -158,6 +218,7 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	//array where the generated chunk hashes will be stored
 	conf.hashes = make([]storage.Address, 0)
 
+	feedwrap.setNetwork(sim.Net)
 	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		panic(err)
@@ -166,51 +227,54 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	ctx, cancelSimRun := watchSim(sim)
 	defer cancelSimRun()
 
-	//setup filters in the event feed
-	offeredHashesFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(1)
-	wantedFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(2)
-	deliveryFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(10)
-	eventC := sim.PeerEvents(ctx, sim.UpNodeIDs(), offeredHashesFilter, wantedFilter, deliveryFilter)
+	/*
+			//setup filters in the event feed
+			offeredHashesFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(1)
+			wantedFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(2)
+			deliveryFilter := simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(10)
+			eventC := sim.PeerEvents(ctx, sim.UpNodeIDs(), offeredHashesFilter, wantedFilter, deliveryFilter)
 
-	quit := make(chan struct{})
+		quit := make(chan struct{})
 
-	go func() {
-		for e := range eventC {
-			select {
-			case <-quit:
-				fmt.Println("quitting event loop")
-				return
-			default:
-			}
-			if e.Error != nil {
-				t.Fatal(e.Error)
-			}
-			if e.Event.Msg.Code == uint64(1) {
-				evt := &simulations.Event{
-					Type:    EventTypeChunkOffered,
-					Node:    sim.Net.GetNode(e.NodeID),
-					Control: false,
+			go func() {
+				for e := range eventC {
+					select {
+					case <-quit:
+						fmt.Println("quitting event loop")
+						return
+					default:
+					}
+					if e.Error != nil {
+						t.Fatal(e.Error)
+					}
+
+					if e.Event.Msg.Code == uint64(1) {
+						evt := &simulations.Event{
+							Type:    EventTypeChunkOffered,
+							Node:    sim.Net.GetNode(e.NodeID),
+							Control: false,
+						}
+						go sim.Net.Events().Send(evt)
+					} else if e.Event.Msg.Code == uint64(2) {
+						evt := &simulations.Event{
+							Type:    EventTypeChunkWanted,
+							Node:    sim.Net.GetNode(e.NodeID),
+							Control: false,
+						}
+						go sim.Net.Events().Send(evt)
+					} else if e.Event.Msg.Code == uint64(10) {
+						evt := &simulations.Event{
+							Type:    EventTypeChunkDelivered,
+							Node:    sim.Net.GetNode(e.NodeID),
+							Control: false,
+						}
+						go sim.Net.Events().Send(evt)
+					} else {
+						fmt.Println(fmt.Sprintf("msg code: %d", e.Event.Msg.Code))
+					}
 				}
-				sim.Net.Events().Send(evt)
-			} else if e.Event.Msg.Code == uint64(2) {
-				evt := &simulations.Event{
-					Type:    EventTypeChunkWanted,
-					Node:    sim.Net.GetNode(e.NodeID),
-					Control: false,
-				}
-				sim.Net.Events().Send(evt)
-			} else if e.Event.Msg.Code == uint64(10) {
-				evt := &simulations.Event{
-					Type:    EventTypeChunkDelivered,
-					Node:    sim.Net.GetNode(e.NodeID),
-					Control: false,
-				}
-				sim.Net.Events().Send(evt)
-			} else {
-				fmt.Println(fmt.Sprintf("msg code: %d", e.Event.Msg.Code))
-			}
-		}
-	}()
+			}()
+	*/
 	//run the sim
 	result := runSim(conf, ctx, sim, chunkCount)
 
@@ -219,11 +283,124 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 		Type:    EventTypeSimTerminated,
 		Control: false,
 	}
-	sim.Net.Events().Send(evt)
+	go sim.Net.Events().Send(evt)
 
 	if result.Error != nil {
 		panic(result.Error)
 	}
-	close(quit)
+	//close(quit)
 	log.Info("Simulation ended")
+}
+
+type testRegistry struct {
+	*Registry
+	w *netWrapper
+}
+
+func (tr *testRegistry) Protocols() []p2p.Protocol {
+	regProto := tr.Registry.Protocols()
+	regProto[0].Run = tr.runProto
+	return regProto
+}
+
+func (tr *testRegistry) runProto(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	testRw := &testMsgReadWriter{
+		MsgReadWriter: rw,
+		Peer:          p,
+		w:             tr.w,
+		Registry:      tr.Registry,
+	}
+	return tr.runProtocol(p, testRw)
+}
+
+type testMsgReadWriter struct {
+	*Registry
+	p2p.MsgReadWriter
+	*p2p.Peer
+	w *netWrapper
+}
+
+type netWrapper struct {
+	net *simulations.Network
+}
+
+func (w *netWrapper) setNetwork(n *simulations.Network) {
+	w.net = n
+}
+
+func (w *netWrapper) getNetwork() *simulations.Network {
+	return w.net
+}
+
+// ReadMsg reads a message from the underlying MsgReadWriter and emits a
+// "message received" event
+func (ev *testMsgReadWriter) ReadMsg() (p2p.Msg, error) {
+	msg, err := ev.MsgReadWriter.ReadMsg()
+	if err != nil {
+		return msg, err
+	}
+
+	subCodes := []uint64{1, 2, 10}
+	found := false
+	for _, c := range subCodes {
+		if c == msg.Code {
+			found = true
+		}
+	}
+	if !found {
+		return msg, nil
+	}
+
+	var buf bytes.Buffer
+	tee := io.TeeReader(msg.Payload, &buf)
+
+	mcp := &p2p.Msg{
+		Code:       msg.Code,
+		Size:       msg.Size,
+		ReceivedAt: msg.ReceivedAt,
+		Payload:    tee,
+	}
+	msg.Payload = &buf
+
+	var wmsg protocols.WrappedMsg
+	err = mcp.Decode(&wmsg)
+	if err != nil {
+		log.Error(err.Error())
+		return msg, err
+	}
+	val, ok := ev.Registry.GetSpec().NewMsg(mcp.Code)
+	if !ok {
+		return msg, errors.New(fmt.Sprintf("Invalid message code: %v", msg.Code))
+	}
+	if err := rlp.DecodeBytes(wmsg.Payload, val); err != nil {
+		return msg, errors.New(fmt.Sprintf("Decoding error <= %v: %v", msg, err))
+	}
+	var evt *simulations.Event
+	switch val := val.(type) {
+	case *OfferedHashesMsg:
+		evt = &simulations.Event{
+			Type:    EventTypeChunkOffered,
+			Node:    ev.w.getNetwork().GetNode(ev.ID()),
+			Control: false,
+			Data:    val.Hashes,
+		}
+	case *WantedHashesMsg:
+		evt = &simulations.Event{
+			Type:    EventTypeChunkWanted,
+			Node:    ev.w.getNetwork().GetNode(ev.ID()),
+			Control: false,
+			Data:    val.Want,
+		}
+	case *ChunkDeliveryMsgSyncing:
+		evt = &simulations.Event{
+			Type:    EventTypeChunkDelivered,
+			Node:    ev.w.getNetwork().GetNode(ev.ID()),
+			Control: false,
+			Data:    val.Addr.String(),
+		}
+	}
+	if evt != nil {
+		ev.w.getNetwork().Events().Send(evt)
+	}
+	return msg, nil
 }
