@@ -40,6 +40,7 @@ services:
   nginx:
     build: .
     image: {{.Network}}/nginx
+    container_name: {{.Network}}_nginx_1
     ports:
       - "{{.Port}}:80"
     volumes:
