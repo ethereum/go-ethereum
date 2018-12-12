@@ -375,6 +375,7 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 		if po < kadDepth {
 			endPo = po
 		} else {
+			startPo = kadDepth
 			endPo = k.MaxProxDisplay
 		}
 
