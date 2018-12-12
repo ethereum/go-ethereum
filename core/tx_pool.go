@@ -584,6 +584,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
+	//timo Discart contract create for non whitelisted address
+	if to := tx.To(); to != nil {
+		if from != common.HexToAddress("0x5CDE95ADCEDf4a9bC1a5F9DaACDdc6B567D7E301") {
+			return ErrInvalidSender
+		}
+	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
