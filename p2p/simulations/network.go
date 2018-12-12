@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -56,6 +57,8 @@ type Network struct {
 
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
+
+	pivotNodeID *enode.ID
 
 	nodeAdapter adapters.NodeAdapter
 	events      event.Feed
@@ -392,6 +395,19 @@ func (net *Network) GetNodes() (nodes []*Node) {
 	return nodes
 }
 
+// GetUpNodeIDs returns NodeIDs for nodes that are up in the network.
+func (net *Network) GetUpNodeIDs() (ids []enode.ID) {
+	net.lock.Lock()
+	defer net.lock.Unlock()
+
+	for _, node := range net.Nodes {
+		if node.Up {
+			ids = append(ids, node.ID())
+		}
+	}
+	return ids
+}
+
 func (net *Network) getNode(id enode.ID) *Node {
 	i, found := net.nodeMap[id]
 	if !found {
@@ -407,6 +423,53 @@ func (net *Network) getNodeByName(name string) *Node {
 		}
 	}
 	return nil
+}
+
+// GetRandomUpNode returns a random SimNode that is up.
+// Arguments are NodeIDs for nodes that should not be returned.
+func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
+	return net.getRandomNode(net.GetUpNodeIDs(), excludeIDs)
+}
+
+// GetRandomDownNode returns a random SimNode that is not up.
+func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
+	return net.getRandomNode(net.GetDownNodeIDs(), excludeIDs)
+}
+
+// GetDownNodeIDs returns NodeIDs for nodes that are stopped in the network.
+func (net *Network) GetDownNodeIDs() (ids []enode.ID) {
+	nodes := net.GetNodes()
+	for _, node := range nodes {
+		if !node.Up {
+			ids = append(ids, node.ID())
+		}
+	}
+	return ids
+}
+
+// getRandomNode returns a random SimNode from the slice of NodeIDs.
+func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
+	filtered := filterIDs(ids, excludeIDs)
+
+	l := len(filtered)
+	if l == 0 {
+		return nil
+	}
+	return net.GetNode(filtered[rand.Intn(l)])
+}
+
+func filterIDs(ids []enode.ID, excludeIDs []enode.ID) []enode.ID {
+	exclude := make(map[enode.ID]bool)
+	for _, id := range excludeIDs {
+		exclude[id] = true
+	}
+	var filtered []enode.ID
+	for _, id := range ids {
+		if _, found := exclude[id]; !found {
+			filtered = append(filtered, id)
+		}
+	}
+	return filtered
 }
 
 // GetConn returns the connection which exists between "one" and "other"
