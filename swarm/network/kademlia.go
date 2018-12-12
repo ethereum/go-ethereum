@@ -358,6 +358,10 @@ func (k *Kademlia) Off(p *Peer) {
 	}
 }
 
+//EachBin iterates over each connection of a kademlia table, per bin.
+//So `po` will be representing the bin value (0..255), while `val` represents an
+//existing connection inside that bin.
+//For any such connection found, the parameter func `eachBinFunc` will be executed
 func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(conn *Peer, po int) bool) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
