@@ -89,61 +89,64 @@ func TestNeighbourhoodDepth(t *testing.T) {
 
 	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
 
-	closerAddress := pot.RandomAddressAt(baseAddress, 7)
-	closerPeer := newTestDiscoveryPeer(closerAddress, kad)
-	kad.On(closerPeer)
+	// generate the peers
+	var peers []*Peer
+	for i := 0; i < 7; i++ {
+		addr := pot.RandomAddressAt(baseAddress, i)
+		peers = append(peers, newTestDiscoveryPeer(addr, kad))
+	}
+	var sevenPeers []*Peer
+	for i := 0; i < 2; i++ {
+		addr := pot.RandomAddressAt(baseAddress, 7)
+		sevenPeers = append(sevenPeers, newTestDiscoveryPeer(addr, kad))
+	}
+
+	// first try with empty kademlia
 	depth := kad.NeighbourhoodDepth()
 	if depth != 0 {
 		t.Fatalf("expected depth 0, was %d", depth)
 	}
 
-	sameAddress := pot.RandomAddressAt(baseAddress, 7)
-	samePeer := newTestDiscoveryPeer(sameAddress, kad)
-	kad.On(samePeer)
+	// add one peer on 7
+	kad.On(sevenPeers[0])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 0 {
 		t.Fatalf("expected depth 0, was %d", depth)
 	}
 
-	midAddress := pot.RandomAddressAt(baseAddress, 4)
-	midPeer := newTestDiscoveryPeer(midAddress, kad)
-	kad.On(midPeer)
-	depth = kad.NeighbourhoodDepth()
-	if depth != 5 {
-		t.Fatalf("expected depth 5, was %d", depth)
-	}
-
-	kad.Off(midPeer)
+	// add a second
+	kad.On(sevenPeers[1])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 0 {
 		t.Fatalf("expected depth 0, was %d", depth)
 	}
 
-	fartherAddress := pot.RandomAddressAt(baseAddress, 1)
-	fartherPeer := newTestDiscoveryPeer(fartherAddress, kad)
-	kad.On(fartherPeer)
-	depth = kad.NeighbourhoodDepth()
-	if depth != 2 {
-		t.Fatalf("expected depth 2, was %d", depth)
+	for i, p := range peers {
+		kad.On(p)
+		depth = kad.NeighbourhoodDepth()
+		if depth != i+1 {
+			t.Fatalf("expected depth %d, was %d", i+1, depth)
+		}
 	}
 
-	midSameAddress := pot.RandomAddressAt(baseAddress, 4)
-	midSamePeer := newTestDiscoveryPeer(midSameAddress, kad)
-	kad.Off(closerPeer)
-	kad.On(midPeer)
-	kad.On(midSamePeer)
+	kad.Off(sevenPeers[1])
 	depth = kad.NeighbourhoodDepth()
-	if depth != 2 {
-		t.Fatalf("expected depth 2, was %d", depth)
+	if depth != 6 {
+		t.Fatalf("expected depth 6, was %d", depth)
 	}
 
-	kad.Off(fartherPeer)
-	log.Trace(kad.string())
-	time.Sleep(time.Millisecond)
+	kad.Off(peers[4])
 	depth = kad.NeighbourhoodDepth()
-	if depth != 0 {
-		t.Fatalf("expected depth 0, was %d", depth)
+	if depth != 4 {
+		t.Fatalf("expected depth 4, was %d", depth)
 	}
+
+	kad.Off(peers[3])
+	depth = kad.NeighbourhoodDepth()
+	if depth != 3 {
+		t.Fatalf("expected depth 3, was %d", depth)
+	}
+
 }
 
 func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {

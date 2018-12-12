@@ -447,12 +447,7 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	// total number of peers in iteration
 	var size int
 
-	// true if iteration has all prox peers
-	var b bool
-
-	// last po recorded in iteration
-	var lastPo int
-
+	var maxDepth int
 	f := func(v pot.Val, i int) bool {
 		// po == 256 means that addr is the pivot address(self)
 		if i == 256 {
@@ -463,38 +458,25 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 		// this means we have all nn-peers.
 		// depth is by default set to the bin of the farthest nn-peer
 		if size == minProxBinSize {
-			b = true
-			depth = i
-			return true
-		}
-
-		// if there are empty bins between farthest nn and current node,
-		// the depth should recalculated to be
-		// the farthest of those empty bins
-		//
-		// 0   abac ccde
-		// 1   2a2a
-		// 2   589f       <--- nearest non-nn
-		// ============ DEPTH 3  ===========
-		// 3              <--- don't count as empty bins
-		// 4              <--- don't count as empty bins
-		// 5  cbcb cdcd    <---- furthest nn
-		// 6  a1a2 b3c4
-		if b && i < depth {
-			depth = i + 1
-			lastPo = i
+			maxDepth = i
 			return false
 		}
-		lastPo = i
+
 		return true
 	}
 	p.EachNeighbour(pivotAddr, pof, f)
 
-	// cover edge case where more than one farthest nn
-	// AND we only have nn-peers
-	if lastPo == depth {
-		depth = 0
-	}
+	p.EachBin(pivotAddr, pof, 0, func(po int, _ int, _ func(func(pot.Val, int) bool) bool) bool {
+		if po == depth {
+			if maxDepth == depth {
+				return false
+			}
+			depth++
+			return true
+		}
+		return false
+	})
+
 	return depth
 }
 
