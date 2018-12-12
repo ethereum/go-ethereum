@@ -20,10 +20,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"math/big"
+	"net"
 	"os"
 	"reflect"
+	"time"
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -138,7 +141,113 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
+	printWarning(ctx, &cfg)
 	return stack, cfg
+}
+
+func publicIp(host string) bool {
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Most likely a hostname. Instead of trying to dns-resolve this, we'll assume that this is a
+		// public name and return 'true'
+		return true
+	}
+
+	var privateIPBlocks []*net.IPNet
+	for _, cidr := range []string{
+		"127.0.0.0/8",    // IPv4 loopback
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"::1/128",        // IPv6 loopback
+		"fe80::/10",      // IPv6 link-local
+	} {
+		_, block, _ := net.ParseCIDR(cidr)
+		privateIPBlocks = append(privateIPBlocks, block)
+	}
+	for _, block := range privateIPBlocks {
+		if block.Contains(ip) {
+			return false
+		}
+	}
+	return true
+}
+
+// printWarning checks for some common insecure combinations
+func printWarning(ctx *cli.Context, config *gethConfig) {
+	contains := func(list []string, a string) bool {
+		for _, b := range list {
+			if b == a {
+				return true
+			}
+		}
+		return false
+	}
+
+	if public, modules := publicIp(config.Node.HTTPHost), config.Node.HTTPModules; public {
+		if contains(modules, "personal") || contains(modules, "admin") {
+			log.Warn(fmt.Sprintf(`
+
+             WARNING
+       =====================
+Insecure configuration setting, public interface (%v) and personal or admin api enabled via HTTP RPC api. 
+
+Enabling 'personal' namespace towards the internet _will_ lead to attackers trying to access your account(s), and perform
+brute-force attacks against the unlock functionality. All your ether/tokens are at risk of being stolen!
+
+It also means that anyone can shut the node down.
+
+(Press ctrl-c to abort, otherwise geth startup will resume in 5 seconds)
+`, config.Node.HTTPHost))
+			time.Sleep(time.Second * 5)
+		}
+	}
+	if public, modules := publicIp(config.Node.WSHost), config.Node.WSModules; public {
+		if contains(modules, "personal") || contains(modules, "admin") {
+			log.Warn(fmt.Sprintf(`
+
+             WARNING
+       =====================
+Insecure configuration setting, public interface (%v) and personal or admin api enabled via Websocket-API. 
+
+Enabling 'personal' namespace towards the internet _will_ lead to attackers trying to access your account(s), and perform
+brute-force attacks against the unlock functionality. All your ether/tokens are at risk of being stolen!
+
+It also means that anyone can shut the node down.
+
+(Press ctrl-c to abort, otherwise geth startup will resume in 5 seconds)
+`, config.Node.WSHost))
+			time.Sleep(time.Second * 5)
+		}
+	}
+	if ctx.GlobalString(utils.UnlockedAccountFlag.Name) != "" {
+		log.Warn(`
+
+             WARNING
+       =====================
+Extremely insecure configuration setting, public interface used in combination with auto-unlocked account(s).
+
+This means that anyone on the internet can make transactions from your unlocked account(s).
+
+(Press ctrl-c to abort, otherwise geth startup will resume in 5 seconds)
+`)
+		time.Sleep(time.Second * 5)
+	}
+
+	if contains(config.Node.HTTPCors, "*") {
+		log.Warn(`
+
+             WARNING
+       =====================
+The cors-setting is set to allow interaction from any domain (webpage) in any browser. This means that a malicious 
+webpage that you visit in a browser can interact fully with your node, and e.g. try to make transactions. 
+
+(Press ctrl-c to abort, otherwise geth startup will resume in 5 seconds)
+ `)
+		time.Sleep(time.Second * 5)
+	}
+	return
 }
 
 // enableWhisper returns true in case one of the whisper flags is set.
