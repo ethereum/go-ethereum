@@ -92,7 +92,7 @@ func (ls *LocalStore) isValid(chunk Chunk) bool {
 	// ls.Validators contains a list of one validator per chunk type.
 	// if one validator succeeds, then the chunk is valid
 	for _, v := range ls.Validators {
-		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
+		if valid = v.Validate(chunk); valid {
 			break
 		}
 	}
