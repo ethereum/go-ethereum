@@ -245,6 +245,37 @@ OUTER_TWO:
 			t.Fatalf("Superfluous conn found %v -> %v", ev.Conn.One, ev.Conn.Other)
 		}
 	}
+
+	// This test validates if all connections from the snapshot
+	// are created in the network.
+	t.Run("conns after load", func(t *testing.T) {
+		// Create new network.
+		n := NewNetwork(
+			adapters.NewSimAdapter(adapters.Services{
+				"noopwoop": func(ctx *adapters.ServiceContext) (node.Service, error) {
+					return NewNoopService(nil), nil
+				},
+			}),
+			&NetworkConfig{
+				DefaultService: "noopwoop",
+			},
+		)
+		defer n.Shutdown()
+
+		// Load the same snapshot.
+		err := n.Load(snap)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Check every connection from the snapshot
+		// if it is in the network, too.
+		for _, c := range snap.Conns {
+			if n.GetConn(c.One, c.Other) == nil {
+				t.Errorf("missing connection: %s -> %s", c.One, c.Other)
+			}
+		}
+	})
 }
 
 // TestNetworkSimulation creates a multi-node simulation network with each node
