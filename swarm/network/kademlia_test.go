@@ -888,3 +888,175 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 	}
 	return NewPeer(bp, kad)
 }
+
+/*
+TestEachBin is a unit test for the `EachBin` function
+
+This kad table and its peers are copied from TestKademliaCase1,
+it represents an edge case but for the purpose of a unit test for
+the `EachBin` function it is ok.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
+=========================================================================
+Wed Dec 12 14:03:58 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
+population: 12 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+000  2 835f 8196                    | 18 8196 (0) 835f (0) 8958 (0) 8e23 (0)
+001  2 28f0 2690                    | 14 2690 (0) 28f0 (0) 2850 (0) 3a51 (0)
+002  2 4a45 4d72                    | 11 4d72 (0) 4a45 (0) 4375 (0) 4607 (0)
+003  1 646e                         |  1 646e (0)
+004  3 7656 76d1 769c               |  3 769c (0) 76d1 (0) 7656 (0)
+============ DEPTH: 5 ==========================================
+005  1 7a48                         |  1 7a48 (0)
+006  1 7cbd                         |  1 7cbd (0)
+007  0                              |  0
+008  0                              |  0
+009  0                              |  0
+010  0                              |  0
+011  0                              |  0
+012  0                              |  0
+013  0                              |  0
+014  0                              |  0
+015  0                              |  0
+=========================================================================
+*/
+func TestEachBin(t *testing.T) {
+	pivotAddr := "7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e"
+
+	//a map of bin to addresses
+	binMap := make(map[int][]string)
+	binMap[0] = []string{
+		"835fbbf1d16ba7347b6e2fc552d6e982148d29c624ea20383850df3c810fa8fc",
+		"81968a2d8fb39114342ee1da85254ec51e0608d7f0f6997c2a8354c260a71009",
+	}
+	binMap[1] = []string{
+		"28f0bc1b44658548d6e05dd16d4c2fe77f1da5d48b6774bc4263b045725d0c19",
+		"2690a910c33ee37b91eb6c4e0731d1d345e2dc3b46d308503a6e85bbc242c69e",
+	}
+	binMap[2] = []string{
+		"4a45f1fc63e1a9cb9dfa44c98da2f3d20c2923e5d75ff60b2db9d1bdb0c54d51",
+		"4d72a04ddeb851a68cd197ef9a92a3e2ff01fbbff638e64929dd1a9c2e150112",
+	}
+	binMap[3] = []string{
+		"646e9540c84f6a2f9cf6585d45a4c219573b4fd1b64a3c9a1386fc5cf98c0d4d",
+	}
+	binMap[4] = []string{
+		"7656caccdc79cd8d7ce66d415cc96a718e8271c62fb35746bfc2b49faf3eebf3",
+		"76d1e83c71ca246d042e37ff1db181f2776265fbcfdc890ce230bfa617c9c2f0",
+		"769ce86aa90b518b7ed382f9fdacfbed93574e18dc98fe6c342e4f9f409c2d5a",
+	}
+	binMap[5] = []string{
+		"7a48f75f8ca60487ae42d6f92b785581b40b91f2da551ae73d5eae46640e02e8",
+	}
+	binMap[6] = []string{
+		"7cbd42350bde8e18ae5b955b5450f8e2cef3419f92fbf5598160c60fd78619f0",
+	}
+
+	addrs := []string{
+		"7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e",
+		"ec560e6a4806aa37f147ee83687f3cf044d9953e61eedb8c34b6d50d9e2c5623",
+		"646e9540c84f6a2f9cf6585d45a4c219573b4fd1b64a3c9a1386fc5cf98c0d4d",
+		"18f13c5fba653781019025ab10e8d2fdc916d6448729268afe9e928ffcdbb8e8",
+		"317617acf99b4ffddda8a736f8fc6c6ede0bf690bc23d834123823e6d03e2f69",
+		"d7e52d9647a5d1c27a68c3ee65d543be3947ae4b68537b236d71ef9cb15fb9ab",
+		"7a48f75f8ca60487ae42d6f92b785581b40b91f2da551ae73d5eae46640e02e8",
+		"7cbd42350bde8e18ae5b955b5450f8e2cef3419f92fbf5598160c60fd78619f0",
+		"52aa3ddec61f4d48dd505a2385403c634f6ad06ee1d99c5c90a5ba6006f9af9c",
+		"47cdb6fa93eeb8bc91a417ff4e3b14a9c2ea85137462e2f575fae97f0c4be60d",
+		"5161943eb42e2a03e715fe8afa1009ff5200060c870ead6ab103f63f26cb107f",
+		"a38eaa1255f76bf883ca0830c86e8c4bb7eed259a8348aae9b03f21f90105bee",
+		"b2522bdf1ab26f324e75424fdf6e493b47e8a27687fe76347607b344fc010075",
+		"5bd7213964efb2580b91d02ac31ef126838abeba342f5dbdbe8d4d03562671a2",
+		"0b531adb82744768b694d7f94f73d4f0c9de591266108daeb8c74066bfc9c9ca",
+		"28501f59f70e888d399570145ed884353e017443c675aa12731ada7c87ea14f7",
+		"4a45f1fc63e1a9cb9dfa44c98da2f3d20c2923e5d75ff60b2db9d1bdb0c54d51",
+		"b193431ee35cd32de95805e7c1c749450c47486595aae7195ea6b6019a64fd61",
+		"baebf36a1e35a7ed834e1c72faf44ba16c159fa47d3289ceb3ca35fefa8739b5",
+		"a3659bd32e05fa36c8d20dbaaed8362bf1a8a7bd116aed62d8a43a2efbdf513f",
+		"10d1b50881a4770ebebdd0a75589dabb931e6716747b0f65fd6b080b88c4fdb6",
+		"3c76b8ca5c7ce6a03320646826213f59229626bf5b9d25da0c3ec0662dcb8ff3",
+		"4d72a04ddeb851a68cd197ef9a92a3e2ff01fbbff638e64929dd1a9c2e150112",
+		"c7353d320987956075b5bc1668571c7a36c800d5598fdc4832ec6569561e15d1",
+		"d9e0c7c90878c20ab7639d5954756f54775404b3483407fe1b483635182734f6",
+		"8fca67216b7939c0824fb06c5279901a94da41da9482b000f56df9906736ee75",
+		"460719d7f7aa7d7438f0eaf30333484fa3bd0f233632c10ba89e6e46dd3604be",
+		"0421d92c8a1c79ed5d01305a3d25aaf22a8f5f9e3d4bc80da47ee16ce20465fe",
+		"3441d9d9c0f05820a1bb6459fc7d8ef266a1bd929e7db939a10f544efe8261ea",
+		"ab198a66c293586746758468c610e5d3914d4ce629147eff6dd55a31f863ff8f",
+		"3a1c8c16b0763f3d2c35269f454ff779d1255e954d2deaf6c040fb3f0bcdc945",
+		"5561c0ea3b203e173b11e6aa9d0e621a4e10b1d8b178b8fe375220806557b823",
+		"7656caccdc79cd8d7ce66d415cc96a718e8271c62fb35746bfc2b49faf3eebf3",
+		"5130594fd54c1652cf2debde2c4204573ed76555d1e26757fe345b409af1544a",
+		"76d1e83c71ca246d042e37ff1db181f2776265fbcfdc890ce230bfa617c9c2f0",
+		"89580231962624c53968c1b0095b4a2732b2a2640a19fdd7d21fd064fcc0a5ef",
+		"3d10d001fff44680c7417dd66ecf2e984f0baa20a9bbcea348583ba5ff210c4f",
+		"43754e323f0f3a1155b1852bd6edd55da86b8c4cfe3df8b33733fca50fc202b8",
+		"a9e7b1bb763ae6452ddcacd174993f82977d81a85206bb2ae3c842e2d8e19b4c",
+		"10bb07da7bc7c7757f74149eff167d528a94a253cdc694a863f4d50054c00b6d",
+		"28f0bc1b44658548d6e05dd16d4c2fe77f1da5d48b6774bc4263b045725d0c19",
+		"835fbbf1d16ba7347b6e2fc552d6e982148d29c624ea20383850df3c810fa8fc",
+		"8e236c56a77d7f46e41e80f7092b1a68cd8e92f6156365f41813ad1ca2c6b6f3",
+		"51d9c857e9238c49186e37b4eccf17a82de3d5739f026f6043798ab531456e73",
+		"bbddf7db6a682225301f36a9fd5b0d0121d2951753e1681295f3465352ad511f",
+		"2690a910c33ee37b91eb6c4e0731d1d345e2dc3b46d308503a6e85bbc242c69e",
+		"769ce86aa90b518b7ed382f9fdacfbed93574e18dc98fe6c342e4f9f409c2d5a",
+		"ba3bebec689ce51d3e12776c45f80d25164fdfb694a8122d908081aaa2e7122c",
+		"3a51f4146ea90a815d0d283d1ceb20b928d8b4d45875e892696986a3c0d8fb9b",
+		"81968a2d8fb39114342ee1da85254ec51e0608d7f0f6997c2a8354c260a71009",
+	}
+
+	addr := common.FromHex(pivotAddr)
+	addrs = append(addrs, pivotAddr)
+
+	k := NewKademlia(addr, NewKadParams())
+
+	as := make([][]byte, len(addrs))
+	for i, a := range addrs {
+		as[i] = common.FromHex(a)
+	}
+
+	for _, a := range as {
+		if bytes.Equal(a, addr) {
+			continue
+		}
+		p := &BzzAddr{OAddr: a, UAddr: a}
+		if err := k.Register(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for {
+		a, _, _ := k.SuggestPeer()
+		if a == nil {
+			break
+		}
+		k.On(NewPeer(&BzzPeer{BzzAddr: a}, k))
+	}
+	//TODO: check kad table is same
+	//currently k.String() prints date so it will never be the same :)
+	//--> implement JSON representation of kad table
+	log.Debug(k.String())
+
+	fakeSubscriptions := make(map[string][]int)
+	eachBinFunc := func(p *Peer, bin int) bool {
+		peerstr := fmt.Sprintf("%x", p.Over())
+		if _, ok := fakeSubscriptions[peerstr]; !ok {
+			fakeSubscriptions[peerstr] = make([]int, 0)
+		}
+		fakeSubscriptions[peerstr] = append(fakeSubscriptions[peerstr], bin)
+		return true
+	}
+
+	k.EachBin(addr[:], pot.DefaultPof(256), 0, eachBinFunc)
+
+	for p, subs := range fakeSubscriptions {
+		fmt.Println(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
+		fmt.Print("...")
+		for i := range subs {
+			fmt.Print(fmt.Sprintf("%d,", i))
+		}
+		fmt.Println("")
+	}
+
+}
