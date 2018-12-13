@@ -99,8 +99,8 @@ func UnmarshalFixedText(typname string, input, out []byte) error {
 			return ErrSyntax
 		}
 	}
-	hex.Decode(out, raw)
-	return nil
+	_, err = hex.Decode(out, raw)
+	return err
 }
 
 // UnmarshalFixedUnprefixedText decodes the input as a string with optional 0x prefix. The
@@ -120,8 +120,8 @@ func UnmarshalFixedUnprefixedText(typname string, input, out []byte) error {
 			return ErrSyntax
 		}
 	}
-	hex.Decode(out, raw)
-	return nil
+	_, err = hex.Decode(out, raw)
+	return err
 }
 
 // Big marshals/unmarshals as a JSON string with 0x prefix.
