@@ -1,4 +1,4 @@
-## Go Ethereum
+## Go Snt
 
 Official golang implementation of the Ethereum protocol.
 
