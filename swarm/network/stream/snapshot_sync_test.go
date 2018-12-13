@@ -248,7 +248,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		//get the node at that index
 		//this is the node selected for upload
-		node := sim.Net.RandomUpNode()
+		node := sim.Net.GetRandomUpNode()
 		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
@@ -453,7 +453,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			}
 		}
 		//select a random node for upload
-		node := sim.Net.RandomUpNode()
+		node := sim.Net.GetRandomUpNode()
 		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
