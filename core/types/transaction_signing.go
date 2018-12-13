@@ -168,7 +168,7 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
-func (s HomesteadSigner) Equal(s2 Signer) bool {
+func (hs HomesteadSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(HomesteadSigner)
 	return ok
 }
@@ -185,7 +185,7 @@ func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
 
 type FrontierSigner struct{}
 
-func (s FrontierSigner) Equal(s2 Signer) bool {
+func (fs FrontierSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(FrontierSigner)
 	return ok
 }
