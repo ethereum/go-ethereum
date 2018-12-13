@@ -248,10 +248,6 @@ func U64ToBytes(val uint64) []byte {
 	return data
 }
 
-func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
-	index.Access = s.accessCnt
-}
-
 func getIndexKey(hash Address) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
@@ -775,18 +771,6 @@ func (s *LDBStore) BinIndex(po uint8) uint64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.bucketCnt[po]
-}
-
-func (s *LDBStore) Size() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.entryCnt
-}
-
-func (s *LDBStore) CurrentStorageIndex() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.dataIdx
 }
 
 // Put adds a chunk to the database, adding indices and incrementing global counters.

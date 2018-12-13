@@ -79,14 +79,6 @@ func testPoFunc(k Address) (ret uint8) {
 	return uint8(Proximity(basekey, k[:]))
 }
 
-func (db *testDbStore) close() {
-	db.Close()
-	err := os.RemoveAll(db.dir)
-	if err != nil {
-		panic(err)
-	}
-}
-
 func testDbStoreRandom(n int, chunksize int64, mock bool, t *testing.T) {
 	db, cleanup, err := newTestDbStore(mock, true)
 	defer cleanup()

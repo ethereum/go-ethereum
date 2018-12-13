@@ -65,10 +65,6 @@ If all is well it is possible to implement this by simply composing readers so t
 The hashing itself does use extra copies and allocation though, since it does need it.
 */
 
-var (
-	errAppendOppNotSuported = errors.New("Append operation not supported")
-)
-
 type ChunkerParams struct {
 	chunkSize int64
 	hashSize  int64
@@ -99,7 +95,6 @@ type TreeChunker struct {
 	ctx context.Context
 
 	branches int64
-	hashFunc SwarmHasher
 	dataSize int64
 	data     io.Reader
 	// calculated
@@ -363,10 +358,6 @@ func (tc *TreeChunker) runWorker(ctx context.Context) {
 			}
 		}
 	}()
-}
-
-func (tc *TreeChunker) Append() (Address, func(), error) {
-	return nil, nil, errAppendOppNotSuported
 }
 
 // LazyChunkReader implements LazySectionReader

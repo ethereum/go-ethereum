@@ -83,23 +83,3 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	}
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
 }
-
-// Modify(rootHash, basePath, contentHash, contentType) takes th e manifest trie rooted in rootHash,
-// and merge on  to it. creating an entry w conentType (mime)
-//
-// DEPRECATED: Use the HTTP API instead
-func (s *Storage) Modify(ctx context.Context, rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
-	uri, err := Parse("bzz:/" + rootHash)
-	if err != nil {
-		return "", err
-	}
-	addr, err := s.api.Resolve(ctx, uri.Addr)
-	if err != nil {
-		return "", err
-	}
-	addr, err = s.api.Modify(ctx, addr, path, contentHash, contentType)
-	if err != nil {
-		return "", err
-	}
-	return addr.Hex(), nil
-}
