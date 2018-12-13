@@ -157,14 +157,23 @@ func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 }
 
 func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	if !checkMsg(msg) {
+		return errors.New("invalid message")
+	}
 	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
 }
 
 func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	if !checkMsg(msg) {
+		return errors.New("invalid message")
+	}
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
 
 func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) error {
+	if !checkMsg(msg) {
+		return errors.New("invalid message")
+	}
 	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
 }
 
@@ -176,4 +185,11 @@ func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
 
 func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, error) {
 	return pssapi.Pss.getPeerAddress(pubkeyhex, topic)
+}
+
+func checkMsg(msg []byte) bool {
+	if msg == nil || len(msg) == 0 {
+		return false
+	}
+	return true
 }

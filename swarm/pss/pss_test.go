@@ -1008,6 +1008,28 @@ func TestRawAllow(t *testing.T) {
 	}
 }
 
+// BELOW HERE ARE TESTS USING THE SIMULATION FRAMEWORK
+
+// tests that the API layer can handle edge case values
+func TestApi(t *testing.T) {
+	clients, err := setupNetwork(2, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "0xdeadbeef"
+
+	err = clients[0].Call(nil, "pss_sendRaw", "0x", topic, "0x666f6f")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = clients[0].Call(nil, "pss_sendRaw", "0xabcdef", topic, "0x")
+	if err == nil {
+		t.Fatal("expected error on empty msg")
+	}
+}
+
 // verifies that nodes can send and receive raw (verbatim) messages
 func TestSendRaw(t *testing.T) {
 	t.Run("32", testSendRaw)

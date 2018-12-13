@@ -396,9 +396,11 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	// raw is simplest handler contingency to check, so check that first
 	var isRaw bool
 	if pssmsg.isRaw() {
-		if !p.topicHandlerCaps[psstopic].raw {
-			log.Debug("No handler for raw message", "topic", psstopic)
-			return nil
+		if _, ok := p.topicHandlerCaps[psstopic]; ok {
+			if !p.topicHandlerCaps[psstopic].raw {
+				log.Debug("No handler for raw message", "topic", psstopic)
+				return nil
+			}
 		}
 		isRaw = true
 	}
@@ -529,6 +531,9 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 // The value in `address` will be used as a routing hint for the
 // public key / topic association
 func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address *PssAddress) error {
+	if !checkAddress(address) {
+		return errors.New("invalid address")
+	}
 	pubkeybytes := crypto.FromECDSAPub(pubkey)
 	if len(pubkeybytes) == 0 {
 		return fmt.Errorf("invalid public key: %v", pubkey)
@@ -570,6 +575,9 @@ func (p *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache 
 // Returns a string id that can be used to retrieve the key bytes
 // from the whisper backend (see pss.GetSymmetricKey())
 func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address *PssAddress, addtocache bool) (string, error) {
+	if !checkAddress(address) {
+		return "", errors.New("invalid address")
+	}
 	return p.setSymmetricKey(key, topic, address, addtocache, true)
 }
 
@@ -770,8 +778,10 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 
 	// if we have a proxhandler on this topic
 	// also deliver message to ourselves
-	if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
-		return p.process(pssMsg, true, true)
+	if _, ok := p.topicHandlerCaps[topic]; ok {
+		if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
+			return p.process(pssMsg, true, true)
+		}
 	}
 	return nil
 }
@@ -1033,4 +1043,11 @@ func (p *Pss) digestBytes(msg []byte) pssDigest {
 	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
 	return digest
+}
+
+func checkAddress(addr *PssAddress) bool {
+	if len(*addr) > addressLength {
+		return false
+	}
+	return true
 }
