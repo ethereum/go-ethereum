@@ -225,7 +225,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		for {
 			select {
 			case msg := <-p.outbox:
-				err := p.forward(msg)
+				err := p.forward(msg, nil)
 				if err != nil {
 					log.Error(err.Error())
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
@@ -887,7 +887,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 }
 
 // tries to send a message, returns true if successful
-func (p *Pss) trySend(sp *network.Peer, msg *PssMsg) bool {
+func trySendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -915,16 +915,21 @@ func (p *Pss) trySend(sp *network.Peer, msg *PssMsg) bool {
 	return err == nil
 }
 
-// Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
-// The recipient address can be of any length, and the byte slice will be matched to the MSB slice
-// of the peer address of the equivalent length.
+// Forwards a pss message to the peer(s) based on recipient address according to the algorithm
+// described below. The recipient address can be of any length, and the byte slice will be matched
+// to the MSB slice of the peer address of the equivalent length.
+//
 // If the recipient address (or partial address) is within the neighbourhood depth of the forwarding
 // node, then it will be forwarded to all the nearest neighbours of the forwarding node. In case of
 // partial address, it should be forwarded to all the peers matching the partial address, if there
 // are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
 // forwarding fails, the node should try to forward it to the next best peer, until the message is
 // successfully forwarded to at least one peer.
-func (p *Pss) forward(msg *PssMsg) error {
+func (p *Pss) forward(msg *PssMsg, trySend func(p *Pss, sp *network.Peer, msg *PssMsg) bool) error {
+	if trySend == nil {
+		trySend = trySendMsg
+	}
+
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
@@ -940,14 +945,21 @@ func (p *Pss) forward(msg *PssMsg) error {
 		depth = luminosityRadius
 	}
 
+	// if measured from the recipient address (as opposed to the base address), then
+	// peers that fall in the same proximity bin will appear one bit closer (at least),
+	// under condition that these additional bits exist in the recipient address.
+	if depth < luminosityRadius && depth < neighbourhoodDepth {
+		depth++
+	}
+
 	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
 		if po < depth && sent > 0 {
 			return false // stop iterating
 		}
-		if p.trySend(sp, msg) {
+		if trySend(p, sp, msg) {
 			sent++
 		}
-		return true // continue
+		return po < addressLength*8 // stop iterating in case of exact match of full address
 	})
 
 	// if we failed to send to anyone, re-insert message in the send-queue
