@@ -402,7 +402,6 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
-
 		startTime := time.Now()
 		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
 		if err != nil {
@@ -411,13 +410,8 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 		}
 		metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 		r.chunkData = chunkData
-		s := r.chunkData.Size()
-		log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
-		if s < 0 {
-			return 0, errors.New("corrupt size")
-		}
-		return int64(s), nil
 	}
+
 	s := r.chunkData.Size()
 	log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
 
