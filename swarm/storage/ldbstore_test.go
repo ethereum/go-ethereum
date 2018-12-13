@@ -445,7 +445,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(nil, chunks[i].Address())
+		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
 
 		if i%2 == 0 {
 			// expect even chunks to be missing

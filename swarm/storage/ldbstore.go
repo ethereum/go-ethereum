@@ -794,11 +794,11 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	batch := s.batch
 
 	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
-	idata, err := s.db.Get(ikey)
+	_, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, &index, po)
 	}
-	idata = encodeIndex(&index)
+	idata := encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 
 	// add the access-chunkindex index for garbage collection
