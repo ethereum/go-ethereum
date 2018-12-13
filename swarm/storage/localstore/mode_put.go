@@ -17,8 +17,6 @@
 package localstore
 
 import (
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -114,7 +112,7 @@ func (db *DB) put(mode ModePut, item shed.IndexItem) (err error) {
 		if item.AccessTimestamp != 0 {
 			// delete current entry from the gc index
 			db.gcIndex.DeleteInBatch(batch, item)
-			atomic.AddInt64(&db.gcSize, -1)
+			db.incGCSize(-1)
 		}
 		if item.StoreTimestamp == 0 {
 			item.StoreTimestamp = now()
@@ -129,7 +127,7 @@ func (db *DB) put(mode ModePut, item shed.IndexItem) (err error) {
 		}
 		// add new entry to gc index
 		db.gcIndex.PutInBatch(batch, item)
-		atomic.AddInt64(&db.gcSize, 1)
+		db.incGCSize(1)
 
 		if db.useRetrievalCompositeIndex {
 			db.retrievalCompositeIndex.PutInBatch(batch, item)

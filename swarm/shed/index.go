@@ -262,3 +262,18 @@ func (f Index) IterateFrom(start IndexItem, fn IndexIterFunc) (err error) {
 	}
 	return it.Error()
 }
+
+// Count returns the number of items in index.
+func (f Index) Count() (count int, err error) {
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	for ok := it.Seek(f.prefix); ok; ok = it.Next() {
+		key := it.Key()
+		if key[0] != f.prefix[0] {
+			break
+		}
+		count++
+	}
+	return count, it.Error()
+}

@@ -166,10 +166,10 @@ func TestDB_updateGCSem(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkNew/1000-8         	     200	  11684285 ns/op	 9556056 B/op	   10005 allocs/op
-// BenchmarkNew/10000-8        	     100	  15161036 ns/op	10539571 B/op	    7799 allocs/op
-// BenchmarkNew/100000-8       	      20	  74270386 ns/op	18234588 B/op	   24382 allocs/op
-// BenchmarkNew/1000000-8      	       2	 942098251 ns/op	48747500 B/op	  274976 allocs/op
+// BenchmarkNew/1000-8         	     200	  11672414 ns/op	 9570960 B/op	   10008 allocs/op
+// BenchmarkNew/10000-8        	     100	  14890609 ns/op	10490118 B/op	    7759 allocs/op
+// BenchmarkNew/100000-8       	      20	  58334080 ns/op	17763157 B/op	   22978 allocs/op
+// BenchmarkNew/1000000-8      	       2	 748595153 ns/op	45297404 B/op	  253242 allocs/op
 // PASS
 func BenchmarkNew(b *testing.B) {
 	if testing.Short() {
@@ -178,8 +178,8 @@ func BenchmarkNew(b *testing.B) {
 	for _, count := range []int{
 		1000,
 		10000,
-		// 100000,
-		// 1000000,
+		100000,
+		1000000,
 	} {
 		b.Run(strconv.Itoa(count), func(b *testing.B) {
 			dir, err := ioutil.TempDir("", "localstore-new-benchmark")
@@ -499,69 +499,6 @@ func validateItem(t *testing.T, item shed.IndexItem, address, data []byte, store
 	}
 	if item.AccessTimestamp != accessTimestamp {
 		t.Errorf("got item access timestamp %v, want %v", item.AccessTimestamp, accessTimestamp)
-	}
-}
-
-// setTestHookUpdateGC sets testHookUpdateGC and
-// returns a function that will reset it to the
-// value before the change.
-func setTestHookUpdateGC(h func()) (reset func()) {
-	current := testHookUpdateGC
-	reset = func() { testHookUpdateGC = current }
-	testHookUpdateGC = h
-	return reset
-}
-
-// TestSetTestHookUpdateGC tests if setTestHookUpdateGC changes
-// testHookUpdateGC function correctly and if its reset function
-// resets the original function.
-func TestSetTestHookUpdateGC(t *testing.T) {
-	// Set the current function after the test finishes.
-	defer func(h func()) { testHookUpdateGC = h }(testHookUpdateGC)
-
-	// expected value for the unchanged function
-	original := 1
-	// expected value for the changed function
-	changed := 2
-
-	// this variable will be set with two different functions
-	var got int
-
-	// define the original (unchanged) functions
-	testHookUpdateGC = func() {
-		got = original
-	}
-
-	// set got variable
-	testHookUpdateGC()
-
-	// test if got variable is set correctly
-	if got != original {
-		t.Errorf("got hook value %v, want %v", got, original)
-	}
-
-	// set the new function
-	reset := setTestHookUpdateGC(func() {
-		got = changed
-	})
-
-	// set got variable
-	testHookUpdateGC()
-
-	// test if got variable is set correctly to changed value
-	if got != changed {
-		t.Errorf("got hook value %v, want %v", got, changed)
-	}
-
-	// set the function to the original one
-	reset()
-
-	// set got variable
-	testHookUpdateGC()
-
-	// test if got variable is set correctly to original value
-	if got != original {
-		t.Errorf("got hook value %v, want %v", got, original)
 	}
 }
 

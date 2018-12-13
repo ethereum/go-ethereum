@@ -204,3 +204,66 @@ func testModeGetSyncValues(t *testing.T, db *DB) {
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
+
+// setTestHookUpdateGC sets testHookUpdateGC and
+// returns a function that will reset it to the
+// value before the change.
+func setTestHookUpdateGC(h func()) (reset func()) {
+	current := testHookUpdateGC
+	reset = func() { testHookUpdateGC = current }
+	testHookUpdateGC = h
+	return reset
+}
+
+// TestSetTestHookUpdateGC tests if setTestHookUpdateGC changes
+// testHookUpdateGC function correctly and if its reset function
+// resets the original function.
+func TestSetTestHookUpdateGC(t *testing.T) {
+	// Set the current function after the test finishes.
+	defer func(h func()) { testHookUpdateGC = h }(testHookUpdateGC)
+
+	// expected value for the unchanged function
+	original := 1
+	// expected value for the changed function
+	changed := 2
+
+	// this variable will be set with two different functions
+	var got int
+
+	// define the original (unchanged) functions
+	testHookUpdateGC = func() {
+		got = original
+	}
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
+	}
+
+	// set the new function
+	reset := setTestHookUpdateGC(func() {
+		got = changed
+	})
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly to changed value
+	if got != changed {
+		t.Errorf("got hook value %v, want %v", got, changed)
+	}
+
+	// set the function to the original one
+	reset()
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly to original value
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
+	}
+}

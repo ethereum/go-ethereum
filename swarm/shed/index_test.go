@@ -407,6 +407,101 @@ func TestIndex_iterate(t *testing.T) {
 	})
 }
 
+// TestIndex_Count tests if Index.Count returns the correct
+// number of items.
+func TestIndex_Count(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items := []IndexItem{
+		{
+			Address: []byte("iterate-hash-01"),
+			Data:    []byte("data80"),
+		},
+		{
+			Address: []byte("iterate-hash-03"),
+			Data:    []byte("data22"),
+		},
+		{
+			Address: []byte("iterate-hash-05"),
+			Data:    []byte("data41"),
+		},
+		{
+			Address: []byte("iterate-hash-02"),
+			Data:    []byte("data84"),
+		},
+		{
+			Address: []byte("iterate-hash-06"),
+			Data:    []byte("data1"),
+		},
+	}
+	batch := new(leveldb.Batch)
+	for _, i := range items {
+		index.PutInBatch(batch, i)
+	}
+	err = db.WriteBatch(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := index.Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := len(items)
+	if got != want {
+		t.Errorf("got %v items count, want %v", got, want)
+	}
+
+	// update the index with another item
+
+	item04 := IndexItem{
+		Address: []byte("iterate-hash-04"),
+		Data:    []byte("data0"),
+	}
+	err = index.Put(item04)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = index.Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want = len(items) + 1
+	if got != want {
+		t.Errorf("got %v items count, want %v", got, want)
+	}
+
+	// delete some items
+
+	deleteCount := 3
+
+	for _, item := range items[:deleteCount] {
+		err := index.Delete(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err = index.Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want = len(items) + 1 - deleteCount
+	if got != want {
+		t.Errorf("got %v items count, want %v", got, want)
+	}
+}
+
 // checkIndexItem is a test helper function that compares if two Index items are the same.
 func checkIndexItem(t *testing.T, got, want IndexItem) {
 	t.Helper()

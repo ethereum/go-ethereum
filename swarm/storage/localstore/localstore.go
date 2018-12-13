@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/shed"
@@ -41,9 +40,13 @@ var (
 	ErraddressLockTimeout = errors.New("update lock timeout")
 )
 
-// Limit the number of goroutines created by Getters
-// that call updateGC function. Value 0 sets no limit.
-var maxParallelUpdateGC = 1000
+var (
+	// Default value for Capacity DB option.
+	defaultCapacity int64 = 5000000
+	// Limit the number of goroutines created by Getters
+	// that call updateGC function. Value 0 sets no limit.
+	maxParallelUpdateGC = 1000
+)
 
 // DB is the local store implementation and holds
 // database related objects.
@@ -71,6 +74,11 @@ type DB struct {
 
 	// number of elements in garbage collection index
 	gcSize int64
+	// garbage collection is triggered when gcSize exceeds
+	// the capacity value
+	capacity int64
+
+	collectGarbageTrigger chan struct{}
 
 	// a buffered channel acting as a semaphore
 	// to limit the maximal number of goroutines
@@ -80,6 +88,10 @@ type DB struct {
 	baseKey []byte
 
 	addressLocks sync.Map
+
+	// this channel is closed when close function is called
+	// to terminate other goroutines
+	close chan struct{}
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -99,6 +111,9 @@ type Options struct {
 	// of swarm nodes with chunk data deduplication provided by
 	// the mock global store.
 	MockStore *mock.NodeStore
+	// Capacity is a limit that triggers garbage collection when
+	// number of items in gcIndex equals or exceeds it.
+	Capacity int64
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -109,8 +124,17 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		o = new(Options)
 	}
 	db = &DB{
+		capacity:                   o.Capacity,
 		baseKey:                    baseKey,
 		useRetrievalCompositeIndex: o.UseRetrievalCompositeIndex,
+		// this channel needs to be buffered with the size of 1
+		// to signal another garbage collection run if it
+		// is triggered during already running one
+		collectGarbageTrigger: make(chan struct{}, 1),
+		close:                 make(chan struct{}),
+	}
+	if db.capacity <= 0 {
+		db.capacity = defaultCapacity
 	}
 	if maxParallelUpdateGC > 0 {
 		db.updateGCSem = make(chan struct{}, maxParallelUpdateGC)
@@ -321,18 +345,20 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// start garbage collection worker
+	go db.collectGarbage()
 	// count number of elements in garbage collection index
-	var gcSize int64
-	db.gcIndex.IterateAll(func(_ shed.IndexItem) (stop bool, err error) {
-		gcSize++
-		return false, nil
-	})
-	atomic.AddInt64(&db.gcSize, gcSize)
+	gcSize, err := db.gcIndex.Count()
+	if err != nil {
+		return nil, err
+	}
+	db.incGCSize(int64(gcSize))
 	return db, nil
 }
 
 // Close closes the underlying database.
 func (db *DB) Close() (err error) {
+	close(db.close)
 	return db.shed.Close()
 }
 

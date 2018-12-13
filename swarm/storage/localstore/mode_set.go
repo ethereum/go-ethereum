@@ -17,8 +17,6 @@
 package localstore
 
 import (
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -88,7 +86,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 				item.AccessTimestamp = i.AccessTimestamp
 				item.StoreTimestamp = i.StoreTimestamp
 				db.gcIndex.DeleteInBatch(batch, item)
-				atomic.AddInt64(&db.gcSize, -1)
+				db.incGCSize(-1)
 			case leveldb.ErrNotFound:
 				db.pullIndex.DeleteInBatch(batch, item)
 				item.AccessTimestamp = now()
@@ -113,7 +111,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 			case nil:
 				item.AccessTimestamp = i.AccessTimestamp
 				db.gcIndex.DeleteInBatch(batch, item)
-				atomic.AddInt64(&db.gcSize, -1)
+				db.incGCSize(-1)
 			case leveldb.ErrNotFound:
 				// the chunk is not accessed before
 			default:
@@ -124,7 +122,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pullIndex.PutInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
-		atomic.AddInt64(&db.gcSize, 1)
+		db.incGCSize(1)
 
 	case ModeSetSync:
 		// delete from push, insert to gc
@@ -157,7 +155,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 				// the chunk is accessed before
 				// remove the current gc index item
 				db.gcIndex.DeleteInBatch(batch, item)
-				atomic.AddInt64(&db.gcSize, -1)
+				db.incGCSize(-1)
 			}
 		} else {
 			i, err := db.retrievalDataIndex.Get(item)
@@ -179,7 +177,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 			case nil:
 				item.AccessTimestamp = i.AccessTimestamp
 				db.gcIndex.DeleteInBatch(batch, item)
-				atomic.AddInt64(&db.gcSize, -1)
+				db.incGCSize(-1)
 			case leveldb.ErrNotFound:
 				// the chunk is not accessed before
 			default:
@@ -190,7 +188,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
-		atomic.AddInt64(&db.gcSize, 1)
+		db.incGCSize(1)
 
 	case ModeSetRemove:
 		// delete from retrieve, pull, gc
@@ -230,8 +228,10 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.gcIndex.DeleteInBatch(batch, item)
 		// TODO: optimize in garbage collection
 		// get is too expensive operation
+		// Suggestion: remove ModeSetRemove and use this code
+		// only in collectGarbage function
 		if _, err := db.gcIndex.Get(item); err == nil {
-			atomic.AddInt64(&db.gcSize, -1)
+			db.incGCSize(-1)
 		}
 
 	default:
