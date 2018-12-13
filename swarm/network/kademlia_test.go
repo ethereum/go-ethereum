@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	printResults = flag.Bool("printresults", false, "print results for the EachBin test")
+	printResults = flag.Bool("print", false, "print results for the EachBin test")
 )
 
 func init() {
@@ -913,13 +913,13 @@ Addresses used in this test are discovered as part of the simulation network
 in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
-Wed Dec 12 14:03:58 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
-population: 12 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
-000  2 835f 8196                    | 18 8196 (0) 835f (0) 8958 (0) 8e23 (0)
-001  2 28f0 2690                    | 14 2690 (0) 28f0 (0) 2850 (0) 3a51 (0)
-002  2 4a45 4d72                    | 11 4d72 (0) 4a45 (0) 4375 (0) 4607 (0)
+Thu Dec 13 14:21:47 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
+population: 49 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+000 18 8196 835f 8958 8e23          | 18 8196 (0) 835f (0) 8958 (0) 8e23 (0)
+001 14 2690 28f0 2850 3a51          | 14 2690 (0) 28f0 (0) 2850 (0) 3a51 (0)
+002 11 4d72 4a45 4375 4607          | 11 4d72 (0) 4a45 (0) 4375 (0) 4607 (0)
 003  1 646e                         |  1 646e (0)
-004  3 7656 76d1 769c               |  3 769c (0) 76d1 (0) 7656 (0)
+004  3 769c 76d1 7656               |  3 769c (0) 76d1 (0) 7656 (0)
 ============ DEPTH: 5 ==========================================
 005  1 7a48                         |  1 7a48 (0)
 006  1 7cbd                         |  1 7cbd (0)
@@ -969,7 +969,6 @@ func TestEachBin(t *testing.T) {
 
 	//we need to add all other addresses in order to have the kademlia built as expected
 	addrs := []string{
-		"7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e",
 		"ec560e6a4806aa37f147ee83687f3cf044d9953e61eedb8c34b6d50d9e2c5623",
 		"646e9540c84f6a2f9cf6585d45a4c219573b4fd1b64a3c9a1386fc5cf98c0d4d",
 		"18f13c5fba653781019025ab10e8d2fdc916d6448729268afe9e928ffcdbb8e8",
@@ -1021,34 +1020,16 @@ func TestEachBin(t *testing.T) {
 		"81968a2d8fb39114342ee1da85254ec51e0608d7f0f6997c2a8354c260a71009",
 	}
 
-	//construct the peers and the kademlia
+	//create the pivot's kademlia
 	addr := common.FromHex(pivotAddr)
-	addrs = append(addrs, pivotAddr)
-
 	k := NewKademlia(addr, NewKadParams())
 
-	as := make([][]byte, len(addrs))
-	for i, a := range addrs {
-		as[i] = common.FromHex(a)
+	//construct the peers and the kademlia
+	for _, a := range addrs {
+		addr := common.FromHex(a)
+		k.On(NewPeer(&BzzPeer{BzzAddr: &BzzAddr{OAddr: addr}}, k))
 	}
 
-	for _, a := range as {
-		if bytes.Equal(a, addr) {
-			continue
-		}
-		p := &BzzAddr{OAddr: a, UAddr: a}
-		if err := k.Register(p); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	for {
-		a, _, _ := k.SuggestPeer()
-		if a == nil {
-			break
-		}
-		k.On(NewPeer(&BzzPeer{BzzAddr: a}, k))
-	}
 	//TODO: check kad table is same
 	//currently k.String() prints date so it will never be the same :)
 	//--> implement JSON representation of kad table
@@ -1069,7 +1050,7 @@ func TestEachBin(t *testing.T) {
 		return true
 	}
 	//run the k.EachBin function
-	k.EachBin(addr[:], pot.DefaultPof(256), 0, eachBinFunc)
+	k.EachBin(addr[:], pot.DefaultPof(k.MaxProxDisplay), 0, eachBinFunc)
 
 	//now, check that all peers have the expected (fake) subscriptions
 
@@ -1082,11 +1063,10 @@ func TestEachBin(t *testing.T) {
 			//if the peer's bin is below the kademlia depth...
 			if bin < k.NeighbourhoodDepth() {
 				//(iterate all (fake) subscriptions)
-				for i, subbin := range fakeSubs {
-					//...each bin from 0 to the peer's bin number should be "subscribed"
-					//(and be smaller than bin)
-					// as we start from 0 we can use the iteration index to check
-					if i != subbin || subbin > bin {
+				for _, subbin := range fakeSubs {
+					//...only the peer's bin should be "subscribed"
+					//(and thus have only one subscription)
+					if subbin != bin || len(fakeSubs) != 1 {
 						t.Fatalf("Did not get expected subscription for bin < depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 				}
@@ -1094,8 +1074,8 @@ func TestEachBin(t *testing.T) {
 				//(iterate all (fake) subscriptions)
 				for i, subbin := range fakeSubs {
 					//...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
-					//(and be smaller than bin)
-					if subbin != i+bin || subbin < bin {
+					// as we start from depth we can use the iteration index to check
+					if subbin != i+k.NeighbourhoodDepth() {
 						t.Fatalf("Did not get expected subscription for bin > depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 					//the last "subscription" should be k.MaxProxDisplay
@@ -1117,5 +1097,4 @@ func TestEachBin(t *testing.T) {
 			fmt.Println("")
 		}
 	}
-
 }
