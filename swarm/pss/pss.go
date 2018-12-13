@@ -759,6 +759,9 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
+	if !checkAddress(&address) {
+		return errors.New("invalid address")
+	}
 	pssMsgParams := &msgParams{
 		raw: true,
 	}

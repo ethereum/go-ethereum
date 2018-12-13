@@ -1028,6 +1028,12 @@ func TestApi(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on empty msg")
 	}
+
+	overflowAddr := [33]byte{}
+	err = clients[0].Call(nil, "pss_sendRaw", hexutil.Encode(overflowAddr[:]), topic, "0x666f6f")
+	if err == nil {
+		t.Fatal("expected error on send too big address")
+	}
 }
 
 // verifies that nodes can send and receive raw (verbatim) messages
