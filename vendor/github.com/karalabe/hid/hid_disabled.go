@@ -2,11 +2,9 @@
 // Copyright (c) 2017 Péter Szilágyi. All rights reserved.
 //
 // This file is released under the 3-clause BSD license. Note however that Linux
-// support depends on libusb, released under GNU GPL 2.1 or later.
+// support depends on libusb, released under GNU LGPL 2.1 or later.
 
-// +build !linux
-// +build !darwin ios
-// +build !windows
+// +build !linux,!darwin,!windows ios !cgo
 
 package hid
 
@@ -38,7 +36,7 @@ func (info DeviceInfo) Open() (*Device, error) {
 
 // Close releases the HID USB device handle. On platforms that this file implements
 // the method is just a noop.
-func (dev *Device) Close() {}
+func (dev *Device) Close() error { return nil }
 
 // Write sends an output report to a HID device. On platforms that this file
 // implements the method just returns an error.

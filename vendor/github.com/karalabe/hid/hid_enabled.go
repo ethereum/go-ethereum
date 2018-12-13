@@ -2,10 +2,9 @@
 // Copyright (c) 2017 Péter Szilágyi. All rights reserved.
 //
 // This file is released under the 3-clause BSD license. Note however that Linux
-// support depends on libusb, released under GNU GPL 2.1 or later.
+// support depends on libusb, released under LGNU GPL 2.1 or later.
 
-// +build !ios
-// +build linux darwin windows
+// +build linux,cgo darwin,!ios,cgo windows,cgo
 
 package hid
 
@@ -13,6 +12,7 @@ package hid
 #cgo CFLAGS: -I./hidapi/hidapi
 
 #cgo linux CFLAGS: -I./libusb/libusb -DDEFAULT_VISIBILITY="" -DOS_LINUX -D_GNU_SOURCE -DPOLL_NFDS_TYPE=int
+#cgo linux,!android LDFLAGS: -lrt
 #cgo darwin CFLAGS: -DOS_DARWIN
 #cgo darwin LDFLAGS: -framework CoreFoundation -framework IOKit
 #cgo windows CFLAGS: -DOS_WINDOWS
@@ -41,6 +41,7 @@ package hid
 #endif
 */
 import "C"
+
 import (
 	"errors"
 	"runtime"
@@ -48,10 +49,14 @@ import (
 	"unsafe"
 )
 
-func init() {
-	// Initialize the HIDAPI library
-	C.hid_init()
-}
+// enumerateLock is a mutex serializing access to USB device enumeration needed
+// by the macOS USB HID system calls, which require 2 consecutive method calls
+// for enumeration, causing crashes if called concurrently.
+//
+// For more details, see:
+//   https://developer.apple.com/documentation/iokit/1438371-iohidmanagersetdevicematching
+//   > "subsequent calls will cause the hid manager to release previously enumerated devices"
+var enumerateLock sync.Mutex
 
 // Supported returns whether this platform is supported by the HID library or not.
 // The goal of this method is to allow programatically handling platforms that do
@@ -66,6 +71,9 @@ func Supported() bool {
 //  - If the product id is set to 0 then any product matches.
 //  - If the vendor and product id are both 0, all HID devices are returned.
 func Enumerate(vendorID uint16, productID uint16) []DeviceInfo {
+	enumerateLock.Lock()
+	defer enumerateLock.Unlock()
+
 	// Gather all device infos and ensure they are freed before returning
 	head := C.hid_enumerate(C.ushort(vendorID), C.ushort(productID))
 	if head == nil {
@@ -101,6 +109,9 @@ func Enumerate(vendorID uint16, productID uint16) []DeviceInfo {
 
 // Open connects to an HID device by its path name.
 func (info DeviceInfo) Open() (*Device, error) {
+	enumerateLock.Lock()
+	defer enumerateLock.Unlock()
+
 	path := C.CString(info.Path)
 	defer C.free(unsafe.Pointer(path))
 
@@ -123,7 +134,7 @@ type Device struct {
 }
 
 // Close releases the HID USB device handle.
-func (dev *Device) Close() {
+func (dev *Device) Close() error {
 	dev.lock.Lock()
 	defer dev.lock.Unlock()
 
@@ -131,6 +142,7 @@ func (dev *Device) Close() {
 		C.hid_close(dev.device)
 		dev.device = nil
 	}
+	return nil
 }
 
 // Write sends an output report to a HID device.
