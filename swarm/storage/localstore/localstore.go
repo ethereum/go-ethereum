@@ -41,6 +41,10 @@ var (
 	ErraddressLockTimeout = errors.New("update lock timeout")
 )
 
+// Limit the number of goroutines created by Getters
+// that call updateGC function. Value 0 sets no limit.
+var maxParallelUpdateGC = 1000
+
 // DB is the local store implementation and holds
 // database related objects.
 type DB struct {
@@ -67,6 +71,11 @@ type DB struct {
 
 	// number of elements in garbage collection index
 	gcSize int64
+
+	// a buffered channel acting as a semaphore
+	// to limit the maximal number of goroutines
+	// created by Getters to call updateGC function
+	updateGCSem chan struct{}
 
 	baseKey []byte
 
@@ -102,6 +111,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db = &DB{
 		baseKey:                    baseKey,
 		useRetrievalCompositeIndex: o.UseRetrievalCompositeIndex,
+	}
+	if maxParallelUpdateGC > 0 {
+		db.updateGCSem = make(chan struct{}, maxParallelUpdateGC)
 	}
 
 	db.shed, err = shed.NewDB(path)

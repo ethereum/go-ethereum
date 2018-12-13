@@ -24,6 +24,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -88,6 +89,64 @@ func TestDB_useRetrievalCompositeIndex(t *testing.T) {
 			t.Error("useRetrievalCompositeIndex is not set to false")
 		}
 	})
+}
+
+// TestDB_updateGCSem tests maxParallelUpdateGC limit.
+// This test temporary sets the limit to a low number,
+// makes updateGC function execution time longer by
+// setting a custom testHookUpdateGC function with a sleep
+// and a count current and maximal number of goroutines.
+func TestDB_updateGCSem(t *testing.T) {
+	defer func(m int) { maxParallelUpdateGC = m }(maxParallelUpdateGC)
+	maxParallelUpdateGC = 3
+
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	chunk := generateRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updateGCSleep := time.Second
+	var count int
+	var max int
+	var mu sync.Mutex
+	defer setTestHookUpdateGC(func() {
+		mu.Lock()
+		// add to the count of current goroutines
+		count++
+		if count > max {
+			// set maximal detected numbers of goroutines
+			max = count
+		}
+		mu.Unlock()
+
+		// wait for some time to ensure multiple parallel goroutines
+		time.Sleep(updateGCSleep)
+
+		mu.Lock()
+		count--
+		mu.Unlock()
+	})()
+
+	getter := db.NewGetter(ModeGetRequest)
+
+	// get more chunks then maxParallelUpdateGC
+	// in time shorter then updateGCSleep
+	for i := 0; i < 5; i++ {
+		_, err = getter.Get(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if max != maxParallelUpdateGC {
+		t.Errorf("got max %v, want %v", max, maxParallelUpdateGC)
+	}
+
 }
 
 // BenchmarkNew measures the time that New function

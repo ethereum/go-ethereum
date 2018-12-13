@@ -87,7 +87,17 @@ func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.IndexItem, err e
 	switch mode {
 	// update the access timestamp and gc index
 	case ModeGetRequest:
+		if db.updateGCSem != nil {
+			// wait before creating new goroutines
+			// if updateGCSem buffer id full
+			db.updateGCSem <- struct{}{}
+		}
 		go func() {
+			if db.updateGCSem != nil {
+				// free a spot in updateGCSem buffer
+				// for a new goroutine
+				defer func() { <-db.updateGCSem }()
+			}
 			err := db.updateGC(out)
 			if err != nil {
 				log.Error("localstore update gc", "err", err)
