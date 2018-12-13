@@ -368,14 +368,11 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 	var endPo int
 	kadDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
-	k.conns.EachBin(base, Pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-		if startPo > 0 && endPo != k.MaxProxDisplay {
-			startPo = endPo + 1
-		}
+	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		if po < kadDepth {
 			endPo = po
 		} else {
-			startPo = kadDepth
+			startPo = po
 			endPo = k.MaxProxDisplay
 		}
 

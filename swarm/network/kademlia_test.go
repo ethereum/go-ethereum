@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -29,6 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pot"
+)
+
+var (
+	printResults = flag.Bool("printresults", false, "print results for the EachBin test")
 )
 
 func init() {
@@ -890,7 +895,15 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 }
 
 /*
-TestEachBin is a unit test for the `EachBin` function
+TestEachBin is a unit test for the kademlia's `EachBin` function.
+That function is actually used only for streamer subscriptions.
+
+Thus, the test does:
+	* assigns each known connected peer to a bin map
+  * build up a known kademlia in advance
+	* runs the EachBin function, which returns supposed subscription bins
+	* store all supposed bins per peer in a map
+	* check that all peers have the expected subscriptions
 
 This kad table and its peers are copied from TestKademliaCase1,
 it represents an edge case but for the purpose of a unit test for
@@ -922,9 +935,10 @@ population: 12 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
 =========================================================================
 */
 func TestEachBin(t *testing.T) {
+	//the pivot address; this is the actual kademlia node
 	pivotAddr := "7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e"
 
-	//a map of bin to addresses
+	//a map of bin number to addresses from the given kademlia
 	binMap := make(map[int][]string)
 	binMap[0] = []string{
 		"835fbbf1d16ba7347b6e2fc552d6e982148d29c624ea20383850df3c810fa8fc",
@@ -953,6 +967,7 @@ func TestEachBin(t *testing.T) {
 		"7cbd42350bde8e18ae5b955b5450f8e2cef3419f92fbf5598160c60fd78619f0",
 	}
 
+	//we need to add all other addresses in order to have the kademlia built as expected
 	addrs := []string{
 		"7efef1c41d77f843ad167be95f6660567eb8a4a59f39240000cce2e0d65baf8e",
 		"ec560e6a4806aa37f147ee83687f3cf044d9953e61eedb8c34b6d50d9e2c5623",
@@ -1006,6 +1021,7 @@ func TestEachBin(t *testing.T) {
 		"81968a2d8fb39114342ee1da85254ec51e0608d7f0f6997c2a8354c260a71009",
 	}
 
+	//construct the peers and the kademlia
 	addr := common.FromHex(pivotAddr)
 	addrs = append(addrs, pivotAddr)
 
@@ -1038,25 +1054,68 @@ func TestEachBin(t *testing.T) {
 	//--> implement JSON representation of kad table
 	log.Debug(k.String())
 
+	//simulate that we would do subscriptions: just store the bin numbers
 	fakeSubscriptions := make(map[string][]int)
+	//define the function which should run for each connection
 	eachBinFunc := func(p *Peer, bin int) bool {
+		//get the peer ID
 		peerstr := fmt.Sprintf("%x", p.Over())
+		//create the array of bins per peer
 		if _, ok := fakeSubscriptions[peerstr]; !ok {
 			fakeSubscriptions[peerstr] = make([]int, 0)
 		}
+		//store the (fake) bin subscription
 		fakeSubscriptions[peerstr] = append(fakeSubscriptions[peerstr], bin)
 		return true
 	}
-
+	//run the k.EachBin function
 	k.EachBin(addr[:], pot.DefaultPof(256), 0, eachBinFunc)
 
-	for p, subs := range fakeSubscriptions {
-		fmt.Println(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
-		fmt.Print("...")
-		for i := range subs {
-			fmt.Print(fmt.Sprintf("%d,", i))
+	//now, check that all peers have the expected (fake) subscriptions
+
+	//iterate the bin map
+	for bin, peers := range binMap {
+		//for every peer...
+		for _, peer := range peers {
+			//...get its (fake) subscriptions
+			fakeSubs := fakeSubscriptions[peer]
+			//if the peer's bin is below the kademlia depth...
+			if bin < k.NeighbourhoodDepth() {
+				//(iterate all (fake) subscriptions)
+				for i, subbin := range fakeSubs {
+					//...each bin from 0 to the peer's bin number should be "subscribed"
+					//(and be smaller than bin)
+					// as we start from 0 we can use the iteration index to check
+					if i != subbin || subbin > bin {
+						t.Fatalf("Did not get expected subscription for bin < depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
+					}
+				}
+			} else { //if the peer's bin is equal or higher than the kademlia depth...
+				//(iterate all (fake) subscriptions)
+				for i, subbin := range fakeSubs {
+					//...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
+					//(and be smaller than bin)
+					if subbin != i+bin || subbin < bin {
+						t.Fatalf("Did not get expected subscription for bin > depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
+					}
+					//the last "subscription" should be k.MaxProxDisplay
+					if i == len(fakeSubs)-1 && subbin != k.MaxProxDisplay {
+						t.Fatalf("Expected last subscription to be: %d, but is: %d", k.MaxProxDisplay, subbin)
+					}
+				}
+			}
 		}
-		fmt.Println("")
+	}
+
+	if *printResults {
+		for p, subs := range fakeSubscriptions {
+			fmt.Println(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
+			fmt.Print("...")
+			for _, bin := range subs {
+				fmt.Print(fmt.Sprintf("%d,", bin))
+			}
+			fmt.Println("")
+		}
 	}
 
 }
