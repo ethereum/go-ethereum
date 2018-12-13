@@ -29,9 +29,9 @@ var (
 )
 
 // ConnectToPivotNode connects the node with provided NodeID
-// to the pivot node, already set by Connections.SetPivotNode method.
+// to the pivot node, already set by Network.SetPivotNode method.
 // It is useful when constructing a star network topology
-// when Connections adds and removes nodes dynamically.
+// when Network adds and removes nodes dynamically.
 func (net *Network) ConnectToPivotNode(id enode.ID) (err error) {
 	pivot := net.PivotNodeID()
 	if pivot == nil {

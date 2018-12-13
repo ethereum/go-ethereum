@@ -91,12 +91,7 @@ func TestConnectToLastNode(t *testing.T) {
 		}
 
 		if net.GetConn(first, id) != nil {
-			t.Errorf(
-				"connection must not exits with node(ind: %v, id: %v)",
-				i,
-				id,
-			)
-
+			t.Errorf("connection must not exits with node(ind: %v, id: %v)", i, id)
 		}
 	}
 
