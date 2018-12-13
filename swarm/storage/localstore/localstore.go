@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -34,10 +35,10 @@ var (
 	ErrInvalidMode = errors.New("invalid mode")
 	// ErrDBClosed is returned when database is closed.
 	ErrDBClosed = errors.New("db closed")
-	// ErrUpdateLockTimeout is returned when the same chunk
+	// ErraddressLockTimeout is returned when the same chunk
 	// is updated in parallel and one of the updates
 	// takes longer then the configured timeout duration.
-	ErrUpdateLockTimeout = errors.New("update lock timeout")
+	ErraddressLockTimeout = errors.New("update lock timeout")
 )
 
 // DB is the local store implementation and holds
@@ -69,7 +70,7 @@ type DB struct {
 
 	baseKey []byte
 
-	updateLocks sync.Map
+	addressLocks sync.Map
 }
 
 // Options struct holds optional parameters for configuring DB.
@@ -327,6 +328,50 @@ func (db *DB) Close() (err error) {
 // and database base key.
 func (db *DB) po(addr storage.Address) (bin uint8) {
 	return uint8(storage.Proximity(db.baseKey, addr))
+}
+
+var (
+	// Maximal time for lockAddr to wait until it
+	// returns error.
+	addressLockTimeout = 3 * time.Second
+	// duration between two lock checks in lockAddr.
+	addressLockCheckDelay = 30 * time.Microsecond
+)
+
+// lockAddr sets the lock on a particular address
+// using addressLocks sync.Map and returns unlock function.
+// If the address is locked this function will check it
+// in a for loop for addressLockTimeout time, after which
+// it will return ErraddressLockTimeout error.
+func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
+	start := time.Now()
+	lockKey := hex.EncodeToString(addr)
+	for {
+		_, loaded := db.addressLocks.LoadOrStore(lockKey, struct{}{})
+		if !loaded {
+			break
+		}
+		time.Sleep(addressLockCheckDelay)
+		if time.Since(start) > addressLockTimeout {
+			return nil, ErraddressLockTimeout
+		}
+	}
+	return func() { db.addressLocks.Delete(lockKey) }, nil
+}
+
+// chunkToItem creates new IndexItem with data provided by the Chunk.
+func chunkToItem(ch storage.Chunk) shed.IndexItem {
+	return shed.IndexItem{
+		Address: ch.Address(),
+		Data:    ch.Data(),
+	}
+}
+
+// addressToItem creates new IndexItem with a provided address.
+func addressToItem(addr storage.Address) shed.IndexItem {
+	return shed.IndexItem{
+		Address: addr,
+	}
 }
 
 // now is a helper function that returns a current unix timestamp

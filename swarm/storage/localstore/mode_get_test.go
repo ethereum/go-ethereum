@@ -1,0 +1,206 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package localstore
+
+import (
+	"bytes"
+	"testing"
+	"time"
+)
+
+// TestModeGetRequest validates internal data operations and state
+// for ModeGetRequest on DB with default configuration.
+func TestModeGetRequest(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	testModeGetRequestValues(t, db)
+}
+
+// TestModeGetRequest_useRetrievalCompositeIndex validates internal
+// data operations and state for ModeGetRequest on DB with
+// retrieval composite index enabled.
+func TestModeGetRequest_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
+	defer cleanupFunc()
+
+	testModeGetRequestValues(t, db)
+}
+
+// testModeGetRequestValues validates ModeGetRequest index values on the provided DB.
+func testModeGetRequestValues(t *testing.T, db *DB) {
+	uploadTimestamp := time.Now().UTC().UnixNano()
+	defer setNow(func() (t int64) {
+		return uploadTimestamp
+	})()
+
+	chunk := generateRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	requester := db.NewGetter(ModeGetRequest)
+
+	// set update gc test hook to signal when
+	// update gc goroutine is done by sending to
+	// testHookUpdateGCChan channel, which is
+	// used to wait for garbage colletion index
+	// changes
+	testHookUpdateGCChan := make(chan struct{})
+	defer setTestHookUpdateGC(func() {
+		testHookUpdateGCChan <- struct{}{}
+	})()
+
+	t.Run("get unsynced", func(t *testing.T) {
+		got, err := requester.Get(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// wait for update gc goroutine to be done
+		<-testHookUpdateGCChan
+
+		if !bytes.Equal(got.Address(), chunk.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		}
+
+		if !bytes.Equal(got.Data(), chunk.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		}
+
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
+
+		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
+	})
+
+	// set chunk to synced state
+	err = db.NewSetter(ModeSetSync).Set(chunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("first get", func(t *testing.T) {
+		got, err := requester.Get(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// wait for update gc goroutine to be done
+		<-testHookUpdateGCChan
+
+		if !bytes.Equal(got.Address(), chunk.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		}
+
+		if !bytes.Equal(got.Data(), chunk.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		}
+
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, uploadTimestamp))
+
+		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, uploadTimestamp))
+
+		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
+	})
+
+	t.Run("second get", func(t *testing.T) {
+		accessTimestamp := time.Now().UTC().UnixNano()
+		defer setNow(func() (t int64) {
+			return accessTimestamp
+		})()
+
+		got, err := requester.Get(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// wait for update gc goroutine to be done
+		<-testHookUpdateGCChan
+
+		if !bytes.Equal(got.Address(), chunk.Address()) {
+			t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+		}
+
+		if !bytes.Equal(got.Data(), chunk.Data()) {
+			t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+		}
+
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, accessTimestamp))
+
+		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, accessTimestamp))
+
+		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+
+		t.Run("gc size", newIndexGCSizeTest(db))
+	})
+}
+
+// TestModeGetSync validates internal data operations and state
+// for ModeGetSync on DB with default configuration.
+func TestModeGetSync(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	testModeGetSyncValues(t, db)
+}
+
+// TestModeGetSync_useRetrievalCompositeIndex validates internal
+// data operations and state for ModeGetSync on DB with
+// retrieval composite index enabled.
+func TestModeGetSync_useRetrievalCompositeIndex(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
+	defer cleanupFunc()
+
+	testModeGetSyncValues(t, db)
+}
+
+// testModeGetSyncValues validates ModeGetSync index values on the provided DB.
+func testModeGetSyncValues(t *testing.T, db *DB) {
+	uploadTimestamp := time.Now().UTC().UnixNano()
+	defer setNow(func() (t int64) {
+		return uploadTimestamp
+	})()
+
+	chunk := generateRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.NewGetter(ModeGetSync).Get(chunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(got.Address(), chunk.Address()) {
+		t.Errorf("got chunk address %x, want %x", got.Address(), chunk.Address())
+	}
+
+	if !bytes.Equal(got.Data(), chunk.Data()) {
+		t.Errorf("got chunk data %x, want %x", got.Data(), chunk.Data())
+	}
+
+	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
+
+	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+
+	t.Run("gc size", newIndexGCSizeTest(db))
+}

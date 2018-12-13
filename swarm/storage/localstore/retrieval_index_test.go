@@ -17,7 +17,6 @@
 package localstore
 
 import (
-	"context"
 	"strconv"
 	"testing"
 
@@ -43,12 +42,12 @@ import (
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkRetrievalIndexes/1000-split-8         	      20       57035332 ns/op      18150318 B/op       78152 allocs/op
-// BenchmarkRetrievalIndexes/1000-composite-8     	      10      145093830 ns/op      66965899 B/op       68621 allocs/op
-// BenchmarkRetrievalIndexes/10000-split-8        	       1     1023919551 ns/op     376620048 B/op     1384874 allocs/op
-// BenchmarkRetrievalIndexes/10000-composite-8    	       1     2612845197 ns/op    1006614104 B/op     1492380 allocs/op
-// BenchmarkRetrievalIndexes/100000-split-8       	       1    14168164804 ns/op    2868944816 B/op    12425362 allocs/op
-// BenchmarkRetrievalIndexes/100000-composite-8   	       1    65995988337 ns/op   12387004776 B/op    22376909 allocs/op
+// BenchmarkRetrievalIndexes/1000-split-8         	      20       75556686 ns/op      19033493 B/op       84500 allocs/op
+// BenchmarkRetrievalIndexes/1000-composite-8     	      10      143774538 ns/op      67474551 B/op       72104 allocs/op
+// BenchmarkRetrievalIndexes/10000-split-8        	       1     1079084922 ns/op     382792064 B/op     1429644 allocs/op
+// BenchmarkRetrievalIndexes/10000-composite-8    	       1     2597268475 ns/op    1005916808 B/op     1516443 allocs/op
+// BenchmarkRetrievalIndexes/100000-split-8       	       1    16891305737 ns/op    2629165304 B/op    12465019 allocs/op
+// BenchmarkRetrievalIndexes/100000-composite-8   	       1    67158059676 ns/op   12292703424 B/op    22436767 allocs/op
 // PASS
 func BenchmarkRetrievalIndexes(b *testing.B) {
 	for _, count := range []int{
@@ -76,31 +75,41 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.Accessor(ModeUpload)
-	syncer := db.Accessor(ModeSynced)
-	requester := db.Accessor(ModeRequest)
-	ctx := context.Background()
-	chunks := make([]storage.Chunk, count)
+	uploader := db.NewPutter(ModePutUpload)
+	syncer := db.NewSetter(ModeSetSync)
+	requester := db.NewGetter(ModeGetRequest)
+	addrs := make([]storage.Address, count)
 	for i := 0; i < count; i++ {
 		chunk := generateFakeRandomChunk()
-		err := uploader.Put(ctx, chunk)
+		err := uploader.Put(chunk)
 		if err != nil {
 			b.Fatal(err)
 		}
-		chunks[i] = chunk
+		addrs[i] = chunk.Address()
 	}
+	// set update gc test hook to signal when
+	// update gc goroutine is done by sending to
+	// testHookUpdateGCChan channel, which is
+	// used to wait for gc index updates to be
+	// included in the benchmark time
+	testHookUpdateGCChan := make(chan struct{})
+	defer setTestHookUpdateGC(func() {
+		testHookUpdateGCChan <- struct{}{}
+	})()
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := syncer.Put(ctx, chunks[i])
+		err := syncer.Set(addrs[i])
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		_, err = requester.Get(ctx, chunks[i].Address())
+		_, err = requester.Get(addrs[i])
 		if err != nil {
 			b.Fatal(err)
 		}
+		// wait for update gc goroutine to be done
+		<-testHookUpdateGCChan
 	}
 }
 
@@ -113,12 +122,12 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkUpload/1000-split-8         	      20	  99501623 ns/op      25164178 B/op    22202 allocs/op
-// BenchmarkUpload/1000-composite-8     	      20	 103449118 ns/op      25177986 B/op    22204 allocs/op
-// BenchmarkUpload/10000-split-8        	       2	 670290376 ns/op     216382840 B/op   239645 allocs/op
-// BenchmarkUpload/10000-composite-8    	       2	 667137525 ns/op     216377176 B/op   238854 allocs/op
-// BenchmarkUpload/100000-split-8       	       1	26074429894 ns/op   2326850952 B/op  3932893 allocs/op
-// BenchmarkUpload/100000-composite-8   	       1	26242346728 ns/op   2331055096 B/op  3957569 allocs/op
+// BenchmarkUpload/1000-split-8         	      20       59437463 ns/op     25205193 B/op    23208 allocs/op
+// BenchmarkUpload/1000-composite-8     	      20       59823642 ns/op     25204900 B/op	   23202 allocs/op
+// BenchmarkUpload/10000-split-8        	       2      580646362 ns/op    216532932 B/op	  248090 allocs/op
+// BenchmarkUpload/10000-composite-8    	       2      589351080 ns/op    216540740 B/op	  248007 allocs/op
+// BenchmarkUpload/100000-split-8       	       1    22373390892 ns/op   2323055312 B/op	 3995903 allocs/op
+// BenchmarkUpload/100000-composite-8   	       1    22090725078 ns/op   2320312976 B/op	 3969219 allocs/op
 // PASS
 func BenchmarkUpload(b *testing.B) {
 	for _, count := range []int{
@@ -146,8 +155,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StopTimer()
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
-	uploader := db.Accessor(ModeUpload)
-	ctx := context.Background()
+	uploader := db.NewPutter(ModePutUpload)
 	chunks := make([]storage.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunk := generateFakeRandomChunk()
@@ -156,7 +164,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := uploader.Put(ctx, chunks[i])
+		err := uploader.Put(chunks[i])
 		if err != nil {
 			b.Fatal(err)
 		}

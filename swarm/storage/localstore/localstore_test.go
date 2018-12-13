@@ -18,17 +18,47 @@ package localstore
 
 import (
 	"bytes"
-	"context"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/syndtr/goleveldb/leveldb"
 )
+
+// TestDB validates if the chunk can be uploaded and
+// correctly retrieved.
+func TestDB(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	chunk := generateRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := db.NewGetter(ModeGetRequest).Get(chunk.Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(got.Address(), chunk.Address()) {
+		t.Errorf("got address %x, want %x", got.Address(), chunk.Address())
+	}
+	if !bytes.Equal(got.Data(), chunk.Data()) {
+		t.Errorf("got data %x, want %x", got.Data(), chunk.Data())
+	}
+}
 
 // TestDB_useRetrievalCompositeIndex checks if optional argument
 // WithRetrievalCompositeIndex to New constructor is setting the
@@ -77,10 +107,10 @@ func TestDB_useRetrievalCompositeIndex(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkNew/1000-8         	     200	  12020231 ns/op	 9556077 B/op	    9999 allocs/op
-// BenchmarkNew/10000-8        	     100	  15475883 ns/op	10493071 B/op	    7781 allocs/op
-// BenchmarkNew/100000-8       	      20	  64046466 ns/op	17823841 B/op	   23375 allocs/op
-// BenchmarkNew/1000000-8      	       1	1011464203 ns/op	51024688 B/op	  310599 allocs/op
+// BenchmarkNew/1000-8         	     200	  11684285 ns/op	 9556056 B/op	   10005 allocs/op
+// BenchmarkNew/10000-8        	     100	  15161036 ns/op	10539571 B/op	    7799 allocs/op
+// BenchmarkNew/100000-8       	      20	  74270386 ns/op	18234588 B/op	   24382 allocs/op
+// BenchmarkNew/1000000-8      	       2	 942098251 ns/op	48747500 B/op	  274976 allocs/op
 // PASS
 func BenchmarkNew(b *testing.B) {
 	if testing.Short() {
@@ -89,8 +119,8 @@ func BenchmarkNew(b *testing.B) {
 	for _, count := range []int{
 		1000,
 		10000,
-		100000,
-		1000000,
+		// 100000,
+		// 1000000,
 	} {
 		b.Run(strconv.Itoa(count), func(b *testing.B) {
 			dir, err := ioutil.TempDir("", "localstore-new-benchmark")
@@ -106,16 +136,15 @@ func BenchmarkNew(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			uploader := db.Accessor(ModeUpload)
-			syncer := db.Accessor(ModeSynced)
-			ctx := context.Background()
+			uploader := db.NewPutter(ModePutUpload)
+			syncer := db.NewSetter(ModeSetSync)
 			for i := 0; i < count; i++ {
 				chunk := generateFakeRandomChunk()
-				err := uploader.Put(ctx, chunk)
+				err := uploader.Put(chunk)
 				if err != nil {
 					b.Fatal(err)
 				}
-				err = syncer.Put(ctx, chunk)
+				err = syncer.Set(chunk.Address())
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -226,5 +255,312 @@ func TestGenerateFakeRandomChunk(t *testing.T) {
 	}
 	if bytes.Equal(c1.Data(), c2.Data()) {
 		t.Error("fake chunks data bytes do not differ")
+	}
+}
+
+// newRetrieveIndexesTest returns a test function that validates if the right
+// chunk values are in the retrieval indexes.
+func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		if db.useRetrievalCompositeIndex {
+			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
+		} else {
+			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+
+			// access index should not be set
+			wantErr := leveldb.ErrNotFound
+			item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+			if err != wantErr {
+				t.Errorf("got error %v, want %v", err, wantErr)
+			}
+		}
+	}
+}
+
+// newRetrieveIndexesTestWithAccess returns a test function that validates if the right
+// chunk values are in the retrieval indexes when access time must be stored.
+func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		if db.useRetrievalCompositeIndex {
+			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
+		} else {
+			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+
+			if accessTimestamp > 0 {
+				item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+			}
+		}
+	}
+}
+
+// newPullIndexTest returns a test function that validates if the right
+// chunk values are in the pull index.
+func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+	return func(t *testing.T) {
+		item, err := db.pullIndex.Get(shed.IndexItem{
+			Address:        chunk.Address(),
+			StoreTimestamp: storeTimestamp,
+		})
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
+		}
+		if err == nil {
+			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		}
+	}
+}
+
+// newPushIndexTest returns a test function that validates if the right
+// chunk values are in the push index.
+func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+	return func(t *testing.T) {
+		item, err := db.pushIndex.Get(shed.IndexItem{
+			Address:        chunk.Address(),
+			StoreTimestamp: storeTimestamp,
+		})
+		if err != wantError {
+			t.Errorf("got error %v, want %v", err, wantError)
+		}
+		if err == nil {
+			validateItem(t, item, chunk.Address(), nil, storeTimestamp, 0)
+		}
+	}
+}
+
+// newGCIndexTest returns a test function that validates if the right
+// chunk values are in the push index.
+func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+	return func(t *testing.T) {
+		item, err := db.gcIndex.Get(shed.IndexItem{
+			Address:         chunk.Address(),
+			StoreTimestamp:  storeTimestamp,
+			AccessTimestamp: accessTimestamp,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateItem(t, item, chunk.Address(), nil, storeTimestamp, accessTimestamp)
+	}
+}
+
+// newIndexItemsCountTest returns a test function that validates if
+// an index contains expected number of key/value pairs.
+func newIndexItemsCountTest(i shed.Index, want int) func(t *testing.T) {
+	return func(t *testing.T) {
+		var c int
+		i.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+			c++
+			return
+		})
+		if c != want {
+			t.Errorf("got %v items in index, want %v", c, want)
+		}
+	}
+}
+
+// newIndexGCSizeTest retruns a test function that validates if DB.gcSize
+// value is the same as the number of items in DB.gcIndex.
+func newIndexGCSizeTest(db *DB) func(t *testing.T) {
+	return func(t *testing.T) {
+		var want int64
+		db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+			want++
+			return
+		})
+		got := atomic.LoadInt64(&db.gcSize)
+		if got != want {
+			t.Errorf("got gc size %v, want %v", got, want)
+		}
+	}
+}
+
+// testIndexChunk embeds storageChunk with additional data that is stored
+// in database. It is used for index values validations.
+type testIndexChunk struct {
+	storage.Chunk
+	storeTimestamp int64
+}
+
+// testIndexItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
+// chunks will be sorted with it before validation.
+func testIndexItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
+	newIndexItemsCountTest(i, len(chunks))(t)
+
+	if sortFunc != nil {
+		sort.Slice(chunks, sortFunc)
+	}
+
+	var cursor int
+	err := i.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		want := chunks[cursor].Address()
+		got := item.Address
+		if !bytes.Equal(got, want) {
+			return true, fmt.Errorf("got address %x at position %v, want %x", got, cursor, want)
+		}
+		cursor++
+		return false, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// validateItem is a helper function that checks IndexItem values.
+func validateItem(t *testing.T, item shed.IndexItem, address, data []byte, storeTimestamp, accessTimestamp int64) {
+	t.Helper()
+
+	if !bytes.Equal(item.Address, address) {
+		t.Errorf("got item address %x, want %x", item.Address, address)
+	}
+	if !bytes.Equal(item.Data, data) {
+		t.Errorf("got item data %x, want %x", item.Data, data)
+	}
+	if item.StoreTimestamp != storeTimestamp {
+		t.Errorf("got item store timestamp %v, want %v", item.StoreTimestamp, storeTimestamp)
+	}
+	if item.AccessTimestamp != accessTimestamp {
+		t.Errorf("got item access timestamp %v, want %v", item.AccessTimestamp, accessTimestamp)
+	}
+}
+
+// setTestHookUpdateGC sets testHookUpdateGC and
+// returns a function that will reset it to the
+// value before the change.
+func setTestHookUpdateGC(h func()) (reset func()) {
+	current := testHookUpdateGC
+	reset = func() { testHookUpdateGC = current }
+	testHookUpdateGC = h
+	return reset
+}
+
+// TestSetTestHookUpdateGC tests if setTestHookUpdateGC changes
+// testHookUpdateGC function correctly and if its reset function
+// resets the original function.
+func TestSetTestHookUpdateGC(t *testing.T) {
+	// Set the current function after the test finishes.
+	defer func(h func()) { testHookUpdateGC = h }(testHookUpdateGC)
+
+	// expected value for the unchanged function
+	original := 1
+	// expected value for the changed function
+	changed := 2
+
+	// this variable will be set with two different functions
+	var got int
+
+	// define the original (unchanged) functions
+	testHookUpdateGC = func() {
+		got = original
+	}
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
+	}
+
+	// set the new function
+	reset := setTestHookUpdateGC(func() {
+		got = changed
+	})
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly to changed value
+	if got != changed {
+		t.Errorf("got hook value %v, want %v", got, changed)
+	}
+
+	// set the function to the original one
+	reset()
+
+	// set got variable
+	testHookUpdateGC()
+
+	// test if got variable is set correctly to original value
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
+	}
+}
+
+// setNow replaces now function and
+// returns a function that will reset it to the
+// value before the change.
+func setNow(f func() int64) (reset func()) {
+	current := now
+	reset = func() { now = current }
+	now = f
+	return reset
+}
+
+// TestSetNow tests if setNow function changes now function
+// correctly and if its reset function resets the original function.
+func TestSetNow(t *testing.T) {
+	// set the current function after the test finishes
+	defer func(f func() int64) { now = f }(now)
+
+	// expected value for the unchanged function
+	var original int64 = 1
+	// expected value for the changed function
+	var changed int64 = 2
+
+	// define the original (unchanged) functions
+	now = func() int64 {
+		return original
+	}
+
+	// get the time
+	got := now()
+
+	// test if got variable is set correctly
+	if got != original {
+		t.Errorf("got now value %v, want %v", got, original)
+	}
+
+	// set the new function
+	reset := setNow(func() int64 {
+		return changed
+	})
+
+	// get the time
+	got = now()
+
+	// test if got variable is set correctly to changed value
+	if got != changed {
+		t.Errorf("got hook value %v, want %v", got, changed)
+	}
+
+	// set the function to the original one
+	reset()
+
+	// get the time
+	got = now()
+
+	// test if got variable is set correctly to original value
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
 	}
 }
