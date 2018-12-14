@@ -676,7 +676,7 @@ func (k *Kademlia) saturation() int {
 // are found among the peers known to the kademlia
 // It is used in Healthy function for testing only
 // TODO move to separate testing tools file
-func (o *PeerPot) knowNearestNeighbours() (got bool, n int, missing [][]byte) {
+func (o *PeerPot) knownNeighbours() (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
 	// create a map with all peers at depth and deeper known in the kademlia
@@ -713,7 +713,7 @@ func (o *PeerPot) knowNearestNeighbours() (got bool, n int, missing [][]byte) {
 // gotNearestNeighbours tests if all neighbours in the peerpot
 // are currently connected in the kademlia
 // It is used in Healthy function for testing only
-func (o *PeerPot) gotNearestNeighbours() (got bool, n int, missing [][]byte) {
+func (o *PeerPot) connectedNeighbours() (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
 	// create a map with all peers at depth and deeper that are connected in the kademlia
@@ -765,8 +765,8 @@ type Health struct {
 func (o *PeerPot) Healthy() *Health {
 	o.Kademlia.lock.RLock()
 	defer o.Kademlia.lock.RUnlock()
-	gotnn, countgotnn, culpritsgotnn := o.gotNearestNeighbours()
-	knownn, countknownn, culpritsknownn := o.knowNearestNeighbours()
+	gotnn, countgotnn, culpritsgotnn := o.connectedNeighbours()
+	knownn, countknownn, culpritsknownn := o.knownNeighbours()
 	depth := depthForPot(o.conns, o.MinProxBinSize, o.base)
 	saturated := o.saturation() < depth
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", o.base, knownn, gotnn, saturated))
