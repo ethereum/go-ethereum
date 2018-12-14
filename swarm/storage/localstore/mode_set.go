@@ -226,10 +226,9 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
-		// TODO: optimize in garbage collection
-		// get is too expensive operation
-		// Suggestion: remove ModeSetRemove and use this code
-		// only in collectGarbage function
+		// a check is needed for decrementing gcSize
+		// as delete is not reporting if the key/value pair
+		// is deleted or not
 		if _, err := db.gcIndex.Get(item); err == nil {
 			db.incGCSize(-1)
 		}

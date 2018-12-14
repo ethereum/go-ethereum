@@ -21,17 +21,23 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// gcTargetRatio defines the target number of items
-// in garbage collection index that will not be removed
-// on garbage collection. The target number of items
-// is calculated by gcTarget function. This value must be
-// in range (0,1]. For example, with 0.9 value,
-// garbage collection will leave 90% of defined capacity
-// in database after its run. This prevents frequent
-// garbage collection runt.
-var gcTargetRatio = 0.9
+var (
+	// gcTargetRatio defines the target number of items
+	// in garbage collection index that will not be removed
+	// on garbage collection. The target number of items
+	// is calculated by gcTarget function. This value must be
+	// in range (0,1]. For example, with 0.9 value,
+	// garbage collection will leave 90% of defined capacity
+	// in database after its run. This prevents frequent
+	// garbage collection runt.
+	gcTargetRatio = 0.9
+	// gcBatchSize limits the number of chunks in a single
+	// leveldb batch on garbage collection.
+	gcBatchSize int64 = 1000
+)
 
 // collectGarbage is a long running function that waits for
 // collectGarbageTrigger channel to signal a garbage collection
@@ -42,22 +48,50 @@ func (db *DB) collectGarbage() {
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
+			batch := new(leveldb.Batch)
+
+			// sets a gc trigger if batch limit is reached
+			var triggerNextIteration bool
 			var collectedCount int64
 			err := db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
 				gcSize := atomic.LoadInt64(&db.gcSize)
-				if gcSize <= target {
+				if gcSize-collectedCount <= target {
 					return true, nil
 				}
-				err = db.set(ModeSetRemove, item.Address)
-				if err != nil {
-					return false, err
+				// delete from retrieve, pull, gc
+				if db.useRetrievalCompositeIndex {
+					db.retrievalCompositeIndex.DeleteInBatch(batch, item)
+				} else {
+					db.retrievalDataIndex.DeleteInBatch(batch, item)
+					db.retrievalAccessIndex.DeleteInBatch(batch, item)
 				}
+				db.pullIndex.DeleteInBatch(batch, item)
+				db.gcIndex.DeleteInBatch(batch, item)
 				collectedCount++
+				if collectedCount >= gcBatchSize {
+					triggerNextIteration = true
+					return true, nil
+				}
 				return false, nil
 			})
 			if err != nil {
 				log.Error("localstore collect garbage", "err", err)
 			}
+
+			err = db.shed.WriteBatch(batch)
+			if err != nil {
+				log.Error("localstore collect garbage write batch", "err", err)
+			} else {
+				// batch is written, decrement gcSize and check if another gc run is needed
+				db.incGCSize(-collectedCount)
+				if triggerNextIteration {
+					select {
+					case db.collectGarbageTrigger <- struct{}{}:
+					default:
+					}
+				}
+			}
+
 			if testHookCollectGarbage != nil {
 				testHookCollectGarbage(collectedCount)
 			}

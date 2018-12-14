@@ -82,6 +82,8 @@ func TestDB_collectGarbage(t *testing.T) {
 		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
 
+	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, int(gcTarget)))
+
 	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, int(gcTarget)))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
@@ -181,6 +183,8 @@ func TestDB_collectGarbage_withRequests(t *testing.T) {
 	if totalCollectedCount != wantTotalCollectedCount {
 		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
+
+	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, int(gcTarget)))
 
 	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, int(gcTarget)))
 
