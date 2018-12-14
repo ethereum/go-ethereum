@@ -794,7 +794,7 @@ func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int
 	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
 	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
-		return DiscTooManyPeers
+		return DiscTooManyInboundConnections
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
 	case c.node.ID() == srv.localnode.ID():
