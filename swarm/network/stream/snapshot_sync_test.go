@@ -183,7 +183,6 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
@@ -205,7 +204,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -332,7 +331,6 @@ kademlia network. The snapshot should have 'streamer' in its service list.
 */
 func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) error {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			n := ctx.Config.Node()
@@ -388,7 +386,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return err
 	}
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		return err
 	}
 
@@ -466,7 +464,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
@@ -555,9 +553,12 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	var kadMinProxSize = 2
+	var kads []*network.Kademlia
+	for _, a := range conf.addrs {
+		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
+	}
 
-	ppmap := network.NewPeerPotMap(kadMinProxSize, conf.addrs)
+	ppmap := network.NewPeerPotMap(kads)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))

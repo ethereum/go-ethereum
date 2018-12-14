@@ -265,7 +265,11 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
+	var kads []*network.Kademlia
+	for _, a := range addrs {
+		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
+	}
+	ppmap := network.NewPeerPotMap(kads)
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -281,12 +285,15 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		if err != nil {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
+
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap[id.String()]); err != nil {
+		pp := ppmap[id.String()]
+		log.Error("pp in", "p", pp, "base", pp.BaseAddr())
+		if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
-		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Hive))
+		return healthy.KnowNN && healthy.GotNN, nil
 	}
 
 	// 64 nodes ~ 1min
@@ -379,7 +386,11 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 	// run a simulation which connects the 10 nodes in a ring and waits
 	// for full peer discovery
-	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
+	var kads []*network.Kademlia
+	for _, a := range addrs {
+		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
+	}
+	ppmap := network.NewPeerPotMap(kads)
 
 	var restartTime time.Time
 
@@ -400,12 +411,14 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
+				log.Error("before hive healthy call")
+				pp := ppmap[addr]
+				if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
-				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.GotNN && healthy.KnowNN && healthy.Full))
-				if !healthy.GotNN || !healthy.Full {
+				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.GotNN && healthy.KnowNN))
+				if !healthy.GotNN {
 					isHealthy = false
 					break
 				}
@@ -482,9 +495,9 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		if err := client.Call(&healthy, "hive_healthy", ppmap[id.String()]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v", id, healthy.GotNN, healthy.KnowNN, healthy.Full))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.GotNN, healthy.KnowNN))
 
-		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+		return healthy.KnowNN && healthy.GotNN, nil
 	}
 
 	// 64 nodes ~ 1min

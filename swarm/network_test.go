@@ -260,7 +260,6 @@ type testSwarmNetworkOptions struct {
 //  - Checking if a file is retrievable from all nodes.
 func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwarmNetworkStep) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	if o == nil {
 		o = new(testSwarmNetworkOptions)
 	}
@@ -354,7 +353,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 
 			if *waitKademlia {
-				if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+				if _, err := sim.WaitTillHealthy(ctx); err != nil {
 					return err
 				}
 			}

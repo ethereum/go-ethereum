@@ -59,7 +59,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	ill, err := sim.WaitTillHealthy(ctx, 2)
+	ill, err := sim.WaitTillHealthy(ctx)
 	if err != nil {
 		// inspect the latest detected not healthy kademlias
 		for id, kad := range ill {

@@ -242,3 +242,9 @@ func (h *Hive) savePeers() error {
 	}
 	return nil
 }
+
+func (h *Hive) Healthy(addr []byte, pp PeerPot) *Health {
+	pp.base = addr
+	log.Error("pp", "p", pp, "base", pp.base)
+	return pp.Healthy()
+}

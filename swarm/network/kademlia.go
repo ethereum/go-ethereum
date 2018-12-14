@@ -62,7 +62,7 @@ type KadParams struct {
 	RetryExponent  int   // exponent to multiply retry intervals with
 	MaxRetries     int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
-	Reachable func(*BzzAddr) bool
+	Reachable func(*BzzAddr) bool `json:"-"`
 }
 
 // NewKadParams returns a params struct with default values
@@ -89,7 +89,7 @@ type Kademlia struct {
 	nDepth     int                                     // stores the last neighbourhood depth
 	nDepthC    chan int                                // returned by DepthC function to signal neighbourhood depth change
 	addrCountC chan int                                // returned by AddrCountC function to signal peer count change
-	Pof        func(pot.Val, pot.Val, int) (int, bool) // function for calculating kademlia routing distance between two addresses
+	Pof        func(pot.Val, pot.Val, int) (int, bool) `json:"-"` // function for calculating kademlia routing distance between two addresses
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -609,16 +609,20 @@ type PeerPot struct {
 // used for testing only
 // TODO move to separate testing tools file
 //func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
-func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
+func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
 
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
-	for _, addr := range addrs {
-		np, _, _ = pot.Add(np, addr, pof)
+
+	for _, k := range kads {
+		np, _, _ = pot.Add(np, k.base, pof)
 	}
 	ppmap := make(map[string]*PeerPot)
 
-	for i, a := range addrs {
+	for i, k := range kads {
+
+		// get the address to use
+		a := k.base
 
 		// actual kademlia depth
 		depth := depthForPot(np, k.MinProxBinSize, a)
@@ -643,7 +647,7 @@ func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
 			return false
 		})
 
-		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogAddrs(nns)))
+		log.Trace(fmt.Sprintf("%x NNS: %s", kads[i].base[:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{
 			Kademlia: k,
 			NNSet:    nns,
@@ -700,7 +704,7 @@ func (o *PeerPot) knowNearestNeighbours() (got bool, n int, missing [][]byte) {
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.BaseAddr()[:4], pk[:8]))
+			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.base, pk)) //(o.BaseAddr()[:4], pk[:8]))
 			culprits = append(culprits, p)
 		}
 	}
@@ -736,7 +740,7 @@ func (o *PeerPot) gotNearestNeighbours() (got bool, n int, missing [][]byte) {
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", o.BaseAddr()[:4], pk[:8]))
+			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", o.base, pk)) //o.BaseAddr()[:4], pk[:8]))
 			culprits = append(culprits, p)
 		}
 	}
@@ -766,7 +770,7 @@ func (o *PeerPot) Healthy() *Health {
 	knownn, countknownn, culpritsknownn := o.knowNearestNeighbours()
 	depth := depthForPot(o.conns, o.MinProxBinSize, o.base)
 	saturated := o.saturation() < depth
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", o.BaseAddr()[:4], knownn, gotnn, saturated))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", o.base, knownn, gotnn, saturated))
 	return &Health{
 		KnowNN:         knownn,
 		CountKnowNN:    countknownn,

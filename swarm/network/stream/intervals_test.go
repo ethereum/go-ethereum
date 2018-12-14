@@ -53,7 +53,6 @@ func TestIntervalsLiveAndHistory(t *testing.T) {
 
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodes := 2
 	chunkCount := dataChunkCount
 	externalStreamName := "externalStream"
@@ -114,7 +113,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		t.Fatal(err)
 	}
 

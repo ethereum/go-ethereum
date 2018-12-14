@@ -34,15 +34,17 @@ var BucketKeyKademlia BucketKey = "kademlia"
 // WaitTillHealthy is blocking until the health of all kademlias is true.
 // If error is not nil, a map of kademlia that was found not healthy is returned.
 // TODO: Check correctness since change in kademlia depth calculation logic
-func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (ill map[enode.ID]*network.Kademlia, err error) {
+func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*network.Kademlia, err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
+	var kademliasArray []*network.Kademlia
 	addrs := make([][]byte, 0, len(kademlias))
 	for _, k := range kademlias {
 		addrs = append(addrs, k.BaseAddr())
+		kademliasArray = append(kademliasArray, k)
 	}
-	ppmap = network.NewPeerPotMap(kadMinProxSize, addrs)
+	ppmap = network.NewPeerPotMap(kademliasArray) //kadMinProxSize, addrs)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -63,13 +65,13 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 				addr := common.Bytes2Hex(k.BaseAddr())
 				pp := ppmap[addr]
 				//call Healthy RPC
-				h := k.Healthy(pp)
+				h := pp.Healthy()
 				//print info
 				log.Debug(k.String())
-				log.Debug("kademlia", "empty bins", pp.EmptyBins, "gotNN", h.GotNN, "knowNN", h.KnowNN, "full", h.Full)
-				log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				if !h.GotNN || !h.Full {
+				log.Debug("kademlia", "gotNN", h.GotNN, "knowNN", h.KnowNN)
+				log.Debug("kademlia", "health", h.GotNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				log.Debug("kademlia", "ill condition", !h.GotNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				if !h.GotNN {
 					ill[id] = k
 				}
 			}
