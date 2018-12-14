@@ -288,7 +288,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 
 		healthy := &network.Health{}
 		pp := ppmap[id.String()]
-		log.Error("pp in", "p", pp, "base", pp.BaseAddr())
 		if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
@@ -492,7 +491,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap[id.String()]); err != nil {
+		pp := ppmap[id.String()]
+		if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.GotNN, healthy.KnowNN))

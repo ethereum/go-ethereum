@@ -243,8 +243,8 @@ func (h *Hive) savePeers() error {
 	return nil
 }
 
+// Healthy is an api proxy to the underlying kademlia healthy function
 func (h *Hive) Healthy(addr []byte, pp PeerPot) *Health {
 	pp.base = addr
-	log.Error("pp", "p", pp, "base", pp.base)
 	return pp.Healthy()
 }

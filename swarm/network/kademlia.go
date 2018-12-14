@@ -608,7 +608,6 @@ type PeerPot struct {
 // the MinProxBinSize of the passed kademlia is used
 // used for testing only
 // TODO move to separate testing tools file
-//func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
 func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
 
 	// create a table of all nodes for health check
