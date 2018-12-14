@@ -386,6 +386,15 @@ func (net *Network) GetNodeByName(name string) *Node {
 	return net.getNodeByName(name)
 }
 
+func (net *Network) getNodeByName(name string) *Node {
+	for _, node := range net.Nodes {
+		if node.Config.Name == name {
+			return node
+		}
+	}
+	return nil
+}
+
 // GetNodes returns the existing nodes
 func (net *Network) GetNodes() (nodes []*Node) {
 	net.lock.Lock()
@@ -393,19 +402,6 @@ func (net *Network) GetNodes() (nodes []*Node) {
 
 	nodes = append(nodes, net.Nodes...)
 	return nodes
-}
-
-// GetUpNodeIDs returns NodeIDs for nodes that are up in the network.
-func (net *Network) GetUpNodeIDs() (ids []enode.ID) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
-
-	for _, node := range net.Nodes {
-		if node.Up {
-			ids = append(ids, node.ID())
-		}
-	}
-	return ids
 }
 
 func (net *Network) getNode(id enode.ID) *Node {
@@ -416,30 +412,31 @@ func (net *Network) getNode(id enode.ID) *Node {
 	return net.Nodes[i]
 }
 
-func (net *Network) getNodeByName(name string) *Node {
+// GetRandomUpNode returns a random node on the network, which is running.
+func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+	return net.getRandomNode(net.getUpNodeIDs(), excludeIDs)
+}
+
+func (net *Network) getUpNodeIDs() (ids []enode.ID) {
 	for _, node := range net.Nodes {
-		if node.Config.Name == name {
-			return node
+		if node.Up {
+			ids = append(ids, node.ID())
 		}
 	}
-	return nil
+	return ids
 }
 
-// GetRandomUpNode returns a random SimNode that is up.
-// Arguments are NodeIDs for nodes that should not be returned.
-func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
-	return net.getRandomNode(net.GetUpNodeIDs(), excludeIDs)
-}
-
-// GetRandomDownNode returns a random SimNode that is not up.
+// GetRandomDownNode returns a random node on the network, which is stopped.
 func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
-	return net.getRandomNode(net.GetDownNodeIDs(), excludeIDs)
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+	return net.getRandomNode(net.getDownNodeIDs(), excludeIDs)
 }
 
-// GetDownNodeIDs returns NodeIDs for nodes that are stopped in the network.
-func (net *Network) GetDownNodeIDs() (ids []enode.ID) {
-	nodes := net.GetNodes()
-	for _, node := range nodes {
+func (net *Network) getDownNodeIDs() (ids []enode.ID) {
+	for _, node := range net.GetNodes() {
 		if !node.Up {
 			ids = append(ids, node.ID())
 		}
@@ -447,7 +444,6 @@ func (net *Network) GetDownNodeIDs() (ids []enode.ID) {
 	return ids
 }
 
-// getRandomNode returns a random SimNode from the slice of NodeIDs.
 func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
 	filtered := filterIDs(ids, excludeIDs)
 

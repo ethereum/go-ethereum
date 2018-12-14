@@ -45,7 +45,7 @@ func (net *Network) ConnectToPivotNode(id enode.ID) (err error) {
 // It is useful when constructing a chain network topology
 // when Network adds and removes nodes dynamically.
 func (net *Network) ConnectToLastNode(id enode.ID) (err error) {
-	ids := net.GetUpNodeIDs()
+	ids := net.getUpNodeIDs()
 	l := len(ids)
 	if l < 2 {
 		return nil
@@ -73,7 +73,7 @@ func (net *Network) ConnectToRandomNode(id enode.ID) (err error) {
 // which should be rarely needed.
 func (net *Network) ConnectNodesFull(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = net.GetUpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
@@ -91,7 +91,7 @@ func (net *Network) ConnectNodesFull(ids []enode.ID) (err error) {
 // If ids argument is nil, all nodes that are up will be connected.
 func (net *Network) ConnectNodesChain(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = net.GetUpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l-1; i++ {
@@ -107,7 +107,7 @@ func (net *Network) ConnectNodesChain(ids []enode.ID) (err error) {
 // If ids argument is nil, all nodes that are up will be connected.
 func (net *Network) ConnectNodesRing(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = net.GetUpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	if l < 2 {
@@ -127,7 +127,7 @@ func (net *Network) ConnectNodesRing(ids []enode.ID) (err error) {
 // If ids argument is nil, all nodes that are up will be connected.
 func (net *Network) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = net.GetUpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
