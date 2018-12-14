@@ -99,19 +99,18 @@ func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
 func VerifyFull(t *testing.T, net *Network, ids []enode.ID) {
 	t.Helper()
 	n := len(ids)
-	var cc int
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			if net.GetConn(ids[i], ids[j]) != nil {
-				cc++
+	var connections int
+	for i, lid := range ids {
+		for _, rid := range ids[i+1:] {
+			if net.GetConn(lid, rid) != nil {
+				connections++
 			}
 		}
 	}
 
 	want := n * (n - 1) / 2
-
-	if cc != want {
-		t.Errorf("expected %v connection, got %v", want, cc)
+	if connections != want {
+		t.Errorf("wrong number of connections, got: %v, want: %v", connections, want)
 	}
 }
 

@@ -50,22 +50,21 @@ func (net *Network) ConnectToLastNode(id enode.ID) (err error) {
 	if l < 2 {
 		return nil
 	}
-	lid := ids[l-1]
-	if lid == id {
-		lid = ids[l-2]
+	last := ids[l-1]
+	if last == id {
+		last = ids[l-2]
 	}
-	return net.connect(lid, id)
+	return net.connect(last, id)
 }
 
 // ConnectToRandomNode connects the node with provided NodeID
 // to a random node that is up.
 func (net *Network) ConnectToRandomNode(id enode.ID) (err error) {
-	n := net.GetRandomUpNode(id)
-
-	if n == nil {
+	selected := net.GetRandomUpNode(id)
+	if selected == nil {
 		return ErrNodeNotFound
 	}
-	return net.connect(n.ID(), id)
+	return net.connect(selected.ID(), id)
 }
 
 // ConnectNodesFull connects all nodes one to another.
@@ -75,11 +74,9 @@ func (net *Network) ConnectNodesFull(ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = net.getUpNodeIDs()
 	}
-	l := len(ids)
-	for i := 0; i < l; i++ {
-		for j := i + 1; j < l; j++ {
-			err = net.connect(ids[i], ids[j])
-			if err != nil {
+	for i, lid := range ids {
+		for _, rid := range ids[i+1:] {
+			if err = net.connect(lid, rid); err != nil {
 				return err
 			}
 		}
@@ -95,8 +92,7 @@ func (net *Network) ConnectNodesChain(ids []enode.ID) (err error) {
 	}
 	l := len(ids)
 	for i := 0; i < l-1; i++ {
-		err = net.connect(ids[i], ids[i+1])
-		if err != nil {
+		if err := net.connect(ids[i], ids[i+1]); err != nil {
 			return err
 		}
 	}
@@ -113,11 +109,8 @@ func (net *Network) ConnectNodesRing(ids []enode.ID) (err error) {
 	if l < 2 {
 		return nil
 	}
-	for i := 0; i < l-1; i++ {
-		err = net.connect(ids[i], ids[i+1])
-		if err != nil {
-			return err
-		}
+	if err := net.ConnectNodesChain(ids); err != nil {
+		return err
 	}
 	return net.connect(ids[l-1], ids[0])
 }
@@ -125,17 +118,15 @@ func (net *Network) ConnectNodesRing(ids []enode.ID) (err error) {
 // ConnectNodesStar connects all nodes in a star topology
 // with the center at provided NodeID.
 // If ids argument is nil, all nodes that are up will be connected.
-func (net *Network) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
+func (net *Network) ConnectNodesStar(pivot enode.ID, ids []enode.ID) (err error) {
 	if ids == nil {
 		ids = net.getUpNodeIDs()
 	}
-	l := len(ids)
-	for i := 0; i < l; i++ {
-		if id == ids[i] {
+	for _, id := range ids {
+		if pivot == id {
 			continue
 		}
-		err = net.connect(id, ids[i])
-		if err != nil {
+		if err := net.connect(pivot, id); err != nil {
 			return err
 		}
 	}
