@@ -935,7 +935,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 
 	// run the forward
 	// it is enough that it completes; trying to send to incapable peers would create segfault
-	ps.forward(pssmsg, nil)
+	ps.forward(pssmsg)
 
 }
 

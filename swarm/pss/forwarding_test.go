@@ -14,10 +14,33 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
+var testResMap map[pot.Address]int
+
+// this function substitutes the real send function, since
+// we only want to test the peer selection functionality
+func dummySendMsg(_ *Pss, sp *network.Peer, _ *PssMsg) bool {
+	a := pot.NewAddressFromBytes(sp.Address())
+	testResMap[a]++
+	return true
+}
+
+// setDummySendMsg replaces sendMessage function for testing purposes
+func setDummySendMsg() {
+	sendMessage = dummySendMsg
+}
+
+// resetSendMsgProduction resets sendMessage function to production version
+func resetSendMsgProduction() {
+	sendMessage = sendMessageProd
+}
+
 // the purpose of this test is to see that pss.forward() function correctly
 // selects the peers for message forwarding, depending on the message address
 // and kademlia constellation.
 func TestForwardBasic(t *testing.T) {
+	setDummySendMsg()
+	defer resetSendMsgProduction()
+
 	base := newBaseAddress() // 0xFFFFFF.......
 	var peerAddresses []pot.Address
 	var dst pot.Address
@@ -40,7 +63,6 @@ func TestForwardBasic(t *testing.T) {
 
 	const firstNearest = depth * 2 // first peer in the nearest neighbours' bin
 	nearestNeighbours := []int{firstNearest, firstNearest + 1, firstNearest + 2}
-	//fmt.Println(kad.String()) // print kademlia map for debugging, before any test starts
 
 	for i := 0; i < len(peerAddresses); i++ {
 		// send msg directly to the known peers (recipient address == peer address)
@@ -91,25 +113,20 @@ func TestForwardBasic(t *testing.T) {
 	testForwardMsg(900, t, ps, peerAddresses[19][:1], peerAddresses, all[16:])
 }
 
-// this function tests the forwarding of a single message. the recipient address (addr) is passed as param,
+// this function tests the forwarding of a single message. the recipient address is passed as param,
 // along with addreses of all peers, and indexes of those peers which are expected to receive the message.
-func testForwardMsg(testID int, t *testing.T, ps *Pss, addr []byte, addresses []pot.Address, expected []int) {
-	testResMap := make(map[pot.Address]int)
-	msg := newTestMsg(addr)
-	ps.forward(msg, func(p *Pss, sp *network.Peer, msg *PssMsg) bool {
-		// this function substitutes the real send function, since we only want to test the peer selection functionality
-		a := pot.NewAddressFromBytes(sp.Address())
-		testResMap[a]++
-		return true
-	})
+func testForwardMsg(testID int, t *testing.T, ps *Pss, recipientAddr []byte, peers []pot.Address, expected []int) {
+	testResMap = make(map[pot.Address]int)
+	msg := newTestMsg(recipientAddr)
+	ps.forward(msg)
 
 	// check test results
 	var fail bool
-	s := fmt.Sprintf("test id: %d, msg address: %x..., radius: %d", testID, addr[:len(addr)%4], 8*len(addr))
+	s := fmt.Sprintf("test id: %d, msg address: %x..., radius: %d", testID, recipientAddr[:len(recipientAddr)%4], 8*len(recipientAddr))
 
-	// false negatives
+	// false negatives (expected message didn't reach peer)
 	for _, i := range expected {
-		a := addresses[i]
+		a := peers[i]
 		received := testResMap[a]
 		if received != 1 {
 			s += fmt.Sprintf("\npeer number %d [%x...] received %d messages", i, a[:4], received)
@@ -118,13 +135,13 @@ func testForwardMsg(testID int, t *testing.T, ps *Pss, addr []byte, addresses []
 		testResMap[a] = 0
 	}
 
-	// false positives
+	// false positives (unexpected message reached peer)
 	for k, v := range testResMap {
 		if v != 0 {
 			// find the index of the false positive peer
 			var j int
-			for j = 0; j < len(addresses); j++ {
-				if addresses[j] == k {
+			for j = 0; j < len(peers); j++ {
+				if peers[j] == k {
 					break
 				}
 			}
@@ -156,7 +173,6 @@ func createPss(t *testing.T, kad *network.Kademlia) *Pss {
 }
 
 func newBaseAddress() pot.Address {
-	//base := network.RandomAddr().OAddr
 	base := make([]byte, 32)
 	for i := 0; i < len(base); i++ {
 		base[i] = 0xFF

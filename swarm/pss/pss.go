@@ -225,7 +225,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		for {
 			select {
 			case msg := <-p.outbox:
-				err := p.forward(msg, nil)
+				err := p.forward(msg)
 				if err != nil {
 					log.Error(err.Error())
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
@@ -886,8 +886,17 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	return nil
 }
 
+// sendMessage is a helper function that tries to send a message and returns true on success
+// It is set in the init function for usage in production, and optionally overridden in tests
+// for data validation.
+var sendMessage func(p *Pss, sp *network.Peer, msg *PssMsg) bool
+
+func init() {
+	sendMessage = sendMessageProd
+}
+
 // tries to send a message, returns true if successful
-func sendMessage(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+func sendMessageProd(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -897,7 +906,7 @@ func sendMessage(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 		}
 	}
 	if !isPssEnabled {
-		log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+		log.Error("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
 		return false
 	}
 
@@ -925,11 +934,7 @@ func sendMessage(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
 // forwarding fails, the node should try to forward it to the next best peer, until the message is
 // successfully forwarded to at least one peer.
-func (p *Pss) forward(msg *PssMsg, sendMsg func(p *Pss, sp *network.Peer, msg *PssMsg) bool) error {
-	if sendMsg == nil {
-		sendMsg = sendMessage
-	}
-
+func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
 	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
@@ -937,17 +942,19 @@ func (p *Pss) forward(msg *PssMsg, sendMsg func(p *Pss, sp *network.Peer, msg *P
 	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
 
 	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
-	// but the luminosity is less. here luminosity equals the number of bits present in the destination address.
+	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
 	luminosityRadius := len(msg.To) * 8
-	pof := pot.DefaultPof(neighbourhoodDepth) // pof function matching up to neighbourhoodDepth bits (pof <= neighbourhoodDepth)
+
+	// proximity order function matching up to neighbourhoodDepth bits (po <= neighbourhoodDepth)
+	pof := pot.DefaultPof(neighbourhoodDepth)
 	depth, _ := pof(to, p.BaseAddr(), 0)
 	if depth > luminosityRadius {
 		depth = luminosityRadius
 	}
 
-	// if measured from the recipient address (as opposed to the base address), then
-	// peers that fall in the same proximity bin will appear one bit closer (at least),
-	// under condition that these additional bits exist in the recipient address.
+	// if measured from the recipient address (as opposed to the base address), then peers
+	// that fall in the same proximity bin as recipient address will appear one bit closer
+	// (at least), under condition that these additional bits exist in the recipient address.
 	if depth < luminosityRadius && depth < neighbourhoodDepth {
 		depth++
 	}
@@ -956,10 +963,14 @@ func (p *Pss) forward(msg *PssMsg, sendMsg func(p *Pss, sp *network.Peer, msg *P
 		if po < depth && sent > 0 {
 			return false // stop iterating
 		}
-		if sendMsg(p, sp, msg) {
+		if sendMessage(p, sp, msg) {
 			sent++
+			if po == addressLength*8 {
+				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
+				return false
+			}
 		}
-		return po < addressLength*8 // stop iterating in case of exact match of full address
+		return true
 	})
 
 	// if we failed to send to anyone, re-insert message in the send-queue
