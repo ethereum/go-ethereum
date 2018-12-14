@@ -41,27 +41,30 @@ func TestForwardBasic(t *testing.T) {
 	setDummySendMsg()
 	defer resetSendMsgProduction()
 
-	base := newBaseAddress() // 0xFFFFFF.......
+	baseAddrBytes := make([]byte, 32)
+	for i := 0; i < len(baseAddrBytes); i++ {
+		baseAddrBytes[i] = 0xFF
+	}
+	base := pot.NewAddressFromBytes(baseAddrBytes)
 	var peerAddresses []pot.Address
-	var dst pot.Address
+	var a pot.Address
 	const depth = 9
 	for i := 0; i <= depth; i++ {
-		// add two peers for each proximity order (same as in live system)
-		a := pot.RandomAddressAt(base, i)
-		peerAddresses = append(peerAddresses, a)
+		// add one peer for each proximity order
 		a = pot.RandomAddressAt(base, i)
 		peerAddresses = append(peerAddresses, a)
 	}
 
-	// skip one level, add one peer at one level below
-	a := pot.RandomAddressAt(base, depth+2)
-	peerAddresses = append(peerAddresses, a)
+	// add one peer to the "depth" level, then skip one level, add one peer at one level below.
+	// as a result, we will have an edge case of three peers in nearest neighbours' bin.
+	peerAddresses = append(peerAddresses, pot.RandomAddressAt(base, depth))
+	peerAddresses = append(peerAddresses, pot.RandomAddressAt(base, depth+2))
 
 	kad := network.NewKademlia(base[:], network.NewKadParams())
 	ps := createPss(t, kad)
 	addPeers(kad, peerAddresses)
 
-	const firstNearest = depth * 2 // first peer in the nearest neighbours' bin
+	const firstNearest = depth // first peer in the nearest neighbours' bin
 	nearestNeighbours := []int{firstNearest, firstNearest + 1, firstNearest + 2}
 
 	for i := 0; i < len(peerAddresses); i++ {
@@ -70,32 +73,30 @@ func TestForwardBasic(t *testing.T) {
 	}
 
 	for i := 0; i < firstNearest; i++ {
-		// send random messages with different proximity orders
-		po := i / 2
-		dst := pot.RandomAddressAt(base, po)
-		testForwardMsg(200+i, t, ps, dst[:], peerAddresses, []int{po * 2, po*2 + 1})
+		// send random messages with proximity orders, corresponding to PO of each bin
+		a = pot.RandomAddressAt(base, i)
+		testForwardMsg(200+i, t, ps, a[:], peerAddresses, []int{i})
 	}
 
 	for i := firstNearest; i < len(peerAddresses); i++ {
 		// recipient address falls into the nearest neighbours' bin
-		dst := pot.RandomAddressAt(base, i)
-		testForwardMsg(300+i, t, ps, dst[:], peerAddresses, nearestNeighbours)
+		a = pot.RandomAddressAt(base, i)
+		testForwardMsg(300+i, t, ps, a[:], peerAddresses, nearestNeighbours)
 	}
 
-	// send msg with proximity order higher than the last nearest neighbour
-	dst = pot.RandomAddressAt(base, 29)
-	testForwardMsg(400, t, ps, dst[:], peerAddresses, nearestNeighbours)
+	// send msg with proximity order much deeper than the deepest nearest neighbour
+	a = pot.RandomAddressAt(base, 77)
+	testForwardMsg(400, t, ps, a[:], peerAddresses, nearestNeighbours)
 
 	// test with partial addresses
 	const part = 12
 
 	for i := 0; i < firstNearest; i++ {
 		// send messages with partial address falling into different proximity orders
-		po := i / 2
-		if po%8 != 0 {
-			testForwardMsg(500+i, t, ps, peerAddresses[i][:po], peerAddresses, []int{po * 2, po*2 + 1})
+		if i%8 != 0 {
+			testForwardMsg(500+i, t, ps, peerAddresses[i][:i], peerAddresses, []int{i})
 		}
-		testForwardMsg(550+i, t, ps, peerAddresses[i][:part], peerAddresses, []int{po * 2, po*2 + 1})
+		testForwardMsg(550+i, t, ps, peerAddresses[i][:part], peerAddresses, []int{i})
 	}
 
 	for i := firstNearest; i < len(peerAddresses); i++ {
@@ -104,17 +105,19 @@ func TestForwardBasic(t *testing.T) {
 	}
 
 	// partial address with proximity order higher than the last nearest neighbour
-	dst = pot.RandomAddressAt(base, part)
-	testForwardMsg(700, t, ps, dst[:part], peerAddresses, nearestNeighbours)
+	a = pot.RandomAddressAt(base, part)
+	testForwardMsg(700, t, ps, a[:part], peerAddresses, nearestNeighbours)
 
 	// special cases where partial address matches a large group of peers
-	all := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	all := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 	testForwardMsg(800, t, ps, []byte{}, peerAddresses, all)
-	testForwardMsg(900, t, ps, peerAddresses[19][:1], peerAddresses, all[16:])
+
+	// luminous radius of one byte (8 bits)
+	testForwardMsg(900, t, ps, baseAddrBytes[:1], peerAddresses, all[8:])
 }
 
 // this function tests the forwarding of a single message. the recipient address is passed as param,
-// along with addreses of all peers, and indexes of those peers which are expected to receive the message.
+// along with addresses of all peers, and indices of those peers which are expected to receive the message.
 func testForwardMsg(testID int, t *testing.T, ps *Pss, recipientAddr []byte, peers []pot.Address, expected []int) {
 	testResMap = make(map[pot.Address]int)
 	msg := newTestMsg(recipientAddr)
@@ -170,14 +173,6 @@ func createPss(t *testing.T, kad *network.Kademlia) *Pss {
 		t.Fatal(err.Error())
 	}
 	return ps
-}
-
-func newBaseAddress() pot.Address {
-	base := make([]byte, 32)
-	for i := 0; i < len(base); i++ {
-		base[i] = 0xFF
-	}
-	return pot.NewAddressFromBytes(base)
 }
 
 func newTestDiscoveryPeer(addr pot.Address, kad *network.Kademlia) *network.Peer {
