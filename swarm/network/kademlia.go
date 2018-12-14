@@ -277,7 +277,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	}
 	log.Trace(k.string())
 	// calculate if depth of saturation changed
-	depth := uint8(k.saturation(k.MinBinSize))
+	depth := uint8(k.saturation())
 	var changed bool
 	if depth != k.depth {
 		changed = true
@@ -595,16 +595,21 @@ func (k *Kademlia) string() string {
 	return "\n" + strings.Join(rows, "\n")
 }
 
-// PeerPot keeps info about expected nearest neighbours and empty bins
+// PeerPot keeps info about expected nearest neighbours
 // used for testing only
+// TODO move to separate testing tools file
 type PeerPot struct {
+	*Kademlia
 	NNSet [][]byte
 }
 
 // NewPeerPotMap creates a map of pot record of *BzzAddr with keys
 // as hexadecimal representations of the address.
+// the MinProxBinSize of the passed kademlia is used
 // used for testing only
-func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
+// TODO move to separate testing tools file
+//func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
+func NewPeerPotMap(k *Kademlia, addrs [][]byte) map[string]*PeerPot {
 
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
@@ -616,55 +621,46 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 	for i, a := range addrs {
 
 		// actual kademlia depth
-		depth := depthForPot(np, kadMinProxSize, a)
-
-		// upon entering a new iteration
-		// this will hold the value the po should be
-		// if it's one higher than the po in the last iteration
-		prevPo := 256
-
-		// all empty bins which are outside neighbourhood depth
-		var emptyBins []int
+		depth := depthForPot(np, k.MinProxBinSize, a)
 
 		// all nn-peers
 		var nns [][]byte
 
+		// iterate through the neighbours, going from the deepest to the shallowest
 		np.EachNeighbour(a, pof, func(val pot.Val, po int) bool {
 			addr := val.([]byte)
 			// po == 256 means that addr is the pivot address(self)
+			// we do not include self in the map
 			if po == 256 {
 				return true
 			}
 
-			// iterate through the neighbours, going from the closest to the farthest
-			// we calculate the nearest neighbours that should be in the set
-			// depth in this case equates to:
-			// 1.  Within all bins that are higher or equal than depth there are
-			//     at least minProxBinSize peers connected
-			// 2.  depth-1 bin is not empty
+			// nearest neighbor is anyone within the depth bin, inclusive
 			if po >= depth {
 				nns = append(nns, addr)
-				prevPo = depth - 1
 				return true
 			}
-			prevPo = po - 1
-			return true
+			return false
 		})
 
 		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogAddrs(nns)))
-		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns}
+		ppmap[common.Bytes2Hex(a)] = &PeerPot{
+			Kademlia: k,
+			NNSet:    nns,
+		}
 	}
 	return ppmap
 }
 
-// saturation returns the lowest proximity order that the bin for that order
-// has less than n peers
-// It is used in Healthy function for testing only
-func (k *Kademlia) saturation(n int) int {
+// saturation iterates through all peers and
+// returns the smallest po value in which the node has less than n peers
+// if the iterator reaches depth, then value for depth is returned
+// TODO move to separate testing tools file
+func (k *Kademlia) saturation() int {
 	prev := -1
 	k.addrs.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		prev++
-		return prev == po && size >= n
+		return prev == po && size >= k.MinProxBinSize
 	})
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	if depth < prev {
@@ -673,76 +669,112 @@ func (k *Kademlia) saturation(n int) int {
 	return prev
 }
 
-// knowNearestNeighbours tests if all known nearest neighbours given as arguments
-// are found in the addressbook
+// knowNearestNeighbours tests if all neighbours in the peerpot
+// are found among the peers known to the kademlia
 // It is used in Healthy function for testing only
-func (k *Kademlia) knowNearestNeighbours(peers [][]byte) bool {
+// TODO move to separate testing tools file
+func (o *PeerPot) knowNearestNeighbours() (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
-	k.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
-		if !nn {
+	// create a map with all peers at depth and deeper known in the kademlia
+	// in order deepest to shallowest compared to the kademlia base address
+	// all bins are included (stop at 255)
+	depth := depthForPot(o.addrs, o.MinProxBinSize, o.base)
+	o.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
+		if po < depth {
 			return false
 		}
-		pk := fmt.Sprintf("%x", p.Address())
+		pk := common.Bytes2Hex(p.Address())
 		pm[pk] = true
 		return true
 	})
-	for _, p := range peers {
-		pk := fmt.Sprintf("%x", p)
-		if !pm[pk] {
-			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", k.BaseAddr()[:4], pk[:8]))
-			return false
-		}
-	}
-	return true
-}
 
-// gotNearestNeighbours tests if all known nearest neighbours given as arguments
-// are connected peers
-// It is used in Healthy function for testing only
-func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool, n int, missing [][]byte) {
-	pm := make(map[string]bool)
-
-	k.eachConn(nil, 255, func(p *Peer, po int, nn bool) bool {
-		if !nn {
-			return false
-		}
-		pk := fmt.Sprintf("%x", p.Address())
-		pm[pk] = true
-		return true
-	})
+	// iterate through nearest neighbors in the peerpot map
+	// if we can't find the neighbor in the map we created above
+	// then we don't know all our neighbors
+	// (which sadly is all too common in modern society)
 	var gots int
 	var culprits [][]byte
-	for _, p := range peers {
-		pk := fmt.Sprintf("%x", p)
+	for _, p := range o.NNSet {
+		pk := common.Bytes2Hex(p)
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.BaseAddr()[:4], pk[:8]))
+			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.BaseAddr()[:4], pk[:8]))
 			culprits = append(culprits, p)
 		}
 	}
-	return gots == len(peers), gots, culprits
+	return gots == len(o.NNSet), gots, culprits
+}
+
+// gotNearestNeighbours tests if all neighbours in the peerpot
+// are currently connected in the kademlia
+// It is used in Healthy function for testing only
+func (o *PeerPot) gotNearestNeighbours() (got bool, n int, missing [][]byte) {
+	pm := make(map[string]bool)
+
+	// create a map with all peers at depth and deeper that are connected in the kademlia
+	// in order deepest to shallowest compared to the kademlia base address
+	// all bins are included (stop at 255)
+	depth := depthForPot(o.addrs, o.MinProxBinSize, o.base)
+	o.eachConn(nil, 255, func(p *Peer, po int, nn bool) bool {
+		if po < depth {
+			return false
+		}
+		pk := common.Bytes2Hex(p.Address())
+		pm[pk] = true
+		return true
+	})
+
+	// iterate through nearest neighbors in the peerpot map
+	// if we can't find the neighbor in the map we created above
+	// then we don't know all our neighbors
+	var gots int
+	var culprits [][]byte
+	for _, p := range o.NNSet {
+		pk := common.Bytes2Hex(p)
+		if pm[pk] {
+			gots++
+		} else {
+			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", o.BaseAddr()[:4], pk[:8]))
+			culprits = append(culprits, p)
+		}
+	}
+	return gots == len(o.NNSet), gots, culprits
 }
 
 // Health state of the Kademlia
 // used for testing only
 type Health struct {
-	KnowNN     bool     // whether node knows all its nearest neighbours
-	GotNN      bool     // whether node is connected to all its nearest neighbours
-	CountNN    int      // amount of nearest neighbors connected to
-	CulpritsNN [][]byte // which known NNs are missing
-	Hive       string
+	KnowNN         bool     // whether node knows all its nearest neighbours
+	CountKnowNN    int      // amount of nearest neighbors connected to
+	CulpritsKnowNN [][]byte // which known NNs are missing
+	GotNN          bool     // whether node is connected to all its nearest neighbours
+	CountGotNN     int      // amount of nearest neighbors connected to
+	CulpritsGotNN  [][]byte // which known NNs are missing
+	Saturated      bool     // whether we have all the peers we'd like to have
+	Hive           string
 }
 
 // Healthy reports the health state of the kademlia connectivity
 // returns a Health struct
 // used for testing only
-func (k *Kademlia) Healthy(pp *PeerPot) *Health {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
-	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
-	knownn := k.knowNearestNeighbours(pp.NNSet)
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n", k.BaseAddr()[:4], knownn, gotnn, full))
-	return &Health{knownn, gotnn, countnn, culpritsnn, k.string()}
+func (o *PeerPot) Healthy() *Health {
+	o.Kademlia.lock.RLock()
+	defer o.Kademlia.lock.RUnlock()
+	gotnn, countgotnn, culpritsgotnn := o.gotNearestNeighbours()
+	knownn, countknownn, culpritsknownn := o.knowNearestNeighbours()
+	depth := depthForPot(o.conns, o.MinProxBinSize, o.base)
+	saturated := o.saturation() < depth
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", o.BaseAddr()[:4], knownn, gotnn, saturated))
+	return &Health{
+		KnowNN:         knownn,
+		CountKnowNN:    countknownn,
+		CulpritsKnowNN: culpritsknownn,
+		GotNN:          gotnn,
+		CountGotNN:     countgotnn,
+		CulpritsGotNN:  culpritsgotnn,
+		Saturated:      saturated,
+		Hive:           o.Kademlia.string(),
+	}
 }
