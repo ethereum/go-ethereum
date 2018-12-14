@@ -33,11 +33,11 @@ var (
 // It is useful when constructing a star network topology
 // when Network adds and removes nodes dynamically.
 func (net *Network) ConnectToPivotNode(id enode.ID) (err error) {
-	pivot := net.PivotNodeID()
+	pivot := net.GetPivotNode()
 	if pivot == nil {
 		return ErrNoPivotNode
 	}
-	return net.connect(*pivot, id)
+	return net.connect(pivot.ID(), id)
 }
 
 // ConnectToLastNode connects the node with provided NodeID
@@ -146,11 +146,11 @@ func (net *Network) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
 // with the center at already set pivot node.
 // If ids argument is nil, all nodes that are up will be connected.
 func (net *Network) ConnectNodesStarPivot(ids []enode.ID) (err error) {
-	pivot := net.PivotNodeID()
+	pivot := net.GetPivotNode()
 	if pivot == nil {
 		return ErrNoPivotNode
 	}
-	return net.ConnectNodesStar(*pivot, ids)
+	return net.ConnectNodesStar(pivot.ID(), ids)
 }
 
 // connect connects two nodes but ignores already connected error.
@@ -168,18 +168,18 @@ func ignoreAlreadyConnectedErr(err error) error {
 // SetPivotNode sets the NodeID of the network's pivot node.
 // Pivot node is just a specific node that should be treated
 // differently then other nodes in test. SetPivotNode and
-// PivotNodeID are just a convenient functions to set and
+// GetPivotNode are just a convenient functions to set and
 // retrieve it.
 func (net *Network) SetPivotNode(id enode.ID) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
-	net.pivotNodeID = &id
+	net.pivotNodeID = id
 }
 
-// PivotNodeID returns NodeID of the pivot node set by
+// GetPivotNode returns NodeID of the pivot node set by
 // Network.SetPivotNode method.
-func (net *Network) PivotNodeID() (id *enode.ID) {
+func (net *Network) GetPivotNode() (node *Node) {
 	net.lock.RLock()
 	defer net.lock.RUnlock()
-	return net.pivotNodeID
+	return net.getNode(net.pivotNodeID)
 }

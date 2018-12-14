@@ -58,7 +58,7 @@ type Network struct {
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
 
-	pivotNodeID *enode.ID
+	pivotNodeID enode.ID
 
 	nodeAdapter adapters.NodeAdapter
 	events      event.Feed
