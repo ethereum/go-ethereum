@@ -948,21 +948,21 @@ func (p *Pss) forward(msg *PssMsg) error {
 	// proximity order function matching up to neighbourhoodDepth bits (po <= neighbourhoodDepth)
 	pof := pot.DefaultPof(neighbourhoodDepth)
 
-	// soft threshold of msg propagation
-	threshold, _ := pof(to, p.BaseAddr(), 0)
-	if threshold > luminosityRadius {
-		threshold = luminosityRadius
+	// soft threshold for msg broadcast
+	broadcastThreshold, _ := pof(to, p.BaseAddr(), 0)
+	if broadcastThreshold > luminosityRadius {
+		broadcastThreshold = luminosityRadius
 	}
 
 	// if measured from the recipient address as opposed to the base address (see Kademlia.EachConn
 	// call below), then peers that fall in the same proximity bin as recipient address will appear
 	// [at least] one bit closer, but only if these additional bits are given in the recipient address.
-	if threshold < luminosityRadius && threshold < neighbourhoodDepth {
-		threshold++
+	if broadcastThreshold < luminosityRadius && broadcastThreshold < neighbourhoodDepth {
+		broadcastThreshold++
 	}
 
 	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
-		if po < threshold && sent > 0 {
+		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
 		if sendMessage(p, sp, msg) {
