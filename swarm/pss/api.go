@@ -188,8 +188,5 @@ func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, er
 }
 
 func checkMsg(msg []byte) bool {
-	if msg == nil || len(msg) == 0 {
-		return false
-	}
-	return true
+	return len(msg) > 0
 }

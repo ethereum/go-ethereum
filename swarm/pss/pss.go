@@ -1041,8 +1041,5 @@ func (p *Pss) digestBytes(msg []byte) pssDigest {
 }
 
 func checkAddress(addr PssAddress) bool {
-	if len(addr) > addressLength {
-		return false
-	}
-	return true
+	return len(addr) <= addressLength
 }
