@@ -28,11 +28,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -943,6 +945,8 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	nodeCount := 16
 	//set the syncUpdateDelay for sync registrations to start
 	syncUpdateDelay := 500 * time.Millisecond
+	//we will later need the kad table for each node
+	bucketKeyKad := simulation.BucketKey("kademlia")
 	//create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -958,6 +962,8 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 				return nil, nil, err
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			//store the kad table
+			bucket.Store(bucketKeyKad, kad)
 			delivery := NewDelivery(kad, netStore)
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 			//configure so that sync registrations actually happen
@@ -989,17 +995,62 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//wait till healthy
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-		t.Fatal(err)
-	}
-
+	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		//we need to wait for some time until registrations are finished...
-		time.Sleep(syncUpdateDelay + 1*time.Second)
+		log.Info("Simulation running")
 		nodes := sim.Net.Nodes
+		//setup the filter for SubscribeMsg
+		msgs := sim.PeerEvents(
+			context.Background(),
+			sim.NodeIDs(),
+			simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(4), //4 is SubscribeMsg
+		)
 
-		//iterate all nodes
+		//setup the vars we need
+		msgCount := 0
+		expectedMsgCount := 0
+		allSubscriptionsDone := make(chan struct{})
+
+		//in a loop, catch all SubscribeMsg and just add up
+		go func() {
+			for m := range msgs {
+				if m.Error != nil {
+					log.Error("stream message", "err", m.Error)
+					continue
+				}
+				log.Trace("stream message", "node", m.NodeID, "peer", m.PeerID)
+				//add one
+				msgCount += 1
+				if msgCount == expectedMsgCount {
+					//the expected amount is reached
+					allSubscriptionsDone <- struct{}{}
+					return
+				}
+			}
+		}()
+
+		//first iterate all nodes to get the expected number of subscriptions from the kad table
+		for _, node := range nodes {
+			item, ok := sim.NodeItem(node.ID(), bucketKeyKad)
+			if !ok {
+				return fmt.Errorf("No kademlia")
+			}
+			kad := item.(*network.Kademlia)
+			//define the function which should run for each connection - just count subscriptions
+			//this is not actually subscribing but iterating the same way as the subscriptions do,
+			//as we need just the number
+			eachBinFunc := func(p *network.Peer, bin int) bool {
+				expectedMsgCount += 1
+				return true
+			}
+			//call the actual kademlia for the count
+			kad.EachBin(kad.BaseAddr(), pot.DefaultPof(kad.MaxProxDisplay), 0, eachBinFunc)
+		}
+		log.Debug("Expected message count: ", "expectedMsgCount", expectedMsgCount)
+		//wait until all subscriptions are done
+		<-allSubscriptionsDone
+		log.Info("All subscriptions received")
+		//now iterate again, this time we call each node via RPC to get its subscriptions
 		for _, node := range nodes {
 			//create rpc client
 			client, err := node.Client()
@@ -1018,18 +1069,15 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			//lenght of the subscriptions can not be smaller than number of peers
+			//length of the subscriptions can not be smaller than number of peers
 			if len(pstreams) < len(registry.peers) {
-				t.Fatal("No subscriptions have been made")
+				t.Fatal("Subscription count is smaller than expected")
 			}
-			//if enabled, print stats to STDOUT
-			if *printstats {
-				fmt.Println(fmt.Sprintf("node %s subscriptions:", node.String()))
-				for p, ps := range pstreams {
-					fmt.Println(fmt.Sprintf("...with node %s: ", p))
-					for _, s := range ps {
-						fmt.Println(fmt.Sprintf("......%s", s))
-					}
+			log.Debug(fmt.Sprintf("node %s subscriptions:", node.String()))
+			for p, ps := range pstreams {
+				log.Debug(fmt.Sprintf("...with node %s: ", p))
+				for _, s := range ps {
+					log.Debug(fmt.Sprintf("......%s", s))
 				}
 			}
 		}

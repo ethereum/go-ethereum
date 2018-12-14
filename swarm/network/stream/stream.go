@@ -849,7 +849,7 @@ func (api *API) GetPeerSubscriptions() map[string][]string {
 	pstreams := make(map[string][]string)
 	//iterate all streamer peers
 	for id, p := range api.streamer.peers {
-		streams := make([]string, 0)
+		var streams []string
 		//every peer has a map of stream servers
 		//every stream server represents a subscription
 		for s := range p.servers {
