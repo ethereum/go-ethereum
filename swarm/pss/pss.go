@@ -887,7 +887,7 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 }
 
 // tries to send a message, returns true if successful
-func trySendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+func sendMessage(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
@@ -925,9 +925,9 @@ func trySendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 // are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
 // forwarding fails, the node should try to forward it to the next best peer, until the message is
 // successfully forwarded to at least one peer.
-func (p *Pss) forward(msg *PssMsg, trySend func(p *Pss, sp *network.Peer, msg *PssMsg) bool) error {
-	if trySend == nil {
-		trySend = trySendMsg
+func (p *Pss) forward(msg *PssMsg, sendMsg func(p *Pss, sp *network.Peer, msg *PssMsg) bool) error {
+	if sendMsg == nil {
+		sendMsg = sendMessage
 	}
 
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
@@ -956,7 +956,7 @@ func (p *Pss) forward(msg *PssMsg, trySend func(p *Pss, sp *network.Peer, msg *P
 		if po < depth && sent > 0 {
 			return false // stop iterating
 		}
-		if trySend(p, sp, msg) {
+		if sendMsg(p, sp, msg) {
 			sent++
 		}
 		return po < addressLength*8 // stop iterating in case of exact match of full address

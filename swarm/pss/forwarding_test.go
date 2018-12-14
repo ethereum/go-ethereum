@@ -14,12 +14,16 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
+// the purpose of this test is to see that pss.forward() function correctly
+// selects the peers for message forwarding, depending on the message address
+// and kademlia constellation.
 func TestForwardBasic(t *testing.T) {
 	base := newBaseAddress() // 0xFFFFFF.......
 	var peerAddresses []pot.Address
 	var dst pot.Address
 	const depth = 9
 	for i := 0; i <= depth; i++ {
+		// add two peers for each proximity order (same as in live system)
 		a := pot.RandomAddressAt(base, i)
 		peerAddresses = append(peerAddresses, a)
 		a = pot.RandomAddressAt(base, i)
@@ -87,10 +91,13 @@ func TestForwardBasic(t *testing.T) {
 	testForwardMsg(900, t, ps, peerAddresses[19][:1], peerAddresses, all[16:])
 }
 
-func testForwardMsg(num int, t *testing.T, ps *Pss, addr []byte, addresses []pot.Address, expected []int) {
+// this function tests the forwarding of a single message. the recipient address (addr) is passed as param,
+// along with addreses of all peers, and indexes of those peers which are expected to receive the message.
+func testForwardMsg(testID int, t *testing.T, ps *Pss, addr []byte, addresses []pot.Address, expected []int) {
 	testResMap := make(map[pot.Address]int)
 	msg := newTestMsg(addr)
 	ps.forward(msg, func(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+		// this function substitutes the real send function, since we only want to test the peer selection functionality
 		a := pot.NewAddressFromBytes(sp.Address())
 		testResMap[a]++
 		return true
@@ -98,7 +105,7 @@ func testForwardMsg(num int, t *testing.T, ps *Pss, addr []byte, addresses []pot
 
 	// check test results
 	var fail bool
-	s := fmt.Sprintf("test id: %d, msg address: %x..., radius: %d", num, addr[:len(addr)%4], 8*len(addr))
+	s := fmt.Sprintf("test id: %d, msg address: %x..., radius: %d", testID, addr[:len(addr)%4], 8*len(addr))
 
 	// false negatives
 	for _, i := range expected {
