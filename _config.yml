@@ -1,0 +1,6 @@
+repository: ethereum/go-ethereum
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - .gitignore
