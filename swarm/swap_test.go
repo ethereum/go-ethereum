@@ -149,7 +149,6 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 		for _, node := range sim.NodeIDs() {
 			item, ok := sim.NodeItem(node, bucketKeySwarm)
 			if !ok {
-				log.Error("No swarm")
 				return errors.New("No swarm")
 			}
 			swarm := item.(*Swarm)
@@ -200,7 +199,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 	//but in inverted signs
 
 	//iterate the map
-	success := true
+	errorFound := false
 	for k, mapForK := range balancesMap {
 		//iterate the submap
 		for n, balanceKwithN := range mapForK {
@@ -211,11 +210,11 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			//...check that they have the same balance in Abs terms and that it is not 0
 			if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
 				log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-				success = false
+				errorFound = true
 			}
 		}
 	}
-	if !success {
+	if errorFound {
 		t.Fatal("Expected balances to be symmetrical, but they were not")
 	}
 	log.Debug("test terminated")
@@ -325,7 +324,6 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		for _, node := range sim.NodeIDs() {
 			item, ok := sim.NodeItem(node, bucketKeySwarm)
 			if !ok {
-				log.Error("No swarm")
 				return errors.New("no swarm")
 			}
 			swarm := item.(*Swarm)
@@ -367,7 +365,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 		Assuming that in this case, balances should be symmetric too	I
 	*/
 
-	success := true
+	errorsFound := false
 	for k, mapForK := range balancesMap {
 		for n, balanceKwithN := range mapForK {
 			mapForSubK := balancesMap[n]
@@ -375,12 +373,12 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 			log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
 			if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
 				log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n: %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
-				success = false
+				errorsFound = true
 			}
 		}
 	}
 
-	if !success {
+	if errorsFound {
 		t.Fatal("Expected balances to be symmetrical, but they were not")
 	}
 	log.Debug("test terminated")
