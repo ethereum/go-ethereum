@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -87,6 +88,10 @@ func LocalEnv() Environment {
 	if splits := strings.Split(head, " "); len(splits) == 2 {
 		head = splits[1]
 	} else {
+		commitRe, _ := regexp.Compile("^([0-9a-f]{40})$")
+		if commit := commitRe.FindString(head); commit != "" && env.Commit == "" {
+			env.Commit = commit
+		}
 		return env
 	}
 	if env.Commit == "" {
