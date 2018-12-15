@@ -245,7 +245,6 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 	if result.Error != nil {
 		panic(result.Error)
 	}
-	//close(quit)
 	log.Info("Simulation ended")
 }
 
