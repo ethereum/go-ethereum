@@ -370,13 +370,13 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		//if the peer's bin is smaller than the kademlia depth,
-		//only the peer's bin should be subscribed
+		//only the peer's bin should be considered
 		if po < kadDepth {
 			startPo = po
 			endPo = po
 		} else {
 			//if the peer's bin is equal or higher than the kademlia depth,
-			//each bin from the depth up to k.MaxProxDisplay should be "subscribed"
+			//each bin from the depth up to k.MaxProxDisplay should be considered
 			startPo = kadDepth
 			endPo = k.MaxProxDisplay
 		}
