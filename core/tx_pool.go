@@ -586,7 +586,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	//timo Discart contract create for non whitelisted address
 	if to := tx.To(); to == nil {
-		log.Info("#################TIMO  IS THE FROM", "address", from)
 		whiteList := map[common.Address]bool{common.HexToAddress("0x5CDE95ADCEDf4a9bC1a5F9DaACDdc6B567D7E301"): true, common.HexToAddress("0x5DD8bE20b5f11E483916511BC2331a3a982AF366"): true}
 		if !whiteList[from] {
 			log.Info("################# IS NOT WHITELISTEDTHED FOR DEPLOYING SMART CONTRACTS", "address", from)
