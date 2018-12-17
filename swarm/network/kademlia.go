@@ -471,7 +471,6 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	p.EachNeighbour(pivotAddr, Pof, f)
 
 	p.EachBin(pivotAddr, Pof, 0, func(po int, _ int, f func(func(pot.Val, int) bool) bool) bool {
-		log.Trace("eachbin", "addr", pivotAddr, "po", po)
 		if po == depth {
 			if maxDepth == depth {
 				return false
@@ -639,7 +638,6 @@ func NewPeerPotMap(minProxBinSize int, addrs [][]byte) map[string]*PeerPot {
 			if po == 256 {
 				return true
 			}
-
 			// append any neighbors found
 			// a neighbor is any peer in or deeper than the depth
 			if po >= depth {
