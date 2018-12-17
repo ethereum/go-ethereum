@@ -412,7 +412,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				addr := id.String()
 				log.Error("before hive healthy call")
 				pp := ppmap[addr]
-				if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
+				// if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
+				if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), addrs); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
