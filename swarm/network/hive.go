@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -247,7 +248,15 @@ func (h *Hive) savePeers() error {
 func (h *Hive) Healthy(addrs [][]byte) *Health {
 	k := NewKademlia(h.BaseAddr(), NewKadParams())
 	for _, a := range addrs {
-		k.On(a)
+		p := &Peer{
+			BzzPeer: &BzzPeer{
+				BzzAddr: &BzzAddr{
+					OAddr: a,
+				},
+			},
+		}
+		k.On(p)
 	}
-	return pp.Healthy([]*Kademlia{k})
+	pp := NewPeerPotMap([]*Kademlia{k})
+	return pp[common.Bytes2Hex(h.BaseAddr())].Healthy()
 }
