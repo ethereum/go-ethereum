@@ -1,5 +1,5 @@
 **NOTE: These instructions are for people who want to contribute Go source code changes.
-If you just want to run ethereum, use the normal [Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)**
+If you just want to run ethereum, use the normal [Installation Instructions](Building-Ethereum)**
 
 This document is the entry point for developers of the Go implementation of Ethereum. Developers here refer to the hands-on: who are interested in build, develop, debug, submit a bug report or pull request or contribute code to go-ethereum.
 
@@ -7,7 +7,7 @@ This document is the entry point for developers of the Go implementation of Ethe
 
 ### Go Environment
 
-We assume that you have [`go` v1.8 installed](https://github.com/ethereum/go-ethereum/wiki/Installing-Go), and `GOPATH` is set.
+We assume that you have [`go` v1.8 installed](Installing-Go), and `GOPATH` is set.
 
 **Note**:You must have your working copy under `$GOPATH/src/github.com/ethereum/go-ethereum`.
 
@@ -46,7 +46,7 @@ go-ethereum exectuables can be built individually. To build just geth, use:
 go install -v ./cmd/geth
 ```
 
-Read about cross compilation of go-ethereum [here](https://github.com/ethereum/go-ethereum/wiki/Cross-compiling-Ethereum).
+Read about cross compilation of go-ethereum [here](Cross-compiling-Ethereum).
 
 ### Git flow
 
@@ -81,7 +81,7 @@ for more see [go test flags](http://golang.org/cmd/go/#hdr-Description_of_testin
 ### Metrics and monitoring
 
 `geth` can do node behaviour monitoring, aggregation and show performance metric charts. 
-Read about [metrics and monitoring](https://github.com/ethereum/go-ethereum/wiki/Metrics-and-Monitoring)
+Read about [metrics and monitoring](Metrics-and-Monitoring)
 
 ### Getting Stack Traces
 
@@ -123,7 +123,7 @@ PRs need to be based on and opened against the `master` branch (unless by explic
 agreement, you contribute to a complex feature branch).
 
 Your PR will be reviewed according to the [Code Review
-Guidelines](https://github.com/ethereum/go-ethereum/wiki/Code-Review-Guidelines).
+Guidelines](Code-Review-Guidelines).
 
 We encourage a PR early approach, meaning you create the PR the earliest even without the
 fix/feature. This will let core devs and other volunteers know you picked up an issue.
@@ -131,8 +131,8 @@ These early PRs should indicate 'in progress' status.
 
 ## Dev Tutorials (mostly outdated)
 
-* [Private networks, local clusters and monitoring](https://github.com/ethereum/go-ethereum/wiki/Setting-up-private-network-or-local-cluster)
+* [Private networks, local clusters and monitoring](Setting-up-private-network-or-local-cluster)
 
-* [P2P 101](https://github.com/ethereum/go-ethereum/wiki/Peer-to-Peer): a tutorial about setting up and creating a p2p server and p2p sub protocol.
+* [P2P 101](Peer-to-Peer): a tutorial about setting up and creating a p2p server and p2p sub protocol.
 
-* [How to Whisper](https://github.com/ethereum/go-ethereum/wiki/How-to-Whisper): an introduction to whisper.
+* [How to Whisper](How-to-Whisper): an introduction to whisper.

@@ -7,7 +7,7 @@
 
 **Q.**  I would like to run multiple geth instances but got the error "Fatal: blockchain db err: resource temporarily unavailable".
 
-**A.**  Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](https://github.com/ethereum/go-ethereum/wiki/Setting-up-private-network-or-local-cluster) instructions.
+**A.**  Geth uses a datadir to store the blockchain, accounts and some additional information. This directory cannot be shared between running instances. If you would like to run multiple instances follow [these](Setting-up-private-network-or-local-cluster) instructions.
 
 **Q.** How do Ethereum syncing work?
 

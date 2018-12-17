@@ -28,7 +28,7 @@
 
 ## APIs
 - DAPP API - js integration (Fabian, Alex)
-- mist dapp storage scheme, url->hash mapping (Fabian, Alex) https://github.com/ethereum/go-ethereum/wiki/URL-Scheme
+- mist dapp storage scheme, url->hash mapping (Fabian, Alex) [URL scheme](URL-Scheme)
 
 # Discuss alternatives 
 

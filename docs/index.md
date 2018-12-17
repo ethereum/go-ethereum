@@ -5,13 +5,13 @@ This is the Wiki for the official Ethereum golang implementation. For generic Et
 
 Main entry points:
 
-* [Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
-* [Developer/Management API](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)
-* [Managing Accounts](https://github.com/ethereum/go-ethereum/wiki/Managing-your-accounts)
-* [Command Line Options](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)
-* [JavaScript Console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console)
-* [Private Network](https://github.com/ethereum/go-ethereum/wiki/Private-network)
-* [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
-* [Whisper v6](https://github.com/ethereum/go-ethereum/wiki/Whisper)
+* [Installation Instructions](Building-Ethereum)
+* [Developer/Management API](Management-APIs)
+* [Managing Accounts](Managing-your-accounts)
+* [Command Line Options](Command-Line-Options)
+* [JavaScript Console](JavaScript-Console)
+* [Private Network](Private-network)
+* [Developers' Guide](Developers'-Guide)
+* [Whisper v6](Whisper)
 
 Sidebar lists all pages.

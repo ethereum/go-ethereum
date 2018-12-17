@@ -61,7 +61,7 @@ every named host defines a timeline,
 The host part in a bzz webaddress should be resolved with our version of DNS, ie. using both `NameReg` (name registration contract on ethereum) and a simple mutable storage in swarm. 
 
 ## signed version store
-The point of channels (https://github.com/ethereum/go-ethereum/wiki/Swarm---Channels
+The point of channels (Swarm---Channels
 ) is to have a total order over a set of manifests.
 
 The typical usecase is that it should be enough to know the name of a site or document to always see the latest version of a software or get the current episode of your favourite series or the consensus state of a blockchain. It should also be possible to deterministically derive the key to future content...

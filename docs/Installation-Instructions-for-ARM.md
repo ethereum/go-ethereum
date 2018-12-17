@@ -1,6 +1,6 @@
 # Installation Instructions for ARM
 
-Geth is built for ARM using cross-compilation. See [Cross compiling Ethereum](https://github.com/ethereum/go-ethereum/wiki/Cross-compiling-Ethereum) for more details.
+Geth is built for ARM using cross-compilation. See [Cross compiling Ethereum](Cross-compiling-Ethereum) for more details.
 
 ## RasPi 2
 

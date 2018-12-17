@@ -1,21 +1,21 @@
 ### Native DApps
 
-[Introduction and packages](https://github.com/ethereum/go-ethereum/wiki/Native:-Introduction)
+[Introduction and packages](Native:-Introduction)
 
-[Account management](https://github.com/ethereum/go-ethereum/wiki/Native:-Account-management)
+[Account management](Native:-Account-management)
 
 ### Mobile platforms  
 
-[Introduction and packages](https://github.com/ethereum/go-ethereum/wiki/Mobile:-Introduction)
+[Introduction and packages](Mobile:-Introduction)
 
-[Account management](https://github.com/ethereum/go-ethereum/wiki/Mobile:-Account-management)
+[Account management](Mobile:-Account-management)
 
 ### Transaction tracing
 
-[Introduction and basics](https://github.com/ethereum/go-ethereum/wiki/Tracing:-Introduction)
+[Introduction and basics](Tracing:-Introduction)
 
-[Custom in-node tracers](https://github.com/ethereum/go-ethereum/wiki/Tracing:-Custom-tracers)
+[Custom in-node tracers](Tracing:-Custom-tracers)
 
-[Full blockchain tracing](https://github.com/ethereum/go-ethereum/wiki/Tracing:-Blockchain-tracing)
+[Full blockchain tracing](Tracing:-Blockchain-tracing)
 
-[Dependency exfiltration](https://github.com/ethereum/go-ethereum/wiki/Tracing:-Exfiltration)
+[Dependency exfiltration](Tracing:-Exfiltration)

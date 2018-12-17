@@ -28,7 +28,7 @@ git clone https://github.com/ethereum/go-ethereum
 ```
 Install latest distribution of Go (v1.7) if you don't have it already:
 
-[See instructions](https://github.com/ethereum/go-ethereum/wiki/Installing-Go#ubuntu-1404)
+[See instructions](Installing-Go#ubuntu-1404)
 
 Building `geth` requires Go and C compilers to be installed:
 

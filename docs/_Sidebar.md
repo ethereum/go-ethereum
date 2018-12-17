@@ -2,42 +2,42 @@
 
 ### Install and build  
 
-[Installing Ethereum](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
+[Installing Ethereum](Building-Ethereum)
 
-[Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers%27-Guide)
+[Developers' Guide](Developers%27-Guide)
 
 ### Usage
 
-[Managing Accounts](https://github.com/ethereum/go-ethereum/wiki/Managing-your-accounts)
+[Managing Accounts](Managing-your-accounts)
 
-[Mining](https://github.com/ethereum/go-ethereum/wiki/Mining)
+[Mining](Mining)
 
-[Contract Tutorial](https://github.com/ethereum/go-ethereum/wiki/Contract-Tutorial)
+[Contract Tutorial](Contract-Tutorial)
 
 ### Interface Documentation
 
-[Command Line Options](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)
+[Command Line Options](Command-Line-Options)
 
-[JavaScript Console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console)
+[JavaScript Console](JavaScript-Console)
 
-[Management API](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)
+[Management API](Management-APIs)
 
 [JSON-RPC server](https://github.com/ethereum/wiki/wiki/JSON-RPC)
 
 ### Issues
 
-[FAQ](https://github.com/ethereum/go-ethereum/wiki/FAQ)
+[FAQ](FAQ)
 
-[Reporting issues](https://github.com/ethereum/go-ethereum/wiki/geth#reporting)
+[Reporting issues](geth#reporting)
 
-[Community and support](https://github.com/ethereum/go-ethereum/wiki/geth#community-and-support)
+[Community and support](geth#community-and-support)
 
-[Issue handling workflow](https://github.com/ethereum/go-ethereum/wiki/Issue-handling-workflow) (draft proposal)
+[Issue handling workflow](Issue-handling-workflow) (draft proposal)
 
 ### Developers
 
-[Mobile Clients](https://github.com/ethereum/go-ethereum/wiki/Mobile-Clients:-Libraries-and-Inproc-Ethereum-Nodes)
+[Mobile Clients](Mobile-Clients:-Libraries-and-Inproc-Ethereum-Nodes)
 
-[Native DApps](https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts)
+[Native DApps](Native-DApps:-Go-bindings-to-Ethereum-contracts)
 
-[Active go-ethereum projects](https://github.com/ethereum/go-ethereum/wiki/Active-go-ethereum-projects)
+[Active go-ethereum projects](Active-go-ethereum-projects)

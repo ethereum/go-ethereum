@@ -55,7 +55,7 @@ These additional APIs follow the same conventions as the official DApp APIs. Web
 [extended](https://github.com/ethereum/web3.js/pull/229) and used to consume these additional APIs. 
 
 The different functions are split into multiple smaller logically grouped APIs. Examples are given
-for the [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console) but
+for the [JavaScript console](JavaScript-Console) but
 can easily be converted to an RPC request.
 
 **2 examples:**

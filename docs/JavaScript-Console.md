@@ -1,6 +1,6 @@
 Ethereum implements a **javascript runtime environment** (JSRE) that can be used in either interactive (console) or non-interactive (script) mode.
  
-Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the [admin API](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console#javascript-console-api).
+Ethereum's Javascript console exposes the full [web3 JavaScript Dapp API](https://github.com/ethereum/wiki/wiki/JavaScript-API) and the [admin API](JavaScript-Console#javascript-console-api).
 
 ## Interactive use: the JSRE REPL  Console
 
@@ -71,4 +71,4 @@ In addition to the full functionality of JS (as per ECMA5), the ethereum JSRE is
 
 Beside the official [DApp API](https://github.com/ethereum/wiki/wiki/JSON-RPC) interface the go ethereum node has support for additional management API's. These API's are offered using [JSON-RPC](http://www.jsonrpc.org/specification) and follow the same conventions as used in the DApp API. The go ethereum package comes with a console client which has support for all additional API's.
 
-[The management API has its own wiki page](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
+[The management API has its own wiki page](Management-APIs).
