@@ -444,7 +444,6 @@ func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 // if there is altogether less than MinProxBinSize peers it returns 0
 // caller must hold the lock
 func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
-	log.Trace("pivot", "a", pivotAddr)
 	if p.Size() <= minProxBinSize {
 		return 0
 	}
@@ -605,7 +604,6 @@ func (k *Kademlia) string() string {
 // used for testing only
 // TODO move to separate testing tools file
 type PeerPot struct {
-	*Kademlia
 	NNSet [][]byte
 }
 
@@ -614,25 +612,22 @@ type PeerPot struct {
 // the MinProxBinSize of the passed kademlia is used
 // used for testing only
 // TODO move to separate testing tools file
-func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
+func NewPeerPotMap(minProxBinSize int, addrs [][]byte) map[string]*PeerPot {
 
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
-	for _, k := range kads {
-		np, _, _ = pot.Add(np, k.base, Pof)
+	for _, addr := range addrs {
+		np, _, _ = pot.Add(np, addr, Pof)
 	}
 	ppmap := make(map[string]*PeerPot)
 
 	// generate an allknowing source of truth for connections
 	// for every kademlia passed
-	for i, k := range kads {
-
-		// get the address to use
-		a := k.base
+	for i, a := range addrs {
 
 		// actual kademlia depth
-		depth := depthForPot(k.addrs, k.MinProxBinSize, a)
-		log.Trace("potmap", "k", k.BaseAddr(), "depth", depth)
+		depth := depthForPot(np, minProxBinSize, a)
+
 		// all nn-peers
 		var nns [][]byte
 
@@ -654,10 +649,9 @@ func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
 			return false
 		})
 
-		log.Trace(fmt.Sprintf("%x PeerPotMap NNS: %s", kads[i].base[:4], LogAddrs(nns)))
+		log.Trace(fmt.Sprintf("%x PeerPotMap NNS: %s", addrs[i][:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{
-			Kademlia: k,
-			NNSet:    nns,
+			NNSet: nns,
 		}
 	}
 	return ppmap
@@ -686,15 +680,14 @@ func (k *Kademlia) saturation() int {
 // are found among the peers known to the kademlia
 // It is used in Healthy function for testing only
 // TODO move to separate testing tools file
-func (o *PeerPot) knowNeighbours() (got bool, n int, missing [][]byte) {
+func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
 	// create a map with all peers at depth and deeper known in the kademlia
 	// in order deepest to shallowest compared to the kademlia base address
 	// all bins (except self) are included (0 <= bin <= 255)
-	depth := depthForPot(o.addrs, o.MinProxBinSize, o.base)
-	o.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
-		log.Info("eachaddr", "depth", depth, "po", po)
+	depth := depthForPot(k.addrs, k.MinProxBinSize, k.base)
+	k.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
 		if po < depth {
 			return false
 		}
@@ -709,29 +702,29 @@ func (o *PeerPot) knowNeighbours() (got bool, n int, missing [][]byte) {
 	// (which sadly is all too common in modern society)
 	var gots int
 	var culprits [][]byte
-	for _, p := range o.NNSet {
+	for _, p := range addrs {
 		pk := common.Bytes2Hex(p)
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.base, pk))
+			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", k.base, pk))
 			culprits = append(culprits, p)
 		}
 	}
-	return gots == len(o.NNSet), gots, culprits
+	return gots == len(addrs), gots, culprits
 }
 
 // connectedNeighbours tests if all neighbours in the peerpot
 // are currently connected in the kademlia
 // It is used in Healthy function for testing only
-func (o *PeerPot) connectedNeighbours() (got bool, n int, missing [][]byte) {
+func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
 	// create a map with all peers at depth and deeper that are connected in the kademlia
 	// in order deepest to shallowest compared to the kademlia base address
 	// all bins (except self) are included (0 <= bin <= 255)
-	depth := depthForPot(o.addrs, o.MinProxBinSize, o.base)
-	o.eachConn(nil, 255, func(p *Peer, po int, nn bool) bool {
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	k.eachConn(nil, 255, func(p *Peer, po int, nn bool) bool {
 		if po < depth {
 			return false
 		}
@@ -745,16 +738,16 @@ func (o *PeerPot) connectedNeighbours() (got bool, n int, missing [][]byte) {
 	// then we don't know all our neighbors
 	var gots int
 	var culprits [][]byte
-	for _, p := range o.NNSet {
+	for _, p := range peers {
 		pk := common.Bytes2Hex(p)
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", o.base, pk)) //o.BaseAddr()[:4], pk[:8]))
+			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.base, pk))
 			culprits = append(culprits, p)
 		}
 	}
-	return gots == len(o.NNSet), gots, culprits
+	return gots == len(peers), gots, culprits
 }
 
 // Health state of the Kademlia
@@ -773,14 +766,14 @@ type Health struct {
 // Healthy reports the health state of the kademlia connectivity
 // returns a Health struct
 // used for testing only
-func (o *PeerPot) Healthy() *Health {
-	o.Kademlia.lock.RLock()
-	defer o.Kademlia.lock.RUnlock()
-	gotnn, countgotnn, culpritsgotnn := o.connectedNeighbours()
-	knownn, countknownn, culpritsknownn := o.knowNeighbours()
-	depth := depthForPot(o.conns, o.MinProxBinSize, o.base)
-	saturated := o.saturation() < depth
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", o.base, knownn, gotnn, saturated))
+func (k *Kademlia) Healthy(pp *PeerPot) *Health {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
+	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	saturated := k.saturation() < depth
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
 		KnowNN:         knownn,
 		CountKnowNN:    countknownn,
@@ -789,6 +782,6 @@ func (o *PeerPot) Healthy() *Health {
 		CountGotNN:     countgotnn,
 		CulpritsGotNN:  culpritsgotnn,
 		Saturated:      saturated,
-		Hive:           o.Kademlia.string(),
+		Hive:           k.string(),
 	}
 }

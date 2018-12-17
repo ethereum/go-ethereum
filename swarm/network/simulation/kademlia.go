@@ -19,6 +19,7 @@ package simulation
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -38,13 +39,19 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
-	var kademliasArray []*network.Kademlia
 	addrs := make([][]byte, 0, len(kademlias))
+	// TODO verify that all kademlias have same params
+	var minProxBinSize int
 	for _, k := range kademlias {
+		if minProxBinSize == 0 {
+			minProxBinSize = k.MinProxBinSize
+		}
 		addrs = append(addrs, k.BaseAddr())
-		kademliasArray = append(kademliasArray, k)
 	}
-	ppmap = network.NewPeerPotMap(kademliasArray)
+	if minProxBinSize == 0 {
+		return nil, errors.New("no kademlias in simulation")
+	}
+	ppmap = network.NewPeerPotMap(minProxBinSize, addrs)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -65,7 +72,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 				addr := common.Bytes2Hex(k.BaseAddr())
 				pp := ppmap[addr]
 				//call Healthy RPC
-				h := pp.Healthy()
+				h := k.Healthy(pp)
 				//print info
 				log.Debug(k.String())
 				log.Debug("kademlia", "gotNN", h.GotNN, "knowNN", h.KnowNN)

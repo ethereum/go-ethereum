@@ -553,12 +553,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	var kads []*network.Kademlia
-	for _, a := range conf.addrs {
-		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
-	}
-
-	ppmap := network.NewPeerPotMap(kads)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, conf.addrs)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))
