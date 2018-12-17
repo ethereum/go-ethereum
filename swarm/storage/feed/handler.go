@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
@@ -32,12 +31,10 @@ import (
 )
 
 type Handler struct {
-	chunkStore      *storage.NetStore
-	HashSize        int
-	cache           map[uint64]*cacheEntry
-	cacheLock       sync.RWMutex
-	storeTimeout    time.Duration
-	queryMaxPeriods uint32
+	chunkStore *storage.NetStore
+	HashSize   int
+	cache      map[uint64]*cacheEntry
+	cacheLock  sync.RWMutex
 }
 
 // HandlerParams pass parameters to the Handler constructor NewHandler
