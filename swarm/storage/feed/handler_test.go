@@ -17,11 +17,9 @@
 package feed
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -31,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 var (
@@ -71,7 +70,9 @@ func (f *fakeTimeProvider) Now() Timestamp {
 }
 
 // make updates and retrieve them based on periods and versions
-func TestFeedsHandler(t *testing.T) {
+func TestFeedsHandler(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
 
 	// make fake timeProvider
 	clock := &fakeTimeProvider{
@@ -80,12 +81,7 @@ func TestFeedsHandler(t *testing.T) {
 
 	// signer containing private key
 	signer := newAliceSigner()
-
-	feedsHandler, datadir, teardownTest, err := setupTest(clock, signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownTest()
+	feedsHandler := setupTest(t, clock)
 
 	// create a new feed
 	ctx, cancel := context.WithCancel(context.Background())
@@ -109,86 +105,68 @@ func TestFeedsHandler(t *testing.T) {
 	chunkAddress := make(map[string]storage.Address)
 	data := []byte(updates[0])
 	request.SetData(data)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+
+	err := request.Sign(signer)
+	t.Ok(err)
+
 	chunkAddress[updates[0]], err = feedsHandler.Update(ctx, request)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// move the clock ahead 21 seconds
 	clock.FastForward(21) // t=4221
 
 	request, err = feedsHandler.NewRequest(ctx, &request.Feed) // this timestamps the update at t = 4221
-	if err != nil {
-		t.Fatal(err)
-	}
-	if request.Epoch.Base() != 0 || request.Epoch.Level != lookup.HighestLevel-1 {
-		t.Fatalf("Suggested epoch BaseTime should be 0 and Epoch level should be %d", lookup.HighestLevel-1)
-	}
+	t.Ok(err)
+	t.Assert(request.Epoch.Base() == 0 && request.Epoch.Level == lookup.HighestLevel-1, "Suggested epoch BaseTime should be 0 and Epoch level should be %d", lookup.HighestLevel-1)
 
 	request.Epoch.Level = lookup.HighestLevel // force level 25 instead of 24 to make it fail
 	data = []byte(updates[1])
 	request.SetData(data)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+	err = request.Sign(signer)
+	t.Ok(err)
+
 	chunkAddress[updates[1]], err = feedsHandler.Update(ctx, request)
-	if err == nil {
-		t.Fatal("Expected update to fail since an update in this epoch already exists")
-	}
+	t.MustFail(err, "Expected update to fail since an update in this epoch already exists")
 
 	// move the clock ahead 21 seconds
 	clock.FastForward(21) // t=4242
 	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
+
 	request.SetData(data)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+	err = request.Sign(signer)
+	t.Ok(err)
+
 	chunkAddress[updates[1]], err = feedsHandler.Update(ctx, request)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// move the clock ahead 42 seconds
 	clock.FastForward(42) // t=4284
 	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
+
 	data = []byte(updates[2])
 	request.SetData(data)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+	err = request.Sign(signer)
+	t.Ok(err)
+
 	chunkAddress[updates[2]], err = feedsHandler.Update(ctx, request)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// move the clock ahead 1 second
 	clock.FastForward(1) // t=4285
 	request, err = feedsHandler.NewRequest(ctx, &request.Feed)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if request.Epoch.Base() != 0 || request.Epoch.Level != 22 {
-		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 22, request.Epoch.Level)
-	}
+	t.Ok(err)
+	t.Assert(request.Epoch.Base() == 0 && request.Epoch.Level == 22, "Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 22, request.Epoch.Level)
+
 	data = []byte(updates[3])
 	request.SetData(data)
 
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+	err = request.Sign(signer)
+	t.Ok(err)
+
 	chunkAddress[updates[3]], err = feedsHandler.Update(ctx, request)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	time.Sleep(time.Second)
 	feedsHandler.Close()
@@ -196,47 +174,29 @@ func TestFeedsHandler(t *testing.T) {
 	// check we can retrieve the updates after close
 	clock.FastForward(2000) // t=6285
 
-	feedParams := &HandlerParams{}
-
-	feedsHandler2, err := NewTestHandler(datadir, feedParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	feedsHandler2 := NewTestHandler(t, feedsHandler.dataDir)
+	t.Ok(err)
 
 	update2, err := feedsHandler2.Lookup(ctx, NewQueryLatest(&request.Feed, lookup.NoClue))
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// last update should be "clyde"
-	if !bytes.Equal(update2.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("feed update data was %v, expected %v", string(update2.data), updates[len(updates)-1])
-	}
-	if update2.Level != 22 {
-		t.Fatalf("feed update epoch level was %d, expected 22", update2.Level)
-	}
-	if update2.Base() != 0 {
-		t.Fatalf("feed update epoch base time was %d, expected 0", update2.Base())
-	}
+	t.Equals([]byte(updates[len(updates)-1]), update2.data)
+	t.Assert(update2.Level == 22, "feed update epoch level was %d, expected 22", update2.Level)
+	t.Assert(update2.Base() == 0, "feed update epoch base time was %d, expected 0", update2.Base())
+
 	log.Debug("Latest lookup", "epoch base time", update2.Base(), "epoch level", update2.Level, "data", update2.data)
 
 	// specific point in time
 	update, err := feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, 4284, lookup.NoClue))
-	if err != nil {
-		t.Fatal(err)
-	}
-	// check data
-	if !bytes.Equal(update.data, []byte(updates[2])) {
-		t.Fatalf("feed update data (historical) was %v, expected %v", string(update2.data), updates[2])
-	}
+	t.Ok(err)
+	t.Equals([]byte(updates[2]), update.data)
+
 	log.Debug("Historical lookup", "epoch base time", update2.Base(), "epoch level", update2.Level, "data", update2.data)
 
 	// beyond the first should yield an error
 	update, err = feedsHandler2.Lookup(ctx, NewQuery(&request.Feed, startTime.Time-1, lookup.NoClue))
-	if err == nil {
-		t.Fatalf("expected previous to fail, returned epoch %s data %v", update.Epoch.String(), update.data)
-	}
-
+	t.MustFail(err, "expected previous to fail")
 }
 
 const Day = 60 * 60 * 24
@@ -247,7 +207,9 @@ func generateData(x uint64) []byte {
 	return []byte(fmt.Sprintf("%d", x))
 }
 
-func TestSparseUpdates(t *testing.T) {
+func TestSparseUpdates(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
@@ -256,13 +218,7 @@ func TestSparseUpdates(t *testing.T) {
 
 	// signer containing private key
 	signer := newAliceSigner()
-
-	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownTest()
-	defer os.RemoveAll(datadir)
+	rh := setupTest(t, timeProvider)
 
 	// create a new feed
 	ctx, cancel := context.WithCancel(context.Background())
@@ -281,33 +237,24 @@ func TestSparseUpdates(t *testing.T) {
 		request := NewFirstRequest(fd.Topic)
 		request.Epoch = lookup.GetNextEpoch(epoch, T)
 		request.data = generateData(T) // this generates some data that depends on T, so we can check later
-		request.Sign(signer)
-		if err != nil {
-			t.Fatal(err)
-		}
+		err := request.Sign(signer)
+		t.Ok(err)
 
-		if _, err := rh.Update(ctx, request); err != nil {
-			t.Fatal(err)
-		}
+		_, err = rh.Update(ctx, request)
+		t.Ok(err)
+
 		epoch = request.Epoch
 		lastUpdateTime = T
 	}
 
 	query := NewQuery(&fd, today, lookup.NoClue)
 
-	_, err = rh.Lookup(ctx, query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err := rh.Lookup(ctx, query)
+	t.Ok(err)
 
 	_, content, err := rh.GetContent(&fd)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(generateData(lastUpdateTime), content) {
-		t.Fatalf("Expected to recover last written value %d, got %s", lastUpdateTime, string(content))
-	}
+	t.Ok(err)
+	t.Equals(generateData(lastUpdateTime), content)
 
 	// lookup the closest update to 35*Year + 6* Month (~ June 2005):
 	// it should find the update we put on 35*Year, since we were updating every 5 years.
@@ -315,21 +262,16 @@ func TestSparseUpdates(t *testing.T) {
 	query.TimeLimit = 35*Year + 6*Month
 
 	_, err = rh.Lookup(ctx, query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	_, content, err = rh.GetContent(&fd)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(generateData(35*Year), content) {
-		t.Fatalf("Expected to recover %d, got %s", 35*Year, string(content))
-	}
+	t.Ok(err)
+	t.Equals(generateData(35*Year), content)
 }
 
-func TestValidator(t *testing.T) {
+func TestValidator(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
@@ -338,13 +280,8 @@ func TestValidator(t *testing.T) {
 
 	// signer containing private key. Alice will be the good girl
 	signer := newAliceSigner()
-
 	// set up  sim timeProvider
-	rh, _, teardownTest, err := setupTest(timeProvider, signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownTest()
+	rh := setupTest(t, timeProvider)
 
 	// create new feed
 	topic, _ := NewTopic(subtopicName, nil)
@@ -357,33 +294,27 @@ func TestValidator(t *testing.T) {
 	// chunk with address
 	data := []byte("foo")
 	mr.SetData(data)
-	if err := mr.Sign(signer); err != nil {
-		t.Fatalf("sign fail: %v", err)
-	}
+	err := mr.Sign(signer)
+	t.Ok(err)
 
 	chunk, err := mr.toChunk()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !rh.Validate(chunk) {
-		t.Fatal("Chunk validator fail on update chunk")
-	}
+	t.Ok(err)
+	t.Assert(rh.Validate(chunk), "Chunk validator fail on update chunk")
 
 	address := chunk.Address()
 	// mess with the address
 	address[0] = 11
 	address[15] = 99
-
-	if rh.Validate(storage.NewChunk(address, chunk.Data())) {
-		t.Fatal("Expected Validate to fail with false chunk address")
-	}
+	t.Assert(!rh.Validate(storage.NewChunk(address, chunk.Data())), "Expected Validate to fail with false chunk address")
 }
 
 // tests that the content address validator correctly checks the data
 // tests that feed update chunks are passed through content address validator
 // there is some redundancy in this test as it also tests content addressed chunks,
 // which should be evaluated as invalid chunks by this validator
-func TestValidatorInStore(t *testing.T) {
+func TestValidatorInStore(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
 
 	// make fake timeProvider
 	TimestampProvider = &fakeTimeProvider{
@@ -392,24 +323,16 @@ func TestValidatorInStore(t *testing.T) {
 
 	// signer containing private key
 	signer := newAliceSigner()
-
 	// set up localstore
-	datadir, err := ioutil.TempDir("", "storage-testfeedsvalidator")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(datadir)
+	datadir := t.Services.NewTempDir()
 
 	handlerParams := storage.NewDefaultLocalStoreParams()
 	handlerParams.Init(datadir)
 	store, err := storage.NewLocalStore(handlerParams, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// set up Swarm feeds handler and add is as a validator to the localstore
-	fhParams := &HandlerParams{}
-	fh := NewHandler(fhParams)
+	fh := NewHandler(&HandlerParams{})
 	store.Validators = append(store.Validators, fh)
 
 	// create content addressed chunks, one good, one faulty
@@ -439,55 +362,28 @@ func TestValidatorInStore(t *testing.T) {
 	r.Update.ID = id
 	r.data = data
 
-	r.Sign(signer)
+	err = r.Sign(signer)
+	t.Ok(err)
 
 	uglyChunk, err := r.toChunk()
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// put the chunks in the store and check their error status
 	err = store.Put(context.Background(), goodChunk)
-	if err == nil {
-		t.Fatal("expected error on good content address chunk with feed update validator only, but got nil")
-	}
+	t.MustFail(err, "expected error on good content address chunk with feed update validator only, but got nil")
+
 	err = store.Put(context.Background(), badChunk)
-	if err == nil {
-		t.Fatal("expected error on bad content address chunk with feed update validator only, but got nil")
-	}
-	err = store.Put(context.Background(), uglyChunk)
-	if err != nil {
-		t.Fatalf("expected no error on feed update chunk with feed update validator only, but got: %s", err)
-	}
+	t.MustFail(err, "expected error on bad content address chunk with feed update validator only, but got nil")
+
+	err = store.Put(context.Background(), uglyChunk) // feed update chunk with feed update validator only
+	t.Ok(err)
 }
 
 // create rpc and feeds Handler
-func setupTest(timeProvider timestampProvider, signer Signer) (fh *TestHandler, datadir string, teardown func(), err error) {
-
-	var fsClean func()
-	var rpcClean func()
-	cleanF = func() {
-		if fsClean != nil {
-			fsClean()
-		}
-		if rpcClean != nil {
-			rpcClean()
-		}
-	}
-
-	// temp datadir
-	datadir, err = ioutil.TempDir("", "fh")
-	if err != nil {
-		return nil, "", nil, err
-	}
-	fsClean = func() {
-		os.RemoveAll(datadir)
-	}
-
+func setupTest(t *testutil.SwarmTestTools, timeProvider timestampProvider) *TestHandler {
 	TimestampProvider = timeProvider
-	fhParams := &HandlerParams{}
-	fh, err = NewTestHandler(datadir, fhParams)
-	return fh, datadir, cleanF, err
+	fh := NewTestHandler(t, "")
+	return fh
 }
 
 func newAliceSigner() *GenericSigner {

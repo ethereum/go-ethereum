@@ -17,11 +17,11 @@
 package http
 
 import (
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -32,33 +32,21 @@ type TestServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
-	dir, err := ioutil.TempDir("", "swarm-storage-test")
-	if err != nil {
-		t.Fatal(err)
-	}
+func NewTestSwarmServer(tx *testing.T, serverFunc func(*api.API) TestServer, resolver api.Resolver) *TestSwarmServer {
+	// hacked this function for the testing framework demo. Disregard changes here.
+	t := testutil.BeginTest(tx, false)
+	dir := t.Services.NewTempDir()
+
 	storeparams := storage.NewDefaultLocalStoreParams()
 	storeparams.DbCapacity = 5000000
 	storeparams.CacheCapacity = 5000
 	storeparams.Init(dir)
 	localStore, err := storage.NewLocalStore(storeparams, nil)
-	if err != nil {
-		os.RemoveAll(dir)
-		t.Fatal(err)
-	}
+	t.Ok(err)
+
 	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
-	// Swarm feeds test setup
-	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rhparams := &feed.HandlerParams{}
-	rh, err := feed.NewTestHandler(feedsDir, rhparams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rh := feed.NewTestHandler(t, "")
 
 	a := api.NewAPI(fileStore, resolver, rh.Handler, nil)
 	srv := httptest.NewServer(serverFunc(a))
@@ -70,8 +58,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
-			os.RemoveAll(dir)
-			os.RemoveAll(feedsDir)
+			t.FinishTest()
 		},
 		CurrentTime: 42,
 	}

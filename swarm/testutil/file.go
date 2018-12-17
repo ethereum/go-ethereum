@@ -26,6 +26,8 @@ import (
 	"testing"
 )
 
+//TODO: refactor these as TestServices
+
 // TempFileWithContent is a helper function that creates a temp file that contains the following string content then closes the file handle
 // it returns the complete file path
 func TempFileWithContent(t *testing.T, content string) string {

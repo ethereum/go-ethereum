@@ -17,38 +17,27 @@
 package feed
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
-
-func areEqualJSON(s1, s2 string) (bool, error) {
-	//credit for the trick: turtlemonvh https://gist.github.com/turtlemonvh/e4f7404e28387fadb8ad275a99596f67
-	var o1 interface{}
-	var o2 interface{}
-
-	err := json.Unmarshal([]byte(s1), &o1)
-	if err != nil {
-		return false, fmt.Errorf("Error mashalling string 1 :: %s", err.Error())
-	}
-	err = json.Unmarshal([]byte(s2), &o2)
-	if err != nil {
-		return false, fmt.Errorf("Error mashalling string 2 :: %s", err.Error())
-	}
-
-	return reflect.DeepEqual(o1, o2), nil
-}
 
 // TestEncodingDecodingUpdateRequests ensures that requests are serialized properly
 // while also checking cryptographically that only the owner of a feed can update it.
-func TestEncodingDecodingUpdateRequests(t *testing.T) {
+func TestEncodingDecodingUpdateRequests(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
+
+	TimestampProvider = &fakeTimeProvider{
+		currentTime: startTime.Time, // clock starts at t=4200
+	}
 
 	charlie := newCharlieSigner() //Charlie
 	bob := newBobSigner()         //Bob
@@ -58,28 +47,12 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	firstRequest := NewFirstRequest(topic)
 	firstRequest.User = charlie.Address()
 
-	// We now encode the create message to simulate we send it over the wire
-	messageRawData, err := firstRequest.MarshalJSON()
-	if err != nil {
-		t.Fatalf("Error encoding first feed update request: %s", err)
-	}
+	t.TestJSONMarshaller("firstrequest.json", firstRequest)
 
-	// ... the message arrives and is decoded...
-	var recoveredFirstRequest Request
-	if err := recoveredFirstRequest.UnmarshalJSON(messageRawData); err != nil {
-		t.Fatalf("Error decoding first feed update request: %s", err)
-	}
+	// but verification should fail because it is not signed!
+	t.MustFail(firstRequest.Verify(), "Expected Verify to fail since the message is not signed")
 
-	// ... but verification should fail because it is not signed!
-	if err := recoveredFirstRequest.Verify(); err == nil {
-		t.Fatal("Expected Verify to fail since the message is not signed")
-	}
-
-	// We now assume that the feed ypdate was created and propagated.
-
-	const expectedSignature = "0x7235b27a68372ddebcf78eba48543fa460864b0b0e99cb533fcd3664820e603312d29426dd00fb39628f5299480a69bf6e462838d78de49ce0704c754c9deb2601"
-	const expectedJSON = `{"feed":{"topic":"0x6120676f6f6420746f706963206e616d65000000000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"epoch":{"time":1000,"level":1},"protocolVersion":0,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
-
+	// We now assume that the feed update was created and propagated.
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
@@ -95,96 +68,74 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		},
 	}
 
-	messageRawData, err = request.MarshalJSON()
-	if err != nil {
-		t.Fatalf("Error encoding update request: %s", err)
-	}
-
-	equalJSON, err := areEqualJSON(string(messageRawData), expectedJSON)
-	if err != nil {
-		t.Fatalf("Error decoding update request JSON: %s", err)
-	}
-	if !equalJSON {
-		t.Fatalf("Received a different JSON message. Expected %s, got %s", expectedJSON, string(messageRawData))
-	}
+	messageRawData, err := request.MarshalJSON()
+	t.Ok(err)
+	t.JSONBytesEqualsFile("secondrequest.json", messageRawData)
 
 	// now the encoded message messageRawData is sent over the wire and arrives to the signer
 
 	//Attempt to extract an UpdateRequest out of the encoded message
 	var recoveredRequest Request
-	if err := recoveredRequest.UnmarshalJSON(messageRawData); err != nil {
-		t.Fatalf("Error decoding update request: %s", err)
-	}
+	err = recoveredRequest.UnmarshalJSON(messageRawData)
+	t.Ok(err)
 
 	//sign the request and see if it matches our predefined signature above.
-	if err := recoveredRequest.Sign(charlie); err != nil {
-		t.Fatalf("Error signing request: %s", err)
-	}
-
-	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.Signature[:], expectedSignature)
+	err = recoveredRequest.Sign(charlie)
+	t.Ok(err)
+	t.EqualsKey("signature", hexutil.Encode(recoveredRequest.Signature[:]))
 
 	// mess with the signature and see what happens. To alter the signature, we briefly decode it as JSON
 	// to alter the signature field.
 	var j updateRequestJSON
-	if err := json.Unmarshal([]byte(expectedJSON), &j); err != nil {
-		t.Fatal("Error unmarshalling test json, check expectedJSON constant")
-	}
+	err = json.Unmarshal([]byte(messageRawData), &j)
+	t.Ok(err)
+
 	j.Signature = "Certainly not a signature"
 	corruptMessage, _ := json.Marshal(j) // encode the message with the bad signature
 	var corruptRequest Request
-	if err = corruptRequest.UnmarshalJSON(corruptMessage); err == nil {
-		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
-	}
+	err = corruptRequest.UnmarshalJSON(corruptMessage)
+	t.MustFail(err, "Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 
 	// Now imagine Bob wants to create an update of his own about the same feed,
 	// signing a message with his private key
-	if err := request.Sign(bob); err != nil {
-		t.Fatalf("Error signing: %s", err)
-	}
+	err = request.Sign(bob)
+	t.Ok(err)
 
 	// Now Bob encodes the message to send it over the wire...
 	messageRawData, err = request.MarshalJSON()
-	if err != nil {
-		t.Fatalf("Error encoding message:%s", err)
-	}
+	t.Ok(err)
 
 	// ... the message arrives to our Swarm node and it is decoded.
 	recoveredRequest = Request{}
-	if err := recoveredRequest.UnmarshalJSON(messageRawData); err != nil {
-		t.Fatalf("Error decoding message:%s", err)
-	}
+	err = recoveredRequest.UnmarshalJSON(messageRawData)
+	t.Ok(err)
 
 	// Before checking what happened with Bob's update, let's see what would happen if we mess
 	// with the signature big time to see if Verify catches it
 	savedSignature := *recoveredRequest.Signature                               // save the signature for later
 	binary.LittleEndian.PutUint64(recoveredRequest.Signature[5:], 556845463424) // write some random data to break the signature
-	if err = recoveredRequest.Verify(); err == nil {
-		t.Fatal("Expected Verify to fail on corrupt signature")
-	}
+	err = recoveredRequest.Verify()
+	t.MustFail(err, "Expected Verify to fail on corrupt signature")
 
 	// restore the Bob's signature from corruption
 	*recoveredRequest.Signature = savedSignature
 
 	// Now the signature is not corrupt
-	if err = recoveredRequest.Verify(); err != nil {
-		t.Fatal(err)
-	}
+	err = recoveredRequest.Verify()
+	t.Ok(err)
 
 	// Reuse object and sign with our friend Charlie's private key
-	if err := recoveredRequest.Sign(charlie); err != nil {
-		t.Fatalf("Error signing with the correct private key: %s", err)
-	}
+	err = recoveredRequest.Sign(charlie)
+	t.Ok(err)
 
 	// And now, Verify should work since this update now belongs to Charlie
-	if err = recoveredRequest.Verify(); err != nil {
-		t.Fatalf("Error verifying that Charlie, can sign a reused request object:%s", err)
-	}
+	err = recoveredRequest.Verify()
+	t.Ok(err)
 
 	// mess with the lookup key to make sure Verify fails:
 	recoveredRequest.Time = 77999 // this will alter the lookup key
-	if err = recoveredRequest.Verify(); err == nil {
-		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
-	}
+	err = recoveredRequest.Verify()
+	t.MustFail(err, "Expected Verify to fail since the lookup key has been altered")
 }
 
 func getTestRequest() *Request {
@@ -233,27 +184,17 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 }
 
 // check that signature address matches update signer address
-func TestReverse(t *testing.T) {
+func TestReverse(tx *testing.T) {
+	t := testutil.BeginTest(tx, false) // set to true to generate results
+	defer t.FinishTest()
 
 	epoch := lookup.Epoch{
 		Time:  7888,
 		Level: 6,
 	}
 
-	// make fake timeProvider
-	timeProvider := &fakeTimeProvider{
-		currentTime: startTime.Time,
-	}
-
 	// signer containing private key
 	signer := newAliceSigner()
-
-	// set up rpc and create feeds handler
-	_, _, teardownTest, err := setupTest(timeProvider, signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownTest()
 
 	topic, _ := NewTopic("Cervantes quotes", nil)
 	fd := Feed{
@@ -271,42 +212,30 @@ func TestReverse(t *testing.T) {
 	// generate a chunk key for this request
 	key := request.Addr()
 
-	if err = request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
+	err := request.Sign(signer)
+	t.Ok(err)
 
 	chunk, err := request.toChunk()
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Ok(err)
 
 	// check that we can recover the owner account from the update chunk's signature
 	var checkUpdate Request
-	if err := checkUpdate.fromChunk(chunk); err != nil {
-		t.Fatal(err)
-	}
+	err = checkUpdate.fromChunk(chunk)
+	t.Ok(err)
+
 	checkdigest, err := checkUpdate.GetDigest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	recoveredAddr, err := getUserAddr(checkdigest, *checkUpdate.Signature)
-	if err != nil {
-		t.Fatalf("Retrieve address from signature fail: %v", err)
-	}
+	t.Ok(err)
+
+	recoveredAddr, err := getUserAddr(checkdigest, *checkUpdate.Signature) //Retrieve address from signature
+	t.Ok(err)
+
 	originalAddr := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
 
 	// check that the metadata retrieved from the chunk matches what we gave it
-	if recoveredAddr != originalAddr {
-		t.Fatalf("addresses dont match: %x != %x", originalAddr, recoveredAddr)
-	}
+	t.Assert(recoveredAddr == originalAddr, "addresses dont match: %x != %x", originalAddr, recoveredAddr)
+	t.Equals(chunk.Address()[:], key[:])
 
-	if !bytes.Equal(key[:], chunk.Address()[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Address())
-	}
-	if epoch != checkUpdate.Epoch {
-		t.Fatalf("Expected epoch to be '%s', was '%s'", epoch.String(), checkUpdate.Epoch.String())
-	}
-	if !bytes.Equal(data, checkUpdate.data) {
-		t.Fatalf("Expected data '%x', was '%x'", data, checkUpdate.data)
-	}
+	t.Assert(epoch == checkUpdate.Epoch, "Expected epoch to be '%s', was '%s'", epoch.String(), checkUpdate.Epoch.String())
+
+	t.Equals(checkUpdate.data, data)
 }

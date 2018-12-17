@@ -18,20 +18,16 @@ package feed
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-)
-
-const (
-	testDbDirName = "feeds"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 type TestHandler struct {
 	*Handler
+	dataDir string
 }
 
 func (t *TestHandler) Close() {
@@ -50,22 +46,24 @@ func newFakeNetFetcher(context.Context, storage.Address, *sync.Map) storage.NetF
 }
 
 // NewTestHandler creates Handler object to be used for testing purposes.
-func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
-	path := filepath.Join(datadir, testDbDirName)
-	fh := NewHandler(params)
+func NewTestHandler(t *testutil.SwarmTestTools, path string) *TestHandler {
+	if path == "" {
+		path = t.Services.NewTempDir()
+	}
+	fh := NewHandler(&HandlerParams{})
 	localstoreparams := storage.NewDefaultLocalStoreParams()
 	localstoreparams.Init(path)
 	localStore, err := storage.NewLocalStore(localstoreparams, nil)
-	if err != nil {
-		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
-	}
+	t.Ok(err)
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)))
 	localStore.Validators = append(localStore.Validators, fh)
 	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, err
-	}
+	t.Ok(err)
 	netStore.NewNetFetcherFunc = newFakeNetFetcher
 	fh.SetStore(netStore)
-	return &TestHandler{fh}, nil
+	th := &TestHandler{
+		Handler: fh,
+		dataDir: path,
+	}
+	return th
 }
