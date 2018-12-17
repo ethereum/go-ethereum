@@ -531,8 +531,8 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 // The value in `address` will be used as a routing hint for the
 // public key / topic association
 func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address PssAddress) error {
-	if !checkAddress(address) {
-		return errors.New("invalid address")
+	if err := validateAddress(address); err != nil {
+		return err
 	}
 	pubkeybytes := crypto.FromECDSAPub(pubkey)
 	if len(pubkeybytes) == 0 {
@@ -575,8 +575,8 @@ func (p *Pss) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache b
 // Returns a string id that can be used to retrieve the key bytes
 // from the whisper backend (see pss.GetSymmetricKey())
 func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
-	if !checkAddress(address) {
-		return "", errors.New("invalid address")
+	if err := validateAddress(address); err != nil {
+		return "", err
 	}
 	return p.setSymmetricKey(key, topic, address, addtocache, true)
 }
@@ -759,8 +759,8 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
-	if !checkAddress(address) {
-		return errors.New("invalid address")
+	if err := validateAddress(address); err != nil {
+		return err
 	}
 	pssMsgParams := &msgParams{
 		raw: true,
@@ -1040,6 +1040,9 @@ func (p *Pss) digestBytes(msg []byte) pssDigest {
 	return digest
 }
 
-func checkAddress(addr PssAddress) bool {
-	return len(addr) <= addressLength
+func validateAddress(addr PssAddress) error {
+	if len(addr) > addressLength {
+		return errors.New("address too long")
+	}
+	return nil
 }

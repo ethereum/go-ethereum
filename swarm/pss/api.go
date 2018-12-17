@@ -157,22 +157,22 @@ func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 }
 
 func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
-	if !checkMsg(msg) {
-		return errors.New("invalid message")
+	if err := validateMsg(msg); err != nil {
+		return err
 	}
 	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
 }
 
 func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
-	if !checkMsg(msg) {
-		return errors.New("invalid message")
+	if err := validateMsg(msg); err != nil {
+		return err
 	}
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
 
 func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) error {
-	if !checkMsg(msg) {
-		return errors.New("invalid message")
+	if err := validateMsg(msg); err != nil {
+		return err
 	}
 	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
 }
@@ -187,6 +187,9 @@ func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, er
 	return pssapi.Pss.getPeerAddress(pubkeyhex, topic)
 }
 
-func checkMsg(msg []byte) bool {
-	return len(msg) > 0
+func validateMsg(msg []byte) error {
+	if len(msg) == 0 {
+		return errors.New("invalid message length")
+	}
+	return nil
 }
