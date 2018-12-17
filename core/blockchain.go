@@ -1475,11 +1475,11 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		commonBlock *types.Block
 		deletedTxs  types.Transactions
 		deletedLogs []*types.Log
+		rebirthLogs []*types.Log
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
-		// These logs are later announced as deleted.
-		collectLogs = func(hash common.Hash) {
-			// Coalesce logs and set 'Removed'.
+		// These logs are later announced as deleted or reborn
+		collectLogs = func(hash common.Hash, removed bool) {
 			number := bc.hc.GetBlockNumber(hash)
 			if number == nil {
 				return
@@ -1487,9 +1487,13 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			receipts := rawdb.ReadReceipts(bc.db, hash, *number)
 			for _, receipt := range receipts {
 				for _, log := range receipt.Logs {
-					del := *log
-					del.Removed = true
-					deletedLogs = append(deletedLogs, &del)
+					l := *log
+					if removed {
+						l.Removed = true
+						deletedLogs = append(deletedLogs, &l)
+					} else {
+						rebirthLogs = append(rebirthLogs, &l)
+					}
 				}
 			}
 		}
@@ -1502,7 +1506,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 
-			collectLogs(oldBlock.Hash())
+			collectLogs(oldBlock.Hash(), true)
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
@@ -1526,7 +1530,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldChain = append(oldChain, oldBlock)
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-		collectLogs(oldBlock.Hash())
+		collectLogs(oldBlock.Hash(), true)
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
@@ -1552,6 +1556,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	for i := len(newChain) - 1; i >= 0; i-- {
 		// insert the block in the canonical way, re-writing history
 		bc.insert(newChain[i])
+		// collect reborn logs due to chain reorg(except head block)
+		if i != 0 {
+			collectLogs(newChain[i].Hash(), false)
+		}
 		// write lookup entries for hash based transaction/receipt searches
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
@@ -1568,6 +1576,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+	}
+	if len(rebirthLogs) > 0 {
+		go bc.logsFeed.Send(rebirthLogs)
 	}
 	if len(oldChain) > 0 {
 		go func() {
