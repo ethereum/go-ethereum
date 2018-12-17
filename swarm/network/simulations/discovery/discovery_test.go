@@ -23,11 +23,9 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -247,25 +245,14 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	action := func(ctx context.Context) error {
 		return nil
 	}
-	wg := sync.WaitGroup{}
 	for i := range ids {
 		// collect the overlay addresses, to
 		addrs = append(addrs, ids[i].Bytes())
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = (i + 1) % len(ids)
-			} else {
-				k = rand.Intn(len(ids))
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
 	}
-	wg.Wait()
+	err := net.ConnectNodesChain(nil)
+	if err != nil {
+		return nil, err
+	}
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
 	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
@@ -457,23 +444,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 		return nil
 	}
-	//connects in a chain
-	wg := sync.WaitGroup{}
-	//connects in a ring
-	for i := range ids {
-		for j := 1; j <= conns; j++ {
-			k := (i + j) % len(ids)
-			if k == i {
-				k = (k + 1) % len(ids)
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
-	}
-	wg.Wait()
+	net.ConnectNodesChain(nil)
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
 	check := func(ctx context.Context, id enode.ID) (bool, error) {

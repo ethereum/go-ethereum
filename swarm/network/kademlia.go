@@ -640,6 +640,8 @@ func (k *Kademlia) saturation() int {
 	})
 	// TODO evaluate whether this check cannot just as well be done within the eachbin
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
+
+	// if in the iterator above we iterated deeper than the neighbourhood depth - return depth
 	if depth < prev {
 		return depth
 	}

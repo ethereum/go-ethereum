@@ -49,9 +49,11 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 	defer stop()
 
 	// perform the action
-	if err := step.Action(ctx); err != nil {
-		result.Error = err
-		return
+	if step.Action != nil {
+		if err := step.Action(ctx); err != nil {
+			result.Error = err
+			return
+		}
 	}
 
 	// wait for all node expectations to either pass, error or timeout
