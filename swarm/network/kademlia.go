@@ -411,7 +411,7 @@ func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
 }
 
 // EachAddr called with (base, po, f) is an iterator applying f to each known peer
-// that has proximity order po or less as measured from the base
+// that has proximity order o or less as measured from the base
 // if base is nil, kademlia base address is used
 // It returns peers in order deepest to shallowest
 func (k *Kademlia) EachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool) {
@@ -444,6 +444,7 @@ func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 // if there is altogether less than MinProxBinSize peers it returns 0
 // caller must hold the lock
 func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
+	log.Trace("pivot", "a", pivotAddr)
 	if p.Size() <= minProxBinSize {
 		return 0
 	}
@@ -470,7 +471,8 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	}
 	p.EachNeighbour(pivotAddr, Pof, f)
 
-	p.EachBin(pivotAddr, Pof, 0, func(po int, _ int, _ func(func(pot.Val, int) bool) bool) bool {
+	p.EachBin(pivotAddr, Pof, 0, func(po int, _ int, f func(func(pot.Val, int) bool) bool) bool {
+		log.Trace("eachbin", "addr", pivotAddr, "po", po)
 		if po == depth {
 			if maxDepth == depth {
 				return false
@@ -629,8 +631,8 @@ func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
 		a := k.base
 
 		// actual kademlia depth
-		depth := depthForPot(np, k.MinProxBinSize, a)
-
+		depth := depthForPot(k.addrs, k.MinProxBinSize, a)
+		log.Trace("potmap", "k", k.BaseAddr(), "depth", depth)
 		// all nn-peers
 		var nns [][]byte
 
@@ -652,7 +654,7 @@ func NewPeerPotMap(kads []*Kademlia) map[string]*PeerPot {
 			return false
 		})
 
-		log.Trace(fmt.Sprintf("%x NNS: %s", kads[i].base[:4], LogAddrs(nns)))
+		log.Trace(fmt.Sprintf("%x PeerPotMap NNS: %s", kads[i].base[:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{
 			Kademlia: k,
 			NNSet:    nns,
@@ -692,6 +694,7 @@ func (o *PeerPot) knowNeighbours() (got bool, n int, missing [][]byte) {
 	// all bins (except self) are included (0 <= bin <= 255)
 	depth := depthForPot(o.addrs, o.MinProxBinSize, o.base)
 	o.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
+		log.Info("eachaddr", "depth", depth, "po", po)
 		if po < depth {
 			return false
 		}
@@ -711,7 +714,7 @@ func (o *PeerPot) knowNeighbours() (got bool, n int, missing [][]byte) {
 		if pm[pk] {
 			gots++
 		} else {
-			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.base, pk)) //(o.BaseAddr()[:4], pk[:8]))
+			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", o.base, pk))
 			culprits = append(culprits, p)
 		}
 	}

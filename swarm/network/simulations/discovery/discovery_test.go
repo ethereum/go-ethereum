@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -285,7 +286,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		if err := client.Call(&healthy, "hive_healthy", addrs); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Hive))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Hive))
 		return healthy.KnowNN && healthy.GotNN, nil
 	}
 
@@ -399,13 +400,20 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				log.Error("before hive healthy call")
 				if err := client.Call(&healthy, "hive_healthy", addrs); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
-				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.GotNN && healthy.KnowNN))
-				if !healthy.GotNN {
+				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.GotNN && healthy.KnowNN && healthy.CountKnowNN > 0))
+				var nodeStr string
+				if err := client.Call(&nodeStr, "hive_string"); err != nil {
+					return fmt.Errorf("error getting node string %s", err)
+				}
+				log.Info(nodeStr)
+				for _, a := range addrs {
+					log.Info(common.Bytes2Hex(a))
+				}
+				if !healthy.GotNN || healthy.CountKnowNN == 0 {
 					isHealthy = false
 					break
 				}

@@ -41,12 +41,17 @@ func testKadPeerAddr(s string) *BzzAddr {
 	return &BzzAddr{OAddr: a, UAddr: a}
 }
 
-func newTestKademlia(b string) *Kademlia {
+func newTestKademliaParams() *KadParams {
 	params := NewKadParams()
+	// TODO why is this 1?
 	params.MinBinSize = 1
 	params.MinProxBinSize = 2
+	return params
+}
+
+func newTestKademlia(b string) *Kademlia {
 	base := pot.NewAddressFromString(b)
-	return NewKademlia(base, params)
+	return NewKademlia(base, newTestKademliaParams())
 }
 
 func newTestKadPeer(k *Kademlia, s string, lightNode bool) *Peer {
@@ -157,6 +162,58 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
+func TestHealth(t *testing.T) {
+	k := newTestKademlia("00000000")
+	assertHealth(t, k, false)
+	Register(k, "00001000")
+	log.Trace(k.String())
+	assertHealth(t, k, false)
+	On(k, "00001000")
+	assertHealth(t, k, true)
+	Register(k, "00000100")
+	log.Trace(k.String())
+	assertHealth(t, k, false)
+	On(k, "00000100")
+	assertHealth(t, k, true)
+	Register(k, "10000000")
+	log.Trace(k.String())
+	assertHealth(t, k, false)
+	On(k, "10000000")
+	assertHealth(t, k, true)
+	Register(k, "00100000")
+	log.Trace(k.String())
+	assertHealth(t, k, false)
+	On(k, "00100000")
+	assertHealth(t, k, true)
+	Register(k, "01000000")
+	log.Trace(k.String())
+	assertHealth(t, k, false)
+	On(k, "01000000")
+	assertHealth(t, k, true)
+}
+
+func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool) {
+	kid := common.Bytes2Hex(k.BaseAddr())
+	kads := []*Kademlia{k}
+	k.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
+		kads = append(kads, NewKademlia(addr.Address(), newTestKademliaParams()))
+		return true
+	})
+
+	pp := NewPeerPotMap(kads)
+	log.Trace("set", "pp", pp[kid].NNSet)
+	healthParams := pp[kid].Healthy()
+
+	// definition of health, all conditions but be true:
+	// - we at least know one peer
+	// - we know all neighbors
+	// - we are connected to all known neighbors
+	health := healthParams.KnowNN && healthParams.GotNN && healthParams.CountKnowNN > 0
+	if expectHealthy != health {
+		t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, k.String())
+	}
+}
+
 func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {
 	addr, o, want := k.SuggestPeer()
 	log.Trace("suggestpeer return", "a", addr, "o", o, "want", want)
@@ -179,6 +236,7 @@ func binStr(a *BzzAddr) string {
 	return pot.ToBin(a.Address())[:8]
 }
 
+// TODO explain why this bug occurred and how it should have been mitigated
 func TestSuggestPeerBug(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
@@ -557,7 +615,7 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 	}
 
 	h := pp.Healthy()
-	if !(h.GotNN && h.KnowNN) {
+	if !(h.GotNN && h.KnowNN && h.CountKnowNN > 0) {
 		t.Fatalf("not healthy: %#v\n%v", h, k.String())
 	}
 }

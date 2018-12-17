@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"time"
@@ -248,17 +249,27 @@ func (h *Hive) savePeers() error {
 // It evaluates the healthiness based on the addresses passed as argument
 // in relation to the base address of the hive instance the method is called on
 func (h *Hive) Healthy(addrs [][]byte) *Health {
-	k := NewKademlia(h.BaseAddr(), NewKadParams())
+	//k := NewKademlia(h.BaseAddr(), NewKadParams())
+	pivotK := *h.Kademlia
+	kads := []*Kademlia{&pivotK}
 	for _, a := range addrs {
-		p := &Peer{
-			BzzPeer: &BzzPeer{
-				BzzAddr: &BzzAddr{
-					OAddr: a,
-				},
-			},
+		if bytes.Equal(a, h.BaseAddr()) {
+			continue
 		}
-		k.On(p)
+		kads = append(kads, NewKademlia(a, kadParamsFromInstance(h.Kademlia)))
 	}
-	pp := NewPeerPotMap([]*Kademlia{k})
+	pp := NewPeerPotMap(kads)
 	return pp[common.Bytes2Hex(h.BaseAddr())].Healthy()
+}
+
+func kadParamsFromInstance(k *Kademlia) *KadParams {
+	return &KadParams{
+		MaxProxDisplay: k.MaxProxDisplay,
+		MinProxBinSize: k.MinProxBinSize,
+		MinBinSize:     k.MinBinSize,
+		MaxBinSize:     k.MaxBinSize,
+		RetryInterval:  k.RetryInterval,
+		RetryExponent:  k.RetryExponent,
+		MaxRetries:     k.MaxRetries,
+	}
 }
