@@ -209,7 +209,7 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 			log.Trace(fmt.Sprintf("balance of %s with %s: %d", n.TerminalString(), k.TerminalString(), mapForSubK[k]))
 			//...check that they have the same balance in Abs terms and that it is not 0
 			if balanceKwithN+mapForSubK[k] != 0 && balanceKwithN != 0 {
-				log.Error(fmt.Sprintf("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not, balance k with n:  %d, balance n with k: %d", balanceKwithN, mapForSubK[k]))
+				log.Error("Expected balances to be a+b = 0 AND balance(a) != 0, but they are not", "balance_k_with", balanceKwithN, "balance_n_with_k", mapForSubK[k])
 				errorFound = true
 			}
 		}
