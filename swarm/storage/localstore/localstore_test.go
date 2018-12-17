@@ -376,7 +376,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestam
 // chunk values are in the pull index.
 func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
-		item, err := db.pullIndex.Get(shed.IndexItem{
+		item, err := db.pullIndex.Get(shed.Item{
 			Address:        chunk.Address(),
 			StoreTimestamp: storeTimestamp,
 		})
@@ -393,7 +393,7 @@ func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 // chunk values are in the push index.
 func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
-		item, err := db.pushIndex.Get(shed.IndexItem{
+		item, err := db.pushIndex.Get(shed.Item{
 			Address:        chunk.Address(),
 			StoreTimestamp: storeTimestamp,
 		})
@@ -410,7 +410,7 @@ func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 // chunk values are in the push index.
 func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		item, err := db.gcIndex.Get(shed.IndexItem{
+		item, err := db.gcIndex.Get(shed.Item{
 			Address:         chunk.Address(),
 			StoreTimestamp:  storeTimestamp,
 			AccessTimestamp: accessTimestamp,
@@ -422,12 +422,12 @@ func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp
 	}
 }
 
-// newIndexItemsCountTest returns a test function that validates if
+// newItemsCountTest returns a test function that validates if
 // an index contains expected number of key/value pairs.
-func newIndexItemsCountTest(i shed.Index, want int) func(t *testing.T) {
+func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 	return func(t *testing.T) {
 		var c int
-		i.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		i.IterateAll(func(item shed.Item) (stop bool, err error) {
 			c++
 			return
 		})
@@ -442,7 +442,7 @@ func newIndexItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
 		var want int64
-		db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+		db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
 			want++
 			return
 		})
@@ -460,17 +460,17 @@ type testIndexChunk struct {
 	storeTimestamp int64
 }
 
-// testIndexItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
+// testItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
 // chunks will be sorted with it before validation.
-func testIndexItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
-	newIndexItemsCountTest(i, len(chunks))(t)
+func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
+	newItemsCountTest(i, len(chunks))(t)
 
 	if sortFunc != nil {
 		sort.Slice(chunks, sortFunc)
 	}
 
 	var cursor int
-	err := i.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+	err := i.IterateAll(func(item shed.Item) (stop bool, err error) {
 		want := chunks[cursor].Address()
 		got := item.Address
 		if !bytes.Equal(got, want) {
@@ -484,8 +484,8 @@ func testIndexItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, so
 	}
 }
 
-// validateItem is a helper function that checks IndexItem values.
-func validateItem(t *testing.T, item shed.IndexItem, address, data []byte, storeTimestamp, accessTimestamp int64) {
+// validateItem is a helper function that checks Item values.
+func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64) {
 	t.Helper()
 
 	if !bytes.Equal(item.Address, address) {

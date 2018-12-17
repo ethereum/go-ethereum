@@ -26,7 +26,7 @@ import (
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
 // Pull index key contains PO prefix which is calculated from
-// DB base key and chunk address. This is not an IndexItem field
+// DB base key and chunk address. This is not an Item field
 // which are checked in Mode tests.
 // This test uploads chunks, sorts them in expected order and
 // validates that pull index iterator will iterate it the same
@@ -61,7 +61,7 @@ func TestDB_pullIndex(t *testing.T) {
 		}
 	}
 
-	testIndexItemsOrder(t, db.pullIndex, chunks, func(i, j int) (less bool) {
+	testItemsOrder(t, db.pullIndex, chunks, func(i, j int) (less bool) {
 		poi := storage.Proximity(db.baseKey, chunks[i].Address())
 		poj := storage.Proximity(db.baseKey, chunks[j].Address())
 		if poi < poj {
@@ -119,10 +119,10 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 	}
 
 	// check if all chunks are stored
-	newIndexItemsCountTest(db.pullIndex, chunkCount)(t)
+	newItemsCountTest(db.pullIndex, chunkCount)(t)
 
 	// check that chunks are not collectable for garbage
-	newIndexItemsCountTest(db.gcIndex, 0)(t)
+	newItemsCountTest(db.gcIndex, 0)(t)
 
 	// set update gc test hook to signal when
 	// update gc goroutine is done by sending to
@@ -145,7 +145,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 
 		// the chunk is not synced
 		// should not be in the garbace collection index
-		newIndexItemsCountTest(db.gcIndex, 0)(t)
+		newItemsCountTest(db.gcIndex, 0)(t)
 
 		newIndexGCSizeTest(db)(t)
 	})
@@ -159,7 +159,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		}
 
 		// the chunk is synced and should be in gc index
-		newIndexItemsCountTest(db.gcIndex, 1)(t)
+		newItemsCountTest(db.gcIndex, 1)(t)
 
 		newIndexGCSizeTest(db)(t)
 	})
@@ -174,7 +174,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 			}
 		}
 
-		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+		testItemsOrder(t, db.gcIndex, chunks, nil)
 
 		newIndexGCSizeTest(db)(t)
 	})
@@ -194,7 +194,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		chunks = append(chunks[:i], chunks[i+1:]...)
 		chunks = append(chunks, c)
 
-		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+		testItemsOrder(t, db.gcIndex, chunks, nil)
 
 		newIndexGCSizeTest(db)(t)
 	})
@@ -215,7 +215,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 			<-testHookUpdateGCChan
 		}
 
-		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+		testItemsOrder(t, db.gcIndex, chunks, nil)
 
 		newIndexGCSizeTest(db)(t)
 	})
@@ -231,7 +231,7 @@ func testDB_gcIndex(t *testing.T, db *DB) {
 		// remove the chunk from the expected chunks in gc index
 		chunks = append(chunks[:i], chunks[i+1:]...)
 
-		testIndexItemsOrder(t, db.gcIndex, chunks, nil)
+		testItemsOrder(t, db.gcIndex, chunks, nil)
 
 		newIndexGCSizeTest(db)(t)
 	})

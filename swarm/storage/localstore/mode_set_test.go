@@ -58,11 +58,11 @@ func testModeSetAccessValues(t *testing.T, db *DB) {
 
 	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
 
-	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, 1))
+	t.Run("pull index count", newItemsCountTest(db.pullIndex, 1))
 
 	t.Run("gc index", newGCIndexTest(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
@@ -111,7 +111,7 @@ func testModeSetSyncValues(t *testing.T, db *DB) {
 
 	t.Run("gc index", newGCIndexTest(db, chunk, wantTimestamp, wantTimestamp))
 
-	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
@@ -156,28 +156,28 @@ func testModeSetRemovalValues(t *testing.T, db *DB) {
 			if err != wantErr {
 				t.Errorf("got error %v, want %v", err, wantErr)
 			}
-			t.Run("retrieve index count", newIndexItemsCountTest(db.retrievalCompositeIndex, 0))
+			t.Run("retrieve index count", newItemsCountTest(db.retrievalCompositeIndex, 0))
 		} else {
 			_, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 			if err != wantErr {
 				t.Errorf("got error %v, want %v", err, wantErr)
 			}
-			t.Run("retrieve data index count", newIndexItemsCountTest(db.retrievalDataIndex, 0))
+			t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
 
 			// access index should not be set
 			_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
 			if err != wantErr {
 				t.Errorf("got error %v, want %v", err, wantErr)
 			}
-			t.Run("retrieve access index count", newIndexItemsCountTest(db.retrievalAccessIndex, 0))
+			t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
 		}
 	})
 
 	t.Run("pull index", newPullIndexTest(db, chunk, 0, leveldb.ErrNotFound))
 
-	t.Run("pull index count", newIndexItemsCountTest(db.pullIndex, 0))
+	t.Run("pull index count", newItemsCountTest(db.pullIndex, 0))
 
-	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 

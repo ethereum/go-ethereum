@@ -65,9 +65,9 @@ func (g *Getter) Get(addr storage.Address) (chunk storage.Chunk, err error) {
 	return storage.NewChunk(out.Address, out.Data), nil
 }
 
-// get returns IndexItem with from the retrieval index
+// get returns Item with from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.IndexItem, err error) {
+func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	if db.useRetrievalCompositeIndex {
@@ -120,7 +120,7 @@ func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.IndexItem, err e
 // a single item. Provided item is expected to have
 // only Address and Data fields with non zero values,
 // which is ensured by the get function.
-func (db *DB) updateGC(item shed.IndexItem) (err error) {
+func (db *DB) updateGC(item shed.Item) (err error) {
 	unlock, err := db.lockAddr(item.Address)
 	if err != nil {
 		return err

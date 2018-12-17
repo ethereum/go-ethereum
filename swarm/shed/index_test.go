@@ -29,20 +29,20 @@ import (
 
 // Index functions for the index that is used in tests in this file.
 var retrievalIndexFuncs = IndexFuncs{
-	EncodeKey: func(fields IndexItem) (key []byte, err error) {
+	EncodeKey: func(fields Item) (key []byte, err error) {
 		return fields.Address, nil
 	},
-	DecodeKey: func(key []byte) (e IndexItem, err error) {
+	DecodeKey: func(key []byte) (e Item, err error) {
 		e.Address = key
 		return e, nil
 	},
-	EncodeValue: func(fields IndexItem) (value []byte, err error) {
+	EncodeValue: func(fields Item) (value []byte, err error) {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
 		value = append(b, fields.Data...)
 		return value, nil
 	},
-	DecodeValue: func(keyItem IndexItem, value []byte) (e IndexItem, err error) {
+	DecodeValue: func(keyItem Item, value []byte) (e Item, err error) {
 		e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
 		e.Data = value[8:]
 		return e, nil
@@ -60,7 +60,7 @@ func TestIndex(t *testing.T) {
 	}
 
 	t.Run("put", func(t *testing.T) {
-		want := IndexItem{
+		want := Item{
 			Address:        []byte("put-hash"),
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -70,16 +70,16 @@ func TestIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(IndexItem{
+		got, err := index.Get(Item{
 			Address: want.Address,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkIndexItem(t, got, want)
+		checkItem(t, got, want)
 
 		t.Run("overwrite", func(t *testing.T) {
-			want := IndexItem{
+			want := Item{
 				Address:        []byte("put-hash"),
 				Data:           []byte("New DATA"),
 				StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -89,18 +89,18 @@ func TestIndex(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := index.Get(IndexItem{
+			got, err := index.Get(Item{
 				Address: want.Address,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			checkIndexItem(t, got, want)
+			checkItem(t, got, want)
 		})
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
-		want := IndexItem{
+		want := Item{
 			Address:        []byte("put-in-batch-hash"),
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -112,16 +112,16 @@ func TestIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(IndexItem{
+		got, err := index.Get(Item{
 			Address: want.Address,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkIndexItem(t, got, want)
+		checkItem(t, got, want)
 
 		t.Run("overwrite", func(t *testing.T) {
-			want := IndexItem{
+			want := Item{
 				Address:        []byte("put-in-batch-hash"),
 				Data:           []byte("New DATA"),
 				StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -133,13 +133,13 @@ func TestIndex(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := index.Get(IndexItem{
+			got, err := index.Get(Item{
 				Address: want.Address,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			checkIndexItem(t, got, want)
+			checkItem(t, got, want)
 		})
 	})
 
@@ -150,13 +150,13 @@ func TestIndex(t *testing.T) {
 		address := []byte("put-in-batch-twice-hash")
 
 		// put the first item
-		index.PutInBatch(batch, IndexItem{
+		index.PutInBatch(batch, Item{
 			Address:        address,
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
 		})
 
-		want := IndexItem{
+		want := Item{
 			Address:        address,
 			Data:           []byte("New DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -168,17 +168,17 @@ func TestIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(IndexItem{
+		got, err := index.Get(Item{
 			Address: address,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkIndexItem(t, got, want)
+		checkItem(t, got, want)
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		want := IndexItem{
+		want := Item{
 			Address:        []byte("delete-hash"),
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -188,15 +188,15 @@ func TestIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(IndexItem{
+		got, err := index.Get(Item{
 			Address: want.Address,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkIndexItem(t, got, want)
+		checkItem(t, got, want)
 
-		err = index.Delete(IndexItem{
+		err = index.Delete(Item{
 			Address: want.Address,
 		})
 		if err != nil {
@@ -204,7 +204,7 @@ func TestIndex(t *testing.T) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(IndexItem{
+		got, err = index.Get(Item{
 			Address: want.Address,
 		})
 		if err != wantErr {
@@ -213,7 +213,7 @@ func TestIndex(t *testing.T) {
 	})
 
 	t.Run("delete in batch", func(t *testing.T) {
-		want := IndexItem{
+		want := Item{
 			Address:        []byte("delete-in-batch-hash"),
 			Data:           []byte("DATA"),
 			StoreTimestamp: time.Now().UTC().UnixNano(),
@@ -223,16 +223,16 @@ func TestIndex(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(IndexItem{
+		got, err := index.Get(Item{
 			Address: want.Address,
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkIndexItem(t, got, want)
+		checkItem(t, got, want)
 
 		batch := new(leveldb.Batch)
-		index.DeleteInBatch(batch, IndexItem{
+		index.DeleteInBatch(batch, Item{
 			Address: want.Address,
 		})
 		err = db.WriteBatch(batch)
@@ -241,7 +241,7 @@ func TestIndex(t *testing.T) {
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(IndexItem{
+		got, err = index.Get(Item{
 			Address: want.Address,
 		})
 		if err != wantErr {
@@ -260,7 +260,7 @@ func TestIndex_iterate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := []IndexItem{
+	items := []Item{
 		{
 			Address: []byte("iterate-hash-01"),
 			Data:    []byte("data80"),
@@ -290,7 +290,7 @@ func TestIndex_iterate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item04 := IndexItem{
+	item04 := Item{
 		Address: []byte("iterate-hash-04"),
 		Data:    []byte("data0"),
 	}
@@ -306,12 +306,12 @@ func TestIndex_iterate(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		var i int
-		err := index.IterateAll(func(item IndexItem) (stop bool, err error) {
+		err := index.IterateAll(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
 			want := items[i]
-			checkIndexItem(t, item, want)
+			checkItem(t, item, want)
 			i++
 			return false, nil
 		})
@@ -323,12 +323,12 @@ func TestIndex_iterate(t *testing.T) {
 	t.Run("from", func(t *testing.T) {
 		startIndex := 2
 		i := startIndex
-		err := index.IterateFrom(items[startIndex], func(item IndexItem) (stop bool, err error) {
+		err := index.IterateFrom(items[startIndex], func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
 			want := items[i]
-			checkIndexItem(t, item, want)
+			checkItem(t, item, want)
 			i++
 			return false, nil
 		})
@@ -341,12 +341,12 @@ func TestIndex_iterate(t *testing.T) {
 		var i int
 		stopIndex := 3
 		var count int
-		err := index.IterateAll(func(item IndexItem) (stop bool, err error) {
+		err := index.IterateAll(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
 			want := items[i]
-			checkIndexItem(t, item, want)
+			checkItem(t, item, want)
 			count++
 			if i == stopIndex {
 				return true, nil
@@ -369,22 +369,22 @@ func TestIndex_iterate(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		secondIndexItem := IndexItem{
+		secondItem := Item{
 			Address: []byte("iterate-hash-10"),
 			Data:    []byte("data-second"),
 		}
-		err = secondIndex.Put(secondIndexItem)
+		err = secondIndex.Put(secondItem)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		var i int
-		err = index.IterateAll(func(item IndexItem) (stop bool, err error) {
+		err = index.IterateAll(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
 			want := items[i]
-			checkIndexItem(t, item, want)
+			checkItem(t, item, want)
 			i++
 			return false, nil
 		})
@@ -393,11 +393,11 @@ func TestIndex_iterate(t *testing.T) {
 		}
 
 		i = 0
-		err = secondIndex.IterateAll(func(item IndexItem) (stop bool, err error) {
+		err = secondIndex.IterateAll(func(item Item) (stop bool, err error) {
 			if i > 1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
-			checkIndexItem(t, item, secondIndexItem)
+			checkItem(t, item, secondItem)
 			i++
 			return false, nil
 		})
@@ -418,7 +418,7 @@ func TestIndex_Count(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := []IndexItem{
+	items := []Item{
 		{
 			Address: []byte("iterate-hash-01"),
 			Data:    []byte("data80"),
@@ -461,7 +461,7 @@ func TestIndex_Count(t *testing.T) {
 
 	// update the index with another item
 
-	item04 := IndexItem{
+	item04 := Item{
 		Address: []byte("iterate-hash-04"),
 		Data:    []byte("data0"),
 	}
@@ -502,8 +502,8 @@ func TestIndex_Count(t *testing.T) {
 	}
 }
 
-// checkIndexItem is a test helper function that compares if two Index items are the same.
-func checkIndexItem(t *testing.T, got, want IndexItem) {
+// checkItem is a test helper function that compares if two Index items are the same.
+func checkItem(t *testing.T, got, want Item) {
 	t.Helper()
 
 	if !bytes.Equal(got.Address, want.Address) {

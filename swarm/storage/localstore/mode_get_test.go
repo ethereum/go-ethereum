@@ -85,7 +85,7 @@ func testModeGetRequestValues(t *testing.T, db *DB) {
 
 		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
 
-		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
@@ -116,7 +116,7 @@ func testModeGetRequestValues(t *testing.T, db *DB) {
 
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, uploadTimestamp))
 
-		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
@@ -146,7 +146,7 @@ func testModeGetRequestValues(t *testing.T, db *DB) {
 
 		t.Run("gc index", newGCIndexTest(db, chunk, uploadTimestamp, accessTimestamp))
 
-		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
@@ -200,7 +200,7 @@ func testModeGetSyncValues(t *testing.T, db *DB) {
 
 	t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, uploadTimestamp, 0))
 
-	t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 0))
+	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
 }

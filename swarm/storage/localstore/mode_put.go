@@ -57,12 +57,12 @@ func (p *Putter) Put(ch storage.Chunk) (err error) {
 	return p.db.put(p.mode, chunkToItem(ch))
 }
 
-// put stores IndexItem to database and updates other
+// put stores Item to database and updates other
 // indexes. It acquires lockAddr to protect two calls
 // of this function for the same address in parallel.
-// IndexItem fields Address and Data must not be
+// Item fields Address and Data must not be
 // with their nil values.
-func (db *DB) put(mode ModePut, item shed.IndexItem) (err error) {
+func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 	// protect parallel updates
 	unlock, err := db.lockAddr(item.Address)
 	if err != nil {

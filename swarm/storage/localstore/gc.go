@@ -53,7 +53,7 @@ func (db *DB) collectGarbage() {
 			// sets a gc trigger if batch limit is reached
 			var triggerNextIteration bool
 			var collectedCount int64
-			err := db.gcIndex.IterateAll(func(item shed.IndexItem) (stop bool, err error) {
+			err := db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
 				gcSize := atomic.LoadInt64(&db.gcSize)
 				if gcSize-collectedCount <= target {
 					return true, nil

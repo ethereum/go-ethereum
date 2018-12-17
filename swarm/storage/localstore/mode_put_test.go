@@ -64,7 +64,7 @@ func testModePutRequestValues(t *testing.T, db *DB) {
 
 		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, wantTimestamp, wantTimestamp))
 
-		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
@@ -82,7 +82,7 @@ func testModePutRequestValues(t *testing.T, db *DB) {
 
 		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, storeTimestamp, wantTimestamp))
 
-		t.Run("gc index count", newIndexItemsCountTest(db.gcIndex, 1))
+		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
 		t.Run("gc size", newIndexGCSizeTest(db))
 	})
