@@ -1000,9 +1000,10 @@ func TestEachBin(t *testing.T) {
 	}
 	//run the k.EachBin function
 	k.EachBin(addr[:], pot.DefaultPof(k.MaxProxDisplay), 0, eachBinFunc)
+	//calculate the kademlia depth
+	kdepth := k.NeighbourhoodDepth()
 
 	//now, check that all peers have the expected (fake) subscriptions
-
 	//iterate the bin map
 	for bin, peers := range binMap {
 		//for every peer...
@@ -1010,7 +1011,7 @@ func TestEachBin(t *testing.T) {
 			//...get its (fake) subscriptions
 			fakeSubs := fakeSubscriptions[peer]
 			//if the peer's bin is below the kademlia depth...
-			if bin < k.NeighbourhoodDepth() {
+			if bin < kdepth {
 				//(iterate all (fake) subscriptions)
 				for _, subbin := range fakeSubs {
 					//...only the peer's bin should be "subscribed"
@@ -1024,7 +1025,7 @@ func TestEachBin(t *testing.T) {
 				for i, subbin := range fakeSubs {
 					//...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
 					// as we start from depth we can use the iteration index to check
-					if subbin != i+k.NeighbourhoodDepth() {
+					if subbin != i+kdepth {
 						t.Fatalf("Did not get expected subscription for bin > depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 					//the last "subscription" should be k.MaxProxDisplay
