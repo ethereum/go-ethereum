@@ -55,8 +55,9 @@ var (
 	bucketKeyDelivery  = simulation.BucketKey("delivery")
 	bucketKeyRegistry  = simulation.BucketKey("registry")
 
-	chunkSize = 4096
-	pof       = network.Pof
+	chunkSize      = 4096
+	pof            = network.Pof
+	minProxBinSize = network.NewKadParams().MinProxBinSize
 )
 
 func init() {

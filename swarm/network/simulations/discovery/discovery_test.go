@@ -266,8 +266,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	k := network.NewKademlia(addrs[0], network.NewKadParams())
-	ppmap := network.NewPeerPotMap(k, addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -403,8 +402,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				k := network.NewKademlia(common.Hex2Bytes(addr), network.NewKadParams())
-				ppmap := network.NewPeerPotMap(k, addrs)
+				ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
 				if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
@@ -492,8 +490,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		k := network.NewKademlia(addrs[0], network.NewKadParams())
-		ppmap := network.NewPeerPotMap(k, addrs)
+		ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
 
 		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)

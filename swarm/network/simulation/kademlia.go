@@ -19,7 +19,6 @@ package simulation
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,17 +40,10 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 	kademlias := s.kademlias()
 	addrs := make([][]byte, 0, len(kademlias))
 	// TODO verify that all kademlias have same params
-	var minProxBinSize int
 	for _, k := range kademlias {
-		if minProxBinSize == 0 {
-			minProxBinSize = k.MinProxBinSize
-		}
 		addrs = append(addrs, k.BaseAddr())
 	}
-	if minProxBinSize == 0 {
-		return nil, errors.New("no kademlias in simulation")
-	}
-	ppmap = network.NewPeerPotMap(minProxBinSize, addrs)
+	ppmap = network.NewPeerPotMap(s.minProxBinSize, addrs)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)

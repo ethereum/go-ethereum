@@ -182,7 +182,6 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 }
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-
 	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
