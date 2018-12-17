@@ -48,7 +48,7 @@ func TestForwardBasic(t *testing.T) {
 	base := pot.NewAddressFromBytes(baseAddrBytes)
 	var peerAddresses []pot.Address
 	var a pot.Address
-	const depth = 9
+	const depth = 10
 	for i := 0; i <= depth; i++ {
 		// add one peer for each proximity order
 		a = pot.RandomAddressAt(base, i)
@@ -64,7 +64,7 @@ func TestForwardBasic(t *testing.T) {
 	ps := createPss(t, kad)
 	addPeers(kad, peerAddresses)
 
-	const firstNearest = depth // first peer in the nearest neighbours' bin
+	const firstNearest = depth // shallowest peer in the nearest neighbours' bin
 	nearestNeighbours := []int{firstNearest, firstNearest + 1, firstNearest + 2}
 
 	for i := 0; i < len(peerAddresses); i++ {
@@ -104,12 +104,12 @@ func TestForwardBasic(t *testing.T) {
 		testForwardMsg(600+i, t, ps, peerAddresses[i][:part], peerAddresses, nearestNeighbours)
 	}
 
-	// partial address with proximity order higher than the last nearest neighbour
+	// partial address with proximity order deeper than any of the nearest neighbour
 	a = pot.RandomAddressAt(base, part)
 	testForwardMsg(700, t, ps, a[:part], peerAddresses, nearestNeighbours)
 
 	// special cases where partial address matches a large group of peers
-	all := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+	all := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 	testForwardMsg(800, t, ps, []byte{}, peerAddresses, all)
 
 	// luminous radius of one byte (8 bits)
