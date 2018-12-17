@@ -269,7 +269,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	for _, a := range addrs {
 		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
 	}
-	//ppmap := network.NewPeerPotMap(kads)
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -287,8 +286,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		}
 
 		healthy := &network.Health{}
-		//pp := ppmap[id.String()]
-		//if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 		if err := client.Call(&healthy, "hive_healthy", addrs); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
@@ -412,8 +409,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				healthy := &network.Health{}
 				addr := id.String()
 				log.Error("before hive healthy call")
-				//pp := ppmap[addr]
-				// if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 				if err := client.Call(&healthy, "hive_healthy", addrs); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
@@ -493,8 +488,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		//pp := ppmap[id.String()]
-		//if err := client.Call(&healthy, "hive_healthy", pp.BaseAddr(), pp); err != nil {
 		if err := client.Call(&healthy, "hive_healthy", addrs); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}

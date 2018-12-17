@@ -244,7 +244,9 @@ func (h *Hive) savePeers() error {
 	return nil
 }
 
-// Healthy is an api proxy to the underlying kademlia healthy function
+// Healthy works as an API proxy to the corresponding kademlia.Healthy function
+// It evaluates the healthiness based on the addresses passed as argument
+// in relation to the base address of the hive instance the method is called on
 func (h *Hive) Healthy(addrs [][]byte) *Health {
 	k := NewKademlia(h.BaseAddr(), NewKadParams())
 	for _, a := range addrs {

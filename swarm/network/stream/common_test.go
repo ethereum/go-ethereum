@@ -57,7 +57,7 @@ var (
 	bucketKeyRegistry  = simulation.BucketKey("registry")
 
 	chunkSize = 4096
-	pof       = pot.DefaultPof(256)
+	pof       = network.Pof
 )
 
 func init() {

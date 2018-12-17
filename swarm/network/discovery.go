@@ -161,7 +161,7 @@ func (d *Peer) handleSubPeersMsg(msg *subPeersMsg) error {
 		d.setDepth(msg.Depth)
 		var peers []*BzzAddr
 		d.kad.EachConn(d.Over(), 255, func(p *Peer, po int, isproxbin bool) bool {
-			if pob, _ := pof(d, d.kad.BaseAddr(), 0); pob > po {
+			if pob, _ := Pof(d, d.kad.BaseAddr(), 0); pob > po {
 				return false
 			}
 			if !d.seen(p.BzzAddr) {
