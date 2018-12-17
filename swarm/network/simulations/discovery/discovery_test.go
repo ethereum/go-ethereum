@@ -265,10 +265,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	var kads []*network.Kademlia
-	for _, a := range addrs {
-		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
-	}
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -383,11 +379,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 	// run a simulation which connects the 10 nodes in a ring and waits
 	// for full peer discovery
-	var kads []*network.Kademlia
-	for _, a := range addrs {
-		kads = append(kads, network.NewKademlia(a, network.NewKadParams()))
-	}
-	//ppmap := network.NewPeerPotMap(kads)
 
 	var restartTime time.Time
 

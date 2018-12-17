@@ -101,52 +101,60 @@ func TestNeighbourhoodDepth(t *testing.T) {
 		sevenPeers = append(sevenPeers, newTestDiscoveryPeer(addr, kad))
 	}
 
+	testNum := 0
 	// first try with empty kademlia
 	depth := kad.NeighbourhoodDepth()
 	if depth != 0 {
-		t.Fatalf("expected depth 0, was %d", depth)
+		t.Fatalf("%d expected depth 0, was %d", testNum, depth)
 	}
+	testNum++
 
 	// add one peer on 7
 	kad.On(sevenPeers[0])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 0 {
-		t.Fatalf("expected depth 0, was %d", depth)
+		t.Fatalf("%d expected depth 0, was %d", testNum, depth)
 	}
+	testNum++
 
-	// add a second
+	// add a second on 7
 	kad.On(sevenPeers[1])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 0 {
-		t.Fatalf("expected depth 0, was %d", depth)
+		t.Fatalf("%d expected depth 0, was %d", testNum, depth)
 	}
+	testNum++
 
+	// add from 0 to 6
 	for i, p := range peers {
 		kad.On(p)
 		depth = kad.NeighbourhoodDepth()
 		if depth != i+1 {
-			t.Fatalf("expected depth %d, was %d", i+1, depth)
+			t.Fatalf("%d.%d expected depth %d, was %d", i+1, testNum, i, depth)
 		}
 	}
+	testNum++
 
 	kad.Off(sevenPeers[1])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 6 {
-		t.Fatalf("expected depth 6, was %d", depth)
+		t.Fatalf("%d expected depth 6, was %d", testNum, depth)
 	}
+	testNum++
 
 	kad.Off(peers[4])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 4 {
-		t.Fatalf("expected depth 4, was %d", depth)
+		t.Fatalf("%d expected depth 4, was %d", testNum, depth)
 	}
+	testNum++
 
 	kad.Off(peers[3])
 	depth = kad.NeighbourhoodDepth()
 	if depth != 3 {
-		t.Fatalf("expected depth 3, was %d", depth)
+		t.Fatalf("%d expected depth 3, was %d", testNum, depth)
 	}
-
+	testNum++
 }
 
 func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {

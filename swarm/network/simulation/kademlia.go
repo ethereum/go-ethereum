@@ -44,7 +44,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 		addrs = append(addrs, k.BaseAddr())
 		kademliasArray = append(kademliasArray, k)
 	}
-	ppmap = network.NewPeerPotMap(kademliasArray) //kadMinProxSize, addrs)
+	ppmap = network.NewPeerPotMap(kademliasArray)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)
