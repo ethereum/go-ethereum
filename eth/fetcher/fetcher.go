@@ -369,13 +369,15 @@ func (f *Fetcher) loop() {
 			for hash, announces := range f.announced {
 				if time.Since(announces[0].time) > arriveTimeout-gatherSlack {
 					// Pick a random peer to retrieve from, reset all others
-					announce := announces[rand.Intn(len(announces))]
 					f.forgetHash(hash)
 
 					// If the block still didn't arrive, queue for fetching
 					if f.getBlock(hash) == nil {
-						request[announce.origin] = append(request[announce.origin], hash)
-						f.fetching[hash] = announce
+						// Pick more peers to retrieve from
+						for _, announce := range announces {
+							request[announce.origin] = append(request[announce.origin], hash)
+						}
+						f.fetching[hash] = announces[rand.Intn(len(announces))]
 					}
 				}
 			}
@@ -404,13 +406,14 @@ func (f *Fetcher) loop() {
 
 			for hash, announces := range f.fetched {
 				// Pick a random peer to retrieve from, reset all others
-				announce := announces[rand.Intn(len(announces))]
 				f.forgetHash(hash)
 
 				// If the block still didn't arrive, queue for completion
 				if f.getBlock(hash) == nil {
-					request[announce.origin] = append(request[announce.origin], hash)
-					f.completing[hash] = announce
+					for _, announce := range announces {
+						request[announce.origin] = append(request[announce.origin], hash)
+					}
+					f.completing[hash] = announces[rand.Intn(len(announces))]
 				}
 			}
 			// Send out all block body requests
