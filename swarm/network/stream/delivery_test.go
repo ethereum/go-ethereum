@@ -505,7 +505,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		//determine the pivot node to be the first node of the simulation
-		sim.SetPivotNode(nodeIDs[0])
+		pivot := nodeIDs[0]
+
 		//distribute chunks of a random file into Stores of nodes 1 to nodes
 		//we will do this by creating a file store with an underlying round-robin store:
 		//the file store will create a hash for the uploaded file, but every chunk will be
@@ -519,7 +520,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		//...iterate the buckets...
 		for id, bucketVal := range lStores {
 			//...and remove the one which is the pivot node
-			if id == *sim.PivotNodeID() {
+			if id == pivot {
 				continue
 			}
 			//the other ones are added to the array...
@@ -547,7 +548,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		}
 
 		//get the pivot node's filestore
-		item, ok := sim.NodeItem(*sim.PivotNodeID(), bucketKeyFileStore)
+		item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
 		if !ok {
 			return fmt.Errorf("No filestore")
 		}

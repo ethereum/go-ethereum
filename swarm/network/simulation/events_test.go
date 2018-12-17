@@ -59,7 +59,7 @@ func TestPeerEvents(t *testing.T) {
 		}
 	}()
 
-	err = sim.ConnectNodesChain(sim.NodeIDs())
+	err = sim.Net.ConnectNodesChain(sim.NodeIDs())
 	if err != nil {
 		t.Fatal(err)
 	}

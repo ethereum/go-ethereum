@@ -103,7 +103,7 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		//check on the node's FileStore (netstore)
-		id := sim.RandomUpNode().ID
+		id := sim.Net.GetRandomUpNode().ID()
 		item, ok := sim.NodeItem(id, bucketKeyFileStore)
 		if !ok {
 			t.Fatalf("No filestore")

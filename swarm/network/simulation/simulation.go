@@ -33,7 +33,6 @@ import (
 // Common errors that are returned by functions in this package.
 var (
 	ErrNodeNotFound = errors.New("node not found")
-	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
 // Simulation provides methods on network, nodes and services
