@@ -198,7 +198,19 @@ func dumpConfig(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	io.WriteString(os.Stdout, comment)
-	os.Stdout.Write(out)
+
+	if ctx.NArg() > 0 {
+		f, err := os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		f.WriteString(comment)
+		f.Write(out)
+	} else {
+		io.WriteString(os.Stdout, comment)
+		os.Stdout.Write(out)
+	}
+
 	return nil
 }
