@@ -1,6 +1,12 @@
 repository: ethereum/go-ethereum
-
+#remote_theme: Phlow/feeling-responsive
+remote_theme: daattali/beautiful-jekyll
 exclude:
   - Gemfile
   - Gemfile.lock
   - .gitignore
+
+layout: page
+navbar-links:
+  Home: ""
+  Documents: "/docs"
