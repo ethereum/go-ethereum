@@ -23,27 +23,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// TestModeSetAccess validates internal data operations and state
-// for ModeSetAccess on DB with default configuration.
+// TestModeSetAccess validates ModeSetAccess index values on the provided DB.
 func TestModeSetAccess(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModeSetAccessValues(t, db)
-}
-
-// TestModeSetAccess_useRetrievalCompositeIndex validates internal
-// data operations and state for ModeSetAccess on DB with
-// retrieval composite index enabled.
-func TestModeSetAccess_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModeSetAccessValues(t, db)
-}
-
-// testModeSetAccessValues validates ModeSetAccess index values on the provided DB.
-func testModeSetAccessValues(t *testing.T, db *DB) {
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
@@ -67,27 +51,11 @@ func testModeSetAccessValues(t *testing.T, db *DB) {
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
-// TestModeSetSync validates internal data operations and state
-// for ModeSetSync on DB with default configuration.
+// TestModeSetSync validates ModeSetSync index values on the provided DB.
 func TestModeSetSync(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModeSetSyncValues(t, db)
-}
-
-// TestModeSetSync_useRetrievalCompositeIndex validates internal
-// data operations and state for ModeSetSync on DB with
-// retrieval composite index enabled.
-func TestModeSetSync_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModeSetSyncValues(t, db)
-}
-
-// testModeSetSyncValues validates ModeSetSync index values on the provided DB.
-func testModeSetSyncValues(t *testing.T, db *DB) {
 	chunk := generateRandomChunk()
 
 	wantTimestamp := time.Now().UTC().UnixNano()
@@ -116,27 +84,11 @@ func testModeSetSyncValues(t *testing.T, db *DB) {
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
-// TestModeSetRemoval validates internal data operations and state
-// for ModeSetRemoval on DB with default configuration.
+// TestModeSetRemoval validates ModeSetRemoval index values on the provided DB.
 func TestModeSetRemoval(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModeSetRemovalValues(t, db)
-}
-
-// TestModeSetRemoval_useRetrievalCompositeIndex validates internal
-// data operations and state for ModeSetRemoval on DB with
-// retrieval composite index enabled.
-func TestModeSetRemoval_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModeSetRemovalValues(t, db)
-}
-
-// testModeSetRemovalValues validates ModeSetRemoval index values on the provided DB.
-func testModeSetRemovalValues(t *testing.T, db *DB) {
 	chunk := generateRandomChunk()
 
 	err := db.NewPutter(ModePutUpload).Put(chunk)
@@ -151,26 +103,18 @@ func testModeSetRemovalValues(t *testing.T, db *DB) {
 
 	t.Run("retrieve indexes", func(t *testing.T) {
 		wantErr := leveldb.ErrNotFound
-		if db.useRetrievalCompositeIndex {
-			_, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
-			if err != wantErr {
-				t.Errorf("got error %v, want %v", err, wantErr)
-			}
-			t.Run("retrieve index count", newItemsCountTest(db.retrievalCompositeIndex, 0))
-		} else {
-			_, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
-			if err != wantErr {
-				t.Errorf("got error %v, want %v", err, wantErr)
-			}
-			t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
-
-			// access index should not be set
-			_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
-			if err != wantErr {
-				t.Errorf("got error %v, want %v", err, wantErr)
-			}
-			t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
+		_, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		if err != wantErr {
+			t.Errorf("got error %v, want %v", err, wantErr)
 		}
+		t.Run("retrieve data index count", newItemsCountTest(db.retrievalDataIndex, 0))
+
+		// access index should not be set
+		_, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+		if err != wantErr {
+			t.Errorf("got error %v, want %v", err, wantErr)
+		}
+		t.Run("retrieve access index count", newItemsCountTest(db.retrievalAccessIndex, 0))
 	})
 
 	t.Run("pull index", newPullIndexTest(db, chunk, 0, leveldb.ErrNotFound))

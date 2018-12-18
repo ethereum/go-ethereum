@@ -23,13 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// BenchmarkRetrievalIndexes compares two different retrieval
-// index schemas:
-// - single retrieval composite index retrievalCompositeIndex
-// - two separated indexes for data and access time
-//   - retrievalDataIndex
-//   - retrievalAccessIndex
-// This benchmark uploads a number of chunks in order to measure
+// BenchmarkRetrievalIndexes uploads a number of chunks in order to measure
 // total time of updating their retrieval indexes by setting them
 // to synced state and requesting them.
 //
@@ -42,12 +36,9 @@ import (
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkRetrievalIndexes/1000-split-8         	      20       75556686 ns/op      19033493 B/op       84500 allocs/op
-// BenchmarkRetrievalIndexes/1000-composite-8     	      10      143774538 ns/op      67474551 B/op       72104 allocs/op
-// BenchmarkRetrievalIndexes/10000-split-8        	       1     1079084922 ns/op     382792064 B/op     1429644 allocs/op
-// BenchmarkRetrievalIndexes/10000-composite-8    	       1     2597268475 ns/op    1005916808 B/op     1516443 allocs/op
-// BenchmarkRetrievalIndexes/100000-split-8       	       1    16891305737 ns/op    2629165304 B/op    12465019 allocs/op
-// BenchmarkRetrievalIndexes/100000-composite-8   	       1    67158059676 ns/op   12292703424 B/op    22436767 allocs/op
+// BenchmarkRetrievalIndexes/1000-8         	      20       75556686 ns/op      19033493 B/op       84500 allocs/op
+// BenchmarkRetrievalIndexes/10000-8        	       1     1079084922 ns/op     382792064 B/op     1429644 allocs/op
+// BenchmarkRetrievalIndexes/100000-8       	       1    16891305737 ns/op    2629165304 B/op    12465019 allocs/op
 // PASS
 func BenchmarkRetrievalIndexes(b *testing.B) {
 	for _, count := range []int{
@@ -58,11 +49,6 @@ func BenchmarkRetrievalIndexes(b *testing.B) {
 		b.Run(strconv.Itoa(count)+"-split", func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
 				benchmarkRetrievalIndexes(b, nil, count)
-			}
-		})
-		b.Run(strconv.Itoa(count)+"-composite", func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				benchmarkRetrievalIndexes(b, &Options{UseRetrievalCompositeIndex: true}, count)
 			}
 		})
 	}
@@ -122,12 +108,9 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkUpload/1000-split-8         	      20       59437463 ns/op     25205193 B/op    23208 allocs/op
-// BenchmarkUpload/1000-composite-8     	      20       59823642 ns/op     25204900 B/op	   23202 allocs/op
-// BenchmarkUpload/10000-split-8        	       2      580646362 ns/op    216532932 B/op	  248090 allocs/op
-// BenchmarkUpload/10000-composite-8    	       2      589351080 ns/op    216540740 B/op	  248007 allocs/op
-// BenchmarkUpload/100000-split-8       	       1    22373390892 ns/op   2323055312 B/op	 3995903 allocs/op
-// BenchmarkUpload/100000-composite-8   	       1    22090725078 ns/op   2320312976 B/op	 3969219 allocs/op
+// BenchmarkUpload/1000-8         	      20       59437463 ns/op     25205193 B/op    23208 allocs/op
+// BenchmarkUpload/10000-8        	       2      580646362 ns/op    216532932 B/op	  248090 allocs/op
+// BenchmarkUpload/100000-8       	       1    22373390892 ns/op   2323055312 B/op	 3995903 allocs/op
 // PASS
 func BenchmarkUpload(b *testing.B) {
 	for _, count := range []int{
@@ -135,14 +118,9 @@ func BenchmarkUpload(b *testing.B) {
 		10000,
 		100000,
 	} {
-		b.Run(strconv.Itoa(count)+"-split", func(b *testing.B) {
+		b.Run(strconv.Itoa(count), func(b *testing.B) {
 			for n := 0; n < b.N; n++ {
 				benchmarkUpload(b, nil, count)
-			}
-		})
-		b.Run(strconv.Itoa(count)+"-composite", func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
-				benchmarkUpload(b, &Options{UseRetrievalCompositeIndex: true}, count)
 			}
 		})
 	}

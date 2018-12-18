@@ -79,47 +79,31 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		// need to get access timestamp here as it is not
 		// provided by the access function, and it is not
 		// a property of a chunk provided to Accessor.Put.
-		if db.useRetrievalCompositeIndex {
-			i, err := db.retrievalCompositeIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-				item.StoreTimestamp = i.StoreTimestamp
-				db.gcIndex.DeleteInBatch(batch, item)
-				db.incGCSize(-1)
-			case leveldb.ErrNotFound:
-				db.pullIndex.DeleteInBatch(batch, item)
-				item.AccessTimestamp = now()
-				item.StoreTimestamp = now()
-			default:
-				return err
-			}
-		} else {
-			i, err := db.retrievalDataIndex.Get(item)
-			switch err {
-			case nil:
-				item.StoreTimestamp = i.StoreTimestamp
-			case leveldb.ErrNotFound:
-				db.pushIndex.DeleteInBatch(batch, item)
-				item.StoreTimestamp = now()
-			default:
-				return err
-			}
 
-			i, err = db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-				db.gcIndex.DeleteInBatch(batch, item)
-				db.incGCSize(-1)
-			case leveldb.ErrNotFound:
-				// the chunk is not accessed before
-			default:
-				return err
-			}
-			item.AccessTimestamp = now()
-			db.retrievalAccessIndex.PutInBatch(batch, item)
+		i, err := db.retrievalDataIndex.Get(item)
+		switch err {
+		case nil:
+			item.StoreTimestamp = i.StoreTimestamp
+		case leveldb.ErrNotFound:
+			db.pushIndex.DeleteInBatch(batch, item)
+			item.StoreTimestamp = now()
+		default:
+			return err
 		}
+
+		i, err = db.retrievalAccessIndex.Get(item)
+		switch err {
+		case nil:
+			item.AccessTimestamp = i.AccessTimestamp
+			db.gcIndex.DeleteInBatch(batch, item)
+			db.incGCSize(-1)
+		case leveldb.ErrNotFound:
+			// the chunk is not accessed before
+		default:
+			return err
+		}
+		item.AccessTimestamp = now()
+		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
@@ -131,62 +115,33 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		// need to get access timestamp here as it is not
 		// provided by the access function, and it is not
 		// a property of a chunk provided to Accessor.Put.
-		if db.useRetrievalCompositeIndex {
-			i, err := db.retrievalCompositeIndex.Get(item)
-			if err != nil {
-				if err == leveldb.ErrNotFound {
-					// chunk is not found,
-					// no need to update gc index
-					// just delete from the push index
-					// if it is there
-					db.pushIndex.DeleteInBatch(batch, item)
-					return nil
-				}
-				return err
+		i, err := db.retrievalDataIndex.Get(item)
+		if err != nil {
+			if err == leveldb.ErrNotFound {
+				// chunk is not found,
+				// no need to update gc index
+				// just delete from the push index
+				// if it is there
+				db.pushIndex.DeleteInBatch(batch, item)
+				return nil
 			}
-			item.AccessTimestamp = i.AccessTimestamp
-			item.StoreTimestamp = i.StoreTimestamp
-			item.Data = i.Data
-			if item.AccessTimestamp == 0 {
-				// the chunk is not accessed before
-				// set access time for gc index
-				item.AccessTimestamp = now()
-				db.retrievalCompositeIndex.PutInBatch(batch, item)
-			} else {
-				// the chunk is accessed before
-				// remove the current gc index item
-				db.gcIndex.DeleteInBatch(batch, item)
-				db.incGCSize(-1)
-			}
-		} else {
-			i, err := db.retrievalDataIndex.Get(item)
-			if err != nil {
-				if err == leveldb.ErrNotFound {
-					// chunk is not found,
-					// no need to update gc index
-					// just delete from the push index
-					// if it is there
-					db.pushIndex.DeleteInBatch(batch, item)
-					return nil
-				}
-				return err
-			}
-			item.StoreTimestamp = i.StoreTimestamp
-
-			i, err = db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-				db.gcIndex.DeleteInBatch(batch, item)
-				db.incGCSize(-1)
-			case leveldb.ErrNotFound:
-				// the chunk is not accessed before
-			default:
-				return err
-			}
-			item.AccessTimestamp = now()
-			db.retrievalAccessIndex.PutInBatch(batch, item)
+			return err
 		}
+		item.StoreTimestamp = i.StoreTimestamp
+
+		i, err = db.retrievalAccessIndex.Get(item)
+		switch err {
+		case nil:
+			item.AccessTimestamp = i.AccessTimestamp
+			db.gcIndex.DeleteInBatch(batch, item)
+			db.incGCSize(-1)
+		case leveldb.ErrNotFound:
+			// the chunk is not accessed before
+		default:
+			return err
+		}
+		item.AccessTimestamp = now()
+		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
@@ -198,34 +153,23 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		// need to get access timestamp here as it is not
 		// provided by the access function, and it is not
 		// a property of a chunk provided to Accessor.Put.
-		if db.useRetrievalCompositeIndex {
-			i, err := db.retrievalCompositeIndex.Get(item)
-			if err != nil {
-				return err
-			}
-			item.StoreTimestamp = i.StoreTimestamp
+
+		i, err := db.retrievalAccessIndex.Get(item)
+		switch err {
+		case nil:
 			item.AccessTimestamp = i.AccessTimestamp
-		} else {
-			i, err := db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-			case leveldb.ErrNotFound:
-			default:
-				return err
-			}
-			i, err = db.retrievalDataIndex.Get(item)
-			if err != nil {
-				return err
-			}
-			item.StoreTimestamp = i.StoreTimestamp
+		case leveldb.ErrNotFound:
+		default:
+			return err
 		}
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.DeleteInBatch(batch, item)
-		} else {
-			db.retrievalDataIndex.DeleteInBatch(batch, item)
-			db.retrievalAccessIndex.DeleteInBatch(batch, item)
+		i, err = db.retrievalDataIndex.Get(item)
+		if err != nil {
+			return err
 		}
+		item.StoreTimestamp = i.StoreTimestamp
+
+		db.retrievalDataIndex.DeleteInBatch(batch, item)
+		db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
 		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)

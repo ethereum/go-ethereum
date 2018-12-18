@@ -61,36 +61,6 @@ func TestDB(t *testing.T) {
 	}
 }
 
-// TestDB_useRetrievalCompositeIndex checks if optional argument
-// WithRetrievalCompositeIndex to New constructor is setting the
-// correct state.
-func TestDB_useRetrievalCompositeIndex(t *testing.T) {
-	t.Run("set true", func(t *testing.T) {
-		db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-		defer cleanupFunc()
-
-		if !db.useRetrievalCompositeIndex {
-			t.Error("useRetrievalCompositeIndex is not set to true")
-		}
-	})
-	t.Run("set false", func(t *testing.T) {
-		db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: false})
-		defer cleanupFunc()
-
-		if db.useRetrievalCompositeIndex {
-			t.Error("useRetrievalCompositeIndex is not set to false")
-		}
-	})
-	t.Run("unset", func(t *testing.T) {
-		db, cleanupFunc := newTestDB(t, nil)
-		defer cleanupFunc()
-
-		if db.useRetrievalCompositeIndex {
-			t.Error("useRetrievalCompositeIndex is not set to false")
-		}
-	})
-}
-
 // TestDB_updateGCSem tests maxParallelUpdateGC limit.
 // This test temporary sets the limit to a low number,
 // makes updateGC function execution time longer by
@@ -321,25 +291,17 @@ func TestGenerateFakeRandomChunk(t *testing.T) {
 // chunk values are in the retrieval indexes.
 func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		if db.useRetrievalCompositeIndex {
-			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
-		} else {
-			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
 
-			// access index should not be set
-			wantErr := leveldb.ErrNotFound
-			item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
-			if err != wantErr {
-				t.Errorf("got error %v, want %v", err, wantErr)
-			}
+		// access index should not be set
+		wantErr := leveldb.ErrNotFound
+		item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+		if err != wantErr {
+			t.Errorf("got error %v, want %v", err, wantErr)
 		}
 	}
 }
@@ -348,26 +310,18 @@ func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessT
 // chunk values are in the retrieval indexes when access time must be stored.
 func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		if db.useRetrievalCompositeIndex {
-			item, err := db.retrievalCompositeIndex.Get(addressToItem(chunk.Address()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, accessTimestamp)
-		} else {
-			item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
 
-			if accessTimestamp > 0 {
-				item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
-				if err != nil {
-					t.Fatal(err)
-				}
-				validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+		if accessTimestamp > 0 {
+			item, err = db.retrievalAccessIndex.Get(addressToItem(chunk.Address()))
+			if err != nil {
+				t.Fatal(err)
 			}
+			validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
 		}
 	}
 }

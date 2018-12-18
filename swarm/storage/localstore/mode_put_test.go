@@ -21,27 +21,11 @@ import (
 	"time"
 )
 
-// TestModePutRequest validates internal data operations and state
-// for ModePutRequest on DB with default configuration.
+// TestModePutRequest validates ModePutRequest index values on the provided DB.
 func TestModePutRequest(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModePutRequestValues(t, db)
-}
-
-// TestModePutRequest_useRetrievalCompositeIndex validates internal
-// data operations and state for ModePutRequest on DB with
-// retrieval composite index enabled.
-func TestModePutRequest_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModePutRequestValues(t, db)
-}
-
-// testModePutRequestValues validates ModePutRequest index values on the provided DB.
-func testModePutRequestValues(t *testing.T, db *DB) {
 	putter := db.NewPutter(ModePutRequest)
 
 	chunk := generateRandomChunk()
@@ -88,27 +72,11 @@ func testModePutRequestValues(t *testing.T, db *DB) {
 	})
 }
 
-// TestModePutSync validates internal data operations and state
-// for ModePutSync on DB with default configuration.
+// TestModePutSync validates ModePutSync index values on the provided DB.
 func TestModePutSync(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModePutSyncValues(t, db)
-}
-
-// TestModePutSync_useRetrievalCompositeIndex validates internal
-// data operations and state for ModePutSync on DB with
-// retrieval composite index enabled.
-func TestModePutSync_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModePutSyncValues(t, db)
-}
-
-// testModePutSyncValues validates ModePutSync index values on the provided DB.
-func testModePutSyncValues(t *testing.T, db *DB) {
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return wantTimestamp
@@ -126,27 +94,11 @@ func testModePutSyncValues(t *testing.T, db *DB) {
 	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
 }
 
-// TestModePutUpload validates internal data operations and state
-// for ModePutUpload on DB with default configuration.
+// TestModePutUpload validates ModePutUpload index values on the provided DB.
 func TestModePutUpload(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModePutUploadValues(t, db)
-}
-
-// TestModePutUpload_useRetrievalCompositeIndex validates internal
-// data operations and state for ModePutUpload on DB with
-// retrieval composite index enabled.
-func TestModePutUpload_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModePutUploadValues(t, db)
-}
-
-// testModePutUploadValues validates ModePutUpload index values on the provided DB.
-func testModePutUploadValues(t *testing.T, db *DB) {
 	wantTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return wantTimestamp

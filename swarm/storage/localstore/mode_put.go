@@ -78,36 +78,23 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 
 		// check if the chunk already is in the database
 		// as gc index is updated
-		if db.useRetrievalCompositeIndex {
-			i, err := db.retrievalCompositeIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-				item.StoreTimestamp = i.StoreTimestamp
-			case leveldb.ErrNotFound:
-				// no chunk in database
-			default:
-				return err
-			}
-		} else {
-			i, err := db.retrievalAccessIndex.Get(item)
-			switch err {
-			case nil:
-				item.AccessTimestamp = i.AccessTimestamp
-			case leveldb.ErrNotFound:
-				// no chunk accesses
-			default:
-				return err
-			}
-			i, err = db.retrievalDataIndex.Get(item)
-			switch err {
-			case nil:
-				item.StoreTimestamp = i.StoreTimestamp
-			case leveldb.ErrNotFound:
-				// no chunk accesses
-			default:
-				return err
-			}
+		i, err := db.retrievalAccessIndex.Get(item)
+		switch err {
+		case nil:
+			item.AccessTimestamp = i.AccessTimestamp
+		case leveldb.ErrNotFound:
+			// no chunk accesses
+		default:
+			return err
+		}
+		i, err = db.retrievalDataIndex.Get(item)
+		switch err {
+		case nil:
+			item.StoreTimestamp = i.StoreTimestamp
+		case leveldb.ErrNotFound:
+			// no chunk accesses
+		default:
+			return err
 		}
 		if item.AccessTimestamp != 0 {
 			// delete current entry from the gc index
@@ -120,32 +107,20 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		// update access timestamp
 		item.AccessTimestamp = now()
 		// update retrieve access index
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalAccessIndex.PutInBatch(batch, item)
-		}
+		db.retrievalAccessIndex.PutInBatch(batch, item)
 		// add new entry to gc index
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		db.incGCSize(1)
 
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalDataIndex.PutInBatch(batch, item)
-			db.retrievalAccessIndex.PutInBatch(batch, item)
-		}
+		db.retrievalDataIndex.PutInBatch(batch, item)
+		db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	case ModePutUpload:
 		// put to indexes: retrieve, push, pull
 
 		item.StoreTimestamp = now()
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalDataIndex.PutInBatch(batch, item)
-		}
+		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
 		db.pushIndex.PutInBatch(batch, item)
 
@@ -153,11 +128,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		// put to indexes: retrieve, pull
 
 		item.StoreTimestamp = now()
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.PutInBatch(batch, item)
-		} else {
-			db.retrievalDataIndex.PutInBatch(batch, item)
-		}
+		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
 
 	default:

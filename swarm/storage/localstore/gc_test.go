@@ -38,19 +38,6 @@ func TestDB_collectGarbageWorker(t *testing.T) {
 	testDB_collectGarbageWorker(t, db)
 }
 
-// TestDB_collectGarbageWorker_useRetrievalCompositeIndex tests
-// garbage collection runs by uploading and syncing a number
-// of chunks using composite retrieval index.
-func TestDB_collectGarbageWorker_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{
-		Capacity:                   100,
-		UseRetrievalCompositeIndex: true,
-	})
-	defer cleanupFunc()
-
-	testDB_collectGarbageWorker(t, db)
-}
-
 // TestDB_collectGarbageWorker_multipleBatches tests garbage
 // collection runs by uploading and syncing a number of
 // chunks by having multiple smaller batches.
@@ -62,25 +49,6 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
-	})
-	defer cleanupFunc()
-
-	testDB_collectGarbageWorker(t, db)
-}
-
-// TestDB_collectGarbageWorker_multipleBatches_useRetrievalCompositeIndex
-// tests garbage collection runs by uploading and syncing a number
-// of chunks using composite retrieval index and having multiple
-// smaller batches.
-func TestDB_collectGarbageWorker_multipleBatches_useRetrievalCompositeIndex(t *testing.T) {
-	// lower the maximal number of chunks in a single
-	// gc batch to ensure multiple batches.
-	defer func(s int64) { gcBatchSize = s }(gcBatchSize)
-	gcBatchSize = 2
-
-	db, cleanupFunc := newTestDB(t, &Options{
-		Capacity:                   100,
-		UseRetrievalCompositeIndex: true,
 	})
 	defer cleanupFunc()
 
@@ -163,34 +131,15 @@ func testDB_collectGarbageWorker(t *testing.T, db *DB) {
 	})
 }
 
-// TestDB_collectGarbageWorker_withRequests tests garbage collection
-// runs by uploading, syncing and requesting a number of chunks.
+// TestDB_collectGarbageWorker_withRequests is a helper test function
+// to test garbage collection runs by uploading, syncing and
+// requesting a number of chunks.
 func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbageWorker_withRequests(t, db)
-}
-
-// TestDB_collectGarbageWorker_withRequests_useRetrievalCompositeIndex
-// tests garbage collection runs by uploading, syncing and
-// requesting a number of chunks using composite retrieval index.
-func TestDB_collectGarbageWorker_withRequests_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{
-		Capacity:                   100,
-		UseRetrievalCompositeIndex: true,
-	})
-	defer cleanupFunc()
-
-	testDB_collectGarbageWorker_withRequests(t, db)
-}
-
-// testDB_collectGarbageWorker_withRequests is a helper test function
-// to test garbage collection runs by uploading, syncing and
-// requesting a number of chunks.
-func testDB_collectGarbageWorker_withRequests(t *testing.T, db *DB) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 

@@ -80,24 +80,13 @@ func TestDB_pullIndex(t *testing.T) {
 	})
 }
 
+// TestDB_gcIndex validates garbage collection index by uploading
+// a chunk with and performing operations using synced, access and
+// request modes.
 func TestDB_gcIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testDB_gcIndex(t, db)
-}
-
-func TestDB_gcIndex_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testDB_gcIndex(t, db)
-}
-
-// testDB_gcIndex validates garbage collection index by uploading
-// a chunk with and performing operations using synced, access and
-// request modes.
-func testDB_gcIndex(t *testing.T, db *DB) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	chunkCount := 50

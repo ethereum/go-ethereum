@@ -70,19 +70,9 @@ func (g *Getter) Get(addr storage.Address) (chunk storage.Chunk, err error) {
 func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
-	if db.useRetrievalCompositeIndex {
-		out, err = db.retrievalCompositeIndex.Get(item)
-		if err != nil {
-			return out, err
-		}
-	} else {
-		// No need to get access timestamp here as it is used
-		// only for some of Modes in update and access time
-		// is not property of the chunk returned by the Accessor.Get.
-		out, err = db.retrievalDataIndex.Get(item)
-		if err != nil {
-			return out, err
-		}
+	out, err = db.retrievalDataIndex.Get(item)
+	if err != nil {
+		return out, err
 	}
 	switch mode {
 	// update the access timestamp and gc index
@@ -133,19 +123,14 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 
 	// update accessTimeStamp in retrieve, gc
 
-	if db.useRetrievalCompositeIndex {
-		// access timestamp is already populated
-		// in the provided item, passed from access function.
-	} else {
-		i, err := db.retrievalAccessIndex.Get(item)
-		switch err {
-		case nil:
-			item.AccessTimestamp = i.AccessTimestamp
-		case leveldb.ErrNotFound:
-			// no chunk accesses
-		default:
-			return err
-		}
+	i, err := db.retrievalAccessIndex.Get(item)
+	switch err {
+	case nil:
+		item.AccessTimestamp = i.AccessTimestamp
+	case leveldb.ErrNotFound:
+		// no chunk accesses
+	default:
+		return err
 	}
 	if item.AccessTimestamp == 0 {
 		// chunk is not yes synced
@@ -157,11 +142,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	// update access timestamp
 	item.AccessTimestamp = now()
 	// update retrieve access index
-	if db.useRetrievalCompositeIndex {
-		db.retrievalCompositeIndex.PutInBatch(batch, item)
-	} else {
-		db.retrievalAccessIndex.PutInBatch(batch, item)
-	}
+	db.retrievalAccessIndex.PutInBatch(batch, item)
 	// add new entry to gc index
 	db.gcIndex.PutInBatch(batch, item)
 

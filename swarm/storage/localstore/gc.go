@@ -87,12 +87,8 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 			return true, nil
 		}
 		// delete from retrieve, pull, gc
-		if db.useRetrievalCompositeIndex {
-			db.retrievalCompositeIndex.DeleteInBatch(batch, item)
-		} else {
-			db.retrievalDataIndex.DeleteInBatch(batch, item)
-			db.retrievalAccessIndex.DeleteInBatch(batch, item)
-		}
+		db.retrievalDataIndex.DeleteInBatch(batch, item)
+		db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
 		collectedCount++

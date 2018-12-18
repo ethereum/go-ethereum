@@ -58,16 +58,9 @@ type DB struct {
 	// filed that stores number of intems in gc index
 	storedGCSize shed.Uint64Field
 
-	// this flag is for benchmarking two types of retrieval indexes
-	// - single retrieval composite index retrievalCompositeIndex
-	// - two separated indexes for data and access time
-	//   - retrievalDataIndex
-	//   - retrievalAccessIndex
-	useRetrievalCompositeIndex bool
 	// retrieval indexes
-	retrievalCompositeIndex shed.Index
-	retrievalDataIndex      shed.Index
-	retrievalAccessIndex    shed.Index
+	retrievalDataIndex   shed.Index
+	retrievalAccessIndex shed.Index
 	// sync indexes
 	pushIndex shed.Index
 	pullIndex shed.Index
@@ -107,15 +100,6 @@ type DB struct {
 
 // Options struct holds optional parameters for configuring DB.
 type Options struct {
-	// UseRetrievalCompositeIndex option is for benchmarking
-	// two types of retrieval indexes:
-	// - single retrieval composite index retrievalCompositeIndex
-	// - two separated indexes for data and access time
-	//   - retrievalDataIndex
-	//   - retrievalAccessIndex
-	// It should be temporary until the decision is reached
-	// about the retrieval index structure.
-	UseRetrievalCompositeIndex bool
 	// MockStore is a mock node store that is used to store
 	// chunk data in a central store. It can be used to reduce
 	// total storage space requirements in testing large number
@@ -135,9 +119,8 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		o = new(Options)
 	}
 	db = &DB{
-		capacity:                   o.Capacity,
-		baseKey:                    baseKey,
-		useRetrievalCompositeIndex: o.UseRetrievalCompositeIndex,
+		capacity: o.Capacity,
+		baseKey:  baseKey,
 		// channels collectGarbageTrigger and writeGCSizeTrigger
 		// need to be buffered with the size of 1
 		// to signal another event if it
@@ -167,129 +150,76 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if db.useRetrievalCompositeIndex {
-		var (
-			encodeValueFunc func(fields shed.Item) (value []byte, err error)
-			decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
-		)
-		if o.MockStore != nil {
-			encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-				b := make([]byte, 16)
-				binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
-				binary.BigEndian.PutUint64(b[8:16], uint64(fields.AccessTimestamp))
-				err = o.MockStore.Put(fields.Address, fields.Data)
-				if err != nil {
-					return nil, err
-				}
-				return b, nil
+	// Functions for retrieval data index.
+	var (
+		encodeValueFunc func(fields shed.Item) (value []byte, err error)
+		decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
+	)
+	if o.MockStore != nil {
+		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
+			err = o.MockStore.Put(fields.Address, fields.Data)
+			if err != nil {
+				return nil, err
 			}
-			decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
-				e.Data, err = o.MockStore.Get(keyItem.Address)
-				return e, err
-			}
-		} else {
-			encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-				b := make([]byte, 16)
-				binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
-				binary.BigEndian.PutUint64(b[8:16], uint64(fields.AccessTimestamp))
-				value = append(b, fields.Data...)
-				return value, nil
-			}
-			decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
-				e.Data = value[16:]
-				return e, nil
-			}
+			return b, nil
 		}
-		// Index storing chunk data with stored and access timestamps.
-		db.retrievalCompositeIndex, err = db.shed.NewIndex("Hash->StoredTimestamp|AccessTimestamp|Data", shed.IndexFuncs{
-			EncodeKey: func(fields shed.Item) (key []byte, err error) {
-				return fields.Address, nil
-			},
-			DecodeKey: func(key []byte) (e shed.Item, err error) {
-				e.Address = key
-				return e, nil
-			},
-			EncodeValue: encodeValueFunc,
-			DecodeValue: decodeValueFunc,
-		})
-		if err != nil {
-			return nil, err
+		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+			e.Data, err = o.MockStore.Get(keyItem.Address)
+			return e, err
 		}
 	} else {
-		var (
-			encodeValueFunc func(fields shed.Item) (value []byte, err error)
-			decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
-		)
-		if o.MockStore != nil {
-			encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-				b := make([]byte, 8)
-				binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-				err = o.MockStore.Put(fields.Address, fields.Data)
-				if err != nil {
-					return nil, err
-				}
-				return b, nil
-			}
-			decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.Data, err = o.MockStore.Get(keyItem.Address)
-				return e, err
-			}
-		} else {
-			encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-				b := make([]byte, 8)
-				binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-				value = append(b, fields.Data...)
-				return value, nil
-			}
-			decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-				e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-				e.Data = value[8:]
-				return e, nil
-			}
+		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
+			value = append(b, fields.Data...)
+			return value, nil
 		}
-		// Index storing actual chunk address, data and store timestamp.
-		db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
-			EncodeKey: func(fields shed.Item) (key []byte, err error) {
-				return fields.Address, nil
-			},
-			DecodeKey: func(key []byte) (e shed.Item, err error) {
-				e.Address = key
-				return e, nil
-			},
-			EncodeValue: encodeValueFunc,
-			DecodeValue: decodeValueFunc,
-		})
-		if err != nil {
-			return nil, err
+		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+			e.Data = value[8:]
+			return e, nil
 		}
-		// Index storing access timestamp for a particular address.
-		// It is needed in order to update gc index keys for iteration order.
-		db.retrievalAccessIndex, err = db.shed.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
-			EncodeKey: func(fields shed.Item) (key []byte, err error) {
-				return fields.Address, nil
-			},
-			DecodeKey: func(key []byte) (e shed.Item, err error) {
-				e.Address = key
-				return e, nil
-			},
-			EncodeValue: func(fields shed.Item) (value []byte, err error) {
-				b := make([]byte, 8)
-				binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
-				return b, nil
-			},
-			DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-				e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
-				return e, nil
-			},
-		})
-		if err != nil {
-			return nil, err
-		}
+	}
+	// Index storing actual chunk address, data and store timestamp.
+	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: encodeValueFunc,
+		DecodeValue: decodeValueFunc,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Index storing access timestamp for a particular address.
+	// It is needed in order to update gc index keys for iteration order.
+	db.retrievalAccessIndex, err = db.shed.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
+			return b, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
 	// pull index allows history and live syncing per po bin
 	db.pullIndex, err = db.shed.NewIndex("PO|StoredTimestamp|Hash->nil", shed.IndexFuncs{

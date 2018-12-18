@@ -22,27 +22,11 @@ import (
 	"time"
 )
 
-// TestModeGetRequest validates internal data operations and state
-// for ModeGetRequest on DB with default configuration.
+// TestModeGetRequest validates ModeGetRequest index values on the provided DB.
 func TestModeGetRequest(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModeGetRequestValues(t, db)
-}
-
-// TestModeGetRequest_useRetrievalCompositeIndex validates internal
-// data operations and state for ModeGetRequest on DB with
-// retrieval composite index enabled.
-func TestModeGetRequest_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModeGetRequestValues(t, db)
-}
-
-// testModeGetRequestValues validates ModeGetRequest index values on the provided DB.
-func testModeGetRequestValues(t *testing.T, db *DB) {
 	uploadTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return uploadTimestamp
@@ -152,27 +136,11 @@ func testModeGetRequestValues(t *testing.T, db *DB) {
 	})
 }
 
-// TestModeGetSync validates internal data operations and state
-// for ModeGetSync on DB with default configuration.
+// TestModeGetSync validates ModeGetSync index values on the provided DB.
 func TestModeGetSync(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	testModeGetSyncValues(t, db)
-}
-
-// TestModeGetSync_useRetrievalCompositeIndex validates internal
-// data operations and state for ModeGetSync on DB with
-// retrieval composite index enabled.
-func TestModeGetSync_useRetrievalCompositeIndex(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{UseRetrievalCompositeIndex: true})
-	defer cleanupFunc()
-
-	testModeGetSyncValues(t, db)
-}
-
-// testModeGetSyncValues validates ModeGetSync index values on the provided DB.
-func testModeGetSyncValues(t *testing.T, db *DB) {
 	uploadTimestamp := time.Now().UTC().UnixNano()
 	defer setNow(func() (t int64) {
 		return uploadTimestamp
