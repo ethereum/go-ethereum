@@ -1130,6 +1130,9 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	syncUpdateDelay := 500 * time.Millisecond
 	//we will later need the kad table for each node
 	bucketKeyKad := simulation.BucketKey("kademlia")
+	//holds the msg code for SubscribeMsg
+	var subscribeMsgCode uint64
+	var ok bool
 	//create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -1155,6 +1158,11 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 				Syncing:         SyncingAutoSubscribe, //enable sync registrations
 				SyncUpdateDelay: syncUpdateDelay,
 			}, nil)
+			//get the SubscribeMsg code
+			subscribeMsgCode, ok = r.GetSpec().GetCode(SubscribeMsg{})
+			if !ok {
+				t.Fatal("Message code for SubscribeMsg not found")
+			}
 
 			bucket.Store(bucketKeyRegistry, r)
 			cleanup = func() {
@@ -1186,7 +1194,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		msgs := sim.PeerEvents(
 			context.Background(),
 			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(4), //4 is SubscribeMsg
+			simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("stream").MsgCode(subscribeMsgCode),
 		)
 
 		//setup the vars we need
@@ -1231,7 +1239,12 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		}
 		log.Debug("Expected message count: ", "expectedMsgCount", expectedMsgCount)
 		//wait until all subscriptions are done
-		<-allSubscriptionsDone
+		select {
+		case <-allSubscriptionsDone:
+		case <-ctx.Done():
+			t.Fatal("Context timed out")
+		}
+
 		log.Info("All subscriptions received")
 		//now iterate again, this time we call each node via RPC to get its subscriptions
 		for _, node := range nodes {
