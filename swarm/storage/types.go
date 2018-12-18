@@ -184,9 +184,6 @@ func (c AddressCollection) Swap(i, j int) {
 // Chunk interface implemented by context.Contexts and data chunks
 type Chunk interface {
 	Address() Address
-	Payload() []byte
-	SpanBytes() []byte
-	Span() int64
 	Data() []byte
 }
 
@@ -208,23 +205,8 @@ func (c *chunk) Address() Address {
 	return c.addr
 }
 
-func (c *chunk) SpanBytes() []byte {
-	return c.sdata[:8]
-}
-
-func (c *chunk) Span() int64 {
-	if c.span == -1 {
-		c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-	}
-	return c.span
-}
-
 func (c *chunk) Data() []byte {
 	return c.sdata
-}
-
-func (c *chunk) Payload() []byte {
-	return c.sdata[8:]
 }
 
 // String() for pretty printing
