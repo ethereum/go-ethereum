@@ -17,6 +17,9 @@
 package localstore
 
 import (
+	"io/ioutil"
+	"math/rand"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,34 +27,34 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// TestDB_collectGarbage tests garbage collection runs
+// TestDB_collectGarbageWorker tests garbage collection runs
 // by uploading and syncing a number of chunks.
-func TestDB_collectGarbage(t *testing.T) {
+func TestDB_collectGarbageWorker(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage(t, db)
+	testDB_collectGarbageWorker(t, db)
 }
 
-// TestDB_collectGarbage_useRetrievalCompositeIndex tests
+// TestDB_collectGarbageWorker_useRetrievalCompositeIndex tests
 // garbage collection runs by uploading and syncing a number
 // of chunks using composite retrieval index.
-func TestDB_collectGarbage_useRetrievalCompositeIndex(t *testing.T) {
+func TestDB_collectGarbageWorker_useRetrievalCompositeIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity:                   100,
 		UseRetrievalCompositeIndex: true,
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage(t, db)
+	testDB_collectGarbageWorker(t, db)
 }
 
-// TestDB_collectGarbage_multipleBatches tests garbage
+// TestDB_collectGarbageWorker_multipleBatches tests garbage
 // collection runs by uploading and syncing a number of
 // chunks by having multiple smaller batches.
-func TestDB_collectGarbage_multipleBatches(t *testing.T) {
+func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 	// lower the maximal number of chunks in a single
 	// gc batch to ensure multiple batches.
 	defer func(s int64) { gcBatchSize = s }(gcBatchSize)
@@ -62,14 +65,14 @@ func TestDB_collectGarbage_multipleBatches(t *testing.T) {
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage(t, db)
+	testDB_collectGarbageWorker(t, db)
 }
 
-// TestDB_collectGarbage_multipleBatches_useRetrievalCompositeIndex
+// TestDB_collectGarbageWorker_multipleBatches_useRetrievalCompositeIndex
 // tests garbage collection runs by uploading and syncing a number
 // of chunks using composite retrieval index and having multiple
 // smaller batches.
-func TestDB_collectGarbage_multipleBatches_useRetrievalCompositeIndex(t *testing.T) {
+func TestDB_collectGarbageWorker_multipleBatches_useRetrievalCompositeIndex(t *testing.T) {
 	// lower the maximal number of chunks in a single
 	// gc batch to ensure multiple batches.
 	defer func(s int64) { gcBatchSize = s }(gcBatchSize)
@@ -81,12 +84,12 @@ func TestDB_collectGarbage_multipleBatches_useRetrievalCompositeIndex(t *testing
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage(t, db)
+	testDB_collectGarbageWorker(t, db)
 }
 
-// testDB_collectGarbage is a helper test function to test
+// testDB_collectGarbageWorker is a helper test function to test
 // garbage collection runs by uploading and syncing a number of chunks.
-func testDB_collectGarbage(t *testing.T, db *DB) {
+func testDB_collectGarbageWorker(t *testing.T, db *DB) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
@@ -160,34 +163,34 @@ func testDB_collectGarbage(t *testing.T, db *DB) {
 	})
 }
 
-// TestDB_collectGarbage_withRequests tests garbage collection
+// TestDB_collectGarbageWorker_withRequests tests garbage collection
 // runs by uploading, syncing and requesting a number of chunks.
-func TestDB_collectGarbage_withRequests(t *testing.T) {
+func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity: 100,
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage_withRequests(t, db)
+	testDB_collectGarbageWorker_withRequests(t, db)
 }
 
-// TestDB_collectGarbage_withRequests_useRetrievalCompositeIndex
+// TestDB_collectGarbageWorker_withRequests_useRetrievalCompositeIndex
 // tests garbage collection runs by uploading, syncing and
 // requesting a number of chunks using composite retrieval index.
-func TestDB_collectGarbage_withRequests_useRetrievalCompositeIndex(t *testing.T) {
+func TestDB_collectGarbageWorker_withRequests_useRetrievalCompositeIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, &Options{
 		Capacity:                   100,
 		UseRetrievalCompositeIndex: true,
 	})
 	defer cleanupFunc()
 
-	testDB_collectGarbage_withRequests(t, db)
+	testDB_collectGarbageWorker_withRequests(t, db)
 }
 
-// testDB_collectGarbage_withRequests is a helper test function
+// testDB_collectGarbageWorker_withRequests is a helper test function
 // to test garbage collection runs by uploading, syncing and
 // requesting a number of chunks.
-func testDB_collectGarbage_withRequests(t *testing.T, db *DB) {
+func testDB_collectGarbageWorker_withRequests(t *testing.T, db *DB) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
@@ -288,6 +291,69 @@ func testDB_collectGarbage_withRequests(t *testing.T, db *DB) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// TestDB_gcSize checks if gcSize has a correct value after
+// database is initialized with existing data.
+func TestDB_gcSize(t *testing.T) {
+	dir, err := ioutil.TempDir("", "localstore-stored-gc-size")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	baseKey := make([]byte, 32)
+	if _, err := rand.Read(baseKey); err != nil {
+		t.Fatal(err)
+	}
+	db, err := New(dir, baseKey, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	uploader := db.NewPutter(ModePutUpload)
+	syncer := db.NewSetter(ModeSetSync)
+
+	count := 100
+
+	for i := 0; i < count; i++ {
+		chunk := generateRandomChunk()
+
+		err := uploader.Put(chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = syncer.Set(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err = db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db, err = New(dir, baseKey, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("gc index size", newIndexGCSizeTest(db))
+
+	t.Run("gc uncounted hashes index count", newItemsCountTest(db.gcUncountedHashesIndex, 0))
+}
+
+func testStoredGCSize(t *testing.T, db *DB, want uint64) {
+	t.Helper()
+
+	got, err := db.storedGCSize.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("got stored gc size %v, want %v", got, want)
+	}
 }
 
 // setTestHookCollectGarbage sets testHookCollectGarbage and

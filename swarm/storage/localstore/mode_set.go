@@ -122,6 +122,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pullIndex.PutInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
+		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		db.incGCSize(1)
 
 	case ModeSetSync:
@@ -188,6 +189,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
+		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		db.incGCSize(1)
 
 	case ModeSetRemove:
@@ -226,6 +228,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		}
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
+		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
 		// a check is needed for decrementing gcSize
 		// as delete is not reporting if the key/value pair
 		// is deleted or not

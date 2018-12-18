@@ -127,6 +127,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		}
 		// add new entry to gc index
 		db.gcIndex.PutInBatch(batch, item)
+		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		db.incGCSize(1)
 
 		if db.useRetrievalCompositeIndex {

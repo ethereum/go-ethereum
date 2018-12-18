@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
@@ -39,56 +40,24 @@ var (
 	gcBatchSize int64 = 1000
 )
 
-// collectGarbage is a long running function that waits for
+// collectGarbageWorker is a long running function that waits for
 // collectGarbageTrigger channel to signal a garbage collection
 // run. GC run iterates on gcIndex and removes older items
 // form retrieval and other indexes.
-func (db *DB) collectGarbage() {
-	target := db.gcTarget()
+func (db *DB) collectGarbageWorker() {
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
-			batch := new(leveldb.Batch)
-
-			// sets a gc trigger if batch limit is reached
-			var triggerNextIteration bool
-			var collectedCount int64
-			err := db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
-				gcSize := atomic.LoadInt64(&db.gcSize)
-				if gcSize-collectedCount <= target {
-					return true, nil
-				}
-				// delete from retrieve, pull, gc
-				if db.useRetrievalCompositeIndex {
-					db.retrievalCompositeIndex.DeleteInBatch(batch, item)
-				} else {
-					db.retrievalDataIndex.DeleteInBatch(batch, item)
-					db.retrievalAccessIndex.DeleteInBatch(batch, item)
-				}
-				db.pullIndex.DeleteInBatch(batch, item)
-				db.gcIndex.DeleteInBatch(batch, item)
-				collectedCount++
-				if collectedCount >= gcBatchSize {
-					triggerNextIteration = true
-					return true, nil
-				}
-				return false, nil
-			})
+			// TODO: Add comment about done
+			collectedCount, done, err := db.collectGarbage()
 			if err != nil {
 				log.Error("localstore collect garbage", "err", err)
 			}
-
-			err = db.shed.WriteBatch(batch)
-			if err != nil {
-				log.Error("localstore collect garbage write batch", "err", err)
-			} else {
-				// batch is written, decrement gcSize and check if another gc run is needed
-				db.incGCSize(-collectedCount)
-				if triggerNextIteration {
-					select {
-					case db.collectGarbageTrigger <- struct{}{}:
-					default:
-					}
+			// check if another gc run is needed
+			if !done {
+				select {
+				case db.collectGarbageTrigger <- struct{}{}:
+				default:
 				}
 			}
 
@@ -101,6 +70,53 @@ func (db *DB) collectGarbage() {
 	}
 }
 
+// collectGarbage removes chunks from retrieval and other
+// indexes if maximal number of chunks in database is reached.
+// This function returns the number of removed chunks. If done
+// is false, another call to this function is needed to collect
+// the rest of the garbage as the batch size limit is reached.
+// This function is called in collectGarbageWorker.
+func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
+	batch := new(leveldb.Batch)
+	target := db.gcTarget()
+
+	done = true
+	err = db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+		gcSize := atomic.LoadInt64(&db.gcSize)
+		if gcSize-collectedCount <= target {
+			return true, nil
+		}
+		// delete from retrieve, pull, gc
+		if db.useRetrievalCompositeIndex {
+			db.retrievalCompositeIndex.DeleteInBatch(batch, item)
+		} else {
+			db.retrievalDataIndex.DeleteInBatch(batch, item)
+			db.retrievalAccessIndex.DeleteInBatch(batch, item)
+		}
+		db.pullIndex.DeleteInBatch(batch, item)
+		db.gcIndex.DeleteInBatch(batch, item)
+		collectedCount++
+		if collectedCount >= gcBatchSize {
+			// bach size limit reached,
+			// another gc run is needed
+			done = false
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return 0, false, err
+	}
+
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return 0, false, err
+	}
+	// batch is written, decrement gcSize
+	db.incGCSize(-collectedCount)
+	return collectedCount, done, nil
+}
+
 // gcTrigger retruns the absolute value for garbage collection
 // target value, calculated from db.capacity and gcTargetRatio.
 func (db *DB) gcTarget() (target int64) {
@@ -110,13 +126,60 @@ func (db *DB) gcTarget() (target int64) {
 // incGCSize increments gcSize by the provided number.
 // If count is negative, it will decrement gcSize.
 func (db *DB) incGCSize(count int64) {
+	if count == 0 {
+		return
+	}
 	new := atomic.AddInt64(&db.gcSize, count)
+	select {
+	case db.writeGCSizeTrigger <- struct{}{}:
+	default:
+	}
 	if new >= db.capacity {
 		select {
 		case db.collectGarbageTrigger <- struct{}{}:
 		default:
 		}
 	}
+}
+
+var writeGCSizeDelay = 10 * time.Second
+
+// writeGCSizeWorker calls writeGCSize function
+// on writeGCSizeTrigger receive. It implements a
+// backoff with delay of writeGCSizeDelay duration
+// to avoid very frequent database operations.
+func (db *DB) writeGCSizeWorker() {
+	for {
+		select {
+		case <-db.writeGCSizeTrigger:
+			err := db.writeGCSize()
+			if err != nil {
+				log.Error("localstore write gc size", "err", err)
+			}
+			select {
+			case <-time.After(writeGCSizeDelay):
+			case <-db.close:
+				return
+			}
+		case <-db.close:
+			return
+		}
+	}
+}
+
+// writeGCSize stores the number of items in gcIndex.
+// It removes all hashes from gcUncountedHashesIndex
+// not to include them on the next database initialization
+// when gcSize is counted.
+func (db *DB) writeGCSize() (err error) {
+	gcSize := atomic.LoadInt64(&db.gcSize)
+	err = db.storedGCSize.Put(uint64(gcSize))
+	if err != nil {
+		return err
+	}
+	return db.gcUncountedHashesIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+		return false, db.gcUncountedHashesIndex.Delete(item)
+	})
 }
 
 // testHookCollectGarbage is a hook that can provide

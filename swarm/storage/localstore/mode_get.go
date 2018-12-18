@@ -92,7 +92,9 @@ func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.Item, err error)
 			// if updateGCSem buffer id full
 			db.updateGCSem <- struct{}{}
 		}
+		db.updateGCWG.Add(1)
 		go func() {
+			defer db.updateGCWG.Done()
 			if db.updateGCSem != nil {
 				// free a spot in updateGCSem buffer
 				// for a new goroutine
