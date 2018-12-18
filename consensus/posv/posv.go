@@ -478,7 +478,7 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 	masternodes := c.GetMasternodes(chain, parent)
 	snap, err := c.GetSnapshot(chain, parent)
 	if err != nil {
-		log.Error("Failed when trying to commit new work", "err", err)
+		log.Warn("Failed when trying to commit new work", "err", err)
 		return 0, -1, -1, false, err
 	}
 	if len(masternodes) == 0 {
@@ -499,7 +499,7 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 		log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", signer, "position", curIndex)
 	}
 	for i, s := range masternodes {
-		fmt.Printf("%d - %s\n", i, s.String())
+		log.Info("%d - %s\n", i, s.String())
 	}
 	if (preIndex+1)%len(masternodes) == curIndex {
 		return len(masternodes), preIndex, curIndex, true, nil
