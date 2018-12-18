@@ -23,10 +23,17 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
+	if len(endpoint) > 107 {
+		log.Warn("The ipc endpoint is longer than 107 characters and is restricted to this size by linux. "+
+			"Shorten this path to less than 108 characters.", "endpoint", endpoint)
+	}
+
 	// Ensure the IPC path exists and remove any previous leftover
 	if err := os.MkdirAll(filepath.Dir(endpoint), 0751); err != nil {
 		return nil, err
