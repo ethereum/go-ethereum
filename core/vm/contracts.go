@@ -17,8 +17,10 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/go-interpreter/wagon/exec"
+	"github.com/go-interpreter/wagon/wasm"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -59,6 +63,19 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}): &bn256Pairing{},
 }
 
+// PrecompiledContractsEWASM contains the default set of pre-compiled Ethereum
+// contracts used for Ethereum 1.x release.
+var PrecompiledContractsEWASM = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): newEWASMPrecompile(ewasmEcrecoverCode),
+	common.BytesToAddress([]byte{2}): newEWASMPrecompile(ewasmSha256HashCode),
+	common.BytesToAddress([]byte{3}): newEWASMPrecompile(ewasmRipemd160hashCode),
+	common.BytesToAddress([]byte{4}): newEWASMPrecompile(ewasmDataCopyCode),
+	common.BytesToAddress([]byte{5}): newEWASMPrecompile(ewasmBigModExpCode),
+	common.BytesToAddress([]byte{6}): newEWASMPrecompile(ewasmBn256AddCode),
+	common.BytesToAddress([]byte{7}): newEWASMPrecompile(ewasmBn256ScalarMulCode),
+	common.BytesToAddress([]byte{8}): newEWASMPrecompile(ewasmBn256PairingCode),
+}
+
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.RequiredGas(input)
@@ -66,6 +83,61 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 		return p.Run(input)
 	}
 	return nil, ErrOutOfGas
+}
+
+// SHA256 implemented as a native contract; WASM version of the
+// contract above.
+type ewasmPrecompile struct {
+	code []byte
+	vm   *exec.VM
+}
+
+var (
+	ewasmEcrecoverCode      = []byte{}
+	ewasmSha256HashCode     = []byte{}
+	ewasmRipemd160hashCode  = []byte{}
+	ewasmDataCopyCode       = []byte{}
+	ewasmBigModExpCode      = []byte{}
+	ewasmBn256AddCode       = []byte{}
+	ewasmBn256ScalarMulCode = []byte{}
+	ewasmBn256PairingCode   = []byte{}
+)
+
+func newEWASMPrecompile(code []byte) *ewasmPrecompile {
+	module, err := wasm.ReadModule(bytes.NewReader(code), nil)
+	if err != nil {
+		panic("Could not read precompile module")
+	}
+
+	vm, err := exec.NewVM(module)
+	if err != nil {
+		panic("Could not create precompile VM")
+	}
+
+	return &ewasmPrecompile{vm: vm}
+}
+
+func (c *ewasmPrecompile) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+func (c *ewasmPrecompile) Run(input []byte) ([]byte, error) {
+	mem := c.vm.Memory()
+
+	/* Copy input into memory */
+	if len(input) > len(mem) {
+		return nil, fmt.Errorf("input size (%d) is greater than available memory (%d)", len(input), len(mem))
+	}
+
+	/* Run the contract */
+	ret, err := c.vm.ExecCode(0)
+	if err == nil {
+		if r, ok := ret.([]byte); ok {
+			return r, nil
+		}
+		return nil, fmt.Errorf("invalid return data in call to precompile")
+	}
+	return nil, err
 }
 
 // ECRECOVER implemented as a native contract.
