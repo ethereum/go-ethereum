@@ -407,9 +407,9 @@ func TestIndex_iterate(t *testing.T) {
 	})
 }
 
-// TestIndex_Count tests if Index.Count returns the correct
-// number of items.
-func TestIndex_Count(t *testing.T) {
+// TestIndex_count tests if Index.Count and Index.CountFrom
+// returns the correct number of items.
+func TestIndex_count(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
@@ -424,19 +424,19 @@ func TestIndex_Count(t *testing.T) {
 			Data:    []byte("data80"),
 		},
 		{
-			Address: []byte("iterate-hash-03"),
-			Data:    []byte("data22"),
-		},
-		{
-			Address: []byte("iterate-hash-05"),
-			Data:    []byte("data41"),
-		},
-		{
 			Address: []byte("iterate-hash-02"),
 			Data:    []byte("data84"),
 		},
 		{
-			Address: []byte("iterate-hash-06"),
+			Address: []byte("iterate-hash-03"),
+			Data:    []byte("data22"),
+		},
+		{
+			Address: []byte("iterate-hash-04"),
+			Data:    []byte("data41"),
+		},
+		{
+			Address: []byte("iterate-hash-05"),
 			Data:    []byte("data1"),
 		},
 	}
@@ -449,57 +449,111 @@ func TestIndex_Count(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := index.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := len(items)
-	if got != want {
-		t.Errorf("got %v items count, want %v", got, want)
-	}
-
-	// update the index with another item
-
-	item04 := Item{
-		Address: []byte("iterate-hash-04"),
-		Data:    []byte("data0"),
-	}
-	err = index.Put(item04)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err = index.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want = len(items) + 1
-	if got != want {
-		t.Errorf("got %v items count, want %v", got, want)
-	}
-
-	// delete some items
-
-	deleteCount := 3
-
-	for _, item := range items[:deleteCount] {
-		err := index.Delete(item)
+	t.Run("Count", func(t *testing.T) {
+		got, err := index.Count()
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
 
-	got, err = index.Count()
-	if err != nil {
-		t.Fatal(err)
-	}
+		want := len(items)
+		if got != want {
+			t.Errorf("got %v items count, want %v", got, want)
+		}
+	})
 
-	want = len(items) + 1 - deleteCount
-	if got != want {
-		t.Errorf("got %v items count, want %v", got, want)
-	}
+	t.Run("CountFrom", func(t *testing.T) {
+		got, err := index.CountFrom(Item{
+			Address: items[1].Address,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := len(items) - 1
+		if got != want {
+			t.Errorf("got %v items count, want %v", got, want)
+		}
+	})
+
+	// update the index with another item
+	t.Run("add item", func(t *testing.T) {
+		item04 := Item{
+			Address: []byte("iterate-hash-06"),
+			Data:    []byte("data0"),
+		}
+		err = index.Put(item04)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		count := len(items) + 1
+
+		t.Run("Count", func(t *testing.T) {
+			got, err := index.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			want := count
+			if got != want {
+				t.Errorf("got %v items count, want %v", got, want)
+			}
+		})
+
+		t.Run("CountFrom", func(t *testing.T) {
+			got, err := index.CountFrom(Item{
+				Address: items[1].Address,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			want := count - 1
+			if got != want {
+				t.Errorf("got %v items count, want %v", got, want)
+			}
+		})
+	})
+
+	// delete some items
+	t.Run("delete items", func(t *testing.T) {
+		deleteCount := 3
+
+		for _, item := range items[:deleteCount] {
+			err := index.Delete(item)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		count := len(items) + 1 - deleteCount
+
+		t.Run("Count", func(t *testing.T) {
+			got, err := index.Count()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			want := count
+			if got != want {
+				t.Errorf("got %v items count, want %v", got, want)
+			}
+		})
+
+		t.Run("CountFrom", func(t *testing.T) {
+			got, err := index.CountFrom(Item{
+				Address: items[deleteCount+1].Address,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			want := count - 1
+			if got != want {
+				t.Errorf("got %v items count, want %v", got, want)
+			}
+		})
+	})
 }
 
 // checkItem is a test helper function that compares if two Index items are the same.

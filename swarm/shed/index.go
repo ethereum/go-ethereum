@@ -277,3 +277,23 @@ func (f Index) Count() (count int, err error) {
 	}
 	return count, it.Error()
 }
+
+// CountFrom returns the number of items in index keys
+// starting from the key encoded from the provided Item.
+func (f Index) CountFrom(start Item) (count int, err error) {
+	startKey, err := f.encodeKeyFunc(start)
+	if err != nil {
+		return 0, err
+	}
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	for ok := it.Seek(startKey); ok; ok = it.Next() {
+		key := it.Key()
+		if key[0] != f.prefix[0] {
+			break
+		}
+		count++
+	}
+	return count, it.Error()
+}
