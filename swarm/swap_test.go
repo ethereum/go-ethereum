@@ -119,7 +119,6 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 		for _, id := range nodeIDs {
 			item, ok := sim.NodeItem(id, bucketKeySwarm)
 			if !ok {
-				log.Error("No swarm")
 				return errors.New("No swarm")
 			}
 			swarm := item.(*Swarm)
@@ -344,9 +343,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 			}
 			balancesMap[node] = subBalances
 		}
-
 		return nil
-
 	})
 
 	if result.Error != nil {
@@ -384,7 +381,7 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 	log.Debug("test terminated")
 }
 
-// uploadFile, uploads a short file to the swarm instance
+// uploadRandomFileSize, uploads a file of random size to the swarm instance
 // using the api.Put method.
 func uploadRandomFileSize(swarm *Swarm, size int) (storage.Address, string, error) {
 	b := make([]byte, size)
@@ -415,8 +412,6 @@ func retrieveForSwap(
 		files[i], files[j] = files[j], files[i]
 	})
 
-	lock := &sync.Mutex{}
-
 	nodeIDs := sim.UpNodeIDs()
 
 	totalFoundCount := uint64(0)
@@ -424,43 +419,34 @@ func retrieveForSwap(
 
 	for _, id := range nodeIDs {
 
-		waitGrp := sync.WaitGroup{}
 		swarm := sim.Service("swarm", id).(*Swarm)
 		for _, f := range files {
-			f := f
-			waitGrp.Add(1)
-			go func() {
-				defer waitGrp.Done()
-				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", totalFoundCount)
+			log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", totalFoundCount)
 
-				r, _, _, _, err := swarm.api.Get(context.TODO(), api.NOOPDecrypt, f.addr, "/")
-				if err != nil {
-					log.Error("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
-					return
-				}
-				d, err := ioutil.ReadAll(r)
-				if err != nil {
-					log.Error("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
-					return
-				}
-				data := string(d)
-				if data != f.data {
-					log.Error("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
-					return
-				}
-				log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", totalFoundCount)
+			r, _, _, _, err := swarm.api.Get(context.TODO(), api.NOOPDecrypt, f.addr, "/")
+			if err != nil {
+				log.Error("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+				return
+			}
+			d, err := ioutil.ReadAll(r)
+			if err != nil {
+				log.Error("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+				return
+			}
+			data := string(d)
+			if data != f.data {
+				log.Error("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
+				return
+			}
+			log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", totalFoundCount)
 
-				lock.Lock()
-				defer lock.Unlock()
-				totalFoundCount++
+			totalFoundCount++
 
-				log.Debug("status", "totalCheckCount", totalCheckCount, "totalFoundCount", totalFoundCount)
-			}()
+			log.Debug("status", "totalCheckCount", totalCheckCount, "totalFoundCount", totalFoundCount)
 		}
-		waitGrp.Wait()
 	}
 
-	log.Info("check stats", "total check count", totalCheckCount, "total files found", totalFoundCount)
+	log.Info("check stats", "total check count", totalCheckCount, "total files found", totalFoundCount, "missing", missing)
 
 	return totalCheckCount - totalFoundCount
 }
