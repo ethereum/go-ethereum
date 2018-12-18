@@ -7,18 +7,18 @@
 - http://www.amazon.co.uk/Swarmwise-Tactical-Manual-Changing-World/dp/1463533152/
 
 ## Docs & specs
-- TODO: https://github.com/ethereum/go-ethereum/wiki/Swarm---TODO
+- [Swarm TODO](Swarm---TODO)
 - Dani & Viktor on public wiki: https://github.com/ethereum/wiki/wiki/Distributed-Preimage-Archive
 - Dani on swarm hash: https://github.com/ethereum/wiki/wiki/Swarm-Hash
 - Dani on incentive system: https://github.com/ethersphere/swarm/blob/master/doc/incentives.md 
-- The swarm smart contract: https://github.com/ethereum/go-ethereum/wiki/Swarm-Contract
+- [The swarm smart contract](Swarm-Contract)
 - gav on url-hint https://github.com/ethereum/wiki/wiki/URL-Hint-Protocol
 - Gav on public wiki: https://github.com/ethereum/cpp-ethereum/wiki/Swarm
 - network (DEVp2p)
-  - https://github.com/ethereum/go-ethereum/wiki/Peer-to-Peer
-  - Ethereum node discovery protocol on UDP: https://github.com/ethereum/go-ethereum/wiki/RLPx-----Node-Discovery-Protocol
+  - [Peer-to-Peer](Peer-to-Peer)
+  - [Ethereum node discovery protocol on UDP](RLPx-----Node-Discovery-Protocol)
   - on kademlia: https://github.com/ethereum/wiki/wiki/Cademlia-Peer-Selection
-  - Multi-protocol peer selection https://github.com/ethereum/go-ethereum/wiki/Multi-protocol-peer-selection
+  - [Multi-protocol peer selection](Multi-protocol-peer-selection)
 
 ## Talks
 - https://twitter.com/ethereumproject/status/538030376858693633
