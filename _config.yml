@@ -5,8 +5,8 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - .gitignore
-
 layout: page
 navbar-links:
-  Home: ""
-  Documents: "/docs"
+  Home: "docs"
+  Documents: "docs"
+
