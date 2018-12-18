@@ -136,12 +136,9 @@ func TestSwapNetworkSymmetricFileUpload(t *testing.T) {
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		for {
-			//we use a special retrieve function for swap which is optimized for parallel requests
-			//but does not leave many cascaded requests floating around
-			if retrieveForSwap(sim, files) == 0 {
-				break
-			}
+		//we use a special retrieve function for swap which is optimized for parallel requests
+		//but does not leave many cascaded requests floating around
+		for retrieveForSwap(sim, files) != 0 {
 		}
 
 		//iterate all nodes
@@ -312,12 +309,9 @@ func TestSwapNetworkAsymmetricFileUpload(t *testing.T) {
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
-		for {
-			//we use a special retrieve function for swap which is optimized for parallel requests
-			//but does not leave many cascaded requests floating around
-			if retrieveForSwap(sim, files) == 0 {
-				break
-			}
+		//we use a special retrieve function for swap which is optimized for parallel requests
+		//but does not leave many cascaded requests floating around
+		for retrieveForSwap(sim, files) != 0 {
 		}
 
 		for _, node := range sim.NodeIDs() {
