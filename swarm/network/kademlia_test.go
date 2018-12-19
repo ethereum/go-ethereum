@@ -168,65 +168,65 @@ func TestHealthStrict(t *testing.T) {
 	// no peers
 	// unhealthy (and lonely)
 	k := newTestKademlia("11111111")
-	checkHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// know one peer but not connected
 	// unhealthy
 	Register(k, "11100000")
 	log.Trace(k.String())
-	checkHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// know one peer and connected
 	// healthy
 	On(k, "11100000")
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// know two peers, only one connected
 	// unhealthy
 	Register(k, "11111100")
 	log.Trace(k.String())
-	checkHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// know two peers and connected to both
 	// healthy
 	On(k, "11111100")
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// know three peers, connected to the two deepest
 	// healthy
 	Register(k, "00000000")
 	log.Trace(k.String())
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// know three peers, connected to all three
 	// healthy
 	On(k, "00000000")
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// add fourth peer deeper than current depth
 	// unhealthy
 	Register(k, "11110000")
 	log.Trace(k.String())
-	checkHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// connected to three deepest peers
 	// healthy
 	On(k, "11110000")
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// add additional peer in same bin as deepest peer
 	// unhealthy
 	Register(k, "11111101")
 	log.Trace(k.String())
-	checkHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// four deepest of five peers connected
 	// healthy
 	On(k, "11111101")
-	checkHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 }
 
-func checkHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturation bool) {
+func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturation bool) {
 	t.Helper()
 	kid := common.Bytes2Hex(k.BaseAddr())
 	addrs := [][]byte{k.BaseAddr()}
