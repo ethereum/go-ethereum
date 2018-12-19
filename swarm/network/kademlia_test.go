@@ -32,10 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
-var (
-	printResults = flag.Bool("print", false, "print results for the EachBin test")
-)
-
 func init() {
 	h := log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
 	log.Root().SetHandler(h)
@@ -1037,14 +1033,11 @@ func TestEachBin(t *testing.T) {
 		}
 	}
 
-	if *printResults {
-		for p, subs := range fakeSubscriptions {
-			fmt.Println(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
-			fmt.Print("...")
-			for _, bin := range subs {
-				fmt.Print(fmt.Sprintf("%d,", bin))
-			}
-			fmt.Println("")
+	//print some output
+	for p, subs := range fakeSubscriptions {
+		log.Debug(fmt.Sprintf("Peer %s has the following fake subscriptions: ", p))
+		for _, bin := range subs {
+			log.Debug(fmt.Sprintf("%d,", bin))
 		}
 	}
 }
