@@ -202,118 +202,51 @@ func (f Index) DeleteInBatch(batch *leveldb.Batch, keyFields Item) (err error) {
 // propagated to the called iterator method on Index.
 type IndexIterFunc func(item Item) (stop bool, err error)
 
-// IterateAll iterates over all keys of the Index.
-func (f Index) IterateAll(fn IndexIterFunc) (err error) {
-	it := f.db.NewIterator()
-	defer it.Release()
-
-	for ok := it.Seek(f.prefix); ok; ok = it.Next() {
-		key := it.Key()
-		if key[0] != f.prefix[0] {
-			break
-		}
-		keyItem, err := f.decodeKeyFunc(key)
-		if err != nil {
-			return err
-		}
-		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
-		if err != nil {
-			return err
-		}
-		stop, err := fn(keyItem.Merge(valueItem))
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
-	}
-	return it.Error()
+// IterateOptions defines optional parameters for Iterate function.
+type IterateOptions struct {
+	// StartFrom is the Item to start the iteration from.
+	StartFrom *Item
+	// If SkipStartFromItem is true, StartFrom item will not
+	// be iterated on.
+	SkipStartFromItem bool
+	// Iterate over items which keys have a common prefix.
+	Prefix []byte
 }
 
-// IterateFrom iterates over Index keys starting from the key
-// encoded from the provided Item.
-func (f Index) IterateFrom(start Item, fn IndexIterFunc) (err error) {
-	startKey, err := f.encodeKeyFunc(start)
-	if err != nil {
-		return err
+// Iterate function iterates over keys of the Index.
+// If IterateOptions is nil, the iterations is over all keys.
+func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
+	if options == nil {
+		options = new(IterateOptions)
+	}
+	// construct a prefix with Index prefix and optional common key prefix
+	prefix := append(f.prefix, options.Prefix...)
+	// start from the prefix
+	startKey := prefix
+	if options.StartFrom != nil {
+		// start from the provided StartFrom Item key value
+		startKey, err = f.encodeKeyFunc(*options.StartFrom)
+		if err != nil {
+			return err
+		}
 	}
 	it := f.db.NewIterator()
 	defer it.Release()
 
-	for ok := it.Seek(startKey); ok; ok = it.Next() {
-		key := it.Key()
-		if key[0] != f.prefix[0] {
-			break
-		}
-		keyItem, err := f.decodeKeyFunc(key)
-		if err != nil {
-			return err
-		}
-		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
-		if err != nil {
-			return err
-		}
-		stop, err := fn(keyItem.Merge(valueItem))
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
+	// move the cursor to the start key
+	ok := it.Seek(startKey)
+	if !ok {
+		// stop iterator if seek has failed
+		return it.Error()
 	}
-	return it.Error()
-}
-
-// IterateWithPrefix iterates over all keys of the Index that have
-// a common prefix.
-func (f Index) IterateWithPrefix(prefix []byte, fn IndexIterFunc) (err error) {
-	it := f.db.NewIterator()
-	defer it.Release()
-
-	// construct complete prefix with index prefix
-	p := append(f.prefix, prefix...)
-
-	for ok := it.Seek(p); ok; ok = it.Next() {
-		key := it.Key()
-		if !bytes.HasPrefix(key, p) {
-			break
-		}
-		keyItem, err := f.decodeKeyFunc(key)
-		if err != nil {
-			return err
-		}
-		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
-		if err != nil {
-			return err
-		}
-		stop, err := fn(keyItem.Merge(valueItem))
-		if err != nil {
-			return err
-		}
-		if stop {
-			break
-		}
+	if options.SkipStartFromItem && bytes.Equal(startKey, it.Key()) {
+		// skip the start from Item if it is the first key
+		// and it is explicitly configured to skip it
+		ok = it.Next()
 	}
-	return it.Error()
-}
-
-// IterateWithPrefixFrom iterates over Index keys that have a common prefix,
-// starting from the key encoded from the provided start Item.
-func (f Index) IterateWithPrefixFrom(prefix []byte, start Item, fn IndexIterFunc) (err error) {
-	startKey, err := f.encodeKeyFunc(start)
-	if err != nil {
-		return err
-	}
-	it := f.db.NewIterator()
-	defer it.Release()
-
-	// construct complete prefix with index prefix
-	p := append(f.prefix, prefix...)
-
-	for ok := it.Seek(startKey); ok; ok = it.Next() {
+	for ; ok; ok = it.Next() {
 		key := it.Key()
-		if !bytes.HasPrefix(key, p) {
+		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
 		keyItem, err := f.decodeKeyFunc(key)
