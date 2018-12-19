@@ -111,6 +111,8 @@ type Options struct {
 	// Capacity is a limit that triggers garbage collection when
 	// number of items in gcIndex equals or exceeds it.
 	Capacity int64
+	// MetricsPrefix defines a prefix for metrics names.
+	MetricsPrefix string
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -138,7 +140,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		db.updateGCSem = make(chan struct{}, maxParallelUpdateGC)
 	}
 
-	db.shed, err = shed.NewDB(path)
+	db.shed, err = shed.NewDB(path, o.MetricsPrefix)
 	if err != nil {
 		return nil, err
 	}
