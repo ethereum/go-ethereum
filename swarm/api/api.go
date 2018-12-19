@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
@@ -417,7 +416,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 				return reader, mimeType, status, nil, err
 			}
 			// get the data of the update
-			_, rsrcData, err := a.feed.GetContent(entry.Feed)
+			_, contentAddr, err := a.feed.GetContent(entry.Feed)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -425,23 +424,23 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 				return reader, mimeType, status, nil, err
 			}
 
-			// extract multihash
-			decodedMultihash, err := multihash.FromMultihash(rsrcData)
-			if err != nil {
+			// extract content hash
+			if len(contentAddr) != storage.AddressLength {
 				apiGetInvalid.Inc(1)
 				status = http.StatusUnprocessableEntity
-				log.Warn("invalid multihash in feed update", "err", err)
-				return reader, mimeType, status, nil, err
+				errorMessage := fmt.Sprintf("invalid swarm hash in feed update. Expected %d bytes. Got %d", storage.AddressLength, len(contentAddr))
+				log.Warn(errorMessage)
+				return reader, mimeType, status, nil, errors.New(errorMessage)
 			}
-			manifestAddr = storage.Address(decodedMultihash)
-			log.Trace("feed update contains multihash", "key", manifestAddr)
+			manifestAddr = storage.Address(contentAddr)
+			log.Trace("feed update contains swarm hash", "key", manifestAddr)
 
-			// get the manifest the multihash digest points to
+			// get the manifest the swarm hash points to
 			trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, NOOPDecrypt)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
-				log.Warn(fmt.Sprintf("loadManifestTrie (feed update multihash) error: %v", err))
+				log.Warn(fmt.Sprintf("loadManifestTrie (feed update) error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
 
@@ -451,8 +450,8 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			if entry == nil {
 				status = http.StatusNotFound
 				apiGetNotFound.Inc(1)
-				err = fmt.Errorf("manifest (feed update multihash) entry for '%s' not found", path)
-				log.Trace("manifest (feed update multihash) entry not found", "key", manifestAddr, "path", path)
+				err = fmt.Errorf("manifest (feed update) entry for '%s' not found", path)
+				log.Trace("manifest (feed update) entry not found", "key", manifestAddr, "path", path)
 				return reader, mimeType, status, nil, err
 			}
 		}
@@ -472,7 +471,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
-		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		err = fmt.Errorf("Not found: could not find resource '%s'", path)
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return

@@ -151,7 +151,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 	}
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
-		// spec and we send it ourself if the posthanshake checks fail.
+		// spec and we send it ourself if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
 		var reason [1]DiscReason

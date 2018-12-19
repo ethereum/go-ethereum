@@ -39,6 +39,7 @@ const (
 var (
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.stream.handle_retrieve_request_msg.count", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network.stream.retrieve_chunks_fail.count", nil)
 
 	requestFromPeersCount     = metrics.NewRegisteredCounter("network.stream.request_from_peers.count", nil)
 	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
@@ -169,7 +170,8 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	go func() {
 		chunk, err := d.chunkStore.Get(ctx, req.Addr)
 		if err != nil {
-			log.Warn("ChunkStore.Get can not retrieve chunk", "err", err)
+			retrieveChunkFail.Inc(1)
+			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
 			return
 		}
 		if req.SkipCheck {
@@ -245,14 +247,17 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	} else {
 		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int, nn bool) bool {
 			id := p.ID()
-			// TODO: skip light nodes that do not accept retrieve requests
+			if p.LightNode {
+				// skip light nodes
+				return true
+			}
 			if req.SkipPeer(id.String()) {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
 			}
 			sp = d.getPeer(id)
 			if sp == nil {
-				log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
+				//log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
 				return true
 			}
 			spID = &id

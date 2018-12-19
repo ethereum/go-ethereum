@@ -171,8 +171,10 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 }
 
 // fromChunk populates this structure from chunk data. It does not verify the signature is valid.
-func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
+func (r *Request) fromChunk(chunk storage.Chunk) error {
 	// for update chunk layout see Request definition
+
+	chunkdata := chunk.Data()
 
 	//deserialize the feed update portion
 	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
@@ -189,7 +191,7 @@ func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error 
 	}
 
 	r.Signature = signature
-	r.idAddr = updateAddr
+	r.idAddr = chunk.Address()
 	r.binaryData = chunkdata
 
 	return nil

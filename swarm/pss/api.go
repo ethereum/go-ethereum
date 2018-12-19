@@ -51,7 +51,7 @@ func NewAPI(ps *Pss) *API {
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg
 // struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic, raw bool, prox bool) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -59,7 +59,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 
 	psssub := notifier.CreateSubscription()
 
-	handler := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+	hndlr := NewHandler(func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		apimsg := &APIMsg{
 			Msg:        hexutil.Bytes(msg),
 			Asymmetric: asymmetric,
@@ -69,9 +69,15 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
 		}
 		return nil
+	})
+	if raw {
+		hndlr.caps.raw = true
+	}
+	if prox {
+		hndlr.caps.prox = true
 	}
 
-	deregf := pssapi.Register(&topic, handler)
+	deregf := pssapi.Register(&topic, hndlr)
 	go func() {
 		defer deregf()
 		select {
@@ -86,7 +92,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 }
 
 func (pssapi *API) GetAddress(topic Topic, asymmetric bool, key string) (PssAddress, error) {
-	var addr *PssAddress
+	var addr PssAddress
 	if asymmetric {
 		peer, ok := pssapi.Pss.pubKeyPool[key][topic]
 		if !ok {
@@ -101,7 +107,7 @@ func (pssapi *API) GetAddress(topic Topic, asymmetric bool, key string) (PssAddr
 		addr = peer.address
 
 	}
-	return *addr, nil
+	return addr, nil
 }
 
 // Retrieves the node's base address in hex form
@@ -122,7 +128,7 @@ func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssA
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkey)
 	}
-	err = pssapi.Pss.SetPeerPublicKey(pk, topic, &addr)
+	err = pssapi.Pss.SetPeerPublicKey(pk, topic, addr)
 	if err != nil {
 		return fmt.Errorf("Invalid key: %x", pk)
 	}
@@ -135,11 +141,11 @@ func (pssapi *API) GetSymmetricKey(symkeyid string) (hexutil.Bytes, error) {
 }
 
 func (pssapi *API) GetSymmetricAddressHint(topic Topic, symkeyid string) (PssAddress, error) {
-	return *pssapi.Pss.symKeyPool[symkeyid][topic].address, nil
+	return pssapi.Pss.symKeyPool[symkeyid][topic].address, nil
 }
 
 func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAddress, error) {
-	return *pssapi.Pss.pubKeyPool[pubkeyid][topic].address, nil
+	return pssapi.Pss.pubKeyPool[pubkeyid][topic].address, nil
 }
 
 func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
@@ -151,11 +157,24 @@ func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 }
 
 func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	if err := validateMsg(msg); err != nil {
+		return err
+	}
 	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
 }
 
 func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	if err := validateMsg(msg); err != nil {
+		return err
+	}
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
+}
+
+func (pssapi *API) SendRaw(addr hexutil.Bytes, topic Topic, msg hexutil.Bytes) error {
+	if err := validateMsg(msg); err != nil {
+		return err
+	}
+	return pssapi.Pss.SendRaw(PssAddress(addr), topic, msg[:])
 }
 
 func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
@@ -166,4 +185,11 @@ func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
 
 func (pssapi *API) GetPeerAddress(pubkeyhex string, topic Topic) (PssAddress, error) {
 	return pssapi.Pss.getPeerAddress(pubkeyhex, topic)
+}
+
+func validateMsg(msg []byte) error {
+	if len(msg) == 0 {
+		return errors.New("invalid message length")
+	}
+	return nil
 }

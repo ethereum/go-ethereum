@@ -765,6 +765,8 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
 	tester, streamer, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval:      RetrievalDisabled,
+		Syncing:        SyncingDisabled,
 		MaxPeerServers: maxPeerServers,
 	})
 	defer teardown()

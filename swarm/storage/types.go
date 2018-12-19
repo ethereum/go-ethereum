@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -185,9 +184,6 @@ func (c AddressCollection) Swap(i, j int) {
 // Chunk interface implemented by context.Contexts and data chunks
 type Chunk interface {
 	Address() Address
-	Payload() []byte
-	SpanBytes() []byte
-	Span() int64
 	Data() []byte
 }
 
@@ -209,23 +205,8 @@ func (c *chunk) Address() Address {
 	return c.addr
 }
 
-func (c *chunk) SpanBytes() []byte {
-	return c.sdata[:8]
-}
-
-func (c *chunk) Span() int64 {
-	if c.span == -1 {
-		c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-	}
-	return c.span
-}
-
 func (c *chunk) Data() []byte {
 	return c.sdata
-}
-
-func (c *chunk) Payload() []byte {
-	return c.sdata[8:]
 }
 
 // String() for pretty printing
@@ -244,24 +225,11 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	if dataSize > ch.DefaultSize {
-		dataSize = ch.DefaultSize
-	}
 	for i := 0; i < count; i++ {
-		ch := GenerateRandomChunk(ch.DefaultSize)
+		ch := GenerateRandomChunk(dataSize)
 		chunks = append(chunks, ch)
 	}
 	return chunks
-}
-
-func GenerateRandomData(l int) (r io.Reader, slice []byte) {
-	slice, err := ioutil.ReadAll(io.LimitReader(rand.Reader, int64(l)))
-	if err != nil {
-		panic("rand error")
-	}
-	// log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
-	r = io.LimitReader(bytes.NewReader(slice), int64(l))
-	return r, slice
 }
 
 // Size, Seek, Read, ReadAt
@@ -341,7 +309,7 @@ func (c ChunkData) Data() []byte {
 }
 
 type ChunkValidator interface {
-	Validate(addr Address, data []byte) bool
+	Validate(chunk Chunk) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -358,7 +326,8 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
+	data := chunk.Data()
 	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
@@ -369,7 +338,7 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	return bytes.Equal(hash, addr[:])
+	return bytes.Equal(hash, chunk.Address())
 }
 
 type ChunkStore interface {

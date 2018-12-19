@@ -16,29 +16,32 @@
 
 package protocols
 
-import "github.com/ethereum/go-ethereum/metrics"
+import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
+)
 
 //define some metrics
 var (
-	//NOTE: these metrics just define the interfaces and are currently *NOT persisted* over sessions
 	//All metrics are cumulative
 
 	//total amount of units credited
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", nil)
+	mBalanceCredit metrics.Counter
 	//total amount of units debited
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", nil)
+	mBalanceDebit metrics.Counter
 	//total amount of bytes credited
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", nil)
+	mBytesCredit metrics.Counter
 	//total amount of bytes debited
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", nil)
+	mBytesDebit metrics.Counter
 	//total amount of credited messages
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", nil)
+	mMsgCredit metrics.Counter
 	//total amount of debited messages
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", nil)
+	mMsgDebit metrics.Counter
 	//how many times local node had to drop remote peers
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", nil)
+	mPeerDrops metrics.Counter
 	//how many times local node overdrafted and dropped
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", nil)
+	mSelfDrops metrics.Counter
 )
 
 //Prices defines how prices are being passed on to the accounting instance
@@ -103,6 +106,26 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 		Balance: balance,
 	}
 	return ah
+}
+
+//SetupAccountingMetrics creates a separate registry for p2p accounting metrics;
+//this registry should be independent of any other metrics as it persists at different endpoints.
+//It also instantiates the given metrics and starts the persisting go-routine which
+//at the passed interval writes the metrics to a LevelDB
+func SetupAccountingMetrics(reportInterval time.Duration, path string) *AccountingMetrics {
+	//create an empty registry
+	registry := metrics.NewRegistry()
+	//instantiate the metrics
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", registry)
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", registry)
+	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", registry)
+	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", registry)
+	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", registry)
+	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", registry)
+	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", registry)
+	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", registry)
+	//create the DB and start persisting
+	return NewAccountingMetrics(registry, reportInterval, path)
 }
 
 //Implement Hook.Send

@@ -87,12 +87,12 @@ func TestEventId(t *testing.T) {
 	}{
 		{
 			definition: `[
-			{ "type" : "event", "name" : "balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
-			{ "type" : "event", "name" : "check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] }
+			{ "type" : "event", "name" : "Balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] }
 			]`,
 			expectations: map[string]common.Hash{
-				"balance": crypto.Keccak256Hash([]byte("balance(uint256)")),
-				"check":   crypto.Keccak256Hash([]byte("check(address,uint256)")),
+				"Balance": crypto.Keccak256Hash([]byte("Balance(uint256)")),
+				"Check":   crypto.Keccak256Hash([]byte("Check(address,uint256)")),
 			},
 		},
 	}
@@ -106,6 +106,39 @@ func TestEventId(t *testing.T) {
 		for name, event := range abi.Events {
 			if event.Id() != test.expectations[name] {
 				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.Id())
+			}
+		}
+	}
+}
+
+func TestEventString(t *testing.T) {
+	var table = []struct {
+		definition   string
+		expectations map[string]string
+	}{
+		{
+			definition: `[
+			{ "type" : "event", "name" : "Balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] },
+			{ "type" : "event", "name" : "Transfer", "inputs": [{ "name": "from", "type": "address", "indexed": true }, { "name": "to", "type": "address", "indexed": true }, { "name": "value", "type": "uint256" }] }
+			]`,
+			expectations: map[string]string{
+				"Balance":  "event Balance(uint256 in)",
+				"Check":    "event Check(address t, uint256 b)",
+				"Transfer": "event Transfer(address indexed from, address indexed to, uint256 value)",
+			},
+		},
+	}
+
+	for _, test := range table {
+		abi, err := JSON(strings.NewReader(test.definition))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for name, event := range abi.Events {
+			if event.String() != test.expectations[name] {
+				t.Errorf("expected string to be %s, got %s", test.expectations[name], event.String())
 			}
 		}
 	}

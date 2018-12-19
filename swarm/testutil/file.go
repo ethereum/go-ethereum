@@ -17,8 +17,10 @@
 package testutil
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -41,4 +43,23 @@ func TempFileWithContent(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return tempFile.Name()
+}
+
+// RandomBytes returns pseudo-random deterministic result
+// because test fails must be reproducible
+func RandomBytes(seed, length int) []byte {
+	b := make([]byte, length)
+	reader := rand.New(rand.NewSource(int64(seed)))
+	for n := 0; n < length; {
+		read, err := reader.Read(b[n:])
+		if err != nil {
+			panic(err)
+		}
+		n += read
+	}
+	return b
+}
+
+func RandomReader(seed, length int) *bytes.Reader {
+	return bytes.NewReader(RandomBytes(seed, length))
 }

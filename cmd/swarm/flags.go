@@ -88,7 +88,7 @@ var (
 	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
-		Usage: "Swarm HTTP endpoint",
+		Usage: "Specifies the Swarm HTTP endpoint to connect to",
 		Value: "http://127.0.0.1:8500",
 	}
 	SwarmRecursiveFlag = cli.BoolFlag{

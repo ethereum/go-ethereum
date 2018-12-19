@@ -14,65 +14,69 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package simulation
+package simulations
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+var (
+	ErrNodeNotFound = errors.New("node not found")
+	ErrNoPivotNode  = errors.New("no pivot node set")
+)
+
 // ConnectToPivotNode connects the node with provided NodeID
-// to the pivot node, already set by Simulation.SetPivotNode method.
+// to the pivot node, already set by Network.SetPivotNode method.
 // It is useful when constructing a star network topology
-// when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToPivotNode(id enode.ID) (err error) {
-	pid := s.PivotNodeID()
-	if pid == nil {
+// when Network adds and removes nodes dynamically.
+func (net *Network) ConnectToPivotNode(id enode.ID) (err error) {
+	pivot := net.GetPivotNode()
+	if pivot == nil {
 		return ErrNoPivotNode
 	}
-	return s.connect(*pid, id)
+	return net.connect(pivot.ID(), id)
 }
 
 // ConnectToLastNode connects the node with provided NodeID
 // to the last node that is up, and avoiding connection to self.
 // It is useful when constructing a chain network topology
-// when simulation adds and removes nodes dynamically.
-func (s *Simulation) ConnectToLastNode(id enode.ID) (err error) {
-	ids := s.UpNodeIDs()
+// when Network adds and removes nodes dynamically.
+func (net *Network) ConnectToLastNode(id enode.ID) (err error) {
+	ids := net.getUpNodeIDs()
 	l := len(ids)
 	if l < 2 {
 		return nil
 	}
-	lid := ids[l-1]
-	if lid == id {
-		lid = ids[l-2]
+	last := ids[l-1]
+	if last == id {
+		last = ids[l-2]
 	}
-	return s.connect(lid, id)
+	return net.connect(last, id)
 }
 
-// ConnectToRandomNode connects the node with provieded NodeID
+// ConnectToRandomNode connects the node with provided NodeID
 // to a random node that is up.
-func (s *Simulation) ConnectToRandomNode(id enode.ID) (err error) {
-	n := s.RandomUpNode(id)
-	if n == nil {
+func (net *Network) ConnectToRandomNode(id enode.ID) (err error) {
+	selected := net.GetRandomUpNode(id)
+	if selected == nil {
 		return ErrNodeNotFound
 	}
-	return s.connect(n.ID, id)
+	return net.connect(selected.ID(), id)
 }
 
 // ConnectNodesFull connects all nodes one to another.
 // It provides a complete connectivity in the network
 // which should be rarely needed.
-func (s *Simulation) ConnectNodesFull(ids []enode.ID) (err error) {
+func (net *Network) ConnectNodesFull(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
-	l := len(ids)
-	for i := 0; i < l; i++ {
-		for j := i + 1; j < l; j++ {
-			err = s.connect(ids[i], ids[j])
-			if err != nil {
+	for i, lid := range ids {
+		for _, rid := range ids[i+1:] {
+			if err = net.connect(lid, rid); err != nil {
 				return err
 			}
 		}
@@ -82,14 +86,13 @@ func (s *Simulation) ConnectNodesFull(ids []enode.ID) (err error) {
 
 // ConnectNodesChain connects all nodes in a chain topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesChain(ids []enode.ID) (err error) {
+func (net *Network) ConnectNodesChain(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	for i := 0; i < l-1; i++ {
-		err = s.connect(ids[i], ids[i+1])
-		if err != nil {
+		if err := net.connect(ids[i], ids[i+1]); err != nil {
 			return err
 		}
 	}
@@ -98,37 +101,32 @@ func (s *Simulation) ConnectNodesChain(ids []enode.ID) (err error) {
 
 // ConnectNodesRing connects all nodes in a ring topology.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesRing(ids []enode.ID) (err error) {
+func (net *Network) ConnectNodesRing(ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
 	l := len(ids)
 	if l < 2 {
 		return nil
 	}
-	for i := 0; i < l-1; i++ {
-		err = s.connect(ids[i], ids[i+1])
-		if err != nil {
-			return err
-		}
+	if err := net.ConnectNodesChain(ids); err != nil {
+		return err
 	}
-	return s.connect(ids[l-1], ids[0])
+	return net.connect(ids[l-1], ids[0])
 }
 
 // ConnectNodesStar connects all nodes in a star topology
 // with the center at provided NodeID.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
+func (net *Network) ConnectNodesStar(pivot enode.ID, ids []enode.ID) (err error) {
 	if ids == nil {
-		ids = s.UpNodeIDs()
+		ids = net.getUpNodeIDs()
 	}
-	l := len(ids)
-	for i := 0; i < l; i++ {
-		if id == ids[i] {
+	for _, id := range ids {
+		if pivot == id {
 			continue
 		}
-		err = s.connect(id, ids[i])
-		if err != nil {
+		if err := net.connect(pivot, id); err != nil {
 			return err
 		}
 	}
@@ -138,17 +136,17 @@ func (s *Simulation) ConnectNodesStar(id enode.ID, ids []enode.ID) (err error) {
 // ConnectNodesStarPivot connects all nodes in a star topology
 // with the center at already set pivot node.
 // If ids argument is nil, all nodes that are up will be connected.
-func (s *Simulation) ConnectNodesStarPivot(ids []enode.ID) (err error) {
-	id := s.PivotNodeID()
-	if id == nil {
+func (net *Network) ConnectNodesStarPivot(ids []enode.ID) (err error) {
+	pivot := net.GetPivotNode()
+	if pivot == nil {
 		return ErrNoPivotNode
 	}
-	return s.ConnectNodesStar(*id, ids)
+	return net.ConnectNodesStar(pivot.ID(), ids)
 }
 
 // connect connects two nodes but ignores already connected error.
-func (s *Simulation) connect(oneID, otherID enode.ID) error {
-	return ignoreAlreadyConnectedErr(s.Net.Connect(oneID, otherID))
+func (net *Network) connect(oneID, otherID enode.ID) error {
+	return ignoreAlreadyConnectedErr(net.Connect(oneID, otherID))
 }
 
 func ignoreAlreadyConnectedErr(err error) error {
@@ -156,4 +154,23 @@ func ignoreAlreadyConnectedErr(err error) error {
 		return nil
 	}
 	return err
+}
+
+// SetPivotNode sets the NodeID of the network's pivot node.
+// Pivot node is just a specific node that should be treated
+// differently then other nodes in test. SetPivotNode and
+// GetPivotNode are just a convenient functions to set and
+// retrieve it.
+func (net *Network) SetPivotNode(id enode.ID) {
+	net.lock.Lock()
+	defer net.lock.Unlock()
+	net.pivotNodeID = id
+}
+
+// GetPivotNode returns NodeID of the pivot node set by
+// Network.SetPivotNode method.
+func (net *Network) GetPivotNode() (node *Node) {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+	return net.getNode(net.pivotNodeID)
 }
