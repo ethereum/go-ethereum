@@ -886,14 +886,9 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	return nil
 }
 
-// sendMessage is a helper function that tries to send a message and returns true on success
-// It is set in the init function for usage in production, and optionally overridden in tests
-// for data validation.
-var sendMessage func(p *Pss, sp *network.Peer, msg *PssMsg) bool
-
-func init() {
-	sendMessage = sendMessageProd
-}
+// sendFunc is a helper function that tries to send a message and returns true on success.
+// It is set here for usage in production, and optionally overridden in tests.
+var sendFunc func(p *Pss, sp *network.Peer, msg *PssMsg) bool = sendMessageProd
 
 // tries to send a message, returns true if successful
 func sendMessageProd(p *Pss, sp *network.Peer, msg *PssMsg) bool {
@@ -954,19 +949,25 @@ func (p *Pss) forward(msg *PssMsg) error {
 		broadcastThreshold = luminosityRadius
 	}
 
+	var onlySendOnce bool // indicates if the message should only be sent to one peer with closest address
+
 	// if measured from the recipient address as opposed to the base address (see Kademlia.EachConn
 	// call below), then peers that fall in the same proximity bin as recipient address will appear
 	// [at least] one bit closer, but only if these additional bits are given in the recipient address.
 	if broadcastThreshold < luminosityRadius && broadcastThreshold < neighbourhoodDepth {
 		broadcastThreshold++
+		onlySendOnce = true
 	}
 
 	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
-		if sendMessage(p, sp, msg) {
+		if sendFunc(p, sp, msg) {
 			sent++
+			if onlySendOnce {
+				return false
+			}
 			if po == addressLength*8 {
 				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
 				return false
