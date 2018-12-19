@@ -18,7 +18,7 @@
 // more complex operations on storage data organized in fields and indexes.
 //
 // Only type which holds logical information about swarm storage chunks data
-// and metadata is IndexItem. This part is not generalized mostly for
+// and metadata is Item. This part is not generalized mostly for
 // performance reasons.
 package shed
 
