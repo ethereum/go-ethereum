@@ -381,10 +381,13 @@ func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp
 func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 	return func(t *testing.T) {
 		var c int
-		i.IterateAll(func(item shed.Item) (stop bool, err error) {
+		err := i.Iterate(func(item shed.Item) (stop bool, err error) {
 			c++
 			return
-		})
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if c != want {
 			t.Errorf("got %v items in index, want %v", c, want)
 		}
@@ -396,10 +399,13 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 	return func(t *testing.T) {
 		var want int64
-		db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			want++
 			return
-		})
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 		got := atomic.LoadInt64(&db.gcSize)
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
@@ -424,7 +430,7 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 	}
 
 	var cursor int
-	err := i.IterateAll(func(item shed.Item) (stop bool, err error) {
+	err := i.Iterate(func(item shed.Item) (stop bool, err error) {
 		want := chunks[cursor].Address()
 		got := item.Address
 		if !bytes.Equal(got, want) {
@@ -432,7 +438,7 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 		}
 		cursor++
 		return false, nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

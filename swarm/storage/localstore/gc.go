@@ -78,7 +78,7 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 	target := db.gcTarget()
 
 	done = true
-	err = db.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		gcSize := atomic.LoadInt64(&db.gcSize)
 		if gcSize-collectedCount <= target {
 			return true, nil
@@ -96,7 +96,7 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 			return true, nil
 		}
 		return false, nil
-	})
+	}, nil)
 	if err != nil {
 		return 0, false, err
 	}
@@ -183,7 +183,7 @@ func (db *DB) writeGCSize(gcSize int64) (err error) {
 	// use only one iterator as it acquires its snapshot
 	// not to remove hashes from index that are added
 	// after stored gc size is written
-	err = db.gcUncountedHashesIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+	err = db.gcUncountedHashesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
 		batchSize++
 		if batchSize >= maxBatchSize {
@@ -195,7 +195,7 @@ func (db *DB) writeGCSize(gcSize int64) (err error) {
 			batchSize = 0
 		}
 		return false, nil
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}
