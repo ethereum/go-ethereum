@@ -168,7 +168,7 @@ func TestHealthStrict(t *testing.T) {
 	// no peers
 	// unhealthy (and lonely)
 	k := newTestKademlia("11111111")
-	if err := assertHealth(t, k, false, false); err != nil {
+	if err := assertHealth(k, false, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -176,14 +176,14 @@ func TestHealthStrict(t *testing.T) {
 	// unhealthy
 	Register(k, "11100000")
 	log.Trace(k.String())
-	if err := assertHealth(t, k, false, false); err != nil {
+	if err := assertHealth(k, false, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know one peer and connected
 	// healthy
 	On(k, "11100000")
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,14 +191,14 @@ func TestHealthStrict(t *testing.T) {
 	// unhealthy
 	Register(k, "11111100")
 	log.Trace(k.String())
-	if err := assertHealth(t, k, false, false); err != nil {
+	if err := assertHealth(k, false, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know two peers and connected to both
 	// healthy
 	On(k, "11111100")
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,14 +206,14 @@ func TestHealthStrict(t *testing.T) {
 	// healthy
 	Register(k, "00000000")
 	log.Trace(k.String())
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know three peers, connected to all three
 	// healthy
 	On(k, "00000000")
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -221,14 +221,14 @@ func TestHealthStrict(t *testing.T) {
 	// unhealthy
 	Register(k, "11110000")
 	log.Trace(k.String())
-	if err := assertHealth(t, k, false, false); err != nil {
+	if err := assertHealth(k, false, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// connected to three deepest peers
 	// healthy
 	On(k, "11110000")
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,19 +236,19 @@ func TestHealthStrict(t *testing.T) {
 	// unhealthy
 	Register(k, "11111101")
 	log.Trace(k.String())
-	if err := assertHealth(t, k, false, false); err != nil {
+	if err := assertHealth(k, false, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// four deepest of five peers connected
 	// healthy
 	On(k, "11111101")
-	if err := assertHealth(t, k, true, false); err != nil {
+	if err := assertHealth(k, true, false); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturation bool) error {
+func assertHealth(k *Kademlia, expectHealthy bool, expectSaturation bool) error {
 	kid := common.Bytes2Hex(k.BaseAddr())
 	addrs := [][]byte{k.BaseAddr()}
 	k.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
