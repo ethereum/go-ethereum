@@ -355,7 +355,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			currentHeader := eth.blockchain.CurrentHeader()
 			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
 			if err != nil {
-				log.Error("Can't get snapshot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex())
+				log.Error("Can't get snapshot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex(), "err", err)
 				return false
 			}
 			if _, ok := snap.Signers[address]; ok {
