@@ -156,6 +156,8 @@ func (db *DB) writeGCSizeWorker() {
 			if err != nil {
 				log.Error("localstore write gc size", "err", err)
 			}
+			// Wait some time before writting gc size in the next
+			// iteration. This prevents frequent I/O operations.
 			select {
 			case <-time.After(writeGCSizeDelay):
 			case <-db.close:
