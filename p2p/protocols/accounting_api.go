@@ -20,6 +20,15 @@ func NewAccountingApi(m *AccountingMetrics) *AccountingApi {
 	return &AccountingApi{m}
 }
 
+// Balance returns local node balance (units credited - units debited)
+func (self *AccountingApi) Balance() (int64, error) {
+	if self.metrics == nil {
+		return 0, errNoAccountingMetrics
+	}
+	balance := mBalanceCredit.Count() - mBalanceDebit.Count()
+	return balance, nil
+}
+
 // BalanceCredit returns total amount of units credited by local node
 func (self *AccountingApi) BalanceCredit() (int64, error) {
 	if self.metrics == nil {

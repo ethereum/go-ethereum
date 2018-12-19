@@ -699,6 +699,10 @@ web3._extend({
 	property: 'account',
 	methods: [
 		new web3._extend.Property({
+			name: 'balance',
+			getter: 'account_balance'
+		}),
+		new web3._extend.Property({
 			name: 'balanceCredit',
 			getter: 'account_balanceCredit'
 		}),
