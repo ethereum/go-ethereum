@@ -17,6 +17,8 @@
 package shed
 
 import (
+	"bytes"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -242,6 +244,76 @@ func (f Index) IterateFrom(start Item, fn IndexIterFunc) (err error) {
 	for ok := it.Seek(startKey); ok; ok = it.Next() {
 		key := it.Key()
 		if key[0] != f.prefix[0] {
+			break
+		}
+		keyItem, err := f.decodeKeyFunc(key)
+		if err != nil {
+			return err
+		}
+		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
+		if err != nil {
+			return err
+		}
+		stop, err := fn(keyItem.Merge(valueItem))
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
+	return it.Error()
+}
+
+// IterateWithPrefix iterates over all keys of the Index that have
+// a common prefix.
+func (f Index) IterateWithPrefix(prefix []byte, fn IndexIterFunc) (err error) {
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	// construct complete prefix with index prefix
+	p := append(f.prefix, prefix...)
+
+	for ok := it.Seek(p); ok; ok = it.Next() {
+		key := it.Key()
+		if !bytes.HasPrefix(key, p) {
+			break
+		}
+		keyItem, err := f.decodeKeyFunc(key)
+		if err != nil {
+			return err
+		}
+		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
+		if err != nil {
+			return err
+		}
+		stop, err := fn(keyItem.Merge(valueItem))
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
+	return it.Error()
+}
+
+// IterateWithPrefixFrom iterates over Index keys that have a common prefix,
+// starting from the key encoded from the provided start Item.
+func (f Index) IterateWithPrefixFrom(prefix []byte, start Item, fn IndexIterFunc) (err error) {
+	startKey, err := f.encodeKeyFunc(start)
+	if err != nil {
+		return err
+	}
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	// construct complete prefix with index prefix
+	p := append(f.prefix, prefix...)
+
+	for ok := it.Seek(startKey); ok; ok = it.Next() {
+		key := it.Key()
+		if !bytes.HasPrefix(key, p) {
 			break
 		}
 		keyItem, err := f.decodeKeyFunc(key)
