@@ -148,7 +148,7 @@ func (db *DB) writeGCSizeWorker() {
 	for {
 		select {
 		case <-db.writeGCSizeTrigger:
-			err := db.writeGCSize()
+			err := db.writeGCSize(atomic.LoadInt64(&db.gcSize))
 			if err != nil {
 				log.Error("localstore write gc size", "err", err)
 			}
@@ -167,15 +167,33 @@ func (db *DB) writeGCSizeWorker() {
 // It removes all hashes from gcUncountedHashesIndex
 // not to include them on the next database initialization
 // when gcSize is counted.
-func (db *DB) writeGCSize() (err error) {
-	gcSize := atomic.LoadInt64(&db.gcSize)
-	err = db.storedGCSize.Put(uint64(gcSize))
+func (db *DB) writeGCSize(gcSize int64) (err error) {
+	const maxBatchSize = 1000
+
+	batch := new(leveldb.Batch)
+	db.storedGCSize.PutInBatch(batch, uint64(gcSize))
+	batchSize := 1
+
+	// use only one iterator as it acquires its snapshot
+	// not to remove hashes from index that are added
+	// after stored gc size is written
+	err = db.gcUncountedHashesIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
+		batchSize++
+		if batchSize >= maxBatchSize {
+			err = db.shed.WriteBatch(batch)
+			if err != nil {
+				return false, err
+			}
+			batch.Reset()
+			batchSize = 0
+		}
+		return false, nil
+	})
 	if err != nil {
 		return err
 	}
-	return db.gcUncountedHashesIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
-		return false, db.gcUncountedHashesIndex.Delete(item)
-	})
+	return db.shed.WriteBatch(batch)
 }
 
 // testHookCollectGarbage is a hook that can provide

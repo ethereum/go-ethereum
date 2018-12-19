@@ -325,15 +325,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	gcSize += uint64(gcUncountedSize)
-	// remove uncounted hashes from the index
-	err = db.gcUncountedHashesIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
-		return false, db.gcUncountedHashesIndex.Delete(item)
-	})
-	if err != nil {
-		return nil, err
-	}
+	// remove uncounted hashes from the index and
 	// save the total gcSize after uncounted hashes are removed
-	err = db.storedGCSize.Put(gcSize)
+	err = db.writeGCSize(int64(gcSize))
 	if err != nil {
 		return nil, err
 	}
