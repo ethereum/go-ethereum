@@ -55,10 +55,7 @@ func (db *DB) collectGarbageWorker() {
 			}
 			// check if another gc run is needed
 			if !done {
-				select {
-				case db.collectGarbageTrigger <- struct{}{}:
-				default:
-				}
+				db.triggerGarbageCollection()
 			}
 
 			if testHookCollectGarbage != nil {
@@ -131,10 +128,16 @@ func (db *DB) incGCSize(count int64) {
 	default:
 	}
 	if new >= db.capacity {
-		select {
-		case db.collectGarbageTrigger <- struct{}{}:
-		default:
-		}
+		db.triggerGarbageCollection()
+	}
+}
+
+// triggerGarbageCollection signals collectGarbageWorker
+// to call collectGarbage.
+func (db *DB) triggerGarbageCollection() {
+	select {
+	case db.collectGarbageTrigger <- struct{}{}:
+	default:
 	}
 }
 
