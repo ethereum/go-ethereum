@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
@@ -410,10 +411,14 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
+
+		startTime := time.Now()
 		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
 		if err != nil {
+			metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 			return 0, err
 		}
+		metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 		r.chunkData = chunkData
 		s := r.chunkData.Size()
 		log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
@@ -542,8 +547,10 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childAddress := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
+			startTime := time.Now()
 			chunkData, err := r.getter.Get(r.ctx, Reference(childAddress))
 			if err != nil {
+				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
@@ -551,6 +558,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 				}
 				return
 			}
+			metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 			if l := len(chunkData); l < 9 {
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v incomplete; key: %s, data length %v", off, off+treeSize, fmt.Sprintf("%x", childAddress), l):

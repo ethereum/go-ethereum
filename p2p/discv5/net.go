@@ -567,12 +567,11 @@ loop:
 			net.ticketStore.searchLookupDone(res.target, res.nodes, func(n *Node, topic Topic) []byte {
 				if n.state != nil && n.state.canQuery {
 					return net.conn.send(n, topicQueryPacket, topicQuery{Topic: topic}) // TODO: set expiration
-				} else {
-					if n.state == unknown {
-						net.ping(n, n.addr())
-					}
-					return nil
 				}
+				if n.state == unknown {
+					net.ping(n, n.addr())
+				}
+				return nil
 			})
 
 		case <-statsDump.C:
@@ -801,7 +800,7 @@ func (n *nodeNetGuts) startNextQuery(net *Network) {
 func (q *findnodeQuery) start(net *Network) bool {
 	// Satisfy queries against the local node directly.
 	if q.remote == net.tab.self {
-		closest := net.tab.closest(crypto.Keccak256Hash(q.target[:]), bucketSize)
+		closest := net.tab.closest(q.target, bucketSize)
 		q.reply <- closest.entries
 		return true
 	}

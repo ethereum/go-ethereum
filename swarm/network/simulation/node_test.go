@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
@@ -228,7 +229,7 @@ func TestAddNodesAndConnectFull(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testFull(t, sim, ids)
+	simulations.VerifyFull(t, sim.Net, ids)
 }
 
 func TestAddNodesAndConnectChain(t *testing.T) {
@@ -247,7 +248,7 @@ func TestAddNodesAndConnectChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testChain(t, sim, sim.UpNodeIDs())
+	simulations.VerifyChain(t, sim.Net, sim.UpNodeIDs())
 }
 
 func TestAddNodesAndConnectRing(t *testing.T) {
@@ -259,7 +260,7 @@ func TestAddNodesAndConnectRing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testRing(t, sim, ids)
+	simulations.VerifyRing(t, sim.Net, ids)
 }
 
 func TestAddNodesAndConnectStar(t *testing.T) {
@@ -271,7 +272,7 @@ func TestAddNodesAndConnectStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testStar(t, sim, ids, 0)
+	simulations.VerifyStar(t, sim.Net, ids, 0)
 }
 
 //To test that uploading a snapshot works

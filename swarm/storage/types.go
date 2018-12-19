@@ -184,9 +184,6 @@ func (c AddressCollection) Swap(i, j int) {
 // Chunk interface implemented by context.Contexts and data chunks
 type Chunk interface {
 	Address() Address
-	Payload() []byte
-	SpanBytes() []byte
-	Span() int64
 	Data() []byte
 }
 
@@ -208,23 +205,8 @@ func (c *chunk) Address() Address {
 	return c.addr
 }
 
-func (c *chunk) SpanBytes() []byte {
-	return c.sdata[:8]
-}
-
-func (c *chunk) Span() int64 {
-	if c.span == -1 {
-		c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-	}
-	return c.span
-}
-
 func (c *chunk) Data() []byte {
 	return c.sdata
-}
-
-func (c *chunk) Payload() []byte {
-	return c.sdata[8:]
 }
 
 // String() for pretty printing
@@ -327,7 +309,7 @@ func (c ChunkData) Data() []byte {
 }
 
 type ChunkValidator interface {
-	Validate(addr Address, data []byte) bool
+	Validate(chunk Chunk) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -344,7 +326,8 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
+	data := chunk.Data()
 	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
@@ -355,7 +338,7 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	return bytes.Equal(hash, addr[:])
+	return bytes.Equal(hash, chunk.Address())
 }
 
 type ChunkStore interface {

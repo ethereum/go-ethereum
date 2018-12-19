@@ -95,8 +95,7 @@ func TestNetworkID(t *testing.T) {
 			kademlias[node].EachAddr(nil, 0, func(addr *BzzAddr, _ int, _ bool) bool {
 				found := false
 				for _, nd := range netIDGroup {
-					p := nd.Bytes()
-					if bytes.Equal(p, addr.Address()) {
+					if bytes.Equal(kademlias[nd].BaseAddr(), addr.Address()) {
 						found = true
 					}
 				}

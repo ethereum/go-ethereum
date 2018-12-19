@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,8 +18,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -26,14 +33,32 @@ const (
 	feedRandomDataLength = 8
 )
 
-// TODO: retrieve with manifest + extract repeating code
 func cliFeedUploadAndSync(c *cli.Context) error {
-
+	metrics.GetOrRegisterCounter("feed-and-sync", nil).Inc(1)
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))))
 
+	errc := make(chan error)
+	go func() {
+		errc <- feedUploadAndSync(c)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter("feed-and-sync.fail", nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter("feed-and-sync.timeout", nil).Inc(1)
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+// TODO: retrieve with manifest + extract repeating code
+func feedUploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
 
-	generateEndpoints(scheme, cluster, from, to)
+	generateEndpoints(scheme, cluster, appName, from, to)
 
 	log.Info("generating and uploading feeds to " + endpoints[0] + " and syncing")
 
@@ -204,12 +229,12 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 	log.Info("all endpoints synced random data successfully")
 
 	// upload test file
-	log.Info("uploading to " + endpoints[0] + " and syncing")
+	seed := int(time.Now().UnixNano() / 1e6)
+	log.Info("feed uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-	f, cleanup := generateRandomFile(filesize * 1000)
-	defer cleanup()
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	hash, err := upload(f, endpoints[0])
+	hash, err := upload(&randomBytes, endpoints[0])
 	if err != nil {
 		return err
 	}
@@ -218,7 +243,7 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 		return err
 	}
 	multihashHex := hexutil.Encode(hashBytes)
-	fileHash, err := digest(f)
+	fileHash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
 		return err
 	}
@@ -284,14 +309,37 @@ func cliFeedUploadAndSync(c *cli.Context) error {
 }
 
 func fetchFeed(topic string, user string, endpoint string, original []byte, ruid string) error {
+	ctx, sp := spancontext.StartSpan(context.Background(), "feed-and-sync.fetch")
+	defer sp.Finish()
+
 	log.Trace("sleeping", "ruid", ruid)
 	time.Sleep(3 * time.Second)
 
 	log.Trace("http get request (feed)", "ruid", ruid, "api", endpoint, "topic", topic, "user", user)
-	res, err := http.Get(endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user)
+
+	var tn time.Time
+	reqUri := endpoint + "/bzz-feed:/?topic=" + topic + "&user=" + user
+	req, _ := http.NewRequest("GET", reqUri, nil)
+
+	opentracing.GlobalTracer().Inject(
+		sp.Context(),
+		opentracing.HTTPHeaders,
+		opentracing.HTTPHeadersCarrier(req.Header))
+
+	trace := client.GetClientTrace("feed-and-sync - http get", "feed-and-sync", ruid, &tn)
+
+	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
+	transport := http.DefaultTransport
+
+	//transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+
+	tn = time.Now()
+	res, err := transport.RoundTrip(req)
 	if err != nil {
+		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
+
 	log.Trace("http get response (feed)", "ruid", ruid, "api", endpoint, "topic", topic, "user", user, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {

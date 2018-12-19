@@ -248,20 +248,20 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		//get the node at that index
 		//this is the node selected for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}
 		for _, h := range hashes {
 			evt := &simulations.Event{
 				Type: EventTypeChunkCreated,
-				Node: sim.Net.GetNode(node.ID),
+				Node: sim.Net.GetNode(node.ID()),
 				Data: h.String(),
 			}
 			sim.Net.Events().Send(evt)
@@ -453,13 +453,13 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			}
 		}
 		//select a random node for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}

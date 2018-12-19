@@ -640,7 +640,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	files[filepath.Join(workdir, network+".json")] = genesis
 
 	if conf.Genesis.Config.Ethash != nil {
-		cppSpec, err := newCppEthereumGenesisSpec(network, conf.Genesis)
+		cppSpec, err := newAlethGenesisSpec(network, conf.Genesis)
 		if err != nil {
 			return nil, err
 		}

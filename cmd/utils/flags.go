@@ -140,6 +140,10 @@ var (
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
+	ConstantinopleOverrideFlag = cli.Uint64Flag{
+		Name:  "override.constantinople",
+		Usage: "Manually specify constantinople fork-block, overriding the bundled setting",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -181,6 +185,10 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	WhitelistFlag = cli.StringFlag{
+		Name:  "whitelist",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
@@ -824,17 +832,12 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 // makeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func makeDatabaseHandles() int {
-	limit, err := fdlimit.Current()
+	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if limit < 2048 {
-		if err := fdlimit.Raise(2048); err != nil {
-			Fatalf("Failed to raise file descriptor allowance: %v", err)
-		}
-	}
-	if limit > 2048 { // cap database file descriptors even if more is available
-		limit = 2048
+	if err := fdlimit.Raise(uint64(limit)); err != nil {
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
 	return limit / 2 // Leave half for networking and other stuff
 }
@@ -1077,6 +1080,29 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
+func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
+	whitelist := ctx.GlobalString(WhitelistFlag.Name)
+	if whitelist == "" {
+		return
+	}
+	cfg.Whitelist = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(whitelist, ",") {
+		parts := strings.Split(entry, "=")
+		if len(parts) != 2 {
+			Fatalf("Invalid whitelist entry: %s", entry)
+		}
+		number, err := strconv.ParseUint(parts[0], 0, 64)
+		if err != nil {
+			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+		}
+		var hash common.Hash
+		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
+			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+		}
+		cfg.Whitelist[number] = hash
+	}
+}
+
 // checkExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
@@ -1142,6 +1168,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setWhitelist(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
@@ -1155,7 +1182,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
 	}
-
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
@@ -1380,7 +1406,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
-
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)

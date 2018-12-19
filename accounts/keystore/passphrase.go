@@ -233,6 +233,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		PrivateKey: key,
 	}, nil
 }
+
 func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 	if cryptoJson.Cipher != "aes-128-ctr" {
 		return nil, fmt.Errorf("Cipher not supported: %v", cryptoJson.Cipher)

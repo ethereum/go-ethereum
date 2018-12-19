@@ -385,6 +385,18 @@ web3._extend({
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
+			name: 'standardTraceBadBlockToFile',
+			call: 'debug_standardTraceBadBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBlockToFile',
+			call: 'debug_standardTraceBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
 			name: 'traceBlockByNumber',
 			call: 'debug_traceBlockByNumber',
 			params: 2,
