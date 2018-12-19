@@ -140,10 +140,11 @@ func (db *DB) incGCSize(count int64) {
 
 var writeGCSizeDelay = 10 * time.Second
 
-// writeGCSizeWorker calls writeGCSize function
-// on writeGCSizeTrigger receive. It implements a
-// backoff with delay of writeGCSizeDelay duration
-// to avoid very frequent database operations.
+// writeGCSizeWorker writes gcSize on trigger event
+// and waits writeGCSizeDelay after each write.
+// It implements a linear backoff with delay of
+// writeGCSizeDelay duration to avoid very frequent
+// database operations.
 func (db *DB) writeGCSizeWorker() {
 	for {
 		select {
