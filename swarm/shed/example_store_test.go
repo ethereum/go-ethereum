@@ -244,7 +244,7 @@ func (s *Store) CollectGarbage() (err error) {
 		// New batch for a new cg round.
 		trash := new(leveldb.Batch)
 		// Iterate through all index items and break when needed.
-		err = s.gcIndex.IterateAll(func(item shed.Item) (stop bool, err error) {
+		err = s.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 			// Remove the chunk.
 			err = s.retrievalIndex.DeleteInBatch(trash, item)
 			if err != nil {
@@ -265,7 +265,7 @@ func (s *Store) CollectGarbage() (err error) {
 				return true, nil
 			}
 			return false, nil
-		})
+		}, nil)
 		if err != nil {
 			return err
 		}

@@ -250,9 +250,9 @@ func TestIndex(t *testing.T) {
 	})
 }
 
-// TestIndex_iterate validates index IterateAll and IterateFrom
+// TestIndex_Iterate validates index Iterate
 // functions for correctness.
-func TestIndex_iterate(t *testing.T) {
+func TestIndex_Iterate(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
@@ -307,7 +307,7 @@ func TestIndex_iterate(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		var i int
-		err := index.IterateAll(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -315,16 +315,35 @@ func TestIndex_iterate(t *testing.T) {
 			checkItem(t, item, want)
 			i++
 			return false, nil
+		}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("start from", func(t *testing.T) {
+		startIndex := 2
+		i := startIndex
+		err := index.Iterate(func(item Item) (stop bool, err error) {
+			if i > len(items)-1 {
+				return true, fmt.Errorf("got unexpected index item: %#v", item)
+			}
+			want := items[i]
+			checkItem(t, item, want)
+			i++
+			return false, nil
+		}, &IterateOptions{
+			StartFrom: &items[startIndex],
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	t.Run("from", func(t *testing.T) {
+	t.Run("skip start from", func(t *testing.T) {
 		startIndex := 2
-		i := startIndex
-		err := index.IterateFrom(items[startIndex], func(item Item) (stop bool, err error) {
+		i := startIndex + 1
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -332,6 +351,9 @@ func TestIndex_iterate(t *testing.T) {
 			checkItem(t, item, want)
 			i++
 			return false, nil
+		}, &IterateOptions{
+			StartFrom:         &items[startIndex],
+			SkipStartFromItem: true,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -342,7 +364,7 @@ func TestIndex_iterate(t *testing.T) {
 		var i int
 		stopIndex := 3
 		var count int
-		err := index.IterateAll(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -354,7 +376,7 @@ func TestIndex_iterate(t *testing.T) {
 			}
 			i++
 			return false, nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -380,7 +402,7 @@ func TestIndex_iterate(t *testing.T) {
 		}
 
 		var i int
-		err = index.IterateAll(func(item Item) (stop bool, err error) {
+		err = index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -388,29 +410,29 @@ func TestIndex_iterate(t *testing.T) {
 			checkItem(t, item, want)
 			i++
 			return false, nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		i = 0
-		err = secondIndex.IterateAll(func(item Item) (stop bool, err error) {
+		err = secondIndex.Iterate(func(item Item) (stop bool, err error) {
 			if i > 1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
 			checkItem(t, item, secondItem)
 			i++
 			return false, nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 }
 
-// TestIndex_iterateWithPrefix validates index IterateWithPrefix
-// and IterateWithPrefixFrom functions for correctness.
-func TestIndex_iterateWithPrefix(t *testing.T) {
+// TestIndex_Iterate_withPrefix validates index Iterate
+// function for correctness.
+func TestIndex_Iterate_withPrefix(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
@@ -455,7 +477,7 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 
 	t.Run("with prefix", func(t *testing.T) {
 		var i int
-		err := index.IterateWithPrefix(prefix, func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -463,6 +485,8 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 			checkItem(t, item, want)
 			i++
 			return false, nil
+		}, &IterateOptions{
+			Prefix: prefix,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -472,11 +496,11 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 		}
 	})
 
-	t.Run("with prefix from", func(t *testing.T) {
+	t.Run("with prefix and start from", func(t *testing.T) {
 		startIndex := 2
 		var count int
 		i := startIndex
-		err := index.IterateWithPrefixFrom(prefix, items[startIndex], func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -485,6 +509,9 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 			i++
 			count++
 			return false, nil
+		}, &IterateOptions{
+			StartFrom: &items[startIndex],
+			Prefix:    prefix,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -495,11 +522,38 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 		}
 	})
 
+	t.Run("with prefix and skip start from", func(t *testing.T) {
+		startIndex := 2
+		var count int
+		i := startIndex + 1
+		err := index.Iterate(func(item Item) (stop bool, err error) {
+			if i > len(items)-1 {
+				return true, fmt.Errorf("got unexpected index item: %#v", item)
+			}
+			want := items[i]
+			checkItem(t, item, want)
+			i++
+			count++
+			return false, nil
+		}, &IterateOptions{
+			StartFrom:         &items[startIndex],
+			SkipStartFromItem: true,
+			Prefix:            prefix,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantCount := len(items) - startIndex - 1
+		if count != wantCount {
+			t.Errorf("got %v items, want %v", count, wantCount)
+		}
+	})
+
 	t.Run("stop", func(t *testing.T) {
 		var i int
 		stopIndex := 3
 		var count int
-		err := index.IterateWithPrefix(prefix, func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -511,6 +565,8 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 			}
 			i++
 			return false, nil
+		}, &IterateOptions{
+			Prefix: prefix,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -537,7 +593,7 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 		}
 
 		var i int
-		err = index.IterateWithPrefix(prefix, func(item Item) (stop bool, err error) {
+		err = index.Iterate(func(item Item) (stop bool, err error) {
 			if i > len(items)-1 {
 				return true, fmt.Errorf("got unexpected index item: %#v", item)
 			}
@@ -545,6 +601,8 @@ func TestIndex_iterateWithPrefix(t *testing.T) {
 			checkItem(t, item, want)
 			i++
 			return false, nil
+		}, &IterateOptions{
+			Prefix: prefix,
 		})
 		if err != nil {
 			t.Fatal(err)
