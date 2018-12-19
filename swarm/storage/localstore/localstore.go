@@ -21,8 +21,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -344,6 +346,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 func (db *DB) Close() (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
+	if err := db.writeGCSize(atomic.LoadInt64(&db.gcSize)); err != nil {
+		log.Error("localstore: write gc size", "err", err)
+	}
 	return db.shed.Close()
 }
 
