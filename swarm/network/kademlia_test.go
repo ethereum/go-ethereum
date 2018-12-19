@@ -18,7 +18,6 @@ package network
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
