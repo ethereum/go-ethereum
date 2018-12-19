@@ -212,7 +212,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("remove one chunk", func(t *testing.T) {
 		i := 3
 
-		err := db.NewSetter(ModeSetRemove).Set(chunks[i].Address())
+		err := db.NewSetter(modeSetRemove).Set(chunks[i].Address())
 		if err != nil {
 			t.Fatal(err)
 		}

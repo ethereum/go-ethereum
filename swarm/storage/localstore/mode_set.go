@@ -30,8 +30,9 @@ const (
 	ModeSetAccess ModeSet = iota
 	// ModeSetSync: when push sync receipt is received
 	ModeSetSync
-	// ModeSetRemove: when GC-d
-	ModeSetRemove
+	// modeSetRemove: when GC-d
+	// unexported as no external packages should remove chunks from database
+	modeSetRemove
 )
 
 // Setter sets the state of a particular
@@ -147,7 +148,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		db.incGCSize(1)
 
-	case ModeSetRemove:
+	case modeSetRemove:
 		// delete from retrieve, pull, gc
 
 		// need to get access timestamp here as it is not

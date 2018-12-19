@@ -84,8 +84,8 @@ func TestModeSetSync(t *testing.T) {
 	t.Run("gc size", newIndexGCSizeTest(db))
 }
 
-// TestModeSetRemoval validates ModeSetRemoval index values on the provided DB.
-func TestModeSetRemoval(t *testing.T) {
+// TestModeSetRemove validates ModeSetRemove index values on the provided DB.
+func TestModeSetRemove(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -96,7 +96,7 @@ func TestModeSetRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = db.NewSetter(ModeSetRemove).Set(chunk.Address())
+	err = db.NewSetter(modeSetRemove).Set(chunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
