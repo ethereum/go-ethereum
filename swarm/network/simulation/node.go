@@ -188,7 +188,7 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	if err != nil {
 		return nil, err
 	}
-	err = s.Net.ConnectNodesStar(ids[0], ids[1:])
+	err = s.Net.ConnectNodesStar(ids[1:], ids[0])
 	if err != nil {
 		return nil, err
 	}
