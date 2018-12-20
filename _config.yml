@@ -30,4 +30,29 @@ navbar-links:
     - Mobile Clients: docs/Mobile-Clients/Libraries-and-Inproc-Ethereum-Nodes
     - Native DApps: docs/Native-DApps/Go-bindings-to-Ethereum-contracts
     - Active go-ethereum projects: docs/Active-go-ethereum-projects
-
+  Swarm and friends:
+    - TODO: docs/Swarm---TODO
+    - distributed preimage archive: docs/Swarm---distributed-preimage-archive
+    - Channels, Namereg-resolution: docs/Swarm-Channels,-Namereg-resolution-draft
+    - Contract: docs/Swarm-Contract
+    - POC series: docs/swarm---POC-series
+    - dev progress: docs/swarm-dev-progress
+    - roadmap: docs/swarm-roadmap
+  Other docs:
+    - Accounts key-storage specification: docs/Accounts---key-storage-specification
+    - Connecting to the network: docs/Connecting-to-the-network
+    - Creating your own Ethereum apps using Eth go: docs/Creating-your-own-Ethereum-apps-using-Eth-go
+    - Developer guide: docs/Developer-Guide
+    - Disclaimer: docs/Disclaimer
+    - Ethereum Specification: docs/Ethereum-Specification
+    - Ethereum on Android: docs/Ethereum-on-Android
+    - GAs Price Oracle: docs/Gas-Price-Oracle
+    - Go ethereum management API's: docs/Go-ethereum-management-API's
+    - IPFS & SWARM: docs/IPFS-&-SWARM
+    - Installing Geth: docs/Installing-Geth
+    - \[Japanese\] Contracts and Transactions: docs/[Japanese]-Contracts-and-Transactions
+    - Provisional JS API: docs/Provisional-JS-API
+    - RPC PUB-SUB: docs/RPC-PUB-SUB
+    - Sending ethere: docs/Sending-ether
+    - Setting up Ethereum (Native): docs/Setting-up-Ethereum-(Native)
+    - URL Scheme: docs/URL-Scheme
