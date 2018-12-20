@@ -15,7 +15,7 @@ The attach node accepts an endpoint in case the geth node is running with a non 
     $ geth attach http://191.168.1.1:8545
     $ geth attach ws://191.168.1.1:8546
 
-Note that by default the geth node doesn't start the http and weboscket service and not all functionality is provided over these interfaces due to security reasons. These defaults can be overridden when the `--rpcapi` and `--wsapi` arguments when the geth node is started, or with [admin.startRPC](admin_startRPC) and [admin.startWS](admin_startWS).
+Note that by default the geth node doesn't start the http and weboscket service and not all functionality is provided over these interfaces due to security reasons. These defaults can be overridden when the `--rpcapi` and `--wsapi` arguments when the geth node is started, or with [admin.startRPC](Management-APIs#admin_startrpc) and [admin.startWS](Management-APIs#admin_startws).
 
 If you need log information, start with:
 
