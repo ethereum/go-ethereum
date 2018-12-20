@@ -18,7 +18,7 @@
 package web3ext
 
 var Modules = map[string]string{
-	"account":    Account_JS,
+	"accounting": Accounting_JS,
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
@@ -694,9 +694,9 @@ web3._extend({
 });
 `
 
-const Account_JS = `
+const Accounting_JS = `
 web3._extend({
-	property: 'account',
+	property: 'accounting',
 	methods: [
 		new web3._extend.Property({
 			name: 'balance',

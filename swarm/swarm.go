@@ -519,7 +519,7 @@ func (self *Swarm) APIs() []rpc.API {
 			Public:    false,
 		},
 		{
-			Namespace: "account",
+			Namespace: "accounting",
 			Version:   protocols.AccountingVersion,
 			Service:   protocols.NewAccountingApi(self.accountingMetrics),
 			Public:    false,
