@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 )
@@ -46,7 +47,7 @@ type updateRequestJSON struct {
 // Request layout
 // Update bytes
 // SignatureLength bytes
-const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
+const minimumSignedUpdateLength = minimumUpdateDataLength + crypto.SignatureLength
 
 // NewFirstRequest returns a ready to sign request to publish a first feed update
 func NewFirstRequest(topic Topic) *Request {
@@ -141,7 +142,7 @@ func (r *Request) GetDigest() (result common.Hash, err error) {
 	hasher.Reset()
 	dataLength := r.Update.binaryLength()
 	if r.binaryData == nil {
-		r.binaryData = make([]byte, dataLength+signatureLength)
+		r.binaryData = make([]byte, dataLength+crypto.SignatureLength)
 		if err := r.Update.binaryPut(r.binaryData[:dataLength]); err != nil {
 			return result, err
 		}
@@ -177,14 +178,14 @@ func (r *Request) fromChunk(chunk storage.Chunk) error {
 	chunkdata := chunk.Data()
 
 	//deserialize the feed update portion
-	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
+	if err := r.Update.binaryGet(chunkdata[:len(chunkdata)-crypto.SignatureLength]); err != nil {
 		return err
 	}
 
 	// Extract the signature
 	var signature *Signature
 	cursor := r.Update.binaryLength()
-	sigdata := chunkdata[cursor : cursor+signatureLength]
+	sigdata := chunkdata[cursor : cursor+crypto.SignatureLength]
 	if len(sigdata) > 0 {
 		signature = &Signature{}
 		copy(signature[:], sigdata)
@@ -205,7 +206,7 @@ func (r *Request) FromValues(values Values, data []byte) error {
 	if err != nil {
 		r.Signature = nil
 	} else {
-		if len(signatureBytes) != signatureLength {
+		if len(signatureBytes) != crypto.SignatureLength {
 			return NewError(ErrInvalidSignature, "Incorrect signature length")
 		}
 		r.Signature = new(Signature)
@@ -244,7 +245,7 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 
 	if j.Signature != "" {
 		sigBytes, err := hexutil.Decode(j.Signature)
-		if err != nil || len(sigBytes) != signatureLength {
+		if err != nil || len(sigBytes) != crypto.SignatureLength {
 			return NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
 		r.Signature = new(Signature)

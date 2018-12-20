@@ -41,7 +41,7 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 // SigToPub returns the public key that created the given signature.
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	// Convert to btcec input format with 'recovery id' v at the beginning.
-	btcsig := make([]byte, 65)
+	btcsig := make([]byte, SignatureLength)
 	btcsig[0] = sig[64] + 27
 	copy(btcsig[1:], sig)
 

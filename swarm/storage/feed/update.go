@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
@@ -44,7 +45,7 @@ type Update struct {
 const minimumUpdateDataLength = idLength + headerLength + 1
 
 //MaxUpdateDataLength indicates the maximum payload size for a feed update
-const MaxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
+const MaxUpdateDataLength = chunk.DefaultSize - crypto.SignatureLength - idLength - headerLength
 
 // binaryPut serializes the feed update information into the given slice
 func (r *Update) binaryPut(serializedData []byte) error {

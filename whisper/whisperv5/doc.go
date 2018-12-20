@@ -32,6 +32,8 @@ package whisperv5
 import (
 	"fmt"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -50,7 +52,7 @@ const (
 	signatureFlag = byte(4)
 
 	TopicLength     = 4
-	signatureLength = 65
+	signatureLength = crypto.SignatureLength
 	aesKeyLength    = 32
 	AESNonceLength  = 12
 	keyIdSize       = 32

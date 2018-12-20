@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -280,8 +281,8 @@ func TestSignData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h == nil || len(h) != 65 {
-		t.Errorf("Expected 65 byte signature (got %d bytes)", len(h))
+	if h == nil || len(h) != crypto.SignatureLength {
+		t.Errorf("Expected %d byte signature (got %d bytes)", crypto.SignatureLength, len(h))
 	}
 }
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
