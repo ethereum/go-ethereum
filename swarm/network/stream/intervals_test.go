@@ -113,7 +113,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	if _, err := sim.WaitTillHealthy(ctx); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		t.Fatal(err)
 	}
 

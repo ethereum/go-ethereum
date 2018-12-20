@@ -203,7 +203,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
 
-	if _, err := sim.WaitTillHealthy(ctx); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -385,7 +385,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return err
 	}
 
-	if _, err := sim.WaitTillHealthy(ctx); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		return err
 	}
 
@@ -463,7 +463,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if _, err := sim.WaitTillHealthy(ctx); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 			return err
 		}
 

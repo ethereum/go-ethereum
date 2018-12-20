@@ -751,14 +751,14 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 // Health state of the Kademlia
 // used for testing only
 type Health struct {
-	KnowNN         bool     // whether node knows all its nearest neighbours
-	CountKnowNN    int      // amount of nearest neighbors connected to
-	CulpritsKnowNN [][]byte // which known NNs are missing
-	GotNN          bool     // whether node is connected to all its nearest neighbours
-	CountGotNN     int      // amount of nearest neighbors connected to
-	CulpritsGotNN  [][]byte // which known NNs are missing
-	Saturated      bool     // whether we have all the peers we'd like to have
-	Hive           string
+	KnowNN            bool     // whether node knows all its nearest neighbours
+	CountKnowNN       int      // amount of nearest neighbors connected to
+	CulpritsKnowNN    [][]byte // which known NNs are missing
+	ConnectNN         bool     // whether node is connected to all its nearest neighbours
+	CountConnectNN    int      // amount of nearest neighbors connected to
+	CulpritsConnectNN [][]byte // which known NNs are missing
+	Saturated         bool     // whether we have all the peers we'd like to have
+	Hive              string
 }
 
 // Healthy reports the health state of the kademlia connectivity
@@ -773,13 +773,13 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	saturated := k.saturation() < depth
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
-		KnowNN:         knownn,
-		CountKnowNN:    countknownn,
-		CulpritsKnowNN: culpritsknownn,
-		GotNN:          gotnn,
-		CountGotNN:     countgotnn,
-		CulpritsGotNN:  culpritsgotnn,
-		Saturated:      saturated,
-		Hive:           k.string(),
+		KnowNN:            knownn,
+		CountKnowNN:       countknownn,
+		CulpritsKnowNN:    culpritsknownn,
+		ConnectNN:         gotnn,
+		CountConnectNN:    countgotnn,
+		CulpritsConnectNN: culpritsgotnn,
+		Saturated:         saturated,
+		Hive:              k.string(),
 	}
 }

@@ -289,8 +289,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Hive))
-		return healthy.KnowNN && healthy.GotNN, nil
+		log.Info(fmt.Sprintf("node %4s healthy: connected nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.ConnectNN, healthy.KnowNN, healthy.Hive))
+		return healthy.KnowNN && healthy.ConnectNN, nil
 	}
 
 	// 64 nodes ~ 1min
@@ -409,7 +409,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
-				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.GotNN && healthy.KnowNN && healthy.CountKnowNN > 0))
+				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.ConnectNN && healthy.KnowNN && healthy.CountKnowNN > 0))
 				var nodeStr string
 				if err := client.Call(&nodeStr, "hive_string"); err != nil {
 					return fmt.Errorf("error getting node string %s", err)
@@ -418,7 +418,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				for _, a := range addrs {
 					log.Info(common.Bytes2Hex(a))
 				}
-				if !healthy.GotNN || healthy.CountKnowNN == 0 {
+				if !healthy.ConnectNN || healthy.CountKnowNN == 0 {
 					isHealthy = false
 					break
 				}
@@ -497,9 +497,9 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.GotNN, healthy.KnowNN))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))
 
-		return healthy.KnowNN && healthy.GotNN, nil
+		return healthy.KnowNN && healthy.ConnectNN, nil
 	}
 
 	// 64 nodes ~ 1min

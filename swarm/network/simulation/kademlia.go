@@ -34,7 +34,7 @@ var BucketKeyKademlia BucketKey = "kademlia"
 // WaitTillHealthy is blocking until the health of all kademlias is true.
 // If error is not nil, a map of kademlia that was found not healthy is returned.
 // TODO: Check correctness since change in kademlia depth calculation logic
-func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*network.Kademlia, err error) {
+func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (ill map[enode.ID]*network.Kademlia, err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
@@ -43,7 +43,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 	for _, k := range kademlias {
 		addrs = append(addrs, k.BaseAddr())
 	}
-	ppmap = network.NewPeerPotMap(s.minProxBinSize, addrs)
+	ppmap = network.NewPeerPotMap(kadMinProxSize, addrs)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -67,10 +67,10 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*net
 				h := k.Healthy(pp)
 				//print info
 				log.Debug(k.String())
-				log.Debug("kademlia", "gotNN", h.GotNN, "knowNN", h.KnowNN)
-				log.Debug("kademlia", "health", h.GotNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				log.Debug("kademlia", "ill condition", !h.GotNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				if !h.GotNN {
+				log.Debug("kademlia", "connectNN", h.ConnectNN, "knowNN", h.KnowNN)
+				log.Debug("kademlia", "health", h.ConnectNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				log.Debug("kademlia", "ill condition", !h.ConnectNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				if !h.ConnectNN {
 					ill[id] = k
 				}
 			}
