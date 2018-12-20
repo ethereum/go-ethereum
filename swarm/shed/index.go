@@ -249,11 +249,13 @@ func (f Index) Iterate(fn IndexIterFunc, options *IterateOptions) (err error) {
 		if !bytes.HasPrefix(key, prefix) {
 			break
 		}
-		keyItem, err := f.decodeKeyFunc(key)
+		// create a copy of key byte slice not to share leveldb underlaying slice array
+		keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
 		if err != nil {
 			return err
 		}
-		valueItem, err := f.decodeValueFunc(keyItem, it.Value())
+		// create a copy of value byte slice not to share leveldb underlaying slice array
+		valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
 		if err != nil {
 			return err
 		}
