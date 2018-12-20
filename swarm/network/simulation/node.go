@@ -241,25 +241,6 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	return nil
 }
 
-// SetPivotNode sets the NodeID of the network's pivot node.
-// Pivot node is just a specific node that should be treated
-// differently then other nodes in test. SetPivotNode and
-// PivotNodeID are just a convenient functions to set and
-// retrieve it.
-func (s *Simulation) SetPivotNode(id enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pivotNodeID = &id
-}
-
-// PivotNodeID returns NodeID of the pivot node set by
-// Simulation.SetPivotNode method.
-func (s *Simulation) PivotNodeID() (id *enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.pivotNodeID
-}
-
 // StartNode starts a node by NodeID.
 func (s *Simulation) StartNode(id enode.ID) (err error) {
 	return s.Net.Start(id)

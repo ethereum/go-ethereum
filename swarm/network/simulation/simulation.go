@@ -46,7 +46,6 @@ type Simulation struct {
 	serviceNames      []string
 	cleanupFuncs      []func()
 	buckets           map[enode.ID]*sync.Map
-	pivotNodeID       *enode.ID
 	shutdownWG        sync.WaitGroup
 	done              chan struct{}
 	mu                sync.RWMutex
