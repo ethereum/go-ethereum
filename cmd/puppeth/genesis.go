@@ -174,7 +174,11 @@ func (spec *alethGenesisSpec) setPrecompile(address byte, data *alethGenesisSpec
 	if spec.Accounts == nil {
 		spec.Accounts = make(map[common.UnprefixedAddress]*alethGenesisSpecAccount)
 	}
-	spec.Accounts[common.UnprefixedAddress(common.BytesToAddress([]byte{address}))].Precompiled = data
+	a := common.UnprefixedAddress(common.BytesToAddress([]byte{address}))
+	if _, exist := spec.Accounts[a]; !exist {
+		spec.Accounts[a] = &alethGenesisSpecAccount{}
+	}
+	spec.Accounts[a].Precompiled = data
 }
 
 func (spec *alethGenesisSpec) setAccount(address common.Address, account core.GenesisAccount) {
