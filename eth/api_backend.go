@@ -18,9 +18,9 @@ package eth
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
-	"errors"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -96,12 +96,11 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	}
 	// Otherwise resolve the block number and return its state
 	header, err := b.HeaderByNumber(ctx, blockNr)
-	if header == nil || err != nil {
-		//if the error is nil, let's create a generic error message instead of returning a fully null result
-		if err == nil {
-			err = errors.New("blockchain header is nil")
-		}
+	if err != nil {
 		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, errors.New("header not found")
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 	return stateDb, header, err
