@@ -67,6 +67,8 @@ func TestDB(t *testing.T) {
 // setting a custom testHookUpdateGC function with a sleep
 // and a count current and maximal number of goroutines.
 func TestDB_updateGCSem(t *testing.T) {
+	t.Parallel()
+
 	defer func(m int) { maxParallelUpdateGC = m }(maxParallelUpdateGC)
 	maxParallelUpdateGC = 3
 

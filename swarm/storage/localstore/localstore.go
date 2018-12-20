@@ -63,9 +63,14 @@ type DB struct {
 	// retrieval indexes
 	retrievalDataIndex   shed.Index
 	retrievalAccessIndex shed.Index
-	// sync indexes
+	// push syncing index
 	pushIndex shed.Index
+	// provides push syncing subscriptions
+	pushFeed *feed
+	// pull syncing index
 	pullIndex shed.Index
+	// provides pull syncing subscriptions
+	pullFeed *feed
 	// garbage collection index
 	gcIndex shed.Index
 	// index that stores hashes that are not
@@ -249,6 +254,8 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// create a pull syncing feed used by SubscribePull function
+	db.pullFeed = newFeed(db.pullIndex, db.retrievalDataIndex)
 	// push index contains as yet unsynced chunks
 	db.pushIndex, err = db.shed.NewIndex("StoredTimestamp|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
@@ -272,6 +279,8 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// create a push syncing feed used by SubscribePush function
+	db.pushFeed = newFeed(db.pushIndex, db.retrievalDataIndex)
 	// gc index for removable chunk ordered by ascending last access time
 	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|StoredTimestamp|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
@@ -351,6 +360,9 @@ func (db *DB) Close() (err error) {
 	if err := db.writeGCSize(atomic.LoadInt64(&db.gcSize)); err != nil {
 		log.Error("localstore: write gc size", "err", err)
 	}
+	// stop all subscriptions
+	db.pullFeed.close()
+	db.pushFeed.close()
 	return db.shed.Close()
 }
 

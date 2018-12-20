@@ -72,6 +72,12 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 
 	batch := new(leveldb.Batch)
 
+	// variables that provide information for operations
+	// to be done after write batch function successfully executes
+	var gcSizeChange int64   // number to add or subtract from gcSize
+	var triggerPullFeed bool // signal pull feed subscriptions to iterate
+	var triggerPushFeed bool // signal push feed subscriptions to iterate
+
 	switch mode {
 	case ModePutRequest:
 		// put to indexes: retrieve, gc; it does not enter the syncpool
@@ -99,7 +105,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		if item.AccessTimestamp != 0 {
 			// delete current entry from the gc index
 			db.gcIndex.DeleteInBatch(batch, item)
-			db.incGCSize(-1)
+			gcSizeChange--
 		}
 		if item.StoreTimestamp == 0 {
 			item.StoreTimestamp = now()
@@ -111,7 +117,7 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		// add new entry to gc index
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
-		db.incGCSize(1)
+		gcSizeChange++
 
 		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.retrievalAccessIndex.PutInBatch(batch, item)
@@ -122,7 +128,9 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		item.StoreTimestamp = now()
 		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
+		triggerPullFeed = true
 		db.pushIndex.PutInBatch(batch, item)
+		triggerPushFeed = true
 
 	case ModePutSync:
 		// put to indexes: retrieve, pull
@@ -130,10 +138,24 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		item.StoreTimestamp = now()
 		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
+		triggerPullFeed = true
 
 	default:
 		return ErrInvalidMode
 	}
 
-	return db.shed.WriteBatch(batch)
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
+	}
+	if gcSizeChange != 0 {
+		db.incGCSize(gcSizeChange)
+	}
+	if triggerPullFeed {
+		db.pullFeed.trigger([]byte{db.po(item.Address)})
+	}
+	if triggerPushFeed {
+		db.pushFeed.trigger(nil)
+	}
+	return nil
 }

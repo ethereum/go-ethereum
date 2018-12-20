@@ -71,6 +71,11 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 
 	batch := new(leveldb.Batch)
 
+	// variables that provide information for operations
+	// to be done after write batch function successfully executes
+	var gcSizeChange int64   // number to add or subtract from gcSize
+	var triggerPullFeed bool // signal pull feed subscriptions to iterate
+
 	item := addressToItem(addr)
 
 	switch mode {
@@ -97,7 +102,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		case nil:
 			item.AccessTimestamp = i.AccessTimestamp
 			db.gcIndex.DeleteInBatch(batch, item)
-			db.incGCSize(-1)
+			gcSizeChange--
 		case leveldb.ErrNotFound:
 			// the chunk is not accessed before
 		default:
@@ -106,9 +111,10 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		item.AccessTimestamp = now()
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
+		triggerPullFeed = true
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
-		db.incGCSize(1)
+		gcSizeChange++
 
 	case ModeSetSync:
 		// delete from push, insert to gc
@@ -135,7 +141,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		case nil:
 			item.AccessTimestamp = i.AccessTimestamp
 			db.gcIndex.DeleteInBatch(batch, item)
-			db.incGCSize(-1)
+			gcSizeChange--
 		case leveldb.ErrNotFound:
 			// the chunk is not accessed before
 		default:
@@ -146,7 +152,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
 		db.gcUncountedHashesIndex.PutInBatch(batch, item)
-		db.incGCSize(1)
+		gcSizeChange++
 
 	case modeSetRemove:
 		// delete from retrieve, pull, gc
@@ -178,12 +184,22 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		// as delete is not reporting if the key/value pair
 		// is deleted or not
 		if _, err := db.gcIndex.Get(item); err == nil {
-			db.incGCSize(-1)
+			gcSizeChange = -1
 		}
 
 	default:
 		return ErrInvalidMode
 	}
 
-	return db.shed.WriteBatch(batch)
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
+	}
+	if gcSizeChange != 0 {
+		db.incGCSize(gcSizeChange)
+	}
+	if triggerPullFeed {
+		db.pullFeed.trigger([]byte{db.po(item.Address)})
+	}
+	return nil
 }
