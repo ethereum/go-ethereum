@@ -242,7 +242,7 @@ func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturatio
 	// - we at least know one peer
 	// - we know all neighbors
 	// - we are connected to all known neighbors
-	health := healthParams.KnowNN && healthParams.GotNN && healthParams.CountKnowNN > 0
+	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
 	if expectHealthy != health {
 		t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, k.String())
 	}
@@ -647,7 +647,7 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 	}
 
 	h := k.Healthy(pp)
-	if !(h.GotNN && h.KnowNN && h.CountKnowNN > 0) {
+	if !(h.ConnectNN && h.KnowNN && h.CountKnowNN > 0) {
 		t.Fatalf("not healthy: %#v\n%v", h, k.String())
 	}
 }
