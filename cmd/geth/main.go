@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/les"
@@ -346,11 +346,19 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 			}
 			var mux = stack.EventMux()
-			var sub = mux.Subscribe(downloader.DoneEvent{})
-			<-sub.Chan()
-			log.Info("Synchronisation completed, exitting", "countdown", exitWhenSynced)
-			time.Sleep(exitWhenSynced)
-			stack.Stop()
+			var sub = mux.Subscribe(downloader.BlockEvent{})
+			for {
+				select {
+				case headers := <-sub.Chan():
+					if headers == nil {
+						return
+					}
+					log.Info("Synchronisation completed, checking", "check", headers)
+					time.Sleep(exitWhenSynced)
+					stack.Stop()
+				default:
+				}
+			}
 		}()
 	}
 

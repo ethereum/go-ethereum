@@ -17,5 +17,6 @@
 package downloader
 
 type DoneEvent struct{}
+type BlockEvent struct{}
 type StartEvent struct{}
 type FailedEvent struct{ Err error }
