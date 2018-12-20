@@ -247,7 +247,7 @@ func testForwardMsg(t *testing.T, ps *Pss, c *testCase) {
 
 	resultMap := make(map[pot.Address]int)
 
-	defer func() { sendFunc = sendMessageProd }()
+	defer func() { sendFunc = sendMsg }()
 	sendFunc = func(_ *Pss, sp *network.Peer, _ *PssMsg) bool {
 		if tries < nFails {
 			tries++

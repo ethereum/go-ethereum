@@ -888,10 +888,10 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 
 // sendFunc is a helper function that tries to send a message and returns true on success.
 // It is set here for usage in production, and optionally overridden in tests.
-var sendFunc func(p *Pss, sp *network.Peer, msg *PssMsg) bool = sendMessageProd
+var sendFunc func(p *Pss, sp *network.Peer, msg *PssMsg) bool = sendMsg
 
 // tries to send a message, returns true if successful
-func sendMessageProd(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	var isPssEnabled bool
 	info := sp.Info()
 	for _, capability := range info.Caps {
