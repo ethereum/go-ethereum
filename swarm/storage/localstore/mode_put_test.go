@@ -17,8 +17,11 @@
 package localstore
 
 import (
+	"bytes"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -116,4 +119,78 @@ func TestModePutUpload(t *testing.T) {
 	t.Run("pull index", newPullIndexTest(db, chunk, wantTimestamp, nil))
 
 	t.Run("push index", newPushIndexTest(db, chunk, wantTimestamp, nil))
+}
+
+// TestModePutUpload_parallel uploads chunks in parallel
+// and validates if all chunks can be retrieved with correct data.
+func TestModePutUpload_parallel(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	chunkCount := 1000
+	workerCount := 100
+
+	chunkChan := make(chan storage.Chunk)
+	errChan := make(chan error)
+	doneChan := make(chan struct{})
+	defer close(doneChan)
+
+	// start uploader workers
+	for i := 0; i < workerCount; i++ {
+		go func(i int) {
+			uploader := db.NewPutter(ModePutUpload)
+			for {
+				select {
+				case chunk, ok := <-chunkChan:
+					if !ok {
+						return
+					}
+					err := uploader.Put(chunk)
+					select {
+					case errChan <- err:
+					case <-doneChan:
+					}
+				case <-doneChan:
+					return
+				}
+			}
+		}(i)
+	}
+
+	chunks := make([]storage.Chunk, 0)
+
+	// send chunks to workers
+	go func() {
+		for i := 0; i < chunkCount; i++ {
+			chunk := generateRandomChunk()
+			select {
+			case chunkChan <- chunk:
+			case <-doneChan:
+				return
+			}
+			chunks = append(chunks, chunk)
+		}
+
+		close(chunkChan)
+	}()
+
+	// validate every error from workers
+	for i := 0; i < chunkCount; i++ {
+		err := <-errChan
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// get every chunk and validate its data
+	getter := db.NewGetter(ModeGetRequest)
+	for _, chunk := range chunks {
+		got, err := getter.Get(chunk.Address())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got.Data(), chunk.Data()) {
+			t.Fatalf("got chunk %s data %x, want %x", chunk.Address().Hex(), got.Data(), chunk.Data())
+		}
+	}
 }
