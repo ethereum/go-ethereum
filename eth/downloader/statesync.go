@@ -152,7 +152,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			finished = append(finished, req)
 			delete(active, pack.PeerId())
 
-			// Handle dropped peer connections:
+		// Handle dropped peer connections:
 		case p := <-peerDrop:
 			// Skip if no request is currently pending
 			req := active[p.id]
@@ -398,9 +398,8 @@ func (s *stateSync) fillTasks(n int, req *stateReq) {
 
 // process iterates over a batch of delivered state data, injecting each item
 // into a running state sync, re-queuing any items that were requested but not
-// delivered.
-// Returns whether the peer actually managed to deliver anything of value,
-// and any error that occurred
+// delivered. Returns whether the peer actually managed to deliver anything of
+// value, and any error that occurred.
 func (s *stateSync) process(req *stateReq) (int, error) {
 	// Collect processing stats and update progress if valid data was received
 	duplicate, unexpected, successful := 0, 0, 0
@@ -412,14 +411,12 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 	}(time.Now())
 
 	// Iterate over all the delivered data and inject one-by-one into the trie
-	progress := false
 	for _, blob := range req.response {
-		prog, hash, err := s.processNodeData(blob)
+		_, hash, err := s.processNodeData(blob)
 		switch err {
 		case nil:
 			s.numUncommitted++
 			s.bytesUncommitted += len(blob)
-			progress = progress || prog
 			successful++
 		case trie.ErrNotRequested:
 			unexpected++
