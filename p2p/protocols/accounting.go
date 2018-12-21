@@ -130,7 +130,6 @@ func SetupAccountingMetrics(reportInterval time.Duration, path string) *Accounti
 	return NewAccountingMetrics(MetricsRegistry, reportInterval, path)
 }
 
-// Implement Hook.Send
 // Send takes a peer, a size and a msg and
 //   - calculates the cost for the local node sending a msg of size to peer using the Prices interface
 //   - credits/debits local node using balance interface
@@ -150,7 +149,6 @@ func (ah *Accounting) Send(peer *Peer, size uint32, msg interface{}) error {
 	return err
 }
 
-// Implement Hook.Receive
 // Receive takes a peer, a size and a msg and
 //   - calculates the cost for the local node receiving a msg of size from peer using the Prices interface
 //   - credits/debits local node using balance interface

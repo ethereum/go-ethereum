@@ -110,7 +110,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
-	// check if retriaval has been disabled
+	// check if retrieval has been disabled
 	retrieval := options.Retrieval != RetrievalDisabled
 
 	streamer := &Registry{

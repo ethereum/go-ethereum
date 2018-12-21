@@ -921,3 +921,31 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 		}
 	}
 }
+
+func TestRetrievalIsBilled(t *testing.T) {
+}
+
+func TestHasPriceImplementation(t *testing.T) {
+	_, r, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
+	})
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r.prices == nil {
+		t.Fatal("No prices implementation available for the stream protocol")
+	}
+
+	price := r.prices.Price(&ChunkDeliveryMsgRetrieval{})
+	if price == nil || price.Value == 0 {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+
+	price = r.prices.Price(&RetrieveRequestMsg{})
+	if price == nil || price.Value == 0 {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+}
