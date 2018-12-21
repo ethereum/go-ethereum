@@ -59,7 +59,7 @@ func (i *Interface) SetInt64(n int64)              { i.object = &n }
 func (i *Interface) SetUint8(bigint *BigInt)       { n := uint8(bigint.bigint.Uint64()); i.object = &n }
 func (i *Interface) SetUint16(bigint *BigInt)      { n := uint16(bigint.bigint.Uint64()); i.object = &n }
 func (i *Interface) SetUint32(bigint *BigInt)      { n := uint32(bigint.bigint.Uint64()); i.object = &n }
-func (i *Interface) SetUint64(bigint *BigInt)      { n := uint64(bigint.bigint.Uint64()); i.object = &n }
+func (i *Interface) SetUint64(bigint *BigInt)      { n := bigint.bigint.Uint64(); i.object = &n }
 func (i *Interface) SetBigInt(bigint *BigInt)      { i.object = &bigint.bigint }
 func (i *Interface) SetBigInts(bigints *BigInts)   { i.object = &bigints.bigints }
 

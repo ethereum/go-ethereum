@@ -56,7 +56,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 	defer mux.mutex.Unlock()
 	if mux.stopped {
 		// set the status to closed so that calling Unsubscribe after this
-		// call will short curuit
+		// call will short circuit.
 		sub.closed = true
 		close(sub.postC)
 	} else {
@@ -178,6 +178,12 @@ func (s *TypeMuxSubscription) Chan() <-chan *TypeMuxEvent {
 func (s *TypeMuxSubscription) Unsubscribe() {
 	s.mux.del(s)
 	s.closewait()
+}
+
+func (s *TypeMuxSubscription) Closed() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	return s.closed
 }
 
 func (s *TypeMuxSubscription) closewait() {

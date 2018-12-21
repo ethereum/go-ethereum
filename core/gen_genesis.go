@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var _ = (*genesisSpecMarshaling)(nil)
+
 func (g Genesis) MarshalJSON() ([]byte, error) {
 	type Genesis struct {
 		Config     *params.ChainConfig                         `json:"config"`
@@ -54,7 +56,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Config     *params.ChainConfig                         `json:"config"`
 		Nonce      *math.HexOrDecimal64                        `json:"nonce"`
 		Timestamp  *math.HexOrDecimal64                        `json:"timestamp"`
-		ExtraData  hexutil.Bytes                               `json:"extraData"`
+		ExtraData  *hexutil.Bytes                              `json:"extraData"`
 		GasLimit   *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
 		Difficulty *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
 		Mixhash    *common.Hash                                `json:"mixHash"`
@@ -78,7 +80,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		g.Timestamp = uint64(*dec.Timestamp)
 	}
 	if dec.ExtraData != nil {
-		g.ExtraData = dec.ExtraData
+		g.ExtraData = *dec.ExtraData
 	}
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for Genesis")

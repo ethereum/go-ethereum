@@ -40,8 +40,8 @@ type PublicDownloaderAPI struct {
 // installSyncSubscription channel.
 func NewPublicDownloaderAPI(d *Downloader, m *event.TypeMux) *PublicDownloaderAPI {
 	api := &PublicDownloaderAPI{
-		d:   d,
-		mux: m,
+		d:                         d,
+		mux:                       m,
 		installSyncSubscription:   make(chan chan interface{}),
 		uninstallSyncSubscription: make(chan *uninstallSyncSubscriptionRequest),
 	}
@@ -51,7 +51,7 @@ func NewPublicDownloaderAPI(d *Downloader, m *event.TypeMux) *PublicDownloaderAP
 	return api
 }
 
-// eventLoop runs an loop until the event mux closes. It will install and uninstall new
+// eventLoop runs a loop until the event mux closes. It will install and uninstall new
 // sync subscriptions and broadcasts sync status updates to the installed sync subscriptions.
 func (api *PublicDownloaderAPI) eventLoop() {
 	var (

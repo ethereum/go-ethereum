@@ -127,6 +127,8 @@ func (f *Feed) remove(sub *feedSub) {
 // Send delivers to all subscribed channels simultaneously.
 // It returns the number of subscribers that the value was sent to.
 func (f *Feed) Send(value interface{}) (nsent int) {
+	rvalue := reflect.ValueOf(value)
+
 	f.once.Do(f.init)
 	<-f.sendLock
 
@@ -134,19 +136,21 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 	f.mu.Lock()
 	f.sendCases = append(f.sendCases, f.inbox...)
 	f.inbox = nil
-	f.mu.Unlock()
 
-	// Set the sent value on all channels.
-	rvalue := reflect.ValueOf(value)
 	if !f.typecheck(rvalue.Type()) {
 		f.sendLock <- struct{}{}
 		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
 	}
+	f.mu.Unlock()
+
+	// Set the sent value on all channels.
 	for i := firstSubSendCase; i < len(f.sendCases); i++ {
 		f.sendCases[i].Send = rvalue
 	}
 
-	// Send until all channels except removeSub have been chosen.
+	// Send until all channels except removeSub have been chosen. 'cases' tracks a prefix
+	// of sendCases. When a send succeeds, the corresponding case moves to the end of
+	// 'cases' and it shrinks by one element.
 	cases := f.sendCases
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
@@ -168,6 +172,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 			index := f.sendCases.find(recv.Interface())
 			f.sendCases = f.sendCases.delete(index)
 			if index >= 0 && index < len(cases) {
+				// Shrink 'cases' too because the removed case was still active.
 				cases = f.sendCases[:len(cases)-1]
 			}
 		} else {

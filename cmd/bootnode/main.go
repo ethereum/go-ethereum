@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
@@ -36,7 +38,7 @@ func main() {
 	var (
 		listenAddr  = flag.String("addr", ":30301", "listen address")
 		genKey      = flag.String("genkey", "", "generate a node key")
-		writeAddr   = flag.Bool("writeaddress", false, "write out the node's pubkey hash and quit")
+		writeAddr   = flag.Bool("writeaddress", false, "write out the node's public key and quit")
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
@@ -84,7 +86,7 @@ func main() {
 	}
 
 	if *writeAddr {
-		fmt.Printf("%v\n", discover.PubkeyID(&nodeKey.PublicKey))
+		fmt.Printf("%x\n", crypto.FromECDSAPub(&nodeKey.PublicKey)[1:])
 		os.Exit(0)
 	}
 
@@ -96,12 +98,38 @@ func main() {
 		}
 	}
 
+	addr, err := net.ResolveUDPAddr("udp", *listenAddr)
+	if err != nil {
+		utils.Fatalf("-ResolveUDPAddr: %v", err)
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		utils.Fatalf("-ListenUDP: %v", err)
+	}
+
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil {
+		if !realaddr.IP.IsLoopback() {
+			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := natm.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+		}
+	}
+
 	if *runv5 {
-		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
+		if _, err := discv5.ListenUDP(nodeKey, conn, "", restrictList); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	} else {
-		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
+		db, _ := enode.OpenDB("")
+		ln := enode.NewLocalNode(db, nodeKey)
+		cfg := discover.Config{
+			PrivateKey:  nodeKey,
+			NetRestrict: restrictList,
+		}
+		if _, err := discover.ListenUDP(conn, ln, cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}

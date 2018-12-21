@@ -38,6 +38,8 @@ var stateTestCommand = cli.Command{
 	ArgsUsage: "<file>",
 }
 
+// StatetestResult contains the execution status after running a state test, any
+// error that might have occurred and a dump of the final state if requested.
 type StatetestResult struct {
 	Name  string      `json:"name"`
 	Pass  bool        `json:"pass"`
@@ -66,7 +68,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	)
 	switch {
 	case ctx.GlobalBool(MachineFlag.Name):
-		tracer = NewJSONLogger(config, os.Stderr)
+		tracer = vm.NewJSONLogger(config, os.Stderr)
 
 	case ctx.GlobalBool(DebugFlag.Name):
 		debugger = vm.NewStructLogger(config)
@@ -94,7 +96,12 @@ func stateTestCmd(ctx *cli.Context) error {
 		for _, st := range test.Subtests() {
 			// Run the test and aggregate the result
 			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			if state, err := test.Run(st, cfg); err != nil {
+			state, err := test.Run(st, cfg)
+			// print state root for evmlab tracing
+			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
+				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
+			}
+			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
 				if ctx.GlobalBool(DumpFlag.Name) && state != nil {
@@ -102,6 +109,7 @@ func stateTestCmd(ctx *cli.Context) error {
 					result.State = &dump
 				}
 			}
+
 			results = append(results, *result)
 
 			// Print any structured logs collected

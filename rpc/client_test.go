@@ -323,6 +323,30 @@ func TestClientSubscribeClose(t *testing.T) {
 	}
 }
 
+// This test reproduces https://github.com/ethereum/go-ethereum/issues/17837 where the
+// client hangs during shutdown when Unsubscribe races with Client.Close.
+func TestClientCloseUnsubscribeRace(t *testing.T) {
+	service := &NotificationTestService{}
+	server := newTestServer("eth", service)
+	defer server.Stop()
+
+	for i := 0; i < 20; i++ {
+		client := DialInProc(server)
+		nc := make(chan int)
+		sub, err := client.EthSubscribe(context.Background(), nc, "someSubscription", 3, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go client.Close()
+		go sub.Unsubscribe()
+		select {
+		case <-sub.Err():
+		case <-time.After(5 * time.Second):
+			t.Fatal("subscription not closed within timeout")
+		}
+	}
+}
+
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {

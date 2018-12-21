@@ -17,7 +17,7 @@ var _ = (*ttTransactionMarshaling)(nil)
 func (t ttTransaction) MarshalJSON() ([]byte, error) {
 	type ttTransaction struct {
 		Data     hexutil.Bytes         `gencodec:"required"`
-		GasLimit *math.HexOrDecimal256 `gencodec:"required"`
+		GasLimit math.HexOrDecimal64   `gencodec:"required"`
 		GasPrice *math.HexOrDecimal256 `gencodec:"required"`
 		Nonce    math.HexOrDecimal64   `gencodec:"required"`
 		Value    *math.HexOrDecimal256 `gencodec:"required"`
@@ -28,7 +28,7 @@ func (t ttTransaction) MarshalJSON() ([]byte, error) {
 	}
 	var enc ttTransaction
 	enc.Data = t.Data
-	enc.GasLimit = (*math.HexOrDecimal256)(t.GasLimit)
+	enc.GasLimit = math.HexOrDecimal64(t.GasLimit)
 	enc.GasPrice = (*math.HexOrDecimal256)(t.GasPrice)
 	enc.Nonce = math.HexOrDecimal64(t.Nonce)
 	enc.Value = (*math.HexOrDecimal256)(t.Value)
@@ -41,8 +41,8 @@ func (t ttTransaction) MarshalJSON() ([]byte, error) {
 
 func (t *ttTransaction) UnmarshalJSON(input []byte) error {
 	type ttTransaction struct {
-		Data     hexutil.Bytes         `gencodec:"required"`
-		GasLimit *math.HexOrDecimal256 `gencodec:"required"`
+		Data     *hexutil.Bytes        `gencodec:"required"`
+		GasLimit *math.HexOrDecimal64  `gencodec:"required"`
 		GasPrice *math.HexOrDecimal256 `gencodec:"required"`
 		Nonce    *math.HexOrDecimal64  `gencodec:"required"`
 		Value    *math.HexOrDecimal256 `gencodec:"required"`
@@ -58,11 +58,11 @@ func (t *ttTransaction) UnmarshalJSON(input []byte) error {
 	if dec.Data == nil {
 		return errors.New("missing required field 'data' for ttTransaction")
 	}
-	t.Data = dec.Data
+	t.Data = *dec.Data
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for ttTransaction")
 	}
-	t.GasLimit = (*big.Int)(dec.GasLimit)
+	t.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasPrice == nil {
 		return errors.New("missing required field 'gasPrice' for ttTransaction")
 	}

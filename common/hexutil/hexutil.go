@@ -39,6 +39,7 @@ import (
 
 const uintBits = 32 << (uint64(^uint(0)) >> 63)
 
+// Errors
 var (
 	ErrEmptyString   = &decError{"empty hex string"}
 	ErrSyntax        = &decError{"invalid hex string"}
@@ -53,9 +54,7 @@ var (
 
 type decError struct{ msg string }
 
-func (err decError) Error() string {
-	return string(err.msg)
-}
+func (err decError) Error() string { return err.msg }
 
 // Decode decodes a hex string with 0x prefix.
 func Decode(input string) ([]byte, error) {

@@ -21,6 +21,7 @@ var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
+	"ethash":     Ethash_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -109,6 +110,34 @@ web3._extend({
 });
 `
 
+const Ethash_JS = `
+web3._extend({
+	property: 'ethash',
+	methods: [
+		new web3._extend.Method({
+			name: 'getWork',
+			call: 'ethash_getWork',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getHashrate',
+			call: 'ethash_getHashrate',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'submitWork',
+			call: 'ethash_submitWork',
+			params: 3,
+		}),
+		new web3._extend.Method({
+			name: 'submitHashRate',
+			call: 'ethash_submitHashRate',
+			params: 2,
+		}),
+	]
+});
+`
+
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
@@ -121,6 +150,16 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'removePeer',
 			call: 'admin_removePeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addTrustedPeer',
+			call: 'admin_addTrustedPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removeTrustedPeer',
+			call: 'admin_removeTrustedPeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -194,26 +233,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlock',
-			call: 'debug_traceBlock',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockFromFile',
-			call: 'debug_traceBlockFromFile',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByNumber',
-			call: 'debug_traceBlockByNumber',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'traceBlockByHash',
-			call: 'debug_traceBlockByHash',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -328,9 +347,66 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'mutexProfile',
+			call: 'debug_mutexProfile',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setMutexProfileFraction',
+			call: 'debug_setMutexProfileFraction',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'writeMutexProfile',
+			call: 'debug_writeMutexProfile',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'writeMemProfile',
 			call: 'debug_writeMemProfile',
 			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'traceBlock',
+			call: 'debug_traceBlock',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockFromFile',
+			call: 'debug_traceBlockFromFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBadBlock',
+			call: 'debug_traceBadBlock',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBadBlockToFile',
+			call: 'debug_standardTraceBadBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBlockToFile',
+			call: 'debug_standardTraceBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByNumber',
+			call: 'debug_traceBlockByNumber',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByHash',
+			call: 'debug_traceBlockByHash',
+			params: 2,
+			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
 			name: 'traceTransaction',
@@ -354,6 +430,18 @@ web3._extend({
 			call: 'debug_storageRangeAt',
 			params: 5,
 		}),
+		new web3._extend.Method({
+			name: 'getModifiedAccountsByNumber',
+			call: 'debug_getModifiedAccountsByNumber',
+			params: 2,
+			inputFormatter: [null, null],
+		}),
+		new web3._extend.Method({
+			name: 'getModifiedAccountsByHash',
+			call: 'debug_getModifiedAccountsByHash',
+			params: 2,
+			inputFormatter:[null, null],
+		}),
 	],
 	properties: []
 });
@@ -363,6 +451,11 @@ const Eth_JS = `
 web3._extend({
 	property: 'eth',
 	methods: [
+		new web3._extend.Method({
+			name: 'chainId',
+			call: 'eth_chainId',
+			params: 0
+		}),
 		new web3._extend.Method({
 			name: 'sign',
 			call: 'eth_sign',
@@ -399,6 +492,12 @@ web3._extend({
 			},
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'getProof',
+			call: 'eth_getProof',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 	],
 	properties: [
@@ -448,6 +547,11 @@ web3._extend({
 			call: 'miner_setGasPrice',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
+		}),
+		new web3._extend.Method({
+			name: 'setRecommitInterval',
+			call: 'miner_setRecommitInterval',
+			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',
@@ -501,6 +605,12 @@ web3._extend({
 			call: 'personal_deriveAccount',
 			params: 3
 		}),
+		new web3._extend.Method({
+			name: 'signTransaction',
+			call: 'personal_signTransaction',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
+		}),
 	],
 	properties: [
 		new web3._extend.Property({
@@ -528,109 +638,6 @@ const Shh_JS = `
 web3._extend({
 	property: 'shh',
 	methods: [
-		new web3._extend.Method({
-			name: 'setMaxMessageLength',
-			call: 'shh_setMaxMessageLength',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'setMinimumPoW',
-			call: 'shh_setMinimumPoW',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'markTrustedPeer',
-			call: 'shh_markTrustedPeer',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'hasKeyPair',
-			call: 'shh_hasKeyPair',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'deleteKeyPair',
-			call: 'shh_deleteKeyPair',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'newKeyPair',
-			call: 'shh_newKeyPair'
-		}),
-		new web3._extend.Method({
-			name: 'getPublicKey',
-			call: 'shh_getPublicKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getPrivateKey',
-			call: 'shh_getPrivateKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'newSymKey',
-			call: 'shh_newSymKey',
-		}),
-		new web3._extend.Method({
-			name: 'addSymKey',
-			call: 'shh_addSymKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'generateSymKeyFromPassword',
-			call: 'shh_generateSymKeyFromPassword',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'hasSymKey',
-			call: 'shh_hasSymKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getSymKey',
-			call: 'shh_getSymKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'deleteSymKey',
-			call: 'shh_deleteSymKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'subscribe',
-			call: 'shh_subscribe',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'unsubscribe',
-			call: 'shh_unsubscribe',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'post',
-			call: 'shh_post',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'publicKey',
-			call: 'shh_getPublicKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getFilterMessages',
-			call: 'shh_getFilterMessages',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'deleteMessageFilter',
-			call: 'shh_deleteMessageFilter',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'newMessageFilter',
-			call: 'shh_newMessageFilter',
-			params: 1
-		}),
 	],
 	properties:
 	[

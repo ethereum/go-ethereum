@@ -18,6 +18,7 @@ package bloombits
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math"
 	"sort"
@@ -56,10 +57,16 @@ type partialMatches struct {
 // Retrieval represents a request for retrieval task assignments for a given
 // bit with the given number of fetch elements, or a response for such a request.
 // It can also have the actual results set to be used as a delivery data struct.
+//
+// The contest and error fields are used by the light client to terminate matching
+// early if an error is encountered on some path of the pipeline.
 type Retrieval struct {
 	Bit      uint
 	Sections []uint64
 	Bitsets  [][]byte
+
+	Context context.Context
+	Error   error
 }
 
 // Matcher is a pipelined system of schedulers and logic matchers which perform
@@ -137,7 +144,7 @@ func (m *Matcher) addScheduler(idx uint) {
 // Start starts the matching process and returns a stream of bloom matches in
 // a given range of blocks. If there are no more matches in the range, the result
 // channel is closed.
-func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession, error) {
+func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uint64) (*MatcherSession, error) {
 	// Make sure we're not creating concurrent sessions
 	if atomic.SwapUint32(&m.running, 1) == 1 {
 		return nil, errors.New("matcher already running")
@@ -149,6 +156,7 @@ func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession
 		matcher: m,
 		quit:    make(chan struct{}),
 		kill:    make(chan struct{}),
+		ctx:     ctx,
 	}
 	for _, scheduler := range m.schedulers {
 		scheduler.reset()
@@ -184,10 +192,12 @@ func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession
 				}
 				// Iterate over all the blocks in the section and return the matching ones
 				for i := first; i <= last; i++ {
-					// Skip the entire byte if no matches are found inside
+					// Skip the entire byte if no matches are found inside (and we're processing an entire byte!)
 					next := res.bitset[(i-sectionStart)/8]
 					if next == 0 {
-						i += 7
+						if i%8 == 0 {
+							i += 7
+						}
 						continue
 					}
 					// Some bit it set, do the actual submatching
@@ -208,7 +218,7 @@ func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession
 // run creates a daisy-chain of sub-matchers, one for the address set and one
 // for each topic set, each sub-matcher receiving a section only if the previous
 // ones have all found a potential match in one of the blocks of the section,
-// then binary AND-ing its own matches and forwaring the result to the next one.
+// then binary AND-ing its own matches and forwarding the result to the next one.
 //
 // The method starts feeding the section indexes into the first sub-matcher on a
 // new goroutine and returns a sink channel receiving the results.
@@ -382,7 +392,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 		shutdown = session.quit // Shutdown request channel, will gracefully wait for pending requests
 	)
 
-	// assign is a helper method fo try to assign a pending bit an an actively
+	// assign is a helper method fo try to assign a pending bit an actively
 	// listening servicer, or schedule it up for later when one arrives.
 	assign := func(bit uint) {
 		select {
@@ -502,29 +512,38 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 type MatcherSession struct {
 	matcher *Matcher
 
-	quit chan struct{} // Quit channel to request pipeline termination
-	kill chan struct{} // Term channel to signal non-graceful forced shutdown
+	closer sync.Once     // Sync object to ensure we only ever close once
+	quit   chan struct{} // Quit channel to request pipeline termination
+	kill   chan struct{} // Term channel to signal non-graceful forced shutdown
+
+	ctx context.Context // Context used by the light client to abort filtering
+	err atomic.Value    // Global error to track retrieval failures deep in the chain
+
 	pend sync.WaitGroup
 }
 
 // Close stops the matching process and waits for all subprocesses to terminate
 // before returning. The timeout may be used for graceful shutdown, allowing the
 // currently running retrievals to complete before this time.
-func (s *MatcherSession) Close(timeout time.Duration) {
-	// Bail out if the matcher is not running
-	select {
-	case <-s.quit:
-		return
-	default:
+func (s *MatcherSession) Close() {
+	s.closer.Do(func() {
+		// Signal termination and wait for all goroutines to tear down
+		close(s.quit)
+		time.AfterFunc(time.Second, func() { close(s.kill) })
+		s.pend.Wait()
+	})
+}
+
+// Error returns any failure encountered during the matching session.
+func (s *MatcherSession) Error() error {
+	if err := s.err.Load(); err != nil {
+		return err.(error)
 	}
-	// Signal termination and wait for all goroutines to tear down
-	close(s.quit)
-	time.AfterFunc(timeout, func() { close(s.kill) })
-	s.pend.Wait()
+	return nil
 }
 
 // AllocateRetrieval assigns a bloom bit index to a client process that can either
-// immediately reuest and fetch the section contents assigned to this bit or wait
+// immediately request and fetch the section contents assigned to this bit or wait
 // a little while for more sections to be requested.
 func (s *MatcherSession) AllocateRetrieval() (uint, bool) {
 	fetcher := make(chan uint)
@@ -580,8 +599,8 @@ func (s *MatcherSession) DeliverSections(bit uint, sections []uint64, bitsets []
 	}
 }
 
-// Multiplex polls the matcher session for rerieval tasks and multiplexes it into
-// the reuested retrieval queue to be serviced together with other sessions.
+// Multiplex polls the matcher session for retrieval tasks and multiplexes it into
+// the requested retrieval queue to be serviced together with other sessions.
 //
 // This method will block for the lifetime of the session. Even after termination
 // of the session, any request in-flight need to be responded to! Empty responses
@@ -618,9 +637,13 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 
 		case mux <- request:
 			// Retrieval accepted, something must arrive before we're aborting
-			request <- &Retrieval{Bit: bit, Sections: sections}
+			request <- &Retrieval{Bit: bit, Sections: sections, Context: s.ctx}
 
 			result := <-request
+			if result.Error != nil {
+				s.err.Store(result.Error)
+				s.Close()
+			}
 			s.DeliverSections(result.Bit, result.Sections, result.Bitsets)
 		}
 	}

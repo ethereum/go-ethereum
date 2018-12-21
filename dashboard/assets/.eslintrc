@@ -1,0 +1,86 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// React syntax style mostly according to https://github.com/airbnb/javascript/tree/master/react
+{
+    'env': {
+        'browser': true,
+        'node':    true,
+        'es6':     true,
+    },
+    'parser': 'babel-eslint',
+    'parserOptions': {
+        'sourceType':   'module',
+        'ecmaVersion':  6,
+        'ecmaFeatures': {
+            'jsx': true,
+        }
+    },
+    'extends': 'airbnb',
+    'plugins': [
+        'flowtype',
+        'react',
+    ],
+    'rules': {
+        'no-tabs':                'off',
+        'indent':                 ['error', 'tab'],
+        'react/jsx-indent':       ['error', 'tab'],
+        'react/jsx-indent-props': ['error', 'tab'],
+        'react/prefer-stateless-function': 'off',
+        'jsx-quotes':  ['error', 'prefer-single'],
+        'no-plusplus': 'off',
+        'no-console':  ['error', { allow: ['error'] }],
+
+        // Specifies the maximum length of a line.
+        'max-len': ['warn', 120, 2, {
+            'ignoreUrls':             true,
+            'ignoreComments':         false,
+            'ignoreRegExpLiterals':   true,
+            'ignoreStrings':          true,
+            'ignoreTemplateLiterals': true,
+        }],
+        // Enforces consistent spacing between keys and values in object literal properties.
+        'key-spacing': ['error', {'align': {
+            'beforeColon': false,
+            'afterColon':  true,
+            'on':          'value'
+        }}],
+        // Prohibits padding inside curly braces.
+        'object-curly-spacing': ['error', 'never'],
+        'no-use-before-define': 'off', // messageAPI
+        'default-case': 'off',
+
+        'flowtype/boolean-style':                  ['error', 'boolean'],
+        'flowtype/define-flow-type':               'warn',
+        'flowtype/generic-spacing':                ['error', 'never'],
+        'flowtype/no-primitive-constructor-types': 'error',
+        'flowtype/no-weak-types':                  'error',
+        'flowtype/object-type-delimiter':          ['error', 'comma'],
+        'flowtype/require-valid-file-annotation':  'error',
+        'flowtype/semi':                           ['error', 'always'],
+        'flowtype/space-after-type-colon':         ['error', 'always'],
+        'flowtype/space-before-generic-bracket':   ['error', 'never'],
+        'flowtype/space-before-type-colon':        ['error', 'never'],
+        'flowtype/union-intersection-spacing':     ['error', 'always'],
+        'flowtype/use-flow-type':                  'warn',
+        'flowtype/valid-syntax':                   'warn',
+    },
+    'settings': {
+        'flowtype': {
+            'onlyFilesWithFlowAnnotation': true,
+        }
+    },
+}

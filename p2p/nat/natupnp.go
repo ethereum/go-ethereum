@@ -62,6 +62,7 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
+	n.DeleteMapping(protocol, extport, intport)
 	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 }
 
@@ -80,11 +81,8 @@ func (n *upnp) internalAddress() (net.IP, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			switch x := addr.(type) {
-			case *net.IPNet:
-				if x.Contains(devaddr.IP) {
-					return x.IP, nil
-				}
+			if x, ok := addr.(*net.IPNet); ok && x.Contains(devaddr.IP) {
+				return x.IP, nil
 			}
 		}
 	}

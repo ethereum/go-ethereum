@@ -36,25 +36,17 @@ const Version = 4
 
 // Errors
 var (
-	errPacketTooSmall   = errors.New("too small")
-	errBadHash          = errors.New("bad hash")
-	errExpired          = errors.New("expired")
-	errUnsolicitedReply = errors.New("unsolicited reply")
-	errUnknownNode      = errors.New("unknown node")
-	errTimeout          = errors.New("RPC timeout")
-	errClockWarp        = errors.New("reply deadline too far in the future")
-	errClosed           = errors.New("socket closed")
+	errPacketTooSmall = errors.New("too small")
+	errBadPrefix      = errors.New("bad prefix")
+	errTimeout        = errors.New("RPC timeout")
 )
 
 // Timeouts
 const (
 	respTimeout = 500 * time.Millisecond
-	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
 
-	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
-	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
-	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
+	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC request structures
@@ -145,10 +137,11 @@ type (
 	}
 )
 
-const (
-	macSize  = 256 / 8
-	sigSize  = 520 / 8
-	headSize = macSize + sigSize // space of packet frame data
+var (
+	versionPrefix     = []byte("temporary discovery v5")
+	versionPrefixSize = len(versionPrefix)
+	sigSize           = 520 / 8
+	headSize          = versionPrefixSize + sigSize // space of packet frame data
 )
 
 // Neighbors replies are sent across multiple packets to
@@ -237,30 +230,24 @@ type udp struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
-	transport, err := listenUDP(priv, laddr)
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	transport, err := listenUDP(priv, conn, realaddr)
 	if err != nil {
 		return nil, err
 	}
-	net, err := newNetwork(transport, priv.PublicKey, natm, nodeDBPath, netrestrict)
+	net, err := newNetwork(transport, priv.PublicKey, nodeDBPath, netrestrict)
 	if err != nil {
 		return nil, err
 	}
+	log.Info("UDP listener up", "net", net.tab.self)
 	transport.net = net
 	go transport.readLoop()
 	return net, nil
 }
 
-func listenUDP(priv *ecdsa.PrivateKey, laddr string) (*udp, error) {
-	addr, err := net.ResolveUDPAddr("udp", laddr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &udp{conn: conn, priv: priv, ourEndpoint: makeEndpoint(addr, uint16(addr.Port))}, nil
+func listenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr) (*udp, error) {
+	return &udp{conn: conn, priv: priv, ourEndpoint: makeEndpoint(realaddr, uint16(realaddr.Port))}, nil
 }
 
 func (t *udp) localAddr() *net.UDPAddr {
@@ -324,19 +311,19 @@ func (t *udp) sendTopicRegister(remote *Node, topics []Topic, idx int, pong []by
 
 func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node) {
 	p := topicNodes{Echo: queryHash}
-	if len(nodes) == 0 {
-		t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
-		return
-	}
-	for i, result := range nodes {
-		if netutil.CheckRelayIP(remote.IP, result.IP) != nil {
-			continue
+	var sent bool
+	for _, result := range nodes {
+		if result.IP.Equal(t.net.tab.self.IP) || netutil.CheckRelayIP(remote.IP, result.IP) == nil {
+			p.Nodes = append(p.Nodes, nodeToRPC(result))
 		}
-		p.Nodes = append(p.Nodes, nodeToRPC(result))
-		if len(p.Nodes) == maxTopicNodes || i == len(nodes)-1 {
+		if len(p.Nodes) == maxTopicNodes {
 			t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
 			p.Nodes = p.Nodes[:0]
+			sent = true
 		}
+	}
+	if !sent || len(p.Nodes) > 0 {
+		t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
 	}
 }
 
@@ -348,8 +335,10 @@ func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req inter
 		return hash, err
 	}
 	log.Trace(fmt.Sprintf(">>> %v to %x@%v", nodeEvent(ptype), toid[:8], toaddr))
-	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
+	if nbytes, err := t.conn.WriteToUDP(packet, toaddr); err != nil {
 		log.Trace(fmt.Sprint("UDP send failed:", err))
+	} else {
+		egressTrafficMeter.Mark(int64(nbytes))
 	}
 	//fmt.Println(err)
 	return hash, err
@@ -372,11 +361,9 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 		log.Error(fmt.Sprint("could not sign packet:", err))
 		return nil, nil, err
 	}
-	copy(packet[macSize:], sig)
-	// add the hash to the front. Note: this doesn't protect the
-	// packet in any way.
-	hash = crypto.Keccak256(packet[macSize:])
-	copy(packet, hash)
+	copy(packet, versionPrefix)
+	copy(packet[versionPrefixSize:], sig)
+	hash = crypto.Keccak256(packet[versionPrefixSize:])
 	return packet, hash, nil
 }
 
@@ -390,6 +377,7 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
+		ingressTrafficMeter.Mark(int64(nbytes))
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
 			log.Debug(fmt.Sprintf("Temporary read error: %v", err))
@@ -420,17 +408,16 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 	}
 	buf := make([]byte, len(buffer))
 	copy(buf, buffer)
-	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
-	shouldhash := crypto.Keccak256(buf[macSize:])
-	if !bytes.Equal(hash, shouldhash) {
-		return errBadHash
+	prefix, sig, sigdata := buf[:versionPrefixSize], buf[versionPrefixSize:headSize], buf[headSize:]
+	if !bytes.Equal(prefix, versionPrefix) {
+		return errBadPrefix
 	}
 	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
 		return err
 	}
 	pkt.rawData = buf
-	pkt.hash = hash
+	pkt.hash = crypto.Keccak256(buf[versionPrefixSize:])
 	pkt.remoteID = fromID
 	switch pkt.ev = nodeEvent(sigdata[0]); pkt.ev {
 	case pingPacket:

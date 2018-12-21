@@ -23,12 +23,13 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -39,12 +40,11 @@ import (
 // config contains all the configurations needed by puppeth that should be saved
 // between sessions.
 type config struct {
-	path      string        // File containing the configuration values
-	genesis   *core.Genesis // Genesis block to cache for node deploys
-	bootFull  []string      // Bootnodes to always connect to by full nodes
-	bootLight []string      // Bootnodes to always connect to by light nodes
-	ethstats  string        // Ethstats settings to cache for node deploys
+	path      string   // File containing the configuration values
+	bootnodes []string // Bootnodes to always connect to by all nodes
+	ethstats  string   // Ethstats settings to cache for node deploys
 
+	Genesis *core.Genesis     `json:"genesis,omitempty"` // Genesis block to cache for node deploys
 	Servers map[string][]byte `json:"servers,omitempty"`
 }
 
@@ -76,7 +76,8 @@ type wizard struct {
 	servers  map[string]*sshClient // SSH connections to servers to administer
 	services map[string][]string   // Ethereum services known to be running on servers
 
-	in *bufio.Reader // Wrapper around stdin to allow reading user input
+	in   *bufio.Reader // Wrapper around stdin to allow reading user input
+	lock sync.Mutex    // Lock to protect configs during concurrent service discovery
 }
 
 // read reads a single line from stdin, trimming if from spaces.
@@ -118,6 +119,47 @@ func (w *wizard) readDefaultString(def string) string {
 	return def
 }
 
+// readDefaultYesNo reads a single line from stdin, trimming if from spaces and
+// interpreting it as a 'yes' or a 'no'. If an empty line is entered, the default
+// value is returned.
+func (w *wizard) readDefaultYesNo(def bool) bool {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.ToLower(strings.TrimSpace(text)); text == "" {
+			return def
+		}
+		if text == "y" || text == "yes" {
+			return true
+		}
+		if text == "n" || text == "no" {
+			return false
+		}
+		log.Error("Invalid input, expected 'y', 'yes', 'n', 'no' or empty")
+	}
+}
+
+// readURL reads a single line from stdin, trimming if from spaces and trying to
+// interpret it as a URL (http, https or file).
+func (w *wizard) readURL() *url.URL {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		uri, err := url.Parse(strings.TrimSpace(text))
+		if err != nil {
+			log.Error("Invalid input, expected URL", "err", err)
+			continue
+		}
+		return uri
+	}
+}
+
 // readInt reads a single line from stdin, trimming if from spaces, enforcing it
 // to parse into an integer.
 func (w *wizard) readInt() int {
@@ -155,6 +197,28 @@ func (w *wizard) readDefaultInt(def int) int {
 		val, err := strconv.Atoi(strings.TrimSpace(text))
 		if err != nil {
 			log.Error("Invalid input, expected integer", "err", err)
+			continue
+		}
+		return val
+	}
+}
+
+// readDefaultBigInt reads a single line from stdin, trimming if from spaces,
+// enforcing it to parse into a big integer. If an empty line is entered, the
+// default value is returned.
+func (w *wizard) readDefaultBigInt(def *big.Int) *big.Int {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		}
+		val, ok := new(big.Int).SetString(text, 0)
+		if !ok {
+			log.Error("Invalid input, expected big integer")
 			continue
 		}
 		return val
@@ -209,7 +273,7 @@ func (w *wizard) readDefaultFloat(def float64) float64 {
 // line and returns it. The input will not be echoed.
 func (w *wizard) readPassword() string {
 	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(syscall.Stdin))
+	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}
@@ -280,8 +344,10 @@ func (w *wizard) readJSON() string {
 }
 
 // readIPAddress reads a single line from stdin, trimming if from spaces and
-// converts it to a network IP address.
-func (w *wizard) readIPAddress() net.IP {
+// returning it if it's convertible to an IP address. The reason for keeping
+// the user input format instead of returning a Go net.IP is to match with
+// weird formats used by ethstats, which compares IPs textually, not by value.
+func (w *wizard) readIPAddress() string {
 	for {
 		// Read the IP address from the user
 		fmt.Printf("> ")
@@ -290,14 +356,13 @@ func (w *wizard) readIPAddress() net.IP {
 			log.Crit("Failed to read user input", "err", err)
 		}
 		if text = strings.TrimSpace(text); text == "" {
-			return nil
+			return ""
 		}
 		// Make sure it looks ok and return it if so
-		ip := net.ParseIP(text)
-		if ip == nil {
+		if ip := net.ParseIP(text); ip == nil {
 			log.Error("Invalid IP address, please retry")
 			continue
 		}
-		return ip
+		return text
 	}
 }

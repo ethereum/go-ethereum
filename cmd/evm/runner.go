@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
+	goruntime "runtime"
 	"runtime/pprof"
 	"time"
-
-	goruntime "runtime"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -76,18 +76,20 @@ func runCmd(ctx *cli.Context) error {
 	logconfig := &vm.LogConfig{
 		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
 		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
+		Debug:         ctx.GlobalBool(DebugFlag.Name),
 	}
 
 	var (
-		tracer      vm.Tracer
-		debugLogger *vm.StructLogger
-		statedb     *state.StateDB
-		chainConfig *params.ChainConfig
-		sender      = common.StringToAddress("sender")
-		receiver    = common.StringToAddress("receiver")
+		tracer        vm.Tracer
+		debugLogger   *vm.StructLogger
+		statedb       *state.StateDB
+		chainConfig   *params.ChainConfig
+		sender        = common.BytesToAddress([]byte("sender"))
+		receiver      = common.BytesToAddress([]byte("receiver"))
+		genesisConfig *core.Genesis
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = NewJSONLogger(logconfig, os.Stdout)
+		tracer = vm.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
@@ -96,11 +98,14 @@ func runCmd(ctx *cli.Context) error {
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
-		_, statedb = gen.ToBlock()
+		genesisConfig = gen
+		db := ethdb.NewMemDatabase()
+		genesis := gen.ToBlock(db)
+		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
-		db, _ := ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+		genesisConfig = new(core.Genesis)
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
@@ -152,16 +157,22 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	initialGas := ctx.GlobalUint64(GasFlag.Name)
+	if genesisConfig.GasLimit != 0 {
+		initialGas = genesisConfig.GasLimit
+	}
 	runtimeConfig := runtime.Config{
-		Origin:   sender,
-		State:    statedb,
-		GasLimit: initialGas,
-		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
+		Origin:      sender,
+		State:       statedb,
+		GasLimit:    initialGas,
+		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
+		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
+		Difficulty:  genesisConfig.Difficulty,
+		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
+		Coinbase:    genesisConfig.Coinbase,
+		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
 		EVMConfig: vm.Config{
-			Tracer:             tracer,
-			Debug:              ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
-			DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+			Tracer: tracer,
+			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 		},
 	}
 
@@ -195,6 +206,7 @@ func runCmd(ctx *cli.Context) error {
 	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
+		statedb.Commit(true)
 		statedb.IntermediateRoot(true)
 		fmt.Println(string(statedb.Dump()))
 	}
@@ -233,9 +245,7 @@ Gas used:           %d
 
 `, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
 	}
-	if tracer != nil {
-		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime, err)
-	} else {
+	if tracer == nil {
 		fmt.Printf("0x%x\n", ret)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)

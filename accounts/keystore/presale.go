@@ -38,7 +38,13 @@ func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (accou
 		return accounts.Account{}, nil, err
 	}
 	key.Id = uuid.NewRandom()
-	a := accounts.Account{Address: key.Address, URL: accounts.URL{Scheme: KeyStoreScheme, Path: keyStore.JoinPath(keyFileName(key.Address))}}
+	a := accounts.Account{
+		Address: key.Address,
+		URL: accounts.URL{
+			Scheme: KeyStoreScheme,
+			Path:   keyStore.JoinPath(keyFileName(key.Address)),
+		},
+	}
 	err = keyStore.StoreKey(a.URL.Path, key, password)
 	return a, key, err
 }
@@ -57,6 +63,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	encSeedBytes, err := hex.DecodeString(preSaleKeyStruct.EncSeed)
 	if err != nil {
 		return nil, errors.New("invalid hex in encSeed")
+	}
+	if len(encSeedBytes) < 16 {
+		return nil, errors.New("invalid encSeed, too short")
 	}
 	iv := encSeedBytes[:16]
 	cipherText := encSeedBytes[16:]

@@ -27,10 +27,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/julienschmidt/httprouter"
@@ -263,8 +264,10 @@ func (c *Client) Send(method, path string, in, out interface{}) error {
 
 // Server is an HTTP server providing an API to manage a simulation network
 type Server struct {
-	router  *httprouter.Router
-	network *Network
+	router     *httprouter.Router
+	network    *Network
+	mockerStop chan struct{} // when set, stops the current mocker
+	mockerMtx  sync.Mutex    // synchronises access to the mockerStop field
 }
 
 // NewServer returns a new simulation API server
@@ -278,6 +281,10 @@ func NewServer(network *Network) *Server {
 	s.GET("/", s.GetNetwork)
 	s.POST("/start", s.StartNetwork)
 	s.POST("/stop", s.StopNetwork)
+	s.POST("/mocker/start", s.StartMocker)
+	s.POST("/mocker/stop", s.StopMocker)
+	s.GET("/mocker", s.GetMockers)
+	s.POST("/reset", s.ResetNetwork)
 	s.GET("/events", s.StreamNetworkEvents)
 	s.GET("/snapshot", s.CreateSnapshot)
 	s.POST("/snapshot", s.LoadSnapshot)
@@ -314,6 +321,59 @@ func (s *Server) StopNetwork(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// StartMocker starts the mocker node simulation
+func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
+	s.mockerMtx.Lock()
+	defer s.mockerMtx.Unlock()
+	if s.mockerStop != nil {
+		http.Error(w, "mocker already running", http.StatusInternalServerError)
+		return
+	}
+	mockerType := req.FormValue("mocker-type")
+	mockerFn := LookupMocker(mockerType)
+	if mockerFn == nil {
+		http.Error(w, fmt.Sprintf("unknown mocker type %q", mockerType), http.StatusBadRequest)
+		return
+	}
+	nodeCount, err := strconv.Atoi(req.FormValue("node-count"))
+	if err != nil {
+		http.Error(w, "invalid node-count provided", http.StatusBadRequest)
+		return
+	}
+	s.mockerStop = make(chan struct{})
+	go mockerFn(s.network, s.mockerStop, nodeCount)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// StopMocker stops the mocker node simulation
+func (s *Server) StopMocker(w http.ResponseWriter, req *http.Request) {
+	s.mockerMtx.Lock()
+	defer s.mockerMtx.Unlock()
+	if s.mockerStop == nil {
+		http.Error(w, "stop channel not initialized", http.StatusInternalServerError)
+		return
+	}
+	close(s.mockerStop)
+	s.mockerStop = nil
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// GetMockerList returns a list of available mockers
+func (s *Server) GetMockers(w http.ResponseWriter, req *http.Request) {
+
+	list := GetMockerList()
+	s.JSON(w, http.StatusOK, list)
+}
+
+// ResetNetwork resets all properties of a network to its initial (empty) state
+func (s *Server) ResetNetwork(w http.ResponseWriter, req *http.Request) {
+	s.network.Reset()
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -501,7 +561,8 @@ func (s *Server) LoadSnapshot(w http.ResponseWriter, req *http.Request) {
 
 // CreateNode creates a node in the network using the given configuration
 func (s *Server) CreateNode(w http.ResponseWriter, req *http.Request) {
-	config := adapters.RandomNodeConfig()
+	config := &adapters.NodeConfig{}
+
 	err := json.NewDecoder(req.Body).Decode(config)
 	if err != nil && err != io.EOF {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -648,8 +709,9 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 		ctx := context.Background()
 
 		if id := params.ByName("nodeid"); id != "" {
+			var nodeID enode.ID
 			var node *Node
-			if nodeID, err := discover.HexID(id); err == nil {
+			if nodeID.UnmarshalText([]byte(id)) == nil {
 				node = s.network.GetNode(nodeID)
 			} else {
 				node = s.network.GetNodeByName(id)
@@ -662,8 +724,9 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 		}
 
 		if id := params.ByName("peerid"); id != "" {
+			var peerID enode.ID
 			var peer *Node
-			if peerID, err := discover.HexID(id); err == nil {
+			if peerID.UnmarshalText([]byte(id)) == nil {
 				peer = s.network.GetNode(peerID)
 			} else {
 				peer = s.network.GetNodeByName(id)

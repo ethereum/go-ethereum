@@ -60,7 +60,7 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 					req.section,                    // Requested data
 					req.section,                    // Duplicated data (ensure it doesn't double close anything)
 				}, [][]byte{
-					[]byte{},
+					{},
 					new(big.Int).SetUint64(req.section).Bytes(),
 					new(big.Int).SetUint64(req.section).Bytes(),
 				})

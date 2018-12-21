@@ -99,7 +99,7 @@ type wallet struct {
 	//
 	// As such, a hardware wallet needs two locks to function correctly. A state
 	// lock can be used to protect the wallet's software-side internal state, which
-	// must not be held exlusively during hardware communication. A communication
+	// must not be held exclusively during hardware communication. A communication
 	// lock can be used to achieve exclusive access to the device itself, this one
 	// however should allow "skipping" waiting for operations that might want to
 	// use the device, but can live without too (e.g. account self-derivation).

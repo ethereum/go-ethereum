@@ -1,0 +1,3 @@
+[[constraint]]
+  branch = "v1"
+  name = "gopkg.in/check.v1"

@@ -23,27 +23,27 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
 func TestFastSyncDisabling(t *testing.T) {
 	// Create a pristine protocol manager, check that fast sync is left enabled
-	pmEmpty := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
+	pmEmpty, _ := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
 	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
 		t.Fatalf("fast sync disabled on pristine blockchain")
 	}
 	// Create a full protocol manager, check that fast sync gets disabled
-	pmFull := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
+	pmFull, _ := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
 	if atomic.LoadUint32(&pmFull.fastSync) == 1 {
 		t.Fatalf("fast sync not disabled on non-empty blockchain")
 	}
 	// Sync up the two peers
 	io1, io2 := p2p.MsgPipe()
 
-	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(discover.NodeID{}, "empty", nil), io2))
-	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(discover.NodeID{}, "full", nil), io1))
+	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(enode.ID{}, "empty", nil), io2))
+	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(enode.ID{}, "full", nil), io1))
 
 	time.Sleep(250 * time.Millisecond)
 	pmEmpty.synchronise(pmEmpty.peers.BestPeer())

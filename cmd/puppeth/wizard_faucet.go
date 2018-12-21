@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,7 +38,7 @@ func (w *wizard) deployFaucet() {
 	infos, err := checkFaucet(client, w.network)
 	if err != nil {
 		infos = &faucetInfos{
-			node:    &nodeInfos{portFull: 30303, peersTotal: 25},
+			node:    &nodeInfos{port: 30303, peersTotal: 25},
 			port:    80,
 			host:    client.server,
 			amount:  1,
@@ -47,8 +46,10 @@ func (w *wizard) deployFaucet() {
 			tiers:   3,
 		}
 	}
-	infos.node.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
-	infos.node.network = w.conf.genesis.Config.ChainId.Int64()
+	existed := err == nil
+
+	infos.node.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
+	infos.node.network = w.conf.Genesis.Config.ChainID.Int64()
 
 	// Figure out which port to listen on
 	fmt.Println()
@@ -60,7 +61,7 @@ func (w *wizard) deployFaucet() {
 		log.Error("Failed to decide on faucet host", "err", err)
 		return
 	}
-	// Port and proxy settings retrieved, figure out the funcing amount per perdion configurations
+	// Port and proxy settings retrieved, figure out the funding amount per period configurations
 	fmt.Println()
 	fmt.Printf("How many Ethers to release per request? (default = %d)\n", infos.amount)
 	infos.amount = w.readDefaultInt(infos.amount)
@@ -76,52 +77,11 @@ func (w *wizard) deployFaucet() {
 		log.Error("At least one funding tier must be set")
 		return
 	}
-	// Accessing GitHub gists requires API authorization, retrieve it
-	if infos.githubUser != "" {
-		fmt.Println()
-		fmt.Printf("Reuse previous (%s) GitHub API authorization (y/n)? (default = yes)\n", infos.githubUser)
-		if w.readDefaultString("y") != "y" {
-			infos.githubUser, infos.githubToken = "", ""
-		}
-	}
-	if infos.githubUser == "" {
-		// No previous authorization (or new one requested)
-		fmt.Println()
-		fmt.Println("Which GitHub user to verify Gists through?")
-		infos.githubUser = w.readString()
-
-		fmt.Println()
-		fmt.Println("What is the GitHub personal access token of the user? (won't be echoed)")
-		infos.githubToken = w.readPassword()
-
-		// Do a sanity check query against github to ensure it's valid
-		req, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
-		req.SetBasicAuth(infos.githubUser, infos.githubToken)
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Error("Failed to verify GitHub authentication", "err", err)
-			return
-		}
-		defer res.Body.Close()
-
-		var msg struct {
-			Login   string `json:"login"`
-			Message string `json:"message"`
-		}
-		if err = json.NewDecoder(res.Body).Decode(&msg); err != nil {
-			log.Error("Failed to decode authorization response", "err", err)
-			return
-		}
-		if msg.Login != infos.githubUser {
-			log.Error("GitHub authorization failed", "user", infos.githubUser, "message", msg.Message)
-			return
-		}
-	}
 	// Accessing the reCaptcha service requires API authorizations, request it
 	if infos.captchaToken != "" {
 		fmt.Println()
 		fmt.Println("Reuse previous reCaptcha API authorization (y/n)? (default = yes)")
-		if w.readDefaultString("y") != "y" {
+		if !w.readDefaultYesNo(true) {
 			infos.captchaToken, infos.captchaSecret = "", ""
 		}
 	}
@@ -129,7 +89,9 @@ func (w *wizard) deployFaucet() {
 		// No previous authorization (or old one discarded)
 		fmt.Println()
 		fmt.Println("Enable reCaptcha protection against robots (y/n)? (default = no)")
-		if w.readDefaultString("n") == "y" {
+		if !w.readDefaultYesNo(false) {
+			log.Warn("Users will be able to requests funds via automated scripts")
+		} else {
 			// Captcha protection explicitly requested, read the site and secret keys
 			fmt.Println()
 			fmt.Printf("What is the reCaptcha site key to authenticate human users?\n")
@@ -151,8 +113,8 @@ func (w *wizard) deployFaucet() {
 	}
 	// Figure out which port to listen on
 	fmt.Println()
-	fmt.Printf("Which TCP/UDP port should the light client listen on? (default = %d)\n", infos.node.portFull)
-	infos.node.portFull = w.readDefaultInt(infos.node.portFull)
+	fmt.Printf("Which TCP/UDP port should the light client listen on? (default = %d)\n", infos.node.port)
+	infos.node.port = w.readDefaultInt(infos.node.port)
 
 	// Set a proper name to report on the stats page
 	fmt.Println()
@@ -170,12 +132,12 @@ func (w *wizard) deployFaucet() {
 		} else {
 			fmt.Println()
 			fmt.Printf("Reuse previous (%s) funding account (y/n)? (default = yes)\n", key.Address.Hex())
-			if w.readDefaultString("y") != "y" {
+			if !w.readDefaultYesNo(true) {
 				infos.node.keyJSON, infos.node.keyPass = "", ""
 			}
 		}
 	}
-	if infos.node.keyJSON == "" {
+	for i := 0; i < 3 && infos.node.keyJSON == ""; i++ {
 		fmt.Println()
 		fmt.Println("Please paste the faucet's funding account key JSON:")
 		infos.node.keyJSON = w.readJSON()
@@ -186,11 +148,27 @@ func (w *wizard) deployFaucet() {
 
 		if _, err := keystore.DecryptKey([]byte(infos.node.keyJSON), infos.node.keyPass); err != nil {
 			log.Error("Failed to decrypt key with given passphrase")
-			return
+			infos.node.keyJSON = ""
+			infos.node.keyPass = ""
 		}
 	}
+	// Check if the user wants to run the faucet in debug mode (noauth)
+	noauth := "n"
+	if infos.noauth {
+		noauth = "y"
+	}
+	fmt.Println()
+	fmt.Printf("Permit non-authenticated funding requests (y/n)? (default = %v)\n", infos.noauth)
+	infos.noauth = w.readDefaultString(noauth) != "n"
+
 	// Try to deploy the faucet server on the host
-	if out, err := deployFaucet(client, w.network, w.conf.bootLight, infos); err != nil {
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultYesNo(false)
+	}
+	if out, err := deployFaucet(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy faucet container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
@@ -198,5 +176,5 @@ func (w *wizard) deployFaucet() {
 		return
 	}
 	// All ok, run a network scan to pick any changes up
-	w.networkStats(false)
+	w.networkStats()
 }

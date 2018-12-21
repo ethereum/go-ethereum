@@ -1,4 +1,7 @@
 **/.git
+.git
+!.git/HEAD
+!.git/refs/heads
 **/*_test.go
 
 build/_workspace
