@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
-	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -467,24 +466,8 @@ func (r *Registry) updateSyncing() {
 	}
 	r.peersMu.RUnlock()
 
-	// request subscriptions for all nodes and bins
-	kad.EachBin(r.addr[:], pot.DefaultPof(256), 0, func(p *network.Peer, bin int) bool {
-		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr, p.ID(), bin))
-
-		// bin is always less then 256 and it is safe to convert it to type uint8
-		stream := NewStream("SYNC", FormatSyncBinKey(uint8(bin)), true)
-		if streams, ok := subs[p.ID()]; ok {
-			// delete live and history streams from the map, so that it won't be removed with a Quit request
-			delete(streams, stream)
-			delete(streams, getHistoryStream(stream))
-		}
-		err := r.RequestSubscription(p.ID(), stream, NewRange(0, 0), High)
-		if err != nil {
-			log.Debug("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
-			return false
-		}
-		return true
-	})
+	// start requesting subscriptions from peers
+	r.requestPeerSubscriptions(kad, subs, r.doRequestSubscription)
 
 	// remove SYNC servers that do not need to be subscribed
 	for id, streams := range subs {
@@ -503,6 +486,69 @@ func (r *Registry) updateSyncing() {
 			}
 		}
 	}
+}
+
+// requestPeerSubscriptions calls on each live peer in the kademlia table
+// and sends a `RequestSubscription` to peers according to their bin
+// and their relationship with kademlia's depth.
+// Also check `TestRequestPeerSubscriptions` in order to understand the
+// expected behavior.
+// The function expects:
+//   * the kademlia
+//   * a map of subscriptions
+//   * the actual function to subscribe
+//     (in case of the test, it doesn't do real subscriptions)
+func (r *Registry) requestPeerSubscriptions(
+	kad *network.Kademlia,
+	subs map[enode.ID]map[Stream]struct{},
+	subscriptionFunc func(p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool) {
+
+	var startPo int
+	var endPo int
+	var ok bool
+
+	// kademlia's depth
+	kadDepth := kad.NeighbourhoodDepth()
+	// request subscriptions for all nodes and bins
+	// nil as base takes the node's base; we need to pass 255 as `EachConn` runs
+	// from deepest bins backwards
+	kad.EachConn(nil, 255, func(p *network.Peer, po int, _ bool) bool {
+		//if the peer's bin is shallower than the kademlia depth,
+		//only the peer's bin should be subscribed
+		if po < kadDepth {
+			startPo = po
+			endPo = po
+		} else {
+			//if the peer's bin is equal or deeper than the kademlia depth,
+			//each bin from the depth up to k.MaxProxDisplay should be subscribed
+			startPo = kadDepth
+			endPo = kad.MaxProxDisplay
+		}
+
+		for bin := startPo; bin <= endPo; bin++ {
+			//do the actual subscription
+			ok = subscriptionFunc(p, uint8(bin), subs)
+		}
+		return ok
+	})
+}
+
+// doRequestSubscription sends the actual RequestSubscription to the peer
+func (r *Registry) doRequestSubscription(p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+	log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr, p.ID(), bin))
+	// bin is always less then 256 and it is safe to convert it to type uint8
+	stream := NewStream("SYNC", FormatSyncBinKey(uint8(bin)), true)
+	if streams, ok := subs[p.ID()]; ok {
+		// delete live and history streams from the map, so that it won't be removed with a Quit request
+		delete(streams, stream)
+		delete(streams, getHistoryStream(stream))
+	}
+	err := r.RequestSubscription(p.ID(), stream, NewRange(0, 0), High)
+	if err != nil {
+		log.Debug("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
+		return false
+	}
+	return true
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {

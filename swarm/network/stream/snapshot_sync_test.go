@@ -538,10 +538,10 @@ func startSyncing(r *Registry, conf *synctestConfig) (int, error) {
 	kad := r.delivery.kad
 	subCnt := 0
 	//iterate over each bin and solicit needed subscription to bins
-	kad.EachBin(r.addr[:], pof, 0, func(conn *network.Peer, po int) bool {
+	kad.EachConn(nil, 255, func(p *network.Peer, po int, _ bool) bool {
 		//identify begin and start index of the bin(s) we want to subscribe to
 		subCnt++
-		err = r.RequestSubscription(conf.addrToIDMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), NewRange(0, 0), High)
+		err = r.RequestSubscription(conf.addrToIDMap[string(p.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), true), NewRange(0, 0), High)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
 			return false
