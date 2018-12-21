@@ -91,7 +91,8 @@
 				// stack: salt, size, offset, endowment
 				var offset = log.stack.peek(1).valueOf()
 				var size = log.stack.peek(2).valueOf()
-				this.lookupAccount(toContract2(from, log.stack.peek(3).toString(16), log.memory.slice(offset, size)), db);
+				var end = offset + size
+				this.lookupAccount(toContract2(from, log.stack.peek(3).toString(16), log.memory.slice(offset, end)), db);
 				break;
 			case "CALL": case "CALLCODE": case "DELEGATECALL": case "STATICCALL":
 				this.lookupAccount(toAddress(log.stack.peek(1).toString(16)), db);
