@@ -16,4 +16,5 @@ FROM alpine:3.8
 WORKDIR /
 COPY --from=builder /swarm /geth /swarm-smoke /
 ADD run.sh /run.sh
+ADD run-smoke.sh /run-smoke.sh
 ENTRYPOINT ["/run.sh"]
