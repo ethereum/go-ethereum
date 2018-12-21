@@ -79,6 +79,13 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+		// protect parallel updates
+		unlock, err := db.lockAddr(item.Address)
+		if err != nil {
+			return false, err
+		}
+		defer unlock()
+
 		gcSize := atomic.LoadInt64(&db.gcSize)
 		if gcSize-collectedCount <= target {
 			return true, nil
