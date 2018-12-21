@@ -162,6 +162,8 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
+// TestHealthStrict tests the simplest definition of health
+// Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
 
 	// base address is all zeros

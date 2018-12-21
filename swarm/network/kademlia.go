@@ -474,7 +474,7 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	}
 	p.EachNeighbour(pivotAddr, Pof, f)
 
-	// the second step is to start from the top and test for empty bins
+	// the second step is to test for empty bins in order from shallowest to deepest
 	// if an empty bin is found, this will be the actual depth
 	// we stop iterating if we hit the maxDepth determined in the first step
 	p.EachBin(pivotAddr, Pof, 0, func(po int, _ int, f func(func(pot.Val, int) bool) bool) bool {
