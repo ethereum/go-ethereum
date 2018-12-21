@@ -255,9 +255,7 @@ func TestSubscribePull(t *testing.T) {
 	// to validate the number of chunks received by the subscription
 	errChan := make(chan error)
 
-	var maxBin uint8 = 32
-
-	for bin := uint8(0); bin < maxBin; bin++ {
+	for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
 		sub, err := db.SubscribePull(ctx, bin)
 		if err != nil {
 			t.Fatal(err)
@@ -354,14 +352,12 @@ func TestSubscribePull_multiple(t *testing.T) {
 	// to validate the number of chunks received by the subscription
 	errChan := make(chan error)
 
-	var maxBin uint8 = 32
-
 	subsCount := 10
 
 	// start a number of subscriptions
 	// that all of them will write every chunk error to errChan
 	for j := 0; j < subsCount; j++ {
-		for bin := uint8(0); bin < maxBin; bin++ {
+		for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
 			sub, err := db.SubscribePull(ctx, bin)
 			if err != nil {
 				t.Fatal(err)
