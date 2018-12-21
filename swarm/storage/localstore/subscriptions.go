@@ -40,16 +40,16 @@ func (db *DB) SubscribePush(ctx context.Context) (s *Subscription, err error) {
 	return db.pushFeed.subscribe(ctx, nil)
 }
 
-// Subscription provides stream of Chunks in a particular order
-// through the Chunks channel. That channel will not be closed
-// when the last Chunk is read, but will block until the new Chunk
+// Subscription provides stream of Addresses in a particular order
+// through the Addrs channel. That channel will not be closed
+// when the last Address is read, but will block until the new Address
 // is added to database index. Subscription should be used for
-// getting Chunks and waiting for new ones. It provides methods
+// getting Addresses and waiting for new ones. It provides methods
 // to control and get information about subscription state.
 type Subscription struct {
-	// Chunks is the read-only channel that provides stream of chunks.
-	// This is the subscription main purpose.
-	Chunks <-chan storage.Chunk
+	// Addrs is the read-only channel that provides stream of
+	// chunks addresses. This is the subscription main purpose.
+	Addrs <-chan storage.Address
 
 	// subscribe to set of keys only with this prefix
 	prefix []byte
@@ -92,17 +92,15 @@ func (s *Subscription) Stop() {
 	})
 }
 
-// feed is a collection of Chunks subscriptions of order given
-// by sort index and Chunk data provided by data index.
+// feed is a collection of Address subscriptions of order given
+// by the sort index.
 // It provides methods to create, trigger and remove subscriptions.
 // It is the internal core component for push and pull
 // index subscriptions.
 type feed struct {
-	// index on which keys the order of Chunks will be
+	// index on which keys the order of Addresses will be
 	// provided by subscriptions
 	sortIndex shed.Index
-	// index that contains chunk data
-	dataIndex shed.Index
 	// collection fo subscriptions on this feed
 	subscriptions []*Subscription
 	// protects subscriptions slice
@@ -114,12 +112,10 @@ type feed struct {
 }
 
 // newFeed creates a new feed with from sort and data indexes.
-// Sort index provides ordering of Chunks and data index
-// provides Chunk data.
-func newFeed(sortIndex, dataIndex shed.Index) (f *feed) {
+// Sort index provides ordering of Addresses.
+func newFeed(sortIndex shed.Index) (f *feed) {
 	return &feed{
 		sortIndex:     sortIndex,
-		dataIndex:     dataIndex,
 		subscriptions: make([]*Subscription, 0),
 		closeChan:     make(chan struct{}),
 	}
@@ -135,9 +131,9 @@ func (f *feed) subscribe(ctx context.Context, prefix []byte) (s *Subscription, e
 		return nil, ErrSubscriptionFeedClosed
 	default:
 	}
-	chunks := make(chan storage.Chunk)
+	addrs := make(chan storage.Address)
 	s = &Subscription{
-		Chunks:   chunks,
+		Addrs:    addrs,
 		prefix:   prefix,
 		stopChan: make(chan struct{}),
 		doneChan: make(chan struct{}),
@@ -169,14 +165,8 @@ func (f *feed) subscribe(ctx context.Context, prefix []byte) (s *Subscription, e
 				// - subscription stop is called
 				// - context is done
 				err = f.sortIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-					// get chunk data
-					dataItem, err := f.dataIndex.Get(item)
-					if err != nil {
-						return true, err
-					}
-
 					select {
-					case chunks <- storage.NewChunk(dataItem.Address, dataItem.Data):
+					case addrs <- storage.Address(item.Address):
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						startFrom = &item
@@ -189,7 +179,7 @@ func (f *feed) subscribe(ctx context.Context, prefix []byte) (s *Subscription, e
 					}
 				}, &shed.IterateOptions{
 					StartFrom: startFrom,
-					// startFrom was sent as the last Chunk in the previous
+					// startFrom was sent as the last Address in the previous
 					// iterator call, skip it in this one
 					SkipStartFromItem: true,
 					Prefix:            prefix,
@@ -245,7 +235,7 @@ func (f *feed) close() {
 	})
 }
 
-// trigger signals all subscriptions with tprovided prefix
+// trigger signals all subscriptions with provided prefix
 // that they should continue iterating over index keys
 // where they stopped in the last iteration. This method
 // should be called when new data is put to the index.

@@ -28,7 +28,7 @@ import (
 
 // TestSubscribePush uploads some chunks before and after
 // push syncing subscription is created and validates if
-// all chunks are received in the right order.
+// all addresses are received in the right order.
 func TestSubscribePush(t *testing.T) {
 	t.Parallel()
 
@@ -37,7 +37,7 @@ func TestSubscribePush(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make([]storage.Chunk, 0)
+	addrs := make([]storage.Address, 0)
 
 	uploadRandomChunks := func(count int) {
 		for i := 0; i < count; i++ {
@@ -48,7 +48,7 @@ func TestSubscribePush(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			chunks = append(chunks, chunk)
+			addrs = append(addrs, chunk.Address())
 		}
 	}
 
@@ -60,8 +60,8 @@ func TestSubscribePush(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// collect all errors from validating chunks, even nil ones
-	// to validate the number of chunks received by the subscription
+	// collect all errors from validating addresses, even nil ones
+	// to validate the number of addresses received by the subscription
 	errChan := make(chan error)
 
 	sub, err := db.SubscribePush(ctx)
@@ -70,22 +70,19 @@ func TestSubscribePush(t *testing.T) {
 	}
 	defer sub.Stop()
 
-	// receive and validate chunks from the subscription
+	// receive and validate addresses from the subscription
 	go func() {
-		var i int // chunk index
+		var i int // address index
 		for {
 			select {
-			case got := <-sub.Chunks:
-				want := chunks[i]
+			case got := <-sub.Addrs:
+				want := addrs[i]
 				var err error
-				if !bytes.Equal(got.Data(), want.Data()) {
-					err = fmt.Errorf("got chunk %v data %x, want %x", i, got.Data(), want.Data())
-				}
-				if !bytes.Equal(got.Address(), want.Address()) {
-					err = fmt.Errorf("got chunk %v address %s, want %s", i, got.Address().Hex(), want.Address().Hex())
+				if !bytes.Equal(got, want) {
+					err = fmt.Errorf("got chunk %v address %s, want %s", i, got, want)
 				}
 				i++
-				// send one and only one error per received chunk
+				// send one and only one error per received address
 				errChan <- err
 			case <-ctx.Done():
 				return
@@ -101,7 +98,7 @@ func TestSubscribePush(t *testing.T) {
 	// upload some chunks after some short time
 	uploadRandomChunks(3)
 
-	totalChunks := len(chunks)
+	totalChunks := len(addrs)
 	for i := 0; i < totalChunks; i++ {
 		select {
 		case err := <-errChan:
@@ -116,7 +113,7 @@ func TestSubscribePush(t *testing.T) {
 
 // TestSubscribePush_multiple uploads chunks before and after
 // multiple push syncing subscriptions are created and
-// validates if all chunks are received in the right order.
+// validates if all addresses are received in the right order.
 func TestSubscribePush_multiple(t *testing.T) {
 	t.Parallel()
 
@@ -125,7 +122,7 @@ func TestSubscribePush_multiple(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make([]storage.Chunk, 0)
+	addrs := make([]storage.Address, 0)
 
 	uploadRandomChunks := func(count int) {
 		for i := 0; i < count; i++ {
@@ -136,7 +133,7 @@ func TestSubscribePush_multiple(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			chunks = append(chunks, chunk)
+			addrs = append(addrs, chunk.Address())
 		}
 	}
 
@@ -148,14 +145,14 @@ func TestSubscribePush_multiple(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// collect all errors from validating chunks, even nil ones
-	// to validate the number of chunks received by the subscription
+	// collect all errors from validating addresses, even nil ones
+	// to validate the number of addresses received by the subscription
 	errChan := make(chan error)
 
 	subsCount := 10
 
 	// start a number of subscriptions
-	// that all of them will write every chunk error to errChan
+	// that all of them will write every addresses error to errChan
 	for j := 0; j < subsCount; j++ {
 		sub, err := db.SubscribePush(ctx)
 		if err != nil {
@@ -163,22 +160,19 @@ func TestSubscribePush_multiple(t *testing.T) {
 		}
 		defer sub.Stop()
 
-		// receive and validate chunks from the subscription
+		// receive and validate addresses from the subscription
 		go func(j int) {
-			var i int // chunk index
+			var i int // address index
 			for {
 				select {
-				case got := <-sub.Chunks:
-					want := chunks[i]
+				case got := <-sub.Addrs:
+					want := addrs[i]
 					var err error
-					if !bytes.Equal(got.Data(), want.Data()) {
-						err = fmt.Errorf("got chunk %v on subscription %v data %x, want %x", i, j, got.Data(), want.Data())
-					}
-					if !bytes.Equal(got.Address(), want.Address()) {
-						err = fmt.Errorf("got chunk %v on subscription %v address %s, want %s", i, j, got.Address().Hex(), want.Address().Hex())
+					if !bytes.Equal(got, want) {
+						err = fmt.Errorf("got chunk %v address on subscription %v %s, want %s", i, j, got, want)
 					}
 					i++
-					// send one and only one error per received chunk
+					// send one and only one error per received address
 					errChan <- err
 				case <-ctx.Done():
 					return
@@ -195,8 +189,8 @@ func TestSubscribePush_multiple(t *testing.T) {
 	// upload some chunks after some short time
 	uploadRandomChunks(3)
 
-	// number of chunks received by all subscriptions
-	totalChunks := len(chunks) * subsCount
+	// number of addresses received by all subscriptions
+	totalChunks := len(addrs) * subsCount
 	for i := 0; i < totalChunks; i++ {
 		select {
 		case err := <-errChan:
@@ -211,7 +205,7 @@ func TestSubscribePush_multiple(t *testing.T) {
 
 // TestSubscribePull uploads some chunks before and after
 // pull syncing subscription is created and validates if
-// all chunks are received in the right order
+// all addresses are received in the right order
 // for expected proximity order bins.
 func TestSubscribePull(t *testing.T) {
 	t.Parallel()
@@ -221,7 +215,7 @@ func TestSubscribePull(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make(map[uint8][]storage.Chunk)
+	addrs := make(map[uint8][]storage.Address)
 	var uploadedChunksCount int
 
 	uploadRandomChunks := func(count int) {
@@ -234,11 +228,11 @@ func TestSubscribePull(t *testing.T) {
 			}
 
 			bin := db.po(chunk.Address())
-			if _, ok := chunks[bin]; !ok {
-				chunks[bin] = make([]storage.Chunk, 0)
+			if _, ok := addrs[bin]; !ok {
+				addrs[bin] = make([]storage.Address, 0)
 			}
 
-			chunks[bin] = append(chunks[bin], chunk)
+			addrs[bin] = append(addrs[bin], chunk.Address())
 			uploadedChunksCount++
 		}
 	}
@@ -251,8 +245,8 @@ func TestSubscribePull(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// collect all errors from validating chunks, even nil ones
-	// to validate the number of chunks received by the subscription
+	// collect all errors from validating addresses, even nil ones
+	// to validate the number of addresses received by the subscription
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
@@ -262,22 +256,19 @@ func TestSubscribePull(t *testing.T) {
 		}
 		defer sub.Stop()
 
-		// receive and validate chunks from the subscription
+		// receive and validate addresses from the subscription
 		go func(bin uint8) {
-			var i int // chunk index
+			var i int // address index
 			for {
 				select {
-				case got := <-sub.Chunks:
-					want := chunks[bin][i]
+				case got := <-sub.Addrs:
+					want := addrs[bin][i]
 					var err error
-					if !bytes.Equal(got.Data(), want.Data()) {
-						err = fmt.Errorf("got chunk %v in bin %v data %x, want %x", i, bin, got.Data(), want.Data())
-					}
-					if !bytes.Equal(got.Address(), want.Address()) {
-						err = fmt.Errorf("got chunk %v in bin %v address %s, want %s", i, bin, got.Address().Hex(), want.Address().Hex())
+					if !bytes.Equal(got, want) {
+						err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got, want)
 					}
 					i++
-					// send one and only one error per received chunk
+					// send one and only one error per received address
 					errChan <- err
 				case <-ctx.Done():
 					return
@@ -308,7 +299,7 @@ func TestSubscribePull(t *testing.T) {
 
 // TestSubscribePull_multiple uploads chunks before and after
 // multiple pull syncing subscriptions are created and
-// validates if all chunks are received in the right order
+// validates if all addresses are received in the right order
 // for expected proximity order bins.
 func TestSubscribePull_multiple(t *testing.T) {
 	t.Parallel()
@@ -318,7 +309,7 @@ func TestSubscribePull_multiple(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make(map[uint8][]storage.Chunk)
+	addrs := make(map[uint8][]storage.Address)
 	var uploadedChunksCount int
 
 	uploadRandomChunks := func(count int) {
@@ -331,11 +322,11 @@ func TestSubscribePull_multiple(t *testing.T) {
 			}
 
 			bin := db.po(chunk.Address())
-			if _, ok := chunks[bin]; !ok {
-				chunks[bin] = make([]storage.Chunk, 0)
+			if _, ok := addrs[bin]; !ok {
+				addrs[bin] = make([]storage.Address, 0)
 			}
 
-			chunks[bin] = append(chunks[bin], chunk)
+			addrs[bin] = append(addrs[bin], chunk.Address())
 			uploadedChunksCount++
 		}
 	}
@@ -348,14 +339,14 @@ func TestSubscribePull_multiple(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// collect all errors from validating chunks, even nil ones
-	// to validate the number of chunks received by the subscription
+	// collect all errors from validating addresses, even nil ones
+	// to validate the number of addresses received by the subscription
 	errChan := make(chan error)
 
 	subsCount := 10
 
 	// start a number of subscriptions
-	// that all of them will write every chunk error to errChan
+	// that all of them will write every address error to errChan
 	for j := 0; j < subsCount; j++ {
 		for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
 			sub, err := db.SubscribePull(ctx, bin)
@@ -364,22 +355,19 @@ func TestSubscribePull_multiple(t *testing.T) {
 			}
 			defer sub.Stop()
 
-			// receive and validate chunks from the subscription
+			// receive and validate addresses from the subscription
 			go func(bin uint8, j int) {
-				var i int // chunk index
+				var i int // address index
 				for {
 					select {
-					case got := <-sub.Chunks:
-						want := chunks[bin][i]
+					case got := <-sub.Addrs:
+						want := addrs[bin][i]
 						var err error
-						if !bytes.Equal(got.Data(), want.Data()) {
-							err = fmt.Errorf("got chunk %v in bin %v on subscription %v data %x, want %x", i, bin, j, got.Data(), want.Data())
-						}
-						if !bytes.Equal(got.Address(), want.Address()) {
-							err = fmt.Errorf("got chunk %v in bin %v on subscription %v address %s, want %s", i, bin, j, got.Address().Hex(), want.Address().Hex())
+						if !bytes.Equal(got, want) {
+							err = fmt.Errorf("got chunk address %v in bin %v on subscription %v %s, want %s", i, bin, j, got, want)
 						}
 						i++
-						// send one and only one error per received chunk
+						// send one and only one error per received address
 						errChan <- err
 					case <-ctx.Done():
 						return

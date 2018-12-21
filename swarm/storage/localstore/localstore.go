@@ -255,7 +255,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	// create a pull syncing feed used by SubscribePull function
-	db.pullFeed = newFeed(db.pullIndex, db.retrievalDataIndex)
+	db.pullFeed = newFeed(db.pullIndex)
 	// push index contains as yet unsynced chunks
 	db.pushIndex, err = db.shed.NewIndex("StoredTimestamp|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
@@ -280,7 +280,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	// create a push syncing feed used by SubscribePush function
-	db.pushFeed = newFeed(db.pushIndex, db.retrievalDataIndex)
+	db.pushFeed = newFeed(db.pushIndex)
 	// gc index for removable chunk ordered by ascending last access time
 	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|StoredTimestamp|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
