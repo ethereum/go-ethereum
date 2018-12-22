@@ -1562,7 +1562,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 		if err := d.importBlockResults(afterP); err != nil {
 			return err
 		}
-		if 4400000 > time.Now().Unix()-latest.Time.Int64() {
+		if 600 > time.Now().Unix()-latest.Time.Int64() {
 			d.mux.Post(BlockEvent{})
 		}
 	}
