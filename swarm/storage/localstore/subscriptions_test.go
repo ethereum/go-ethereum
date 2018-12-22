@@ -249,7 +249,7 @@ func TestSubscribePull(t *testing.T) {
 	// to validate the number of addresses received by the subscription
 	errChan := make(chan error)
 
-	for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
+	for bin := uint8(0); bin <= uint8(storage.MaxPO); bin++ {
 		sub, err := db.SubscribePull(ctx, bin)
 		if err != nil {
 			t.Fatal(err)
@@ -348,7 +348,7 @@ func TestSubscribePull_multiple(t *testing.T) {
 	// start a number of subscriptions
 	// that all of them will write every address error to errChan
 	for j := 0; j < subsCount; j++ {
-		for bin := uint8(0); bin < uint8(storage.MaxPO); bin++ {
+		for bin := uint8(0); bin <= uint8(storage.MaxPO); bin++ {
 			sub, err := db.SubscribePull(ctx, bin)
 			if err != nil {
 				t.Fatal(err)
