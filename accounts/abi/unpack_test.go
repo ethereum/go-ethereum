@@ -364,6 +364,55 @@ func TestUnpack(t *testing.T) {
 	}
 }
 
+func TestUnpackSetDynamicArrayOutput(t *testing.T) {
+	abi, err := JSON(strings.NewReader(`[{"constant":true,"inputs":[],"name":"testDynamicFixedBytes15","outputs":[{"name":"","type":"bytes15[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"testDynamicFixedBytes32","outputs":[{"name":"","type":"bytes32[]"}],"payable":false,"stateMutability":"view","type":"function"}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var (
+		marshalledReturn32 = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000230783132333435363738393000000000000000000000000000000000000000003078303938373635343332310000000000000000000000000000000000000000")
+		marshalledReturn15 = common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000230783031323334350000000000000000000000000000000000000000000000003078393837363534000000000000000000000000000000000000000000000000")
+
+		out32 [][32]byte
+		out15 [][15]byte
+	)
+
+	// test 32
+	err = abi.Unpack(&out32, "testDynamicFixedBytes32", marshalledReturn32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out32) != 2 {
+		t.Fatalf("expected array with 2 values, got %d", len(out32))
+	}
+	expected := common.Hex2Bytes("3078313233343536373839300000000000000000000000000000000000000000")
+	if !bytes.Equal(out32[0][:], expected) {
+		t.Errorf("expected %x, got %x\n", expected, out32[0])
+	}
+	expected = common.Hex2Bytes("3078303938373635343332310000000000000000000000000000000000000000")
+	if !bytes.Equal(out32[1][:], expected) {
+		t.Errorf("expected %x, got %x\n", expected, out32[1])
+	}
+
+	// test 15
+	err = abi.Unpack(&out15, "testDynamicFixedBytes32", marshalledReturn15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out15) != 2 {
+		t.Fatalf("expected array with 2 values, got %d", len(out15))
+	}
+	expected = common.Hex2Bytes("307830313233343500000000000000")
+	if !bytes.Equal(out15[0][:], expected) {
+		t.Errorf("expected %x, got %x\n", expected, out15[0])
+	}
+	expected = common.Hex2Bytes("307839383736353400000000000000")
+	if !bytes.Equal(out15[1][:], expected) {
+		t.Errorf("expected %x, got %x\n", expected, out15[1])
+	}
+}
+
 type methodMultiOutput struct {
 	Int    *big.Int
 	String string
