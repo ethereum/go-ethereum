@@ -518,6 +518,12 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   self.sfs,
 			Public:    false,
 		},
+		{
+			Namespace: "accounting",
+			Version:   protocols.AccountingVersion,
+			Service:   protocols.NewAccountingApi(self.accountingMetrics),
+			Public:    false,
+		},
 	}
 
 	apis = append(apis, self.bzz.APIs()...)
