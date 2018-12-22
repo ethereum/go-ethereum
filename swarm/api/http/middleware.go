@@ -80,7 +80,7 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 		h.ServeHTTP(writer, r)
 
 		ts := time.Since(tn)
-		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts*time.Millisecond)
+		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).Update(ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.%d.time", r.Method, writer.statusCode), nil).Update(ts)
 	})
