@@ -182,8 +182,6 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 }
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
@@ -332,7 +330,6 @@ kademlia network. The snapshot should have 'streamer' in its service list.
 */
 func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) error {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			n := ctx.Config.Node()
@@ -555,9 +552,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	var kadMinProxSize = 2
-
-	ppmap := network.NewPeerPotMap(kadMinProxSize, conf.addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, conf.addrs)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))

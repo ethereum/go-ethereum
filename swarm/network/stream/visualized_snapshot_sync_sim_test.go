@@ -96,7 +96,6 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 //This test requests bogus hashes into the network
 func TestNonExistingHashesWithServer(t *testing.T) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodeCount, _, sim := setupSim(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -211,6 +210,7 @@ func TestSnapshotSyncWithServer(t *testing.T) {
 		},
 	}).WithServer(":8888") //start with the HTTP server
 
+	nodeCount, chunkCount, sim := setupSim(simServiceMap)
 	defer sim.Close()
 
 	log.Info("Initializing test config")

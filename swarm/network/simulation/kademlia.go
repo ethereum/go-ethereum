@@ -39,6 +39,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
 	addrs := make([][]byte, 0, len(kademlias))
+	// TODO verify that all kademlias have same params
 	for _, k := range kademlias {
 		addrs = append(addrs, k.BaseAddr())
 	}
@@ -66,10 +67,10 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 				h := k.Healthy(pp)
 				//print info
 				log.Debug(k.String())
-				log.Debug("kademlia", "empty bins", pp.EmptyBins, "gotNN", h.GotNN, "knowNN", h.KnowNN, "full", h.Full)
-				log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
-				if !h.GotNN || !h.Full {
+				log.Debug("kademlia", "connectNN", h.ConnectNN, "knowNN", h.KnowNN)
+				log.Debug("kademlia", "health", h.ConnectNN && h.KnowNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				log.Debug("kademlia", "ill condition", !h.ConnectNN, "addr", hex.EncodeToString(k.BaseAddr()), "node", id)
+				if !h.ConnectNN {
 					ill[id] = k
 				}
 			}

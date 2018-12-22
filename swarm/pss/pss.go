@@ -513,7 +513,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	}
 
 	depth := p.Kademlia.NeighbourhoodDepth()
-	po, _ := p.Kademlia.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
 	return depth <= po
