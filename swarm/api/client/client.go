@@ -46,11 +46,6 @@ import (
 )
 
 var (
-	DefaultGateway = "http://localhost:8500"
-	DefaultClient  = NewClient(DefaultGateway)
-)
-
-var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
 

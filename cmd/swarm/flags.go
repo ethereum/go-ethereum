@@ -164,10 +164,6 @@ var (
 		Name:  "topic",
 		Usage: "User-defined topic this feed is tracking, hex encoded. Limited to 64 hexadecimal characters",
 	}
-	SwarmFeedDataOnCreateFlag = cli.StringFlag{
-		Name:  "data",
-		Usage: "Initializes the feed with the given hex-encoded data. Data must be prefixed by 0x",
-	}
 	SwarmFeedManifestFlag = cli.StringFlag{
 		Name:  "manifest",
 		Usage: "Refers to the feed through a manifest",

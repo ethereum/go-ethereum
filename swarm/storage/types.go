@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"hash"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,49 +34,9 @@ import (
 const MaxPO = 16
 const AddressLength = 32
 
-type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
 
-// Peer is the recorded as Source on the chunk
-// should probably not be here? but network should wrap chunk object
-type Peer interface{}
-
 type Address []byte
-
-func (a Address) Size() uint {
-	return uint(len(a))
-}
-
-func (a Address) isEqual(y Address) bool {
-	return bytes.Equal(a, y)
-}
-
-func (a Address) bits(i, j uint) uint {
-	ii := i >> 3
-	jj := i & 7
-	if ii >= a.Size() {
-		return 0
-	}
-
-	if jj+j <= 8 {
-		return uint((a[ii] >> jj) & ((1 << j) - 1))
-	}
-
-	res := uint(a[ii] >> jj)
-	jj = 8 - jj
-	j -= jj
-	for j != 0 {
-		ii++
-		if j < 8 {
-			res += uint(a[ii]&((1<<j)-1)) << jj
-			return res
-		}
-		res += uint(a[ii]) << jj
-		jj += 8
-		j -= 8
-	}
-	return res
-}
 
 // Proximity(x, y) returns the proximity order of the MSB distance between x and y
 //
@@ -110,10 +69,6 @@ func Proximity(one, other []byte) (ret int) {
 		}
 	}
 	return MaxPO
-}
-
-func IsZeroAddr(addr Address) bool {
-	return len(addr) == 0 || bytes.Equal(addr, ZeroAddr)
 }
 
 var ZeroAddr = Address(common.Hash{}.Bytes())
@@ -302,10 +257,6 @@ type Getter interface {
 // NOTE: this returns invalid data if chunk is encrypted
 func (c ChunkData) Size() uint64 {
 	return binary.LittleEndian.Uint64(c[:8])
-}
-
-func (c ChunkData) Data() []byte {
-	return c[8:]
 }
 
 type ChunkValidator interface {
