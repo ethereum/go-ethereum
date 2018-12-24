@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -149,6 +150,11 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 
 	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
+	}
+
+	// Check testnet is enable.
+	if ctx.GlobalBool(utils.TomoTestnetFlag.Name) {
+		common.IsTestnet = true
 	}
 
 	// read passwords from environment

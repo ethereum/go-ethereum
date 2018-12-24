@@ -45,8 +45,8 @@ import (
 )
 
 const (
-	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	M2ByteLength       = 4
+	inmemorySnapshots = 128 // Number of recent vote snapshots to keep in memory
+	M2ByteLength      = 4
 )
 
 type Masternode struct {
@@ -476,6 +476,11 @@ func whoIsCreator(snap *Snapshot, header *types.Header) (common.Address, error) 
 
 func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	masternodes := c.GetMasternodes(chain, parent)
+	if common.IsTestnet {
+		// Only three mns for tomo testnet.
+		masternodes = masternodes[:3]
+	}
+	log.Error("masternodes", "masternodes", len(masternodes))
 	snap, err := c.GetSnapshot(chain, parent)
 	if err != nil {
 		log.Warn("Failed when trying to commit new work", "err", err)
