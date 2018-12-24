@@ -28,7 +28,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS TOMO_TESTNET; do
+            NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -55,6 +55,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
+      params="$params --tomo-testnet"
       ;;
     90 )
       genesisPath="devnet.json"
@@ -142,11 +143,6 @@ fi
 # annonce txs
 if [[ ! -z $ANNOUNCE_TXS ]]; then
   params="$params --announce-txs"
-fi
-
-# testnet only
-if [[ ! -z $TOMO_TESTNET ]]; then
-  params="$params --tomo-testnet"
 fi
 
 # dump
