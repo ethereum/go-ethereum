@@ -127,11 +127,11 @@ type BlockChain struct {
 	bodyRLPCache     *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	blockCache       *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks     *lru.Cache     // future blocks are blocks added for later processing
-	resultProcess    *lru.Cache		// Cache for processed blocks
-	calculatingBlock *lru.Cache		// Cache for processing blocks
-	downloadingBlock *lru.Cache		// Cache for downloading blocks (avoid duplication from fetcher)
-	quit             chan struct{} // blockchain quit channel
-	running          int32         // running must be called atomically
+	resultProcess    *lru.Cache     // Cache for processed blocks
+	calculatingBlock *lru.Cache     // Cache for processing blocks
+	downloadingBlock *lru.Cache     // Cache for downloading blocks (avoid duplication from fetcher)
+	quit             chan struct{}  // blockchain quit channel
+	running          int32          // running must be called atomically
 	// procInterrupt must be atomically called
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down

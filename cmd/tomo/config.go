@@ -28,6 +28,7 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -149,6 +150,11 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 
 	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
+	}
+
+	// Check testnet is enable.
+	if ctx.GlobalBool(utils.TomoTestnetFlag.Name) {
+		common.IsTestnet = true
 	}
 
 	// read passwords from environment
