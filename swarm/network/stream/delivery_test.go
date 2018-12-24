@@ -442,17 +442,17 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 }
 
 func TestDeliveryFromNodes(t *testing.T) {
-	testDeliveryFromNodes(t, 2, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 2, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 4, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 4, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 8, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 8, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 16, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 16, 1, dataChunkCount, false)
+	testDeliveryFromNodes(t, 2, dataChunkCount, true)
+	testDeliveryFromNodes(t, 2, dataChunkCount, false)
+	testDeliveryFromNodes(t, 4, dataChunkCount, true)
+	testDeliveryFromNodes(t, 4, dataChunkCount, false)
+	testDeliveryFromNodes(t, 8, dataChunkCount, true)
+	testDeliveryFromNodes(t, 8, dataChunkCount, false)
+	testDeliveryFromNodes(t, 16, dataChunkCount, true)
+	testDeliveryFromNodes(t, 16, dataChunkCount, false)
 }
 
-func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
+func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			node := ctx.Config.Node()
@@ -609,7 +609,7 @@ func BenchmarkDeliveryFromNodesWithoutCheck(b *testing.B) {
 			b.Run(
 				fmt.Sprintf("nodes=%v,chunks=%v", i, chunks),
 				func(b *testing.B) {
-					benchmarkDeliveryFromNodes(b, i, 1, chunks, true)
+					benchmarkDeliveryFromNodes(b, i, chunks, true)
 				},
 			)
 		}
@@ -622,14 +622,14 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 			b.Run(
 				fmt.Sprintf("nodes=%v,chunks=%v", i, chunks),
 				func(b *testing.B) {
-					benchmarkDeliveryFromNodes(b, i, 1, chunks, false)
+					benchmarkDeliveryFromNodes(b, i, chunks, false)
 				},
 			)
 		}
 	}
 }
 
-func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
+func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			node := ctx.Config.Node()
