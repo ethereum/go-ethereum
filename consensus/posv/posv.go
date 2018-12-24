@@ -480,7 +480,6 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 		// Only three mns for tomo testnet.
 		masternodes = masternodes[:3]
 	}
-	log.Error("masternodes", "masternodes", len(masternodes))
 	snap, err := c.GetSnapshot(chain, parent)
 	if err != nil {
 		log.Warn("Failed when trying to commit new work", "err", err)
