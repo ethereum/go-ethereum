@@ -611,12 +611,12 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 func (s *PublicBlockChainAPI) GetBlockSignersByHash(ctx context.Context, blockHash common.Hash) ([]common.Address, error) {
 	block, err := s.b.GetBlock(ctx, blockHash)
 	if err != nil || block == nil {
-		return nil, err
+		return []common.Address{}, err
 	}
 	masternodes, err := s.GetMasternodes(block, ctx)
 	if err != nil || len(masternodes) == 0 {
-		log.Error("Failed to get masternodes")
-		return nil, err
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return []common.Address{}, err
 	}
 	return s.rpcOutputBlockSigners(block, ctx, masternodes)
 }
@@ -624,12 +624,12 @@ func (s *PublicBlockChainAPI) GetBlockSignersByHash(ctx context.Context, blockHa
 func (s *PublicBlockChainAPI) GetBlockSignersByNumber(ctx context.Context, blockNumber rpc.BlockNumber) ([]common.Address, error) {
 	block, err := s.b.BlockByNumber(ctx, blockNumber)
 	if err != nil || block == nil {
-		return nil, err
+		return []common.Address{}, err
 	}
 	masternodes, err := s.GetMasternodes(block, ctx)
 	if err != nil || len(masternodes) == 0 {
-		log.Error("Failed to get masternodes")
-		return nil, err
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return []common.Address{}, err
 	}
 	return s.rpcOutputBlockSigners(block, ctx, masternodes)
 }
@@ -641,10 +641,13 @@ func (s *PublicBlockChainAPI) GetBlockFinalityByHash(ctx context.Context, blockH
 	}
 	masternodes, err := s.GetMasternodes(block, ctx)
 	if err != nil || len(masternodes) == 0 {
-		log.Error("Failed to get masternodes")
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
 		return int32(0), err
 	}
 	blockSigners, err := s.rpcOutputBlockSigners(block, ctx, masternodes)
+	if err != nil {
+		return int32(0), err
+	}
 	return int32(100 * len(blockSigners) / len(masternodes)), err
 }
 
@@ -655,10 +658,13 @@ func (s *PublicBlockChainAPI) GetBlockFinalityByNumber(ctx context.Context, bloc
 	}
 	masternodes, err := s.GetMasternodes(block, ctx)
 	if err != nil || len(masternodes) == 0 {
-		log.Error("Failed to get masternodes")
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
 		return int32(0), err
 	}
 	blockSigners, err := s.rpcOutputBlockSigners(block, ctx, masternodes)
+	if err != nil {
+		return int32(0), err
+	}
 	return int32(100 * len(blockSigners) / len(masternodes)), err
 }
 func (s *PublicBlockChainAPI) GetMasternodes(b *types.Block, ctx context.Context) ([]common.Address, error) {
@@ -677,6 +683,8 @@ func (s *PublicBlockChainAPI) GetMasternodes(b *types.Block, ctx context.Context
 			if prevCheckpointBlock != nil {
 				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XDPoS.Epoch)
 			}
+		}  else {
+			log.Error("Undefined XDPoS consensus engine")
 		}
 	}
 	return masternodes, nil
@@ -936,7 +944,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 	client, err := s.b.GetIPCClient()
 	if err != nil {
 		log.Error("Fail to connect IPC client for block status", "error", err)
-		return nil, err
+		return []common.Address{}, err
 	}
 
 	var signers []common.Address
@@ -952,13 +960,13 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 			prevBlock, err := s.b.BlockByNumber(ctx, rpc.BlockNumber(prevBlockNumber))
 			if err != nil {
 				log.Error("Fail to get previous block", "error", err)
-				return nil, err
+				return []common.Address{}, err
 			}
 			addrBlockSigner := common.HexToAddress(common.BlockSigners)
 			signers, err = contracts.GetSignersByExecutingEVM(addrBlockSigner, client, prevBlock.Hash())
 			if err != nil {
 				log.Error("Fail to get signers from block signer SC.", "error", err)
-				return nil, err
+				return []common.Address{}, err
 			}
 			validator, _ := engine.RecoverValidator(b.Header())
 			creator, _ := engine.RecoverSigner(b.Header())
@@ -972,6 +980,8 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 					}
 				}
 			}
+		}  else {
+			log.Error("Undefined XDPoS consensus engine")
 		}
 	}
 	return filterSigners, nil
