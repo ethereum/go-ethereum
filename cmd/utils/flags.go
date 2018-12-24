@@ -139,6 +139,10 @@ var (
 		Name:  "testnet",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
+	TomoTestnetFlag = cli.BoolFlag{
+		Name:  "tomo-testnet",
+		Usage: "Tomo test network",
+	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",

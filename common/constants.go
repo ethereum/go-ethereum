@@ -16,3 +16,5 @@ const (
 	LimitThresholdNonceInQueue = 10
 	MinGasPrice                = 2500
 )
+
+var IsTestnet bool = false
