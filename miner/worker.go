@@ -497,7 +497,7 @@ func (self *worker) commitNewWork() {
 		if self.config.Posv != nil {
 			// get masternodes set from latest checkpoint
 			c := self.engine.(*posv.Posv)
-			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(),self.coinbase)
+			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return
