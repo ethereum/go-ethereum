@@ -500,10 +500,10 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 	}
 	curIndex := position(masternodes, signer)
 	if signer == c.signer {
-		log.Info("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", signer, "position", curIndex)
+		log.Debug("Masternodes cycle info", "number of masternodes", len(masternodes), "previous", pre, "position", preIndex, "current", signer, "position", curIndex)
 	}
 	for i, s := range masternodes {
-		log.Info("%d - %s\n", i, s.String())
+		log.Debug("Masternode:", "index", i, "address", s.String())
 	}
 	if (preIndex+1)%len(masternodes) == curIndex {
 		return len(masternodes), preIndex, curIndex, true, nil
