@@ -197,6 +197,10 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case SliceTy:
 		return forEachUnpack(t, output, begin, end)
 	case ArrayTy:
+		if (*t.Elem).T == StringTy {
+			offset := big.NewInt(0).SetBytes(returnOutput).Int64()
+			return forEachUnpack(t, output[offset:], 0, t.Size)
+		}
 		return forEachUnpack(t, output, index, t.Size)
 	case StringTy: // variable arrays are written at the end of the return bytes
 		return string(output[begin : begin+end]), nil
