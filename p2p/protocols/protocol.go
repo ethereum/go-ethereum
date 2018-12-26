@@ -18,7 +18,7 @@
 Package protocols is an extension to p2p. It offers a user friendly simple way to define
 devp2p subprotocols by abstracting away code standardly shared by protocols.
 
-* automate assigments of code indexes to messages
+* automate assignments of code indexes to messages
 * automate RLP decoding/encoding based on reflecting
 * provide the forever loop to read incoming messages
 * standardise error handling related to communication

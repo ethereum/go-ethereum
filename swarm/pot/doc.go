@@ -69,7 +69,7 @@ retrieve items has a logarithmic distribution.
 
 As a consequence one can organise the tree so that items that need faster access
 are torwards the top. In particular for any subset where popularity has a power
-distriution that is independent of proximity order (content addressed storage of
+distribution that is independent of proximity order (content addressed storage of
 chunks), it is in principle possible to create a pot where the steps needed to
 access an item is inversely proportional to its popularity.
 Such organisation is not implemented as yet.
