@@ -46,7 +46,7 @@ import (
 
 func init() {
 	// Register a reexec function to start a simulation node when the current binary is
-	// executed as "p2p-node" (rather than whataver the main() function would normally do).
+	// executed as "p2p-node" (rather than whatever the main() function would normally do).
 	reexec.Register("p2p-node", execP2PNode)
 }
 
