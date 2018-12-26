@@ -962,7 +962,7 @@ func TestHasPriceImplementation(t *testing.T) {
 TestRequestPeerSubscriptions is a unit test for stream's pull sync subscriptions.
 
 The test does:
-	* assign each known connected peer to a bin map
+	* assign each connected peer to a bin map
   * build up a known kademlia in advance
 	* run the EachConn function, which returns supposed subscription bins
 	* store all supposed bins per peer in a map
@@ -1067,7 +1067,8 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	// create just a simple Registry object in order to be able to call...
 	r := &Registry{}
 	// ...the requestPeerSubscriptions function, which contains the logic for subscriptions
-	r.requestPeerSubscriptions(k, nil, requestSubscriptionFunc)
+	r.subscriptionFunc = requestSubscriptionFunc
+	r.requestPeerSubscriptions(k, nil)
 	// calculate the kademlia depth
 	kdepth := k.NeighbourhoodDepth()
 
@@ -1077,27 +1078,27 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 		// for every peer...
 		for _, peer := range peers {
 			// ...get its (fake) subscriptions
-			fakeSubs := fakeSubscriptions[peer]
-			// if the peer's bin is below the kademlia depth...
+			fakeSubsForPeer := fakeSubscriptions[peer]
+			// if the peer's bin is shallower than the kademlia depth...
 			if bin < kdepth {
 				// (iterate all (fake) subscriptions)
-				for _, subbin := range fakeSubs {
+				for _, subbin := range fakeSubsForPeer {
 					// ...only the peer's bin should be "subscribed"
 					// (and thus have only one subscription)
-					if subbin != bin || len(fakeSubs) != 1 {
+					if subbin != bin || len(fakeSubsForPeer) != 1 {
 						t.Fatalf("Did not get expected subscription for bin < depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 				}
 			} else { //if the peer's bin is equal or higher than the kademlia depth...
 				// (iterate all (fake) subscriptions)
-				for i, subbin := range fakeSubs {
+				for i, subbin := range fakeSubsForPeer {
 					// ...each bin from the peer's bin number up to k.MaxProxDisplay should be "subscribed"
 					// as we start from depth we can use the iteration index to check
 					if subbin != i+kdepth {
 						t.Fatalf("Did not get expected subscription for bin > depth; bin of peer %s: %d, subscription: %d", peer, bin, subbin)
 					}
 					// the last "subscription" should be k.MaxProxDisplay
-					if i == len(fakeSubs)-1 && subbin != k.MaxProxDisplay {
+					if i == len(fakeSubsForPeer)-1 && subbin != k.MaxProxDisplay {
 						t.Fatalf("Expected last subscription to be: %d, but is: %d", k.MaxProxDisplay, subbin)
 					}
 				}
