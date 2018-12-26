@@ -167,7 +167,7 @@ exec XDC $params \
   --identity $IDENTITY \
   --password ./password \
   --port 30303 \
-  --maxpeers 25 \
+  --maxpeers 200 \
   --txpool.globalqueue 5000 \
   --txpool.globalslots 5000 \
   --rpc \
