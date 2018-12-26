@@ -1,4 +1,3 @@
-
 package common
 
 import "math/big"
@@ -19,6 +18,7 @@ const (
 	LimitThresholdNonceInQueue = 10
 	DefaultMinGasPrice         = 2500
 	MergeSignRange             = 15
+	RangeReturnSigner          = 90
 )
 
 var TIP2019Block = big.NewInt(1050000)
