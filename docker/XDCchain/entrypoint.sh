@@ -1,4 +1,4 @@
-#!/bin/sh 
+#!/bin/sh
 
 # vars from docker env
 # - IDENTITY (default to empty)
@@ -28,7 +28,7 @@ accountsCount=$(
 
 # file to env
 for env in IDENTITY PASSWORD PRIVATE_KEY BOOTNODES WS_SECRET NETSTATS_HOST \
-           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD; do
+           NETSTATS_PORT EXTIP SYNC_MODE NETWORK_ID ANNOUNCE_TXS STORE_REWARD DEBUG_MODE; do
   file=$(eval echo "\$${env}_FILE")
   if [[ -f $file ]] && [[ ! -z $file ]]; then
     echo "Replacing $env by $file"
@@ -55,6 +55,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
+      params="$params --XDC-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
       ;;
     90 )
       genesisPath="devnet.json"
@@ -98,7 +99,7 @@ if [[ $accountsCount -le 0 ]]; then
       --datadir $DATA_DIR \
       --keystore $KEYSTORE_DIR \
       --password ./password
-      rm ./private_key
+    rm ./private_key
   else
     echo "Creating new account"
     XDC account new \
@@ -147,6 +148,11 @@ fi
 # store reward
 if [[ ! -z $STORE_REWARD ]]; then
   params="$params --store-reward"
+fi
+
+# debug mode
+if [[ ! -z $DEBUG_MODE ]]; then
+  params="$params --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
 fi
 
 # dump
