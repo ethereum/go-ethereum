@@ -145,7 +145,7 @@ if [[ ! -z $ANNOUNCE_TXS ]]; then
   params="$params --announce-txs"
 fi
 
-# annonce txs
+# store reward
 if [[ ! -z $STORE_REWARD ]]; then
   params="$params --store-reward"
 fi
