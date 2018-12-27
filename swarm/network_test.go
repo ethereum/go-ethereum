@@ -259,6 +259,7 @@ type testSwarmNetworkOptions struct {
 //  - May wait for Kademlia on every node to be healthy.
 //  - Checking if a file is retrievable from all nodes.
 func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwarmNetworkStep) {
+
 	if o == nil {
 		o = new(testSwarmNetworkOptions)
 	}

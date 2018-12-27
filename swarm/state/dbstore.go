@@ -28,9 +28,6 @@ import (
 // ErrNotFound is returned when no results are returned from the database
 var ErrNotFound = errors.New("ErrorNotFound")
 
-// ErrInvalidArgument is returned when the argument type does not match the expected type
-var ErrInvalidArgument = errors.New("ErrorInvalidArgument")
-
 // Store defines methods required to get, set, delete values for different keys
 // and close the underlying resources.
 type Store interface {

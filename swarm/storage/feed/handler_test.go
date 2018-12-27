@@ -40,7 +40,6 @@ var (
 	}
 	cleanF       func()
 	subtopicName = "føø.bar"
-	hashfunc     = storage.MakeHashFunc(storage.DefaultHash)
 )
 
 func init() {
@@ -366,7 +365,7 @@ func TestValidator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !rh.Validate(chunk.Address(), chunk.Data()) {
+	if !rh.Validate(chunk) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -375,7 +374,7 @@ func TestValidator(t *testing.T) {
 	address[0] = 11
 	address[15] = 99
 
-	if rh.Validate(address, chunk.Data()) {
+	if rh.Validate(storage.NewChunk(address, chunk.Data())) {
 		t.Fatal("Expected Validate to fail with false chunk address")
 	}
 }

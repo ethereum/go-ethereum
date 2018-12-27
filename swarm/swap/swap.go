@@ -91,3 +91,8 @@ func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 	}
 	return
 }
+
+//Clean up Swap
+func (swap *Swap) Close() {
+	swap.stateStore.Close()
+}

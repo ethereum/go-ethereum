@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -66,34 +66,22 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config      *api.Config        // swarm configuration
-	api         *api.API           // high level api layer (fs/manifest)
-	dns         api.Resolver       // DNS registrar
-	fileStore   *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer    *stream.Registry
-	bzz         *network.Bzz       // the logistic manager
-	backend     chequebook.Backend // simple blockchain Backend
-	privateKey  *ecdsa.PrivateKey
-	corsString  string
-	swapEnabled bool
-	netStore    *storage.NetStore
-	sfs         *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
-	swap        *swap.Swap
+	config            *api.Config        // swarm configuration
+	api               *api.API           // high level api layer (fs/manifest)
+	dns               api.Resolver       // DNS registrar
+	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer          *stream.Registry
+	bzz               *network.Bzz       // the logistic manager
+	backend           chequebook.Backend // simple blockchain Backend
+	privateKey        *ecdsa.PrivateKey
+	netStore          *storage.NetStore
+	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
+	ps                *pss.Pss
+	swap              *swap.Swap
+	stateStore        *state.DBStore
+	accountingMetrics *protocols.AccountingMetrics
 
 	tracerClose io.Closer
-}
-
-type SwarmAPI struct {
-	Api     *api.API
-	Backend chequebook.Backend
-}
-
-func (self *Swarm) API() *SwarmAPI {
-	return &SwarmAPI{
-		Api:     self.api,
-		Backend: self.backend,
-	}
 }
 
 // creates a new swarm service instance
@@ -134,7 +122,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		LightNode:   config.LightNodeEnabled,
 	}
 
-	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
+	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
@@ -179,6 +167,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil, err
 		}
 		self.swap = swap.New(balancesStore)
+		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
 	var nodeID enode.ID
@@ -203,7 +192,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}
-	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, registryOptions, self.swap)
+	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
@@ -226,7 +215,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, self.streamer.GetSpec(), self.streamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.NewPss(to, config.Pss)
@@ -446,14 +435,24 @@ func (self *Swarm) Stop() error {
 		ch.Stop()
 		ch.Save()
 	}
-
+	if self.swap != nil {
+		self.swap.Close()
+	}
+	if self.accountingMetrics != nil {
+		self.accountingMetrics.Close()
+	}
 	if self.netStore != nil {
 		self.netStore.Close()
 	}
 	self.sfs.Stop()
 	stopCounter.Inc(1)
 	self.streamer.Stop()
-	return self.bzz.Stop()
+
+	err := self.bzz.Stop()
+	if self.stateStore != nil {
+		self.stateStore.Close()
+	}
+	return err
 }
 
 // implements the node.Service interface
@@ -464,14 +463,6 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, self.ps.Protocols()...)
 	}
 	return
-}
-
-func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
-	if !pss.IsActiveProtocol {
-		return nil, fmt.Errorf("Pss protocols not available (built with !nopssprotocol tag)")
-	}
-	topic := pss.ProtocolTopic(spec)
-	return pss.RegisterProtocol(self.ps, &topic, spec, targetprotocol, options)
 }
 
 // implements node.Service
@@ -505,6 +496,12 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   self.sfs,
 			Public:    false,
 		},
+		{
+			Namespace: "accounting",
+			Version:   protocols.AccountingVersion,
+			Service:   protocols.NewAccountingApi(self.accountingMetrics),
+			Public:    false,
+		},
 	}
 
 	apis = append(apis, self.bzz.APIs()...)
@@ -514,10 +511,6 @@ func (self *Swarm) APIs() []rpc.API {
 	}
 
 	return apis
-}
-
-func (self *Swarm) Api() *api.API {
-	return self.api
 }
 
 // SetChequebook ensures that the local checquebook is set up on chain.

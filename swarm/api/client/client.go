@@ -19,6 +19,7 @@ package client
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -33,14 +35,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-)
-
-var (
-	DefaultGateway = "http://localhost:8500"
-	DefaultClient  = NewClient(DefaultGateway)
+	"github.com/pborman/uuid"
 )
 
 var (
@@ -474,6 +476,11 @@ type UploadFn func(file *File) error
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
 func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, toEncrypt bool) (string, error) {
+	ctx, sp := spancontext.StartSpan(context.Background(), "api.client.tarupload")
+	defer sp.Finish()
+
+	var tn time.Time
+
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
 	addr := hash
@@ -489,6 +496,12 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 	if err != nil {
 		return "", err
 	}
+
+	trace := GetClientTrace("swarm api client - upload tar", "api.client.uploadtar", uuid.New()[:8], &tn)
+
+	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
+	transport := http.DefaultTransport
+
 	req.Header.Set("Content-Type", "application/x-tar")
 	if defaultPath != "" {
 		q := req.URL.Query()
@@ -529,8 +542,8 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 		}
 		reqW.CloseWithError(err)
 	}()
-
-	res, err := http.DefaultClient.Do(req)
+	tn = time.Now()
+	res, err := transport.RoundTrip(req)
 	if err != nil {
 		return "", err
 	}
@@ -727,4 +740,58 @@ func (c *Client) GetFeedRequest(query *feed.Query, manifestAddressOrDomain strin
 		return nil, err
 	}
 	return &metadata, nil
+}
+
+func GetClientTrace(traceMsg, metricPrefix, ruid string, tn *time.Time) *httptrace.ClientTrace {
+	trace := &httptrace.ClientTrace{
+		GetConn: func(_ string) {
+			log.Trace(traceMsg+" - http get", "event", "GetConn", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".getconn", nil).Update(time.Since(*tn))
+		},
+		GotConn: func(_ httptrace.GotConnInfo) {
+			log.Trace(traceMsg+" - http get", "event", "GotConn", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".gotconn", nil).Update(time.Since(*tn))
+		},
+		PutIdleConn: func(err error) {
+			log.Trace(traceMsg+" - http get", "event", "PutIdleConn", "ruid", ruid, "err", err)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".putidle", nil).Update(time.Since(*tn))
+		},
+		GotFirstResponseByte: func() {
+			log.Trace(traceMsg+" - http get", "event", "GotFirstResponseByte", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".firstbyte", nil).Update(time.Since(*tn))
+		},
+		Got100Continue: func() {
+			log.Trace(traceMsg, "event", "Got100Continue", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".got100continue", nil).Update(time.Since(*tn))
+		},
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			log.Trace(traceMsg, "event", "DNSStart", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsstart", nil).Update(time.Since(*tn))
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			log.Trace(traceMsg, "event", "DNSDone", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".dnsdone", nil).Update(time.Since(*tn))
+		},
+		ConnectStart: func(network, addr string) {
+			log.Trace(traceMsg, "event", "ConnectStart", "ruid", ruid, "network", network, "addr", addr)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectstart", nil).Update(time.Since(*tn))
+		},
+		ConnectDone: func(network, addr string, err error) {
+			log.Trace(traceMsg, "event", "ConnectDone", "ruid", ruid, "network", network, "addr", addr, "err", err)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".connectdone", nil).Update(time.Since(*tn))
+		},
+		WroteHeaders: func() {
+			log.Trace(traceMsg, "event", "WroteHeaders(request)", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroteheaders", nil).Update(time.Since(*tn))
+		},
+		Wait100Continue: func() {
+			log.Trace(traceMsg, "event", "Wait100Continue", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wait100continue", nil).Update(time.Since(*tn))
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			log.Trace(traceMsg, "event", "WroteRequest", "ruid", ruid)
+			metrics.GetOrRegisterResettingTimer(metricPrefix+".wroterequest", nil).Update(time.Since(*tn))
+		},
+	}
+	return trace
 }

@@ -477,7 +477,7 @@ func (t *Pot) each(f func(Val, int) bool) bool {
 	return f(t.pin, t.po)
 }
 
-// EachFrom called with (f, start) is a synchronous iterator over the elements of a Pot
+// eachFrom called with (f, start) is a synchronous iterator over the elements of a Pot
 // within the inclusive range starting from proximity order start
 // the function argument is passed the value and the proximity order wrt the root pin
 // it does NOT include the pinned item of the root
@@ -485,10 +485,6 @@ func (t *Pot) each(f func(Val, int) bool) bool {
 // proximity > pinnedness
 // the iteration ends if the function return false or there are no more elements
 // end of a po range can be implemented since po is passed to the function
-func (t *Pot) EachFrom(f func(Val, int) bool, po int) bool {
-	return t.eachFrom(f, po)
-}
-
 func (t *Pot) eachFrom(f func(Val, int) bool, po int) bool {
 	var next bool
 	_, lim := t.getPos(po)

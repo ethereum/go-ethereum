@@ -137,14 +137,14 @@ func (w *wizard) deployDashboard() {
 	if w.conf.ethstats != "" {
 		fmt.Println()
 		fmt.Println("Include ethstats secret on dashboard (y/n)? (default = yes)")
-		infos.trusted = w.readDefaultString("y") == "y"
+		infos.trusted = w.readDefaultYesNo(true)
 	}
 	// Try to deploy the dashboard container on the host
 	nocache := false
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
 	if out, err := deployDashboard(client, w.network, &w.conf, infos, nocache); err != nil {
 		log.Error("Failed to deploy dashboard container", "err", err)

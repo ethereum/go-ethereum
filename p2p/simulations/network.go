@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -55,6 +57,8 @@ type Network struct {
 
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
+
+	pivotNodeID enode.ID
 
 	nodeAdapter adapters.NodeAdapter
 	events      event.Feed
@@ -369,23 +373,32 @@ func (net *Network) DidReceive(sender, receiver enode.ID, proto string, code uin
 // GetNode gets the node with the given ID, returning nil if the node does not
 // exist
 func (net *Network) GetNode(id enode.ID) *Node {
-	net.lock.Lock()
-	defer net.lock.Unlock()
+	net.lock.RLock()
+	defer net.lock.RUnlock()
 	return net.getNode(id)
 }
 
 // GetNode gets the node with the given name, returning nil if the node does
 // not exist
 func (net *Network) GetNodeByName(name string) *Node {
-	net.lock.Lock()
-	defer net.lock.Unlock()
+	net.lock.RLock()
+	defer net.lock.RUnlock()
 	return net.getNodeByName(name)
+}
+
+func (net *Network) getNodeByName(name string) *Node {
+	for _, node := range net.Nodes {
+		if node.Config.Name == name {
+			return node
+		}
+	}
+	return nil
 }
 
 // GetNodes returns the existing nodes
 func (net *Network) GetNodes() (nodes []*Node) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
+	net.lock.RLock()
+	defer net.lock.RUnlock()
 
 	nodes = append(nodes, net.Nodes...)
 	return nodes
@@ -399,20 +412,67 @@ func (net *Network) getNode(id enode.ID) *Node {
 	return net.Nodes[i]
 }
 
-func (net *Network) getNodeByName(name string) *Node {
+// GetRandomUpNode returns a random node on the network, which is running.
+func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+	return net.getRandomNode(net.getUpNodeIDs(), excludeIDs)
+}
+
+func (net *Network) getUpNodeIDs() (ids []enode.ID) {
 	for _, node := range net.Nodes {
-		if node.Config.Name == name {
-			return node
+		if node.Up {
+			ids = append(ids, node.ID())
 		}
 	}
-	return nil
+	return ids
+}
+
+// GetRandomDownNode returns a random node on the network, which is stopped.
+func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
+	net.lock.RLock()
+	defer net.lock.RUnlock()
+	return net.getRandomNode(net.getDownNodeIDs(), excludeIDs)
+}
+
+func (net *Network) getDownNodeIDs() (ids []enode.ID) {
+	for _, node := range net.GetNodes() {
+		if !node.Up {
+			ids = append(ids, node.ID())
+		}
+	}
+	return ids
+}
+
+func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
+	filtered := filterIDs(ids, excludeIDs)
+
+	l := len(filtered)
+	if l == 0 {
+		return nil
+	}
+	return net.GetNode(filtered[rand.Intn(l)])
+}
+
+func filterIDs(ids []enode.ID, excludeIDs []enode.ID) []enode.ID {
+	exclude := make(map[enode.ID]bool)
+	for _, id := range excludeIDs {
+		exclude[id] = true
+	}
+	var filtered []enode.ID
+	for _, id := range ids {
+		if _, found := exclude[id]; !found {
+			filtered = append(filtered, id)
+		}
+	}
+	return filtered
 }
 
 // GetConn returns the connection which exists between "one" and "other"
 // regardless of which node initiated the connection
 func (net *Network) GetConn(oneID, otherID enode.ID) *Conn {
-	net.lock.Lock()
-	defer net.lock.Unlock()
+	net.lock.RLock()
+	defer net.lock.RUnlock()
 	return net.getConn(oneID, otherID)
 }
 
@@ -705,8 +765,11 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 	return snap, nil
 }
 
+var snapshotLoadTimeout = 120 * time.Second
+
 // Load loads a network snapshot
 func (net *Network) Load(snap *Snapshot) error {
+	// Start nodes.
 	for _, n := range snap.Nodes {
 		if _, err := net.NewNodeWithConfig(n.Node.Config); err != nil {
 			return err
@@ -718,6 +781,69 @@ func (net *Network) Load(snap *Snapshot) error {
 			return err
 		}
 	}
+
+	// Prepare connection events counter.
+	allConnected := make(chan struct{}) // closed when all connections are established
+	done := make(chan struct{})         // ensures that the event loop goroutine is terminated
+	defer close(done)
+
+	// Subscribe to event channel.
+	// It needs to be done outside of the event loop goroutine (created below)
+	// to ensure that the event channel is blocking before connect calls are made.
+	events := make(chan *Event)
+	sub := net.Events().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	go func() {
+		// Expected number of connections.
+		total := len(snap.Conns)
+		// Set of all established connections from the snapshot, not other connections.
+		// Key array element 0 is the connection One field value, and element 1 connection Other field.
+		connections := make(map[[2]enode.ID]struct{}, total)
+
+		for {
+			select {
+			case e := <-events:
+				// Ignore control events as they do not represent
+				// connect or disconnect (Up) state change.
+				if e.Control {
+					continue
+				}
+				// Detect only connection events.
+				if e.Type != EventTypeConn {
+					continue
+				}
+				connection := [2]enode.ID{e.Conn.One, e.Conn.Other}
+				// Nodes are still not connected or have been disconnected.
+				if !e.Conn.Up {
+					// Delete the connection from the set of established connections.
+					// This will prevent false positive in case disconnections happen.
+					delete(connections, connection)
+					log.Warn("load snapshot: unexpected disconnection", "one", e.Conn.One, "other", e.Conn.Other)
+					continue
+				}
+				// Check that the connection is from the snapshot.
+				for _, conn := range snap.Conns {
+					if conn.One == e.Conn.One && conn.Other == e.Conn.Other {
+						// Add the connection to the set of established connections.
+						connections[connection] = struct{}{}
+						if len(connections) == total {
+							// Signal that all nodes are connected.
+							close(allConnected)
+							return
+						}
+
+						break
+					}
+				}
+			case <-done:
+				// Load function returned, terminate this goroutine.
+				return
+			}
+		}
+	}()
+
+	// Start connecting.
 	for _, conn := range snap.Conns {
 
 		if !net.GetNode(conn.One).Up || !net.GetNode(conn.Other).Up {
@@ -728,6 +854,14 @@ func (net *Network) Load(snap *Snapshot) error {
 		if err := net.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
+	}
+
+	select {
+	// Wait until all connections from the snapshot are established.
+	case <-allConnected:
+	// Make sure that we do not wait forever.
+	case <-time.After(snapshotLoadTimeout):
+		return errors.New("snapshot connections not established")
 	}
 	return nil
 }

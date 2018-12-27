@@ -35,8 +35,6 @@ import (
 
 const (
 	DefaultNetworkID = 3
-	// ProtocolMaxMsgSize maximum allowed message size
-	ProtocolMaxMsgSize = 10 * 1024 * 1024
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
@@ -44,7 +42,7 @@ const (
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
 	Name:       "bzz",
-	Version:    7,
+	Version:    8,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		HandshakeMsg{},
@@ -54,7 +52,7 @@ var BzzSpec = &protocols.Spec{
 // DiscoverySpec is the spec for the bzz discovery subprotocols
 var DiscoverySpec = &protocols.Spec{
 	Name:       "hive",
-	Version:    6,
+	Version:    8,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		peersMsg{},
@@ -248,11 +246,6 @@ type BzzPeer struct {
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
 	return &BzzPeer{Peer: p, BzzAddr: NewAddr(p.Node())}
-}
-
-// LastActive returns the time the peer was last active
-func (p *BzzPeer) LastActive() time.Time {
-	return p.lastActive
 }
 
 // ID returns the peer's underlay node identifier.

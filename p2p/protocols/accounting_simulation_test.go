@@ -20,7 +20,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -66,6 +69,13 @@ func init() {
 func TestAccountingSimulation(t *testing.T) {
 	//setup the balances objects for every node
 	bal := newBalances(*nodes)
+	//setup the metrics system or tests will fail trying to write metrics
+	dir, err := ioutil.TempDir("", "account-sim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	SetupAccountingMetrics(1*time.Second, filepath.Join(dir, "metrics.db"))
 	//define the node.Service for this test
 	services := adapters.Services{
 		"accounting": func(ctx *adapters.ServiceContext) (node.Service, error) {

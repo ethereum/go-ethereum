@@ -23,11 +23,13 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"hash"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -79,7 +81,7 @@ type senderPeer interface {
 // member `protected` prevents garbage collection of the instance
 type pssPeer struct {
 	lastSeen  time.Time
-	address   *PssAddress
+	address   PssAddress
 	protected bool
 }
 
@@ -136,10 +138,10 @@ type Pss struct {
 	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
 
 	// message handling
-	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
-	handlersMu sync.RWMutex
-	allowRaw   bool
-	hashPool   sync.Pool
+	handlers         map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlersMu       sync.RWMutex
+	hashPool         sync.Pool
+	topicHandlerCaps map[Topic]*handlerCaps // caches capabilities of each topic's handlers (see handlerCap* consts in types.go)
 
 	// process
 	quitC chan struct{}
@@ -180,11 +182,12 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		symKeyDecryptCache:         make([]*string, params.SymKeyCacheCapacity),
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
-		handlers: make(map[Topic]map[*Handler]bool),
-		allowRaw: params.AllowRaw,
+		handlers:         make(map[Topic]map[*handler]bool),
+		topicHandlerCaps: make(map[Topic]*handlerCaps),
+
 		hashPool: sync.Pool{
 			New: func() interface{} {
-				return storage.MakeHashFunc(storage.DefaultHash)()
+				return sha3.NewKeccak256()
 			},
 		},
 	}
@@ -313,30 +316,54 @@ func (p *Pss) PublicKey() *ecdsa.PublicKey {
 //
 // Returns a deregister function which needs to be called to
 // deregister the handler,
-func (p *Pss) Register(topic *Topic, handler Handler) func() {
+func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
 	if handlers == nil {
-		handlers = make(map[*Handler]bool)
+		handlers = make(map[*handler]bool)
 		p.handlers[*topic] = handlers
+		log.Debug("registered handler", "caps", hndlr.caps)
 	}
-	handlers[&handler] = true
-	return func() { p.deregister(topic, &handler) }
+	if hndlr.caps == nil {
+		hndlr.caps = &handlerCaps{}
+	}
+	handlers[hndlr] = true
+	if _, ok := p.topicHandlerCaps[*topic]; !ok {
+		p.topicHandlerCaps[*topic] = &handlerCaps{}
+	}
+	if hndlr.caps.raw {
+		p.topicHandlerCaps[*topic].raw = true
+	}
+	if hndlr.caps.prox {
+		p.topicHandlerCaps[*topic].prox = true
+	}
+	return func() { p.deregister(topic, hndlr) }
 }
-func (p *Pss) deregister(topic *Topic, h *Handler) {
+func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
 	handlers := p.handlers[*topic]
-	if len(handlers) == 1 {
+	if len(handlers) > 1 {
 		delete(p.handlers, *topic)
+		// topic caps might have changed now that a handler is gone
+		caps := &handlerCaps{}
+		for h := range handlers {
+			if h.caps.raw {
+				caps.raw = true
+			}
+			if h.caps.prox {
+				caps.prox = true
+			}
+		}
+		p.topicHandlerCaps[*topic] = caps
 		return
 	}
-	delete(handlers, h)
+	delete(handlers, hndlr)
 }
 
 // get all registered handlers for respective topics
-func (p *Pss) getHandlers(topic Topic) map[*Handler]bool {
+func (p *Pss) getHandlers(topic Topic) map[*handler]bool {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
 	return p.handlers[topic]
@@ -348,12 +375,11 @@ func (p *Pss) getHandlers(topic Topic) map[*Handler]bool {
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
-
 	pssmsg, ok := msg.(*PssMsg)
-
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 	}
+	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
 		log.Warn("pss filtered expired message", "from", common.ToHex(p.Kademlia.BaseAddr()), "to", common.ToHex(pssmsg.To))
@@ -365,13 +391,36 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	}
 	p.addFwdCache(pssmsg)
 
-	if !p.isSelfPossibleRecipient(pssmsg) {
-		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()))
+	psstopic := Topic(pssmsg.Payload.Topic)
+
+	// raw is simplest handler contingency to check, so check that first
+	var isRaw bool
+	if pssmsg.isRaw() {
+		if _, ok := p.topicHandlerCaps[psstopic]; ok {
+			if !p.topicHandlerCaps[psstopic].raw {
+				log.Debug("No handler for raw message", "topic", psstopic)
+				return nil
+			}
+		}
+		isRaw = true
+	}
+
+	// check if we can be recipient:
+	// - no prox handler on message and partial address matches
+	// - prox handler on message and we are in prox regardless of partial address match
+	// store this result so we don't calculate again on every handler
+	var isProx bool
+	if _, ok := p.topicHandlerCaps[psstopic]; ok {
+		isProx = p.topicHandlerCaps[psstopic].prox
+	}
+	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
+	if !isRecipient {
+		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()))
-	if err := p.process(pssmsg); err != nil {
+	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
+	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
 			return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
@@ -384,23 +433,21 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 // Entry point to processing a message for which the current node can be the intended recipient.
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
-func (p *Pss) process(pssmsg *PssMsg) error {
+func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	metrics.GetOrRegisterCounter("pss.process", nil).Inc(1)
 
 	var err error
 	var recvmsg *whisper.ReceivedMessage
 	var payload []byte
-	var from *PssAddress
+	var from PssAddress
 	var asymmetric bool
 	var keyid string
-	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
+	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error)
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
-	if pssmsg.isRaw() {
-		if !p.allowRaw {
-			return errors.New("raw message support disabled")
-		}
+
+	if raw {
 		payload = pssmsg.Payload.Data
 	} else {
 		if pssmsg.isSym() {
@@ -422,19 +469,27 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 			return err
 		}
 	}
-	p.executeHandlers(psstopic, payload, from, asymmetric, keyid)
+	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
 
 	return nil
 
 }
 
-func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, asymmetric bool, keyid string) {
+func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
 	handlers := p.getHandlers(topic)
 	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
-	for f := range handlers {
-		err := (*f)(payload, peer, asymmetric, keyid)
+	for h := range handlers {
+		if !h.caps.raw && raw {
+			log.Warn("norawhandler")
+			continue
+		}
+		if !h.caps.prox && prox {
+			log.Warn("noproxhandler")
+			continue
+		}
+		err := (h.f)(payload, peer, asymmetric, keyid)
 		if err != nil {
-			log.Warn("Pss handler %p failed: %v", f, err)
+			log.Warn("Pss handler failed", "err", err)
 		}
 	}
 }
@@ -445,9 +500,23 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 }
 
 // test match of leftmost bytes in given message to node's Kademlia address
-func (p *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
+func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 	local := p.Kademlia.BaseAddr()
-	return bytes.Equal(msg.To, local[:len(msg.To)])
+
+	// if a partial address matches we are possible recipient regardless of prox
+	// if not and prox is not set, we are surely not
+	if bytes.Equal(msg.To, local[:len(msg.To)]) {
+
+		return true
+	} else if !prox {
+		return false
+	}
+
+	depth := p.Kademlia.NeighbourhoodDepth()
+	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
+	log.Trace("selfpossible", "po", po, "depth", depth)
+
+	return depth <= po
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -461,7 +530,10 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
 //
 // The value in `address` will be used as a routing hint for the
 // public key / topic association
-func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address *PssAddress) error {
+func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address PssAddress) error {
+	if err := validateAddress(address); err != nil {
+		return err
+	}
 	pubkeybytes := crypto.FromECDSAPub(pubkey)
 	if len(pubkeybytes) == 0 {
 		return fmt.Errorf("invalid public key: %v", pubkey)
@@ -476,12 +548,12 @@ func (p *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address *Ps
 	}
 	p.pubKeyPool[pubkeyid][topic] = psp
 	p.pubKeyPoolMu.Unlock()
-	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", common.ToHex(*address))
+	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", address)
 	return nil
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (p *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
+func (p *Pss) GenerateSymmetricKey(topic Topic, address PssAddress, addToCache bool) (string, error) {
 	keyid, err := p.w.GenerateSymKey()
 	if err != nil {
 		return "", err
@@ -502,11 +574,14 @@ func (p *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache 
 //
 // Returns a string id that can be used to retrieve the key bytes
 // from the whisper backend (see pss.GetSymmetricKey())
-func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address *PssAddress, addtocache bool) (string, error) {
+func (p *Pss) SetSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool) (string, error) {
+	if err := validateAddress(address); err != nil {
+		return "", err
+	}
 	return p.setSymmetricKey(key, topic, address, addtocache, true)
 }
 
-func (p *Pss) setSymmetricKey(key []byte, topic Topic, address *PssAddress, addtocache bool, protected bool) (string, error) {
+func (p *Pss) setSymmetricKey(key []byte, topic Topic, address PssAddress, addtocache bool, protected bool) (string, error) {
 	keyid, err := p.w.AddSymKeyDirect(key)
 	if err != nil {
 		return "", err
@@ -518,7 +593,7 @@ func (p *Pss) setSymmetricKey(key []byte, topic Topic, address *PssAddress, addt
 // adds a symmetric key to the pss key pool, and optionally adds the key
 // to the collection of keys used to attempt symmetric decryption of
 // incoming messages
-func (p *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAddress, addtocache bool, protected bool) {
+func (p *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address PssAddress, addtocache bool, protected bool) {
 	psp := &pssPeer{
 		address:   address,
 		protected: protected,
@@ -534,7 +609,7 @@ func (p *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAddre
 		p.symKeyDecryptCache[p.symKeyDecryptCacheCursor%cap(p.symKeyDecryptCache)] = &keyid
 	}
 	key, _ := p.GetSymmetricKey(keyid)
-	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", fmt.Sprintf("%p", address), "cache", addtocache)
+	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", address, "cache", addtocache)
 }
 
 // Returns a symmetric key byte seqyence stored in the whisper backend
@@ -555,7 +630,7 @@ func (p *Pss) GetPublickeyPeers(keyid string) (topic []Topic, address []PssAddre
 	defer p.pubKeyPoolMu.RUnlock()
 	for t, peer := range p.pubKeyPool[keyid] {
 		topic = append(topic, t)
-		address = append(address, *peer.address)
+		address = append(address, peer.address)
 	}
 
 	return topic, address, nil
@@ -566,7 +641,7 @@ func (p *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
 	defer p.pubKeyPoolMu.RUnlock()
 	if peers, ok := p.pubKeyPool[keyid]; ok {
 		if t, ok := peers[topic]; ok {
-			return *t.address, nil
+			return t.address, nil
 		}
 	}
 	return nil, fmt.Errorf("peer with pubkey %s, topic %x not found", keyid, topic)
@@ -578,7 +653,7 @@ func (p *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
 // encapsulating the decrypted message, and the whisper backend id
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted
-func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
 
 	for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
@@ -610,7 +685,7 @@ func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, 
 // encapsulating the decrypted message, and the byte representation of
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted
-func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, PssAddress, error) {
 	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
 
 	recvmsg, err := envelope.OpenAsymmetric(p.privateKey)
@@ -622,7 +697,7 @@ func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage,
 		return nil, "", nil, fmt.Errorf("invalid message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
-	var from *PssAddress
+	var from PssAddress
 	p.pubKeyPoolMu.Lock()
 	if p.pubKeyPool[pubkeyid][Topic(envelope.Topic)] != nil {
 		from = p.pubKeyPool[pubkeyid][Topic(envelope.Topic)].address
@@ -684,8 +759,8 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
-	if !p.allowRaw {
-		return errors.New("Raw messages not enabled")
+	if err := validateAddress(address); err != nil {
+		return err
 	}
 	pssMsgParams := &msgParams{
 		raw: true,
@@ -699,7 +774,19 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = payload
 	p.addFwdCache(pssMsg)
-	return p.enqueue(pssMsg)
+	err := p.enqueue(pssMsg)
+	if err != nil {
+		return err
+	}
+
+	// if we have a proxhandler on this topic
+	// also deliver message to ourselves
+	if _, ok := p.topicHandlerCaps[topic]; ok {
+		if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
+			return p.process(pssMsg, true, true)
+		}
+	}
+	return nil
 }
 
 // Send a message using symmetric encryption
@@ -715,11 +802,8 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	p.symKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
-	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic.String(), symkeyid)
 	}
-	err = p.send(*psp.address, topic, msg, false, symkey)
-	return err
+	return p.send(psp.address, topic, msg, false, symkey)
 }
 
 // Send a message using asymmetric encryption
@@ -734,13 +818,8 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	p.pubKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic.String(), pubkeyid)
-	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic.String(), pubkeyid)
 	}
-	go func() {
-		p.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
-	}()
-	return nil
+	return p.send(psp.address, topic, msg, true, common.FromHex(pubkeyid))
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
@@ -800,71 +879,109 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	pssMsg.To = to
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = envelope
-	return p.enqueue(pssMsg)
+	err = p.enqueue(pssMsg)
+	if err != nil {
+		return err
+	}
+	if _, ok := p.topicHandlerCaps[topic]; ok {
+		if p.isSelfPossibleRecipient(pssMsg, true) && p.topicHandlerCaps[topic].prox {
+			return p.process(pssMsg, true, true)
+		}
+	}
+	return nil
 }
 
-// Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
-// The recipient address can be of any length, and the byte slice will be matched to the MSB slice
-// of the peer address of the equivalent length.
+// sendFunc is a helper function that tries to send a message and returns true on success.
+// It is set here for usage in production, and optionally overridden in tests.
+var sendFunc func(p *Pss, sp *network.Peer, msg *PssMsg) bool = sendMsg
+
+// tries to send a message, returns true if successful
+func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
+	var isPssEnabled bool
+	info := sp.Info()
+	for _, capability := range info.Caps {
+		if capability == p.capstring {
+			isPssEnabled = true
+			break
+		}
+	}
+	if !isPssEnabled {
+		log.Error("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+		return false
+	}
+
+	// get the protocol peer from the forwarding peer cache
+	p.fwdPoolMu.RLock()
+	pp := p.fwdPool[sp.Info().ID]
+	p.fwdPoolMu.RUnlock()
+
+	err := pp.Send(context.TODO(), msg)
+	if err != nil {
+		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
+		log.Error(err.Error())
+	}
+
+	return err == nil
+}
+
+// Forwards a pss message to the peer(s) based on recipient address according to the algorithm
+// described below. The recipient address can be of any length, and the byte slice will be matched
+// to the MSB slice of the peer address of the equivalent length.
+//
+// If the recipient address (or partial address) is within the neighbourhood depth of the forwarding
+// node, then it will be forwarded to all the nearest neighbours of the forwarding node. In case of
+// partial address, it should be forwarded to all the peers matching the partial address, if there
+// are any; otherwise only to one peer, closest to the recipient address. In any case, if the message
+// forwarding fails, the node should try to forward it to the next best peer, until the message is
+// successfully forwarded to at least one peer.
 func (p *Pss) forward(msg *PssMsg) error {
 	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
-
+	sent := 0 // number of successful sends
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
+	neighbourhoodDepth := p.Kademlia.NeighbourhoodDepth()
 
-	// send with kademlia
-	// find the closest peer to the recipient and attempt to send
-	sent := 0
-	p.Kademlia.EachConn(to, 256, func(sp *network.Peer, po int, isproxbin bool) bool {
-		info := sp.Info()
+	// luminosity is the opposite of darkness. the more bytes are removed from the address, the higher is darkness,
+	// but the luminosity is less. here luminosity equals the number of bits given in the destination address.
+	luminosityRadius := len(msg.To) * 8
 
-		// check if the peer is running pss
-		var ispss bool
-		for _, cap := range info.Caps {
-			if cap == p.capstring {
-				ispss = true
-				break
+	// proximity order function matching up to neighbourhoodDepth bits (po <= neighbourhoodDepth)
+	pof := pot.DefaultPof(neighbourhoodDepth)
+
+	// soft threshold for msg broadcast
+	broadcastThreshold, _ := pof(to, p.BaseAddr(), 0)
+	if broadcastThreshold > luminosityRadius {
+		broadcastThreshold = luminosityRadius
+	}
+
+	var onlySendOnce bool // indicates if the message should only be sent to one peer with closest address
+
+	// if measured from the recipient address as opposed to the base address (see Kademlia.EachConn
+	// call below), then peers that fall in the same proximity bin as recipient address will appear
+	// [at least] one bit closer, but only if these additional bits are given in the recipient address.
+	if broadcastThreshold < luminosityRadius && broadcastThreshold < neighbourhoodDepth {
+		broadcastThreshold++
+		onlySendOnce = true
+	}
+
+	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
+		if po < broadcastThreshold && sent > 0 {
+			return false // stop iterating
+		}
+		if sendFunc(p, sp, msg) {
+			sent++
+			if onlySendOnce {
+				return false
+			}
+			if po == addressLength*8 {
+				// stop iterating if successfully sent to the exact recipient (perfect match of full address)
+				return false
 			}
 		}
-		if !ispss {
-			log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
-			return true
-		}
-
-		// get the protocol peer from the forwarding peer cache
-		sendMsg := fmt.Sprintf("MSG TO %x FROM %x VIA %x", to, p.BaseAddr(), sp.Address())
-		p.fwdPoolMu.RLock()
-		pp := p.fwdPool[sp.Info().ID]
-		p.fwdPoolMu.RUnlock()
-
-		// attempt to send the message
-		err := pp.Send(context.TODO(), msg)
-		if err != nil {
-			metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
-			log.Error(err.Error())
-			return true
-		}
-		sent++
-		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
-
-		// continue forwarding if:
-		// - if the peer is end recipient but the full address has not been disclosed
-		// - if the peer address matches the partial address fully
-		// - if the peer is in proxbin
-		if len(msg.To) < addressLength && bytes.Equal(msg.To, sp.Address()[:len(msg.To)]) {
-			log.Trace(fmt.Sprintf("Pss keep forwarding: Partial address + full partial match"))
-			return true
-		} else if isproxbin {
-			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ToHex(sp.Address())))
-			return true
-		}
-		// at this point we stop forwarding, and the state is as follows:
-		// - the peer is end recipient and we have full address
-		// - we are not in proxbin (directed routing)
-		// - partial addresses don't fully match
-		return false
+		return true
 	})
 
+	// if we failed to send to anyone, re-insert message in the send-queue
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
 		if err := p.enqueue(msg); err != nil {
@@ -893,6 +1010,10 @@ func (p *Pss) cleanFwdCache() {
 			delete(p.fwdCache, k)
 		}
 	}
+}
+
+func label(b []byte) string {
+	return fmt.Sprintf("%04x", b[:2])
 }
 
 // add a message to the cache
@@ -934,12 +1055,23 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 
 // Digest of message
 func (p *Pss) digest(msg *PssMsg) pssDigest {
-	hasher := p.hashPool.Get().(storage.SwarmHash)
+	return p.digestBytes(msg.serialize())
+}
+
+func (p *Pss) digestBytes(msg []byte) pssDigest {
+	hasher := p.hashPool.Get().(hash.Hash)
 	defer p.hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(msg.serialize())
+	hasher.Write(msg)
 	digest := pssDigest{}
 	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
 	return digest
+}
+
+func validateAddress(addr PssAddress) error {
+	if len(addr) > addressLength {
+		return errors.New("address too long")
+	}
+	return nil
 }
