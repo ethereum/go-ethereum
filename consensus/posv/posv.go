@@ -215,13 +215,14 @@ type Posv struct {
 	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
 	validatorSignatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 	verifiedHeaders     *lru.ARCCache
+	rewards             *lru.ARCCache
 	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error
+	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs func(header *types.Header, signers []common.Address) error
@@ -240,6 +241,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
 	verifiedHeaders, _ := lru.NewARC(inmemorySnapshots)
+	rewards, _ := lru.NewARC(inmemorySnapshots)
 	return &Posv{
 		config:              &conf,
 		db:                  db,
@@ -247,6 +249,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
 		validatorSignatures: validatorSignatures,
+		rewards:             rewards,
 		proposals:           make(map[common.Address]bool),
 	}
 }
@@ -847,9 +850,11 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
-		if err := c.HookReward(chain, state, header); err != nil {
+		err, rewardResults := c.HookReward(chain, state, header)
+		if err != nil {
 			return nil, err
 		}
+		c.rewards.Add(header.Hash(), rewardResults)
 	}
 
 	// the state remains as is and uncles are dropped
@@ -1078,4 +1083,16 @@ func Hop(len, pre, cur int) int {
 	default:
 		return len - 1
 	}
+}
+
+func (c *Posv) GetRewards(hash common.Hash) map[string]interface{} {
+	rewards, ok := c.rewards.Get(hash)
+	if !ok {
+		return nil
+	}
+	return rewards.(map[string]interface{})
+}
+
+func (c *Posv) InsertRewards(hash common.Hash, rewards map[string]interface{}) {
+	c.rewards.Add(hash, rewards)
 }

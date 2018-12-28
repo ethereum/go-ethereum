@@ -492,6 +492,17 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 	return header.Number
 }
 
+// BlockNumber returns the block number of the chain head.
+func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]interface{} {
+	if c, ok := s.b.GetEngine().(*posv.Posv); ok {
+		rewards := c.GetRewards(hash)
+		if rewards != nil {
+			return rewards
+		}
+	}
+	return make(map[string]interface{})
+}
+
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.

@@ -122,6 +122,7 @@ var (
 		//utils.ExtraDataFlag,
 		configFileFlag,
 		utils.AnnounceTxsFlag,
+		utils.StoreRewardFlag,
 	}
 
 	rpcFlags = []cli.Flag{
