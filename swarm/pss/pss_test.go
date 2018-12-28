@@ -407,7 +407,7 @@ func TestProxShortCircuit(t *testing.T) {
 
 	// try the same prox message with sym and asym send
 	proxAddrPss := PssAddress(proxMessageAddress)
-	symKeyId, err := ps.GenerateSymmetricKey(topic, &proxAddrPss, true)
+	symKeyId, err := ps.GenerateSymmetricKey(topic, proxAddrPss, true)
 	go func() {
 		err := ps.SendSym(symKeyId, topic, []byte("baz"))
 		if err != nil {
@@ -424,7 +424,7 @@ func TestProxShortCircuit(t *testing.T) {
 		t.Fatal("sym timeout")
 	}
 
-	err = ps.SetPeerPublicKey(&privKey.PublicKey, topic, &proxAddrPss)
+	err = ps.SetPeerPublicKey(&privKey.PublicKey, topic, proxAddrPss)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -786,14 +786,14 @@ func TestKeys(t *testing.T) {
 	copy(addr, network.RandomAddr().Over())
 	outkey := network.RandomAddr().Over()
 	topicobj := BytesToTopic([]byte("foo:42"))
-	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topicobj, &addr)
-	outkeyid, err := ps.SetSymmetricKey(outkey, topicobj, &addr, false)
+	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topicobj, addr)
+	outkeyid, err := ps.SetSymmetricKey(outkey, topicobj, addr, false)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.GenerateSymmetricKey(topicobj, &addr, true)
+	inkeyid, err := ps.GenerateSymmetricKey(topicobj, addr, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -816,8 +816,8 @@ func TestKeys(t *testing.T) {
 
 	// check that the key is stored in the peerpool
 	psp := ps.symKeyPool[inkeyid][topicobj]
-	if psp.address != &addr {
-		t.Fatalf("inkey address does not match; %p != %p", psp.address, &addr)
+	if !bytes.Equal(psp.address, addr) {
+		t.Fatalf("inkey address does not match; %p != %p", psp.address, addr)
 	}
 }
 
@@ -1005,6 +1005,34 @@ func TestRawAllow(t *testing.T) {
 	ps.handlePssMsg(context.TODO(), pssMsg)
 	if receives != prevReceives {
 		t.Fatalf("Expected handler not to be executed when raw handler is retracted")
+	}
+}
+
+// BELOW HERE ARE TESTS USING THE SIMULATION FRAMEWORK
+
+// tests that the API layer can handle edge case values
+func TestApi(t *testing.T) {
+	clients, err := setupNetwork(2, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "0xdeadbeef"
+
+	err = clients[0].Call(nil, "pss_sendRaw", "0x", topic, "0x666f6f")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = clients[0].Call(nil, "pss_sendRaw", "0xabcdef", topic, "0x")
+	if err == nil {
+		t.Fatal("expected error on empty msg")
+	}
+
+	overflowAddr := [33]byte{}
+	err = clients[0].Call(nil, "pss_sendRaw", hexutil.Encode(overflowAddr[:]), topic, "0x666f6f")
+	if err == nil {
+		t.Fatal("expected error on send too big address")
 	}
 }
 
@@ -1668,7 +1696,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	symkeyid, err := ps.GenerateSymmetricKey(topic, &to, true)
+	symkeyid, err := ps.GenerateSymmetricKey(topic, to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -1676,7 +1704,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retrieve symkey: %v", err)
 	}
-	ps.SetSymmetricKey(symkey, topic, &to, false)
+	ps.SetSymmetricKey(symkey, topic, to, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1712,7 +1740,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	ps.SetPeerPublicKey(&privkey.PublicKey, topic, &to)
+	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ps.SendAsym(common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
@@ -1761,7 +1789,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
-		keyid, err = ps.GenerateSymmetricKey(topic, &to, true)
+		keyid, err = ps.GenerateSymmetricKey(topic, to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1843,7 +1871,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
-		keyid, err = ps.GenerateSymmetricKey(topic, &addr[i], true)
+		keyid, err = ps.GenerateSymmetricKey(topic, addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -2044,12 +2072,13 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to PssAddress) ([2]string, error) {
-	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &to, true)
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to hexutil.Bytes) ([2]string, error) {
+
+	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, PssAddress(to), true)
 	if err != nil {
 		return [2]string{}, err
 	}
-	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &to, false)
+	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, PssAddress(to), false)
 	if err != nil {
 		return [2]string{}, err
 	}

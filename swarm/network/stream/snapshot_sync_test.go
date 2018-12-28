@@ -182,8 +182,6 @@ func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Servic
 }
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
-
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(simServiceMap)
 	defer sim.Close()
 
@@ -248,20 +246,20 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 
 		//get the node at that index
 		//this is the node selected for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}
 		for _, h := range hashes {
 			evt := &simulations.Event{
 				Type: EventTypeChunkCreated,
-				Node: sim.Net.GetNode(node.ID),
+				Node: sim.Net.GetNode(node.ID()),
 				Data: h.String(),
 			}
 			sim.Net.Events().Send(evt)
@@ -332,7 +330,6 @@ kademlia network. The snapshot should have 'streamer' in its service list.
 */
 func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) error {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			n := ctx.Config.Node()
@@ -453,13 +450,13 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			}
 		}
 		//select a random node for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		hashes, err := uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}
@@ -555,9 +552,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	var kadMinProxSize = 2
-
-	ppmap := network.NewPeerPotMap(kadMinProxSize, conf.addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, conf.addrs)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))

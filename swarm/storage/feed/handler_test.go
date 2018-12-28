@@ -40,7 +40,6 @@ var (
 	}
 	cleanF       func()
 	subtopicName = "føø.bar"
-	hashfunc     = storage.MakeHashFunc(storage.DefaultHash)
 )
 
 func init() {

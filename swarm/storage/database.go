@@ -64,16 +64,6 @@ func (db *LDBDatabase) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-func (db *LDBDatabase) LastKnownTD() []byte {
-	data, _ := db.Get([]byte("LTD"))
-
-	if len(data) == 0 {
-		data = []byte{0x0}
-	}
-
-	return data
-}
-
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	metrics.GetOrRegisterCounter("ldbdatabase.newiterator", nil).Inc(1)
 

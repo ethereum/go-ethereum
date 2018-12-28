@@ -138,7 +138,7 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
-	c.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
+	c.pss.SetPeerPublicKey(pubkey, controlTopic, address)
 	pubkeyId := hexutil.Encode(crypto.FromECDSAPub(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
@@ -271,7 +271,7 @@ func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, 
 		currentBin.count++
 		symKeyId = currentBin.symKeyId
 	} else {
-		symKeyId, err = c.pss.GenerateSymmetricKey(ntfr.topic, &pssAddress, false)
+		symKeyId, err = c.pss.GenerateSymmetricKey(ntfr.topic, pssAddress, false)
 		if err != nil {
 			return "", nil, err
 		}
@@ -312,7 +312,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = c.pss.SetPeerPublicKey(pubkey, controlTopic, &pssAddress)
+	err = c.pss.SetPeerPublicKey(pubkey, controlTopic, pssAddress)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 
 	// \TODO keep track of and add actual address
 	updaterAddr := pss.PssAddress([]byte{})
-	c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
+	c.pss.SetSymmetricKey(symkey, topic, updaterAddr, true)
 	c.pss.Register(&topic, pss.NewHandler(c.Handler))
 	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 }

@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -44,31 +43,7 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
 
-type testStore struct {
-	sync.Mutex
-
-	values map[string][]byte
-}
-
-func (t *testStore) Load(key string) ([]byte, error) {
-	t.Lock()
-	defer t.Unlock()
-	v, ok := t.values[key]
-	if !ok {
-		return nil, fmt.Errorf("key not found: %s", key)
-	}
-	return v, nil
-}
-
-func (t *testStore) Save(key string, v []byte) error {
-	t.Lock()
-	defer t.Unlock()
-	t.values[key] = v
-	return nil
-}
-
 func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id enode.ID) []p2ptest.Exchange {
-
 	return []p2ptest.Exchange{
 		{
 			Expects: []p2ptest.Expect{

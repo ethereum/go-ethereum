@@ -246,7 +246,6 @@ simulation's `action` function.
 The snapshot should have 'streamer' in its service list.
 */
 func runRetrievalTest(chunkCount int, nodeCount int) error {
-
 	sim := simulation.New(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -278,13 +277,13 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		}
 
 		//this is the node selected for upload
-		node := sim.RandomUpNode()
-		item, ok := sim.NodeItem(node.ID, bucketKeyStore)
+		node := sim.Net.GetRandomUpNode()
+		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No localstore")
 		}
 		lstore := item.(*storage.LocalStore)
-		conf.hashes, err = uploadFileToSingleNodeStore(node.ID, chunkCount, lstore)
+		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
 			return err
 		}

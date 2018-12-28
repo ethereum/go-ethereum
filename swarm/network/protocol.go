@@ -35,8 +35,6 @@ import (
 
 const (
 	DefaultNetworkID = 3
-	// ProtocolMaxMsgSize maximum allowed message size
-	ProtocolMaxMsgSize = 10 * 1024 * 1024
 	// timeout for waiting
 	bzzHandshakeTimeout = 3000 * time.Millisecond
 )
@@ -248,11 +246,6 @@ type BzzPeer struct {
 
 func NewBzzPeer(p *protocols.Peer) *BzzPeer {
 	return &BzzPeer{Peer: p, BzzAddr: NewAddr(p.Node())}
-}
-
-// LastActive returns the time the peer was last active
-func (p *BzzPeer) LastActive() time.Time {
-	return p.lastActive
 }
 
 // ID returns the peer's underlay node identifier.

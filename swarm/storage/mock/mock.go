@@ -103,13 +103,6 @@ type Exporter interface {
 	Export(w io.Writer) (n int, err error)
 }
 
-// ImportExporter is an interface for importing and exporting
-// mock store data to and from a tar archive.
-type ImportExporter interface {
-	Importer
-	Exporter
-}
-
 // ExportedChunk is the structure that is saved in tar archive for
 // each chunk as JSON-encoded bytes.
 type ExportedChunk struct {

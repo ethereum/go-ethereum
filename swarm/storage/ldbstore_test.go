@@ -79,14 +79,6 @@ func testPoFunc(k Address) (ret uint8) {
 	return uint8(Proximity(basekey, k[:]))
 }
 
-func (db *testDbStore) close() {
-	db.Close()
-	err := os.RemoveAll(db.dir)
-	if err != nil {
-		panic(err)
-	}
-}
-
 func testDbStoreRandom(n int, chunksize int64, mock bool, t *testing.T) {
 	db, cleanup, err := newTestDbStore(mock, true)
 	defer cleanup()
@@ -453,7 +445,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(nil, chunks[i].Address())
+		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
 
 		if i%2 == 0 {
 			// expect even chunks to be missing

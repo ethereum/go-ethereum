@@ -33,7 +33,6 @@ import (
 // Common errors that are returned by functions in this package.
 var (
 	ErrNodeNotFound = errors.New("node not found")
-	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
 // Simulation provides methods on network, nodes and services
@@ -66,8 +65,7 @@ type Simulation struct {
 // after network shutdown.
 type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
-// New creates a new Simulation instance with new
-// simulations.Network initialized with provided services.
+// New creates a new simulation instance
 // Services map must have unique keys as service names and
 // every ServiceFunc must return a node.Service of the unique type.
 // This restriction is required by node.Node.Start() function

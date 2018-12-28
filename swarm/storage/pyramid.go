@@ -71,11 +71,6 @@ const (
 	splitTimeout    = time.Minute * 5
 )
 
-const (
-	DataChunk = 0
-	TreeChunk = 1
-)
-
 type PyramidSplitterParams struct {
 	SplitterParams
 	getter Getter
