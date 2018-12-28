@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/consensus/posv"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -199,4 +200,13 @@ func (b *LesApiBackend) GetIPCClient() (*ethclient.Client, error) {
 
 func (b *LesApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
+}
+func (s *LesApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
+	if c, ok := s.eth.Engine().(*posv.Posv); ok {
+		rewards := c.GetRewards(hash)
+		if rewards != nil {
+			return rewards
+		}
+	}
+	return make(map[string]interface{})
 }
