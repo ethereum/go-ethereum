@@ -683,7 +683,7 @@ func (s *PublicBlockChainAPI) GetMasternodes(b *types.Block, ctx context.Context
 			if prevCheckpointBlock != nil {
 				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XDPoS.Epoch)
 			}
-		}  else {
+		} else {
 			log.Error("Undefined XDPoS consensus engine")
 		}
 	}
@@ -980,7 +980,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 					}
 				}
 			}
-		}  else {
+		} else {
 			log.Error("Undefined XDPoS consensus engine")
 		}
 	}
