@@ -1,3 +1,4 @@
+    
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -507,7 +508,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	bc.currentBlock.Store(block)
 
 	// save cache BlockSigners
-	if bc.chainConfig.XDPoS != nil {
+	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPEVMSigner(block.Number()) {
 		engine := bc.Engine().(*XDPoS.XDPoS)
 		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
 	}
@@ -1018,6 +1019,11 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+	}
+	// save cache BlockSigners
+	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPEVMSigner(block.Number()) {
+		engine := bc.Engine().(*XDPoS.XDPoS)
+		engine.CacheSigner(block.Header(), block.Transactions())
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil

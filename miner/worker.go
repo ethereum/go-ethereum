@@ -18,6 +18,7 @@ package miner
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"os"
@@ -583,6 +584,9 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
+	if self.config.IsTIPEVMSigner(header.Number) {
+		work.state.DeleteAddress(common.HexToAddress(common.BlockSigners))
+	}
 	// won't grasp txs at checkpoint
 	var (
 		txs        *types.TransactionsByPriceAndNonce
@@ -670,6 +674,17 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
 			log.Trace("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
 			continue
+		}
+		if tx.To().Hex() == common.BlockSigners {
+			if len(tx.Data()) < 68 {
+				log.Trace("Data special transaction invalid lenght", "hash", tx.Hash(), "data", len(tx.Data()))
+				continue
+			}
+			blkNumber := binary.BigEndian.Uint64(tx.Data()[8:40])
+			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XDPoS.Epoch*2 {
+				log.Trace("Data special transaction invalid number", "hash", tx.Hash(), "blkNumber", blkNumber, "miner", env.header.Number)
+				continue
+			}
 		}
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
