@@ -234,6 +234,10 @@ func isDynamicType(t Type) bool {
 	return t.T == StringTy || t.T == BytesTy || t.T == SliceTy || (t.T == ArrayTy && isDynamicType(*t.Elem))
 }
 
+func (t Type) isDynamicType() bool {
+	return isDynamicType(t)
+}
+
 // getDynamicTypeOffset returns the offset for the type.
 // See `isDynamicType` to know which types are considered dynamic.
 // If the type t is an array and element type is not a dynamic type, then we consider it a static type and
