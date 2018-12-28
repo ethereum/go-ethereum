@@ -137,6 +137,9 @@ type TxPoolConfig struct {
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	//timo whitelist
+	SCWhitelist []common.Address // Addresses that should be treated by default as local
+
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -209,7 +212,9 @@ type TxPool struct {
 
 	wg sync.WaitGroup // for shutdown sync
 
-	homestead bool
+	homestead   bool
+	scwhitelist *accountSet //timo whitelist
+
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
@@ -236,6 +241,13 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		log.Info("Setting new local account", "address", addr)
 		pool.locals.add(addr)
 	}
+	//timo whitelist
+	pool.scwhitelist = newAccountSet(pool.signer)
+	for _, addr := range config.SCWhitelist {
+		log.Info("Setting new whitelist account", "address", addr)
+		pool.scwhitelist.add(addr)
+	}
+
 	pool.priced = newTxPricedList(pool.all)
 	pool.reset(nil, chain.CurrentBlock().Header())
 
@@ -586,12 +598,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	//timo Discart contract create for non whitelisted address
 	if to := tx.To(); to == nil {
-		whiteList := map[common.Address]bool{common.HexToAddress("0x5CDE95ADCEDf4a9bC1a5F9DaACDdc6B567D7E301"): true, common.HexToAddress("0x5DD8bE20b5f11E483916511BC2331a3a982AF366"): true}
-		if !whiteList[from] {
-			log.Info("################# IS NOT WHITELISTEDTHED FOR DEPLOYING SMART CONTRACTS", "address", from)
+		if !pool.scwhitelist.contains(from) {
+			log.Info("Account is NOT whitelisted for smart contract deployment", "address", from)
+
 			return ErrInvalidSender
 		}
-		log.Info("################# IS WHITELISTEDTHED FOR DEPLOYING SMART CONTRACTS", "address", from)
+		log.Info("Account is whitelisted for smart contract deployment", "address", from)
 
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
