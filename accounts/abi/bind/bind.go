@@ -387,48 +387,15 @@ var methodNormalizer = map[Lang]func(string) string{
 
 // capitalise makes a camel-case string which starts with an upper case character.
 func capitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
-	if len(input) == 0 {
-		return ""
-	}
-	return toCamelCase(strings.ToUpper(input[:1]) + input[1:])
+	return abi.ToCamelCase(input)
 }
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
-	if len(input) == 0 {
-		return ""
-	}
-	return toCamelCase(strings.ToLower(input[:1]) + input[1:])
-}
+	// NOTE: This is the current behavior, it doesn't match the comment
+	// above and needs to be investigated.
+	return abi.ToCamelCase(input)
 
-// toCamelCase converts an under-score string to a camel-case string
-func toCamelCase(input string) string {
-	toupper := false
-
-	result := ""
-	for k, v := range input {
-		switch {
-		case k == 0:
-			result = strings.ToUpper(string(input[0]))
-
-		case toupper:
-			result += strings.ToUpper(string(v))
-			toupper = false
-
-		case v == '_':
-			toupper = true
-
-		default:
-			result += string(v)
-		}
-	}
-	return result
 }
 
 // structured checks whether a list of ABI data types has enough information to
