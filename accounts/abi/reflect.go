@@ -186,7 +186,7 @@ func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]strin
 	for _, arg := range args {
 
 		abiFieldName := arg.Name
-		structFieldName := capitalise(abiFieldName)
+		structFieldName := ToCamelCase(abiFieldName)
 
 		if structFieldName == "" {
 			return nil, fmt.Errorf("abi: purely underscored output cannot unpack to struct")
