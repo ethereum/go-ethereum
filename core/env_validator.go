@@ -1,15 +1,14 @@
-package validator
+package core
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
 	context := vm.Context{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
 		GetHash:     func(uint64) common.Hash { return common.Hash{} },
 
 		Origin:      cfg.Origin,
