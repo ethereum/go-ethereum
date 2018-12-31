@@ -310,38 +310,57 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 	masternodes := posv.GetMasternodesFromCheckpointHeader(prevHeaderCheckpoint)
 
 	if len(masternodes) > 0 {
-		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			block := chain.GetHeaderByNumber(i)
-			addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
-			if err != nil {
-				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-				return nil, err
-			}
-			// Filter duplicate address.
-			if len(addrs) > 0 {
-				addrSigners := make(map[common.Address]bool)
-				for _, masternode := range masternodes {
-					for _, addr := range addrs {
-						if addr == masternode {
-							if _, ok := addrSigners[addr]; !ok {
-								addrSigners[addr] = true
-							}
-							break
-						}
-					}
-				}
 
-				for addr := range addrSigners {
-					_, exist := signers[addr]
-					if exist {
-						signers[addr].Sign++
-					} else {
-						signers[addr] = &rewardLog{1, new(big.Int)}
-					}
-					*totalSigner++
-				}
-			}
-		}
+        var wg sync.WaitGroup
+        squeue := make(chan []common.Address, 1)
+        wg.Add(900)
+
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+            go func(i uint64) {
+                block := chain.GetHeaderByNumber(i)
+                addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
+                if err != nil {
+                    log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+                    // return nil, err
+                }
+                squeue <- addrs
+            }(i)
+        }
+
+        fsigner := func() {
+            for addrs := range squeue {
+                // Filter duplicate address.
+                if len(addrs) > 0 {
+                    addrSigners := make(map[common.Address]bool)
+                    for _, masternode := range masternodes {
+                        for _, addr := range addrs {
+                            if addr == masternode {
+                                if _, ok := addrSigners[addr]; !ok {
+                                    addrSigners[addr] = true
+                                }
+                                break
+                            }
+                        }
+                    }
+
+                    for addr := range addrSigners {
+                        _, exist := signers[addr]
+                        if exist {
+                            signers[addr].Sign++
+                        } else {
+                            signers[addr] = &rewardLog{1, new(big.Int)}
+                        }
+                        *totalSigner++
+                    }
+                }
+                wg.Done()
+            }
+        }
+
+        go fsigner()
+
+        wg.Wait()
+        fmt.Println("totalSigner", *totalSigner)
 	}
 
 	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
