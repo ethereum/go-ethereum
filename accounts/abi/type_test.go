@@ -97,7 +97,7 @@ func TestTypeRegexp(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		typ, err := NewType(tt.blob)
+		typ, err := NewType(tt.blob, nil)
 		if err != nil {
 			t.Errorf("type %q: failed to parse type string: %v", tt.blob, err)
 		}
@@ -256,7 +256,7 @@ func TestTypeCheck(t *testing.T) {
 		{"invalidType", "", "unsupported arg type: invalidType"},
 		{"invalidSlice[]", "", "unsupported arg type: invalidSlice"},
 	} {
-		typ, err := NewType(test.typ)
+		typ, err := NewType(test.typ, nil)
 		if err != nil && len(test.err) == 0 {
 			t.Fatal("unexpected parse error:", err)
 		} else if err != nil && len(test.err) != 0 {
