@@ -18,7 +18,9 @@ package posv
 
 import (
 	"bytes"
+//    "strings"
 	"encoding/json"
+//	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -30,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	// "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -857,13 +860,38 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	var lAddr []common.Address
+    /*
+    abiJSON := `[{"inputs":[{"name":"_blockNumber","type":"uint256"},{"name":"_blockHash","type":"bytes32"}],"name":"sign","type":"function"}]`
+    abiReader, err := abi.JSON(strings.NewReader(abiJSON))
+    if err != nil {
+        log.Error("Abi parser error", err)
+    }
+
+    type Sign struct {
+        BlockNumber  *big.Int
+        BlockHash    common.Hash
+    }
+    var s Sign
+    */
+
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-			lAddr = append(lAddr, *tx.From())
+            /*
+            err = abiReader.Unpack(&s, "sign", tx.Data())
+            if err != nil {
+                log.Error("Abi unpack error", err)
+            }
+            blkHash := s.BlockHash
+            */
+            blkHash := tx.Data()[len(tx.Data())-32:]
+
+            if cached, ok := c.BlockSigners.Get(blkHash); ok {
+                lAddr := cached.([]common.Address)
+                lAddr = append(lAddr, *tx.From())
+                c.BlockSigners.Add(blkHash, lAddr)
+            }
 		}
 	}
-	c.BlockSigners.Add(header.Hash(), lAddr)
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		err, rewards := c.HookReward(chain, state, header)
