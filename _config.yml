@@ -8,6 +8,8 @@ exclude:
   - .gitignore
 layout: page
 avatar: /static/images/ethereum.png
+author:
+  name: The go-ethereum authors
 navbar-links:
   Home: "docs"
   Install and build:
