@@ -313,7 +313,8 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 			block := chain.GetHeaderByNumber(i)
 			addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
 			if err != nil {
-				log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+				return nil, err
 			}
 			// Filter duplicate address.
 			if len(addrs) > 0 {
@@ -410,7 +411,8 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 	opts := new(bind.CallOpts)
 	voters, err := validator.GetVoters(opts, masterAddr)
 	if err != nil {
-		log.Crit("Fail to get voters", "error", err)
+		log.Error("Fail to get voters", "error", err)
+		return nil, err
 	}
 
 	if len(voters) > 0 {
@@ -422,7 +424,8 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		for _, voteAddr := range voters {
 			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
 			if err != nil {
-				log.Crit("Fail to get vote capacity", "error", err)
+				log.Error("Fail to get vote capacity", "error", err)
+				return nil, err
 			}
 
 			totalCap.Add(totalCap, voterCap)
