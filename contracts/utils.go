@@ -86,8 +86,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		// Add tx signed to local tx pool.
 		err = pool.AddLocal(txSigned)
 		if err != nil {
-			log.Error("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
-			return err
+			log.Warn("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
 		}
 
 		// Create secret tx.
@@ -116,7 +115,6 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			err = pool.AddLocal(txSigned)
 			if err != nil {
 				log.Error("Fail to add tx secret to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
-				return err
 			}
 
 			// Put randomize key into chainDb.
@@ -128,7 +126,6 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			randomizeKeyValue, err := chainDb.Get(randomizeKeyName)
 			if err != nil {
 				log.Error("Fail to get randomize key from state db.", "error", err)
-				return err
 			}
 
 			tx, err := BuildTxOpeningRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), randomizeKeyValue)
@@ -145,7 +142,6 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			err = pool.AddLocal(txSigned)
 			if err != nil {
 				log.Error("Fail to add tx opening to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
-				return err
 			}
 
 			// Clear randomize key in state db.
@@ -212,8 +208,27 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 		log.Error("Fail get block signers", "error", err)
 		return nil, err
 	}
-
 	return addrs, nil
+}
+
+func GetSignersFromContract2(c *posv.Posv, addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
+	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
+	if err != nil {
+		log.Error("Fail get instance of blockSigner", "error", err)
+		return nil, err
+	}
+	opts := new(bind.CallOpts)
+	if caddrs, ok := c.GetBlockSigners().Get(blockHash); !ok {
+		addrs, err := blockSigner.GetSigners(opts, blockHash)
+		if err != nil {
+			log.Error("Fail get block signers", "error", err)
+			return nil, err
+		}
+		return addrs, nil
+	} else {
+		return caddrs.([]common.Address), nil
+	}
+	return nil, nil
 }
 
 // Get random from randomize contract.
@@ -221,18 +236,15 @@ func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common
 	randomize, err := randomizeContract.NewTomoRandomize(common.HexToAddress(common.RandomizeSMC), client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
-		return -1, err
 	}
 	opts := new(bind.CallOpts)
 	secrets, err := randomize.GetSecret(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get secrets from randomize", "error", err)
-		return -1, err
 	}
 	opening, err := randomize.GetOpening(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get opening from randomize", "error", err)
-		return -1, err
 	}
 
 	return DecryptRandomizeFromSecretsAndOpening(secrets, opening)
@@ -297,7 +309,6 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 				intNumber, err := strconv.Atoi(decryptSecret)
 				if err != nil {
 					log.Error("Can not convert string to integer", "error", err)
-					return -1, err
 				}
 				random = int64(intNumber)
 			}
@@ -308,7 +319,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
@@ -319,56 +330,57 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 
 	if len(masternodes) > 0 {
 
-        var wg sync.WaitGroup
-        squeue := make(chan []common.Address, 1)
-        wg.Add(900)
+		var wg sync.WaitGroup
+		squeue := make(chan []common.Address, 1)
+		wg.Add(900)
 
 		for i := startBlockNumber; i <= endBlockNumber; i++ {
-            go func(i uint64) {
-                block := chain.GetHeaderByNumber(i)
-                addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
-                if err != nil {
-                    log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-                    // return nil, err
-                }
-                squeue <- addrs
-            }(i)
-        }
+			go func(i uint64) {
+				block := chain.GetHeaderByNumber(i)
+				addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
+				// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
+				if err != nil {
+					log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+					// return nil, err
+				}
+				squeue <- addrs
+			}(i)
+		}
 
-        fsigner := func() {
-            for addrs := range squeue {
-                // Filter duplicate address.
-                if len(addrs) > 0 {
-                    addrSigners := make(map[common.Address]bool)
-                    for _, masternode := range masternodes {
-                        for _, addr := range addrs {
-                            if addr == masternode {
-                                if _, ok := addrSigners[addr]; !ok {
-                                    addrSigners[addr] = true
-                                }
-                                break
-                            }
-                        }
-                    }
+		fsigner := func() {
+			for addrs := range squeue {
+				// Filter duplicate address.
+				if len(addrs) > 0 {
+					addrSigners := make(map[common.Address]bool)
+					for _, masternode := range masternodes {
+						for _, addr := range addrs {
+							if addr == masternode {
+								if _, ok := addrSigners[addr]; !ok {
+									addrSigners[addr] = true
+								}
+								break
+							}
+						}
+					}
 
-                    for addr := range addrSigners {
-                        _, exist := signers[addr]
-                        if exist {
-                            signers[addr].Sign++
-                        } else {
-                            signers[addr] = &rewardLog{1, new(big.Int)}
-                        }
-                        *totalSigner++
-                    }
-                }
-                wg.Done()
-            }
-        }
+					for addr := range addrSigners {
+						_, exist := signers[addr]
+						if exist {
+							signers[addr].Sign++
+						} else {
+							signers[addr] = &rewardLog{1, new(big.Int)}
+						}
+						*totalSigner++
+					}
+				}
+				wg.Done()
+			}
+		}
 
-        go fsigner()
+		go fsigner()
 
-        wg.Wait()
-        fmt.Println("totalSigner", *totalSigner)
+		wg.Wait()
+		fmt.Println("totalSigner", *totalSigner)
 	}
 
 	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
