@@ -872,19 +872,10 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	finality := int32(0)
 	if b.Number().Int64() > 0 {
 		addrBlockSigner := common.HexToAddress(common.BlockSigners)
-		retries := 3
-		for {
-			signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
-			if err != nil {
-				log.Error("Fail to get signers from block signer SC.", "error", err, "retries", retries)
-				if retries == 0 {
-					return nil, err
-				}
-			} else {
-				break
-			}
-			retries--
-			time.Sleep(100 * time.Millisecond)
+		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
+		if err != nil {
+			log.Error("Fail to get signers from block signer SC.", "error", err)
+			return nil, err
 		}
 		// Get block epoc latest.
 		if s.b.ChainConfig().Posv != nil {
