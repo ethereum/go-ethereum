@@ -410,8 +410,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 	opts := new(bind.CallOpts)
 	voters, err := validator.GetVoters(opts, masterAddr)
 	if err != nil {
-		log.Error("Fail to get voters", "error", err)
-		return nil, err
+		log.Crit("Fail to get voters", "error", err)
 	}
 
 	if len(voters) > 0 {
@@ -423,8 +422,7 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		for _, voteAddr := range voters {
 			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
 			if err != nil {
-				log.Error("Fail to get vote capacity", "error", err)
-				return nil, err
+				log.Crit("Fail to get vote capacity", "error", err)
 			}
 
 			totalCap.Add(totalCap, voterCap)
