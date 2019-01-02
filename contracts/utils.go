@@ -313,8 +313,7 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 			block := chain.GetHeaderByNumber(i)
 			addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
 			if err != nil {
-				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-				return nil, err
+				log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
 			}
 			// Filter duplicate address.
 			if len(addrs) > 0 {
