@@ -494,13 +494,7 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]interface{} {
-	if c, ok := s.b.GetEngine().(*posv.Posv); ok {
-		rewards := c.GetRewards(hash)
-		if rewards != nil {
-			return rewards
-		}
-	}
-	return make(map[string]interface{})
+	return s.b.GetRewardByHash(hash)
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the

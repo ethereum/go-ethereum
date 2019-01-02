@@ -18,12 +18,9 @@
 package eth
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -373,27 +370,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return true
 			}
 			return false
-		}
-		eth.blockchain.HookWriteRewards = func(header *types.Header) {
-			if len(config.StoreRewardFolder) > 0 {
-				rewards := c.GetRewards(header.Hash())
-				if rewards == nil {
-					rewards = c.GetRewards(header.HashNoValidator())
-					if rewards != nil {
-						c.InsertRewards(header.Hash(), rewards)
-					}
-				}
-				if rewards == nil {
-					return
-				}
-				data, err := json.Marshal(rewards)
-				if err == nil {
-					err = ioutil.WriteFile(filepath.Join(config.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()), data, 0644)
-				}
-				if err != nil {
-					log.Error("Error when save reward info ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
-				}
-			}
 		}
 	}
 	return eth, nil

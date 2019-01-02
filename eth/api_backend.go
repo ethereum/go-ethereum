@@ -19,7 +19,6 @@ package eth
 import (
 	"context"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/consensus/posv"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
@@ -239,15 +238,17 @@ func (b *EthApiBackend) GetEngine() consensus.Engine {
 }
 
 func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
-	if c, ok := s.eth.Engine().(*posv.Posv); ok {
-		rewards := c.GetRewards(hash)
-		if rewards != nil {
-			return rewards
-		}
-	} else {
-		header := s.eth.blockchain.GetHeaderByHash(hash)
-		if header != nil {
-			data, err := ioutil.ReadFile(filepath.Join(s.eth.config.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
+	header := s.eth.blockchain.GetHeaderByHash(hash)
+	if header != nil {
+		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
+		if err == nil {
+			rewards := make(map[string]interface{})
+			err = json.Unmarshal(data, &rewards)
+			if err == nil {
+				return rewards
+			}
+		} else {
+			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
 			if err == nil {
 				rewards := make(map[string]interface{})
 				err = json.Unmarshal(data, &rewards)
