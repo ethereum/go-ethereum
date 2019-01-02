@@ -1,4 +1,5 @@
 repository: ethereum/go-ethereum
+google_analytics: UA-131485733-1
 #remote_theme: Phlow/feeling-responsive
 remote_theme: daattali/beautiful-jekyll
 exclude:
