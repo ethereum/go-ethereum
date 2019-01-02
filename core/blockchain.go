@@ -141,9 +141,9 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks        *lru.Cache // Bad block cache
-	IPCEndpoint      string
-	Client           *ethclient.Client // Global ipc client instance.
+	badBlocks   *lru.Cache // Bad block cache
+	IPCEndpoint string
+	Client      *ethclient.Client // Global ipc client instance.
 }
 
 // NewBlockChain returns a fully initialised block chain using information
