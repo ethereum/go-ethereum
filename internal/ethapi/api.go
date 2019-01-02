@@ -494,13 +494,7 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 
 // BlockNumber returns the block number of the chain head.
 func (s *PublicBlockChainAPI) GetRewardByHash(hash common.Hash) map[string]interface{} {
-	if c, ok := s.b.GetEngine().(*posv.Posv); ok {
-		rewards := c.GetRewards(hash)
-		if rewards != nil {
-			return rewards
-		}
-	}
-	return make(map[string]interface{})
+	return s.b.GetRewardByHash(hash)
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -865,6 +859,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	client, err := s.b.GetIPCClient()
 	if err != nil {
 		log.Error("Fail to connect IPC client for block status", "error", err)
+		return nil, err
 	}
 	var signers []common.Address
 	var filterSigners []common.Address
@@ -874,6 +869,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
 		if err != nil {
 			log.Error("Fail to get signers from block signer SC.", "error", err)
+			return nil, err
 		}
 		// Get block epoc latest.
 		if s.b.ChainConfig().Posv != nil {

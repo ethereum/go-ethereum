@@ -18,3 +18,4 @@ const (
 )
 
 var IsTestnet bool = false
+var StoreRewardFolder string

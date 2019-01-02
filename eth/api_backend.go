@@ -18,8 +18,10 @@ package eth
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/consensus/posv"
+	"encoding/json"
+	"io/ioutil"
 	"math/big"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -236,10 +238,24 @@ func (b *EthApiBackend) GetEngine() consensus.Engine {
 }
 
 func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]interface{} {
-	if c, ok := s.eth.Engine().(*posv.Posv); ok {
-		rewards := c.GetRewards(hash)
-		if rewards != nil {
-			return rewards
+	header := s.eth.blockchain.GetHeaderByHash(hash)
+	if header != nil {
+		data, err := ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()))
+		if err == nil {
+			rewards := make(map[string]interface{})
+			err = json.Unmarshal(data, &rewards)
+			if err == nil {
+				return rewards
+			}
+		} else {
+			data, err = ioutil.ReadFile(filepath.Join(common.StoreRewardFolder, header.Number.String()+"."+header.HashNoValidator().Hex()))
+			if err == nil {
+				rewards := make(map[string]interface{})
+				err = json.Unmarshal(data, &rewards)
+				if err == nil {
+					return rewards
+				}
+			}
 		}
 	}
 	return make(map[string]interface{})
