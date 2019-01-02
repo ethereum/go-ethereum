@@ -57,8 +57,8 @@ var (
 )
 
 const (
-	bodyCacheLimit      = 256
-	blockCacheLimit     = 256
+	bodyCacheLimit      = 2560
+	blockCacheLimit     = 2560
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	badBlockLimit       = 10
