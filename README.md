@@ -7,35 +7,28 @@
 
 TomoChain is an innovative solution to the scalability problem with the Ethereum blockchain.
 Our mission is to be a leading force in building the Internet of Value, and its infrastructure.
-We are working to create an alternative, scalable financial system which is more secure, transparent, efficient, inclusive and equitable for everyone.
+We are working to create an alternative, scalable financial system which is more secure, transparent, efficient, inclusive, and equitable for everyone.
 
-TomoChain relies on a system of 150 Masternodes with Proof of Stake Voting consensus that can support near-zero fee, and 2-second transaction confirmation time.
-Security, stability and chain finality are guaranteed via novel techniques such as double validation, staking via smart-contracts and "true" randomization processes.
+TomoChain relies on a system of 150 Masternodes with a Proof of Stake Voting consensus that can support near-zero fee, and 2-second transaction confirmation times.
+Security, stability, and chain finality are guaranteed via novel techniques such as double validation, staking via smart-contracts, and "true" randomization processes.
 
 Tomochain supports all EVM-compatible smart-contracts, protocols, and atomic cross-chain token transfers.
-New scaling techniques such as sharding, private-chain generation, hardware integration will be continuously researched and incorporated into Tomochain's masternode architecture which will be an ideal scalable smart-contract public blockchain for decentralized apps, token issuances and token integrations for small and big businesses.
+New scaling techniques such as sharding, private-chain generation, and hardware integration will be continuously researched and incorporated into Tomochain's masternode architecture. This architecture will be an ideal scalable smart-contract public blockchain for decentralized apps, token issuances, and token integrations for small and big businesses.
 
 More details can be found at our [technical white paper](https://tomochain.com/docs/technical-whitepaper---1.0.pdf)
 
-Reading more about us on:
+Read more about us on:
 
 - our website: http://tomochain.com
 - our blogs and announcements: https://medium.com/tomochain
-- our documentation site: https://docs.tomochain.com
-
-## Tomochain vs Giants
-
-Tomochain is built by the mindset of standing on the giants shoulder.
-We have learned from all advanced technical design concept of many well-known public blockchains on the market and shaped up the platform with our own ingredients.
-See below the overall technical comparison table that we try to make clear the position of Tomochain comparing to some popular blockchains at the top-tier.
-
-![Tomochain](https://s3-ap-southeast-1.amazonaws.com/tomochain/tomochainvsgiants.png)
+- our documentation portal: https://docs.tomochain.com
 
 ## Building the source
 
-Tomochain provides client binary called `tomo` for both running a masternode and running a full-node.
-Building `tomo` requires both a Go (1.7+) and a C compiler.
-Install them by your own way. Once the dependencies are installed, just run below commands:
+Tomochain provides a client binary called `tomo` for both running a masternode and running a full-node.
+Building `tomo` requires both a Go (1.7+) and C compiler; install both of these.
+
+Once the dependencies are installed, just run the below commands:
 
 ```bash
 $ git clone https://github.com/tomochain/tomochain tomochain
@@ -43,19 +36,19 @@ $ cd tomochain
 $ make tomo
 ```
 
-Alternatively, you could quickly download pre-complied binary on our [github release page](https://github.com/tomochain/tomochain/releases)
+Alternatively, you could quickly download our pre-complied binary from our [github release page](https://github.com/tomochain/tomochain/releases)
 
 ## Running tomo
 
 ### Running a tomo masternode
 
-Please refer to the [official documentation](https://docs.tomochain.com/get-started/run-node/) on how to run a node if you goal is to run a masternode.
+Please refer to the [official documentation](https://docs.tomochain.com/get-started/run-node/) on how to run a node if your goal is to run a masternode.
 The recommanded ways of running a node and applying to become a masternode are explained in detail there.
 
 ### Attaching to the Tomochain test network
 
 We published our test network 2.0 with full implementation of PoSV consensus at https://stats.testnet.tomochain.com.
-If you'd like to experiment with smart contracts creation and DApps, you might be interested in giving it a try on our Testnet.
+If you'd like to experiment with smart contract creation and DApps, you might be interested to give these a try on our Testnet.
 
 In order to connect to one of the masternodes on the Testnet, just run the command below:
 
@@ -154,22 +147,22 @@ The implementation of the following features is being studied by our research te
 - Layer 2 scalability with state sharding
 - DEX integration
 - Spam filtering
-- Multi-chains interoperabilty
+- Multi-chain interoperabilty
 
-## Contribution and technical discuss
+## Contributing and technical discussion
 
 Thank you for considering to try out our network and/or help out with the source code.
-We would love to get your help, feel free to lend a hand.
-Even the smallest bit of code, bug reporting or just discussing ideas are highly appreciated.
+We would love to get your help; feel free to lend a hand.
+Even the smallest bit of code, bug reporting, or just discussing ideas are highly appreciated.
 
 If you would like to contribute to the tomochain source code, please refer to our Developer Guide for details on configuring development environment, managing dependencies, compiling, testing and submitting your code changes to our repo.
 
 Please also make sure your contributions adhere to the base coding guidelines:
 
-- Code must adhere the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e uses [gofmt](https://golang.org/cmd/gofmt/)).
-- Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
+- Code must adhere to official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e uses [gofmt](https://golang.org/cmd/gofmt/)).
+- Code comments must adhere to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
 - Pull requests need to be based on and opened against the `master` branch.
-- Problem you are trying to contribute must be well-explained as an issue on our [github issue page](https://github.com/tomochain/tomochain/issues)
+- Any code you are trying to contribute must be well-explained as an issue on our [github issue page](https://github.com/tomochain/tomochain/issues)
 - Commit messages should be short but clear enough and should refer to the corresponding pre-logged issue mentioned above.
 
 For technical discussion, feel free to join our chat at [Gitter](https://gitter.im/tomochain/tomochain).
