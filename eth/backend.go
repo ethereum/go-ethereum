@@ -18,12 +18,9 @@
 package eth
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -292,8 +289,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{}) {
 			client, err := eth.blockchain.GetClient()
 			if err != nil {
-				log.Error("Fail to connect IPC client for blockSigner", "error", err)
-				return err, nil
+				log.Crit("Fail to connect IPC client for blockSigner", "error", err)
 			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
@@ -314,20 +310,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				fmt.Println("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
-					log.Error("Fail to get signers for reward checkpoint", "error", err)
-					return err, nil
+					log.Crit("Fail to get signers for reward checkpoint", "error", err)
 				}
 				rewards["signers"] = signers
 				rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
 				if err != nil {
-					log.Error("Fail to calculate reward for signers", "error", err)
-					return err, nil
+					log.Crit("Fail to calculate reward for signers", "error", err)
 				}
 				// Get validator.
 				validator, err := contract.NewTomoValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
 				if err != nil {
-					log.Error("Fail get instance of Tomo Validator", "error", err)
-					return err, nil
+					log.Crit("Fail get instance of Tomo Validator", "error", err)
 				}
 				// Add reward for coin holders.
 				voterResults := make(map[common.Address]interface{})
@@ -337,8 +330,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
 						// err, rewards := contracts.CalculateRewardForHolders2(foudationWalletAddr, vmenv, state, signer, calcReward)
 						if err != nil {
-							log.Error("Fail to calculate reward for holders.", "error", err)
-							return err, nil
+							log.Crit("Fail to calculate reward for holders.", "error", err)
 						}
 						voterResults[signer] = rewards
 					}
@@ -377,27 +369,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				return true
 			}
 			return false
-		}
-		eth.blockchain.HookWriteRewards = func(header *types.Header) {
-			if len(config.StoreRewardFolder) > 0 {
-				rewards := c.GetRewards(header.Hash())
-				if rewards == nil {
-					rewards = c.GetRewards(header.HashNoValidator())
-					if rewards != nil {
-						c.InsertRewards(header.Hash(), rewards)
-					}
-				}
-				if rewards == nil {
-					return
-				}
-				data, err := json.Marshal(rewards)
-				if err == nil {
-					err = ioutil.WriteFile(filepath.Join(config.StoreRewardFolder, header.Number.String()+"."+header.Hash().Hex()), data, 0644)
-				}
-				if err != nil {
-					log.Error("Error when save reward info ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
-				}
-			}
 		}
 	}
 	return eth, nil

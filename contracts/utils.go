@@ -86,7 +86,8 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 		// Add tx signed to local tx pool.
 		err = pool.AddLocal(txSigned)
 		if err != nil {
-			log.Warn("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
+			log.Error("Fail to add tx sign to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
+			return err
 		}
 
 		// Create secret tx.
@@ -115,6 +116,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			err = pool.AddLocal(txSigned)
 			if err != nil {
 				log.Error("Fail to add tx secret to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
+				return err
 			}
 
 			// Put randomize key into chainDb.
@@ -126,6 +128,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			randomizeKeyValue, err := chainDb.Get(randomizeKeyName)
 			if err != nil {
 				log.Error("Fail to get randomize key from state db.", "error", err)
+				return err
 			}
 
 			tx, err := BuildTxOpeningRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), randomizeKeyValue)
@@ -142,6 +145,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			err = pool.AddLocal(txSigned)
 			if err != nil {
 				log.Error("Fail to add tx opening to local pool.", "error", err, "number", block.NumberU64(), "hash", block.Hash().Hex(), "from", account.Address, "nonce", nonce)
+				return err
 			}
 
 			// Clear randomize key in state db.
@@ -217,15 +221,18 @@ func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common
 	randomize, err := randomizeContract.NewTomoRandomize(common.HexToAddress(common.RandomizeSMC), client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
+		return -1, err
 	}
 	opts := new(bind.CallOpts)
 	secrets, err := randomize.GetSecret(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get secrets from randomize", "error", err)
+		return -1, err
 	}
 	opening, err := randomize.GetOpening(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get opening from randomize", "error", err)
+		return -1, err
 	}
 
 	return DecryptRandomizeFromSecretsAndOpening(secrets, opening)
@@ -290,6 +297,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 				intNumber, err := strconv.Atoi(decryptSecret)
 				if err != nil {
 					log.Error("Can not convert string to integer", "error", err)
+					return -1, err
 				}
 				random = int64(intNumber)
 			}

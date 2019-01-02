@@ -133,7 +133,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			log.Error(string(buf))
+			log.Error(fmt.Sprintf("RPC serveRequest %s\n", string(buf)))
 		}
 		s.codecsMu.Lock()
 		s.codecs.Remove(codec)
@@ -344,7 +344,7 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 	}
 
 	if err := codec.Write(response); err != nil {
-		log.Error(fmt.Sprintf("%v\n", err))
+		log.Error(fmt.Sprintf("RPC exec %v\n", err))
 		codec.Close()
 	}
 
@@ -371,7 +371,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 	}
 
 	if err := codec.Write(responses); err != nil {
-		log.Error(fmt.Sprintf("%v\n", err))
+		log.Error(fmt.Sprintf("RPC execBacth %v\n", err))
 		codec.Close()
 	}
 
