@@ -48,8 +48,9 @@ import (
 )
 
 const (
-	inmemorySnapshots = 128 // Number of recent vote snapshots to keep in memory
-	M2ByteLength      = 4
+	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
+	blockSignersCacheLimit = 1800
+	M2ByteLength           = 4
 )
 
 type Masternode struct {
@@ -224,6 +225,7 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
+	BlockSigners  *lru.ARCCache
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -239,6 +241,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 		conf.Epoch = epochLength
 	}
 	// Allocate the snapshot caches and create the engine
+	BlockSigners, _ := lru.NewARC(blockSignersCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
@@ -246,12 +249,17 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	return &Posv{
 		config:              &conf,
 		db:                  db,
+		BlockSigners:        BlockSigners,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
 		validatorSignatures: validatorSignatures,
 		proposals:           make(map[common.Address]bool),
 	}
+}
+
+func (c *Posv) GetBlockSigners() *lru.ARCCache {
+	return c.BlockSigners
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered
@@ -848,6 +856,14 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	// set block reward
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
+
+	var lAddr []common.Address
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			lAddr = append(lAddr, *tx.From())
+		}
+	}
+	c.BlockSigners.Add(header.Hash(), lAddr)
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		err, rewards := c.HookReward(chain, state, header)

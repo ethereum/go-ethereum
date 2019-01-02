@@ -307,7 +307,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
+				signers, err := contracts.GetRewardForCheckpoint(c, chain, addr, number, rCheckpoint, client, totalSigner)
+				// signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
 				fmt.Println("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)

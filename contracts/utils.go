@@ -208,8 +208,27 @@ func GetSignersFromContract(addrBlockSigner common.Address, client bind.Contract
 		log.Error("Fail get block signers", "error", err)
 		return nil, err
 	}
-
 	return addrs, nil
+}
+
+func GetSignersFromContract2(c *posv.Posv, addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
+	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
+	if err != nil {
+		log.Error("Fail get instance of blockSigner", "error", err)
+		return nil, err
+	}
+	opts := new(bind.CallOpts)
+	if caddrs, ok := c.GetBlockSigners().Get(blockHash); !ok {
+		addrs, err := blockSigner.GetSigners(opts, blockHash)
+		if err != nil {
+			log.Error("Fail get block signers", "error", err)
+			return nil, err
+		}
+		return addrs, nil
+	} else {
+		return caddrs.([]common.Address), nil
+	}
+	return nil, nil
 }
 
 // Get random from randomize contract.
@@ -300,7 +319,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
@@ -318,7 +337,8 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, blockSignerAddr common.
 		for i := startBlockNumber; i <= endBlockNumber; i++ {
 			go func(i uint64) {
 				block := chain.GetHeaderByNumber(i)
-				addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
+				addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
+				// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
 				if err != nil {
 					log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
 					// return nil, err
