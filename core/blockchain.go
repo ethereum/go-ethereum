@@ -144,7 +144,6 @@ type BlockChain struct {
 	badBlocks        *lru.Cache // Bad block cache
 	IPCEndpoint      string
 	Client           *ethclient.Client // Global ipc client instance.
-	HookWriteRewards func(header *types.Header)
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -1222,9 +1221,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				}
 			}
 		}
-		if bc.HookWriteRewards != nil {
-			bc.HookWriteRewards(block.Header())
-		}
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
@@ -1430,9 +1426,6 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	if status == CanonStatTy && bc.CurrentBlock().Hash() == block.Hash() {
 		events = append(events, ChainHeadEvent{block})
 		log.Debug("New ChainHeadEvent from fetcher ", "number", block.NumberU64(), "hash", block.Hash())
-	}
-	if bc.HookWriteRewards != nil {
-		bc.HookWriteRewards(block.Header())
 	}
 	return events, coalescedLogs, nil
 }

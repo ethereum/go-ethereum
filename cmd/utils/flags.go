@@ -1087,9 +1087,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
-		cfg.StoreRewardFolder = filepath.Join(stack.DataDir(), "tomo", "rewards")
-		if _, err := os.Stat(cfg.StoreRewardFolder); os.IsNotExist(err) {
-			os.Mkdir(cfg.StoreRewardFolder, os.ModePerm)
+		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "tomo", "rewards")
+		if _, err := os.Stat(common.StoreRewardFolder); os.IsNotExist(err) {
+			os.Mkdir(common.StoreRewardFolder, os.ModePerm)
 		}
 	}
 	// Override any default configs for hard coded networks.
