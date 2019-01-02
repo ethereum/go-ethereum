@@ -859,6 +859,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	client, err := s.b.GetIPCClient()
 	if err != nil {
 		log.Error("Fail to connect IPC client for block status", "error", err)
+		return nil, err
 	}
 	var signers []common.Address
 	var filterSigners []common.Address
@@ -868,6 +869,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
 		if err != nil {
 			log.Error("Fail to get signers from block signer SC.", "error", err)
+			return nil, err
 		}
 		// Get block epoc latest.
 		if s.b.ChainConfig().Posv != nil {
