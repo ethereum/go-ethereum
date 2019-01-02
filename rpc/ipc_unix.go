@@ -20,6 +20,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -27,11 +28,21 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+/*
+#include <sys/un.h>
+
+int max_socket_path_size() {
+struct sockaddr_un s;
+return sizeof(s.sun_path);
+}
+*/
+import "C"
+
 // ipcListen will create a Unix socket on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
-	if len(endpoint) > 107 {
-		log.Warn("The ipc endpoint is longer than 107 characters and is restricted to this size by linux. "+
-			"Shorten this path to less than 108 characters.", "endpoint", endpoint)
+	if len(endpoint) > int(C.max_socket_path_size()) {
+		log.Warn(fmt.Sprintf("The ipc endpoint is longer than %d characters. ", C.max_socket_path_size()),
+			"endpoint", endpoint)
 	}
 
 	// Ensure the IPC path exists and remove any previous leftover
