@@ -123,7 +123,6 @@ var (
 		configFileFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
-		utils.RollbackFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -151,7 +150,7 @@ func init() {
 	// Initialize the CLI app and start XDC
 	app.Action = XDC
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2018 Xinfin"
+	app.Copyright = "Copyright (c) 2018 XDCchain"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
