@@ -247,8 +247,8 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 		conf.Epoch = epochLength
 	}
 	// Allocate the snapshot caches and create the engine
-	BlockSigners, _ := lru.NewARC(blockSignersCacheLimit)
-	Votes, _ := lru.NewARC(votingCacheLimit)
+	BlockSigners, _ := lru.New(blockSignersCacheLimit)
+	Votes, _ := lru.New(votingCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
