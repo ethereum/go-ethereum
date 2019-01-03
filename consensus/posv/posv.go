@@ -18,9 +18,9 @@ package posv
 
 import (
 	"bytes"
-//    "strings"
+	//    "strings"
 	"encoding/json"
-//	"encoding/hex"
+	//	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -52,7 +52,7 @@ import (
 
 const (
 	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
-	blockSignersCacheLimit = 1800
+	blockSignersCacheLimit = 3600
 	M2ByteLength           = 4
 )
 
@@ -860,36 +860,40 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-    /*
-    abiJSON := `[{"inputs":[{"name":"_blockNumber","type":"uint256"},{"name":"_blockHash","type":"bytes32"}],"name":"sign","type":"function"}]`
-    abiReader, err := abi.JSON(strings.NewReader(abiJSON))
-    if err != nil {
-        log.Error("Abi parser error", err)
-    }
+	/*
+	   abiJSON := `[{"inputs":[{"name":"_blockNumber","type":"uint256"},{"name":"_blockHash","type":"bytes32"}],"name":"sign","type":"function"}]`
+	   abiReader, err := abi.JSON(strings.NewReader(abiJSON))
+	   if err != nil {
+	       log.Error("Abi parser error", err)
+	   }
 
-    type Sign struct {
-        BlockNumber  *big.Int
-        BlockHash    common.Hash
-    }
-    var s Sign
-    */
+	   type Sign struct {
+	       BlockNumber  *big.Int
+	       BlockHash    common.Hash
+	   }
+	   var s Sign
+	*/
 
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-            /*
-            err = abiReader.Unpack(&s, "sign", tx.Data())
-            if err != nil {
-                log.Error("Abi unpack error", err)
-            }
-            blkHash := s.BlockHash
-            */
-            blkHash := tx.Data()[len(tx.Data())-32:]
+			/*
+			   err = abiReader.Unpack(&s, "sign", tx.Data())
+			   if err != nil {
+			       log.Error("Abi unpack error", err)
+			   }
+			   blkHash := s.BlockHash
+			*/
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			txHash := *tx.From()
 
-            if cached, ok := c.BlockSigners.Get(blkHash); ok {
-                lAddr := cached.([]common.Address)
-                lAddr = append(lAddr, *tx.From())
-                c.BlockSigners.Add(blkHash, lAddr)
-            }
+			var lAddr []common.Address
+			if cached, ok := c.BlockSigners.Get(blkHash); ok {
+				lAddr = cached.([]common.Address)
+				lAddr = append(lAddr, txHash)
+			} else {
+				lAddr = []common.Address{txHash}
+			}
+			c.BlockSigners.Add(blkHash, lAddr)
 		}
 	}
 

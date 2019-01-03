@@ -217,8 +217,8 @@ func GetSignersFromContract2(c *posv.Posv, addrBlockSigner common.Address, clien
 		log.Error("Fail get instance of blockSigner", "error", err)
 		return nil, err
 	}
-	if caddrs, ok := c.GetBlockSigners().Get(blockHash); !ok {
-        opts := new(bind.CallOpts)
+	if caddrs, ok := c.BlockSigners.Get(blockHash); !ok || c.BlockSigners.Len() < 1800 {
+		opts := new(bind.CallOpts)
 		addrs, err := blockSigner.GetSigners(opts, blockHash)
 		if err != nil {
 			log.Error("Fail get block signers", "error", err)
@@ -226,6 +226,7 @@ func GetSignersFromContract2(c *posv.Posv, addrBlockSigner common.Address, clien
 		}
 		return addrs, nil
 	} else {
+		c.BlockSigners.Remove(blockHash)
 		return caddrs.([]common.Address), nil
 	}
 	return nil, nil
