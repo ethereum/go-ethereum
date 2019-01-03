@@ -52,4 +52,13 @@ func TestPassingBlockNumber(t *testing.T) {
 		t.Fatalf("CodeAt() was not passed the block number")
 	}
 
+	bc.Call(&bind.CallOpts{}, &ret, "something")
+
+	if mc.callContractBlockNumber != nil {
+		t.Fatalf("CallContract() was passed a block number when it should not have been")
+	}
+
+	if mc.codeAtBlockNumber != nil {
+		t.Fatalf("CodeAt() was passed a block number when it should not have been")
+	}
 }
