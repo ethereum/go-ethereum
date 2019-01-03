@@ -118,8 +118,6 @@ type Pss struct {
 	auxAPIs           []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
-	fwdPool         map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
-	fwdPoolMu       sync.RWMutex
 	fwdCache        map[pssDigest]pssCacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	fwdCacheMu      sync.RWMutex
 	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
@@ -169,7 +167,6 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
-		fwdPool:         make(map[string]*protocols.Peer),
 		fwdCache:        make(map[pssDigest]pssCacheEntry),
 		cacheTTL:        params.CacheTTL,
 		msgTTL:          params.MsgTTL,
@@ -268,9 +265,6 @@ func (p *Pss) Protocols() []p2p.Protocol {
 
 func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(peer, rw, pssSpec)
-	p.fwdPoolMu.Lock()
-	p.fwdPool[peer.Info().ID] = pp
-	p.fwdPoolMu.Unlock()
 	return pp.Run(p.handlePssMsg)
 }
 
@@ -910,12 +904,7 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 		return false
 	}
 
-	// get the protocol peer from the forwarding peer cache
-	p.fwdPoolMu.RLock()
-	pp := p.fwdPool[sp.Info().ID]
-	p.fwdPoolMu.RUnlock()
-
-	err := pp.Send(context.TODO(), msg)
+	err := sp.Send(context.TODO(), msg)
 	if err != nil {
 		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
 		log.Error(err.Error())
