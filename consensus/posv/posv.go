@@ -888,8 +888,8 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 		}
 	}
 
-	if !c.EnableCache && c.BlockSigners.Len() >= 1800 {
-		fmt.Println("EnableCache true")
+	if !c.EnableCache && c.BlockSigners.Len() >= 2700 {
+		fmt.Println("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
 		c.EnableCache = true
 	}
 
