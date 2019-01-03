@@ -888,12 +888,12 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 		}
 	}
 
-	if !c.EnableCache && c.BlockSigners.Len() >= 2700 {
-		fmt.Println("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
-		c.EnableCache = true
-	}
-
 	if c.HookReward != nil && number%rCheckpoint == 0 {
+        if !c.EnableCache && c.BlockSigners.Len() >= 2700 {
+            fmt.Println("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
+            c.EnableCache = true
+        }
+
 		err, rewards := c.HookReward(chain, state, header)
 		if err != nil {
 			return nil, err

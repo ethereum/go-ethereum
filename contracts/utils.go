@@ -210,7 +210,6 @@ func GetSignersFromContract(c *posv.Posv, addrBlockSigner common.Address, client
 		}
 		return addrs, nil
 	} else {
-		c.BlockSigners.Remove(blockHash)
 		return caddrs.([]common.Address), nil
 	}
 	return nil, nil
@@ -357,10 +356,8 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 				go func(i uint64) {
 					block := chain.GetHeaderByNumber(i)
 					addrs, err := GetSignersFromContract(c, blockSignerAddr, client, block.Hash())
-					// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
 					if err != nil {
 						log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-						// return nil, err
 					}
 					squeue <- addrs
 				}(i)
