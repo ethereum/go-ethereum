@@ -298,7 +298,7 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 
 	code, found := p.spec.GetCode(msg)
 	if !found {
-		return errorf(ErrInvalidMsgType, "%v", code)
+		return errorf(ErrInvalidMsgType, "%v %s", code, p.spec.Name)
 	}
 	return p2p.Send(p.rw, code, wmsg)
 }
