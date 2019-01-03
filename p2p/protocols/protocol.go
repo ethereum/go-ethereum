@@ -222,6 +222,15 @@ func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	}
 }
 
+// ClonePeer constructs a peer object with an arbitrary Spec, based on an existing Peer
+func ClonePeer(p *Peer, spec *Spec) *Peer {
+	return &Peer{
+		Peer: p.Peer,
+		rw:   p.rw,
+		spec: spec,
+	}
+}
+
 // Run starts the forever loop that handles incoming messages
 // called within the p2p.Protocol#Run function
 // the handler argument is a function which is called for each message received

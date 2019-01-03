@@ -904,7 +904,12 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 		return false
 	}
 
-	err := sp.Send(context.TODO(), msg)
+	// get a Peer value, which supports the `pss` protocol
+	// `sp.BzzPeer.Peer` is a protocols.Peer, which is linked to the `hive` protocol, and
+	// doesn't support `pss` protocol messages.
+	pp := protocols.ClonePeer(sp.BzzPeer.Peer, pssSpec)
+
+	err := pp.Send(context.TODO(), msg)
 	if err != nil {
 		metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
 		log.Error(err.Error())
