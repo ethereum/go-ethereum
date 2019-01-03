@@ -59,9 +59,6 @@ func Proximity(one, other []byte) (ret int) {
 	m := 8
 	for i := 0; i < b; i++ {
 		oxo := one[i] ^ other[i]
-		if i == b-1 {
-			m = MaxPO % 8
-		}
 		for j := 0; j < m; j++ {
 			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j
