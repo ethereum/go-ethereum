@@ -15,11 +15,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"golang.org/x/crypto/scrypt"
+	"golang.org/x/crypto/sha3"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -336,7 +336,7 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 }
 
 func (a *API) getACTDecryptionKey(ctx context.Context, actManifestAddress storage.Address, sessionKey []byte) (found bool, ciphertext, decryptionKey []byte, err error) {
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 	hasher.Write(append(sessionKey, 0))
 	lookupKey := hasher.Sum(nil)
 	hasher.Reset()
@@ -462,7 +462,7 @@ func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees
 			return nil, nil, nil, err
 		}
 
-		hasher := sha3.NewKeccak256()
+		hasher := sha3.NewLegacyKeccak256()
 		hasher.Write(append(sessionKey, 0))
 		lookupKey := hasher.Sum(nil)
 
@@ -484,7 +484,7 @@ func DoACT(ctx *cli.Context, privateKey *ecdsa.PrivateKey, salt []byte, grantees
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		hasher := sha3.NewKeccak256()
+		hasher := sha3.NewLegacyKeccak256()
 		hasher.Write(append(sessionKey, 0))
 		lookupKey := hasher.Sum(nil)
 

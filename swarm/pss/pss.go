@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -187,7 +187,7 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 
 		hashPool: sync.Pool{
 			New: func() interface{} {
-				return sha3.NewKeccak256()
+				return sha3.NewLegacyKeccak256()
 			},
 		},
 	}
