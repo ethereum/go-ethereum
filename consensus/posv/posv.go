@@ -230,8 +230,8 @@ type Posv struct {
 	lock   sync.RWMutex    // Protects the signer fields
 
 	EnableCache   bool
-	BlockSigners  *lru.ARCCache
-	Votes         *lru.ARCCache
+	BlockSigners  *lru.Cache
+	Votes         *lru.Cache
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -862,7 +862,6 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	start := time.Now()
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
@@ -888,7 +887,6 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 			}
 		}
 	}
-	fmt.Println("Time Calculate Cache", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 
 	if !c.EnableCache && c.BlockSigners.Len() >= 1800 {
 		fmt.Println("EnableCache true")
