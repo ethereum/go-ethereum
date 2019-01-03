@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -196,22 +195,7 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
-	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
-	if err != nil {
-		log.Error("Fail get instance of blockSigner", "error", err)
-		return nil, err
-	}
-	opts := new(bind.CallOpts)
-	addrs, err := blockSigner.GetSigners(opts, blockHash)
-	if err != nil {
-		log.Error("Fail get block signers", "error", err)
-		return nil, err
-	}
-	return addrs, nil
-}
-
-func GetSignersFromContract2(c *posv.Posv, addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
+func GetSignersFromContract(c *posv.Posv, addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
 	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
 	if err != nil {
 		log.Error("Fail get instance of blockSigner", "error", err)
@@ -338,7 +322,7 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 		for i := startBlockNumber; i <= endBlockNumber; i++ {
 			go func(i uint64) {
 				block := chain.GetHeaderByNumber(i)
-				addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
+				addrs, err := GetSignersFromContract(c, blockSignerAddr, client, block.Hash())
 				// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
 				if err != nil {
 					log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
@@ -414,18 +398,6 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 	return resultSigners, nil
 }
 
-// Get candidate owner by address.
-func GetCandidatesOwnerBySigner2(vmenv *vm.EVM, signerAddr common.Address) common.Address {
-	owner := signerAddr
-	owner, err := core.GetCandidateOwner(signerAddr, vmenv)
-	if err != nil {
-		log.Error("Fail get candidate owner", "error", err)
-		return owner
-	}
-
-	return owner
-}
-
 func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, signerAddr common.Address) common.Address {
 	owner := signerAddr
 	opts := new(bind.CallOpts)
@@ -436,81 +408,6 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, sign
 	}
 
 	return owner
-}
-
-// Calculate reward for holders.
-func CalculateRewardForHolders2(foudationWalletAddr common.Address, vmenv *vm.EVM, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
-	rewards, err := GetRewardBalancesRate2(foudationWalletAddr, signer, calcReward, vmenv)
-	if err != nil {
-		return err, nil
-	}
-	if len(rewards) > 0 {
-		for holder, reward := range rewards {
-			state.AddBalance(holder, reward)
-		}
-	}
-	return nil, rewards
-}
-
-// Get reward balance rates for master node, founder and holders.
-func GetRewardBalancesRate2(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, vmenv *vm.EVM) (map[common.Address]*big.Int, error) {
-	owner := GetCandidatesOwnerBySigner2(vmenv, masterAddr)
-	balances := make(map[common.Address]*big.Int)
-	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
-	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
-	balances[owner] = rewardMaster
-	// Get voters for masternode.
-	voters, err := core.GetVoters(masterAddr, vmenv)
-	if err != nil {
-		log.Error("Fail to get voters", "error", err)
-		return nil, err
-	}
-
-	if len(voters) > 0 {
-		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
-		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
-		totalCap := new(big.Int)
-		// Get voters capacities.
-		voterCaps := make(map[common.Address]*big.Int)
-		for _, voteAddr := range voters {
-			voterCap, err := core.GetVoterCap(masterAddr, voteAddr, vmenv)
-			if err != nil {
-				log.Error("Fail to get vote capacity", "error", err)
-				return nil, err
-			}
-
-			totalCap.Add(totalCap, voterCap)
-			voterCaps[voteAddr] = voterCap
-		}
-		if totalCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-			for addr, voteCap := range voterCaps {
-				// Only valid voter has cap > 0.
-				if voteCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-					rcap := new(big.Int).Mul(totalVoterReward, voteCap)
-					rcap = new(big.Int).Div(rcap, totalCap)
-					if balances[addr] != nil {
-						balances[addr].Add(balances[addr], rcap)
-					} else {
-						balances[addr] = rcap
-					}
-				}
-			}
-		}
-	}
-
-	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardFoundationPercent))
-	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
-	balances[foudationWalletAddr] = foudationReward
-
-	jsonHolders, err := json.Marshal(balances)
-	if err != nil {
-		log.Error("Fail to parse json holders", "error", err)
-		return nil, err
-	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
-	fmt.Println("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
-
-	return balances, nil
 }
 
 // Calculate reward for holders.
