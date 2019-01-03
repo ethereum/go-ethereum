@@ -201,7 +201,7 @@ func GetSignersFromContract(c *posv.Posv, addrBlockSigner common.Address, client
 		log.Error("Fail get instance of blockSigner", "error", err)
 		return nil, err
 	}
-	if caddrs, ok := c.BlockSigners.Get(blockHash); !ok || c.BlockSigners.Len() < 1800 {
+	if caddrs, ok := c.BlockSigners.Get(blockHash); !ok || !c.EnableCache {
 		opts := new(bind.CallOpts)
 		addrs, err := blockSigner.GetSigners(opts, blockHash)
 		if err != nil {
@@ -315,25 +315,14 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 
 	if len(masternodes) > 0 {
 
-		var wg sync.WaitGroup
-		squeue := make(chan []common.Address, 1)
-		wg.Add(900)
-
-		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			go func(i uint64) {
+		if !c.EnableCache {
+			for i := startBlockNumber; i <= endBlockNumber; i++ {
 				block := chain.GetHeaderByNumber(i)
 				addrs, err := GetSignersFromContract(c, blockSignerAddr, client, block.Hash())
-				// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
 				if err != nil {
-					log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-					// return nil, err
+					log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+					return nil, err
 				}
-				squeue <- addrs
-			}(i)
-		}
-
-		fsigner := func() {
-			for addrs := range squeue {
 				// Filter duplicate address.
 				if len(addrs) > 0 {
 					addrSigners := make(map[common.Address]bool)
@@ -358,13 +347,60 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 						*totalSigner++
 					}
 				}
-				wg.Done()
 			}
+		} else {
+			var wg sync.WaitGroup
+			squeue := make(chan []common.Address, 1)
+			wg.Add(900)
+
+			for i := startBlockNumber; i <= endBlockNumber; i++ {
+				go func(i uint64) {
+					block := chain.GetHeaderByNumber(i)
+					addrs, err := GetSignersFromContract(c, blockSignerAddr, client, block.Hash())
+					// addrs, err := GetSignersFromContract2(c, blockSignerAddr, client, block.Hash())
+					if err != nil {
+						log.Crit("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
+						// return nil, err
+					}
+					squeue <- addrs
+				}(i)
+			}
+
+			fsigner := func() {
+				for addrs := range squeue {
+					// Filter duplicate address.
+					if len(addrs) > 0 {
+						addrSigners := make(map[common.Address]bool)
+						for _, masternode := range masternodes {
+							for _, addr := range addrs {
+								if addr == masternode {
+									if _, ok := addrSigners[addr]; !ok {
+										addrSigners[addr] = true
+									}
+									break
+								}
+							}
+						}
+
+						for addr := range addrSigners {
+							_, exist := signers[addr]
+							if exist {
+								signers[addr].Sign++
+							} else {
+								signers[addr] = &rewardLog{1, new(big.Int)}
+							}
+							*totalSigner++
+						}
+					}
+					wg.Done()
+				}
+			}
+
+			go fsigner()
+
+			wg.Wait()
 		}
-
-		go fsigner()
-
-		wg.Wait()
+		fmt.Println("c.BlockSigners.Len()", c.BlockSigners.Len())
 		fmt.Println("totalSigner", *totalSigner)
 	}
 
@@ -411,8 +447,8 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, sign
 }
 
 // Calculate reward for holders.
-func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
-	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
+func CalculateRewardForHolders(c *posv.Posv, foudationWalletAddr common.Address, validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
+	rewards, err := GetRewardBalancesRate(c, foudationWalletAddr, signer, calcReward, validator)
 	if err != nil {
 		return err, nil
 	}
@@ -425,7 +461,7 @@ func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *co
 }
 
 // Get reward balance rates for master node, founder and holders.
-func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
+func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.TomoValidator) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
@@ -446,7 +482,18 @@ func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common
 		// Get voters capacities.
 		voterCaps := make(map[common.Address]*big.Int)
 		for _, voteAddr := range voters {
-			voterCap, err := validator.GetVoterCap(opts, masterAddr, voteAddr)
+			var vote common.Vote
+			var voterCap *big.Int
+
+			vote.Masternode = masterAddr
+			vote.Voter = voteAddr
+
+			if vCap, ok := c.Votes.Get(vote); ok {
+				voterCap = vCap.(*big.Int)
+			} else {
+				voterCap, err = validator.GetVoterCap(opts, masterAddr, voteAddr)
+				c.Votes.Add(vote, voterCap)
+			}
 			if err != nil {
 				log.Error("Fail to get vote capacity", "error", err)
 				return nil, err

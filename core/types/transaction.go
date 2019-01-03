@@ -294,6 +294,44 @@ func (tx *Transaction) IsSigningTransaction() bool {
 	return tx.To().String() == common.BlockSigners
 }
 
+func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
+	if tx.To() == nil {
+		return false, nil
+	}
+	b := (tx.To().String() == common.MasternodeVotingSMC)
+
+	if !b {
+		return b, nil
+	}
+
+	method := common.ToHex(tx.Data()[0:4])
+	if b = (method == common.VoteMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.UnvoteMethod); b {
+		addr := tx.Data()[len(tx.Data())-32-20 : len(tx.Data())-32]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.ProposeMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	if b = (method == common.ResignMethod); b {
+		addr := tx.Data()[len(tx.Data())-20:]
+		m := common.BytesToAddress(addr)
+		return b, &m
+	}
+
+	return b, nil
+}
+
 func (tx *Transaction) String() string {
 	var from, to string
 	if tx.data.V != nil {

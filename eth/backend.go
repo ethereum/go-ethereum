@@ -327,10 +327,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				// Add reward for coin holders.
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
-					// vmenv := core.NewRuntimeEVM(state)
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
-						// err, rewards := contracts.CalculateRewardForHolders2(foudationWalletAddr, vmenv, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders(c, foudationWalletAddr, validator, state, signer, calcReward)
 						if err != nil {
 							log.Crit("Fail to calculate reward for holders.", "error", err)
 						}

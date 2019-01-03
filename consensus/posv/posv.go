@@ -53,6 +53,7 @@ import (
 const (
 	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
 	blockSignersCacheLimit = 3600
+	votingCacheLimit       = 1500000
 	M2ByteLength           = 4
 )
 
@@ -228,7 +229,9 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
+	EnableCache   bool
 	BlockSigners  *lru.ARCCache
+	Votes         *lru.ARCCache
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -245,6 +248,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	}
 	// Allocate the snapshot caches and create the engine
 	BlockSigners, _ := lru.NewARC(blockSignersCacheLimit)
+	Votes, _ := lru.NewARC(votingCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
@@ -252,17 +256,15 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	return &Posv{
 		config:              &conf,
 		db:                  db,
+		EnableCache:         false,
 		BlockSigners:        BlockSigners,
+		Votes:               Votes,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
 		validatorSignatures: validatorSignatures,
 		proposals:           make(map[common.Address]bool),
 	}
-}
-
-func (c *Posv) GetBlockSigners() *lru.ARCCache {
-	return c.BlockSigners
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered
@@ -860,41 +862,37 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	/*
-	   abiJSON := `[{"inputs":[{"name":"_blockNumber","type":"uint256"},{"name":"_blockHash","type":"bytes32"}],"name":"sign","type":"function"}]`
-	   abiReader, err := abi.JSON(strings.NewReader(abiJSON))
-	   if err != nil {
-	       log.Error("Abi parser error", err)
-	   }
-
-	   type Sign struct {
-	       BlockNumber  *big.Int
-	       BlockHash    common.Hash
-	   }
-	   var s Sign
-	*/
-
+	start := time.Now()
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-			/*
-			   err = abiReader.Unpack(&s, "sign", tx.Data())
-			   if err != nil {
-			       log.Error("Abi unpack error", err)
-			   }
-			   blkHash := s.BlockHash
-			*/
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-			txHash := *tx.From()
+			from := *tx.From()
 
 			var lAddr []common.Address
 			if cached, ok := c.BlockSigners.Get(blkHash); ok {
 				lAddr = cached.([]common.Address)
-				lAddr = append(lAddr, txHash)
+				lAddr = append(lAddr, from)
 			} else {
-				lAddr = []common.Address{txHash}
+				lAddr = []common.Address{from}
 			}
 			c.BlockSigners.Add(blkHash, lAddr)
+		} else {
+
+			b, addr := tx.IsVotingTransaction()
+			if b && addr != nil {
+				var vote common.Vote
+				vote.Masternode = *addr
+				vote.Voter = *tx.From()
+
+				c.Votes.Remove(vote)
+			}
 		}
+	}
+	fmt.Println("Time Calculate Cache", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+
+	if !c.EnableCache && c.BlockSigners.Len() >= 1800 {
+		fmt.Println("EnableCache true")
+		c.EnableCache = true
 	}
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
