@@ -781,25 +781,37 @@ func (sp *StreamerPrices) Price(msg interface{}) *protocols.Price {
 	return sp.priceMatrix[t]
 }
 
+// Instead of hardcoding the price, get it
+// through a function - it could be quite complex in the future
+func (sp *StreamerPrices) getRetrieveRequestMsgPrice() uint64 {
+	return uint64(1)
+}
+
+// Instead of hardcoding the price, get it
+// through a function - it could be quite complex in the future
+func (sp *StreamerPrices) getChunkDeliveryMsgRetrievalPrice() uint64 {
+	return uint64(1)
+}
+
 // createPriceOracle sets up a matrix which can be queried to get
 // the price for a message via the Price method
 func (r *Registry) createPriceOracle() {
-	po := &StreamerPrices{
+	sp := &StreamerPrices{
 		registry: r,
 	}
-	po.priceMatrix = map[reflect.Type]*protocols.Price{
+	sp.priceMatrix = map[reflect.Type]*protocols.Price{
 		reflect.TypeOf(ChunkDeliveryMsgRetrieval{}): {
-			Value:   uint64(1), // arbitrary price for now
+			Value:   sp.getChunkDeliveryMsgRetrievalPrice(), // arbitrary price for now
 			PerByte: true,
 			Payer:   protocols.Receiver,
 		},
 		reflect.TypeOf(RetrieveRequestMsg{}): {
-			Value:   uint64(1), // arbitrary price for now
+			Value:   sp.getRetrieveRequestMsgPrice(), // arbitrary price for now
 			PerByte: false,
 			Payer:   protocols.Sender,
 		},
 	}
-	r.prices = po
+	r.prices = sp
 }
 
 func (r *Registry) Protocols() []p2p.Protocol {
