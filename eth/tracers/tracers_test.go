@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"path/filepath"
