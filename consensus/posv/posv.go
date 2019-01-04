@@ -867,6 +867,19 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 			from := *tx.From()
 
+			var b uint
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					b = r.Status
+					break
+				}
+			}
+
+			if b == types.ReceiptStatusFailed {
+				fmt.Println("Tx receipt status false")
+				continue
+			}
+
 			var lAddr []common.Address
 			if cached, ok := c.BlockSigners.Get(blkHash); ok {
 				lAddr = cached.([]common.Address)

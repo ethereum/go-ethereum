@@ -397,7 +397,6 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 
 			wg.Wait()
 		}
-		fmt.Println("c.BlockSigners.Len()", c.BlockSigners.Len())
 		fmt.Println("totalSigner", *totalSigner)
 	}
 
