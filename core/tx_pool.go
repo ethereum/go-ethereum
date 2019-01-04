@@ -82,6 +82,8 @@ var (
 	ErrZeroGasPrice = errors.New("zero gas price")
 
 	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
+
+	ErrMinDeploySMC = errors.New("smart contract creation cost is under allowance")
 )
 
 var (
@@ -587,7 +589,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	if !local && tx.To() != nil && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		if !tx.IsSpecialTransaction() || (pool.IsMasterNode != nil && !pool.IsMasterNode(from)) {
 			return ErrUnderpriced
 		}
@@ -619,6 +621,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if tx.GasPrice().Cmp(new(big.Int).SetInt64(0)) == 0 {
 			return ErrZeroGasPrice
 		}
+	}
+
+	minGasDeploySMC := new(big.Int).Mul(new(big.Int).SetUint64(10), new(big.Int).SetUint64(params.Ether))
+	if tx.To() == nil && (tx.Cost().Cmp(minGasDeploySMC) < 0 || tx.GasPrice().Cmp(new(big.Int).SetUint64(10000*params.Shannon)) < 0) {
+		return ErrMinDeploySMC
 	}
 
 	return nil
