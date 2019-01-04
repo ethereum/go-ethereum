@@ -345,6 +345,17 @@ outer:
 	return result
 }
 
+func (p *Peer) GetRW(name string, version uint) (MsgReadWriter, error) {
+	for _, proto := range p.running {
+		if proto.Name == name && proto.Version == version {
+			var rw MsgReadWriter = proto
+			return rw, nil
+		}
+	}
+
+	return nil, errors.New("not found")
+}
+
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
 	p.wg.Add(len(p.running))
 	for _, proto := range p.running {

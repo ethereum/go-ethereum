@@ -223,10 +223,15 @@ func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 }
 
 // ClonePeer constructs a peer object with an arbitrary Spec, based on an existing Peer
+// if Peer doesn't support Spec, it returns nil
 func ClonePeer(p *Peer, spec *Spec) *Peer {
+	rw, err := p.Peer.GetRW(spec.Name, spec.Version)
+	if err != nil {
+		return nil
+	}
 	return &Peer{
 		Peer: p.Peer,
-		rw:   p.rw,
+		rw:   rw,
 		spec: spec,
 	}
 }
