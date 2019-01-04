@@ -16,9 +16,7 @@
 - Gav on public wiki: https://github.com/ethereum/cpp-ethereum/wiki/Swarm
 - network (DEVp2p)
   - [Peer-to-Peer](Peer-to-Peer)
-  - [Ethereum node discovery protocol on UDP](RLPx-----Node-Discovery-Protocol)
   - on kademlia: https://github.com/ethereum/wiki/wiki/Cademlia-Peer-Selection
-  - [Multi-protocol peer selection](Multi-protocol-peer-selection)
 
 ## Talks
 - https://twitter.com/ethereumproject/status/538030376858693633
