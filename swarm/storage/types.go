@@ -26,9 +26,9 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"golang.org/x/crypto/sha3"
 )
 
 const MaxPO = 16
@@ -75,10 +75,10 @@ func MakeHashFunc(hash string) SwarmHasher {
 	case "SHA256":
 		return func() SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
 	case "SHA3":
-		return func() SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
+		return func() SwarmHash { return &HashWithLength{sha3.NewLegacyKeccak256()} }
 	case "BMT":
 		return func() SwarmHash {
-			hasher := sha3.NewKeccak256
+			hasher := sha3.NewLegacyKeccak256
 			hasherSize := hasher().Size()
 			segmentCount := ch.DefaultSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
