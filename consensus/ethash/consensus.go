@@ -38,23 +38,25 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward       = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward      = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	ConstantinopleBlockReward = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
-	maxUncles                 = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime    = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	FrontierBlockReward    = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	EIP649FBlockReward     = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	EIP1234FBlockReward    = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Constantinople
+	maxUncles              = 2                 // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 
-	// calcDifficultyConstantinople is the difficulty adjustment algorithm for Constantinople.
+	// calcDifficultyEIP1234 is the difficulty adjustment algorithm for Constantinople.
 	// It returns the difficulty that a new block should have when created at time given the
 	// parent block's time and difficulty. The calculation uses the Byzantium rules, but with
 	// bomb offset 5M.
 	// Specification EIP-1234: https://eips.ethereum.org/EIPS/eip-1234
-	calcDifficultyConstantinople = makeDifficultyCalculator(big.NewInt(5000000))
+	calcDifficultyEIP1234 = makeDifficultyCalculator(big.NewInt(5000000))
 
-	// calcDifficultyByzantium is the difficulty adjustment algorithm. It returns
+	// calcDifficultyByzantium is the difficulty adjustment algorithm for Byzantium. It returns
 	// the difficulty that a new block should have when created at time given the
 	// parent block's time and difficulty. The calculation uses the Byzantium rules.
 	// Specification EIP-649: https://eips.ethereum.org/EIPS/eip-649
+	// Related meta-ish EIP-669: https://github.com/ethereum/EIPs/pull/669
+	// Note that this calculator also includes the change from EIP100.
 	calcDifficultyByzantium = makeDifficultyCalculator(big.NewInt(3000000))
 )
 
@@ -313,10 +315,16 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsConstantinople(next):
-		return calcDifficultyConstantinople(time, parent)
-	case config.IsByzantium(next):
+	case config.IsEIP1234F(next):
+		return calcDifficultyEIP1234(time, parent)
+	case config.IsByzantium(next) || (config.IsEIP649F(next) && config.IsEIP100F(next)):
 		return calcDifficultyByzantium(time, parent)
+	case config.IsEIP649F(next):
+		// TODO: calculator for only EIP649:difficulty bomb delay (without EIP100:mean time adjustment)
+		panic("not implemented")
+	case config.IsEIP100F(next):
+		// TODO: calculator for only EIP100:mean time adjustment (without EIP649:difficulty bomb delay)
+		panic("not implemented")
 	case config.IsHomestead(next):
 		return calcDifficultyHomestead(time, parent)
 	default:
@@ -567,7 +575,7 @@ func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header)
 func (ethash *Ethash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP161F(header.Number))
 
 	// Header seems complete, assemble into a block and return
 	return types.NewBlock(header, txs, uncles, receipts), nil
@@ -608,11 +616,11 @@ var (
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = ByzantiumBlockReward
+	if config.IsEIP649F(header.Number) {
+		blockReward = EIP649FBlockReward
 	}
-	if config.IsConstantinople(header.Number) {
-		blockReward = ConstantinopleBlockReward
+	if config.IsEIP1234F(header.Number) {
+		blockReward = EIP1234FBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)

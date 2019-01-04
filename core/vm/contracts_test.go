@@ -21,6 +21,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -337,9 +339,10 @@ var bn256PairingTests = []precompiledTest{
 }
 
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsByzantium[common.HexToAddress(addr)]
+	p := AllPrecompiledContracts[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
+
 		nil, new(big.Int), p.RequiredGas(in))
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
 		if res, err := RunPrecompiledContract(p, in, contract); err != nil {
@@ -350,11 +353,100 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	})
 }
 
+func TestIsPrecompiledContractEnabled(t *testing.T) {
+	var homeCts = []common.Address{
+		common.BytesToAddress([]byte{1}),
+		common.BytesToAddress([]byte{2}),
+		common.BytesToAddress([]byte{3}),
+		common.BytesToAddress([]byte{4}),
+	}
+	var byzUniqCts = []common.Address{
+		common.BytesToAddress([]byte{5}),
+		common.BytesToAddress([]byte{6}),
+		common.BytesToAddress([]byte{7}),
+		common.BytesToAddress([]byte{8}),
+	}
+	var byzCts = append(homeCts, byzUniqCts...)
+	var nonCts = []common.Address{
+		common.Address{},
+		common.BytesToAddress([]byte{42}),
+		common.HexToAddress("0xdeadbeef"),
+	}
+	type c struct {
+		addr     common.Address
+		config   *params.ChainConfig
+		blockNum *big.Int
+		want     bool
+	}
+	cases := []c{}
+	addCaseWhere := func(config *params.ChainConfig, addr common.Address, bn *big.Int, want bool) {
+		cases = append(cases, c{
+			addr:     addr,
+			config:   config,
+			blockNum: bn,
+			want:     want,
+		})
+	}
+	for _, a := range homeCts {
+		addCaseWhere(params.AllEthashProtocolChanges, a, big.NewInt(0), true)
+		addCaseWhere(params.MainnetChainConfig, a, big.NewInt(0), true)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Sub(params.MainnetChainConfig.ByzantiumBlock, common.Big1), true)
+		addCaseWhere(params.MainnetChainConfig, a, params.MainnetChainConfig.ByzantiumBlock, true)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Add(params.MainnetChainConfig.ByzantiumBlock, common.Big1), true)
+	}
+	for _, a := range byzUniqCts {
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Sub(params.MainnetChainConfig.ByzantiumBlock, common.Big1), false)
+		addCaseWhere(params.MainnetChainConfig, a, params.MainnetChainConfig.ByzantiumBlock, true)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Add(params.MainnetChainConfig.ByzantiumBlock, common.Big1), true)
+	}
+	for _, a := range byzCts {
+		addCaseWhere(params.AllEthashProtocolChanges, a, big.NewInt(0), true)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Add(params.MainnetChainConfig.ByzantiumBlock, common.Big1), true)
+	}
+	for _, a := range nonCts {
+		addCaseWhere(params.AllEthashProtocolChanges, a, big.NewInt(0), false)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Sub(params.MainnetChainConfig.ByzantiumBlock, common.Big1), false)
+		addCaseWhere(params.MainnetChainConfig, a, new(big.Int).Add(params.MainnetChainConfig.ByzantiumBlock, common.Big1), false)
+	}
+
+	for i, c := range cases {
+		got := IsPrecompiledContractEnabled(c.config, c.blockNum, c.addr)
+		if c.want != got {
+			t.Errorf("test: %d, address: %x, want: %v, got: %v", i, c.addr, c.want, got)
+		}
+
+		// test 1:1 with pre-existing hard-fork implementation style in *evm#Call
+		precomps := map[common.Address]PrecompiledContract{
+			common.BytesToAddress([]byte{1}): &ecrecover{},
+			common.BytesToAddress([]byte{2}): &sha256hash{},
+			common.BytesToAddress([]byte{3}): &ripemd160hash{},
+			common.BytesToAddress([]byte{4}): &dataCopy{},
+		}
+		if c.config.IsByzantium(c.blockNum) {
+			precomps = map[common.Address]PrecompiledContract{
+				common.BytesToAddress([]byte{1}): &ecrecover{},
+				common.BytesToAddress([]byte{2}): &sha256hash{},
+				common.BytesToAddress([]byte{3}): &ripemd160hash{},
+				common.BytesToAddress([]byte{4}): &dataCopy{},
+				common.BytesToAddress([]byte{5}): &bigModExp{},
+				common.BytesToAddress([]byte{6}): &bn256Add{},
+				common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
+				common.BytesToAddress([]byte{8}): &bn256Pairing{},
+			}
+		}
+		expect := precomps[c.addr] == nil
+		got = !IsPrecompiledContractEnabled(c.config, c.blockNum, c.addr)
+		if got != expect {
+			t.Errorf("addr: %x, bn: %v, want: %v, got: %v", c.addr, c.blockNum, c.want, got)
+		}
+	}
+}
+
 func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.noBenchmark {
 		return
 	}
-	p := PrecompiledContractsByzantium[common.HexToAddress(addr)]
+	p := AllPrecompiledContracts[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),

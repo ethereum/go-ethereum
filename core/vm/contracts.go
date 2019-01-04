@@ -37,18 +37,8 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-// PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
-// contracts used in the Frontier and Homestead releases.
-var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hash{},
-	common.BytesToAddress([]byte{3}): &ripemd160hash{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-}
-
-// PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
-// contracts used in the Byzantium release.
-var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
+// AllPrecompiledContracts returns all possible precompiled contracts.
+var AllPrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
@@ -57,6 +47,27 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{6}): &bn256Add{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{},
+}
+
+// IsPrecompiledContractEnabled checks whether a given precompiled contract is enabled for a chain config at a given block.
+func IsPrecompiledContractEnabled(config *params.ChainConfig, num *big.Int, codeAddr common.Address) bool {
+	switch codeAddr {
+	case common.BytesToAddress([]byte{1}),
+		common.BytesToAddress([]byte{2}),
+		common.BytesToAddress([]byte{3}),
+		common.BytesToAddress([]byte{4}):
+		return true
+	case common.BytesToAddress([]byte{5}):
+		return config.IsEIP198F(num)
+	case common.BytesToAddress([]byte{6}):
+		return config.IsEIP213F(num)
+	case common.BytesToAddress([]byte{7}):
+		return config.IsEIP213F(num)
+	case common.BytesToAddress([]byte{8}):
+		return config.IsEIP212F(num)
+	default:
+		return false
+	}
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.

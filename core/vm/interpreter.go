@@ -99,16 +99,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
-		switch {
-		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
-			cfg.JumpTable = constantinopleInstructionSet
-		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
-			cfg.JumpTable = byzantiumInstructionSet
-		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
-			cfg.JumpTable = homesteadInstructionSet
-		default:
-			cfg.JumpTable = frontierInstructionSet
-		}
+		cfg.JumpTable = baseInstructionSet
 	}
 
 	return &EVMInterpreter{
@@ -119,7 +110,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 }
 
 func (in *EVMInterpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
-	if in.evm.chainRules.IsByzantium {
+	// STATICCALL
+	if in.evm.chainRules.IsEIP214F {
 		if in.readOnly {
 			// If the interpreter is operating in readonly mode, make sure no
 			// state-modifying operation is performed. The 3rd stack item
@@ -129,6 +121,36 @@ func (in *EVMInterpreter) enforceRestrictions(op OpCode, operation operation, st
 			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
 				return errWriteProtection
 			}
+		}
+	}
+	switch op {
+	case DELEGATECALL:
+		if !in.evm.chainRules.IsEIP7F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case REVERT:
+		if !in.evm.chainRules.IsEIP140F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case STATICCALL:
+		if !in.evm.chainRules.IsEIP214F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case RETURNDATACOPY, RETURNDATASIZE:
+		if !in.evm.chainRules.IsEIP211F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case SHL, SHR, SAR:
+		if !in.evm.chainRules.IsEIP145F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case CREATE2:
+		if !in.evm.chainRules.IsEIP1014F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
+		}
+	case EXTCODEHASH:
+		if !in.evm.chainRules.IsEIP1052F {
+			return fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 	}
 	return nil
@@ -216,11 +238,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-		if err := operation.validateStack(stack); err != nil {
-			return nil, err
-		}
 		// If the operation is valid, enforce and write restrictions
 		if err := in.enforceRestrictions(op, operation, stack); err != nil {
+			return nil, err
+		}
+		if err := operation.validateStack(stack); err != nil {
 			return nil, err
 		}
 

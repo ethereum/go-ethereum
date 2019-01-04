@@ -669,7 +669,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(api.eth.blockchain.Config().IsEIP158(block.Number()))
+		root, err := statedb.Commit(api.eth.blockchain.Config().IsEIP161F(block.Number()))
 		if err != nil {
 			return nil, err
 		}
