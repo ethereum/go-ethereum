@@ -19,7 +19,6 @@ package console
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
