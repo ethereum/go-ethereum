@@ -92,7 +92,7 @@ func _4byte_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "4byte_tracer.js", size: 2933, mode: os.FileMode(0664), modTime: time.Unix(1545311315, 0)}
+	info := bindataFileInfo{name: "4byte_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xb4, 0xc5, 0x48, 0x2d, 0xd9, 0x43, 0x95, 0x93, 0x3b, 0x93, 0x2c, 0x47, 0x8c, 0x84, 0x32, 0x3c, 0x8b, 0x2e, 0xf3, 0x72, 0xc4, 0x57, 0xe6, 0x3a, 0xb3, 0xdf, 0x1d, 0xbf, 0x45, 0x3, 0xfc, 0xa}}
 	return a, nil
 }
@@ -112,7 +112,7 @@ func bigram_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "bigram_tracer.js", size: 1712, mode: os.FileMode(0664), modTime: time.Unix(1545311315, 0)}
+	info := bindataFileInfo{name: "bigram_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x77, 0x6c, 0xd, 0x24, 0xf2, 0x49, 0xbd, 0x58, 0x8b, 0xb5, 0xd1, 0xc9, 0xcd, 0xcf, 0x5b, 0x3e, 0x5c, 0xfb, 0x14, 0x50, 0xe7, 0xe3, 0xb9, 0xd1, 0x54, 0x69, 0xe6, 0x5e, 0x45, 0xa6, 0x2c, 0x6c}}
 	return a, nil
 }
@@ -132,7 +132,7 @@ func call_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "call_tracer.js", size: 8643, mode: os.FileMode(0664), modTime: time.Unix(1545382727, 0)}
+	info := bindataFileInfo{name: "call_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xe9, 0xef, 0x68, 0xda, 0xd8, 0x9, 0xf5, 0xd5, 0x71, 0xa8, 0x8a, 0xfb, 0x30, 0xe8, 0xf0, 0x72, 0x14, 0x36, 0x6b, 0x62, 0x5a, 0x4e, 0xff, 0x16, 0xdc, 0xd3, 0x2c, 0x68, 0x7b, 0x79, 0x9f, 0xd3}}
 	return a, nil
 }
@@ -152,7 +152,7 @@ func evmdis_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "evmdis_tracer.js", size: 4194, mode: os.FileMode(0664), modTime: time.Unix(1521112219, 0)}
+	info := bindataFileInfo{name: "evmdis_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xd5, 0xe8, 0x96, 0xa1, 0x8b, 0xc, 0x68, 0x3c, 0xe8, 0x5d, 0x7e, 0xf0, 0xab, 0xfe, 0xec, 0xd1, 0xb, 0x3d, 0xfc, 0xc7, 0xac, 0xb5, 0xa, 0x41, 0x55, 0x0, 0x3a, 0x60, 0xa7, 0x8e, 0x46, 0x93}}
 	return a, nil
 }
@@ -172,7 +172,7 @@ func noop_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "noop_tracer.js", size: 1271, mode: os.FileMode(0664), modTime: time.Unix(1545311315, 0)}
+	info := bindataFileInfo{name: "noop_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xe3, 0xf, 0x1c, 0x6f, 0x65, 0xaf, 0x90, 0x31, 0xab, 0xf, 0xe0, 0xca, 0x54, 0x7, 0xfd, 0xd3, 0xa1, 0x4a, 0x14, 0x1, 0x2a, 0x9d, 0xdc, 0xb9, 0x64, 0x69, 0x83, 0x30, 0xb1, 0x2a, 0xbd, 0xfb}}
 	return a, nil
 }
@@ -192,7 +192,7 @@ func opcount_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "opcount_tracer.js", size: 1372, mode: os.FileMode(0664), modTime: time.Unix(1521112219, 0)}
+	info := bindataFileInfo{name: "opcount_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x27, 0xe, 0x97, 0x88, 0x9b, 0x53, 0xbb, 0x20, 0x44, 0xd8, 0xf5, 0xeb, 0x41, 0xd2, 0x7e, 0xd6, 0xda, 0x6b, 0xf5, 0xaf, 0x0, 0x75, 0x9f, 0xd9, 0x22, 0xc, 0x6e, 0x74, 0xac, 0x2a, 0xa9, 0xa7}}
 	return a, nil
 }
@@ -212,7 +212,7 @@ func prestate_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "prestate_tracer.js", size: 4234, mode: os.FileMode(0664), modTime: time.Unix(1545387660, 0)}
+	info := bindataFileInfo{name: "prestate_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xe9, 0x79, 0x70, 0x4f, 0xc5, 0x78, 0x57, 0x63, 0x6f, 0x5, 0x31, 0xce, 0x3e, 0x5d, 0xbd, 0x71, 0x4, 0x46, 0x78, 0xcd, 0x1d, 0xcd, 0xb9, 0xd8, 0x10, 0xff, 0xe6, 0xc5, 0x59, 0xb9, 0x25, 0x6e}}
 	return a, nil
 }
@@ -232,7 +232,7 @@ func trigram_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "trigram_tracer.js", size: 1788, mode: os.FileMode(0664), modTime: time.Unix(1545311315, 0)}
+	info := bindataFileInfo{name: "trigram_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x40, 0x63, 0xe1, 0x42, 0x60, 0x7, 0x1b, 0x79, 0x47, 0x1, 0xa1, 0xbf, 0xc4, 0x66, 0x19, 0x9b, 0x2b, 0x5a, 0x1f, 0x82, 0x3d, 0xcf, 0xee, 0xe7, 0x60, 0x25, 0x2c, 0x4f, 0x13, 0x97, 0xc7, 0x18}}
 	return a, nil
 }
@@ -252,7 +252,7 @@ func unigram_tracerJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "unigram_tracer.js", size: 1510, mode: os.FileMode(0664), modTime: time.Unix(1545311315, 0)}
+	info := bindataFileInfo{name: "unigram_tracer.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x2f, 0x36, 0x14, 0xc2, 0xf6, 0xc3, 0x80, 0x2b, 0x4a, 0x11, 0x7d, 0xd5, 0x3e, 0xef, 0x23, 0xb5, 0xd6, 0xe6, 0xe6, 0x5, 0x41, 0xf6, 0x14, 0x7a, 0x39, 0xf7, 0xf8, 0xac, 0x89, 0x8e, 0x43, 0xe6}}
 	return a, nil
 }
@@ -408,15 +408,15 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
-	"4byte_tracer.js":    &bintree{_4byte_tracerJs, map[string]*bintree{}},
-	"bigram_tracer.js":   &bintree{bigram_tracerJs, map[string]*bintree{}},
-	"call_tracer.js":     &bintree{call_tracerJs, map[string]*bintree{}},
-	"evmdis_tracer.js":   &bintree{evmdis_tracerJs, map[string]*bintree{}},
-	"noop_tracer.js":     &bintree{noop_tracerJs, map[string]*bintree{}},
-	"opcount_tracer.js":  &bintree{opcount_tracerJs, map[string]*bintree{}},
-	"prestate_tracer.js": &bintree{prestate_tracerJs, map[string]*bintree{}},
-	"trigram_tracer.js":  &bintree{trigram_tracerJs, map[string]*bintree{}},
-	"unigram_tracer.js":  &bintree{unigram_tracerJs, map[string]*bintree{}},
+	"4byte_tracer.js":    {_4byte_tracerJs, map[string]*bintree{}},
+	"bigram_tracer.js":   {bigram_tracerJs, map[string]*bintree{}},
+	"call_tracer.js":     {call_tracerJs, map[string]*bintree{}},
+	"evmdis_tracer.js":   {evmdis_tracerJs, map[string]*bintree{}},
+	"noop_tracer.js":     {noop_tracerJs, map[string]*bintree{}},
+	"opcount_tracer.js":  {opcount_tracerJs, map[string]*bintree{}},
+	"prestate_tracer.js": {prestate_tracerJs, map[string]*bintree{}},
+	"trigram_tracer.js":  {trigram_tracerJs, map[string]*bintree{}},
+	"unigram_tracer.js":  {unigram_tracerJs, map[string]*bintree{}},
 }}
 
 // RestoreAsset restores an asset under the given directory.
