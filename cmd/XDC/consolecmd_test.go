@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 shh:1.0 txpool:1.0 web3:1.0"
+	ipcAPIs  = "admin:1.0 debug:1.0 eth:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0"
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
@@ -43,14 +43,14 @@ func TestConsoleWelcome(t *testing.T) {
 	// Start a XDC console, make sure it's cleaned up and terminate the console
 	XDC := runXDC(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--shh",
+		"--etherbase", coinbase,
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
 	XDC.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	XDC.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	XDC.SetTemplateFunc("gover", runtime.Version)
-	XDC.SetTemplateFunc("gethver", func() string { return params.Version })
+	XDC.SetTemplateFunc("XDCver", func() string { return params.Version })
 	XDC.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	XDC.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
@@ -81,11 +81,9 @@ func TestIPCAttachWelcome(t *testing.T) {
 		defer os.RemoveAll(ws)
 		ipc = filepath.Join(ws, "XDC.ipc")
 	}
-	// Note: we need --shh because testAttachWelcome checks for default
-	// list of ipc modules and shh is included there.
 	XDC := runXDC(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
+		"--etherbase", coinbase, "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "ipc:"+ipc, ipcAPIs)
@@ -124,7 +122,7 @@ func TestWSAttachWelcome(t *testing.T) {
 }
 
 func testAttachWelcome(t *testing.T, XDC *testXDC, endpoint, apis string) {
-	// Attach to a running XDC note and terminate 1immediately
+	// Attach to a running XDC note and terminate immediately
 	attach := runXDC(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
@@ -146,7 +144,7 @@ Welcome to the XDC JavaScript console!
 
 instance: XDC/v{{XDCver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{etherbase}}
-at block: 0 ({{nil1time}}){{if ipc}}
+at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules: {{apis}}
 

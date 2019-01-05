@@ -122,8 +122,8 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many XDC should be rewarded to masternode? (default = 100)")
-		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(100))
+		fmt.Println("How many Ethers should be rewarded to masternode? (default = 10)")
+		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(10))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
@@ -152,7 +152,7 @@ func (w *wizard) makeGenesis() {
 			}
 		}
 		validatorCap := new(big.Int)
-		validatorCap.SetString("10000000000000000000000000", 10)
+		validatorCap.SetString("50000000000000000000000", 10)
 		var validatorCaps []*big.Int
 		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
 		for i, signer := range signers {
@@ -161,8 +161,8 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("How many blocks per epoch? (default = 1800)")
-		epochNumber := uint64(w.readDefaultInt(1800))
+		fmt.Println("How many blocks per epoch? (default = 900)")
+		epochNumber := uint64(w.readDefaultInt(900))
 		genesis.Config.XDPoS.Epoch = epochNumber
 		genesis.Config.XDPoS.RewardCheckpoint = epochNumber
 
