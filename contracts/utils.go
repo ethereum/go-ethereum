@@ -488,11 +488,10 @@ func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, mas
 				voterCap = vCap.(*big.Int)
 			} else {
 				voterCap, err = validator.GetVoterCap(opts, masterAddr, voteAddr)
+                if err != nil {
+                    log.Crit("Fail to get vote capacity", "error", err)
+                }
 				c.Votes.Add(vote, voterCap)
-			}
-			if err != nil {
-				log.Error("Fail to get vote capacity", "error", err)
-				return nil, err
 			}
 
 			totalCap.Add(totalCap, voterCap)
