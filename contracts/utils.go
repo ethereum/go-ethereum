@@ -385,12 +385,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 		// Get voters capacities.
 		voterCaps := make(map[common.Address]*big.Int)
 		for _, voteAddr := range voters {
-			voterCap, err := GetVoterCap(state, masterAddr, voteAddr)
-			if err != nil {
-				log.Error("Fail to get vote capacity", "error", err)
-				return nil, err
-			}
-
+			voterCap := GetVoterCap(state, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
