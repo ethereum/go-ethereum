@@ -224,10 +224,10 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
-	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
-	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
-	HookVerifyMNs func(header *types.Header, signers []common.Address) error
+	HookReward    func(state *state.StateDB, chain consensus.ChainReader, header *types.Header) (error, map[string]interface{})
+	HookPenalty   func(state *state.StateDB, chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
+	HookValidator func(state *state.StateDB, header *types.Header, signers []common.Address) ([]byte, error)
+	HookVerifyMNs func(state *state.StateDB, header *types.Header, signers []common.Address) error
 }
 
 // New creates a PoSV proof-of-stake-voting consensus engine with the initial
@@ -390,9 +390,11 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 	}
 	// If the block is a checkpoint block, verify the signer list
 	if number%c.config.Epoch == 0 {
+		database := state.NewDatabase(c.db)
+		state, _ := state.New(parent.Hash(), database)
 		penPenalties := []common.Address{}
 		if c.HookPenalty != nil {
-			penPenalties, err = c.HookPenalty(chain, number)
+			penPenalties, err = c.HookPenalty(state, chain, number)
 			if err != nil {
 				return err
 			}
@@ -417,7 +419,7 @@ func (c *Posv) verifyCascadingFields(chain consensus.ChainReader, header *types.
 			return errInvalidCheckpointSigners
 		}
 		if c.HookVerifyMNs != nil {
-			err := c.HookVerifyMNs(header, signers)
+			err := c.HookVerifyMNs(state, header, signers)
 			if err != nil {
 				return err
 			}
@@ -775,8 +777,10 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	header.Extra = header.Extra[:extraVanity]
 	masternodes := snap.GetSigners()
 	if number > 0 && number%c.config.Epoch == 0 {
+		database := state.NewDatabase(c.db)
+		state, _ := state.New(parent.Hash(), database)
 		if c.HookPenalty != nil {
-			penMasternodes, err := c.HookPenalty(chain, number)
+			penMasternodes, err := c.HookPenalty(state, chain, number)
 			if err != nil {
 				return err
 			}
@@ -799,7 +803,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 			header.Extra = append(header.Extra, masternode[:]...)
 		}
 		if c.HookValidator != nil {
-			validators, err := c.HookValidator(header, masternodes)
+			validators, err := c.HookValidator(state, header, masternodes)
 			if err != nil {
 				return err
 			}
@@ -850,7 +854,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewards := c.HookReward(chain, state, header)
+		err, rewards := c.HookReward(state, chain, header)
 		if err != nil {
 			return nil, err
 		}

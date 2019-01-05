@@ -19,7 +19,7 @@ var (
 	ParsedRandomizeABI, _ = abi.JSON(strings.NewReader(randomizeContract.TomoRandomizeABI))
 )
 
-func GetSecret(statedb *state.StateDB, parsed abi.ABI, address common.Address) [][]byte {
+func GetSecret(statedb *state.StateDB, address common.Address) [][32]byte {
 	start := time.Now()
 	fmt.Printf("--------GetSecret---------\n")
 
@@ -32,10 +32,10 @@ func GetSecret(statedb *state.StateDB, parsed abi.ABI, address common.Address) [
 		key := getLocDynamicArrAtElement(common.BigToHash(locSecret), i, 1)
 		keys = append(keys, key)
 	}
-	rets := [][]byte{}
+	rets := [][32]byte{}
 	for _, key := range keys {
 		ret := statedb.GetState(common.HexToAddress(common.RandomizeSMC), key)
-		rets = append(rets, ret.Bytes())
+		rets = append(rets, ret)
 		fmt.Printf("ret hex: %v - ret byte: %v\n", ret.Hex(), ret.Bytes())
 	}
 	elapsed := time.Since(start)
@@ -44,7 +44,7 @@ func GetSecret(statedb *state.StateDB, parsed abi.ABI, address common.Address) [
 	return rets
 }
 
-func GetOpening(statedb *state.StateDB, parsed abi.ABI, address common.Address) []byte {
+func GetOpening(statedb *state.StateDB, address common.Address) [32]byte {
 	start := time.Now()
 	fmt.Printf("--------GetOpening---------\n")
 
@@ -54,5 +54,5 @@ func GetOpening(statedb *state.StateDB, parsed abi.ABI, address common.Address) 
 	fmt.Printf("ret hex: %v - ret byte: %v\n", ret.Hex(), ret.Bytes())
 	elapsed := time.Since(start)
 	fmt.Printf("Execution time: %s\n", elapsed)
-	return ret.Bytes()
+	return ret
 }
