@@ -22,8 +22,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // PrettyDuration is a pretty printed version of a time.Duration value that cuts
@@ -86,12 +84,12 @@ func (t PrettyAge) String() string {
 
 // ToGWei converts the big.Int wei to its gwei string representation.
 func ToGWei(wei *big.Int) string {
-	return ToEth(new(big.Int).Mul(wei, big.NewInt(params.GWei)))
+	return ToEth(new(big.Int).Mul(wei, big.NewInt(1e9)))
 }
 
 // ToEth converts the big.Int wei to its ether string representation.
 func ToEth(wei *big.Int) string {
-	z, m := new(big.Int).DivMod(wei, big.NewInt(params.Ether), new(big.Int))
+	z, m := new(big.Int).DivMod(wei, big.NewInt(1e18), new(big.Int))
 	if m.Cmp(new(big.Int)) == 0 {
 		return z.String()
 	}

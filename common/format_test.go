@@ -52,15 +52,3 @@ func TestToEth(t *testing.T) {
 		}
 	}
 }
-
-func BenchmarkToEth(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		ToEth(big.NewInt(1))
-	}
-}
-
-func BenchmarkToEth2(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		ToEth(big.NewInt(1000000000000000000))
-	}
-}
