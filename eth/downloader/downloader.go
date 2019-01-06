@@ -414,7 +414,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			d.mux.Post(DoneEvent{})
+			latest := d.blockchain.CurrentHeader()
+			d.mux.Post(DoneEvent{latest})
 		}
 	}()
 	if p.version < 62 {
@@ -1561,9 +1562,6 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 		// Fast sync done, pivot commit done, full import
 		if err := d.importBlockResults(afterP); err != nil {
 			return err
-		}
-		if 600 > time.Now().Unix()-latest.Time.Int64() {
-			d.mux.Post(BlockEvent{})
 		}
 	}
 }

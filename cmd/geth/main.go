@@ -346,16 +346,17 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 			}
 			var mux = stack.EventMux()
-			var sub = mux.Subscribe(downloader.BlockEvent{})
+			var sub = mux.Subscribe(downloader.DoneEvent{})
 			for {
 				select {
 				case headers := <-sub.Chan():
 					if headers == nil {
 						return
 					}
-					log.Info("Synchronisation completed, checking", "check", headers)
-					time.Sleep(exitWhenSynced)
-					stack.Stop()
+					if 600 >= time.Now().Unix()-headers.Time.Unix() {
+						time.Sleep(exitWhenSynced)
+						stack.Stop()
+					}
 				default:
 				}
 			}
