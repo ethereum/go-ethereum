@@ -195,9 +195,9 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	return ids, nil
 }
 
-//UploadSnapshot uploads a snapshot to the simulation
-//This method tries to open the json file provided, applies the config to all nodes
-//and then loads the snapshot into the Simulation network
+// UploadSnapshot uploads a snapshot to the simulation
+// This method tries to open the json file provided, applies the config to all nodes
+// and then loads the snapshot into the Simulation network
 func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {

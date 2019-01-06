@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -177,7 +177,7 @@ var noopServiceFuncMap = map[string]ServiceFunc{
 }
 
 // a helper function for most basic noop service
-func noopServiceFunc(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+func noopServiceFunc(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
 	return newNoopService(), nil, nil
 }
 
@@ -188,7 +188,7 @@ func newNoopService() node.Service {
 // a helper function for most basic Noop service
 // of a different type then NoopService to test
 // multiple services on one node.
-func noopService2Func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+func noopService2Func(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
 	return new(noopService2), nil, nil
 }
 

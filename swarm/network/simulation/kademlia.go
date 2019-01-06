@@ -28,7 +28,7 @@ import (
 )
 
 // BucketKeyKademlia is the key to be used for storing the kademlia
-// instance for particuar node, usually inside the ServiceFunc function.
+// instance for particular node, usually inside the ServiceFunc function.
 var BucketKeyKademlia BucketKey = "kademlia"
 
 // WaitTillHealthy is blocking until the health of all kademlias is true.

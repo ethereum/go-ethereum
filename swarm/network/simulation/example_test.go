@@ -25,7 +25,7 @@ import (
 
 // Every node can have a Kademlia associated using the node bucket under
 // BucketKeyKademlia key. This allows to use WaitTillHealthy to block until
-// all nodes have the their Kadmlias healthy.
+// all nodes have the their Kademlias healthy.
 func ExampleSimulation_WaitTillHealthy() {
 
 	log.Error("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
