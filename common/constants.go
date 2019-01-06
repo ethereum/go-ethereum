@@ -1,7 +1,5 @@
 package common
 
-import "math/big"
-
 const (
 	RewardMasterPercent        = 40
 	RewardVoterPercent         = 50
@@ -16,14 +14,7 @@ const (
 	LimitPenaltyEpoch          = 4
 	BlocksPerYear              = uint64(15768000)
 	LimitThresholdNonceInQueue = 10
-	DefaultMinGasPrice         = 2500
-	MergeSignRange             = 15
-	RangeReturnSigner          = 90
+	MinGasPrice                = 2500
 )
 
-var TIP2019Block = big.NewInt(1050000)
-var TIPEVMSignerBlock = big.NewInt(2500000)
 var IsTestnet bool = false
-var StoreRewardFolder string
-var RollbackHash Hash
-var MinGasPrice int64
