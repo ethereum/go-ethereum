@@ -346,14 +346,15 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 			}
 			var mux = stack.EventMux()
-			var sub = mux.Subscribe(downloader.DoneEvent{})
+			var sub = mux.Subscribe(downloader.DoneEvent{},downloader.FailedEvent{})
 			for {
 				select {
 				case headers := <-sub.Chan():
 					if headers == nil {
 						return
 					}
-					if 600 >= time.Now().Unix()-headers.Time.Unix() {
+					if  600 >= time.Now().Unix()-headers.Time.Unix() {
+						log.Info("Synchronisation completed, checking", "check",exitWhenSynced)
 						time.Sleep(exitWhenSynced)
 						stack.Stop()
 					}
