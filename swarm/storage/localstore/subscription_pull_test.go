@@ -44,7 +44,7 @@ func TestDB_SubscribePull(t *testing.T) {
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -59,16 +59,16 @@ func TestDB_SubscribePull(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go checkBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
 
 	time.Sleep(500 * time.Millisecond)
 
 	// upload some chunks after some short time
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
@@ -90,7 +90,7 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -110,17 +110,17 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 			defer stop()
 
 			// receive and validate addresses from the subscription
-			go checkBin(ctx, bin, ch, addrs, errChan)
+			go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
 		}
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
 
 	time.Sleep(500 * time.Millisecond)
 
 	// upload some chunks after some short time
-	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)
 }
@@ -194,7 +194,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go checkBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
 
 	}
 
@@ -273,7 +273,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go checkBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -365,7 +365,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go checkBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -376,7 +376,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 
 // uploadRandomChunksBin uploads random chunks to database and adds them to
 // the map of addresses ber bin.
-func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]storage.Address, uploader *Putter, wantedChunksCount *int, count int) {
+func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uint8][]storage.Address, wantedChunksCount *int, count int) {
 	for i := 0; i < count; i++ {
 		chunk := generateRandomChunk()
 
@@ -395,10 +395,10 @@ func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]storage.Addre
 	}
 }
 
-// checkBin is a helper function that reads all ChunkInfos from a channel and
+// readPullSubscriptionBin is a helper function that reads all ChunkInfos from a channel and
 // sends error to errChan, even if it is nil, to count the number of ChunkInfos
 // returned by the channel.
-func checkBin(ctx context.Context, bin uint8, ch <-chan ChunkInfo, addrs map[uint8][]storage.Address, errChan chan error) {
+func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkInfo, addrs map[uint8][]storage.Address, errChan chan error) {
 	var i int // address index
 	for {
 		select {
