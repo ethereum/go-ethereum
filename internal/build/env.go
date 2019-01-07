@@ -88,6 +88,9 @@ func LocalEnv() Environment {
 	if splits := strings.Split(head, " "); len(splits) == 2 {
 		head = splits[1]
 	} else {
+		// In this case we are in "detached head" state
+		// see: https://git-scm.com/docs/git-checkout#_detached_head
+		// Additional check required to verify, that file contains commit hash
 		commitRe, _ := regexp.Compile("^([0-9a-f]{40})$")
 		if commit := commitRe.FindString(head); commit != "" && env.Commit == "" {
 			env.Commit = commit
