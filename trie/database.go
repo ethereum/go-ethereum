@@ -19,7 +19,6 @@ package trie
 import (
 	"fmt"
 	"io"
-	"math/big"
 	"sync"
 	"time"
 
@@ -572,7 +571,7 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	prunetime, prunenodes, prunesize := db.prunetime, db.prunenodes, db.prunesize
-	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, prune, nil, make(map[string]node)); err != nil {
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, prune, nil, db.newPruner(root)); err != nil {
 		return err
 	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
@@ -595,7 +594,7 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, prune bool, path []byte, cache map[string]node) error {
+func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, prune bool, path []byte, pruner *pruner) error {
 	// Dereference the parent-child
 	parentKey := makeNodeKey(parentOwner, parentHash)
 	parent := db.dirties[parentKey]
@@ -614,7 +613,7 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 			batch := db.diskdb.NewBatch()
 
 			start := time.Now()
-			db.prune(childOwner, childHash, path, batch, cache)
+			pruner.prune(childOwner, childHash, path, batch)
 			db.prunetime += time.Since(start)
 
 			if err := batch.Write(); err != nil {
@@ -646,158 +645,17 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 		}
 		// Dereference all children and delete the node
 		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
-			db.dereference(childOwner, hash, childOwner, childHash, prune, path, cache)
+			db.dereference(childOwner, hash, childOwner, childHash, prune, path, pruner)
 			return nil
 		})
 		for key := range child.children {
 			owner, hash := splitNodeKey(key)
-			db.dereference(owner, hash, childOwner, childHash, prune, nil, cache)
+			db.dereference(owner, hash, childOwner, childHash, prune, nil, pruner)
 		}
 		delete(db.dirties, childKey)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))
 	}
 	return nil
-}
-
-// prune deletes a trie node from disk if there are no more live references to
-// it, cascading until all dangling nodes are removed.
-func (db *Database) prune(owner common.Hash, hash common.Hash, path []byte, batch ethdb.Batch, cache map[string]node) {
-	// If the node is still live in the memory cache, it's still referenced so we
-	// can abort. This case is important when and old trie being pruned references
-	// a new node (maybe that node was recreted since), since currently live nodes
-	// are stored expanded, not as hashes.
-	key := makeNodeKey(owner, hash)
-	if db.dirties[key] != nil {
-		return
-	}
-	// Iterate over all the live tries in the cache and check node liveliness
-	for key := range db.dirties[metaRoot].children {
-		_, root := splitNodeKey(key)
-
-		var paths [][]byte
-		if owner != (common.Hash{}) {
-			paths = [][]byte{keybytesToHex(owner[:])}
-		}
-		if db.live(hashNode(root[:]), owner, hash, append(paths, path), cache) {
-			return
-		}
-	}
-	// Dead node found, delete it from the database
-	dead := []byte(makeNodeKey(owner, hash))
-	blob, err := db.diskdb.Get(dead)
-	if blob == nil || err != nil {
-		log.Error("Missing prune target", "owner", owner, "hash", hash, "path", fmt.Sprintf("%x", path))
-		return
-	}
-	node := mustDecodeNode(hash[:], blob, 0)
-
-	// Prune the node and its children if it's not a bytecode blob
-	db.cleans.Delete(key)
-	batch.Delete(dead)
-	db.prunenodes++
-	db.prunesize += common.StorageSize(len(blob))
-
-	iterateRefs(node, path, func(path []byte, hash common.Hash) error {
-		db.prune(owner, hash, path, batch, cache)
-		return nil
-	})
-}
-
-// live descends in the trie and returns whether the given hash is part of the
-// trie or not.
-func (db *Database) live(root node, owner common.Hash, hash common.Hash, paths [][]byte, cache map[string]node) bool {
-	// If we reached the end of our path, it should be a hash node
-	if len(paths) == 1 && len(paths[0]) == 0 {
-		if have, ok := root.(hashNode); ok {
-			return common.BytesToHash(have) == hash
-		}
-		// Not a hash node? It rarely happens that a 32+ byte leaf short node gets
-		// turned into a 31- byte one, converting if from a hash node to an embedded
-		// one. Allow this case, but reject as a wrong path.
-
-		// TODO(karalabe): get rid of this warning, only curiosity
-		log.Warn("Liveness check terminated on non-hash", "type", fmt.Sprintf("%T", root), "node", root.fstring(""))
-
-		return false
-	}
-	// If we're at a hash node, expand before continuing
-	if n, ok := root.(hashNode); ok {
-		var (
-			key  string
-			hash = common.BytesToHash(n)
-		)
-		if len(paths) > 1 {
-			key = makeNodeKey(common.Hash{}, hash)
-		} else {
-			key = makeNodeKey(owner, hash)
-		}
-		if enc, err := db.cleans.Get(key); err == nil && enc != nil {
-			root = mustDecodeNode(hash[:], enc, 0)
-			cache[key] = root
-		} else if node := db.dirties[key]; node != nil {
-			root = node.node
-		} else if node := cache[key]; node != nil {
-			root = node
-		} else {
-			blob, err := db.diskdb.Get([]byte(key))
-			if blob == nil || err != nil {
-				panic(fmt.Sprintf("missing referenced node %x (searching for %x:%x at %x)", key, owner, hash, paths))
-			}
-			root = mustDecodeNode(hash[:], blob, 0)
-			cache[key] = root
-		}
-	}
-	// If we reached an account node, extract the storage trie root to continue on
-	if len(paths) == 2 && len(paths[0]) == 0 {
-		if have, ok := root.(valueNode); ok {
-			var account struct {
-				Nonce    uint64
-				Balance  *big.Int
-				Root     common.Hash
-				CodeHash []byte
-			}
-			if err := rlp.DecodeBytes(have, &account); err != nil {
-				panic(err)
-			}
-			if account.Root == emptyRoot {
-				return false
-			}
-			return db.live(hashNode(account.Root[:]), owner, hash, paths[1:], cache)
-		}
-		panic(fmt.Sprintf("liveness check path swap terminated on non value node: %T", root))
-	}
-
-	// Descend into the trie following the specified path. This code segment must
-	// be able to handle both simplified raw nodes kept in this cache as well as
-	// cold nodes loaded directly from disk.
-	switch n := root.(type) {
-	case *rawShortNode:
-		if prefixLen(n.Key, paths[0]) == len(n.Key) {
-			return db.live(n.Val, owner, hash, append([][]byte{paths[0][len(n.Key):]}, paths[1:]...), cache)
-		}
-		return false
-
-	case *shortNode:
-		if prefixLen(n.Key, paths[0]) == len(n.Key) {
-			return db.live(n.Val, owner, hash, append([][]byte{paths[0][len(n.Key):]}, paths[1:]...), cache)
-		}
-		return false
-
-	case rawFullNode:
-		if child := n[paths[0][0]]; child != nil {
-			return db.live(child, owner, hash, append([][]byte{paths[0][1:]}, paths[1:]...), cache)
-		}
-		return false
-
-	case *fullNode:
-		if child := n.Children[paths[0][0]]; child != nil {
-			return db.live(child, owner, hash, append([][]byte{paths[0][1:]}, paths[1:]...), cache)
-		}
-		return false
-
-	default:
-		panic(fmt.Sprintf("unknown node type: %T", n))
-	}
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
