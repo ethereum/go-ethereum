@@ -212,7 +212,6 @@ func GetSignersFromContract(c *posv.Posv, addrBlockSigner common.Address, client
 	} else {
 		return caddrs.([]common.Address), nil
 	}
-	return nil, nil
 }
 
 // Get random from randomize contract.
