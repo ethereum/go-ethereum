@@ -876,7 +876,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 			}
 
 			if b == types.ReceiptStatusFailed {
-				fmt.Println("Tx receipt status false")
+				fmt.Println("Tx receipt status false", tx.Hash().Hex())
 				continue
 			}
 
@@ -896,6 +896,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 				vote.Masternode = *addr
 				vote.Voter = *tx.From()
 
+				fmt.Println("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
 				c.Votes.Remove(vote)
 			}
 		}
