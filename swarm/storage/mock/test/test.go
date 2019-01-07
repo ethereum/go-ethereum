@@ -196,15 +196,20 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 	r, w := io.Pipe()
 	defer r.Close()
 
+	exportErrChan := make(chan error)
 	go func() {
 		defer w.Close()
-		if _, err := exporter.Export(w); err != nil {
-			t.Fatalf("export: %v", err)
-		}
+
+		_, err := exporter.Export(w)
+		exportErrChan <- err
 	}()
 
 	if _, err := importer.Import(r); err != nil {
 		t.Fatalf("import: %v", err)
+	}
+
+	if err := <-exportErrChan; err != nil {
+		t.Fatalf("export: %v", err)
 	}
 
 	for i, addr := range addrs {
