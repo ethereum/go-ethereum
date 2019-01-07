@@ -18,9 +18,7 @@ package posv
 
 import (
 	"bytes"
-	//    "strings"
 	"encoding/json"
-	//	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,7 +30,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	// "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -862,45 +859,9 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	for _, tx := range txs {
-		if tx.IsSigningTransaction() {
-			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-			from := *tx.From()
-
-			var b uint
-			for _, r := range receipts {
-				if r.TxHash == tx.Hash() {
-					b = r.Status
-					break
-				}
-			}
-
-			if b == types.ReceiptStatusFailed {
-				fmt.Println("Tx receipt status false", tx.Hash().Hex())
-				continue
-			}
-
-			var lAddr []common.Address
-			if cached, ok := c.BlockSigners.Get(blkHash); ok {
-				lAddr = cached.([]common.Address)
-				lAddr = append(lAddr, from)
-			} else {
-				lAddr = []common.Address{from}
-			}
-			c.BlockSigners.Add(blkHash, lAddr)
-		} else {
-
-			b, addr := tx.IsVotingTransaction()
-			if b && addr != nil {
-				var vote common.Vote
-				vote.Masternode = *addr
-				vote.Voter = *tx.From()
-
-				fmt.Println("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
-				c.Votes.Remove(vote)
-			}
-		}
-	}
+	start := time.Now()
+	_ = c.cacheData(txs, receipts)
+	fmt.Println("Time processed txs", len(txs), "time", common.PrettyDuration(time.Since(start)))
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		if !c.EnableCache && uint64(c.BlockSigners.Len()) >= (rCheckpoint*3) {
@@ -1076,6 +1037,52 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
 	}
 	return masternodes
+}
+
+func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) error {
+	for _, tx := range txs {
+		go func(tx *types.Transaction) error {
+			if tx.IsSigningTransaction() {
+				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+				from := *tx.From()
+
+				var b uint
+				for _, r := range receipts {
+					if r.TxHash == tx.Hash() {
+						b = r.Status
+						return nil
+					}
+				}
+
+				if b == types.ReceiptStatusFailed {
+					fmt.Println("Tx receipt status false", tx.Hash().Hex())
+					return nil
+				}
+
+				var lAddr []common.Address
+				if cached, ok := c.BlockSigners.Get(blkHash); ok {
+					lAddr = cached.([]common.Address)
+					lAddr = append(lAddr, from)
+				} else {
+					lAddr = []common.Address{from}
+				}
+				c.BlockSigners.Add(blkHash, lAddr)
+			} else {
+
+				b, addr := tx.IsVotingTransaction()
+				if b && addr != nil {
+					var vote common.Vote
+					vote.Masternode = *addr
+					vote.Voter = *tx.From()
+
+					fmt.Println("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
+					c.Votes.Remove(vote)
+				}
+			}
+			return nil
+		}(tx)
+	}
+	return nil
 }
 
 // Extract validators from byte array.
