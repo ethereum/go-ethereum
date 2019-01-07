@@ -1040,6 +1040,10 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 }
 
 func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) error {
+    var wg sync.WaitGroup
+
+    wg.Add(len(txs))
+
 	for _, tx := range txs {
 		go func(tx *types.Transaction) error {
 			if tx.IsSigningTransaction() {
@@ -1050,12 +1054,14 @@ func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) er
 				for _, r := range receipts {
 					if r.TxHash == tx.Hash() {
 						b = r.Status
+                        wg.Done()
 						return nil
 					}
 				}
 
 				if b == types.ReceiptStatusFailed {
 					fmt.Println("Tx receipt status false", tx.Hash().Hex())
+                    wg.Done()
 					return nil
 				}
 
@@ -1079,9 +1085,12 @@ func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) er
 					c.Votes.Remove(vote)
 				}
 			}
+            wg.Done()
 			return nil
 		}(tx)
 	}
+
+    wg.Wait()
 	return nil
 }
 
