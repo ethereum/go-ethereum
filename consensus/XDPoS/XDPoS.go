@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-
 )
 
 const (
@@ -210,7 +209,7 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // Ethereum testnet following the Ropsten attacks.
 type XDPoS struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
-	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
 	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -923,7 +922,7 @@ func (c *XDPoS) Seal(chain consensus.ChainReader, block *types.Block, stop <-cha
 				if limit := uint64(2); number < limit || seen > number-limit {
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
-						log.Info("Length of MasterNodes", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
+						log.Info("len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 						log.Info("Signed recently, must wait for others")
 						<-stop
 						return nil, nil
