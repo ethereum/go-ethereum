@@ -467,7 +467,7 @@ func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, mas
 	opts := new(bind.CallOpts)
 	voters, err := validator.GetVoters(opts, masterAddr)
 	if err != nil {
-		log.Error("Fail to get voters", "error", err)
+		log.Crit("Fail to get voters", "error", err)
 		return nil, err
 	}
 
