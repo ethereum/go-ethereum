@@ -23,61 +23,20 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"hash"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"golang.org/x/crypto/sha3"
 )
 
 const MaxPO = 16
 const AddressLength = 32
 
-type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
 
-// Peer is the recorded as Source on the chunk
-// should probably not be here? but network should wrap chunk object
-type Peer interface{}
-
 type Address []byte
-
-func (a Address) Size() uint {
-	return uint(len(a))
-}
-
-func (a Address) isEqual(y Address) bool {
-	return bytes.Equal(a, y)
-}
-
-func (a Address) bits(i, j uint) uint {
-	ii := i >> 3
-	jj := i & 7
-	if ii >= a.Size() {
-		return 0
-	}
-
-	if jj+j <= 8 {
-		return uint((a[ii] >> jj) & ((1 << j) - 1))
-	}
-
-	res := uint(a[ii] >> jj)
-	jj = 8 - jj
-	j -= jj
-	for j != 0 {
-		ii++
-		if j < 8 {
-			res += uint(a[ii]&((1<<j)-1)) << jj
-			return res
-		}
-		res += uint(a[ii]) << jj
-		jj += 8
-		j -= 8
-	}
-	return res
-}
 
 // Proximity(x, y) returns the proximity order of the MSB distance between x and y
 //
@@ -100,9 +59,6 @@ func Proximity(one, other []byte) (ret int) {
 	m := 8
 	for i := 0; i < b; i++ {
 		oxo := one[i] ^ other[i]
-		if i == b-1 {
-			m = MaxPO % 8
-		}
 		for j := 0; j < m; j++ {
 			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j
@@ -112,10 +68,6 @@ func Proximity(one, other []byte) (ret int) {
 	return MaxPO
 }
 
-func IsZeroAddr(addr Address) bool {
-	return len(addr) == 0 || bytes.Equal(addr, ZeroAddr)
-}
-
 var ZeroAddr = Address(common.Hash{}.Bytes())
 
 func MakeHashFunc(hash string) SwarmHasher {
@@ -123,10 +75,10 @@ func MakeHashFunc(hash string) SwarmHasher {
 	case "SHA256":
 		return func() SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
 	case "SHA3":
-		return func() SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
+		return func() SwarmHash { return &HashWithLength{sha3.NewLegacyKeccak256()} }
 	case "BMT":
 		return func() SwarmHash {
-			hasher := sha3.NewKeccak256
+			hasher := sha3.NewLegacyKeccak256
 			hasherSize := hasher().Size()
 			segmentCount := ch.DefaultSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
@@ -302,10 +254,6 @@ type Getter interface {
 // NOTE: this returns invalid data if chunk is encrypted
 func (c ChunkData) Size() uint64 {
 	return binary.LittleEndian.Uint64(c[:8])
-}
-
-func (c ChunkData) Data() []byte {
-	return c[8:]
 }
 
 type ChunkValidator interface {

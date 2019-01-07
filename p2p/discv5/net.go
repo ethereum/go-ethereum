@@ -27,10 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -1234,7 +1234,7 @@ func (net *Network) checkTopicRegister(data *topicRegister) (*pong, error) {
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
+	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h

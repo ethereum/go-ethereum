@@ -202,7 +202,7 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	virtualArgs := 0
 	for index, arg := range arguments.NonIndexed() {
 		marshalledValue, err := toGoType((index+virtualArgs)*32, arg.Type, data)
-		if arg.Type.T == ArrayTy {
+		if arg.Type.T == ArrayTy && (*arg.Type.Elem).T != StringTy {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
 			// This means that we need to add two 'virtual' arguments when
@@ -272,14 +272,13 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	return ret, nil
 }
 
-// capitalise makes the first character of a string upper case, also removing any
-// prefixing underscores from the variable names.
-func capitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
+// ToCamelCase converts an under-score string to a camel-case string
+func ToCamelCase(input string) string {
+	parts := strings.Split(input, "_")
+	for i, s := range parts {
+		if len(s) > 0 {
+			parts[i] = strings.ToUpper(s[:1]) + s[1:]
+		}
 	}
-	if len(input) == 0 {
-		return ""
-	}
-	return strings.ToUpper(input[:1]) + input[1:]
+	return strings.Join(parts, "")
 }

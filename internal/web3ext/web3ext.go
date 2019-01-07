@@ -18,6 +18,7 @@
 package web3ext
 
 var Modules = map[string]string{
+	"accounting": Accounting_JS,
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
@@ -700,6 +701,50 @@ web3._extend({
 				status.queued = web3._extend.utils.toDecimal(status.queued);
 				return status;
 			}
+		}),
+	]
+});
+`
+
+const Accounting_JS = `
+web3._extend({
+	property: 'accounting',
+	methods: [
+		new web3._extend.Property({
+			name: 'balance',
+			getter: 'account_balance'
+		}),
+		new web3._extend.Property({
+			name: 'balanceCredit',
+			getter: 'account_balanceCredit'
+		}),
+		new web3._extend.Property({
+			name: 'balanceDebit',
+			getter: 'account_balanceDebit'
+		}),
+		new web3._extend.Property({
+			name: 'bytesCredit',
+			getter: 'account_bytesCredit'
+		}),
+		new web3._extend.Property({
+			name: 'bytesDebit',
+			getter: 'account_bytesDebit'
+		}),
+		new web3._extend.Property({
+			name: 'msgCredit',
+			getter: 'account_msgCredit'
+		}),
+		new web3._extend.Property({
+			name: 'msgDebit',
+			getter: 'account_msgDebit'
+		}),
+		new web3._extend.Property({
+			name: 'peerDrops',
+			getter: 'account_peerDrops'
+		}),
+		new web3._extend.Property({
+			name: 'selfDrops',
+			getter: 'account_selfDrops'
 		}),
 	]
 });

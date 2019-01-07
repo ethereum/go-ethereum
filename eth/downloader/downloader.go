@@ -1488,7 +1488,15 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
-		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+		if index < len(results) {
+			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
+		} else {
+			// The InsertChain method in blockchain.go will sometimes return an out-of-bounds index,
+			// when it needs to preprocess blocks to import a sidechain.
+			// The importer will put together a new list of blocks to import, which is a superset
+			// of the blocks delivered from the downloader, and the indexing will be off.
+			log.Debug("Downloaded item processing failed on sidechain import", "index", index, "err", err)
+		}
 		return errInvalidChain
 	}
 	return nil

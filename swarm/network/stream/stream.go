@@ -388,14 +388,6 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 	return peer.Send(context.TODO(), msg)
 }
 
-func (r *Registry) NodeInfo() interface{} {
-	return nil
-}
-
-func (r *Registry) PeerInfo(id enode.ID) interface{} {
-	return nil
-}
-
 func (r *Registry) Close() error {
 	return r.intervalsStore.Close()
 }

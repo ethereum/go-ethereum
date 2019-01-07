@@ -130,7 +130,7 @@ func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
 		return nil, err
 	}
 	// this is simulated 'listening'
-	// asynchronously call the dialed destintion node's p2p server
+	// asynchronously call the dialed destination node's p2p server
 	// to set up connection on the 'listening' side
 	go srv.SetupConn(pipe1, 0, nil)
 	return pipe2, nil

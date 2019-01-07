@@ -74,8 +74,6 @@ type Swarm struct {
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
-	corsString        string
-	swapEnabled       bool
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
@@ -84,18 +82,6 @@ type Swarm struct {
 	accountingMetrics *protocols.AccountingMetrics
 
 	tracerClose io.Closer
-}
-
-type SwarmAPI struct {
-	Api     *api.API
-	Backend chequebook.Backend
-}
-
-func (self *Swarm) API() *SwarmAPI {
-	return &SwarmAPI{
-		Api:     self.api,
-		Backend: self.backend,
-	}
 }
 
 // creates a new swarm service instance
@@ -479,14 +465,6 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	return
 }
 
-func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
-	if !pss.IsActiveProtocol {
-		return nil, fmt.Errorf("Pss protocols not available (built with !nopssprotocol tag)")
-	}
-	topic := pss.ProtocolTopic(spec)
-	return pss.RegisterProtocol(self.ps, &topic, spec, targetprotocol, options)
-}
-
 // implements node.Service
 // APIs returns the RPC API descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
@@ -518,6 +496,12 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   self.sfs,
 			Public:    false,
 		},
+		{
+			Namespace: "accounting",
+			Version:   protocols.AccountingVersion,
+			Service:   protocols.NewAccountingApi(self.accountingMetrics),
+			Public:    false,
+		},
 	}
 
 	apis = append(apis, self.bzz.APIs()...)
@@ -527,10 +511,6 @@ func (self *Swarm) APIs() []rpc.API {
 	}
 
 	return apis
-}
-
-func (self *Swarm) Api() *api.API {
-	return self.api
 }
 
 // SetChequebook ensures that the local checquebook is set up on chain.

@@ -21,7 +21,7 @@ import "github.com/ethereum/go-ethereum/p2p/enode"
 // BucketKey is the type that should be used for keys in simulation buckets.
 type BucketKey string
 
-// NodeItem returns an item set in ServiceFunc function for a particualar node.
+// NodeItem returns an item set in ServiceFunc function for a particular node.
 func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -156,7 +156,7 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.11.2.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.11.4.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go

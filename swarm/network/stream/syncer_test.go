@@ -43,10 +43,10 @@ import (
 const dataChunkCount = 200
 
 func TestSyncerSimulation(t *testing.T) {
-	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
 }
 
 func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.BzzAddr) (lstore storage.ChunkStore, datadir string, err error) {
@@ -67,9 +67,8 @@ func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.B
 	return lstore, datadir, nil
 }
 
-func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
+func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
 
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			var store storage.ChunkStore

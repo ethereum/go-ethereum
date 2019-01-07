@@ -24,8 +24,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
+	"golang.org/x/crypto/sha3"
 )
 
 /*
@@ -142,7 +142,7 @@ func TestSha3ForCorrectness(t *testing.T) {
 
 	io.LimitReader(bytes.NewReader(input[8:]), int64(size))
 
-	rawSha3 := sha3.NewKeccak256()
+	rawSha3 := sha3.NewLegacyKeccak256()
 	rawSha3.Reset()
 	rawSha3.Write(input)
 	rawSha3Output := rawSha3.Sum(nil)
