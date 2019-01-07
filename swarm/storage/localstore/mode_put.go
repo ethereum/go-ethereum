@@ -152,10 +152,10 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		db.incGCSize(gcSizeChange)
 	}
 	if triggerPullFeed {
-		db.pullFeed.trigger([]byte{db.po(item.Address)})
+		db.triggerPullSubscriptions(db.po(item.Address))
 	}
 	if triggerPushFeed {
-		db.pushFeed.trigger(nil)
+		db.triggerPushSubscriptions()
 	}
 	return nil
 }

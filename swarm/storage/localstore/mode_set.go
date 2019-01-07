@@ -199,7 +199,7 @@ func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 		db.incGCSize(gcSizeChange)
 	}
 	if triggerPullFeed {
-		db.pullFeed.trigger([]byte{db.po(item.Address)})
+		db.triggerPullSubscriptions(db.po(item.Address))
 	}
 	return nil
 }
