@@ -943,12 +943,12 @@ func TestHasPriceImplementation(t *testing.T) {
 		t.Fatal("`Registry` does not have the expected Prices instance")
 	}
 	price := pricesInstance.Price(&ChunkDeliveryMsgRetrieval{})
-	if price == nil || price.Value == 0 && price.Value != pricesInstance.getChunkDeliveryMsgRetrievalPrice() {
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getChunkDeliveryMsgRetrievalPrice() {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 
 	price = pricesInstance.Price(&RetrieveRequestMsg{})
-	if price == nil || price.Value == 0 && price.Value != pricesInstance.getRetrieveRequestMsgPrice() {
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getRetrieveRequestMsgPrice() {
 		t.Fatal("No prices set for chunk delivery msg")
 	}
 }
