@@ -18,11 +18,13 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -129,7 +131,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 
 		nodeIndex := make(map[enode.ID]int)
@@ -143,11 +145,19 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			simulation.NewPeerEventsFilter().Drop(),
 		)
 
+		var disconnected atomic.Value
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
 					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					t.Fatal(d.Error)
+					disconnected.Store(true)
+				}
+			}
+		}()
+		defer func() {
+			if err != nil {
+				if yes, ok := disconnected.Load().(bool); ok && yes {
+					err = errors.New("disconnect events received")
 				}
 			}
 		}()

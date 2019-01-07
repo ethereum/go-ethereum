@@ -21,6 +21,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -213,11 +214,13 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		simulation.NewPeerEventsFilter().Drop(),
 	)
 
+	var disconnected atomic.Value
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-			t.Fatal("unexpected disconnect")
-			cancelSimRun()
+			if d.Error != nil {
+				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				disconnected.Store(true)
+			}
 		}
 	}()
 
@@ -225,6 +228,9 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+	if yes, ok := disconnected.Load().(bool); ok && yes {
+		t.Fatal("disconnect events received")
 	}
 	log.Info("Simulation ended")
 }
@@ -395,11 +401,13 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		simulation.NewPeerEventsFilter().Drop(),
 	)
 
+	var disconnected atomic.Value
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-			t.Fatal("unexpected disconnect")
-			cancelSimRun()
+			if d.Error != nil {
+				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				disconnected.Store(true)
+			}
 		}
 	}()
 
@@ -514,6 +522,9 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return result.Error
 	}
 
+	if yes, ok := disconnected.Load().(bool); ok && yes {
+		t.Fatal("disconnect events received")
+	}
 	log.Info("Simulation ended")
 	return nil
 }
