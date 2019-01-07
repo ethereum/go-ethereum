@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"reflect"
@@ -199,18 +198,16 @@ func dumpConfig(ctx *cli.Context) error {
 		return err
 	}
 
+	dump := os.Stdout
 	if ctx.NArg() > 0 {
-		f, err := os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE, 0644)
+		dump, err = os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		f.WriteString(comment)
-		f.Write(out)
-	} else {
-		io.WriteString(os.Stdout, comment)
-		os.Stdout.Write(out)
+		defer dump.Close()
 	}
+	dump.WriteString(comment)
+	dump.Write(out)
 
 	return nil
 }
