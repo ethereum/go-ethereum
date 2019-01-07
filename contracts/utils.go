@@ -350,7 +350,7 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 		} else {
 			var wg sync.WaitGroup
 			squeue := make(chan []common.Address, 1)
-			wg.Add(900)
+			wg.Add(int(rCheckpoint))
 
 			for i := startBlockNumber; i <= endBlockNumber; i++ {
 				go func(i uint64) {
@@ -484,15 +484,22 @@ func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, mas
 			vote.Masternode = masterAddr
 			vote.Voter = voteAddr
 
-			if vCap, ok := c.Votes.Get(vote); ok {
-				voterCap = vCap.(*big.Int)
+			if c != nil {
+				if vCap, ok := c.Votes.Get(vote); ok {
+					voterCap = vCap.(*big.Int)
+				} else {
+					voterCap, err = validator.GetVoterCap(opts, masterAddr, voteAddr)
+					if err != nil {
+						log.Crit("Fail to get vote capacity", "error", err)
+					}
+					fmt.Println("Add to Votes cache", vote.Masternode.String(), vote.Voter.String(), voterCap.String())
+					c.Votes.Add(vote, voterCap)
+				}
 			} else {
 				voterCap, err = validator.GetVoterCap(opts, masterAddr, voteAddr)
 				if err != nil {
 					log.Crit("Fail to get vote capacity", "error", err)
 				}
-				fmt.Println("Add to Votes cache", vote.Masternode.String(), vote.Voter.String(), voterCap.String())
-				c.Votes.Add(vote, voterCap)
 			}
 
 			totalCap.Add(totalCap, voterCap)

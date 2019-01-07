@@ -144,7 +144,7 @@ func TestRewardBalance(t *testing.T) {
 
 	foundationAddr := common.HexToAddress(common.FoudationAddr)
 	totalReward := new(big.Int).SetInt64(15 * 1000)
-	rewards, err := contracts.GetRewardBalancesRate(foundationAddr, acc3Addr, totalReward, baseValidator)
+	rewards, err := contracts.GetRewardBalancesRate(nil, foundationAddr, acc3Addr, totalReward, baseValidator)
 	if err != nil {
 		t.Error("Fail to get reward balances rate.", err)
 	}
