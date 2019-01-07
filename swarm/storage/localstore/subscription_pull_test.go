@@ -27,11 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// TestSubscribePull uploads some chunks before and after
+// TestDB_SubscribePull uploads some chunks before and after
 // pull syncing subscription is created and validates if
 // all addresses are received in the right order
 // for expected proximity order bins.
-func TestSubscribePull(t *testing.T) {
+func TestDB_SubscribePull(t *testing.T) {
 	t.Parallel()
 
 	db, cleanupFunc := newTestDB(t, nil)
@@ -42,28 +42,9 @@ func TestSubscribePull(t *testing.T) {
 	addrs := make(map[uint8][]storage.Address)
 	var wantedChunksCount int
 
-	uploadRandomChunks := func(count int) {
-		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
-
-			err := uploader.Put(chunk)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			bin := db.po(chunk.Address())
-			if _, ok := addrs[bin]; !ok {
-				addrs[bin] = make([]storage.Address, 0)
-			}
-
-			addrs[bin] = append(addrs[bin], chunk.Address())
-			wantedChunksCount++
-		}
-	}
-
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunks(10)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -78,54 +59,25 @@ func TestSubscribePull(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go func(bin uint8) {
-			var i int // address index
-			for {
-				select {
-				case got, ok := <-ch:
-					if !ok {
-						return
-					}
-					want := addrs[bin][i]
-					var err error
-					if !bytes.Equal(got.Address, want) {
-						err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
-					}
-					i++
-					// send one and only one error per received address
-					errChan <- err
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(bin)
+		go checkBin(ctx, bin, ch, addrs, errChan)
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunks(5)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 5)
 
 	time.Sleep(500 * time.Millisecond)
 
 	// upload some chunks after some short time
-	uploadRandomChunks(3)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 3)
 
-	for i := 0; i < wantedChunksCount; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
 
-// TestSubscribePull_multiple uploads chunks before and after
+// TestDB_SubscribePull_multiple uploads chunks before and after
 // multiple pull syncing subscriptions are created and
 // validates if all addresses are received in the right order
 // for expected proximity order bins.
-func TestSubscribePull_multiple(t *testing.T) {
+func TestDB_SubscribePull_multiple(t *testing.T) {
 	t.Parallel()
 
 	db, cleanupFunc := newTestDB(t, nil)
@@ -136,28 +88,9 @@ func TestSubscribePull_multiple(t *testing.T) {
 	addrs := make(map[uint8][]storage.Address)
 	var wantedChunksCount int
 
-	uploadRandomChunks := func(count int) {
-		for i := 0; i < count; i++ {
-			chunk := generateRandomChunk()
-
-			err := uploader.Put(chunk)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			bin := db.po(chunk.Address())
-			if _, ok := addrs[bin]; !ok {
-				addrs[bin] = make([]storage.Address, 0)
-			}
-
-			addrs[bin] = append(addrs[bin], chunk.Address())
-			wantedChunksCount++
-		}
-	}
-
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunks(10)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -177,57 +110,26 @@ func TestSubscribePull_multiple(t *testing.T) {
 			defer stop()
 
 			// receive and validate addresses from the subscription
-			go func(bin uint8, j int) {
-				var i int // address index
-				for {
-					select {
-					case got, ok := <-ch:
-						if !ok {
-							return
-						}
-						want := addrs[bin][i]
-						var err error
-						if !bytes.Equal(got.Address, want) {
-							err = fmt.Errorf("got chunk address %v in bin %v on subscription %v %s, want %s", i, bin, j, got.Address.Hex(), want)
-						}
-						i++
-						// send one and only one error per received address
-						errChan <- err
-					case <-ctx.Done():
-						return
-					}
-				}
-			}(bin, j)
+			go checkBin(ctx, bin, ch, addrs, errChan)
 		}
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunks(5)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 5)
 
 	time.Sleep(500 * time.Millisecond)
 
 	// upload some chunks after some short time
-	uploadRandomChunks(3)
+	uploadRandomChunksBin(t, db, addrs, uploader, &wantedChunksCount, 3)
 
-	totalChunks := wantedChunksCount * subsCount
-
-	for i := 0; i < totalChunks; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)
 }
 
-// TestSubscribePull_since uploads chunks before and after
+// TestDB_SubscribePull_since uploads chunks before and after
 // pull syncing subscriptions are created with a since argument
 // and validates if all expected addresses are received in the
 // right order for expected proximity order bins.
-func TestSubscribePull_since(t *testing.T) {
+func TestDB_SubscribePull_since(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -292,49 +194,21 @@ func TestSubscribePull_since(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go func(bin uint8) {
-			var i int // address index
-			for {
-				select {
-				case got, ok := <-ch:
-					if !ok {
-						return
-					}
-					want := addrs[bin][i]
-					var err error
-					if !bytes.Equal(got.Address, want) {
-						err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
-					}
-					i++
-					// send one and only one error per received address
-					errChan <- err
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(bin)
+		go checkBin(ctx, bin, ch, addrs, errChan)
+
 	}
 
 	// upload some chunks just after subscribe
 	uploadRandomChunks(15, true)
 
-	for i := 0; i < wantedChunksCount; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
 
-// TestSubscribePull_until uploads chunks before and after
+// TestDB_SubscribePull_until uploads chunks before and after
 // pull syncing subscriptions are created with an until argument
 // and validates if all expected addresses are received in the
 // right order for expected proximity order bins.
-func TestSubscribePull_until(t *testing.T) {
+func TestDB_SubscribePull_until(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -399,31 +273,157 @@ func TestSubscribePull_until(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go func(bin uint8) {
-			var i int // address index
-			for {
-				select {
-				case got, ok := <-ch:
-					if !ok {
-						return
-					}
-					want := addrs[bin][i]
-					var err error
-					if !bytes.Equal(got.Address, want) {
-						err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
-					}
-					i++
-					// send one and only one error per received address
-					errChan <- err
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(bin)
+		go checkBin(ctx, bin, ch, addrs, errChan)
 	}
 
 	// upload some chunks just after subscribe
 	uploadRandomChunks(15, false)
+
+	checkErrChan(ctx, t, errChan, wantedChunksCount)
+}
+
+// TestDB_SubscribePull_sinceAndUntil uploads chunks before and
+// after pull syncing subscriptions are created with since
+// and until arguments, and validates if all expected addresses
+// are received in the right order for expected proximity order bins.
+func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
+	t.Parallel()
+
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	uploader := db.NewPutter(ModePutUpload)
+
+	addrs := make(map[uint8][]storage.Address)
+	var wantedChunksCount int
+
+	lastTimestamp := time.Now().UTC().UnixNano()
+	defer setNow(func() (t int64) {
+		return atomic.AddInt64(&lastTimestamp, 1)
+	})()
+
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkInfo) {
+		last = make(map[uint8]ChunkInfo)
+		for i := 0; i < count; i++ {
+			chunk := generateRandomChunk()
+
+			err := uploader.Put(chunk)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			bin := db.po(chunk.Address())
+			if _, ok := addrs[bin]; !ok {
+				addrs[bin] = make([]storage.Address, 0)
+			}
+
+			if wanted {
+				addrs[bin] = append(addrs[bin], chunk.Address())
+				wantedChunksCount++
+			}
+
+			last[bin] = ChunkInfo{
+				Address:        chunk.Address(),
+				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
+			}
+		}
+		return last
+	}
+
+	// all chunks from upload1 are not expected
+	// as upload1 chunk is used as since for subscriptions
+	upload1 := uploadRandomChunks(100, false)
+
+	// all chunks from upload2 are expected
+	// as upload2 chunk is used as until for subscriptions
+	upload2 := uploadRandomChunks(100, true)
+
+	// upload some chunks before subscribe but after
+	// wanted chunks
+	uploadRandomChunks(8, false)
+
+	// set a timeout on subscription
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// collect all errors from validating addresses, even nil ones
+	// to validate the number of addresses received by the subscription
+	errChan := make(chan error)
+
+	for bin := uint8(0); bin <= uint8(storage.MaxPO); bin++ {
+		var since *ChunkInfo
+		if c, ok := upload1[bin]; ok {
+			since = &c
+		}
+		until, ok := upload2[bin]
+		if !ok {
+			// no chunks un this bin uploaded in the upload2
+			// skip this bin from testing
+			continue
+		}
+		ch, stop := db.SubscribePull(ctx, bin, since, &until)
+		defer stop()
+
+		// receive and validate addresses from the subscription
+		go checkBin(ctx, bin, ch, addrs, errChan)
+	}
+
+	// upload some chunks just after subscribe
+	uploadRandomChunks(15, false)
+
+	checkErrChan(ctx, t, errChan, wantedChunksCount)
+}
+
+// uploadRandomChunksBin uploads random chunks to database and adds them to
+// the map of addresses ber bin.
+func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]storage.Address, uploader *Putter, wantedChunksCount *int, count int) {
+	for i := 0; i < count; i++ {
+		chunk := generateRandomChunk()
+
+		err := uploader.Put(chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		bin := db.po(chunk.Address())
+		if _, ok := addrs[bin]; !ok {
+			addrs[bin] = make([]storage.Address, 0)
+		}
+
+		addrs[bin] = append(addrs[bin], chunk.Address())
+		*wantedChunksCount++
+	}
+}
+
+// checkBin is a helper function that reads all ChunkInfos from a channel and
+// sends error to errChan, even if it is nil, to count the number of ChunkInfos
+// returned by the channel.
+func checkBin(ctx context.Context, bin uint8, ch <-chan ChunkInfo, addrs map[uint8][]storage.Address, errChan chan error) {
+	var i int // address index
+	for {
+		select {
+		case got, ok := <-ch:
+			if !ok {
+				return
+			}
+			want := addrs[bin][i]
+			var err error
+			if !bytes.Equal(got.Address, want) {
+				err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
+			}
+			i++
+			// send one and only one error per received address
+			errChan <- err
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// checkErrChan expects the number of wantedChunksCount errors from errChan
+// and calls t.Error for the ones that are not nil.
+func checkErrChan(ctx context.Context, t *testing.T, errChan chan error, wantedChunksCount int) {
+	t.Helper()
 
 	for i := 0; i < wantedChunksCount; i++ {
 		select {

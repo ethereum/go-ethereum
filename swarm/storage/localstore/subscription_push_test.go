@@ -26,10 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// TestSubscribePush uploads some chunks before and after
+// TestDB_SubscribePush uploads some chunks before and after
 // push syncing subscription is created and validates if
 // all addresses are received in the right order.
-func TestSubscribePush(t *testing.T) {
+func TestDB_SubscribePush(t *testing.T) {
 	t.Parallel()
 
 	db, cleanupFunc := newTestDB(t, nil)
@@ -101,23 +101,13 @@ func TestSubscribePush(t *testing.T) {
 	// upload some chunks after some short time
 	uploadRandomChunks(3)
 
-	totalChunks := len(chunks)
-	for i := 0; i < totalChunks; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	checkErrChan(ctx, t, errChan, len(chunks))
 }
 
-// TestSubscribePush_multiple uploads chunks before and after
+// TestDB_SubscribePush_multiple uploads chunks before and after
 // multiple push syncing subscriptions are created and
 // validates if all addresses are received in the right order.
-func TestSubscribePush_multiple(t *testing.T) {
+func TestDB_SubscribePush_multiple(t *testing.T) {
 	t.Parallel()
 
 	db, cleanupFunc := newTestDB(t, nil)
@@ -193,15 +183,7 @@ func TestSubscribePush_multiple(t *testing.T) {
 	uploadRandomChunks(3)
 
 	// number of addresses received by all subscriptions
-	totalChunks := len(addrs) * subsCount
-	for i := 0; i < totalChunks; i++ {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				t.Error(err)
-			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		}
-	}
+	wantedChunksCount := len(addrs) * subsCount
+
+	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
