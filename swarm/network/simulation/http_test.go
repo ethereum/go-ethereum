@@ -74,7 +74,7 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
 	errC := make(chan error, 1)
-	go sendRunSignal(t, errC)
+	go triggerSimulationRun(t, errC)
 	result = sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("This run waits for the run signal from `frontend`...")
 		//ensure with a Sleep that simulation doesn't terminate before the signal is received
@@ -90,7 +90,7 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	log.Debug("Test terminated successfully")
 }
 
-func sendRunSignal(t *testing.T, errC chan error) {
+func triggerSimulationRun(t *testing.T, errC chan error) {
 	//We need to first wait for the sim HTTP server to start running...
 	time.Sleep(2 * time.Second)
 	//then we can send the signal
