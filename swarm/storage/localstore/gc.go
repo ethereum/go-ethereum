@@ -148,8 +148,6 @@ func (db *DB) triggerGarbageCollection() {
 	}
 }
 
-var writeGCSizeDelay = 10 * time.Second
-
 // writeGCSizeWorker writes gcSize on trigger event
 // and waits writeGCSizeDelay after each write.
 // It implements a linear backoff with delay of
@@ -166,7 +164,7 @@ func (db *DB) writeGCSizeWorker() {
 			// Wait some time before writing gc size in the next
 			// iteration. This prevents frequent I/O operations.
 			select {
-			case <-time.After(writeGCSizeDelay):
+			case <-time.After(10 * time.Second):
 			case <-db.close:
 				return
 			}
