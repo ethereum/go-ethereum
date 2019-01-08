@@ -98,7 +98,7 @@ func TestPeerEventsTimeout(t *testing.T) {
 
 	select {
 	case <-time.After(time.Second):
-		t.Error("no context deadline received")
+		t.Fatal("no context deadline received")
 	case err := <-errC:
 		t.Fatal(err)
 	case <-done:
