@@ -862,8 +862,8 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	_ = c.cacheData(txs, receipts)
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
-		if !c.EnableCache && uint64(c.BlockSigners.Len()) >= (rCheckpoint*3) {
-			log.Debug("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
+		if !c.EnableCache && int(c.BlockSigners.Len()) >= int(rCheckpoint*3) {
+			log.Debug("EnableCache true c.BlockSigners.Len() ", "BlockSigners.Len", c.BlockSigners.Len())
 			c.EnableCache = true
 		}
 
@@ -1038,56 +1038,45 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 }
 
 func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) error {
-	var wg sync.WaitGroup
-
-	wg.Add(len(txs))
-
 	for _, tx := range txs {
-		go func(tx *types.Transaction) error {
-			if tx.IsSigningTransaction() {
-				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-				from := *tx.From()
+		if tx.IsSigningTransaction() {
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			from := *tx.From()
 
-				var b uint
-				for _, r := range receipts {
-					if r.TxHash == tx.Hash() {
-						b = r.Status
-						wg.Done()
-						return nil
-					}
-				}
-
-				if b == types.ReceiptStatusFailed {
-					wg.Done()
-					return nil
-				}
-
-				var lAddr []common.Address
-				if cached, ok := c.BlockSigners.Get(blkHash); ok {
-					lAddr = cached.([]common.Address)
-					lAddr = append(lAddr, from)
-				} else {
-					lAddr = []common.Address{from}
-				}
-				c.BlockSigners.Add(blkHash, lAddr)
-			} else {
-
-				b, addr := tx.IsVotingTransaction()
-				if b && addr != nil {
-					var vote common.Vote
-					vote.Masternode = *addr
-					vote.Voter = *tx.From()
-
-					log.Debug("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
-					c.Votes.Remove(vote)
+			var b uint
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					b = r.Status
+					break
 				}
 			}
-			wg.Done()
-			return nil
-		}(tx)
+
+			if b == types.ReceiptStatusFailed {
+				continue
+			}
+
+			var lAddr []common.Address
+			if cached, ok := c.BlockSigners.Get(blkHash); ok {
+				lAddr = cached.([]common.Address)
+				lAddr = append(lAddr, from)
+			} else {
+				lAddr = []common.Address{from}
+			}
+			c.BlockSigners.Add(blkHash, lAddr)
+		} else {
+
+			b, addr := tx.IsVotingTransaction()
+			if b && addr != nil {
+				var vote common.Vote
+				vote.Masternode = *addr
+				vote.Voter = *tx.From()
+
+				log.Debug("Remove from Votes cache ", "Masternode", vote.Masternode.String(), "Voter", vote.Voter.String())
+				c.Votes.Remove(vote)
+			}
+		}
 	}
 
-	wg.Wait()
 	return nil
 }
 

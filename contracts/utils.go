@@ -490,7 +490,7 @@ func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, mas
 					if err != nil {
 						log.Crit("Fail to get vote capacity", "error", err)
 					}
-					log.Debug("Add to Votes cache", vote.Masternode.String(), vote.Voter.String(), voterCap.String())
+					log.Debug("Add to Votes cache ", "vote.Masternode", vote.Masternode.String(), "vote.Voter", vote.Voter.String(), "voterCap", voterCap.String())
 					c.Votes.Add(vote, voterCap)
 				}
 			} else {
