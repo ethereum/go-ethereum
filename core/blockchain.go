@@ -1069,7 +1069,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 		bc.downloadingBlock.Add(block.Hash(), true)
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
+	st, err := bc.State()
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	abort, results := bc.engine.VerifyHeaders(bc, st, headers, seals)
 	defer close(abort)
 
 	// Iterate over the blocks and insert when the verifier permits
@@ -1246,7 +1250,11 @@ func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
-	err = bc.engine.VerifyHeader(bc, block.Header(), false)
+	state, err := bc.State()
+	if err != nil {
+		return err
+	}
+	err = bc.engine.VerifyHeader(bc, state, block.Header(), false)
 	if err != nil {
 		return err
 	}
@@ -1678,7 +1686,11 @@ Error: %v
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	state, err := bc.State()
+	if err != nil {
+		return 0, err
+	}
+	if i, err := bc.hc.ValidateHeaderChain(chain, state, checkFreq); err != nil {
 		return i, err
 	}
 
