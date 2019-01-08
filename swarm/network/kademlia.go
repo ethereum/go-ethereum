@@ -175,7 +175,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	minsize := k.MinBinSize
-	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
+	depth := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
@@ -404,23 +404,16 @@ func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 	return depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 }
 
-// depthForPot returns the proximity order that defines the distance of
-// the nearest neighbour set with cardinality >= NeighbourhoodSize
-// if there is altogether less than NeighbourhoodSize peers it returns 0
+// neighbourhoodRadiusForPot returns the proximity order that defines the distance of
+// the nearest neighbour set with cardinality >= MinProxBinSize
+// if there is altogether less than MinProxBinSize peers it returns 0
 // caller must hold the lock
-func depthForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []byte) (depth int) {
+func neighbourhoodRadiusForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []byte) (depth int) {
 	if p.Size() <= neighbourhoodSize {
 		return 0
 	}
-
 	// total number of peers in iteration
 	var size int
-
-	// determining the depth is a two-step process
-	// first we find the proximity bin of the shallowest of the NeighbourhoodSize peers
-	// the numeric value of depth cannot be higher than this
-	var maxDepth int
-
 	f := func(v pot.Val, i int) bool {
 		// po == 256 means that addr is the pivot address(self)
 		if i == 256 {
@@ -431,13 +424,26 @@ func depthForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []byte) (depth int
 		// this means we have all nn-peers.
 		// depth is by default set to the bin of the farthest nn-peer
 		if size == neighbourhoodSize {
-			maxDepth = i
+			depth = i
 			return false
 		}
 
 		return true
 	}
 	p.EachNeighbour(pivotAddr, Pof, f)
+	return depth
+}
+
+// depthForPot returns the depth for the pot
+// caller must hold the lock
+func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
+	if p.Size() <= minProxBinSize {
+		return 0
+	}
+	// determining the depth is a two-step process
+	// first we find the proximity bin of the shallowest of the MinProxBinSize peers
+	// the numeric value of depth cannot be higher than this
+	maxDepth := neighbourhoodRadiusForPot(p, minProxBinSize, pivotAddr)
 
 	// the second step is to test for empty bins in order from shallowest to deepest
 	// if an empty bin is found, this will be the actual depth
@@ -745,6 +751,9 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
+	if len(pp.NNSet) < k.MinProxBinSize {
+		panic("wrong peerpot")
+	}
 	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)

@@ -151,7 +151,6 @@ func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
-	t.Skip("discovery tests depend on suggestpeer, which is unreliable after kademlia depth change.")
 	startedAt := time.Now()
 	result, err := discoverySimulation(nodes, conns, adapter)
 	if err != nil {
@@ -179,7 +178,6 @@ func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.No
 }
 
 func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) map[int][]byte {
-	t.Skip("discovery tests depend on suggestpeer, which is unreliable after kademlia depth change.")
 	persistenceEnabled = true
 	discoveryEnabled = true
 
@@ -269,7 +267,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		}
 
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+			// if err := client.Call(&healthy, "hive_healthy", ppmap[id2addr[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Info(fmt.Sprintf("node %4s healthy: connected nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.ConnectNN, healthy.KnowNN, healthy.Hive))
@@ -353,8 +352,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
-				if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
+				ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
+				if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
@@ -427,7 +426,8 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		healthy := &network.Health{}
 		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
-		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+			// if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))
