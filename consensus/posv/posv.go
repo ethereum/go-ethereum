@@ -859,8 +859,6 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	_ = c.cacheData(txs, receipts)
-
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		if !c.EnableCache && int(c.BlockSigners.Len()) >= int(rCheckpoint*3) {
 			log.Debug("EnableCache true c.BlockSigners.Len() ", "BlockSigners.Len", c.BlockSigners.Len())
@@ -881,6 +879,8 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 			}
 		}
 	}
+
+	_ = c.cacheData(txs, receipts)
 
 	// the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
