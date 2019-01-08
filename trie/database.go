@@ -571,7 +571,12 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	prunetime, prunenodes, prunesize := db.prunetime, db.prunenodes, db.prunesize
-	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, prune, nil, db.newPruner(root)); err != nil {
+
+	pruner := db.newPruner(root)
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, prune, nil, pruner); err != nil {
+		return err
+	}
+	if err := pruner.flush(); err != nil {
 		return err
 	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
@@ -610,15 +615,9 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 	child, ok := db.dirties[childKey]
 	if !ok {
 		if prune {
-			batch := db.diskdb.NewBatch()
-
 			start := time.Now()
-			pruner.prune(childOwner, childHash, path, batch)
+			pruner.prune(childOwner, childHash, path)
 			db.prunetime += time.Since(start)
-
-			if err := batch.Write(); err != nil {
-				return err
-			}
 		}
 		return nil
 	}
