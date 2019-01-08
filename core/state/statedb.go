@@ -568,7 +568,7 @@ func (db *StateDB) GetRefund() uint64 {
 	return db.refund
 }
 
-// Finalise finalises the state by removing the db destructed objects
+// Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
 func (db *StateDB) Finalise(deleteEmptyObjects bool) {
 	for addr := range db.journal.dirties {
