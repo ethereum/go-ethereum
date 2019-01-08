@@ -859,13 +859,11 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	start := time.Now()
 	_ = c.cacheData(txs, receipts)
-	fmt.Println("Time processed txs", len(txs), "time", common.PrettyDuration(time.Since(start)))
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		if !c.EnableCache && uint64(c.BlockSigners.Len()) >= (rCheckpoint*3) {
-			fmt.Println("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
+			log.Debug("EnableCache true c.BlockSigners.Len()", c.BlockSigners.Len())
 			c.EnableCache = true
 		}
 
@@ -1040,9 +1038,9 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 }
 
 func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) error {
-    var wg sync.WaitGroup
+	var wg sync.WaitGroup
 
-    wg.Add(len(txs))
+	wg.Add(len(txs))
 
 	for _, tx := range txs {
 		go func(tx *types.Transaction) error {
@@ -1054,14 +1052,13 @@ func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) er
 				for _, r := range receipts {
 					if r.TxHash == tx.Hash() {
 						b = r.Status
-                        wg.Done()
+						wg.Done()
 						return nil
 					}
 				}
 
 				if b == types.ReceiptStatusFailed {
-					fmt.Println("Tx receipt status false", tx.Hash().Hex())
-                    wg.Done()
+					wg.Done()
 					return nil
 				}
 
@@ -1081,16 +1078,16 @@ func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) er
 					vote.Masternode = *addr
 					vote.Voter = *tx.From()
 
-					fmt.Println("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
+					log.Debug("Remove from Votes cache", vote.Masternode.String(), vote.Voter.String())
 					c.Votes.Remove(vote)
 				}
 			}
-            wg.Done()
+			wg.Done()
 			return nil
 		}(tx)
 	}
 
-    wg.Wait()
+	wg.Wait()
 	return nil
 }
 

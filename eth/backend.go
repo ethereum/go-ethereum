@@ -279,8 +279,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 				}
-				// log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
-				fmt.Println("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
+				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
 				return penSigners, nil
 			}
 			return []common.Address{}, nil
@@ -309,8 +308,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(c, chain, addr, number, rCheckpoint, client, totalSigner)
-				// signers, err := contracts.GetRewardForCheckpoint(chain, addr, number, rCheckpoint, client, totalSigner)
-				fmt.Println("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)
 				}
@@ -336,8 +334,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					}
 				}
 				rewards["rewards"] = voterResults
-				// log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-				fmt.Println("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 			}
 			return nil, rewards
 		}

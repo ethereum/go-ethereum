@@ -396,7 +396,6 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 
 			wg.Wait()
 		}
-		fmt.Println("totalSigner", *totalSigner)
 	}
 
 	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
@@ -491,7 +490,7 @@ func GetRewardBalancesRate(c *posv.Posv, foudationWalletAddr common.Address, mas
 					if err != nil {
 						log.Crit("Fail to get vote capacity", "error", err)
 					}
-					fmt.Println("Add to Votes cache", vote.Masternode.String(), vote.Voter.String(), voterCap.String())
+					log.Debug("Add to Votes cache", vote.Masternode.String(), vote.Voter.String(), voterCap.String())
 					c.Votes.Add(vote, voterCap)
 				}
 			} else {
