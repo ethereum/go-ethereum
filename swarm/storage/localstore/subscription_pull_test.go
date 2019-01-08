@@ -65,9 +65,11 @@ func TestDB_SubscribePull(t *testing.T) {
 	// upload some chunks just after subscribe
 	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
+	// to ensure that subscription will include them
+	// in a dynamic environment
 	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
@@ -117,9 +119,11 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	// upload some chunks just after subscribe
 	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
+	// to ensure that subscription will include them
+	// in a dynamic environment
 	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)

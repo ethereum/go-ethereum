@@ -96,9 +96,11 @@ func TestDB_SubscribePush(t *testing.T) {
 	// upload some chunks just after subscribe
 	uploadRandomChunks(5)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
+	// to ensure that subscription will include them
+	// in a dynamic environment
 	uploadRandomChunks(3)
 
 	checkErrChan(ctx, t, errChan, len(chunks))
@@ -177,9 +179,11 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 	// upload some chunks just after subscribe
 	uploadRandomChunks(5)
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
+	// to ensure that subscription will include them
+	// in a dynamic environment
 	uploadRandomChunks(3)
 
 	// number of addresses received by all subscriptions
