@@ -19,9 +19,11 @@ package stream
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -500,7 +502,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 
 	log.Info("Starting simulation")
 	ctx := context.Background()
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		//determine the pivot node to be the first node of the simulation
 		pivot := nodeIDs[0]
@@ -553,14 +555,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 		}
 		pivotFileStore := item.(*storage.FileStore)
 		log.Debug("Starting retrieval routine")
+		retErrC := make(chan error)
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
 			n, err := readAll(pivotFileStore, fileHash)
 			log.Info(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
-			if err != nil {
-				t.Fatalf("requesting chunks action error: %v", err)
-			}
+			retErrC <- err
 		}()
 
 		log.Debug("Watching for disconnections")
@@ -570,11 +571,19 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 			simulation.NewPeerEventsFilter().Drop(),
 		)
 
+		var disconnected atomic.Value
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
 					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					t.Fatal(d.Error)
+					disconnected.Store(true)
+				}
+			}
+		}()
+		defer func() {
+			if err != nil {
+				if yes, ok := disconnected.Load().(bool); ok && yes {
+					err = errors.New("disconnect events received")
 				}
 			}
 		}()
@@ -594,6 +603,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 
 		if !success {
 			return fmt.Errorf("Test failed, chunks not available on all nodes")
+		}
+		if err := <-retErrC; err != nil {
+			t.Fatalf("requesting chunks: %v", err)
 		}
 		log.Debug("Test terminated successfully")
 		return nil
@@ -675,7 +687,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 	}
 
 	ctx := context.Background()
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		node := nodeIDs[len(nodeIDs)-1]
 
@@ -702,11 +714,19 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			simulation.NewPeerEventsFilter().Drop(),
 		)
 
+		var disconnected atomic.Value
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
 					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					b.Fatal(d.Error)
+					disconnected.Store(true)
+				}
+			}
+		}()
+		defer func() {
+			if err != nil {
+				if yes, ok := disconnected.Load().(bool); ok && yes {
+					err = errors.New("disconnect events received")
 				}
 			}
 		}()
