@@ -223,15 +223,18 @@ func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common
 	randomize, err := randomizeContract.NewTomoRandomize(common.HexToAddress(common.RandomizeSMC), client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
+		return -1, err
 	}
 	opts := new(bind.CallOpts)
 	secrets, err := randomize.GetSecret(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get secrets from randomize", "error", err)
+		return -1, err
 	}
 	opening, err := randomize.GetOpening(opts, addrMasternode)
 	if err != nil {
 		log.Error("Fail get opening from randomize", "error", err)
+		return -1, err
 	}
 
 	return DecryptRandomizeFromSecretsAndOpening(secrets, opening)
@@ -296,6 +299,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 				intNumber, err := strconv.Atoi(decryptSecret)
 				if err != nil {
 					log.Error("Can not convert string to integer", "error", err)
+					return -1, err
 				}
 				random = int64(intNumber)
 			}
