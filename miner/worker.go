@@ -552,7 +552,11 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		header.Coinbase = self.coinbase
 	}
-	if err := self.engine.Prepare(self.chain, self.current.state, header); err != nil {
+	state := &state.StateDB{}
+	if self.current != nil {
+		state = self.current.state
+	}
+	if err := self.engine.Prepare(self.chain, state, header); err != nil {
 		log.Error("Failed to prepare header for new block", "err", err)
 		return
 	}
