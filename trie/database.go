@@ -539,8 +539,8 @@ func (db *Database) Nodes() []string {
 // to break genericity here and assume that parent nodes are not owned (account
 // trie) whereas child nodes may be owned (storage trie or bytecode).
 func (db *Database) Reference(owner common.Hash, child common.Hash, parent common.Hash) {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	// If the node does not exist, it's a node pulled from disk, skip
 	childKey := makeNodeKey(owner, child)
@@ -566,17 +566,19 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 		log.Error("Attempted to dereference the trie cache meta root")
 		return nil
 	}
+	// Obtain the write lock and garbage collect in-memory
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	prunetime, prunenodes, prunesize := db.prunetime, db.prunenodes, db.prunesize
 
-	pruner := db.newPruner(root)
-	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, prune, nil, pruner); err != nil {
-		return err
+	// Dereference the trie and accumulate prune targets if needed
+	var pruner *pruner
+	if prune {
+		pruner = db.newPruner()
 	}
-	if err := pruner.flush(); err != nil {
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil, pruner); err != nil {
 		return err
 	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
@@ -587,19 +589,31 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 	memcacheGCSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheGCNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	memcachePruneTimeTimer.Update(db.prunetime - prunetime)
-	memcachePruneNodesMeter.Mark(int64(db.prunenodes - prunenodes))
-	memcachePruneSizeMeter.Mark(int64(db.prunesize - prunesize))
+	// If pruning was requested, execute on a background thread
+	go func() {
+		db.lock.RLock()
+		defer db.lock.RUnlock()
 
-	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", common.PrettyDuration(time.Since(start)),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", common.PrettyDuration(db.gctime), "prnodes", db.prunenodes, "prsize", db.prunesize, "prtime", common.PrettyDuration(db.prunetime),
-		"livenodes", len(db.dirties), "livesize", db.dirtiesSize)
-
+		if pruner != nil {
+			start := time.Now()
+			pruner.execute()
+			go func() {
+				if err := pruner.flush(); err != nil {
+					log.Crit("Failed to prune database", "err", err)
+				}
+			}()
+			db.prunetime += time.Since(start) // TODO(karalabe): unsafe, stats are off too
+		}
+		// Pruned or not, update the stats and log
+		memcachePruneTimeTimer.Update(db.prunetime - prunetime)
+		memcachePruneNodesMeter.Mark(int64(db.prunenodes - prunenodes))
+		memcachePruneSizeMeter.Mark(int64(db.prunesize - prunesize))
+	}()
 	return nil
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, prune bool, path []byte, pruner *pruner) error {
+func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte, pruner *pruner) error {
 	// Dereference the parent-child
 	parentKey := makeNodeKey(parentOwner, parentHash)
 	parent := db.dirties[parentKey]
@@ -614,10 +628,8 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 	// If the child does not exist, it's a previously committed node.
 	child, ok := db.dirties[childKey]
 	if !ok {
-		if prune {
-			start := time.Now()
-			pruner.prune(childOwner, childHash, path)
-			db.prunetime += time.Since(start)
+		if pruner != nil {
+			pruner.mark(childOwner, childHash, path)
 		}
 		return nil
 	}
@@ -644,12 +656,12 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 		}
 		// Dereference all children and delete the node
 		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
-			db.dereference(childOwner, hash, childOwner, childHash, prune, path, pruner)
+			db.dereference(childOwner, hash, childOwner, childHash, path, pruner)
 			return nil
 		})
 		for key := range child.children {
 			owner, hash := splitNodeKey(key)
-			db.dereference(owner, hash, childOwner, childHash, prune, nil, pruner)
+			db.dereference(owner, hash, childOwner, childHash, nil, pruner)
 		}
 		delete(db.dirties, childKey)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))

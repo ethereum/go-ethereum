@@ -33,40 +33,60 @@ import (
 type pruner struct {
 	db    *Database    // Trie database for accessing dirty and clean data
 	tries []*traverser // Individual stateful trie traversers for fast liveness checks
-	batch ethdb.Batch  // Write batch to minimize database trashing
+
+	marks []*prunerTarget // Nodes marked for potential pruning
+	batch ethdb.Batch     // Write batch to minimize database trashing
+}
+
+// prunerTarget represents a single marked target for potential pruning.
+type prunerTarget struct {
+	owner common.Hash // Owner account hash of the node to delete
+	path  []byte      // Patricia path leading to this node
+	hash  common.Hash // Hash of the node to delete
 }
 
 // newPruner creates a new trie pruner tied to the liveness of all the currently
-// referenced in-memory nodes, except the specified one (currently being pruned).
-func (db *Database) newPruner(skip common.Hash) *pruner {
-	// Create the set of traversers based on the live tries
-	var traversers []*traverser
-	for key := range db.dirties[metaRoot].children {
-		if _, root := splitNodeKey(key); root != skip {
-			traversers = append(traversers, &traverser{
-				db: db,
-				state: &traverserState{
-					node: hashNode(root[:]),
-					hash: root,
-				},
-			})
-		}
-	}
-	// Assemble and return the pruner
+// referenced in-memory nodes.
+func (db *Database) newPruner() *pruner {
 	return &pruner{
 		db:    db,
-		tries: traversers,
 		batch: db.diskdb.NewBatch(),
 	}
 }
 
-// flush commits any pending database writes.
-func (p *pruner) flush() error {
-	if err := p.batch.Write(); err != nil {
-		return err
+// mark adds a new prune target to be deleted on the pruning run.
+func (p *pruner) mark(owner common.Hash, hash common.Hash, path []byte) {
+	p.marks = append(p.marks, &prunerTarget{
+		owner: owner,
+		hash:  hash,
+		path:  common.CopyBytes(path),
+	})
+}
+
+// execute runs the pruning procedure, deleting everything that has no live
+// reference any more.
+func (p *pruner) execute() {
+	// Create the set of traversers based on the live tries
+	for key := range p.db.dirties[metaRoot].children {
+		_, root := splitNodeKey(key)
+		p.tries = append(p.tries, &traverser{
+			db: p.db,
+			state: &traverserState{
+				node: hashNode(root[:]),
+				hash: root,
+			},
+		})
 	}
-	p.batch.Reset()
-	return nil
+	// Iterate over all the nodes marked for pruning and delete them
+	for _, mark := range p.marks {
+		p.prune(mark.owner, mark.hash, mark.path)
+	}
+}
+
+// flush commits any pending database writes. It does not reset the batch since
+// we only ever supposed to commit once per prune run.
+func (p *pruner) flush() error {
+	return p.batch.Write()
 }
 
 // prune deletes a trie node from disk if there are no more live references to
@@ -186,7 +206,9 @@ func (t *traverser) live(owner common.Hash, hash common.Hash, path []byte, unref
 			} else {
 				blob, err := t.db.diskdb.Get([]byte(key))
 				if blob == nil || err != nil {
-					panic(fmt.Sprintf("missing referenced node %x (searching for %x:%x at %x%x)", key, owner, t.state.hash, t.state.prefix, path))
+					log.Error("Missing referenced node", "owner", owner, "hash", t.state.hash, "path", fmt.Sprintf("%x%x", t.state.prefix, path))
+					return false
+					//panic(fmt.Sprintf("missing referenced node %x (searching for %x:%x at %x%x)", key, owner, t.state.hash, t.state.prefix, path))
 				}
 				t.state.node = mustDecodeNode(t.state.hash[:], blob, 0)
 			}
