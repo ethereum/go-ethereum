@@ -204,7 +204,7 @@ func (pool *serverPool) discoverNodes() {
 // Note that whenever a connection has been accepted and a pool entry has been returned,
 // disconnect should also always be called.
 func (pool *serverPool) connect(p *peer, node *enode.Node) *poolEntry {
-	log.Info("Connect new entry", "enode", p.id)
+	log.Debug("Connect new entry", "enode", p.id)
 	req := &connReq{p: p, node: node, result: make(chan *poolEntry, 1)}
 	select {
 	case pool.connCh <- req:
@@ -216,7 +216,7 @@ func (pool *serverPool) connect(p *peer, node *enode.Node) *poolEntry {
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
-	log.Info("Registered new entry", "enode", entry.node.ID())
+	log.Debug("Registered new entry", "enode", entry.node.ID())
 	req := &registerReq{entry: entry, done: make(chan struct{})}
 	select {
 	case pool.registerCh <- req:
@@ -236,7 +236,7 @@ func (pool *serverPool) disconnect(entry *poolEntry) {
 		stopped = true
 	default:
 	}
-	log.Info("Disconnected old entry", "enode", entry.node.ID())
+	log.Debug("Disconnected old entry", "enode", entry.node.ID())
 	req := &disconnReq{entry: entry, stopped: stopped, done: make(chan struct{})}
 
 	// Block until disconnection request is served.
@@ -304,9 +304,6 @@ func (pool *serverPool) eventLoop() {
 			}
 		}
 		entry.state = psNotConnected
-		if pool.trustedNodes[entry.node.ID()] == nil {
-			pool.server.RemovePeer(entry.node)
-		}
 
 		if entry.knownSelected {
 			pool.knownSelected--
@@ -435,7 +432,7 @@ func (pool *serverPool) findOrNewNode(node *enode.Node) *poolEntry {
 	now := mclock.Now()
 	entry := pool.entries[node.ID()]
 	if entry == nil {
-		log.Info("Discovered new entry", "id", node.ID())
+		log.Debug("Discovered new entry", "id", node.ID())
 		entry = &poolEntry{
 			node:       node,
 			addr:       make(map[string]*poolEntryAddress),
@@ -473,11 +470,11 @@ func (pool *serverPool) loadNodes() {
 	var list []*poolEntry
 	err = rlp.DecodeBytes(enc, &list)
 	if err != nil {
-		log.Info("Failed to decode node list", "err", err)
+		log.Debug("Failed to decode node list", "err", err)
 		return
 	}
 	for _, e := range list {
-		log.Info("Loaded server stats", "id", e.node.ID(), "fails", e.lastConnected.fails,
+		log.Debug("Loaded server stats", "id", e.node.ID(), "fails", e.lastConnected.fails,
 			"conn", fmt.Sprintf("%v/%v", e.connectStats.avg, e.connectStats.weight),
 			"delay", fmt.Sprintf("%v/%v", time.Duration(e.delayStats.avg), e.delayStats.weight),
 			"response", fmt.Sprintf("%v/%v", time.Duration(e.responseStats.avg), e.responseStats.weight),
@@ -500,7 +497,7 @@ func (pool *serverPool) connectToTrustedNodes() {
 	for _, node := range pool.trustedNodes {
 		pool.server.AddTrustedPeer(node)
 		pool.server.AddPeer(node)
-		log.Info("Added trusted node", "id", node.ID().String())
+		log.Debug("Added trusted node", "id", node.ID().String())
 	}
 }
 
@@ -617,7 +614,7 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 		pool.newSelected++
 	}
 	addr := entry.addrSelect.choose().(*poolEntryAddress)
-	log.Info("Dialing new peer", "lesaddr", entry.node.ID().String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
+	log.Debug("Dialing new peer", "lesaddr", entry.node.ID().String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
 	entry.dialed = addr
 	go func() {
 		pool.server.AddPeer(entry.node)
@@ -638,11 +635,8 @@ func (pool *serverPool) checkDialTimeout(entry *poolEntry) {
 	if entry.state != psDialed {
 		return
 	}
-	log.Info("Dial timeout", "lesaddr", entry.node.ID().String()+"@"+entry.dialed.strKey())
+	log.Debug("Dial timeout", "lesaddr", entry.node.ID().String()+"@"+entry.dialed.strKey())
 	entry.state = psNotConnected
-	if pool.trustedNodes[entry.node.ID()] == nil {
-		pool.server.RemovePeer(entry.node)
-	}
 	if entry.knownSelected {
 		pool.knownSelected--
 	} else {
