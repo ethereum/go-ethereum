@@ -147,7 +147,7 @@ func add(t *Pot, val Val, pof Pof) (*Pot, int, bool) {
 // Remove deletes element v from the Pot t and returns three parameters:
 // 1. new Pot that contains all the elements of t minus the element v;
 // 2. proximity order of the removed element v;
-// 3. boolean indicating if the item was found.
+// 3. boolean indicating whether the item was found.
 func Remove(t *Pot, v Val, pof Pof) (*Pot, int, bool) {
 	return remove(t, v, pof)
 }

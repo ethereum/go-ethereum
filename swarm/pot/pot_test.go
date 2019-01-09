@@ -82,6 +82,7 @@ func testAdd(t *Pot, pof Pof, j int, values ...string) (_ *Pot, n int, f bool) {
 	return t, n, f
 }
 
+// removing non-existing element from pot
 func TestPotRemoveNonExisting(t *testing.T) {
 	pof := DefaultPof(8)
 	n := NewPot(newTestAddr("00111100", 0), 0)
@@ -93,6 +94,9 @@ func TestPotRemoveNonExisting(t *testing.T) {
 	}
 }
 
+// this test creates hierarchical pot tree, and therefore any child node will have
+// child_po = parent_po + 1.
+// then removes a node from the middle of the tree.
 func TestPotRemoveSameBin(t *testing.T) {
 	pof := DefaultPof(8)
 	n := NewPot(newTestAddr("11111111", 0), 0)
@@ -117,6 +121,9 @@ func TestPotRemoveSameBin(t *testing.T) {
 	}
 }
 
+// this test creates a flat pot tree (all the elements are leafs of one root),
+// and therefore they all have the same po.
+// then removes an arbitrary element from the pot.
 func TestPotRemoveDifferentBins(t *testing.T) {
 	pof := DefaultPof(8)
 	n := NewPot(newTestAddr("11111111", 0), 0)
