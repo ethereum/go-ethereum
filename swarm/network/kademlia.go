@@ -684,7 +684,10 @@ func (k *Kademlia) saturation() int {
 func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	// create a map with all peers at depth and deeper known in the kademlia
 	k.eachAddr(nil, 255, func(p *BzzAddr, po int) bool {
+		// in order deepest to shallowest compared to the kademlia base address
+		// all bins (except self) are included (0 <= bin <= 255)
 		if po < depth {
 			return false
 		}
