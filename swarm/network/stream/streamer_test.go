@@ -1050,9 +1050,11 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 
 	// simulate that we would do subscriptions: just store the bin numbers
 	fakeSubscriptions := make(map[string][]int)
+	//after the test, we need to reset the subscriptionFunc to the default
+	defer func() { subscriptionFunc = doRequestSubscription }()
 	// define the function which should run for each connection
 	// instead of doing real subscriptions, we just store the bin numbers
-	requestSubscriptionFunc := func(p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+	subscriptionFunc = func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
 		// get the peer ID
 		peerstr := fmt.Sprintf("%x", p.Over())
 		// create the array of bins per peer
@@ -1066,8 +1068,6 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	}
 	// create just a simple Registry object in order to be able to call...
 	r := &Registry{}
-	// ...the requestPeerSubscriptions function, which contains the logic for subscriptions
-	r.subscriptionFunc = requestSubscriptionFunc
 	r.requestPeerSubscriptions(k, nil)
 	// calculate the kademlia depth
 	kdepth := k.NeighbourhoodDepth()

@@ -72,6 +72,11 @@ const (
 	RetrievalEnabled
 )
 
+// subscriptionFunc is used to determine what to do in order to perform subscriptions
+// usually we would start to really subscribe to nodes, but for tests other functionality may be needed
+// (see TestRequestPeerSubscriptions in streamer_test.go)
+var subscriptionFunc func(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool = doRequestSubscription
+
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
 	addr           enode.ID
@@ -90,10 +95,6 @@ type Registry struct {
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
 	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
-	// the subscriptionFunc is used to determine what to do in order to perform subscriptions
-	// usually we would start to really subscribe to nodes, but for tests other functionality may be needed
-	// (see TestRequestPeerSubscriptions in streamer_test.go)
-	subscriptionFunc func(p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -128,8 +129,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
 	}
-	//assign the default subscription func: actually do request subscriptions from nodes
-	streamer.subscriptionFunc = streamer.doRequestSubscription
+
 	streamer.setupSpec()
 
 	streamer.api = NewAPI(streamer)
@@ -530,15 +530,15 @@ func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enod
 
 		for bin := startPo; bin <= endPo; bin++ {
 			//do the actual subscription
-			ok = r.subscriptionFunc(p, uint8(bin), subs)
+			ok = subscriptionFunc(r, p, uint8(bin), subs)
 		}
 		return ok
 	})
 }
 
 // doRequestSubscription sends the actual RequestSubscription to the peer
-func (r *Registry) doRequestSubscription(p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
-	log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr, p.ID(), bin))
+func doRequestSubscription(r *Registry, p *network.Peer, bin uint8, subs map[enode.ID]map[Stream]struct{}) bool {
+	log.Debug("Requesting subscription by registry:", "registry", r.addr, "peer", p.ID(), "bin", bin)
 	// bin is always less then 256 and it is safe to convert it to type uint8
 	stream := NewStream("SYNC", FormatSyncBinKey(bin), true)
 	if streams, ok := subs[p.ID()]; ok {
