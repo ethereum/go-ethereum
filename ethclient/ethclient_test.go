@@ -17,13 +17,16 @@
 package ethclient
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
-	"github.com/ethereum/go-ethereum"
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -146,6 +149,179 @@ func TestToFilterArg(t *testing.T) {
 				}
 			} else if !reflect.DeepEqual(testCase.output, output) {
 				t.Fatalf("expected filter arg %v but got %v", testCase.output, output)
+			}
+		})
+	}
+}
+
+func TestNewClient(t *testing.T) {
+	type args struct {
+		c *rpc.Client
+	}
+	tests := []struct {
+		name string
+		args args
+		want *Client
+	}{
+		{
+			"new Client",
+			args{},
+			&Client{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewClient(tt.args.c); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewClient() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClient_StorageAt(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	type fields struct {
+		c *rpc.Client
+	}
+	type args struct {
+		ctx         context.Context
+		account     common.Address
+		key         common.Hash
+		blockNumber *big.Int
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    []byte
+		wantErr bool
+	}{
+		{
+			"call StorageAt at future block",
+			fields{
+				c: &rpc.Client{},
+			},
+			args{
+				ctx:         ctx,
+				account:     common.HexToAddress("0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"),
+				key:         common.HexToHash("0x0"),
+				blockNumber: big.NewInt(1000000000),
+			},
+			[]byte(nil),
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ec := &Client{
+				c: tt.fields.c,
+			}
+			got, err := ec.StorageAt(tt.args.ctx, tt.args.account, tt.args.key, tt.args.blockNumber)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Client.StorageAt() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Client.StorageAt() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClient_TransactionCount(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	type fields struct {
+		c *rpc.Client
+	}
+	type args struct {
+		ctx       context.Context
+		blockHash common.Hash
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    uint
+		wantErr bool
+	}{
+		{
+			"call TransactionCount at future block",
+			fields{
+				c: &rpc.Client{},
+			},
+			args{
+				ctx:       ctx,
+				blockHash: common.HexToHash("0xfdea65c8e26263f6d9a1b5de9555d2931a33b825"),
+			},
+			0,
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ec := &Client{
+				c: tt.fields.c,
+			}
+			got, err := ec.TransactionCount(tt.args.ctx, tt.args.blockHash)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Client.TransactionCount() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Client.TransactionCount() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClient_PendingTransactionCount(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	type fields struct {
+		c *rpc.Client
+	}
+	type args struct {
+		ctx context.Context
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    uint
+		wantErr bool
+	}{
+		{
+			"call TransactionCount at pending block",
+			fields{
+				c: &rpc.Client{},
+			},
+			args{
+				ctx: ctx,
+			},
+			0,
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ec := &Client{
+				c: tt.fields.c,
+			}
+			got, err := ec.PendingTransactionCount(tt.args.ctx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Client.PendingTransactionCount() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Client.PendingTransactionCount() = %v, want %v", got, tt.want)
 			}
 		})
 	}
