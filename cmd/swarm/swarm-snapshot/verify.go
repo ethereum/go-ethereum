@@ -19,10 +19,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -31,33 +33,23 @@ import (
 )
 
 func verify(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
-		return errors.New("argument should be the filename to verify or write-to")
-	}
-	filename, err := touchPath(ctx.Args()[0])
-	if err != nil {
-		return err
-	}
-	err = verifySnapshot(filename)
-	if err != nil {
-		utils.Fatalf("Simulation failed: %s", err)
-	}
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
-	return err
+	if len(ctx.Args()) < 1 {
+		return errors.New("argument should be the filename to verify")
+	}
+	return verifySnapshot(ctx.Args()[0])
 }
 
-func verifySnapshot(filename string) error {
+func verifySnapshot(filename string) (err error) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+		bzzServiceName: func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
-
-			kp := network.NewKadParams()
-			kp.MinProxBinSize = testMinProxBinSize
-
-			kad := network.NewKademlia(addr.Over(), kp)
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()
 			hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
-			hp.Discovery = true //discovery
+			hp.Discovery = false // discovery must be false when uploading a snapshot
 
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
@@ -65,20 +57,21 @@ func verifySnapshot(filename string) error {
 				HiveParams:   hp,
 			}
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
-
 		},
 	})
 	defer sim.Close()
-	err := sim.UploadSnapshot(filename)
+
+	err = sim.UploadSnapshot(filename)
 	if err != nil {
-		utils.Fatalf("%v", err)
+		return fmt.Errorf("upload snapshot: %v", err)
 	}
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-		utils.Fatalf("%v", err)
+	_, err = sim.WaitTillHealthy(ctx, 2)
+	if err != nil {
+		return fmt.Errorf("wait for healthy kademlia: %v", err)
 	}
 
 	return nil

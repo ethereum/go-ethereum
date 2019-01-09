@@ -17,58 +17,121 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 )
-
-func init() {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
-}
 
 //TestSnapshotCreate is a high level e2e test that tests for snapshot generation
 func TestSnapshotCreate(t *testing.T) {
-
 	for _, v := range []struct {
-		name string
-		args []string
+		name     string
+		nodes    int
+		services string
 	}{
 		{
-			name: "no topology - discovery enabled",
-			args: []string{
-				"c",
-			},
+			name: "defaults",
 		},
 		{
-			name: "yes topology - discovery disabled",
-			args: []string{
-				"--topology",
-				"ring",
-				"c",
-			},
+			name:  "more nodes",
+			nodes: defaultNodes + 5,
+		},
+		{
+			name:     "services",
+			services: "stream,pss,zorglub",
+		},
+		{
+			name:     "services with " + bzzServiceName,
+			services: bzzServiceName + ",pss",
 		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
+			t.Parallel()
+
 			file, err := ioutil.TempFile("", "swarm-snapshot")
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer os.Remove(file.Name())
+
+			if err = file.Close(); err != nil {
+				t.Error(err)
+			}
+
+			args := []string{"create"}
+			if v.nodes > 0 {
+				args = append(args, "--nodes", strconv.Itoa(v.nodes))
+			}
+			if v.services != "" {
+				args = append(args, "--services", v.services)
+			}
+			testCmd := runSnapshot(t, append(args, file.Name())...)
+
+			testCmd.ExpectExit()
+			if testCmd.ExitStatus() != 0 {
+				t.Fatal("expected exit code 0")
+			}
+
+			f, err := os.Open(file.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				err := f.Close()
+				if err != nil {
+					t.Error("closing snapshot file", "err", err)
+				}
+			}()
+
+			b, err := ioutil.ReadAll(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var snap simulations.Snapshot
+			err = json.Unmarshal(b, &snap)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			file.Close()
-			snap := runSnapshot(t, append(v.args, file.Name())...)
-
-			snap.ExpectExit()
-			if snap.ExitStatus() != 0 {
-				t.Fatal("expected exit code 0")
+			wantNodes := v.nodes
+			if wantNodes == 0 {
+				wantNodes = defaultNodes
+			}
+			gotNodes := len(snap.Nodes)
+			if gotNodes != wantNodes {
+				t.Errorf("got %v nodes, want %v", gotNodes, wantNodes)
 			}
 
-			_, err = os.Stat(file.Name())
+			if len(snap.Conns) == 0 {
+				t.Error("no connections in a snapshot")
+			}
+
+			var wantServices []string
+			if v.services != "" {
+				wantServices = strings.Split(v.services, ",")
+			} else {
+				wantServices = []string{bzzServiceName}
+			}
+			sort.Strings(wantServices)
+
+			for i, n := range snap.Nodes {
+				gotServices := n.Node.Config.Services
+				sort.Strings(gotServices)
+				if fmt.Sprint(gotServices) != fmt.Sprint(wantServices) {
+					t.Errorf("got services %v for node %v, want %v", gotServices, i, wantServices)
+				}
+			}
+
+			err = verifySnapshot(file.Name())
 			if err != nil {
-				t.Fatal("could not stat snapshot json")
+				t.Error(err)
 			}
 		})
 	}

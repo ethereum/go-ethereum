@@ -23,14 +23,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -38,12 +38,11 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-const testMinProxBinSize = 2
-const NoConnectionTimeout = 2 * time.Second
+const noConnectionTimeout = 2 * time.Second
 
 func create(ctx *cli.Context) error {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
 	if len(ctx.Args()) < 1 {
 		return errors.New("argument should be the filename to verify or write-to")
@@ -52,38 +51,19 @@ func create(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	err = discoverySnapshot(filename, 10)
-	if err != nil {
-		utils.Fatalf("Simulation failed: %s", err)
-	}
-
-	return err
+	return createSnapshot(filename, ctx.Int("nodes"), ctx.String("services"))
 }
 
-func discoverySnapshot(filename string, nodes int) error {
-	//disable discovery if topology is specified
-	discovery = topology == ""
-	log.Debug("discoverySnapshot", "filename", filename, "nodes", nodes, "discovery", discovery)
-	i := 0
-	var lock sync.Mutex
-	var pivotNodeID enode.ID
+func createSnapshot(filename string, nodes int, services string) (err error) {
+	log.Debug("create snapshot", "filename", filename, "nodes", nodes, "services", services)
+
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			lock.Lock()
-			i++
-			if i == pivot {
-				pivotNodeID = ctx.Config.ID
-			}
-			lock.Unlock()
-
+		bzzServiceName: func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
-			kp := network.NewKadParams()
-			kp.MinProxBinSize = testMinProxBinSize
-
-			kad := network.NewKademlia(addr.Over(), kp)
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()
 			hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
-			hp.Discovery = discovery
+			hp.Discovery = true // discovery must be enabled when creating a snapshot
 
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
@@ -95,9 +75,9 @@ func discoverySnapshot(filename string, nodes int) error {
 	})
 	defer sim.Close()
 
-	_, err := sim.AddNodes(10)
+	_, err = sim.AddNodes(nodes)
 	if err != nil {
-		utils.Fatalf("%v", err)
+		return fmt.Errorf("add nodes: %v", err)
 	}
 
 	events := make(chan *simulations.Event)
@@ -106,60 +86,84 @@ func discoverySnapshot(filename string, nodes int) error {
 	case ev := <-events:
 		//only catch node up events
 		if ev.Type == simulations.EventTypeConn {
-			utils.Fatalf("this shouldn't happen as connections weren't initiated yet")
+			return errors.New("unexpected connection events")
 		}
-	case <-time.After(NoConnectionTimeout):
+	case <-time.After(noConnectionTimeout):
 	}
-
 	sub.Unsubscribe()
 
 	if len(sim.Net.Conns) > 0 {
-		utils.Fatalf("no connections should exist after just adding nodes")
+		return errors.New("no connections should exist after just adding nodes")
 	}
 
-	err := sim.Net.ConnectNodesRing(nil)
+	err = sim.Net.ConnectNodesRing(nil)
 	if err != nil {
-		utils.Fatalf("had an error connecting the nodes in a %v topology: %v", topology, err)
+		return fmt.Errorf("connect nodes: %v", err)
 	}
 
-	if discovery {
-		ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancelSimRun()
-
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			utils.Fatalf("%v", err)
-		}
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelSimRun()
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		return fmt.Errorf("wait for healthy kademlia: %v", err)
 	}
 
 	var snap *simulations.Snapshot
 	if len(services) > 0 {
-		var addServices []string
+		addServices := strings.Split(services, ",")
 		var removeServices []string
-		for _, osvc := range strings.Split(services, ",") {
-			if strings.Index(osvc, "+") == 0 {
-				addServices = append(addServices, osvc[1:])
-			} else if strings.Index(osvc, "-") == 0 {
-				removeServices = append(removeServices, osvc[1:])
-			} else {
-				panic("stick to the rules, you know what they are")
+		var hasBzz bool
+		for _, s := range addServices {
+			if s == bzzServiceName {
+				hasBzz = true
+				break
 			}
+		}
+		if !hasBzz {
+			removeServices = append(removeServices, bzzServiceName)
 		}
 		snap, err = sim.Net.SnapshotWithServices(addServices, removeServices)
 	} else {
 		snap, err = sim.Net.Snapshot()
 	}
-
 	if err != nil {
-		return errors.New("no shapshot dude")
+		return fmt.Errorf("create snapshot: %v", err)
 	}
 	jsonsnapshot, err := json.Marshal(snap)
 	if err != nil {
-		return fmt.Errorf("corrupt json snapshot: %v", err)
+		return fmt.Errorf("json encode snapshot: %v", err)
 	}
-	err = ioutil.WriteFile(filename, jsonsnapshot, 0666)
-	if err != nil {
-		return err
+	return ioutil.WriteFile(filename, jsonsnapshot, 0666)
+}
+
+func touchPath(filename string) (string, error) {
+	if path.IsAbs(filename) {
+		if _, err := os.Stat(filename); err == nil {
+			// path exists, we will override the file
+			return filename, nil
+		}
 	}
 
-	return nil
+	d, f := path.Split(filename)
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return "", err
+	}
+
+	_, err = os.Stat(path.Join(dir, filename))
+	if err == nil {
+		// path exists, we will override
+		return filename, nil
+	}
+
+	dirPath := path.Join(dir, d)
+	filePath := path.Join(dirPath, f)
+	if d != "" {
+		err = os.MkdirAll(dirPath, os.ModeDir)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	filename = filePath
+	return filename, nil
 }

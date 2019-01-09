@@ -27,7 +27,7 @@ import (
 
 func init() {
 	reexec.Register("swarm-snapshot", func() {
-		if err := app.Run(os.Args); err != nil {
+		if err := newApp().Run(os.Args); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

@@ -18,65 +18,38 @@ package main
 
 import (
 	"os"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+var gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
+
+const (
+	defaultNodes   = 10
+	bzzServiceName = "bzz"
 )
 
-var (
-	topology  string
-	services  string
-	pivot     int
-	nodes     int
-	verbosity int
-)
+func main() {
+	err := newApp().Run(os.Args)
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
+}
 
-var app = utils.NewApp("", "Swarm Snapshot Util")
-var discovery = true
-
-func init() {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+func newApp() (app *cli.App) {
+	app = utils.NewApp(gitCommit, "Swarm Snapshot Utility")
 
 	app.Name = "swarm-snapshot"
 	app.Usage = ""
 
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "topology",
-			Value:       "chain",
-			Usage:       "the desired topology to connect the nodes in (star, ring, chain, full)",
-			Destination: &topology,
-		},
 		cli.IntFlag{
-			Name:        "pivot",
-			Value:       0,
-			Usage:       "pivot node zero-index",
-			Destination: &pivot,
-		},
-		cli.IntFlag{
-			Name:        "nodes",
-			Value:       10,
-			Usage:       "swarm nodes",
-			Destination: &nodes,
-		},
-		cli.IntFlag{
-			Name:        "verbosity",
-			Value:       1,
-			Usage:       "verbosity",
-			Destination: &verbosity,
-		},
-		cli.StringFlag{
-			Name:        "services",
-			Value:       "",
-			Usage:       "comma separated list of services to boot the nodes with",
-			Destination: &services,
+			Name:  "verbosity",
+			Value: 1,
+			Usage: "verbosity level",
 		},
 	}
 
@@ -86,25 +59,27 @@ func init() {
 			Aliases: []string{"c"},
 			Usage:   "create a swarm snapshot",
 			Action:  create,
+			Flags: append(app.Flags,
+				cli.IntFlag{
+					Name:  "nodes",
+					Value: defaultNodes,
+					Usage: "number of nodes",
+				},
+				cli.StringFlag{
+					Name:  "services",
+					Value: bzzServiceName,
+					Usage: "comma separated list of services to boot the nodes with",
+				},
+			),
 		},
 		{
 			Name:    "verify",
 			Aliases: []string{"v"},
 			Usage:   "verify a swarm snapshot",
 			Action:  verify,
+			Flags:   app.Flags,
 		},
 	}
 
-	sort.Sort(cli.FlagsByName(app.Flags))
-	sort.Sort(cli.CommandsByName(app.Commands))
-}
-
-func main() {
-	err := app.Run(os.Args)
-	if err != nil {
-		log.Error(err.Error())
-
-		os.Exit(1)
-	}
-	os.Exit(0)
+	return app
 }

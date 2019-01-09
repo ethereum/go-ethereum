@@ -22,7 +22,7 @@ import (
 
 func TestSnapshotVerify(t *testing.T) {
 	snap := runSnapshot(t,
-		"v",
+		"verify",
 		"testdata/snapshot.json",
 	)
 
