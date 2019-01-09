@@ -126,14 +126,14 @@ func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
 	return nil
 }
 
-// mapToStringField maps a slice of argument names to struct fields.
+// mapArgNamesToStructFields maps a slice of argument names to struct fields.
 // first round: for each Exportable field that contains a `abi:""` tag
 //   and this field name exists in the given argument name list, pair them together.
 // second round: for each argument name that has not been already linked,
 //   find what variable is expected to be mapped into, if it exists and has not been
 //   used, pair them.
 // Note this function assumes the given value is a struct value.
-func mapToStructFields(argNames []string, value reflect.Value) (map[string]string, error) {
+func mapArgNamesToStructFields(argNames []string, value reflect.Value) (map[string]string, error) {
 	typ := value.Type()
 
 	abi2struct := make(map[string]string)

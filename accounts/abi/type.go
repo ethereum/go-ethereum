@@ -44,14 +44,17 @@ const (
 
 // Type is the reflection of the supported argument type
 type Type struct {
-	Elem       *Type
-	TupleElems []*Type
-	Kind       reflect.Kind
-	Type       reflect.Type
-	Size       int
-	T          byte // Our own type checking
+	Elem *Type
+	Kind reflect.Kind
+	Type reflect.Type
+	Size int
+	T    byte // Our own type checking
 
 	stringKind string // holds the unparsed string for deriving signatures
+
+	// Tuple relative fields
+	TupleElems    []*Type  // Type information of all tuple fields
+	TupleRawNames []string // Raw field name of all tuple fields
 }
 
 var (
@@ -89,6 +92,9 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 			typ.Kind = reflect.Slice
 			typ.Elem = &embeddedType
 			typ.Type = reflect.SliceOf(embeddedType.Type)
+			if embeddedType.T == TupleTy {
+				typ.stringKind = embeddedType.stringKind + sliced
+			}
 		} else if len(intz) == 1 {
 			// is a array
 			typ.T = ArrayTy
@@ -99,6 +105,9 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
 			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
+			if embeddedType.T == TupleTy {
+				typ.stringKind = embeddedType.stringKind + sliced
+			}
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
@@ -162,10 +171,13 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 		}
 	case "tuple":
 		var (
-			fields []reflect.StructField
-			elems  []*Type
+			fields     []reflect.StructField
+			elems      []*Type
+			names      []string
+			expression string // canonical parameter expression
 		)
-		for _, c := range components {
+		expression += "("
+		for idx, c := range components {
 			cType, err := NewType(c.Type, c.Components)
 			if err != nil {
 				return Type{}, err
@@ -174,15 +186,23 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 				return Type{}, errors.New("abi: purely anonymous or underscored field is not supported")
 			}
 			fields = append(fields, reflect.StructField{
-				Name: ToCamelCase(c.Name),
+				Name: ToCamelCase(c.Name), // reflect.StructOf will panic for any exported field.
 				Type: cType.Type,
 			})
 			elems = append(elems, &cType)
+			names = append(names, c.Name)
+			expression += cType.stringKind
+			if idx != len(components)-1 {
+				expression += ","
+			}
 		}
+		expression += ")"
 		typ.Kind = reflect.Struct
 		typ.Type = reflect.StructOf(fields)
 		typ.TupleElems = elems
+		typ.TupleRawNames = names
 		typ.T = TupleTy
+		typ.stringKind = expression
 	case "function":
 		typ.Kind = reflect.Array
 		typ.T = FunctionTy
@@ -247,11 +267,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		//     head(X(i)) = enc(len(head(X(1)) ... head(X(k)) tail(X(1)) ... tail(X(i-1))))
 		//     tail(X(i)) = enc(X(i))
 		// otherwise, i.e. if Ti is a dynamic type.
-		var fieldName []string
-		for i := 0; i < t.Type.NumField(); i++ {
-			fieldName = append(fieldName, t.Type.Field(i).Name)
-		}
-		structMap, err := mapToStructFields(fieldName, v)
+		fieldmap, err := mapArgNamesToStructFields(t.TupleRawNames, v)
 		if err != nil {
 			return nil, err
 		}
@@ -262,10 +278,9 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		}
 		var ret, tail []byte
 		for i, elem := range t.TupleElems {
-			structFieldName := structMap[t.Type.Field(i).Name]
-			field := v.FieldByName(structFieldName)
-			if structFieldName == "" || !field.IsValid() {
-				return nil, fmt.Errorf("field %s for tuple not found in the given struct", t.Type.Field(i).Name)
+			field := v.FieldByName(fieldmap[t.TupleRawNames[i]])
+			if !field.IsValid() {
+				return nil, fmt.Errorf("field %s for tuple not found in the given struct", t.TupleRawNames[i])
 			}
 			val, err := elem.pack(field)
 			if err != nil {

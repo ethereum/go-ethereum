@@ -481,12 +481,12 @@ func TestPack(t *testing.T) {
 				{Name: "f", Type: "address[]"},
 			},
 			struct {
-				A string
-				B int64
-				C []byte
-				D []string
-				E []*big.Int
-				F []common.Address
+				FieldA string `abi:"a"` // Test whether abi tag works
+				FieldB int64  `abi:"b"`
+				C      []byte
+				D      []string
+				E      []*big.Int
+				F      []common.Address
 			}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{{1}, {2}}},
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
 				"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]
@@ -521,14 +521,14 @@ func TestPack(t *testing.T) {
 			},
 			struct {
 				A struct {
-					A *big.Int
-					B []*big.Int
+					FieldA *big.Int `abi:"a"`
+					B      []*big.Int
 				}
 				B []*big.Int
 			}{
 				A: struct {
-					A *big.Int
-					B []*big.Int
+					FieldA *big.Int `abi:"a"` // Test whether abi tag works for nested tuple
+					B      []*big.Int
 				}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(0)}},
 				B: []*big.Int{big.NewInt(1), big.NewInt(0)}},
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040" + // a offset
@@ -588,6 +588,29 @@ func TestPack(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000001" + // tuple[0].b
 				"0000000000000000000000000000000000000000000000000000000000000001" + // tuple[1].a
 				"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // tuple[1].b
+		},
+		{
+			// dynamic tuple array
+			"tuple[2]",
+			[]ArgumentMarshaling{
+				{Name: "a", Type: "int256[]"},
+			},
+			[2]struct {
+				A []*big.Int
+			}{
+				{[]*big.Int{big.NewInt(-1), big.NewInt(1)}},
+				{[]*big.Int{big.NewInt(1), big.NewInt(-1)}},
+			},
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040" + // tuple[0] offset
+				"00000000000000000000000000000000000000000000000000000000000000c0" + // tuple[1] offset
+				"0000000000000000000000000000000000000000000000000000000000000020" + // tuple[0].A offset
+				"0000000000000000000000000000000000000000000000000000000000000002" + // tuple[0].A length
+				"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" + // tuple[0].A[0]
+				"0000000000000000000000000000000000000000000000000000000000000001" + // tuple[0].A[1]
+				"0000000000000000000000000000000000000000000000000000000000000020" + // tuple[1].A offset
+				"0000000000000000000000000000000000000000000000000000000000000002" + // tuple[1].A length
+				"0000000000000000000000000000000000000000000000000000000000000001" + // tuple[1].A[0]
+				"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), // tuple[1].A[1]
 		},
 	} {
 		typ, err := NewType(test.typ, test.components)
@@ -716,7 +739,6 @@ func TestMethodPack(t *testing.T) {
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-
 	packed, err = abi.Pack("nestedSlice", [][]uint8{{1, 2}, {1, 2}})
 	if err != nil {
 		t.Fatal(err)

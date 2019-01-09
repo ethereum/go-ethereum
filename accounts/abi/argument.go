@@ -42,18 +42,18 @@ type ArgumentMarshaling struct {
 
 // UnmarshalJSON implements json.Unmarshaler interface
 func (argument *Argument) UnmarshalJSON(data []byte) error {
-	var dec ArgumentMarshaling
-	err := json.Unmarshal(data, &dec)
+	var arg ArgumentMarshaling
+	err := json.Unmarshal(data, &arg)
 	if err != nil {
 		return fmt.Errorf("argument json err: %v", err)
 	}
 
-	argument.Type, err = NewType(dec.Type, dec.Components)
+	argument.Type, err = NewType(arg.Type, arg.Components)
 	if err != nil {
 		return err
 	}
-	argument.Name = dec.Name
-	argument.Indexed = dec.Indexed
+	argument.Name = arg.Name
+	argument.Indexed = arg.Indexed
 
 	return nil
 }
@@ -97,13 +97,13 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 		return err
 	}
 	if arguments.isTuple() {
-		return unpackTuple(arguments, v, marshalledValues)
+		return arguments.unpackTuple(v, marshalledValues)
 	}
-	return unpackAtomic(arguments[0], v, marshalledValues[0])
+	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
 // unpack sets the unmarshalled value to go format.
-// Note the dst here must is settable.
+// Note the dst here must be settable.
 func unpack(t *Type, dst interface{}, src interface{}) error {
 	var (
 		dstVal = reflect.ValueOf(dst).Elem()
@@ -119,13 +119,17 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 		if dstVal.Kind() != reflect.Struct {
 			return fmt.Errorf("abi: invalid dst value for unpack, want struct, got %s", dstVal.Kind())
 		}
+		fieldmap, err := mapArgNamesToStructFields(t.TupleRawNames, dstVal)
+		if err != nil {
+			return err
+		}
 		for i, elem := range t.TupleElems {
-			fname := t.Type.Field(i).Name
+			fname := fieldmap[t.TupleRawNames[i]]
 			field := dstVal.FieldByName(fname)
 			if !field.IsValid() {
-				return fmt.Errorf("abi: field %s can't found in the given value", fname)
+				return fmt.Errorf("abi: field %s can't found in the given value", t.TupleRawNames[i])
 			}
-			if err := unpack(elem, field.Addr().Interface(), srcVal.FieldByName(fname).Interface()); err != nil {
+			if err := unpack(elem, field.Addr().Interface(), srcVal.Field(i).Interface()); err != nil {
 				return err
 			}
 		}
@@ -156,15 +160,20 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	return nil
 }
 
-func unpackAtomic(argument Argument, v interface{}, marshalledValues interface{}) error {
+// unpackAtomic unpacks ( hexdata -> go ) a single value
+func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
+	if arguments.LengthNonIndexed() == 0 {
+		return nil
+	}
+	argument := arguments.NonIndexed()[0]
 	elem := reflect.ValueOf(v).Elem()
 
 	if elem.Kind() == reflect.Struct {
-		structMap, err := mapToStructFields([]string{argument.Name}, elem)
+		fieldmap, err := mapArgNamesToStructFields([]string{argument.Name}, elem)
 		if err != nil {
 			return err
 		}
-		field := elem.FieldByName(structMap[argument.Name])
+		field := elem.FieldByName(fieldmap[argument.Name])
 		if !field.IsValid() {
 			return fmt.Errorf("abi: field %s can't be found in the given value", argument.Name)
 		}
@@ -173,7 +182,8 @@ func unpackAtomic(argument Argument, v interface{}, marshalledValues interface{}
 	return unpack(&argument.Type, elem.Addr().Interface(), marshalledValues)
 }
 
-func unpackTuple(arguments Arguments, v interface{}, marshalledValues []interface{}) error {
+// unpackTuple unpacks ( hexdata -> go ) a batch of values.
+func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
 	var (
 		value = reflect.ValueOf(v).Elem()
 		typ   = value.Type()
@@ -184,16 +194,16 @@ func unpackTuple(arguments Arguments, v interface{}, marshalledValues []interfac
 	}
 
 	// If the interface is a struct, get of abi->struct_field mapping
-	var (
-		abi2struct map[string]string
-		err        error
-	)
+	var abi2struct map[string]string
 	if kind == reflect.Struct {
-		var argNames []string
-		for _, arg := range arguments {
+		var (
+			argNames []string
+			err      error
+		)
+		for _, arg := range arguments.NonIndexed() {
 			argNames = append(argNames, arg.Name)
 		}
-		abi2struct, err = mapToStructFields(argNames, value)
+		abi2struct, err = mapArgNamesToStructFields(argNames, value)
 		if err != nil {
 			return err
 		}
