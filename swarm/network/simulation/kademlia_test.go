@@ -28,6 +28,7 @@ import (
 )
 
 func TestWaitTillHealthy(t *testing.T) {
+	t.Skip("WaitTillHealthy depends on discovery, which relies on a reliable SuggestPeer, which is not reliable")
 
 	sim := New(map[string]ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
