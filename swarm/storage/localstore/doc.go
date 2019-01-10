@@ -45,5 +45,12 @@ the database.
 Subscription methods are implemented for a specific purpose of
 continuous iterations over Chunks that should be provided to
 Push and Pull syncing.
+
+DB implements an internal garbage collector that removes only synced
+Chunks from the database based on their most recent access time.
+
+Internally, DB stores Chunk data and any required information, such as
+store and access timestamps in different shed indexes that can be
+iterated on by garbage collector or subscriptions.
 */
 package localstore
