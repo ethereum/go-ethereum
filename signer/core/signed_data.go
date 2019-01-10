@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"mime"
 	"regexp"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -266,7 +266,7 @@ func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
 	if len(header.Extra) < 65 {
 		return hash.Bytes(), fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
 	}
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
 		header.UncleHash,
