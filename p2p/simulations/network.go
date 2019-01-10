@@ -80,43 +80,6 @@ func (net *Network) Events() *event.Feed {
 	return &net.events
 }
 
-func triggerChecks(trigger chan enode.ID, net *Network, id enode.ID) error {
-	node := net.GetNode(id)
-	if node == nil {
-		return fmt.Errorf("unknown node: %s", id)
-	}
-	client, err := node.Client()
-	if err != nil {
-		return err
-	}
-	events := make(chan *p2p.PeerEvent)
-	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
-	if err != nil {
-		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
-	}
-	go func() {
-		defer sub.Unsubscribe()
-
-		tick := time.NewTicker(time.Second)
-		defer tick.Stop()
-
-		for {
-			select {
-			case <-events:
-				trigger <- id
-			case <-tick.C:
-				trigger <- id
-			case err := <-sub.Err():
-				if err != nil {
-					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
-				}
-				return
-			}
-		}
-	}()
-	return nil
-}
-
 // NewNodeWithConfig adds a new node to the network with the given config,
 // returning an error if a node with the same ID or name already exists
 func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
