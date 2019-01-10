@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
+	//"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -285,7 +285,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook calculates reward for masternodes
-		c.HookReward = func(state *state.StateDB, chain consensus.ChainReader, header *types.Header) (error, map[string]interface{}) {
+		c.HookReward = func(chain consensus.ChainReader, header *types.Header) (error, map[string]interface{}) {
+			state, err := eth.blockchain.State()
+			if state == nil || err != nil {
+				log.Crit("Can't get state", "block number", header.Number.Uint64(), "err", err)
+			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
 			foundationWalletAddr := chain.Config().Posv.FoudationWalletAddr
