@@ -204,7 +204,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -391,7 +391,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return err
 	}
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		return err
 	}
 
@@ -471,7 +471,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
@@ -563,7 +563,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, conf.addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, conf.addrs)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))
