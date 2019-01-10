@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Package localstore provides disk storage layer for Swarm Chunk persistance.
+Package localstore provides disk storage layer for Swarm Chunk persistence.
 It uses swarm/shed abstractions on top of github.com/syndtr/goleveldb LevelDB
 implementation.
 
