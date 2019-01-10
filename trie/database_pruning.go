@@ -77,6 +77,16 @@ func (p *pruner) execute() {
 			},
 		})
 	}
+	// Beside all the tries kept in memory, keep anything forbidden from pruning
+	for hash := range p.db.noprune {
+		p.tries = append(p.tries, &traverser{
+			db: p.db,
+			state: &traverserState{
+				node: hashNode(common.CopyBytes(hash[:])), // Need closure, take care!!
+				hash: hash,
+			},
+		})
+	}
 	// Iterate over all the nodes marked for pruning and delete them
 	for _, mark := range p.marks {
 		p.prune(mark.owner, mark.hash, mark.path)
@@ -169,17 +179,13 @@ func (t *traverser) live(owner common.Hash, hash common.Hash, path []byte, unref
 	// Short circuit the liveness check if we already covered this prefix (if this
 	// prefix path was not yet seen in previous tries, no parent could have been
 	// seen either, so no point in checkin upwards further than the first hash).
-	state := t.state
-	for state != nil {
-		// If we've found a hash node, check if it's an already known result
+	for state := t.state; state != nil; state = state.parent {
 		if state.hash != (common.Hash{}) {
 			if unrefs[state.hash] {
 				return false
 			}
 			break
 		}
-		// Not a hash node, traverse further up
-		state = state.parent
 	}
 	// Traverse downward until the prefix matches the path completely
 	path = path[len(t.state.prefix):]
@@ -206,7 +212,7 @@ func (t *traverser) live(owner common.Hash, hash common.Hash, path []byte, unref
 			} else {
 				blob, err := t.db.diskdb.Get([]byte(key))
 				if blob == nil || err != nil {
-					log.Error("Missing referenced node", "owner", owner, "hash", t.state.hash, "path", fmt.Sprintf("%x%x", t.state.prefix, path))
+					log.Error("Missing referenced node", "owner", owner, "hash", t.state.hash.Hex(), "path", fmt.Sprintf("%x%x", t.state.prefix, path))
 					return false
 					//panic(fmt.Sprintf("missing referenced node %x (searching for %x:%x at %x%x)", key, owner, t.state.hash, t.state.prefix, path))
 				}

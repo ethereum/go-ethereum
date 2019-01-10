@@ -95,9 +95,11 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db     ethdb.Database // Low level persistent database to store final content in
-	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	db ethdb.Database // Low level persistent database to store final content in
+
+	gcqueue *prque.Prque  // Priority queue mapping block numbers to tries to gc
+	gcsave  common.Hash   // Root hash of the last trie committed to disk
+	gcproc  time.Duration // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -159,7 +161,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
 		db:             db,
-		triegc:         prque.New(nil),
+		gcqueue:        prque.New(nil),
 		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
 		quit:           make(chan struct{}),
 		shouldPreserve: shouldPreserve,
@@ -199,6 +201,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 				log.Error("Chain rewind was successful, resuming normal operation")
 			}
 		}
+	}
+	// Forbid the genesis state (forever) and latest state (temporarilly) from being pruned
+	bc.stateCache.TrieDB().ForbidPrune(bc.genesisBlock.Root())
+	if head := bc.CurrentBlock(); head.NumberU64() > 0 {
+		bc.gcsave = head.Root()
+		bc.stateCache.TrieDB().ForbidPrune(bc.gcsave)
 	}
 	// Take ownership of this particular state
 	go bc.update()
@@ -718,8 +726,8 @@ func (bc *BlockChain) Stop() {
 				}
 			}
 		}
-		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash), false)
+		for !bc.gcqueue.Empty() {
+			triedb.Dereference(bc.gcqueue.PopItem().(common.Hash), false)
 		}
 		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup", "size", size)
@@ -967,7 +975,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(common.Hash{}, root, common.Hash{}) // metadata reference to keep trie alive
-		bc.triegc.Push(root, -int64(block.NumberU64()))
+		bc.gcqueue.Push(root, -int64(block.NumberU64()))
 
 		if current := block.NumberU64(); current > triesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
@@ -998,13 +1006,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
+
+					// A new snapshot was flushed to disk, swap the prune allowance
+					triedb.ForbidPrune(header.Root)
+					if bc.gcsave != (common.Hash{}) {
+						triedb.PermitPrune(bc.gcsave)
+						triedb.Dereference(bc.gcsave, true)
+					}
+					bc.gcsave = header.Root
 				}
 			}
 			// Garbage collect anything below our required write retention
-			for !bc.triegc.Empty() {
-				root, number := bc.triegc.Pop()
+			for !bc.gcqueue.Empty() {
+				root, number := bc.gcqueue.Pop()
 				if uint64(-number) > chosen {
-					bc.triegc.Push(root, number)
+					bc.gcqueue.Push(root, number)
 					break
 				}
 				triedb.Dereference(root.(common.Hash), true)

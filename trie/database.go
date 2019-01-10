@@ -101,7 +101,8 @@ func splitNodeKey(key string) (common.Hash, common.Hash) {
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb ethdb.Database // Persistent storage for matured trie nodes
+	diskdb  ethdb.Database           // Persistent storage for matured trie nodes
+	noprune map[common.Hash]struct{} // Root hashes of the tries that aren't prunable
 
 	cleans  *bigcache.BigCache     // GC friendly memory cache of clean node RLPs
 	dirties map[string]*cachedNode // Data and references relationships of dirty nodes
@@ -363,10 +364,32 @@ func NewDatabaseWithCache(diskdb ethdb.Database, cache int) *Database {
 	}
 	return &Database{
 		diskdb:    diskdb,
+		noprune:   make(map[common.Hash]struct{}),
 		cleans:    cleans,
 		dirties:   map[string]*cachedNode{metaRoot: {}},
 		preimages: make(map[common.Hash][]byte),
 	}
+}
+
+// ForbidPrune adds a root hash to the list of tries that are disallowed from
+// being pruned. The only two ever to be used are the genesis trie and the last
+// committed trie (snapshot).
+func (db *Database) ForbidPrune(root common.Hash) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	log.Debug("Forbidding pruner to delete trie", "root", root)
+	db.noprune[root] = struct{}{}
+}
+
+// PermitPrune allows a particular trie to be pruned from the disk database. To
+// actually run the pruner, please call a dereference on the root hash.
+func (db *Database) PermitPrune(root common.Hash) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	log.Debug("Permitting pruner to delete trie", "root", root)
+	delete(db.noprune, root)
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
@@ -459,7 +482,7 @@ func (db *Database) node(owner common.Hash, hash common.Hash, cachegen uint16) n
 		return nil
 	}
 	if db.cleans != nil {
-		db.cleans.Set(string(hash[:]), enc)
+		db.cleans.Set(key, enc)
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
