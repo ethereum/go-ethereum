@@ -41,6 +41,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
+	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 )
 
 const (
@@ -199,10 +202,39 @@ func GetSignersFromContract(state *state.StateDB, block *types.Block) ([]common.
 	return GetSigners(state, block), nil
 }
 
+// Get signers signed for blockNumber from blockSigner contract.
+func GetSignersFromContract1(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
+	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
+	if err != nil {
+		log.Error("Fail get instance of blockSigner", "error", err)
+		return nil, err
+	}
+	opts := new(bind.CallOpts)
+	addrs, err := blockSigner.GetSigners(opts, blockHash)
+	if err != nil {
+		log.Error("Fail get block signers", "error", err)
+		return nil, err
+	}
+
+	return addrs, nil
+}
+
 // Get random from randomize contract.
-func GetRandomizeFromContract(state *state.StateDB, addrMasternode common.Address) (int64, error) {
-	secrets := GetSecret(state, addrMasternode)
-	opening := GetOpening(state, addrMasternode)
+func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) (int64, error) {
+	randomize, err := randomizeContract.NewTomoRandomize(common.HexToAddress(common.RandomizeSMC), client)
+	if err != nil {
+		log.Error("Fail to get instance of randomize", "error", err)
+	}
+	opts := new(bind.CallOpts)
+	secrets, err := randomize.GetSecret(opts, addrMasternode)
+	if err != nil {
+		log.Error("Fail get secrets from randomize", "error", err)
+	}
+	opening, err := randomize.GetOpening(opts, addrMasternode)
+	if err != nil {
+		log.Error("Fail get opening from randomize", "error", err)
+	}
+
 	return DecryptRandomizeFromSecretsAndOpening(secrets, opening)
 }
 

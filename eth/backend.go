@@ -230,9 +230,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
 		// Hook prepares validators M2 for the current epoch at checkpoint block
-		c.HookValidator = func(state *state.StateDB, header *types.Header, signers []common.Address) ([]byte, error) {
+		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
 			start := time.Now()
-			validators, err := GetValidators(state, signers)
+			validators, err := GetValidators(eth.blockchain, signers)
 			if err != nil {
 				return []byte{}, err
 			}
@@ -242,20 +242,23 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook scans for bad masternodes and decide to penalty them
-		c.HookPenalty = func(state *state.StateDB, chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+			client, err := eth.blockchain.GetClient()
+			if err != nil {
+				return nil, err
+			}
 			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
 			if prevEpoc >= 0 {
 				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
+					blockSignerAddr := common.HexToAddress(common.BlockSigners)
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
-						bHeader := chain.GetHeaderByNumber(i)
-						bHash := bHeader.Hash()
-						block := chain.GetBlock(bHash, i)
+						blockHeader := chain.GetHeaderByNumber(i)
 						if len(penSigners) > 0 {
-							signedMasternodes, err := contracts.GetSignersFromContract(state, block)
+							signedMasternodes, err := contracts.GetSignersFromContract1(blockSignerAddr, client, blockHeader.Hash())
 							if err != nil {
 								return nil, err
 							}
@@ -327,11 +330,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook verifies masternodes set
-		c.HookVerifyMNs = func(state *state.StateDB, header *types.Header, signers []common.Address) error {
+		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
 			number := header.Number.Int64()
 			if number > 0 && number%common.EpocBlockRandomize == 0 {
 				start := time.Now()
-				validators, err := GetValidators(state, signers)
+				validators, err := GetValidators(eth.blockchain, signers)
 				log.Debug("Time Calculated HookVerifyMNs ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					return err
@@ -342,6 +345,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return nil
 		}
+
 		eth.txPool.IsMasterNode = func(address common.Address) bool {
 			currentHeader := eth.blockchain.CurrentHeader()
 			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
@@ -631,14 +635,25 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func GetValidators(state *state.StateDB, masternodes []common.Address) ([]byte, error) {
+func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
+	if bc.Config().Posv == nil {
+		return nil, core.ErrNotPoSV
+	}
+	client, err := bc.GetClient()
+	if err != nil {
+		return nil, err
+	}
 	// Check m2 exists on chaindb.
 	// Get secrets and opening at epoc block checkpoint.
+
 	var candidates []int64
+	if err != nil {
+		return nil, err
+	}
 	lenSigners := int64(len(masternodes))
 	if lenSigners > 0 {
 		for _, addr := range masternodes {
-			random, err := contracts.GetRandomizeFromContract(state, addr)
+			random, err := contracts.GetRandomizeFromContract(client, addr)
 			if err != nil {
 				return nil, err
 			}
