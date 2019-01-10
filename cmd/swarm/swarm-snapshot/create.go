@@ -38,8 +38,9 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-const noConnectionTimeout = 2 * time.Second
+const noConnectionTimeout = 1 * time.Second
 
+// create is used as the entry function for "create" app command.
 func create(ctx *cli.Context) error {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
@@ -51,14 +52,16 @@ func create(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	return createSnapshot(filename, ctx.Int("nodes"), ctx.String("services"))
+	return createSnapshot(filename, ctx.Int("nodes"), strings.Split(ctx.String("services"), ","))
 }
 
-func createSnapshot(filename string, nodes int, services string) (err error) {
+// createSnapshot creates a new snapshot on filesystem with provided filename,
+// number of nodes and service names.
+func createSnapshot(filename string, nodes int, services []string) (err error) {
 	log.Debug("create snapshot", "filename", filename, "nodes", nodes, "services", services)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		bzzServiceName: func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()
@@ -80,6 +83,8 @@ func createSnapshot(filename string, nodes int, services string) (err error) {
 		return fmt.Errorf("add nodes: %v", err)
 	}
 
+	// wait for two some time to ensure no connections
+	// are established
 	events := make(chan *simulations.Event)
 	sub := sim.Net.Events().Subscribe(events)
 	select {
@@ -109,19 +114,21 @@ func createSnapshot(filename string, nodes int, services string) (err error) {
 
 	var snap *simulations.Snapshot
 	if len(services) > 0 {
-		addServices := strings.Split(services, ",")
+		// If service names are provided, include them in the snapshot.
+		// But, check if "bzz" service is not among them to remove it
+		// form the snapshot as it exists on snapshot creation.
 		var removeServices []string
-		var hasBzz bool
-		for _, s := range addServices {
-			if s == bzzServiceName {
-				hasBzz = true
+		var wantBzz bool
+		for _, s := range services {
+			if s == "bzz" {
+				wantBzz = true
 				break
 			}
 		}
-		if !hasBzz {
-			removeServices = append(removeServices, bzzServiceName)
+		if !wantBzz {
+			removeServices = []string{"bzz"}
 		}
-		snap, err = sim.Net.SnapshotWithServices(addServices, removeServices)
+		snap, err = sim.Net.SnapshotWithServices(services, removeServices)
 	} else {
 		snap, err = sim.Net.Snapshot()
 	}
@@ -135,6 +142,8 @@ func createSnapshot(filename string, nodes int, services string) (err error) {
 	return ioutil.WriteFile(filename, jsonsnapshot, 0666)
 }
 
+// touchPath creates an empty file and all subdirectories
+// that are missing.
 func touchPath(filename string) (string, error) {
 	if path.IsAbs(filename) {
 		if _, err := os.Stat(filename); err == nil {
@@ -164,6 +173,5 @@ func touchPath(filename string) (string, error) {
 		}
 	}
 
-	filename = filePath
-	return filename, nil
+	return filePath, nil
 }

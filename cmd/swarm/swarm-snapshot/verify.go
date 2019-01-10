@@ -32,6 +32,7 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+// verify is used as the entry function for "verify" app command.
 func verify(ctx *cli.Context) error {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
@@ -42,9 +43,11 @@ func verify(ctx *cli.Context) error {
 	return verifySnapshot(ctx.Args()[0])
 }
 
+// verifySnapshot constructs a simulation, uploads a snapshot from
+// a file with provided filename and validates that kademlia is healthy.
 func verifySnapshot(filename string) (err error) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		bzzServiceName: func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()

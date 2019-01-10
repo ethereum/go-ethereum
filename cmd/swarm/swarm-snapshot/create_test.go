@@ -29,7 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 )
 
-//TestSnapshotCreate is a high level e2e test that tests for snapshot generation
+// TestSnapshotCreate is a high level e2e test that tests for snapshot generation.
+// It runs a few "create" commands with different flag values and loads generated
+// snapshot files to validate their content.
 func TestSnapshotCreate(t *testing.T) {
 	for _, v := range []struct {
 		name     string
@@ -48,8 +50,8 @@ func TestSnapshotCreate(t *testing.T) {
 			services: "stream,pss,zorglub",
 		},
 		{
-			name:     "services with " + bzzServiceName,
-			services: bzzServiceName + ",pss",
+			name:     "services with bzz",
+			services: "bzz,pss",
 		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
@@ -75,8 +77,8 @@ func TestSnapshotCreate(t *testing.T) {
 			testCmd := runSnapshot(t, append(args, file.Name())...)
 
 			testCmd.ExpectExit()
-			if testCmd.ExitStatus() != 0 {
-				t.Fatal("expected exit code 0")
+			if code := testCmd.ExitStatus(); code != 0 {
+				t.Fatalf("command exit code %v, expected 0", code)
 			}
 
 			f, err := os.Open(file.Name())
@@ -117,8 +119,10 @@ func TestSnapshotCreate(t *testing.T) {
 			if v.services != "" {
 				wantServices = strings.Split(v.services, ",")
 			} else {
-				wantServices = []string{bzzServiceName}
+				wantServices = []string{"bzz"}
 			}
+			// sort service names so they can be comparable
+			// as strings to every node sorted services
 			sort.Strings(wantServices)
 
 			for i, n := range snap.Nodes {

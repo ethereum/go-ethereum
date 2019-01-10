@@ -20,6 +20,8 @@ import (
 	"testing"
 )
 
+// TestSnapshotVerify executes "verify" command with a
+// pregenerated snapshot file that is valid.
 func TestSnapshotVerify(t *testing.T) {
 	snap := runSnapshot(t,
 		"verify",
@@ -27,7 +29,7 @@ func TestSnapshotVerify(t *testing.T) {
 	)
 
 	snap.ExpectExit()
-	if snap.ExitStatus() != 0 {
-		t.Fatal("expected exit code 0")
+	if code := snap.ExitStatus(); code != 0 {
+		t.Fatalf("command exit code %v, expected 0", code)
 	}
 }

@@ -26,10 +26,8 @@ import (
 
 var gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
 
-const (
-	defaultNodes   = 10
-	bzzServiceName = "bzz"
-)
+// default value for "create" command --nodes flag
+const defaultNodes = 10
 
 func main() {
 	err := newApp().Run(os.Args)
@@ -39,12 +37,15 @@ func main() {
 	}
 }
 
+// newApp construct a new instance of Swarm Snapshot Utility.
+// Method Run is called on it in the main function and in tests.
 func newApp() (app *cli.App) {
 	app = utils.NewApp(gitCommit, "Swarm Snapshot Utility")
 
 	app.Name = "swarm-snapshot"
 	app.Usage = ""
 
+	// app flags (for all commands)
 	app.Flags = []cli.Flag{
 		cli.IntFlag{
 			Name:  "verbosity",
@@ -59,6 +60,9 @@ func newApp() (app *cli.App) {
 			Aliases: []string{"c"},
 			Usage:   "create a swarm snapshot",
 			Action:  create,
+			// Flags only for "create" command.
+			// Allow app flags to be specified after the
+			// command argument.
 			Flags: append(app.Flags,
 				cli.IntFlag{
 					Name:  "nodes",
@@ -67,7 +71,7 @@ func newApp() (app *cli.App) {
 				},
 				cli.StringFlag{
 					Name:  "services",
-					Value: bzzServiceName,
+					Value: "bzz",
 					Usage: "comma separated list of services to boot the nodes with",
 				},
 			),
@@ -77,7 +81,9 @@ func newApp() (app *cli.App) {
 			Aliases: []string{"v"},
 			Usage:   "verify a swarm snapshot",
 			Action:  verify,
-			Flags:   app.Flags,
+			// Allow app flags to be specified after the
+			// command argument.
+			Flags: app.Flags,
 		},
 	}
 
