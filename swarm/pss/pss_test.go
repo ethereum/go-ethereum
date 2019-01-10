@@ -491,12 +491,12 @@ func TestAddressMatchProx(t *testing.T) {
 	// meanwhile test regression for kademlia since we are compiling the test parameters from different packages
 	var proxes int
 	var conns int
-	kad.EachConn(nil, peerCount, func(p *network.Peer, po int, prox bool) bool {
+	depth := kad.NeighbourhoodDepth()
+	kad.EachConn(nil, peerCount, func(p *network.Peer, po int) bool {
 		conns++
-		if prox {
+		if po >= depth {
 			proxes++
 		}
-		log.Trace("kadconn", "po", po, "peer", p, "prox", prox)
 		return true
 	})
 	if proxes != nnPeerCount {

@@ -114,7 +114,7 @@ func (h *Hive) Stop() error {
 		}
 	}
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
-	h.EachConn(nil, 255, func(p *Peer, _ int, _ bool) bool {
+	h.EachConn(nil, 255, func(p *Peer, _ int) bool {
 		log.Info(fmt.Sprintf("%08x dropping peer %08x", h.BaseAddr()[:4], p.Address()[:4]))
 		p.Drop(nil)
 		return true
@@ -228,7 +228,7 @@ func (h *Hive) loadPeers() error {
 // savePeers, savePeer implement persistence callback/
 func (h *Hive) savePeers() error {
 	var peers []*BzzAddr
-	h.Kademlia.EachAddr(nil, 256, func(pa *BzzAddr, i int, _ bool) bool {
+	h.Kademlia.EachAddr(nil, 256, func(pa *BzzAddr, i int) bool {
 		if pa == nil {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
 			return true

@@ -390,46 +390,42 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
-// It returns peers in order deepest to shallowest
-func (k *Kademlia) EachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
+func (k *Kademlia) EachConn(base []byte, o int, f func(*Peer, int) bool) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	k.eachConn(base, o, f)
 }
 
-func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
+func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	k.conns.EachNeighbour(base, Pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
 		}
-		return f(val.(*Peer), po, po >= depth)
+		return f(val.(*Peer), po)
 	})
 }
 
 // EachAddr called with (base, po, f) is an iterator applying f to each known peer
 // that has proximity order o or less as measured from the base
 // if base is nil, kademlia base address is used
-// It returns peers in order deepest to shallowest
-func (k *Kademlia) EachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool) {
+func (k *Kademlia) EachAddr(base []byte, o int, f func(*BzzAddr, int) bool) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	k.eachAddr(base, o, f)
 }
 
-func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool) {
+func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	k.addrs.EachNeighbour(base, Pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
 		}
-		return f(val.(*entry).BzzAddr, po, po >= depth)
+		return f(val.(*entry).BzzAddr, po)
 	})
 }
 
@@ -687,12 +683,11 @@ func (k *Kademlia) saturation() int {
 // TODO move to separate testing tools file
 func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
-
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	// create a map with all peers at depth and deeper known in the kademlia
-	// in order deepest to shallowest compared to the kademlia base address
-	// all bins (except self) are included (0 <= bin <= 255)
-	depth := depthForPot(k.addrs, k.MinProxBinSize, k.base)
-	k.eachAddr(nil, 255, func(p *BzzAddr, po int, nn bool) bool {
+	k.eachAddr(nil, 255, func(p *BzzAddr, po int) bool {
+		// in order deepest to shallowest compared to the kademlia base address
+		// all bins (except self) are included (0 <= bin <= 255)
 		if po < depth {
 			return false
 		}
@@ -724,12 +719,8 @@ func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]
 // It is used in Healthy function for testing only
 func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
-
-	// create a map with all peers at depth and deeper that are connected in the kademlia
-	// in order deepest to shallowest compared to the kademlia base address
-	// all bins (except self) are included (0 <= bin <= 255)
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
-	k.eachConn(nil, 255, func(p *Peer, po int, nn bool) bool {
+	k.eachConn(nil, 255, func(p *Peer, po int) bool {
 		if po < depth {
 			return false
 		}

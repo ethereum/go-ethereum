@@ -964,7 +964,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		onlySendOnce = true
 	}
 
-	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int, _ bool) bool {
+	p.Kademlia.EachConn(to, addressLength*8, func(sp *network.Peer, po int) bool {
 		if po < broadcastThreshold && sent > 0 {
 			return false // stop iterating
 		}
