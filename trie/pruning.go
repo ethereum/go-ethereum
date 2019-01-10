@@ -134,7 +134,7 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte) {
 	node := mustDecodeNode(hash[:], blob, 0)
 
 	// Prune the node and its children if it's not a bytecode blob
-	p.db.cleans.Delete(key)
+	p.db.cleans.Delete(string(hash[:]))
 	p.batch.Delete(dead)
 	p.db.prunenodes++
 	p.db.prunesize += common.StorageSize(len(blob))
@@ -205,7 +205,7 @@ func (t *traverser) live(owner common.Hash, hash common.Hash, path []byte, unref
 				key = makeNodeKey(owner, t.state.hash)
 			}
 			// Replace the node in the traverser with the expanded one
-			if enc, err := t.db.cleans.Get(key); err == nil && enc != nil {
+			if enc, err := t.db.cleans.Get(string(t.state.hash[:])); err == nil && enc != nil {
 				t.state.node = mustDecodeNode(t.state.hash[:], enc, 0)
 			} else if node := t.db.dirties[key]; node != nil {
 				t.state.node = node.node
@@ -217,6 +217,7 @@ func (t *traverser) live(owner common.Hash, hash common.Hash, path []byte, unref
 					//panic(fmt.Sprintf("missing referenced node %x (searching for %x:%x at %x%x)", key, owner, t.state.hash, t.state.prefix, path))
 				}
 				t.state.node = mustDecodeNode(t.state.hash[:], blob, 0)
+				t.db.cleans.Set(string(t.state.hash[:]), blob)
 			}
 		}
 		// If we reached an account node, extract the storage trie root to continue on

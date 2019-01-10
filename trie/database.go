@@ -462,7 +462,7 @@ func (db *Database) node(owner common.Hash, hash common.Hash, cachegen uint16) n
 
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
-		if enc, err := db.cleans.Get(key); err == nil && enc != nil {
+		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return mustDecodeNode(hash[:], enc, cachegen)
@@ -482,7 +482,7 @@ func (db *Database) node(owner common.Hash, hash common.Hash, cachegen uint16) n
 		return nil
 	}
 	if db.cleans != nil {
-		db.cleans.Set(key, enc)
+		db.cleans.Set(string(hash[:]), enc)
 		memcacheCleanMissMeter.Mark(1)
 		memcacheCleanWriteMeter.Mark(int64(len(enc)))
 	}
@@ -496,7 +496,7 @@ func (db *Database) Node(owner common.Hash, hash common.Hash) ([]byte, error) {
 
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
-		if enc, err := db.cleans.Get(key); err == nil && enc != nil {
+		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
 			memcacheCleanHitMeter.Mark(1)
 			memcacheCleanReadMeter.Mark(int64(len(enc)))
 			return enc, nil
@@ -514,7 +514,7 @@ func (db *Database) Node(owner common.Hash, hash common.Hash) ([]byte, error) {
 	enc, err := db.diskdb.Get([]byte(key))
 	if err == nil && enc != nil {
 		if db.cleans != nil {
-			db.cleans.Set(key, enc)
+			db.cleans.Set(string(hash[:]), enc)
 			memcacheCleanMissMeter.Mark(1)
 			memcacheCleanWriteMeter.Mark(int64(len(enc)))
 		}
