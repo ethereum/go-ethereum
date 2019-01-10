@@ -50,7 +50,6 @@ import (
 const (
 	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
 	blockSignersCacheLimit = 36000
-	votingCacheLimit       = 1500000
 	M2ByteLength           = 4
 )
 
@@ -245,7 +244,6 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	}
 	// Allocate the snapshot caches and create the engine
 	BlockSigners, _ := lru.New(blockSignersCacheLimit)
-	Votes, _ := lru.New(votingCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
@@ -255,7 +253,6 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 		db:                  db,
 		EnableCache:         false,
 		BlockSigners:        BlockSigners,
-		Votes:               Votes,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
@@ -880,7 +877,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 		}
 	}
 
-	_ = c.cacheData(txs, receipts)
+	_ = c.cacheData(header, txs, receipts)
 
 	// the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -1036,12 +1033,10 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 	return masternodes
 }
 
-func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) error {
+func (c *Posv) cacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) error {
+	var signTxs []*types.Transaction
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-			from := *tx.From()
-
 			var b uint
 			for _, r := range receipts {
 				if r.TxHash == tx.Hash() {
@@ -1054,29 +1049,32 @@ func (c *Posv) cacheData(txs []*types.Transaction, receipts []*types.Receipt) er
 				continue
 			}
 
-			var lAddr []common.Address
-			if cached, ok := c.BlockSigners.Get(blkHash); ok {
-				lAddr = cached.([]common.Address)
-				lAddr = append(lAddr, from)
-			} else {
-				lAddr = []common.Address{from}
-			}
-			c.BlockSigners.Add(blkHash, lAddr)
-		} else {
-
-			b, addr := tx.IsVotingTransaction()
-			if b && addr != nil {
-				var vote common.Vote
-				vote.Masternode = *addr
-				vote.Voter = *tx.From()
-
-				log.Debug("Remove from Votes cache ", "Masternode", vote.Masternode.String(), "Voter", vote.Voter.String())
-				c.Votes.Remove(vote)
-			}
+			signTxs = append(signTxs, tx)
 		}
 	}
 
+	c.BlockSigners.Add(header.Hash(), signTxs)
+
 	return nil
+}
+
+func (c *Posv) GetSignData(chain consensus.ChainReader, startBlockNumber uint64, endBlockNumber uint64) (map[common.Hash][]common.Address, error) {
+	data := make(map[common.Hash][]common.Address)
+	for i := startBlockNumber; i < chain.CurrentHeader().Number.Uint64(); i++ {
+		block := chain.GetHeaderByNumber(i)
+
+		if signData, ok := c.BlockSigners.Get(block.Hash()); ok {
+			txs := signData.([]*types.Transaction)
+			for _, tx := range txs {
+				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+				from := *tx.From()
+				data[blkHash] = append(data[blkHash], from)
+			}
+		} else {
+			return nil, errors.New("Failed get blocksigners from cache")
+		}
+	}
+	return data, nil
 }
 
 // Extract validators from byte array.

@@ -259,7 +259,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
 						blockHeader := chain.GetHeaderByNumber(i)
 						if len(penSigners) > 0 {
-							signedMasternodes, err := contracts.GetSignersFromContract(c, blockSignerAddr, client, blockHeader.Hash())
+							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
 							if err != nil {
 								return nil, err
 							}
