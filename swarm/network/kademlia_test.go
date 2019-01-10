@@ -45,7 +45,7 @@ func newTestKademliaParams() *KadParams {
 	params := NewKadParams()
 	// TODO why is this 1?
 	params.MinBinSize = 1
-	params.MinProxBinSize = 2
+	params.NeighbourhoodSize = 2
 	return params
 }
 
@@ -87,7 +87,7 @@ func Register(k *Kademlia, regs ...string) {
 // empty bins above the farthest "nearest neighbor-peer" then
 // the depth should be set at the farthest of those empty bins
 //
-// TODO: Make test adapt to change in MinProxBinSize
+// TODO: Make test adapt to change in NeighbourhoodSize
 func TestNeighbourhoodDepth(t *testing.T) {
 	baseAddressBytes := RandomAddr().OAddr
 	kad := NewKademlia(baseAddressBytes, NewKadParams())
@@ -237,7 +237,7 @@ func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturatio
 		return true
 	})
 
-	pp := NewPeerPotMap(k.MinProxBinSize, addrs)
+	pp := NewPeerPotMap(k.NeighbourhoodSize, addrs)
 	healthParams := k.Healthy(pp[kid])
 
 	// definition of health, all conditions but be true:
@@ -605,7 +605,7 @@ func TestKademliaHiveString(t *testing.T) {
 	Register(k, "10000000", "10000001")
 	k.MaxProxDisplay = 8
 	h := k.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), NeighbourhoodSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[104:] != h[104:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}
@@ -636,7 +636,7 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 		}
 	}
 
-	ppmap := NewPeerPotMap(k.MinProxBinSize, byteAddrs)
+	ppmap := NewPeerPotMap(k.NeighbourhoodSize, byteAddrs)
 
 	pp := ppmap[pivotAddr]
 
@@ -662,7 +662,7 @@ in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
 Mon Apr  9 12:18:24 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
-population: 9 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+population: 9 (49), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
 000  2 d7e5 ec56                    | 18 ec56 (0) d7e5 (0) d9e0 (0) c735 (0)
 001  2 18f1 3176                    | 14 18f1 (0) 10bb (0) 10d1 (0) 0421 (0)
 002  2 52aa 47cd                    | 11 52aa (0) 51d9 (0) 5161 (0) 5130 (0)
@@ -745,7 +745,7 @@ in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
 Mon Apr  9 18:43:48 UTC 2018 KΛÐΞMLIΛ hive: queen's address: bc7f3b
-population: 9 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+population: 9 (49), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
 000  2 0f49 67ff                    | 28 0f49 (0) 0211 (0) 07b2 (0) 0703 (0)
 001  2 e84b f3a4                    | 13 f3a4 (0) e84b (0) e58b (0) e60b (0)
 002  1 8dba                         |  1 8dba (0)
@@ -779,7 +779,7 @@ in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
 Mon Apr  9 19:04:35 UTC 2018 KΛÐΞMLIΛ hive: queen's address: b4822e
-population: 8 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+population: 8 (49), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
 000  2 786c 774b                    | 29 774b (0) 786c (0) 7a79 (0) 7d2f (0)
 001  2 d9de cf19                    | 10 cf19 (0) d9de (0) d2ff (0) d2a2 (0)
 002  2 8ca1 8d74                    |  5 8d74 (0) 8ca1 (0) 9793 (0) 9f51 (0)
@@ -813,7 +813,7 @@ in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
 Mon Apr  9 19:16:25 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 9a90fe
-population: 8 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+population: 8 (49), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
 000  2 72ef 4e6c                    | 24 0b1e (0) 0d66 (0) 17f5 (0) 17e8 (0)
 001  2 fc2b fa47                    | 13 fa47 (0) fc2b (0) fffd (0) ecef (0)
 002  2 b847 afa8                    |  6 afa8 (0) ad77 (0) bb7c (0) b847 (0)
@@ -848,7 +848,7 @@ in higher level tests for streaming. They were generated randomly.
 
 =========================================================================
 Mon Apr  9 19:25:18 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 5dd5c7
-population: 13 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
+population: 13 (49), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
 000  2 e528 fad0                    | 22 fad0 (0) e528 (0) e3bb (0) ed13 (0)
 001  3 3f30 18e0 1dd3               |  7 3f30 (0) 23db (0) 10b6 (0) 18e0 (0)
 002  4 7c54 7804 61e4 60f9          | 10 61e4 (0) 60f9 (0) 636c (0) 7186 (0)

@@ -197,7 +197,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
@@ -287,7 +287,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 

@@ -46,7 +46,7 @@ import (
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
-const testMinProxBinSize = 2
+const testNeighbourhoodSize = 2
 const discoveryPersistenceDatadir = "discovery_persistence_test_store"
 
 var discoveryPersistencePath = path.Join(os.TempDir(), discoveryPersistenceDatadir)
@@ -268,7 +268,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -404,7 +404,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
+				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 				if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
@@ -492,7 +492,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
+		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
 		if err := client.Call(&healthy, "hive_healthy", ppmap); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
@@ -566,7 +566,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := network.NewAddr(ctx.Config.Node())
 
 	kp := network.NewKadParams()
-	kp.MinProxBinSize = testMinProxBinSize
+	kp.NeighbourhoodSize = testNeighbourhoodSize
 
 	if ctx.Config.Reachable != nil {
 		kp.Reachable = func(o *network.BzzAddr) bool {

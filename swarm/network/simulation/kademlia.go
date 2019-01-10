@@ -34,7 +34,7 @@ var BucketKeyKademlia BucketKey = "kademlia"
 // WaitTillHealthy is blocking until the health of all kademlias is true.
 // If error is not nil, a map of kademlia that was found not healthy is returned.
 // TODO: Check correctness since change in kademlia depth calculation logic
-func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (ill map[enode.ID]*network.Kademlia, err error) {
+func (s *Simulation) WaitTillHealthy(ctx context.Context) (ill map[enode.ID]*network.Kademlia, err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()
@@ -43,7 +43,7 @@ func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (i
 	for _, k := range kademlias {
 		addrs = append(addrs, k.BaseAddr())
 	}
-	ppmap = network.NewPeerPotMap(kadMinProxSize, addrs)
+	ppmap = network.NewPeerPotMap(s.neighbourhoodSize, addrs)
 
 	// Wait for healthy Kademlia on every node before checking files
 	ticker := time.NewTicker(200 * time.Millisecond)

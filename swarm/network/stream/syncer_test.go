@@ -189,7 +189,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			}
 		}
 		// here we distribute chunks of a random file into stores 1...nodes
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
