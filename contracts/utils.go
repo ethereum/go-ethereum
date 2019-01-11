@@ -353,7 +353,7 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 		} else {
 			data, err := c.GetSignData(chain, startBlockNumber, endBlockNumber)
 			if err != nil {
-				log.Crit("Fail to get signers from cache.", "endBlockNumber", startBlockNumber, "startBlockNumber", endBlockNumber)
+				log.Crit("Fail to get signers from cache.", "startBlockNumber", startBlockNumber, "endBlockNumber", endBlockNumber, "error", err)
 			}
 
 			for i := startBlockNumber; i <= endBlockNumber; i++ {

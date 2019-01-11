@@ -877,7 +877,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 		}
 	}
 
-	_ = c.cacheData(header, txs, receipts)
+	// _ = c.cacheData(header, txs, receipts)
 
 	// the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -1033,7 +1033,7 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 	return masternodes
 }
 
-func (c *Posv) cacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) error {
+func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) error {
 	var signTxs []*types.Transaction
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
@@ -1054,6 +1054,7 @@ func (c *Posv) cacheData(header *types.Header, txs []*types.Transaction, receipt
 	}
 
 	c.BlockSigners.Add(header.Hash(), signTxs)
+	fmt.Println("Add cache BLockSigners", header.Hash().String(), len(signTxs), c.BlockSigners.Len())
 
 	return nil
 }
@@ -1071,7 +1072,7 @@ func (c *Posv) GetSignData(chain consensus.ChainReader, startBlockNumber uint64,
 				data[blkHash] = append(data[blkHash], from)
 			}
 		} else {
-			return nil, errors.New("Failed get blocksigners from cache")
+			return nil, errors.New("Failed get blocksigners from cache " + block.Hash().String() + " " + block.Number.String())
 		}
 	}
 	return data, nil
