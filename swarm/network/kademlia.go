@@ -356,37 +356,6 @@ func (k *Kademlia) Off(p *Peer) {
 	}
 }
 
-// EachBin is a two level nested iterator
-// The outer iterator returns all bins that have known peers, in order from shallowest to deepest
-// The inner iterator returns all peers per bin returned by the outer iterator, in no defined order
-// TODO the po returned by the inner iterator is not reliable. However, it is not being used in this method
-func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(conn *Peer, po int) bool) {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
-
-	var startPo int
-	var endPo int
-	kadDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-
-	k.conns.EachBin(base, Pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-		if startPo > 0 && endPo != k.MaxProxDisplay {
-			startPo = endPo + 1
-		}
-		if po < kadDepth {
-			endPo = po
-		} else {
-			endPo = k.MaxProxDisplay
-		}
-
-		for bin := startPo; bin <= endPo; bin++ {
-			f(func(val pot.Val, _ int) bool {
-				return eachBinFunc(val.(*Peer), bin)
-			})
-		}
-		return true
-	})
-}
-
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
