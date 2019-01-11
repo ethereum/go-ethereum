@@ -144,13 +144,10 @@ func add(t *Pot, val Val, pof Pof) (*Pot, int, bool) {
 	return r, po, found
 }
 
-// Remove called on (v) deletes v from the Pot and returns
-// the proximity order of v and a boolean value indicating
-// if the value was found
-// Remove called on (t, v) returns a new Pot that contains all the elements of t
-// minus the value v, using the applicative remove
-// the second return value is the proximity order of the inserted element
-// the third is boolean indicating if the item was found
+// Remove deletes element v from the Pot t and returns three parameters:
+// 1. new Pot that contains all the elements of t minus the element v;
+// 2. proximity order of the removed element v;
+// 3. boolean indicating whether the item was found.
 func Remove(t *Pot, v Val, pof Pof) (*Pot, int, bool) {
 	return remove(t, v, pof)
 }
@@ -161,10 +158,7 @@ func remove(t *Pot, val Val, pof Pof) (r *Pot, po int, found bool) {
 	if found {
 		size--
 		if size == 0 {
-			r = &Pot{
-				po: t.po,
-			}
-			return r, po, true
+			return &Pot{}, po, true
 		}
 		i := len(t.bins) - 1
 		last := t.bins[i]
@@ -201,7 +195,7 @@ func remove(t *Pot, val Val, pof Pof) (r *Pot, po int, found bool) {
 	}
 	bins = append(bins, t.bins[j:]...)
 	r = &Pot{
-		pin:  val,
+		pin:  t.pin,
 		size: size,
 		po:   t.po,
 		bins: bins,
