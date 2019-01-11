@@ -143,7 +143,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 func touchPath(filename string) (string, error) {
 	if path.IsAbs(filename) {
 		if _, err := os.Stat(filename); err == nil {
-			// path exists, we will override the file
+			// path exists, we will overwrite the file
 			return filename, nil
 		}
 	}
@@ -156,7 +156,7 @@ func touchPath(filename string) (string, error) {
 
 	_, err = os.Stat(path.Join(dir, filename))
 	if err == nil {
-		// path exists, we will override
+		// path exists, we will overwrite
 		return filename, nil
 	}
 
