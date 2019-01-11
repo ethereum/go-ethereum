@@ -120,7 +120,6 @@ func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 		gcSizeChange++
 
 		db.retrievalDataIndex.PutInBatch(batch, item)
-		db.retrievalAccessIndex.PutInBatch(batch, item)
 
 	case ModePutUpload:
 		// put to indexes: retrieve, push, pull
