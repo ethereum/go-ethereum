@@ -97,10 +97,6 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 	}
 	sub.Unsubscribe()
 
-	if len(sim.Net.Conns) > 0 {
-		return errors.New("no connections should exist after just adding nodes")
-	}
-
 	err = sim.Net.ConnectNodesRing(nil)
 	if err != nil {
 		return fmt.Errorf("connect nodes: %v", err)
