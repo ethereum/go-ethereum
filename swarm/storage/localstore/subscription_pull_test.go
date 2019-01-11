@@ -147,8 +147,8 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		return atomic.AddInt64(&lastTimestamp, 1)
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkInfo) {
-		last = make(map[uint8]ChunkInfo)
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
 
@@ -167,7 +167,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			last[bin] = ChunkInfo{
+			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
 				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
 			}
@@ -190,7 +190,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(storage.MaxPO); bin++ {
-		var since *ChunkInfo
+		var since *ChunkDescriptor
 		if c, ok := last[bin]; ok {
 			since = &c
 		}
@@ -226,8 +226,8 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		return atomic.AddInt64(&lastTimestamp, 1)
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkInfo) {
-		last = make(map[uint8]ChunkInfo)
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
 
@@ -246,7 +246,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			last[bin] = ChunkInfo{
+			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
 				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
 			}
@@ -306,8 +306,8 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		return atomic.AddInt64(&lastTimestamp, 1)
 	})()
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkInfo) {
-		last = make(map[uint8]ChunkInfo)
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
+		last = make(map[uint8]ChunkDescriptor)
 		for i := 0; i < count; i++ {
 			chunk := generateRandomChunk()
 
@@ -326,7 +326,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			last[bin] = ChunkInfo{
+			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
 				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
 			}
@@ -355,7 +355,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(storage.MaxPO); bin++ {
-		var since *ChunkInfo
+		var since *ChunkDescriptor
 		if c, ok := upload1[bin]; ok {
 			since = &c
 		}
@@ -399,10 +399,10 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 	}
 }
 
-// readPullSubscriptionBin is a helper function that reads all ChunkInfos from a channel and
-// sends error to errChan, even if it is nil, to count the number of ChunkInfos
+// readPullSubscriptionBin is a helper function that reads all ChunkDescriptors from a channel and
+// sends error to errChan, even if it is nil, to count the number of ChunkDescriptors
 // returned by the channel.
-func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkInfo, addrs map[uint8][]storage.Address, errChan chan error) {
+func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDescriptor, addrs map[uint8][]storage.Address, errChan chan error) {
 	var i int // address index
 	for {
 		select {

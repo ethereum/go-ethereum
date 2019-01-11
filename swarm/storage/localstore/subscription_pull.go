@@ -35,8 +35,8 @@ import (
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
-func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkInfo) (c <-chan ChunkInfo, stop func()) {
-	chunkInfos := make(chan ChunkInfo)
+func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkDescriptor) (c <-chan ChunkDescriptor, stop func()) {
+	chunkDescriptors := make(chan ChunkDescriptor)
 	trigger := make(chan struct{}, 1)
 
 	db.pullTriggersMu.Lock()
@@ -53,13 +53,13 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkI
 	var stopChanOnce sync.Once
 
 	// used to provide information from the iterator to
-	// stop subscription when until chunk info is reached
+	// stop subscription when until chunk descriptor is reached
 	var errStopSubscription = errors.New("stop subscription")
 
 	go func() {
-		// close the returned chunkInfo channel at the end to
+		// close the returned ChunkDescriptor channel at the end to
 		// signal that the subscription is done
-		defer close(chunkInfos)
+		defer close(chunkDescriptors)
 		// sinceItem is the Item from which the next iteration
 		// should start. The first iteration starts from the first Item.
 		var sinceItem *shed.Item
@@ -78,11 +78,11 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkI
 				// - context is done
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					select {
-					case chunkInfos <- ChunkInfo{
+					case chunkDescriptors <- ChunkDescriptor{
 						Address:        item.Address,
 						StoreTimestamp: item.StoreTimestamp,
 					}:
-						// until chunk info is sent
+						// until chunk descriptor is sent
 						// break the iteration
 						if until != nil &&
 							(item.StoreTimestamp >= until.StoreTimestamp ||
@@ -154,12 +154,12 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkI
 		}
 	}
 
-	return chunkInfos, stop
+	return chunkDescriptors, stop
 }
 
-// ChunkInfo holds information required for Pull syncing. This struct
+// ChunkDescriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
-type ChunkInfo struct {
+type ChunkDescriptor struct {
 	Address        storage.Address
 	StoreTimestamp int64
 }
