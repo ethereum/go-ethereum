@@ -336,22 +336,24 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number ui
 
 				var signTxs []*types.Transaction
 				for _, tx := range txs {
-					var b uint
-					for _, r := range receipts {
-						if r.TxHash == tx.Hash() {
-							b = r.Status
-							break
+					if tx.IsSigningTransaction() {
+						var b uint
+						for _, r := range receipts {
+							if r.TxHash == tx.Hash() {
+								b = r.Status
+								break
+							}
 						}
-					}
 
-					if b == types.ReceiptStatusFailed {
-						continue
-					}
+						if b == types.ReceiptStatusFailed {
+							continue
+						}
 
-					signTxs = append(signTxs, tx)
-					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-					from := *tx.From()
-					data[blkHash] = append(data[blkHash], from)
+						signTxs = append(signTxs, tx)
+						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+						from := *tx.From()
+						data[blkHash] = append(data[blkHash], from)
+					}
 				}
 				c.BlockSigners.Add(header.Hash(), signTxs)
 

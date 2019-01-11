@@ -39,6 +39,7 @@ const (
 	UnvoteMethod        = "0x02aa9be2"
 	ProposeMethod       = "0x01267951"
 	ResignMethod        = "0xae6e43f5"
+	SignMethod          = "0xe341eaa4"
 )
 
 var (
