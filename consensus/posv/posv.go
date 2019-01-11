@@ -853,7 +853,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
-	_ = c.CacheData(header, txs, receipts)
+	// _ = c.CacheData(header, txs, receipts)
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		err, rewards := c.HookReward(chain, state, header)
@@ -1045,6 +1045,7 @@ func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipt
 		}
 	}
 
+	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
 	c.BlockSigners.Add(header.Hash(), signTxs)
 
 	return nil
