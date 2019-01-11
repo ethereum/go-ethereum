@@ -300,14 +300,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			rewards := make(map[string]interface{})
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				start := time.Now()
-				// Get signers in blockSigner smartcontract.
-				addr := common.HexToAddress(common.BlockSigners)
 				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(c, chain, addr, number, rCheckpoint, client, totalSigner)
+				signers, err := contracts.GetRewardForCheckpoint(c, chain, number, rCheckpoint, totalSigner)
 				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)

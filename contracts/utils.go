@@ -306,7 +306,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSignerAddr common.Address, number uint64, rCheckpoint uint64, client bind.ContractBackend, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
@@ -318,7 +318,7 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 	if len(masternodes) > 0 {
 
 		data := make(map[common.Hash][]common.Address)
-		for i := startBlockNumber; i <= chain.CurrentHeader().Number.Uint64(); i++ {
+		for i := startBlockNumber; i <= prevCheckpoint+(rCheckpoint*2)-1; i++ {
 			header := chain.GetHeaderByNumber(i)
 
 			if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
@@ -329,11 +329,12 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 					data[blkHash] = append(data[blkHash], from)
 				}
 			} else {
-				log.Info("Failed get from cached", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
+				log.Info("Failed get from cached", "hash", header.Hash().String(), "number", i)
 				block := chain.GetBlock(header.Hash(), i)
 				txs := block.Transactions()
 				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
 
+				var signTxs []*types.Transaction
 				for _, tx := range txs {
 					if tx.IsSigningTransaction() {
 						var b uint
@@ -348,11 +349,13 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 							continue
 						}
 
+						signTxs = append(signTxs, tx)
 						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 						from := *tx.From()
 						data[blkHash] = append(data[blkHash], from)
 					}
 				}
+				c.BlockSigners.Add(header.Hash(), signTxs)
 
 			}
 		}
