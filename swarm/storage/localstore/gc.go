@@ -48,7 +48,9 @@ func (db *DB) collectGarbageWorker() {
 	for {
 		select {
 		case <-db.collectGarbageTrigger:
-			// TODO: Add comment about done
+			// run a single collect garbage run and
+			// if done is false, gcBatchSize is reached and
+			// another collect garbage run is needed
 			collectedCount, done, err := db.collectGarbage()
 			if err != nil {
 				log.Error("localstore collect garbage", "err", err)
