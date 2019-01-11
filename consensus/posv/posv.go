@@ -1059,23 +1059,8 @@ func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipt
 	return nil
 }
 
-func (c *Posv) GetSignData(chain consensus.ChainReader, startBlockNumber uint64, endBlockNumber uint64) (map[common.Hash][]common.Address, error) {
-	data := make(map[common.Hash][]common.Address)
-	for i := startBlockNumber; i < chain.CurrentHeader().Number.Uint64(); i++ {
-		block := chain.GetHeaderByNumber(i)
-
-		if signData, ok := c.BlockSigners.Get(block.Hash()); ok {
-			txs := signData.([]*types.Transaction)
-			for _, tx := range txs {
-				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-				from := *tx.From()
-				data[blkHash] = append(data[blkHash], from)
-			}
-		} else {
-			return nil, errors.New("Failed get blocksigners from cache " + block.Hash().String() + " " + block.Number.String())
-		}
-	}
-	return data, nil
+func (c *Posv) GetDb() ethdb.Database {
+	return c.db
 }
 
 // Extract validators from byte array.

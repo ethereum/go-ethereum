@@ -317,71 +317,71 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, blockSign
 
 	if len(masternodes) > 0 {
 
-		if !c.EnableCache {
-			for i := startBlockNumber; i <= endBlockNumber; i++ {
-				block := chain.GetHeaderByNumber(i)
-				addrs, err := GetSignersFromContract(blockSignerAddr, client, block.Hash())
-				if err != nil {
-					log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-					return nil, err
+		data := make(map[common.Hash][]common.Address)
+		for i := startBlockNumber; i <= chain.CurrentHeader().Number.Uint64(); i++ {
+			header := chain.GetHeaderByNumber(i)
+
+			if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
+				txs := signData.([]*types.Transaction)
+				for _, tx := range txs {
+					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+					from := *tx.From()
+					data[blkHash] = append(data[blkHash], from)
 				}
-				// Filter duplicate address.
-				if len(addrs) > 0 {
-					addrSigners := make(map[common.Address]bool)
-					for _, masternode := range masternodes {
-						for _, addr := range addrs {
-							if addr == masternode {
-								if _, ok := addrSigners[addr]; !ok {
-									addrSigners[addr] = true
-								}
+			} else {
+				log.Info("Failed get from cached", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
+				block := chain.GetBlock(header.Hash(), i)
+				txs := block.Transactions()
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+
+				for _, tx := range txs {
+					if tx.IsSigningTransaction() {
+						var b uint
+						for _, r := range receipts {
+							if r.TxHash == tx.Hash() {
+								b = r.Status
 								break
 							}
 						}
-					}
 
-					for addr := range addrSigners {
-						_, exist := signers[addr]
-						if exist {
-							signers[addr].Sign++
-						} else {
-							signers[addr] = &rewardLog{1, new(big.Int)}
+						if b == types.ReceiptStatusFailed {
+							continue
 						}
-						*totalSigner++
+
+						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+						from := *tx.From()
+						data[blkHash] = append(data[blkHash], from)
 					}
 				}
-			}
-		} else {
-			data, err := c.GetSignData(chain, startBlockNumber, endBlockNumber)
-			if err != nil {
-				log.Crit("Fail to get signers from cache.", "startBlockNumber", startBlockNumber, "endBlockNumber", endBlockNumber, "error", err)
-			}
 
-			for i := startBlockNumber; i <= endBlockNumber; i++ {
-				block := chain.GetHeaderByNumber(i)
-				addrs := data[block.Hash()]
-				// Filter duplicate address.
-				if len(addrs) > 0 {
-					addrSigners := make(map[common.Address]bool)
-					for _, masternode := range masternodes {
-						for _, addr := range addrs {
-							if addr == masternode {
-								if _, ok := addrSigners[addr]; !ok {
-									addrSigners[addr] = true
-								}
-								break
+			}
+		}
+
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+			block := chain.GetHeaderByNumber(i)
+			addrs := data[block.Hash()]
+			// Filter duplicate address.
+			if len(addrs) > 0 {
+				addrSigners := make(map[common.Address]bool)
+				for _, masternode := range masternodes {
+					for _, addr := range addrs {
+						if addr == masternode {
+							if _, ok := addrSigners[addr]; !ok {
+								addrSigners[addr] = true
 							}
+							break
 						}
 					}
+				}
 
-					for addr := range addrSigners {
-						_, exist := signers[addr]
-						if exist {
-							signers[addr].Sign++
-						} else {
-							signers[addr] = &rewardLog{1, new(big.Int)}
-						}
-						*totalSigner++
+				for addr := range addrSigners {
+					_, exist := signers[addr]
+					if exist {
+						signers[addr].Sign++
+					} else {
+						signers[addr] = &rewardLog{1, new(big.Int)}
 					}
+					*totalSigner++
 				}
 			}
 		}
