@@ -26,19 +26,27 @@ import (
 )
 
 // ReadDatabaseVersion retrieves the version number of the database.
-func ReadDatabaseVersion(db DatabaseReader) int {
-	var version int
+func ReadDatabaseVersion(db DatabaseReader) *uint64 {
+	var version uint64
 
 	enc, _ := db.Get(databaseVerisionKey)
-	rlp.DecodeBytes(enc, &version)
+	if len(enc) == 0 {
+		return nil
+	}
+	if err := rlp.DecodeBytes(enc, &version); err != nil {
+		return nil
+	}
 
-	return version
+	return &version
 }
 
 // WriteDatabaseVersion stores the version number of the database
-func WriteDatabaseVersion(db DatabaseWriter, version int) {
-	enc, _ := rlp.EncodeToBytes(version)
-	if err := db.Put(databaseVerisionKey, enc); err != nil {
+func WriteDatabaseVersion(db DatabaseWriter, version uint64) {
+	enc, err := rlp.EncodeToBytes(version)
+	if err != nil {
+		log.Crit("Failed to encode database version", "err", err)
+	}
+	if err = db.Put(databaseVerisionKey, enc); err != nil {
 		log.Crit("Failed to store the database version", "err", err)
 	}
 }
