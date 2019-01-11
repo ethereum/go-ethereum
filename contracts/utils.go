@@ -394,13 +394,9 @@ func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state
 	if err != nil {
 		return err, nil
 	}
-	if len(rewards) > 0 {
-		for holder, reward := range rewards {
-			state.AddBalance(holder, reward)
-		}
-	}
 	return nil, rewards
 }
+
 func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.StateDB, masterAddr common.Address, totalReward *big.Int) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(state, masterAddr)
 	balances := make(map[common.Address]*big.Int)

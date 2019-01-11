@@ -321,9 +321,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, canonicalState, signer, calcReward)
 						if err != nil {
 							log.Crit("Fail to calculate reward for holders.", "error", err)
+						}
+						if len(rewards) > 0 {
+							for holder, reward := range rewards {
+								state.AddBalance(holder, reward)
+							}
 						}
 						voterResults[signer] = rewards
 					}
