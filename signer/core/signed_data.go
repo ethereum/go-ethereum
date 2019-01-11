@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"mime"
 	"regexp"
@@ -29,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/common/math"
 
