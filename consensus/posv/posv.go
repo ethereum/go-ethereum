@@ -224,7 +224,7 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward    func(chain consensus.ChainReader, header *types.Header) (error, map[string]interface{})
+	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
 	HookVerifyMNs func(header *types.Header, signers []common.Address) error
@@ -850,7 +850,7 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
 	if c.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewards := c.HookReward(chain, header)
+		err, rewards := c.HookReward(chain, state, header)
 		if err != nil {
 			return nil, err
 		}

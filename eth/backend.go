@@ -52,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 type LesServer interface {
@@ -285,10 +286,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 
 		// Hook calculates reward for masternodes
-		c.HookReward = func(chain consensus.ChainReader, header *types.Header) (error, map[string]interface{}) {
-			state, err := eth.blockchain.State()
-			if state == nil || err != nil {
-				log.Crit("Can't get state", "block number", header.Number.Uint64(), "err", err)
+		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{}) {
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", header.Number.Uint64(), "err", err)
 			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
@@ -306,7 +307,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(chain, number, rCheckpoint, totalSigner, state)
+				signers, err := contracts.GetRewardForCheckpoint(chain, number, rCheckpoint, totalSigner, canonicalState)
 				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)
