@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,8 +143,12 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
+	var lastTimestampMu sync.RWMutex
 	defer setNow(func() (t int64) {
-		return atomic.AddInt64(&lastTimestamp, 1)
+		lastTimestampMu.Lock()
+		defer lastTimestampMu.Unlock()
+		lastTimestamp++
+		return lastTimestamp
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
@@ -167,9 +171,13 @@ func TestDB_SubscribePull_since(t *testing.T) {
 				wantedChunksCount++
 			}
 
+			lastTimestampMu.RLock()
+			storeTimestamp := lastTimestamp
+			lastTimestampMu.RUnlock()
+
 			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
-				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
+				StoreTimestamp: storeTimestamp,
 			}
 		}
 		return last
@@ -222,8 +230,12 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
+	var lastTimestampMu sync.RWMutex
 	defer setNow(func() (t int64) {
-		return atomic.AddInt64(&lastTimestamp, 1)
+		lastTimestampMu.Lock()
+		defer lastTimestampMu.Unlock()
+		lastTimestamp++
+		return lastTimestamp
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
@@ -246,9 +258,13 @@ func TestDB_SubscribePull_until(t *testing.T) {
 				wantedChunksCount++
 			}
 
+			lastTimestampMu.RLock()
+			storeTimestamp := lastTimestamp
+			lastTimestampMu.RUnlock()
+
 			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
-				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
+				StoreTimestamp: storeTimestamp,
 			}
 		}
 		return last
@@ -302,8 +318,12 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
+	var lastTimestampMu sync.RWMutex
 	defer setNow(func() (t int64) {
-		return atomic.AddInt64(&lastTimestamp, 1)
+		lastTimestampMu.Lock()
+		defer lastTimestampMu.Unlock()
+		lastTimestamp++
+		return lastTimestamp
 	})()
 
 	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]ChunkDescriptor) {
@@ -326,9 +346,13 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 				wantedChunksCount++
 			}
 
+			lastTimestampMu.RLock()
+			storeTimestamp := lastTimestamp
+			lastTimestampMu.RUnlock()
+
 			last[bin] = ChunkDescriptor{
 				Address:        chunk.Address(),
-				StoreTimestamp: atomic.LoadInt64(&lastTimestamp),
+				StoreTimestamp: storeTimestamp,
 			}
 		}
 		return last
@@ -409,6 +433,9 @@ func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDesc
 		case got, ok := <-ch:
 			if !ok {
 				return
+			}
+			if i+1 > len(addrs[bin]) {
+				errChan <- fmt.Errorf("got more chunk addresses %v, then expected %v, for bin %v", i+1, len(addrs[bin]), bin)
 			}
 			want := addrs[bin][i]
 			var err error

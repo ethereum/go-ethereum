@@ -17,7 +17,6 @@
 package localstore
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -88,7 +87,7 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 		}
 		defer unlock()
 
-		gcSize := atomic.LoadInt64(&db.gcSize)
+		gcSize := db.getGCSize()
 		if gcSize-collectedCount <= target {
 			return true, nil
 		}
@@ -131,7 +130,12 @@ func (db *DB) incGCSize(count int64) {
 	if count == 0 {
 		return
 	}
-	new := atomic.AddInt64(&db.gcSize, count)
+
+	db.gcSizeMu.Lock()
+	new := db.gcSize + count
+	db.gcSize = new
+	db.gcSizeMu.Unlock()
+
 	select {
 	case db.writeGCSizeTrigger <- struct{}{}:
 	default:
@@ -139,6 +143,15 @@ func (db *DB) incGCSize(count int64) {
 	if new >= db.capacity {
 		db.triggerGarbageCollection()
 	}
+}
+
+// getGCSize returns gcSize value by locking it
+// with gcSizeMu mutex.
+func (db *DB) getGCSize() (count int64) {
+	db.gcSizeMu.RLock()
+	count = db.gcSize
+	db.gcSizeMu.RUnlock()
+	return count
 }
 
 // triggerGarbageCollection signals collectGarbageWorker
@@ -159,7 +172,7 @@ func (db *DB) writeGCSizeWorker() {
 	for {
 		select {
 		case <-db.writeGCSizeTrigger:
-			err := db.writeGCSize(atomic.LoadInt64(&db.gcSize))
+			err := db.writeGCSize(db.getGCSize())
 			if err != nil {
 				log.Error("localstore write gc size", "err", err)
 			}

@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -82,7 +81,10 @@ type DB struct {
 	gcUncountedHashesIndex shed.Index
 
 	// number of elements in garbage collection index
-	gcSize int64
+	// it must be always read by getGCSize and
+	// set with incGCSize which are locking gcSizeMu
+	gcSize   int64
+	gcSizeMu sync.RWMutex
 	// garbage collection is triggered when gcSize exceeds
 	// the capacity value
 	capacity int64
@@ -361,7 +363,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 func (db *DB) Close() (err error) {
 	close(db.close)
 	db.updateGCWG.Wait()
-	if err := db.writeGCSize(atomic.LoadInt64(&db.gcSize)); err != nil {
+	if err := db.writeGCSize(db.getGCSize()); err != nil {
 		log.Error("localstore: write gc size", "err", err)
 	}
 	return db.shed.Close()

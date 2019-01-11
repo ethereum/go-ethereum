@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,23 +88,16 @@ func testDB_collectGarbageWorker(t *testing.T, db *DB) {
 
 	gcTarget := db.gcTarget()
 
-	var totalCollectedCount int64
 	for {
 		select {
-		case c := <-testHookCollectGarbageChan:
-			totalCollectedCount += c
+		case <-testHookCollectGarbageChan:
 		case <-time.After(10 * time.Second):
 			t.Error("collect garbage timeout")
 		}
-		gcSize := atomic.LoadInt64(&db.gcSize)
+		gcSize := db.getGCSize()
 		if gcSize == gcTarget {
 			break
 		}
-	}
-
-	wantTotalCollectedCount := int64(chunkCount) - gcTarget
-	if totalCollectedCount != wantTotalCollectedCount {
-		t.Errorf("total collected chunks %v, want %v", totalCollectedCount, wantTotalCollectedCount)
 	}
 
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, int(gcTarget)))
@@ -200,7 +192,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		case <-time.After(10 * time.Second):
 			t.Error("collect garbage timeout")
 		}
-		gcSize := atomic.LoadInt64(&db.gcSize)
+		gcSize := db.getGCSize()
 		if gcSize == gcTarget {
 			break
 		}

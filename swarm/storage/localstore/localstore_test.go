@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -408,7 +407,7 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := atomic.LoadInt64(&db.gcSize)
+		got := db.getGCSize()
 		if got != want {
 			t.Errorf("got gc size %v, want %v", got, want)
 		}
