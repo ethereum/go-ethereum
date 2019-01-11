@@ -314,45 +314,6 @@ func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Done.")
 }
 
-func TestPivotNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	id, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	id2, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if sim.PivotNodeID() != nil {
-		t.Error("expected no pivot node")
-	}
-
-	sim.SetPivotNode(id)
-
-	pid := sim.PivotNodeID()
-
-	if pid == nil {
-		t.Error("pivot node not set")
-	} else if *pid != id {
-		t.Errorf("expected pivot node %s, got %s", id, *pid)
-	}
-
-	sim.SetPivotNode(id2)
-
-	pid = sim.PivotNodeID()
-
-	if pid == nil {
-		t.Error("pivot node not set")
-	} else if *pid != id2 {
-		t.Errorf("expected pivot node %s, got %s", id2, *pid)
-	}
-}
-
 func TestStartStopNode(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()
