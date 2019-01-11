@@ -329,31 +329,29 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number ui
 					data[blkHash] = append(data[blkHash], from)
 				}
 			} else {
-				log.Info("Failed get from cached", "hash", header.Hash().String(), "number", i)
+				log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 				block := chain.GetBlock(header.Hash(), i)
 				txs := block.Transactions()
 				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
 
 				var signTxs []*types.Transaction
 				for _, tx := range txs {
-					if tx.IsSigningTransaction() {
-						var b uint
-						for _, r := range receipts {
-							if r.TxHash == tx.Hash() {
-								b = r.Status
-								break
-							}
+					var b uint
+					for _, r := range receipts {
+						if r.TxHash == tx.Hash() {
+							b = r.Status
+							break
 						}
-
-						if b == types.ReceiptStatusFailed {
-							continue
-						}
-
-						signTxs = append(signTxs, tx)
-						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-						from := *tx.From()
-						data[blkHash] = append(data[blkHash], from)
 					}
+
+					if b == types.ReceiptStatusFailed {
+						continue
+					}
+
+					signTxs = append(signTxs, tx)
+					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+					from := *tx.From()
+					data[blkHash] = append(data[blkHash], from)
 				}
 				c.BlockSigners.Add(header.Hash(), signTxs)
 
@@ -433,7 +431,7 @@ func GetCandidatesOwnerBySigner(validator *contractValidator.TomoValidator, sign
 }
 
 // Calculate reward for holders.
-func CalculateRewardForHolders(c *posv.Posv, foudationWalletAddr common.Address, validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
+func CalculateRewardForHolders(foudationWalletAddr common.Address, validator *contractValidator.TomoValidator, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
 	rewards, err := GetRewardBalancesRate(foudationWalletAddr, signer, calcReward, validator)
 	if err != nil {
 		return err, nil

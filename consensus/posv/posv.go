@@ -226,7 +226,6 @@ type Posv struct {
 	lock   sync.RWMutex    // Protects the signer fields
 
 	BlockSigners  *lru.Cache
-	Votes         *lru.Cache
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
