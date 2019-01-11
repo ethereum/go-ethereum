@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -194,7 +195,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 
 		results      chan<- *types.Block
 		currentBlock *types.Block
-		currentWork  [4]string
+		currentWork  [5]string
 
 		notifyTransport = &http.Transport{}
 		notifyClient    = &http.Client{
@@ -243,6 +244,7 @@ func (ethash *Ethash) remote(notify []string, noverify bool) {
 		currentWork[1] = common.BytesToHash(SeedHash(block.NumberU64())).Hex()
 		currentWork[2] = common.BytesToHash(new(big.Int).Div(two256, block.Difficulty()).Bytes()).Hex()
 		currentWork[3] = hexutil.EncodeBig(block.Number())
+		currentWork[4] = strings.Join([]string{algorithmName, algorithmVersion}, "/")
 
 		// Trace the seal work fetched by remote sealer.
 		currentBlock = block

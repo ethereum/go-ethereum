@@ -43,6 +43,11 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
+const (
+	algorithmName    = "ethash" // PoW algorithm name
+	algorithmVersion = "1.0.0"  // Algorithm revision information
+)
+
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
 
 var (
@@ -432,7 +437,7 @@ type hashrate struct {
 // sealWork wraps a seal work package for remote sealer.
 type sealWork struct {
 	errc chan error
-	res  chan [4]string
+	res  chan [5]string
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash

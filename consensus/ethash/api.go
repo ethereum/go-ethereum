@@ -38,27 +38,28 @@ type API struct {
 //   result[1] - 32 bytes hex encoded seed hash used for DAG
 //   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 //   result[3] - hex encoded block number
-func (api *API) GetWork() ([4]string, error) {
+//   result[4] - algorithm name and version tag.
+func (api *API) GetWork() ([5]string, error) {
 	if api.ethash.config.PowMode != ModeNormal && api.ethash.config.PowMode != ModeTest {
-		return [4]string{}, errors.New("not supported")
+		return [5]string{}, errors.New("not supported")
 	}
 
 	var (
-		workCh = make(chan [4]string, 1)
+		workCh = make(chan [5]string, 1)
 		errc   = make(chan error, 1)
 	)
 
 	select {
 	case api.ethash.fetchWorkCh <- &sealWork{errc: errc, res: workCh}:
 	case <-api.ethash.exitCh:
-		return [4]string{}, errEthashStopped
+		return [5]string{}, errEthashStopped
 	}
 
 	select {
 	case work := <-workCh:
 		return work, nil
 	case err := <-errc:
-		return [4]string{}, err
+		return [5]string{}, err
 	}
 }
 
