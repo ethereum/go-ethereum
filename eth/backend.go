@@ -244,9 +244,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook scans for bad masternodes and decide to penalty them
 		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
-			client, err := eth.blockchain.GetClient()
-			if err != nil {
-				return nil, err
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
 			}
 			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
 			if prevEpoc >= 0 {
@@ -254,12 +254,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
-					blockSignerAddr := common.HexToAddress(common.BlockSigners)
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
-						blockHeader := chain.GetHeaderByNumber(i)
+						bheader := chain.GetHeaderByNumber(i)
+						bhash := bheader.Hash()
+						block := chain.GetBlock(bhash, i)
 						if len(penSigners) > 0 {
-							signedMasternodes, err := contracts.GetSignersFromContract1(blockSignerAddr, client, blockHeader.Hash())
+							signedMasternodes, err := contracts.GetSignersFromContract(canonicalState, block)
 							if err != nil {
 								return nil, err
 							}
