@@ -175,12 +175,12 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	minsize := k.MinBinSize
-	depth := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
+	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
 	k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
-		if po < depth {
+		if po < radius {
 			return false
 		}
 		e := val.(*entry)
@@ -208,7 +208,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 			bpo = append(bpo, po)
 			minsize = size
 		}
-		return size > 0 && po < depth
+		return size > 0 && po < radius
 	})
 	// all buckets are full, ie., minsize == k.MinBinSize
 	if len(bpo) == 0 {
@@ -221,7 +221,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	nxt := bpo[0]
 	k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
 		// for each bin (up until depth) we find callable candidate peers
-		if po >= depth {
+		if po >= radius {
 			return false
 		}
 		return f(func(val pot.Val) bool {
@@ -751,7 +751,7 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
-	if len(pp.NNSet) < k.MinProxBinSize {
+	if len(pp.NNSet) < k.NeighbourhoodSize {
 		panic("wrong peerpot")
 	}
 	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
