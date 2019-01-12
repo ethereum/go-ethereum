@@ -48,8 +48,9 @@ import (
 )
 
 const (
-	inmemorySnapshots = 128 // Number of recent vote snapshots to keep in memory
-	M2ByteLength      = 4
+	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
+	blockSignersCacheLimit = 36000
+	M2ByteLength           = 4
 )
 
 type Masternode struct {
@@ -224,6 +225,7 @@ type Posv struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
+	BlockSigners  *lru.Cache
 	HookReward    func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{})
 	HookPenalty   func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookValidator func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -239,6 +241,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 		conf.Epoch = epochLength
 	}
 	// Allocate the snapshot caches and create the engine
+	BlockSigners, _ := lru.New(blockSignersCacheLimit)
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySnapshots)
 	validatorSignatures, _ := lru.NewARC(inmemorySnapshots)
@@ -246,6 +249,7 @@ func New(config *params.PosvConfig, db ethdb.Database) *Posv {
 	return &Posv{
 		config:              &conf,
 		db:                  db,
+		BlockSigners:        BlockSigners,
 		recents:             recents,
 		signatures:          signatures,
 		verifiedHeaders:     verifiedHeaders,
@@ -849,6 +853,8 @@ func (c *Posv) Finalize(chain consensus.ChainReader, header *types.Header, state
 	number := header.Number.Uint64()
 	rCheckpoint := chain.Config().Posv.RewardCheckpoint
 
+	// _ = c.CacheData(header, txs, receipts)
+
 	if c.HookReward != nil && number%rCheckpoint == 0 {
 		err, rewards := c.HookReward(chain, state, header)
 		if err != nil {
@@ -930,8 +936,7 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 				if limit := uint64(2); number < limit || seen > number-limit {
 					// Only take into account the non-epoch blocks
 					if number%c.config.Epoch != 0 {
-						log.Info("len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
-						log.Info("Signed recently, must wait for others")
+						log.Info("Signed recently, must wait for others ", "len(masternodes)", len(masternodes), "number", number, "limit", limit, "seen", seen, "recent", recent.String(), "snap.Recents", snap.Recents)
 						<-stop
 						return nil, nil
 					}
@@ -1018,6 +1023,36 @@ func (c *Posv) GetMasternodesFromCheckpointHeader(preCheckpointHeader *types.Hea
 		copy(masternodes[i][:], preCheckpointHeader.Extra[extraVanity+i*common.AddressLength:])
 	}
 	return masternodes
+}
+
+func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipts []*types.Receipt) error {
+	var signTxs []*types.Transaction
+	for _, tx := range txs {
+		if tx.IsSigningTransaction() {
+			var b uint
+			for _, r := range receipts {
+				if r.TxHash == tx.Hash() {
+					b = r.Status
+					break
+				}
+			}
+
+			if b == types.ReceiptStatusFailed {
+				continue
+			}
+
+			signTxs = append(signTxs, tx)
+		}
+	}
+
+	log.Debug("Save tx signers to cache", "hash", header.Hash().String(), "number", header.Number, "len(txs)", len(signTxs))
+	c.BlockSigners.Add(header.Hash(), signTxs)
+
+	return nil
+}
+
+func (c *Posv) GetDb() ethdb.Database {
+	return c.db
 }
 
 // Extract validators from byte array.

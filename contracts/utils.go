@@ -215,7 +215,6 @@ func GetSignersFromContract1(addrBlockSigner common.Address, client bind.Contrac
 		log.Error("Fail get block signers", "error", err)
 		return nil, err
 	}
-
 	return addrs, nil
 }
 
@@ -307,7 +306,8 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 	return random, nil
 }
 
-func GetRewardForCheckpoint(chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64, state *state.StateDB) (map[common.Address]*rewardLog, error) {
+// Calculate reward for reward checkpoint.
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
@@ -317,15 +317,53 @@ func GetRewardForCheckpoint(chain consensus.ChainReader, number uint64, rCheckpo
 	masternodes := posv.GetMasternodesFromCheckpointHeader(prevHeaderCheckpoint)
 
 	if len(masternodes) > 0 {
-		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			bheader := chain.GetHeaderByNumber(i)
-			bhash := bheader.Hash()
-			block := chain.GetBlock(bhash, i)
-			addrs, err := GetSignersFromContract(state, block)
-			if err != nil {
-				log.Error("Fail to get signers from smartcontract.", "error", err, "blockNumber", i)
-				return nil, err
+
+		data := make(map[common.Hash][]common.Address)
+		for i := startBlockNumber; i <= prevCheckpoint+(rCheckpoint*2)-1; i++ {
+			header := chain.GetHeaderByNumber(i)
+
+			if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
+				txs := signData.([]*types.Transaction)
+				for _, tx := range txs {
+					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+					from := *tx.From()
+					data[blkHash] = append(data[blkHash], from)
+				}
+			} else {
+				log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
+				block := chain.GetBlock(header.Hash(), i)
+				txs := block.Transactions()
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+
+				var signTxs []*types.Transaction
+				for _, tx := range txs {
+					if tx.IsSigningTransaction() {
+						var b uint
+						for _, r := range receipts {
+							if r.TxHash == tx.Hash() {
+								b = r.Status
+								break
+							}
+						}
+
+						if b == types.ReceiptStatusFailed {
+							continue
+						}
+
+						signTxs = append(signTxs, tx)
+						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+						from := *tx.From()
+						data[blkHash] = append(data[blkHash], from)
+					}
+				}
+				c.BlockSigners.Add(header.Hash(), signTxs)
+
 			}
+		}
+
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+			block := chain.GetHeaderByNumber(i)
+			addrs := data[block.Hash()]
 			// Filter duplicate address.
 			if len(addrs) > 0 {
 				addrSigners := make(map[common.Address]bool)

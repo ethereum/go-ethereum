@@ -859,6 +859,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	var filterSigners []common.Address
 	finality := int32(0)
 	if b.Number().Int64() > 0 {
+		engine := s.b.GetEngine()
 		blockNr := rpc.BlockNumber(b.Number().Int64())
 		state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 		if state == nil || err != nil {
@@ -870,7 +871,6 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		}
 		// Get block epoc latest.
 		if s.b.ChainConfig().Posv != nil {
-			engine := s.b.GetEngine()
 			lastCheckpointNumber := rpc.BlockNumber(b.Number().Uint64() - (b.Number().Uint64() % s.b.ChainConfig().Posv.Epoch))
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, lastCheckpointNumber)
 			if prevCheckpointBlock != nil {

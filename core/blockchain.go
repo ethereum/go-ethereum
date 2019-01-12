@@ -506,6 +506,12 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 	bc.currentBlock.Store(block)
 
+	// save cache BlockSigners
+	if bc.chainConfig.Posv != nil {
+		engine := bc.Engine().(*posv.Posv)
+		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+	}
+
 	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
