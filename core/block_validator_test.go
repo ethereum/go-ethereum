@@ -48,13 +48,12 @@ func TestHeaderVerification(t *testing.T) {
 	for i := 0; i < len(blocks); i++ {
 		for j, valid := range []bool{true, false} {
 			var results <-chan error
-			state, _ := chain.State()
 			if valid {
 				engine := ethash.NewFaker()
-				_, results = engine.VerifyHeaders(chain, state, []*types.Header{headers[i]}, []bool{true})
+				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			} else {
 				engine := ethash.NewFakeFailer(headers[i].Number.Uint64())
-				_, results = engine.VerifyHeaders(chain, state, []*types.Header{headers[i]}, []bool{true})
+				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			}
 			// Wait for the verification result
 			select {
@@ -106,13 +105,11 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		var results <-chan error
 		if valid {
 			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{})
-			state, _ := chain.State()
-			_, results = chain.engine.VerifyHeaders(chain, state, headers, seals)
+			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
 			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{})
-			state, _ := chain.State()
-			_, results = chain.engine.VerifyHeaders(chain, state, headers, seals)
+			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}
 		// Wait for all the verification results
@@ -176,8 +173,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Start the verifications and immediately abort
 	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{})
 	defer chain.Stop()
-	state, _ := chain.State()
-	abort, results := chain.engine.VerifyHeaders(chain, state, headers, seals)
+	abort, results := chain.engine.VerifyHeaders(chain, headers, seals)
 	close(abort)
 
 	// Deplete the results channel
