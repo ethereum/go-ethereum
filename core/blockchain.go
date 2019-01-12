@@ -1684,11 +1684,7 @@ Error: %v
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	start := time.Now()
-	state, err := bc.State()
-	if err != nil {
-		return 0, err
-	}
-	if i, err := bc.hc.ValidateHeaderChain(chain, state, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
 	}
 
