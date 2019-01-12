@@ -352,7 +352,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 				healthy := &network.Health{}
 				addr := id.String()
-				ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, addrs)
+				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 				if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}

@@ -170,18 +170,18 @@ func TestHealthStrict(t *testing.T) {
 	// no peers
 	// unhealthy (and lonely)
 	k := newTestKademlia("11111111")
-	// assertHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// know one peer but not connected
 	// unhealthy
 	Register(k, "11100000")
 	log.Trace(k.String())
-	// assertHealth(t, k, false, false)
+	assertHealth(t, k, false, false)
 
 	// know one peer and connected
 	// healthy
 	On(k, "11100000")
-	// assertHealth(t, k, true, false)
+	assertHealth(t, k, true, false)
 
 	// know two peers, only one connected
 	// unhealthy

@@ -168,15 +168,13 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 	return nil
 }
 
-// SuggestPeer returns a known peer for the lowest proximity bin for the
-// lowest bincount below depth
-// naturally if there is an empty row it returns a peer for that
+// SuggestPeer returns an unconnected peer address as a peer suggestion for connection
 func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	minsize := k.MinBinSize
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
-	// if there is a callable neighbour within the current proxBin, connect
+	// finds a callable neighbour within the current neighbourhood radius
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
 	k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
@@ -196,6 +194,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 		return a, 0, false
 	}
 
+	// if there are no callable neighbours, find the undersaturated bins from shallow to deep
 	var bpo []int
 	prev := -1
 	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
@@ -210,13 +209,10 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 		}
 		return size > 0 && po < radius
 	})
-	// all buckets are full, ie., minsize == k.MinBinSize
+	// all buckets are saturated, ie., minsize >= k.MinBinSize, no peer suggested
 	if len(bpo) == 0 {
 		return nil, 0, false
 	}
-	// as long as we got candidate peers to connect to
-	// dont ask for new peers (want = false)
-	// try to select a candidate peer
 	// find the first callable peer
 	nxt := bpo[0]
 	k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
@@ -398,15 +394,18 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int) bool) {
 	})
 }
 
+// NeighbourhoodDepth returns the depth for the pot, see depthForPot
 func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	return depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 }
 
-// neighbourhoodRadiusForPot returns the proximity order that defines the distance of
-// the nearest neighbour set with cardinality >= MinProxBinSize
-// if there is altogether less than MinProxBinSize peers it returns 0
+// neighbourhoodRadiusForPot returns the neighbourhood radius of the kademlia
+// neighbourhood radius encloses the nearest neighbour set with cardinality >= neighbourhoodSize
+// i.e., neighbourhood radius is the deepest PO such that all bins not shallower altogether
+// contain at least neighbourhoodSize connected peers
+// if there is altogether less than neighbourhoodSize peers connected, it returns 0
 // caller must hold the lock
 func neighbourhoodRadiusForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []byte) (depth int) {
 	if p.Size() <= neighbourhoodSize {
@@ -435,15 +434,19 @@ func neighbourhoodRadiusForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []by
 }
 
 // depthForPot returns the depth for the pot
+// depth is the radius of the minimal extension of nearest neighbourhood that
+// includes all empty PO bins. I.e., depth is the deepest PO such that
+// - it is not deeper than neighbourhood radius
+// - all bins shallower than depth are not empty
 // caller must hold the lock
-func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
-	if p.Size() <= minProxBinSize {
+func depthForPot(p *pot.Pot, neighbourhoodSize int, pivotAddr []byte) (depth int) {
+	if p.Size() <= neighbourhoodSize {
 		return 0
 	}
 	// determining the depth is a two-step process
-	// first we find the proximity bin of the shallowest of the MinProxBinSize peers
+	// first we find the proximity bin of the shallowest of the neighbourhoodSize peers
 	// the numeric value of depth cannot be higher than this
-	maxDepth := neighbourhoodRadiusForPot(p, minProxBinSize, pivotAddr)
+	maxDepth := neighbourhoodRadiusForPot(p, neighbourhoodSize, pivotAddr)
 
 	// the second step is to test for empty bins in order from shallowest to deepest
 	// if an empty bin is found, this will be the actual depth
@@ -752,7 +755,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	if len(pp.NNSet) < k.NeighbourhoodSize {
-		panic("wrong peerpot")
+		log.Warn("peerpot NNSet < NeighbourhoodSize")
 	}
 	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
