@@ -34,10 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/posv"
 	"github.com/ethereum/go-ethereum/contracts"
-	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
+	//"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -53,6 +52,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 type LesServer interface {
@@ -244,9 +244,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook scans for bad masternodes and decide to penalty them
 		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
-			client, err := eth.blockchain.GetClient()
-			if err != nil {
-				return nil, err
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
 			}
 			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
 			if prevEpoc >= 0 {
@@ -254,12 +254,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
 				if len(penSigners) > 0 {
-					blockSignerAddr := common.HexToAddress(common.BlockSigners)
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
-						blockHeader := chain.GetHeaderByNumber(i)
+						bheader := chain.GetHeaderByNumber(i)
+						bhash := bheader.Hash()
+						block := chain.GetBlock(bhash, i)
 						if len(penSigners) > 0 {
-							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
+							signedMasternodes, err := contracts.GetSignersFromContract(canonicalState, block)
 							if err != nil {
 								return nil, err
 							}
@@ -287,25 +288,28 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook calculates reward for masternodes
 		c.HookReward = func(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error, map[string]interface{}) {
-			client, err := eth.blockchain.GetClient()
-			if err != nil {
-				log.Crit("Fail to connect IPC client for blockSigner", "error", err)
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", header.Number.Uint64(), "err", err)
 			}
 			number := header.Number.Uint64()
 			rCheckpoint := chain.Config().Posv.RewardCheckpoint
-			foudationWalletAddr := chain.Config().Posv.FoudationWalletAddr
-			if foudationWalletAddr == (common.Address{}) {
-				log.Error("Foundation Wallet Address is empty", "error", foudationWalletAddr)
+			foundationWalletAddr := chain.Config().Posv.FoudationWalletAddr
+			if foundationWalletAddr == (common.Address{}) {
+				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
+				return err, nil
 			}
 			rewards := make(map[string]interface{})
-			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
+			if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
 				start := time.Now()
+				// Get signers in blockSigner smartcontract.
 				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
 				signers, err := contracts.GetRewardForCheckpoint(c, chain, number, rCheckpoint, totalSigner)
+
 				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)
@@ -315,18 +319,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				if err != nil {
 					log.Crit("Fail to calculate reward for signers", "error", err)
 				}
-				// Get validator.
-				validator, err := contract.NewTomoValidator(common.HexToAddress(common.MasternodeVotingSMC), client)
-				if err != nil {
-					log.Crit("Fail get instance of Tomo Validator", "error", err)
-				}
 				// Add reward for coin holders.
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, canonicalState, signer, calcReward)
 						if err != nil {
 							log.Crit("Fail to calculate reward for holders.", "error", err)
+						}
+						if len(rewards) > 0 {
+							for holder, reward := range rewards {
+								state.AddBalance(holder, reward)
+							}
 						}
 						voterResults[signer] = rewards
 					}
@@ -353,6 +357,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			}
 			return nil
 		}
+
 		eth.txPool.IsMasterNode = func(address common.Address) bool {
 			currentHeader := eth.blockchain.CurrentHeader()
 			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
@@ -404,6 +409,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 	if chainConfig.Posv != nil {
 		return posv.New(chainConfig.Posv, db)
 	}
+
 	// Otherwise assume proof-of-work
 	switch {
 	case config.PowMode == ethash.ModeFake:

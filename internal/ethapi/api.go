@@ -855,22 +855,19 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	}
 	fields["uncles"] = uncleHashes
 
-	// Get signers for block.
-	client, err := s.b.GetIPCClient()
-	if err != nil {
-		log.Error("Fail to connect IPC client for block status", "error", err)
-		return nil, err
-	}
 	var signers []common.Address
 	var filterSigners []common.Address
 	finality := int32(0)
 	if b.Number().Int64() > 0 {
 		engine := s.b.GetEngine()
-		addrBlockSigner := common.HexToAddress(common.BlockSigners)
-		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
+		blockNr := rpc.BlockNumber(b.Number().Int64())
+		state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+		if state == nil || err != nil {
+			return nil, err
+		}
+		signers, err = contracts.GetSignersFromContract(state, b)
 		if err != nil {
 			log.Error("Fail to get signers from block signer SC.", "error", err)
-			return nil, err
 		}
 		// Get block epoc latest.
 		if s.b.ChainConfig().Posv != nil {

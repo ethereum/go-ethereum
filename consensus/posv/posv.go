@@ -778,7 +778,7 @@ func (c *Posv) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	}
 	header.Extra = header.Extra[:extraVanity]
 	masternodes := snap.GetSigners()
-	if number > 0 && number%c.config.Epoch == 0 {
+	if number >= c.config.Epoch && number%c.config.Epoch == 0 {
 		if c.HookPenalty != nil {
 			penMasternodes, err := c.HookPenalty(chain, number)
 			if err != nil {

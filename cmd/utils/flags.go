@@ -1256,6 +1256,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 			})
 		}
+		Fatalf("Only support posv consensus")
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
