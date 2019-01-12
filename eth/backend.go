@@ -259,7 +259,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
 						blockHeader := chain.GetHeaderByNumber(i)
 						if len(penSigners) > 0 {
-							signedMasternodes, err := contracts.GetSignersFromContract(c, blockSignerAddr, client, blockHeader.Hash())
+							signedMasternodes, err := contracts.GetSignersFromContract(blockSignerAddr, client, blockHeader.Hash())
 							if err != nil {
 								return nil, err
 							}
@@ -300,14 +300,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			rewards := make(map[string]interface{})
 			if number > 0 && number-rCheckpoint > 0 && foudationWalletAddr != (common.Address{}) {
 				start := time.Now()
-				// Get signers in blockSigner smartcontract.
-				addr := common.HexToAddress(common.BlockSigners)
 				// Get reward inflation.
 				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().Posv.Reward), new(big.Int).SetUint64(params.Ether))
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
-				signers, err := contracts.GetRewardForCheckpoint(c, chain, addr, number, rCheckpoint, client, totalSigner)
+				signers, err := contracts.GetRewardForCheckpoint(c, chain, number, rCheckpoint, totalSigner)
 				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 				if err != nil {
 					log.Crit("Fail to get signers for reward checkpoint", "error", err)
@@ -326,7 +324,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				voterResults := make(map[common.Address]interface{})
 				if len(signers) > 0 {
 					for signer, calcReward := range rewardSigners {
-						err, rewards := contracts.CalculateRewardForHolders(c, foudationWalletAddr, validator, state, signer, calcReward)
+						err, rewards := contracts.CalculateRewardForHolders(foudationWalletAddr, validator, state, signer, calcReward)
 						if err != nil {
 							log.Crit("Fail to calculate reward for holders.", "error", err)
 						}

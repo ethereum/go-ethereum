@@ -867,7 +867,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	if b.Number().Int64() > 0 {
 		engine := s.b.GetEngine()
 		addrBlockSigner := common.HexToAddress(common.BlockSigners)
-		signers, err = contracts.GetSignersFromContract(engine.(*posv.Posv), addrBlockSigner, client, b.Hash())
+		signers, err = contracts.GetSignersFromContract(addrBlockSigner, client, b.Hash())
 		if err != nil {
 			log.Error("Fail to get signers from block signer SC.", "error", err)
 			return nil, err
