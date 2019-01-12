@@ -214,10 +214,22 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 		return nil, 0, false
 	}
 	// find the first callable peer
-	nxt := bpo[0]
-	k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
-		// for each bin (up until depth) we find callable candidate peers
+	// for each bin (up until neighbourhood radius) we find callable candidate peers
+	// nxt := bpo[0]
+	ci := 0
+	saturationDepth := bpo[0]
+	cpo := saturationDepth
+	k.addrs.EachBin(k.base, Pof, cpo, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
 		if po >= radius {
+			return false
+		}
+		if po < cpo {
+			return true
+		}
+		for ; ci < len(bpo) && cpo < po; ci++ {
+			cpo = bpo[ci]
+		}
+		if ci == len(bpo) {
 			return false
 		}
 		return f(func(val pot.Val) bool {
@@ -235,11 +247,11 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	}
 	// no candidate peer found, request for the short bin
 	var changed bool
-	if uint8(nxt) < k.depth {
-		k.depth = uint8(nxt)
+	if uint8(saturationDepth) < k.depth {
+		k.depth = uint8(saturationDepth)
 		changed = true
 	}
-	return a, nxt, changed
+	return a, saturationDepth, changed
 }
 
 // On inserts the peer as a kademlia peer into the live peers
