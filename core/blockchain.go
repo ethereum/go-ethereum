@@ -1075,11 +1075,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 		bc.downloadingBlock.Add(block.Hash(), true)
 	}
-	st, err := bc.State()
-	if err != nil {
-		return 0, nil, nil, err
-	}
-	abort, results := bc.engine.VerifyHeaders(bc, st, headers, seals)
+	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
 
 	// Iterate over the blocks and insert when the verifier permits
@@ -1256,11 +1252,7 @@ func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
 		log.Debug("Stop prepare a block because inserting", "number", block.NumberU64(), "hash", block.Hash(), "validator", block.Header().Validator)
 		return nil
 	}
-	state, err := bc.State()
-	if err != nil {
-		return err
-	}
-	err = bc.engine.VerifyHeader(bc, state, block.Header(), false)
+	err = bc.engine.VerifyHeader(bc, block.Header(), false)
 	if err != nil {
 		return err
 	}
