@@ -203,7 +203,7 @@ func GetSignersFromContract(state *state.StateDB, block *types.Block) ([]common.
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract1(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
+func GetSignersByExecutingEVM(addrBlockSigner common.Address, client bind.ContractBackend, blockHash common.Hash) ([]common.Address, error) {
 	blockSigner, err := contract.NewBlockSigner(addrBlockSigner, client)
 	if err != nil {
 		log.Error("Fail get instance of blockSigner", "error", err)
