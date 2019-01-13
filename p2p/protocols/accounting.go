@@ -42,8 +42,6 @@ var (
 	mPeerDrops metrics.Counter
 	// how many times local node overdrafted and dropped
 	mSelfDrops metrics.Counter
-
-	MetricsRegistry metrics.Registry
 )
 
 // Prices defines how prices are being passed on to the accounting instance
@@ -115,19 +113,18 @@ func NewAccounting(balance Balance, po Prices) *Accounting {
 // It also instantiates the given metrics and starts the persisting go-routine which
 // at the passed interval writes the metrics to a LevelDB
 func SetupAccountingMetrics(reportInterval time.Duration, path string) *AccountingMetrics {
-	// create an empty registry
-	MetricsRegistry = metrics.NewRegistry()
 	// instantiate the metrics
-	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", MetricsRegistry)
-	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", MetricsRegistry)
-	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", MetricsRegistry)
-	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", MetricsRegistry)
-	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", MetricsRegistry)
-	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", MetricsRegistry)
-	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", MetricsRegistry)
-	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", MetricsRegistry)
+	mBalanceCredit = metrics.NewRegisteredCounterForced("account.balance.credit", metrics.AccountingRegistry)
+	mBalanceDebit = metrics.NewRegisteredCounterForced("account.balance.debit", metrics.AccountingRegistry)
+	mBytesCredit = metrics.NewRegisteredCounterForced("account.bytes.credit", metrics.AccountingRegistry)
+	mBytesDebit = metrics.NewRegisteredCounterForced("account.bytes.debit", metrics.AccountingRegistry)
+	mMsgCredit = metrics.NewRegisteredCounterForced("account.msg.credit", metrics.AccountingRegistry)
+	mMsgDebit = metrics.NewRegisteredCounterForced("account.msg.debit", metrics.AccountingRegistry)
+	mPeerDrops = metrics.NewRegisteredCounterForced("account.peerdrops", metrics.AccountingRegistry)
+	mSelfDrops = metrics.NewRegisteredCounterForced("account.selfdrops", metrics.AccountingRegistry)
+
 	// create the DB and start persisting
-	return NewAccountingMetrics(MetricsRegistry, reportInterval, path)
+	return NewAccountingMetrics(metrics.AccountingRegistry, reportInterval, path)
 }
 
 // Send takes a peer, a size and a msg and
