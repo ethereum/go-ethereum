@@ -312,8 +312,8 @@ func (r *PrefixedRegistry) UnregisterAll() {
 }
 
 var (
-	DefaultRegistry   = NewRegistry()
-	EphemeralRegistry = NewRegistry()
+	DefaultRegistry    = NewRegistry()
+	EphemeralRegistry  = NewRegistry()
 	AccountingRegistry = NewRegistry()
 )
 
