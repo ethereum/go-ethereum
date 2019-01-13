@@ -43,10 +43,7 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 
-const (
-	algorithmName    = "ethash" // PoW algorithm name
-	algorithmVersion = "1.0.0"  // Algorithm revision information
-)
+const algorithmVersion = "ethash/1.0.0" // PoW algorithm version
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
 
