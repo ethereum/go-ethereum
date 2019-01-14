@@ -157,7 +157,7 @@ var (
 		Usage: "Document Root for HTTPClient file scheme",
 		Value: DirectoryString{homeDir()},
 	}
-	ExitWhenSyncedFlag = cli.DurationFlag{
+	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
 		Usage: "Exists syncing by given time (default 0) after block synchronisation",
 		Value: -1,

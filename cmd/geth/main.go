@@ -333,7 +333,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}()
 
-	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced >= 0 {
+	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced == true {
 		go func() {
 			if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 				var lightEthereum *les.LightEthereum
@@ -357,7 +357,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					latest :=headers.Data.(*types.Header).Time
 					if 600 >= time.Now().Unix()-latest.Int64() {
 						log.Info("Synchronisation completed, checking", "check", exitWhenSynced)
-						time.Sleep(exitWhenSynced)
 						stack.Stop()
 					}
 				default:
