@@ -1,5 +1,7 @@
 package common
 
+import "math/big"
+
 const (
 	RewardMasterPercent        = 40
 	RewardVoterPercent         = 50
@@ -15,7 +17,9 @@ const (
 	BlocksPerYear              = uint64(15768000)
 	LimitThresholdNonceInQueue = 10
 	MinGasPrice                = 2500
+	MergeSignRange             = 15
 )
 
+var TIP2019Block = big.NewInt(1050000)
 var IsTestnet bool = false
 var StoreRewardFolder string
