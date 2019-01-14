@@ -31,19 +31,19 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/posv"
+	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
+	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/contracts/blocksigner/contract"
-	randomizeContract "github.com/ethereum/go-ethereum/contracts/randomize/contract"
 )
 
 const (
@@ -321,7 +321,6 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number ui
 		data := make(map[common.Hash][]common.Address)
 		for i := startBlockNumber; i <= prevCheckpoint+(rCheckpoint*2)-1; i++ {
 			header := chain.GetHeaderByNumber(i)
-
 			if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
 				txs := signData.([]*types.Transaction)
 				for _, tx := range txs {
@@ -362,30 +361,32 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number ui
 		}
 
 		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			block := chain.GetHeaderByNumber(i)
-			addrs := data[block.Hash()]
-			// Filter duplicate address.
-			if len(addrs) > 0 {
-				addrSigners := make(map[common.Address]bool)
-				for _, masternode := range masternodes {
-					for _, addr := range addrs {
-						if addr == masternode {
-							if _, ok := addrSigners[addr]; !ok {
-								addrSigners[addr] = true
+			if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
+				block := chain.GetHeaderByNumber(i)
+				addrs := data[block.Hash()]
+				// Filter duplicate address.
+				if len(addrs) > 0 {
+					addrSigners := make(map[common.Address]bool)
+					for _, masternode := range masternodes {
+						for _, addr := range addrs {
+							if addr == masternode {
+								if _, ok := addrSigners[addr]; !ok {
+									addrSigners[addr] = true
+								}
+								break
 							}
-							break
 						}
 					}
-				}
 
-				for addr := range addrSigners {
-					_, exist := signers[addr]
-					if exist {
-						signers[addr].Sign++
-					} else {
-						signers[addr] = &rewardLog{1, new(big.Int)}
+					for addr := range addrSigners {
+						_, exist := signers[addr]
+						if exist {
+							signers[addr].Sign++
+						} else {
+							signers[addr] = &rewardLog{1, new(big.Int)}
+						}
+						*totalSigner++
 					}
-					*totalSigner++
 				}
 			}
 		}
@@ -427,15 +428,15 @@ func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address)
 	return owner
 }
 
-func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int) (error, map[common.Address]*big.Int) {
-	rewards, err := GetRewardBalancesRate(foundationWalletAddr, state, signer, calcReward)
+func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int, blockNumber uint64) (error, map[common.Address]*big.Int) {
+	rewards, err := GetRewardBalancesRate(foundationWalletAddr, state, signer, calcReward, blockNumber)
 	if err != nil {
 		return err, nil
 	}
 	return nil, rewards
 }
 
-func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.StateDB, masterAddr common.Address, totalReward *big.Int) (map[common.Address]*big.Int, error) {
+func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
 	owner := GetCandidatesOwnerBySigner(state, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
@@ -451,6 +452,9 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 		// Get voters capacities.
 		voterCaps := make(map[common.Address]*big.Int)
 		for _, voteAddr := range voters {
+			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
+				continue
+			}
 			voterCap := GetVoterCap(state, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap

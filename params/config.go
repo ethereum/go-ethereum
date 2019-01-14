@@ -213,6 +213,9 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
+	return isForked(common.TIP2019Block, num)
+}
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
