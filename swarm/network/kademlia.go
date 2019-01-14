@@ -169,89 +169,109 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 }
 
 // SuggestPeer returns an unconnected peer address as a peer suggestion for connection
-func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
+func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, changed bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
-	minsize := k.MinBinSize
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
-	// finds a callable neighbour within the current neighbourhood radius
-	// this makes sure nearest neighbour set is fully connected
-	var ppo int
-	k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
-		if po < radius {
-			return false
-		}
-		e := val.(*entry)
-		c := k.callable(e)
-		if c {
-			a = e.BzzAddr
-		}
-		ppo = po
-		return !c
-	})
-	if a != nil {
-		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
-		return a, 0, false
-	}
-
-	// if there are no callable neighbours, find the undersaturated bins from shallow to deep
-	var bpo []int
-	prev := -1
+	// find the undersaturated bins from lowest cardinality from shallow to deep
+	// first map unsaturated bins to cardinalities
+	spo := make(map[int][]int)
+	var prev int
+	saturationDepth = -1
+	var pastDepth bool
 	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
-		prev++
+		// process skipped empty bins
 		for ; prev < po; prev++ {
-			bpo = append(bpo, prev)
-			minsize = 0
+			// find the lowest unsaturated bin
+			if saturationDepth == -1 {
+				saturationDepth = prev
+			}
+			// if there is an empty bin, depth is surely passed
+			pastDepth = true
+			spo[0] = append(spo[0], prev)
 		}
-		if size < minsize {
-			bpo = append(bpo, po)
-			minsize = size
+		prev = po + 1
+		// past radius, depth is surely passed
+		if po >= radius {
+			pastDepth = true
 		}
-		return size > 0 && po < radius
+		// beyond depth the bin is treated as unsaturated to achieve full connectivity
+		// to all neighbours
+		if pastDepth && size >= k.MinBinSize {
+			size = k.MinBinSize - 1
+		}
+		// process non-empty unsaturated bins
+		if size < k.MinBinSize {
+			// find the lowest unsaturated bin
+			if saturationDepth == -1 {
+				saturationDepth = po
+			}
+			spo[size] = append(spo[size], po)
+		}
+		return true
 	})
-	// all buckets are saturated, ie., minsize >= k.MinBinSize, no peer suggested
-	if len(bpo) == 0 {
+	// to trigger peer requests for peers closer than closest connection, include
+	// all bins from nearest connection upto nearest address as unsaturated
+	var nearestAddrAt int
+	k.addrs.EachNeighbour(k.base, Pof, func(_ pot.Val, po int) bool {
+		nearestAddrAt = po
+		return false
+	})
+	for ; prev <= nearestAddrAt; prev++ {
+		spo[0] = append(spo[0], prev)
+	}
+	// all PO bins are saturated, ie., minsize >= k.MinBinSize, no peer suggested
+	if len(spo) == 0 {
 		return nil, 0, false
 	}
 	// find the first callable peer
+	// starting from the lowest cardinality
 	// for each bin (up until neighbourhood radius) we find callable candidate peers
-	// nxt := bpo[0]
-	ci := 0
-	saturationDepth := bpo[0]
-	cpo := saturationDepth
-	k.addrs.EachBin(k.base, Pof, cpo, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
-		if po >= radius {
-			return false
+	for i := 0; i < k.MinBinSize && suggestedPeer == nil; i++ {
+		bins, ok := spo[i]
+		if !ok {
+			continue
 		}
-		if po < cpo {
-			return true
-		}
-		for ; ci < len(bpo) && cpo < po; ci++ {
-			cpo = bpo[ci]
-		}
-		if ci == len(bpo) {
-			return false
-		}
-		return f(func(val pot.Val) bool {
-			e := val.(*entry)
-			c := k.callable(e)
-			if c {
-				a = e.BzzAddr
+		ci := 0
+		cpo := bins[0]
+		k.addrs.EachBin(k.base, Pof, cpo, func(po, _ int, f func(func(pot.Val) bool) bool) bool {
+			cpo = bins[ci]
+			// find the next bin with cardinality i
+			if cpo == po {
+				ci++
+			} else {
+				// skip bins that have no addresses
+				for ; ci < len(bins) && cpo < po; ci++ {
+					cpo = bins[ci]
+				}
+				if po < cpo {
+					ci--
+					return true
+				}
+				// stop if there are no addresses
+				if cpo < po {
+					return false
+				}
 			}
-			return !c
+			// find a callable peer out of the addresses in the unsaturated bin
+			// stop if found
+			f(func(val pot.Val) bool {
+				e := val.(*entry)
+				c := k.callable(e)
+				if c {
+					suggestedPeer = e.BzzAddr
+				}
+				return !c
+			})
+			return ci < len(bins) && suggestedPeer == nil
 		})
-	})
-	// found a candidate
-	if a != nil {
-		return a, 0, false
 	}
-	// no candidate peer found, request for the short bin
-	var changed bool
+
 	if uint8(saturationDepth) < k.depth {
 		k.depth = uint8(saturationDepth)
-		changed = true
+		return suggestedPeer, saturationDepth, true
 	}
-	return a, saturationDepth, changed
+	return suggestedPeer, 0, false
 }
 
 // On inserts the peer as a kademlia peer into the live peers
@@ -648,23 +668,20 @@ func NewPeerPotMap(neighbourhoodSize int, addrs [][]byte) map[string]*PeerPot {
 	return ppmap
 }
 
-// saturation iterates through all peers and
-// returns the smallest po value in which the node has less than n peers
-// if the iterator reaches depth, then value for depth is returned
-// TODO move to separate testing tools file
-// TODO this function will stop at the first bin with less than MinBinSize peers, even if there are empty bins between that bin and the depth. This may not be correct behavior
+// saturation returns the smallest po value in which the node has less than MinBinSize peers
+// if the iterator reaches neighbourhood radius, then the last bin + 1 is returned
 func (k *Kademlia) saturation() int {
 	prev := -1
-	k.addrs.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
+	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
+	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
 		prev++
+		if po >= radius {
+			return false
+		}
 		return prev == po && size >= k.MinBinSize
 	})
-	// TODO evaluate whether this check cannot just as well be done within the eachbin
-	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-
-	// if in the iterator above we iterated deeper than the neighbourhood depth - return depth
-	if depth < prev {
-		return depth
+	if prev < 0 {
+		return 0
 	}
 	return prev
 }
