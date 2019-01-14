@@ -643,8 +643,12 @@ func (db *Database) Dereference(root common.Hash) error {
 	// Dereference the trie and accumulate prune targets if needed
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 
-	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil); err != nil {
+	derefs := new([]*prunerTarget)
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil, derefs); err != nil {
 		return err
+	}
+	if db.pruner != nil {
+		db.pruner.enqueue(*derefs)
 	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
 	db.gcsize += storage - db.dirtiesSize
@@ -658,7 +662,7 @@ func (db *Database) Dereference(root common.Hash) error {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte) error {
+func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte, derefs *[]*prunerTarget) error {
 	// Dereference the parent-child
 	parentKey := makeNodeKey(parentOwner, parentHash)
 	parent := db.dirties[parentKey]
@@ -674,7 +678,11 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 	child, ok := db.dirties[childKey]
 	if !ok {
 		if db.pruner != nil {
-			db.pruner.enqueue(childOwner, childHash, path)
+			*derefs = append(*derefs, &prunerTarget{
+				owner: childOwner,
+				hash:  childHash,
+				path:  common.CopyBytes(path),
+			})
 		}
 		return nil
 	}
@@ -701,12 +709,12 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 		}
 		// Dereference all children and delete the node
 		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
-			db.dereference(childOwner, hash, childOwner, childHash, path)
+			db.dereference(childOwner, hash, childOwner, childHash, path, derefs)
 			return nil
 		})
 		for key := range child.children {
 			owner, hash := splitNodeKey(key)
-			db.dereference(owner, hash, childOwner, childHash, nil)
+			db.dereference(owner, hash, childOwner, childHash, nil, derefs)
 		}
 		delete(db.dirties, childKey)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))
