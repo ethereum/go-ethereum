@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"sync"
 	"testing"
 	"time"
 
@@ -158,6 +159,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	}
 
 	chunks := make([]storage.Chunk, 0)
+	var chunksMu sync.Mutex
 
 	// send chunks to workers
 	go func() {
@@ -168,7 +170,9 @@ func TestModePutUpload_parallel(t *testing.T) {
 			case <-doneChan:
 				return
 			}
+			chunksMu.Lock()
 			chunks = append(chunks, chunk)
+			chunksMu.Unlock()
 		}
 
 		close(chunkChan)
@@ -184,6 +188,9 @@ func TestModePutUpload_parallel(t *testing.T) {
 
 	// get every chunk and validate its data
 	getter := db.NewGetter(ModeGetRequest)
+
+	chunksMu.Lock()
+	defer chunksMu.Unlock()
 	for _, chunk := range chunks {
 		got, err := getter.Get(chunk.Address())
 		if err != nil {
