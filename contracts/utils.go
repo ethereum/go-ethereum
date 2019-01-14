@@ -307,7 +307,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(chainDb ethdb.Database, c *posv.Posv, chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
@@ -332,12 +332,12 @@ func GetRewardForCheckpoint(chainDb ethdb.Database, c *posv.Posv, chain consensu
 				log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 				block := chain.GetBlock(header.Hash(), i)
 				txs := block.Transactions()
-				receipts := core.GetBlockReceipts(chainDb, header.Hash(), i)
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
 
 				var signTxs []*types.Transaction
 				for _, tx := range txs {
 					if tx.IsSigningTransaction() {
-						b := types.ReceiptStatusSuccessful
+						var b uint
 						for _, r := range receipts {
 							if r.TxHash == tx.Hash() {
 								b = r.Status
@@ -345,7 +345,8 @@ func GetRewardForCheckpoint(chainDb ethdb.Database, c *posv.Posv, chain consensu
 							}
 						}
 
-						if b == types.ReceiptStatusFailed {
+						if b == types.ReceiptStatusFailed && i >= rCheckpoint {
+							log.Debug("Sign tx failed", "hash", tx.Hash().String())
 							continue
 						}
 

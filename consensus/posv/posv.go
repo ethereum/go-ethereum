@@ -1038,6 +1038,7 @@ func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipt
 			}
 
 			if b == types.ReceiptStatusFailed {
+				log.Debug("Sign tx failed", "hash", tx.Hash().String())
 				continue
 			}
 
