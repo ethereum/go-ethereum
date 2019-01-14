@@ -921,3 +921,34 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 		}
 	}
 }
+
+//TestHasPriceImplementation is to check that the Registry has a
+//`Price` interface implementation
+func TestHasPriceImplementation(t *testing.T) {
+	_, r, _, teardown, err := newStreamerTester(t, &RegistryOptions{
+		Retrieval: RetrievalDisabled,
+		Syncing:   SyncingDisabled,
+	})
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r.prices == nil {
+		t.Fatal("No prices implementation available for the stream protocol")
+	}
+
+	pricesInstance, ok := r.prices.(*StreamerPrices)
+	if !ok {
+		t.Fatal("`Registry` does not have the expected Prices instance")
+	}
+	price := pricesInstance.Price(&ChunkDeliveryMsgRetrieval{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getChunkDeliveryMsgRetrievalPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+
+	price = pricesInstance.Price(&RetrieveRequestMsg{})
+	if price == nil || price.Value == 0 || price.Value != pricesInstance.getRetrieveRequestMsgPrice() {
+		t.Fatal("No prices set for chunk delivery msg")
+	}
+}

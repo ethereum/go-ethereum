@@ -21,6 +21,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -203,7 +204,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,11 +214,13 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		simulation.NewPeerEventsFilter().Drop(),
 	)
 
+	var disconnected atomic.Value
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-			t.Fatal("unexpected disconnect")
-			cancelSimRun()
+			if d.Error != nil {
+				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				disconnected.Store(true)
+			}
 		}
 	}()
 
@@ -225,6 +228,9 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+	if yes, ok := disconnected.Load().(bool); ok && yes {
+		t.Fatal("disconnect events received")
 	}
 	log.Info("Simulation ended")
 }
@@ -385,7 +391,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return err
 	}
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		return err
 	}
 
@@ -395,11 +401,13 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		simulation.NewPeerEventsFilter().Drop(),
 	)
 
+	var disconnected atomic.Value
 	go func() {
 		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-			t.Fatal("unexpected disconnect")
-			cancelSimRun()
+			if d.Error != nil {
+				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				disconnected.Store(true)
+			}
 		}
 	}()
 
@@ -463,7 +471,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err
 		}
 
@@ -514,6 +522,9 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		return result.Error
 	}
 
+	if yes, ok := disconnected.Load().(bool); ok && yes {
+		t.Fatal("disconnect events received")
+	}
 	log.Info("Simulation ended")
 	return nil
 }
@@ -552,7 +563,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 
-	ppmap := network.NewPeerPotMap(network.NewKadParams().MinProxBinSize, conf.addrs)
+	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, conf.addrs)
 
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
 	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))

@@ -72,7 +72,7 @@ func setupSim(serviceMap map[string]simulation.ServiceFunc) (int, int, *simulati
 func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) {
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		panic(err)
 	}
 

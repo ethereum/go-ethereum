@@ -58,24 +58,6 @@ func newTestNetwork(t *testing.T, nodeCount int) (*Network, []enode.ID) {
 	return network, ids
 }
 
-func TestConnectToPivotNode(t *testing.T) {
-	net, ids := newTestNetwork(t, 2)
-	defer net.Shutdown()
-
-	pivot := ids[0]
-	net.SetPivotNode(pivot)
-
-	other := ids[1]
-	err := net.ConnectToPivotNode(other)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if net.GetConn(pivot, other) == nil {
-		t.Error("pivot and the other node are not connected")
-	}
-}
-
 func TestConnectToLastNode(t *testing.T) {
 	net, ids := newTestNetwork(t, 10)
 	defer net.Shutdown()
@@ -125,15 +107,30 @@ func TestConnectToRandomNode(t *testing.T) {
 }
 
 func TestConnectNodesFull(t *testing.T) {
-	net, ids := newTestNetwork(t, 12)
-	defer net.Shutdown()
-
-	err := net.ConnectNodesFull(ids)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name      string
+		nodeCount int
+	}{
+		{name: "no node", nodeCount: 0},
+		{name: "single node", nodeCount: 1},
+		{name: "2 nodes", nodeCount: 2},
+		{name: "3 nodes", nodeCount: 3},
+		{name: "even number of nodes", nodeCount: 12},
+		{name: "odd number of nodes", nodeCount: 13},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			net, ids := newTestNetwork(t, test.nodeCount)
+			defer net.Shutdown()
 
-	VerifyFull(t, net, ids)
+			err := net.ConnectNodesFull(ids)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			VerifyFull(t, net, ids)
+		})
+	}
 }
 
 func TestConnectNodesChain(t *testing.T) {
@@ -166,23 +163,7 @@ func TestConnectNodesStar(t *testing.T) {
 
 	pivotIndex := 2
 
-	err := net.ConnectNodesStar(ids[pivotIndex], ids)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	VerifyStar(t, net, ids, pivotIndex)
-}
-
-func TestConnectNodesStarPivot(t *testing.T) {
-	net, ids := newTestNetwork(t, 10)
-	defer net.Shutdown()
-
-	pivotIndex := 4
-
-	net.SetPivotNode(ids[pivotIndex])
-
-	err := net.ConnectNodesStarPivot(ids)
+	err := net.ConnectNodesStar(ids, ids[pivotIndex])
 	if err != nil {
 		t.Fatal(err)
 	}

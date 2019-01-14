@@ -209,7 +209,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return k
 		}
 		params := network.NewKadParams()
-		params.MinProxBinSize = 2
+		params.NeighbourhoodSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
 		params.MaxRetries = 1000

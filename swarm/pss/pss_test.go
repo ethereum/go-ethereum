@@ -491,12 +491,12 @@ func TestAddressMatchProx(t *testing.T) {
 	// meanwhile test regression for kademlia since we are compiling the test parameters from different packages
 	var proxes int
 	var conns int
-	kad.EachConn(nil, peerCount, func(p *network.Peer, po int, prox bool) bool {
+	depth := kad.NeighbourhoodDepth()
+	kad.EachConn(nil, peerCount, func(p *network.Peer, po int) bool {
 		conns++
-		if prox {
+		if po >= depth {
 			proxes++
 		}
-		log.Trace("kadconn", "po", po, "peer", p, "prox", prox)
 		return true
 	})
 	if proxes != nnPeerCount {
@@ -1965,7 +1965,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return k
 		}
 		params := network.NewKadParams()
-		params.MinProxBinSize = 2
+		params.NeighbourhoodSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
 		params.MaxRetries = 1000
@@ -2045,7 +2045,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, kad *network.Kademlia, ppextra *PssPa
 	// set up routing if kademlia is not passed to us
 	if kad == nil {
 		kp := network.NewKadParams()
-		kp.MinProxBinSize = 3
+		kp.NeighbourhoodSize = 3
 		kad = network.NewKademlia(nid[:], kp)
 	}
 
