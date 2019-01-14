@@ -1032,13 +1032,16 @@ func (c *Posv) CacheData(header *types.Header, txs []*types.Transaction, receipt
 			var b uint
 			for _, r := range receipts {
 				if r.TxHash == tx.Hash() {
-					b = r.Status
+					if len(r.PostState) > 0 {
+						b = types.ReceiptStatusSuccessful
+					} else {
+						b = r.Status
+					}
 					break
 				}
 			}
 
 			if b == types.ReceiptStatusFailed {
-				log.Debug("Sign tx failed", "hash", tx.Hash().String())
 				continue
 			}
 
