@@ -68,19 +68,6 @@ func TestDB(t *testing.T) {
 func TestDB_updateGCSem(t *testing.T) {
 	t.Parallel()
 
-	defer func(m int) { maxParallelUpdateGC = m }(maxParallelUpdateGC)
-	maxParallelUpdateGC = 3
-
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
-
-	chunk := generateRandomChunk()
-
-	err := db.NewPutter(ModePutUpload).Put(chunk)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	updateGCSleep := time.Second
 	var count int
 	var max int
@@ -103,6 +90,19 @@ func TestDB_updateGCSem(t *testing.T) {
 		mu.Unlock()
 	})()
 
+	defer func(m int) { maxParallelUpdateGC = m }(maxParallelUpdateGC)
+	maxParallelUpdateGC = 3
+
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	chunk := generateRandomChunk()
+
+	err := db.NewPutter(ModePutUpload).Put(chunk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	getter := db.NewGetter(ModeGetRequest)
 
 	// get more chunks then maxParallelUpdateGC
@@ -117,7 +117,6 @@ func TestDB_updateGCSem(t *testing.T) {
 	if max != maxParallelUpdateGC {
 		t.Errorf("got max %v, want %v", max, maxParallelUpdateGC)
 	}
-
 }
 
 // BenchmarkNew measures the time that New function
