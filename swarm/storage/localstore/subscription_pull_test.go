@@ -40,11 +40,12 @@ func TestDB_SubscribePull(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make(map[uint8][]storage.Address)
+	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -59,18 +60,18 @@ func TestDB_SubscribePull(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 5)
 
 	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
 	// to ensure that subscription will include them
 	// in a dynamic environment
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
@@ -88,11 +89,12 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make(map[uint8][]storage.Address)
+	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -112,19 +114,19 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 			defer stop()
 
 			// receive and validate addresses from the subscription
-			go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
+			go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
 		}
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 5)
 
 	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
 	// to ensure that subscription will include them
 	// in a dynamic environment
-	uploadRandomChunksBin(t, db, uploader, addrs, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)
 }
@@ -140,6 +142,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make(map[uint8][]storage.Address)
+	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
@@ -162,14 +165,16 @@ func TestDB_SubscribePull_since(t *testing.T) {
 			}
 
 			bin := db.po(chunk.Address())
+
+			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
-
 			if wanted {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
+			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -206,7 +211,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
 
 	}
 
@@ -227,6 +232,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make(map[uint8][]storage.Address)
+	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
@@ -249,14 +255,16 @@ func TestDB_SubscribePull_until(t *testing.T) {
 			}
 
 			bin := db.po(chunk.Address())
+
+			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
-
 			if wanted {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
+			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -293,7 +301,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -315,6 +323,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make(map[uint8][]storage.Address)
+	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	lastTimestamp := time.Now().UTC().UnixNano()
@@ -337,14 +346,16 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 			}
 
 			bin := db.po(chunk.Address())
+
+			addrsMu.Lock()
 			if _, ok := addrs[bin]; !ok {
 				addrs[bin] = make([]storage.Address, 0)
 			}
-
 			if wanted {
 				addrs[bin] = append(addrs[bin], chunk.Address())
 				wantedChunksCount++
 			}
+			addrsMu.Unlock()
 
 			lastTimestampMu.RLock()
 			storeTimestamp := lastTimestamp
@@ -393,7 +404,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, errChan)
+		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -404,7 +415,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 
 // uploadRandomChunksBin uploads random chunks to database and adds them to
 // the map of addresses ber bin.
-func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uint8][]storage.Address, wantedChunksCount *int, count int) {
+func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uint8][]storage.Address, addrsMu *sync.Mutex, wantedChunksCount *int, count int) {
 	for i := 0; i < count; i++ {
 		chunk := generateRandomChunk()
 
@@ -413,12 +424,14 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 			t.Fatal(err)
 		}
 
+		addrsMu.Lock()
 		bin := db.po(chunk.Address())
 		if _, ok := addrs[bin]; !ok {
 			addrs[bin] = make([]storage.Address, 0)
 		}
-
 		addrs[bin] = append(addrs[bin], chunk.Address())
+		addrsMu.Unlock()
+
 		*wantedChunksCount++
 	}
 }
@@ -426,7 +439,7 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 // readPullSubscriptionBin is a helper function that reads all ChunkDescriptors from a channel and
 // sends error to errChan, even if it is nil, to count the number of ChunkDescriptors
 // returned by the channel.
-func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDescriptor, addrs map[uint8][]storage.Address, errChan chan error) {
+func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDescriptor, addrs map[uint8][]storage.Address, addrsMu *sync.Mutex, errChan chan error) {
 	var i int // address index
 	for {
 		select {
@@ -434,10 +447,12 @@ func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan ChunkDesc
 			if !ok {
 				return
 			}
+			addrsMu.Lock()
 			if i+1 > len(addrs[bin]) {
 				errChan <- fmt.Errorf("got more chunk addresses %v, then expected %v, for bin %v", i+1, len(addrs[bin]), bin)
 			}
 			want := addrs[bin][i]
+			addrsMu.Unlock()
 			var err error
 			if !bytes.Equal(got.Address, want) {
 				err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
