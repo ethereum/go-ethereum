@@ -187,3 +187,42 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 	}
 	return nil
 }
+
+// parseTopics converts the indexed topic field-value pairs into map key-value pairs
+func parseTopicsIntoMap(out map[string]interface{}, fields abi.Arguments, topics []common.Hash) error {
+	// Sanity check that the fields and topics match up
+	if len(fields) != len(topics) {
+		return errors.New("topic/field count mismatch")
+	}
+	// Iterate over all the fields and reconstruct them from topics
+	for _, arg := range fields {
+		if !arg.Indexed {
+			return errors.New("non-indexed field in topic reconstruction")
+		}
+
+		switch arg.Type.T {
+		case abi.BoolTy:
+			if topics[0][common.HashLength-1] == 1 {
+				out[arg.Name] = true
+			} else {
+				out[arg.Name] = false
+			}
+		case abi.IntTy, abi.UintTy:
+			num := new(big.Int).SetBytes(topics[0][:])
+			out[arg.Name] = num
+		case abi.AddressTy:
+			var addr common.Address
+			copy(addr[:], topics[0][common.HashLength-common.AddressLength:])
+			out[arg.Name] = addr
+		case abi.HashTy:
+			out[arg.Name] = topics[0]
+		case abi.BytesTy, abi.FixedBytesTy:
+			out[arg.Name] = topics[0][:]
+		default:
+		}
+
+		topics = topics[1:]
+	}
+
+	return nil
+}

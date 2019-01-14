@@ -694,6 +694,62 @@ func TestUnpackEvent(t *testing.T) {
 	}
 }
 
+func TestUnpackIntoMapEvent(t *testing.T) {
+	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"receivedAddr","type":"event"}]`
+	abi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const hexdata = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data)%32 == 0 {
+		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
+	}
+
+	receivedMap := map[string]interface{}{}
+	expectedReceivedMap := map[string]interface{}{
+		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
+		"amount": big.NewInt(1),
+		"memo":   []uint8{88},
+	}
+
+	err = abi.UnpackIntoMap(receivedMap, "received", data)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if receivedMap["sender"] != expectedReceivedMap["sender"] {
+		t.Errorf("unpacked map does not match expected map")
+	}
+
+	if receivedMap["amount"].(*big.Int).String() != expectedReceivedMap["amount"].(*big.Int).String() {
+		t.Errorf("unpacked map does not match expected map")
+	}
+
+	u8 := receivedMap["memo"].([]uint8)
+	expectedU8 := expectedReceivedMap["memo"].([]uint8)
+	for i, v := range expectedU8 {
+		if u8[i] != v {
+			t.Errorf("unpacked map does not match expected map")
+		}
+	}
+
+	receivedAddrMap := map[string]interface{}{}
+
+	err = abi.UnpackIntoMap(receivedAddrMap, "receivedAddr", data)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if receivedAddrMap["sender"] != expectedReceivedMap["sender"] {
+		t.Errorf("unpacked map does not match expected map")
+	}
+}
+
 func TestABI_MethodById(t *testing.T) {
 	const abiJSON = `[
 		{"type":"function","name":"receive","constant":false,"inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
