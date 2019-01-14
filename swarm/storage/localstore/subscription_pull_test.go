@@ -32,8 +32,6 @@ import (
 // all addresses are received in the right order
 // for expected proximity order bins.
 func TestDB_SubscribePull(t *testing.T) {
-	t.Parallel()
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -81,8 +79,6 @@ func TestDB_SubscribePull(t *testing.T) {
 // validates if all addresses are received in the right order
 // for expected proximity order bins.
 func TestDB_SubscribePull_multiple(t *testing.T) {
-	t.Parallel()
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -315,8 +311,6 @@ func TestDB_SubscribePull_until(t *testing.T) {
 // and until arguments, and validates if all expected addresses
 // are received in the right order for expected proximity order bins.
 func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
-	t.Parallel()
-
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
