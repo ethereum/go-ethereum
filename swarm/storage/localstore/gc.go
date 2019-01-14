@@ -159,6 +159,7 @@ func (db *DB) getGCSize() (count int64) {
 func (db *DB) triggerGarbageCollection() {
 	select {
 	case db.collectGarbageTrigger <- struct{}{}:
+	case <-db.close:
 	default:
 	}
 }

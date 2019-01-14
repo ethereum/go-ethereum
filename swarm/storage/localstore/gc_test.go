@@ -29,12 +29,7 @@ import (
 // TestDB_collectGarbageWorker tests garbage collection runs
 // by uploading and syncing a number of chunks.
 func TestDB_collectGarbageWorker(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, &Options{
-		Capacity: 100,
-	})
-	defer cleanupFunc()
-
-	testDB_collectGarbageWorker(t, db)
+	testDB_collectGarbageWorker(t)
 }
 
 // TestDB_collectGarbageWorker_multipleBatches tests garbage
@@ -46,26 +41,26 @@ func TestDB_collectGarbageWorker_multipleBatches(t *testing.T) {
 	defer func(s int64) { gcBatchSize = s }(gcBatchSize)
 	gcBatchSize = 2
 
-	db, cleanupFunc := newTestDB(t, &Options{
-		Capacity: 100,
-	})
-	defer cleanupFunc()
-
-	testDB_collectGarbageWorker(t, db)
+	testDB_collectGarbageWorker(t)
 }
 
 // testDB_collectGarbageWorker is a helper test function to test
 // garbage collection runs by uploading and syncing a number of chunks.
-func testDB_collectGarbageWorker(t *testing.T, db *DB) {
-	uploader := db.NewPutter(ModePutUpload)
-	syncer := db.NewSetter(ModeSetSync)
-
+func testDB_collectGarbageWorker(t *testing.T) {
 	chunkCount := 150
 
 	testHookCollectGarbageChan := make(chan int64)
 	defer setTestHookCollectGarbage(func(collectedCount int64) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
+
+	db, cleanupFunc := newTestDB(t, &Options{
+		Capacity: 100,
+	})
+	defer cleanupFunc()
+
+	uploader := db.NewPutter(ModePutUpload)
+	syncer := db.NewSetter(ModeSetSync)
 
 	addrs := make([]storage.Address, 0)
 
@@ -121,6 +116,15 @@ func testDB_collectGarbageWorker(t *testing.T, db *DB) {
 			t.Fatal(err)
 		}
 	})
+
+	// cleanup: drain the last testHookCollectGarbageChan
+	// element before calling deferred functions not to block
+	// collectGarbageWorker loop, preventing the race in
+	// setting testHookCollectGarbage function
+	select {
+	case <-testHookCollectGarbageChan:
+	default:
+	}
 }
 
 // TestDB_collectGarbageWorker_withRequests is a helper test function
