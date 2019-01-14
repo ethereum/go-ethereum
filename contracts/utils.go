@@ -345,7 +345,8 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number ui
 							}
 						}
 
-						if b == types.ReceiptStatusFailed {
+						if b == types.ReceiptStatusFailed && i >= rCheckpoint {
+							log.Debug("Sign tx failed", "hash", tx.Hash().String())
 							continue
 						}
 
