@@ -208,6 +208,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		bc.gcsave = head.Root()
 		bc.stateCache.TrieDB().ForbidPrune(bc.gcsave)
 	}
+	bc.stateCache.TrieDB().ResumePruning()
+
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
@@ -708,6 +710,9 @@ func (bc *BlockChain) Stop() {
 
 	bc.wg.Wait()
 
+	// Terminate the pruner, we don't want it to remove recent stuff while quitting
+	bc.stateCache.TrieDB().TerminatePruning()
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -727,7 +732,7 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 		for !bc.gcqueue.Empty() {
-			triedb.Dereference(bc.gcqueue.PopItem().(common.Hash), false)
+			triedb.Dereference(bc.gcqueue.PopItem().(common.Hash))
 		}
 		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup", "size", size)
@@ -961,13 +966,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	// Pause pruning while the tries are being mutated
+	triedb := bc.stateCache.TrieDB()
+
+	triedb.PausePruning()
+	defer triedb.ResumePruning()
+
+	// Commit the state into the dirty memory-cache and either flush, or garbage collect
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
-	triedb := bc.stateCache.TrieDB()
-
-	// If we're running an archive node, always flush
 	if bc.cacheConfig.Disabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
@@ -1011,7 +1020,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					triedb.ForbidPrune(header.Root)
 					if bc.gcsave != (common.Hash{}) {
 						triedb.PermitPrune(bc.gcsave)
-						triedb.Dereference(bc.gcsave, true)
+						triedb.Dereference(bc.gcsave)
 					}
 					bc.gcsave = header.Root
 				}
@@ -1023,7 +1032,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.gcqueue.Push(root, number)
 					break
 				}
-				triedb.Dereference(root.(common.Hash), true)
+				triedb.Dereference(root.(common.Hash))
 			}
 		}
 	}

@@ -84,7 +84,7 @@ func NewDatabase(db ethdb.Database) Database {
 func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            trie.NewDatabaseWithCache(db, cache),
+		db:            trie.NewDatabaseWithCache(db, cache, true),
 		codeSizeCache: csc,
 	}
 }

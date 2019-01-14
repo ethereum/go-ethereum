@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -30,12 +31,17 @@ import (
 // pruner is responsible for pruning the state trie based on liveness checks
 // whenever the in-memory garbage collector attempt to dereference a node from
 // disk.
+//
+// Note, the pruner is not a standalone construct, rather an extension to the
+// trie database. No attempt was made to separate the API surface and make one
+// a disjoint client of the other.
 type pruner struct {
-	db    *Database    // Trie database for accessing dirty and clean data
-	tries []*traverser // Individual stateful trie traversers for fast liveness checks
+	db *Database // Trie database for accessing dirty and clean data
 
-	marks []*prunerTarget // Nodes marked for potential pruning
-	batch ethdb.Batch     // Write batch to minimize database trashing
+	taskCh      chan *prunerTarget // Task queue receiving the pruning targets to delete
+	pauseCh     chan chan struct{} // Notification channel to pause the pruner
+	resumeCh    chan chan struct{} // Notification channel to resume the pruner
+	terminateCh chan chan struct{} // Notification channel to terminate the pruner
 }
 
 // prunerTarget represents a single marked target for potential pruning.
@@ -45,63 +51,214 @@ type prunerTarget struct {
 	hash  common.Hash // Hash of the node to delete
 }
 
-// newPruner creates a new trie pruner tied to the liveness of all the currently
-// referenced in-memory nodes.
-func (db *Database) newPruner() *pruner {
-	return &pruner{
-		db:    db,
-		batch: db.diskdb.NewBatch(),
+// newPruner creates a new background trie pruner to delete unreferenced nodes
+// whenever the tries are not being actively written.
+func newPruner(db *Database) *pruner {
+	p := &pruner{
+		db:          db,
+		taskCh:      make(chan *prunerTarget, 128),
+		pauseCh:     make(chan chan struct{}),
+		resumeCh:    make(chan chan struct{}),
+		terminateCh: make(chan chan struct{}),
 	}
+	go p.loop()
+	return p
 }
 
-// mark adds a new prune target to be deleted on the pruning run.
-func (p *pruner) mark(owner common.Hash, hash common.Hash, path []byte) {
-	p.marks = append(p.marks, &prunerTarget{
+// enqueue adds a potential prune target to the removal queue to be inspected and
+// removed from the database if deemed unreferenced by recent and snapshot tries.
+func (p *pruner) enqueue(owner common.Hash, hash common.Hash, path []byte) {
+	p.taskCh <- &prunerTarget{
 		owner: owner,
 		hash:  hash,
 		path:  common.CopyBytes(path),
-	})
-}
-
-// execute runs the pruning procedure, deleting everything that has no live
-// reference any more.
-func (p *pruner) execute() {
-	// Create the set of traversers based on the live tries
-	for key := range p.db.dirties[metaRoot].children {
-		_, root := splitNodeKey(key)
-		p.tries = append(p.tries, &traverser{
-			db: p.db,
-			state: &traverserState{
-				node: hashNode(root[:]),
-				hash: root,
-			},
-		})
-	}
-	// Beside all the tries kept in memory, keep anything forbidden from pruning
-	for hash := range p.db.noprune {
-		p.tries = append(p.tries, &traverser{
-			db: p.db,
-			state: &traverserState{
-				node: hashNode(common.CopyBytes(hash[:])), // Need closure, take care!!
-				hash: hash,
-			},
-		})
-	}
-	// Iterate over all the nodes marked for pruning and delete them
-	for _, mark := range p.marks {
-		p.prune(mark.owner, mark.hash, mark.path)
 	}
 }
 
-// flush commits any pending database writes. It does not reset the batch since
-// we only ever supposed to commit once per prune run.
-func (p *pruner) flush() error {
-	return p.batch.Write()
+// resume (re)starts the pruning, locking the dirty caches for reads to prevent
+// trie nodes going missing due to concurrent pruning/referencing.
+//
+// Note, calling resume on an already running pruner will deadlock! The pruner is
+// initially paused.
+func (p *pruner) resume() {
+	// We *must* wait for the pruner to obtain the lock, otherwise the caller might
+	// race forward and lock the database for writing, messing up the state machine.
+	ch := make(chan struct{})
+	p.resumeCh <- ch
+	<-ch
+}
+
+// pause signals the pruner to interrupt its operation and release its held lock.
+// This is needed for the block processor to obtain a write lock on the dirty
+// caches, which are otherwise held hostage by the pruner.
+//
+// Note, calling pause on a non-running pruner will panic! The pruner is initially
+// paused.
+func (p *pruner) pause() {
+	// We don't really need to wait for the pause to complete here as we're unable
+	// to obtain a write-lock sooner anyway, but it's perhaps nicer code to make it
+	// symmetrical to `resume`.
+	ch := make(chan struct{})
+	p.pauseCh <- ch
+	<-ch
+}
+
+// terminate signals the pruner to finish all remaining tasks and permanently
+// release all locks and clean itself up.
+func (p *pruner) terminate() {
+	ch := make(chan struct{})
+	p.terminateCh <- ch
+	<-ch
+}
+
+// loop is the pruner background gorutineo that waits for pruning targets the be
+// added, causing liveness checks and potentially database deletions in response.
+func (p *pruner) loop() {
+	var (
+		runner chan struct{}   // Runner channel acting as a boolean 'running' flag
+		tasks  []*prunerTarget // Batch of trie nodes queued for potential pruning
+		tries  []*traverser    // Individual trie traversers for liveness checks
+		done   int             // Number of pruning tasks done, for smarter CG
+
+		batch = p.db.diskdb.NewBatch() // Create a write batch to minimize thrashing
+
+		start time.Time          // Time instance when the pruner was resumed
+		nodes uint64             // Number of nodes pruned when the pruner was resumed
+		size  common.StorageSize // Number of bytes pruned when the pruner was resumed
+
+		quit     chan struct{}    // Quit signal channel when termination is requested
+		quitting <-chan time.Time // Ticker to periodically log termination progress
+	)
+	// Wait for different events and process them accordingly
+	for {
+		select {
+		case task := <-p.taskCh:
+			// New task received, queue it up. We will not start immediately processing
+			// this as the enqueueing is done whilst doing in-memory garbage collection,
+			// so the dirty caches are locked for writing.
+			tasks = append(tasks, task)
+
+		case ch := <-p.resumeCh:
+			// Pruner was requested to resume operation. Obtain the necessary locks to
+			// prevent the block processor for modifying the dirty caches, but allow any
+			// goroutines to still read the data.
+			p.db.lock.RLock()
+			ch <- struct{}{} // signal back that the lock was obtained
+
+			// Only proceed with task processing if there's something available
+			if len(tasks) > 0 {
+				// Create a runner channel that will allow running whenever checked
+				runner = make(chan struct{})
+				close(runner)
+
+				// Ensure the traversers are pointing to the currently live tries. Usually
+				// after each pause/resume cycle, one (new block) or two (new snapshot) tries
+				// get swapped out.
+				tries = nil // cheat a bit for now and just reconstruct them
+
+				for key := range p.db.dirties[metaRoot].children {
+					_, root := splitNodeKey(key)
+					tries = append(tries, &traverser{
+						db:    p.db,
+						state: &traverserState{hash: root, node: hashNode(root[:])},
+					})
+				}
+				for hash := range p.db.noprune {
+					tries = append(tries, &traverser{
+						db:    p.db,
+						state: &traverserState{hash: hash, node: hashNode(common.CopyBytes(hash[:]))}, // need closure!
+					})
+				}
+			}
+			// Mark the resumption to track the pruning time
+			start, nodes, size = time.Now(), p.db.prunenodes, p.db.prunesize
+
+		case ch := <-p.pauseCh:
+			// Pruner was requestd to pause operation. We can just release the read lock
+			// and stop processing the queued tasks.
+
+			// Destroy the runner, disabling the deletion part of the event loop.
+			if runner != nil {
+				memcachePruneNodesMeter.Mark(int64(p.db.prunenodes - nodes))
+				memcachePruneSizeMeter.Mark(int64(p.db.prunesize - size))
+				memcachePruneTimeTimer.Update(time.Since(start))
+				p.db.prunetime += time.Since(start)
+				runner = nil
+			}
+			// Signal back that the lock was released and nothing touches the database
+			// filds any more.
+			p.db.lock.RUnlock()
+			ch <- struct{}{}
+
+			// If we have anything queued up for writing, might as well push it out now
+			if batch.ValueSize() > 0 {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to flush pruned nodes", "err", err)
+				}
+			}
+			batch.Reset()
+
+		case quit = <-p.terminateCh:
+			// Pruner was requetsed to terminate. If everything was already processed, we
+			// can exit cleanly. Otherwise we must schedule a cleanup.
+			if len(tasks) == 0 {
+				p.db.lock.RUnlock()
+				quit <- struct{}{}
+				return
+			}
+			// Still some tasks left, create a progress ticker to not hang the user
+			log.Info("Pruner finishing pending jobs", "count", len(tasks))
+
+			quitter := time.NewTicker(8 * time.Second)
+			defer quitter.Stop()
+			quitting = quitter.C
+
+		case <-quitting:
+			// A bit of time passed since the last info log, print our progress
+			log.Info("Pruner finishing pending jobs", "count", len(tasks))
+
+		case <-runner:
+			// No interesting events available, but pruner is permitted to delete queued
+			// up tasks. Process the next one.
+			p.prune(tasks[0].owner, tasks[0].hash, tasks[0].path, tries, batch)
+
+			// Delete the task from the queue. Here let's be a bit smarter to prevent the
+			// task slice growing indefinitely.
+			if done++; done%1024 == 0 {
+				tasks = append([]*prunerTarget{}, tasks[1:]...)
+			} else {
+				tasks = tasks[1:]
+			}
+			// If we're out of pruning tasks, stop looping the runner (but don't release
+			// the lock, that's up to higher layer code to request).
+			if len(tasks) == 0 {
+				// Update all the stats and disable the runner
+				memcachePruneNodesMeter.Mark(int64(p.db.prunenodes - nodes))
+				memcachePruneSizeMeter.Mark(int64(p.db.prunesize - size))
+				memcachePruneTimeTimer.Update(time.Since(start))
+				p.db.prunetime += time.Since(start)
+
+				runner = nil
+
+				// If we're actually shutting down, clean up everything
+				if quit != nil {
+					if err := batch.Write(); err != nil {
+						log.Crit("Failed to flush pruned nodes", "err", err)
+					}
+					batch.Reset()
+
+					p.db.lock.RUnlock()
+					quit <- struct{}{}
+					return
+				}
+			}
+		}
+	}
 }
 
 // prune deletes a trie node from disk if there are no more live references to
 // it, cascading until all dangling nodes are removed.
-func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte) {
+func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, tries []*traverser, batch ethdb.Batch) {
 	// If the node is still live in the memory cache, it's still referenced so we
 	// can abort. This case is important when and old trie being pruned references
 	// a new node (maybe that node was recreted since), since currently live nodes
@@ -116,7 +273,7 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte) {
 		crosspath = append(append(keybytesToHex(owner[:]), 0xff), crosspath...)
 	}
 	unrefs := make(map[common.Hash]bool)
-	for _, trie := range p.tries {
+	for _, trie := range tries {
 		// If the node is still live, abort
 		if trie.live(owner, hash, crosspath, unrefs) {
 			return
@@ -135,12 +292,12 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte) {
 
 	// Prune the node and its children if it's not a bytecode blob
 	p.db.cleans.Delete(string(hash[:]))
-	p.batch.Delete(dead)
+	batch.Delete(dead)
 	p.db.prunenodes++
 	p.db.prunesize += common.StorageSize(len(blob))
 
 	iterateRefs(node, path, func(path []byte, hash common.Hash) error {
-		p.prune(owner, hash, path)
+		p.prune(owner, hash, path, tries, batch)
 		return nil
 	})
 }

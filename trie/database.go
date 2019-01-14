@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/allegro/bigcache"
@@ -104,6 +105,9 @@ type Database struct {
 	diskdb  ethdb.Database           // Persistent storage for matured trie nodes
 	noprune map[common.Hash]struct{} // Root hashes of the tries that aren't prunable
 
+	pruner  *pruner // Background pruner to remove unreferenced trie nodes
+	pruning uint32  // Flag whether the pruner is running (sanity checks)
+
 	cleans  *bigcache.BigCache     // GC friendly memory cache of clean node RLPs
 	dirties map[string]*cachedNode // Data and references relationships of dirty nodes
 	oldest  string                 // Oldest tracked node, flush-list head
@@ -115,7 +119,7 @@ type Database struct {
 	gcnodes uint64             // Nodes garbage collected since last commit
 	gcsize  common.StorageSize // Data storage garbage collected since last commit
 
-	prunetime  time.Duration      // Time spend on disk pruning since last commit
+	prunetime  time.Duration      // Time spent on disk pruning since last commit
 	prunenodes uint64             // Nodes pruned from disk since last commit
 	prunesize  common.StorageSize // Data storage pruned from disk since last commit
 
@@ -344,14 +348,14 @@ func expandNode(hash hashNode, n node, cachegen uint16) node {
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected. No read cache is created, so all
 // data retrievals will hit the underlying disk database.
-func NewDatabase(diskdb ethdb.Database) *Database {
-	return NewDatabaseWithCache(diskdb, 0)
+func NewDatabase(diskdb ethdb.Database, prune bool) *Database {
+	return NewDatabaseWithCache(diskdb, 0, prune)
 }
 
 // NewDatabaseWithCache creates a new trie database to store ephemeral trie content
 // before its written out to disk or garbage collected. It also acts as a read cache
 // for nodes loaded from disk.
-func NewDatabaseWithCache(diskdb ethdb.Database, cache int) *Database {
+func NewDatabaseWithCache(diskdb ethdb.Database, cache int, prune bool) *Database {
 	var cleans *bigcache.BigCache
 	if cache > 0 {
 		cleans, _ = bigcache.NewBigCache(bigcache.Config{
@@ -362,12 +366,47 @@ func NewDatabaseWithCache(diskdb ethdb.Database, cache int) *Database {
 			HardMaxCacheSize:   cache,
 		})
 	}
-	return &Database{
+	db := &Database{
 		diskdb:    diskdb,
 		noprune:   make(map[common.Hash]struct{}),
 		cleans:    cleans,
 		dirties:   map[string]*cachedNode{metaRoot: {}},
 		preimages: make(map[common.Hash][]byte),
+	}
+	if prune {
+		db.pruner = newPruner(db)
+	}
+	return db
+}
+
+// ResumePruning permits the pruner to continue deleting unreferenced trie nodes.
+// It is essential to only ever resume pruning after all data is commited, capped
+// and properly referenced, otherwise the pruner might delete data that's *going-
+// to-be* referenced.
+func (db *Database) ResumePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 1)
+		db.pruner.resume()
+	}
+}
+
+// PausePruning waits until the pruner is done with processing its current task
+// and then pauses it so a new trie might be properly integrated into the dirty
+// caches and reference counts.
+func (db *Database) PausePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 0)
+		db.pruner.pause()
+	}
+}
+
+// TerminatePruning waits until the pruner is done with processing all its queued
+// tasls and then permanently terminates it.
+func (db *Database) TerminatePruning() {
+	if db.pruner != nil {
+		atomic.StoreUint32(&db.pruning, 0)
+		db.pruner.terminate()
+		db.pruner = nil // TODO(karalabe): raceyyyy....
 	}
 }
 
@@ -562,6 +601,10 @@ func (db *Database) Nodes() []string {
 // to break genericity here and assume that parent nodes are not owned (account
 // trie) whereas child nodes may be owned (storage trie or bytecode).
 func (db *Database) Reference(owner common.Hash, child common.Hash, parent common.Hash) {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during referencing")
+	}
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -583,7 +626,11 @@ func (db *Database) Reference(owner common.Hash, child common.Hash, parent commo
 }
 
 // Dereference removes an existing reference from a root node.
-func (db *Database) Dereference(root common.Hash, prune bool) error {
+func (db *Database) Dereference(root common.Hash) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during dereferencing")
+	}
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (common.Hash{}) {
 		log.Error("Attempted to dereference the trie cache meta root")
@@ -593,15 +640,10 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	prunetime, prunenodes, prunesize := db.prunetime, db.prunenodes, db.prunesize
-
 	// Dereference the trie and accumulate prune targets if needed
-	var pruner *pruner
-	if prune {
-		pruner = db.newPruner()
-	}
-	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil, pruner); err != nil {
+	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
+
+	if err := db.dereference(common.Hash{}, root, common.Hash{}, common.Hash{}, nil); err != nil {
 		return err
 	}
 	db.gcnodes += uint64(nodes - len(db.dirties))
@@ -612,31 +654,11 @@ func (db *Database) Dereference(root common.Hash, prune bool) error {
 	memcacheGCSizeMeter.Mark(int64(storage - db.dirtiesSize))
 	memcacheGCNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
-	// If pruning was requested, execute on a background thread
-	go func() {
-		db.lock.RLock()
-		defer db.lock.RUnlock()
-
-		if pruner != nil {
-			start := time.Now()
-			pruner.execute()
-			go func() {
-				if err := pruner.flush(); err != nil {
-					log.Crit("Failed to prune database", "err", err)
-				}
-			}()
-			db.prunetime += time.Since(start) // TODO(karalabe): unsafe, stats are off too
-		}
-		// Pruned or not, update the stats and log
-		memcachePruneTimeTimer.Update(db.prunetime - prunetime)
-		memcachePruneNodesMeter.Mark(int64(db.prunenodes - prunenodes))
-		memcachePruneSizeMeter.Mark(int64(db.prunesize - prunesize))
-	}()
 	return nil
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte, pruner *pruner) error {
+func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, parentOwner common.Hash, parentHash common.Hash, path []byte) error {
 	// Dereference the parent-child
 	parentKey := makeNodeKey(parentOwner, parentHash)
 	parent := db.dirties[parentKey]
@@ -651,8 +673,8 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 	// If the child does not exist, it's a previously committed node.
 	child, ok := db.dirties[childKey]
 	if !ok {
-		if pruner != nil {
-			pruner.mark(childOwner, childHash, path)
+		if db.pruner != nil {
+			db.pruner.enqueue(childOwner, childHash, path)
 		}
 		return nil
 	}
@@ -679,12 +701,12 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 		}
 		// Dereference all children and delete the node
 		child.iterateRefs(path, func(path []byte, hash common.Hash) error {
-			db.dereference(childOwner, hash, childOwner, childHash, path, pruner)
+			db.dereference(childOwner, hash, childOwner, childHash, path)
 			return nil
 		})
 		for key := range child.children {
 			owner, hash := splitNodeKey(key)
-			db.dereference(owner, hash, childOwner, childHash, nil, pruner)
+			db.dereference(owner, hash, childOwner, childHash, nil)
 		}
 		delete(db.dirties, childKey)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(child.size))
@@ -695,6 +717,10 @@ func (db *Database) dereference(childOwner common.Hash, childHash common.Hash, p
 // Cap iteratively flushes old but still referenced trie nodes until the total
 // memory usage goes below the given threshold.
 func (db *Database) Cap(limit common.StorageSize) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during capping")
+	}
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
@@ -798,6 +824,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // As a side effect, all pre-images accumulated up to this point are also written.
 func (db *Database) Commit(node common.Hash, report bool) error {
+	// If pruning is enabled and running, something's very wrong
+	if db.pruner != nil && atomic.LoadUint32(&db.pruning) == 1 {
+		panic("pruner running during committing")
+	}
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
 	// memory cache during commit but not yet in persistent storage). This is ensured
