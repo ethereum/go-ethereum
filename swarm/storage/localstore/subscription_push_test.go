@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,7 @@ func TestDB_SubscribePush(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	chunks := make([]storage.Chunk, 0)
+	var chunksMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
 		for i := 0; i < count; i++ {
@@ -48,7 +50,9 @@ func TestDB_SubscribePush(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			chunksMu.Lock()
 			chunks = append(chunks, chunk)
+			chunksMu.Unlock()
 		}
 	}
 
@@ -76,7 +80,9 @@ func TestDB_SubscribePush(t *testing.T) {
 				if !ok {
 					return
 				}
+				chunksMu.Lock()
 				want := chunks[i]
+				chunksMu.Unlock()
 				var err error
 				if !bytes.Equal(got.Data(), want.Data()) {
 					err = fmt.Errorf("got chunk %v data %x, want %x", i, got.Data(), want.Data())
@@ -118,6 +124,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 
 	addrs := make([]storage.Address, 0)
+	var addrsMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
 		for i := 0; i < count; i++ {
@@ -128,7 +135,9 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			addrsMu.Lock()
 			addrs = append(addrs, chunk.Address())
+			addrsMu.Unlock()
 		}
 	}
 
@@ -161,7 +170,9 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 					if !ok {
 						return
 					}
+					addrsMu.Lock()
 					want := addrs[i]
+					addrsMu.Unlock()
 					var err error
 					if !bytes.Equal(got.Address(), want) {
 						err = fmt.Errorf("got chunk %v address on subscription %v %s, want %s", i, j, got, want)
