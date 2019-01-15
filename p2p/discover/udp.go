@@ -261,6 +261,7 @@ func newUDP(c conn, ln *enode.LocalNode, cfg Config) (*Table, *udp, error) {
 		return nil, nil, err
 	}
 	udp.tab = tab
+	log.Info("UDP listener up", "net", tab.self())
 
 	udp.wg.Add(2)
 	go udp.loop()
