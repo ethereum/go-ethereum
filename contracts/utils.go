@@ -307,90 +307,88 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, number uint64, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+	number := header.Number.Uint64()
 	prevCheckpoint := number - (rCheckpoint * 2)
 	startBlockNumber := prevCheckpoint + 1
 	endBlockNumber := startBlockNumber + rCheckpoint - 1
 	signers := make(map[common.Address]*rewardLog)
-	prevHeaderCheckpoint := chain.GetHeaderByNumber(prevCheckpoint)
-	masternodes := posv.GetMasternodesFromCheckpointHeader(prevHeaderCheckpoint)
+	mapBlkHash := map[uint64]common.Hash{}
 
-	if len(masternodes) > 0 {
+	data := make(map[common.Hash][]common.Address)
+	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
+		header = chain.GetHeader(header.ParentHash, i)
+		mapBlkHash[i] = header.Hash()
+		if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
+			txs := signData.([]*types.Transaction)
+			for _, tx := range txs {
+				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+				from := *tx.From()
+				data[blkHash] = append(data[blkHash], from)
+			}
+		} else {
+			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
+			block := chain.GetBlock(header.Hash(), i)
+			txs := block.Transactions()
+			receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
 
-		data := make(map[common.Hash][]common.Address)
-		for i := startBlockNumber; i <= prevCheckpoint+(rCheckpoint*2)-1; i++ {
-			header := chain.GetHeaderByNumber(i)
-			if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
-				txs := signData.([]*types.Transaction)
-				for _, tx := range txs {
+			var signTxs []*types.Transaction
+			for _, tx := range txs {
+				if tx.IsSigningTransaction() {
+					var b uint
+					for _, r := range receipts {
+						if r.TxHash == tx.Hash() {
+							if len(r.PostState) > 0 {
+								b = types.ReceiptStatusSuccessful
+							} else {
+								b = r.Status
+							}
+							break
+						}
+					}
+
+					if b == types.ReceiptStatusFailed {
+						continue
+					}
+
+					signTxs = append(signTxs, tx)
 					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 					from := *tx.From()
 					data[blkHash] = append(data[blkHash], from)
 				}
-			} else {
-				log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
-				block := chain.GetBlock(header.Hash(), i)
-				txs := block.Transactions()
-				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+			}
+			c.BlockSigners.Add(header.Hash(), signTxs)
+		}
+	}
+	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
+	masternodes := posv.GetMasternodesFromCheckpointHeader(header)
 
-				var signTxs []*types.Transaction
-				for _, tx := range txs {
-					if tx.IsSigningTransaction() {
-						var b uint
-						for _, r := range receipts {
-							if r.TxHash == tx.Hash() {
-								if len(r.PostState) > 0 {
-									b = types.ReceiptStatusSuccessful
-								} else {
-									b = r.Status
-								}
-								break
+	for i := startBlockNumber; i <= endBlockNumber; i++ {
+		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
+			addrs := data[mapBlkHash[i]]
+			// Filter duplicate address.
+			if len(addrs) > 0 {
+				addrSigners := make(map[common.Address]bool)
+				for _, masternode := range masternodes {
+					for _, addr := range addrs {
+						if addr == masternode {
+							if _, ok := addrSigners[addr]; !ok {
+								addrSigners[addr] = true
 							}
+							break
 						}
-
-						if b == types.ReceiptStatusFailed {
-							continue
-						}
-
-						signTxs = append(signTxs, tx)
-						blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-						from := *tx.From()
-						data[blkHash] = append(data[blkHash], from)
 					}
 				}
-				c.BlockSigners.Add(header.Hash(), signTxs)
 
-			}
-		}
-
-		for i := startBlockNumber; i <= endBlockNumber; i++ {
-			if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
-				block := chain.GetHeaderByNumber(i)
-				addrs := data[block.Hash()]
-				// Filter duplicate address.
-				if len(addrs) > 0 {
-					addrSigners := make(map[common.Address]bool)
-					for _, masternode := range masternodes {
-						for _, addr := range addrs {
-							if addr == masternode {
-								if _, ok := addrSigners[addr]; !ok {
-									addrSigners[addr] = true
-								}
-								break
-							}
-						}
+				for addr := range addrSigners {
+					_, exist := signers[addr]
+					if exist {
+						signers[addr].Sign++
+					} else {
+						signers[addr] = &rewardLog{1, new(big.Int)}
 					}
-
-					for addr := range addrSigners {
-						_, exist := signers[addr]
-						if exist {
-							signers[addr].Sign++
-						} else {
-							signers[addr] = &rewardLog{1, new(big.Int)}
-						}
-						*totalSigner++
-					}
+					*totalSigner++
 				}
 			}
 		}
