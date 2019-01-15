@@ -275,7 +275,7 @@ func TestEncodeData(t *testing.T) {
 	}
 }
 
-func TestMalformedData1(t *testing.T) {
+func TestMalformedDomainkeys(t *testing.T) {
 	// Verifies that malformed domain keys are properly caught:
 	//{
 	//	"name": "Ether Mail",
@@ -365,7 +365,7 @@ func TestMalformedData1(t *testing.T) {
 	}
 }
 
-func TestMalformedData2(t *testing.T) {
+func TestTypeMismatch(t *testing.T) {
 	// Verifies that:
 	// 1. Mismatches between the given type and data, i.e. `Person` and
 	// 		the data item is a string, are properly caught:
@@ -472,7 +472,7 @@ func TestMalformedData2(t *testing.T) {
 	}
 }
 
-func TestMalformedData3(t *testing.T) {
+func TestMalformedTypesAndExtradata(t *testing.T) {
 	// Verifies several quirks
 	// 1. Using dynamic types and only validating the prefix:
 	//{
@@ -567,7 +567,7 @@ func TestMalformedData3(t *testing.T) {
 	}
 }
 
-func TestMalformedData4(t *testing.T) {
+func TestTypeMismatch(t *testing.T) {
 	// Verifies data that doesn't fit into it:
 	//{
 	//	"test": 65536 <-- test defined as uint8
@@ -606,19 +606,6 @@ func TestFormatter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshalling failed %v", err)
 	}
-
-	//x := PrettyPrintPrimitiveValue("address", "wallet", "0x123123123", 1)
-	//fmt.Printf(x)
-	//y := FormatPrimitiveValue("address", "wallet", "0x123123123")
-	//fmt.Printf("%v\n", y)
-
-	//fmt.Printf(d.PrettyPrintData(d.PrimaryType,d.Message, 1))
-
-	//formatted := d.FormatData(d.PrimaryType,d.Message)
-	//for _,item := range formatted{
-	//	fmt.Printf("%v\n", item.Pprint(0))
-	//}
-
 	formatted := d.Format()
 	for _, item := range formatted {
 		fmt.Printf("%v\n", item.Pprint(0))
@@ -629,7 +616,7 @@ func TestFormatter(t *testing.T) {
 
 }
 
-func TestMalformedData5(t *testing.T) {
+func TestCustomTypeAsArray(t *testing.T) {
 	var jsonTypedData = `
     {
       "types": {

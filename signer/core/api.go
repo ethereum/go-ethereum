@@ -176,7 +176,6 @@ type (
 		ContentType string                  `json:"content_type"`
 		Address     common.MixedcaseAddress `json:"address"`
 		Rawdata     interface{}             `json:"raw_data"`
-		//Message     string                  `json:"message"`
 		Message []*NameValueType `json:"message"`
 		Hash    hexutil.Bytes    `json:"hash"`
 		Meta    Metadata         `json:"meta"`
