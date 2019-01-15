@@ -110,6 +110,11 @@ var (
 		Name:  "nostack",
 		Usage: "disable stack output",
 	}
+	EVMInterpreterFlag = cli.StringFlag{
+		Name:  "vm.evm",
+		Usage: "External EVM configuration (default = built-in interpreter)",
+		Value: "",
+	}
 )
 
 func init() {
@@ -133,6 +138,7 @@ func init() {
 		ReceiverFlag,
 		DisableMemoryFlag,
 		DisableStackFlag,
+		EVMInterpreterFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,
