@@ -1,20 +1,34 @@
+// Copyright (c) 2018 XDCchain
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 package validator
 
 import (
 	"context"
-	"encoding/json"
 	"math/big"
-	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
-	contractValidator "github.com/ethereum/go-ethereum/contracts/validator/contract"
+	"github.com/ethereum/go-ethereum/contracts"
+	"github.com/ethereum/go-ethereum/contracts/validator/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"math/rand"
 )
 
 var (
@@ -80,7 +94,7 @@ func TestRewardBalance(t *testing.T) {
 	// validatorAddr, _, baseValidator, err := contract.DeployXDCValidator(transactOpts, contractBackend, big.NewInt(50000), big.NewInt(99), big.NewInt(100), big.NewInt(100))
 	validatorCap := new(big.Int)
 	validatorCap.SetString("50000000000000000000000", 10)
-	validatorAddr, _, baseValidator, err := contractValidator.DeployXDCValidator(
+	validatorAddr, _, baseValidator, err := contract.DeployXDCValidator(
 		transactOpts,
 		contractBackend,
 		[]common.Address{addr},
@@ -130,7 +144,7 @@ func TestRewardBalance(t *testing.T) {
 
 	foundationAddr := common.HexToAddress(common.FoudationAddr)
 	totalReward := new(big.Int).SetInt64(15 * 1000)
-	rewards, err := GetRewardBalancesRate(foundationAddr, acc3Addr, totalReward, baseValidator)
+	rewards, err := contracts.GetRewardBalancesRate(foundationAddr, acc3Addr, totalReward, baseValidator)
 	if err != nil {
 		t.Error("Fail to get reward balances rate.", err)
 	}
@@ -160,77 +174,4 @@ func TestRewardBalance(t *testing.T) {
 		t.Errorf("reward total %v - %v", totalReward, afterReward)
 	}
 
-}
-
-func GetRewardBalancesRate(foudationWalletAddr common.Address, masterAddr common.Address, totalReward *big.Int, validator *contractValidator.XDCValidator) (map[common.Address]*big.Int, error) {
-	owner := GetCandidatesOwnerBySigner(validator, masterAddr)
-	balances := make(map[common.Address]*big.Int)
-	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
-	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
-	balances[owner] = rewardMaster
-	// Get voters for masternode.
-	opts := new(bind.CallOpts)
-	voters, err := validator.GetVoters(opts, masterAddr)
-	if err != nil {
-		log.Crit("Fail to get voters", "error", err)
-		return nil, err
-	}
-
-	if len(voters) > 0 {
-		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
-		totalVoterReward = new(big.Int).Div(totalVoterReward, new(big.Int).SetUint64(100))
-		totalCap := new(big.Int)
-		// Get voters capacities.
-		voterCaps := make(map[common.Address]*big.Int)
-		for _, voteAddr := range voters {
-			var voterCap *big.Int
-
-			voterCap, err = validator.GetVoterCap(opts, masterAddr, voteAddr)
-			if err != nil {
-				log.Crit("Fail to get vote capacity", "error", err)
-			}
-
-			totalCap.Add(totalCap, voterCap)
-			voterCaps[voteAddr] = voterCap
-		}
-		if totalCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-			for addr, voteCap := range voterCaps {
-				// Only valid voter has cap > 0.
-				if voteCap.Cmp(new(big.Int).SetInt64(0)) > 0 {
-					rcap := new(big.Int).Mul(totalVoterReward, voteCap)
-					rcap = new(big.Int).Div(rcap, totalCap)
-					if balances[addr] != nil {
-						balances[addr].Add(balances[addr], rcap)
-					} else {
-						balances[addr] = rcap
-					}
-				}
-			}
-		}
-	}
-
-	foudationReward := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardFoundationPercent))
-	foudationReward = new(big.Int).Div(foudationReward, new(big.Int).SetInt64(100))
-	balances[foudationWalletAddr] = foudationReward
-
-	jsonHolders, err := json.Marshal(balances)
-	if err != nil {
-		log.Error("Fail to parse json holders", "error", err)
-		return nil, err
-	}
-	log.Info("Holders reward", "holders", string(jsonHolders), "master node", masterAddr.String())
-
-	return balances, nil
-}
-
-func GetCandidatesOwnerBySigner(validator *contractValidator.XDCValidator, signerAddr common.Address) common.Address {
-	owner := signerAddr
-	opts := new(bind.CallOpts)
-	owner, err := validator.GetCandidateOwner(opts, signerAddr)
-	if err != nil {
-		log.Error("Fail get candidate owner", "error", err)
-		return owner
-	}
-
-	return owner
 }
