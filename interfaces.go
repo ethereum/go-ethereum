@@ -147,7 +147,7 @@ type FilterQuery struct {
 	// {{}, {B}}          matches any topic in first position, B in second position
 	// {{A}, {B}}         matches topic A in first position, B in second position
 	// {{A, B}, {C, D}}   matches topic (A OR B) in first position, (C OR D) in second position
-	Topics [][]common.Hash
+	Topics [][]*common.Hash
 }
 
 // LogFilterer provides access to contract log events using a one-off query or continuous
