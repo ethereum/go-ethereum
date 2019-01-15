@@ -489,11 +489,8 @@ Response
 ### account_ecRecover
 
 #### Sign data
-<<<<<<< HEAD
 
-=======
->>>>>>> c72099670... Added example RPC calls for account_signData and account_signTypedData
-   Derive the address from the account that was used to sign data with content type `text/plain` and the signature.
+Derive the address from the account that was used to sign data with content type `text/plain` and the signature.
 
 #### Arguments
   - data [data]: data that was signed

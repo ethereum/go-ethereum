@@ -29,17 +29,15 @@ import (
 	"strings"
 	"unicode"
 
-	"golang.org/x/crypto/sha3"
-
-	"github.com/ethereum/go-ethereum/common/math"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 type SigFormat struct {
@@ -118,7 +116,7 @@ type TypedDataDomain struct {
 	Salt              string   `json:"salt"`
 }
 
-var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[])?$`)
+var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[\])?$`)
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[])?$`)
 
 // Sign receives a request and produces a signature
@@ -222,7 +220,7 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 			},
 		}
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueData, Message: message, Hash: sighash}
-	case TextPlain.Mime:
+	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 		plainData, err := hexutil.Decode(data.(string))
@@ -239,8 +237,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 		}
 
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: plainData, Message: message, Hash: sighash}
-	default:
-		return nil, fmt.Errorf("content type '%s' not implemented for signing", contentType)
 	}
 	return req, nil
 
@@ -315,7 +311,6 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 		return nil, err
 	}
 	sighash := crypto.Keccak256([]byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))))
-	//output := typedData.PrettyPrint()
 	message := typedData.Format()
 	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: message, Hash: sighash}
 	signature, err := api.Sign(ctx, addr, req)
@@ -391,6 +386,7 @@ func (typedData *TypedData) EncodeType(primaryType string) hexutil.Bytes {
 	return buffer.Bytes()
 }
 
+// TypeHash creates the keccak256 hash  of the data
 func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 	return crypto.Keccak256(typedData.EncodeType(primaryType))
 }
@@ -628,7 +624,7 @@ func (typedData *TypedData) PrettyPrint() string {
 	return output.String()
 }
 
-// Format returns a representation of d, which can be easily displayed by a user-interface
+// Format returns a representation of typedData, which can be easily displayed by a user-interface
 // without in-depth knowledge about 712 rules
 func (typedData *TypedData) Format() []*NameValueType {
 	var nvts []*NameValueType
