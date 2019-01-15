@@ -133,10 +133,6 @@ func TestSnapshotCreate(t *testing.T) {
 				}
 			}
 
-			err = verifySnapshot(file.Name())
-			if err != nil {
-				t.Error(err)
-			}
 		})
 	}
 }

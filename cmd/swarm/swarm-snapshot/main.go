@@ -76,15 +76,6 @@ func newApp() (app *cli.App) {
 				},
 			),
 		},
-		{
-			Name:    "verify",
-			Aliases: []string{"v"},
-			Usage:   "verify a swarm snapshot",
-			Action:  verify,
-			// Allow app flags to be specified after the
-			// command argument.
-			Flags: app.Flags,
-		},
 	}
 
 	return app

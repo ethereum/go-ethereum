@@ -104,7 +104,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelSimRun()
-	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+	if _, err := sim.WaitTillHealthy(ctx); err != nil {
 		return fmt.Errorf("wait for healthy kademlia: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 func touchPath(filename string) (string, error) {
 	if path.IsAbs(filename) {
 		if _, err := os.Stat(filename); err == nil {
-			// path exists, we will overwrite the file
+			// path exists, overwrite
 			return filename, nil
 		}
 	}
@@ -156,7 +156,7 @@ func touchPath(filename string) (string, error) {
 
 	_, err = os.Stat(path.Join(dir, filename))
 	if err == nil {
-		// path exists, we will overwrite
+		// path exists, overwrite
 		return filename, nil
 	}
 
