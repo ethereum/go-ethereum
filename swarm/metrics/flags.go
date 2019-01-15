@@ -102,7 +102,7 @@ func Setup(ctx *cli.Context) {
 		}
 
 		if enableAccountingExport {
-			log.Info("Enabling accounting metrics export to InfluxDB")
+			log.Info("Exporting accounting metrics to InfluxDB")
 			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", map[string]string{
 				"host": hosttag,
 			})
