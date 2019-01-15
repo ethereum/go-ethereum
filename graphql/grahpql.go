@@ -344,7 +344,7 @@ type Block struct {
 	receipts []*types.Receipt
 }
 
-// resolve returns the internal Block object represennting this block, fetching
+// resolve returns the internal Block object representing this block, fetching
 // it if necessary.
 func (b *Block) resolve(ctx context.Context) (*types.Block, error) {
 	if b.block != nil {
