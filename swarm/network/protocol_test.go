@@ -82,7 +82,7 @@ func newBzzBaseTester(t *testing.T, n int, addr *BzzAddr, spec *protocols.Spec, 
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: NewAddr(p.Node())})
 	}
 
-	s := p2ptest.NewProtocolTester(t, addr.ID(), n, protocol)
+	s := p2ptest.NewProtocolTester(addr.ID(), n, protocol)
 
 	for _, node := range s.Nodes {
 		cs[node.ID().String()] = make(chan bool)
@@ -115,9 +115,9 @@ func newBzz(addr *BzzAddr, lightNode bool) *Bzz {
 	return bzz
 }
 
-func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr, lightNode bool) *bzzTester {
+func newBzzHandshakeTester(n int, addr *BzzAddr, lightNode bool) *bzzTester {
 	bzz := newBzz(addr, lightNode)
-	pt := p2ptest.NewProtocolTester(t, addr.ID(), n, bzz.runBzz)
+	pt := p2ptest.NewProtocolTester(addr.ID(), n, bzz.runBzz)
 
 	return &bzzTester{
 		addr:           addr,
@@ -165,7 +165,7 @@ func correctBzzHandshake(addr *BzzAddr, lightNode bool) *HandshakeMsg {
 func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, lightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
@@ -182,7 +182,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, lightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
@@ -199,7 +199,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 func TestBzzHandshakeSuccess(t *testing.T) {
 	lightNode := false
 	addr := RandomAddr()
-	s := newBzzHandshakeTester(t, 1, addr, lightNode)
+	s := newBzzHandshakeTester(1, addr, lightNode)
 	node := s.Nodes[0]
 
 	err := s.testHandshake(
@@ -224,7 +224,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 	for _, test := range lightNodeTests {
 		t.Run(test.name, func(t *testing.T) {
 			randomAddr := RandomAddr()
-			pt := newBzzHandshakeTester(t, 1, randomAddr, false)
+			pt := newBzzHandshakeTester(1, randomAddr, false)
 			node := pt.Nodes[0]
 			addr := NewAddr(node)
 
