@@ -20,7 +20,7 @@ const common = require('./webpack.config.common.js');
 
 module.exports = merge(common, {
 	mode:         'production',
-	devtool:      'nosources-source-map',
+	devtool:      'source-map',
 	optimization: {
 		minimize:     true,
 		namedModules: true, // Module names instead of numbers - resolves the large diff problem.

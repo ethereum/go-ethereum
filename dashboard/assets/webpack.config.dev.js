@@ -16,11 +16,13 @@
 
 const webpack = require('webpack');
 const merge = require('webpack-merge');
+const WebpackDashboard = require('webpack-dashboard/plugin');
 const common = require('./webpack.config.common.js');
 
 module.exports = merge(common, {
 	mode:    'development',
 	plugins: [
+		new WebpackDashboard(),
 		new webpack.HotModuleReplacementPlugin(),
 	],
 	// devtool:   'eval',

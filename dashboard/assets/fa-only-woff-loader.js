@@ -21,4 +21,3 @@ module.exports = content => content
 	.replace(/url(?!.*url.*(\.eot)).*(\.eot)[^,]*,/, '')
 	.replace(/url(?!.*url.*(\.ttf)).*(\.ttf)[^,]*,/, '')
 	.replace(/,[^,]*url(?!.*url.*(\.svg)).*(\.svg)[^;]*;/, ';');
-

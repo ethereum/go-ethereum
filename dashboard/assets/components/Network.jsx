@@ -32,6 +32,8 @@ import type {Network as NetworkType, PeerEvent} from '../types/content';
 
 // inserter is a state updater function for the main component, which handles the peers.
 export const inserter = (sampleLimit: number) => (update: NetworkType, prev: NetworkType) => {
+	// The first message contains the metered peer history,
+	// which has a valid peer state JSON format per se.
 	if (update.peers && update.peers.bundles) {
 		prev.peers = update.peers;
 	}
@@ -76,8 +78,8 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 						latitude:  0,
 						longitude: 0,
 					},
-					knownPeers:   {},
-					attempts: [],
+					knownPeers: {},
+					attempts:   [],
 				};
 			}
 			const bundle = prev.peers.bundles[event.ip];
@@ -86,6 +88,9 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 				return;
 			}
 			if (!event.id) {
+				if (!bundle.attempts) {
+					bundle.attempts = [];
+				}
 				bundle.attempts.push({
 					connected:    event.connected,
 					disconnected: event.disconnected,
@@ -169,10 +174,10 @@ class Network extends Component<Props, State> {
 								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
 									return null;
 								}
-								return (
-									<TableRow key={`known_${ip}`}>
+								return Object.entries(bundle.knownPeers).map(([id, peer]) => (
+									<TableRow key={`known_${ip}_${id}`}>
 										<TableCell>
-											{Object.keys(bundle.knownPeers).map(id => id.substring(0, 10)).join(' ')}
+											{id.substring(0, 10)}
 										</TableCell>
 										<TableCell>
 											{bundle.location ? (() => {
@@ -181,31 +186,27 @@ class Network extends Component<Props, State> {
 											})() : ''}
 										</TableCell>
 										<TableCell>
-											{Object.values(bundle.knownPeers).map(({ingress, egress}) => (
-												<div>
-													<AreaChart
-														width={200} height={18}
-														syncId={'footerSyncId'}
-														data={egress.map(({value}) => ({egress: value || 0}))}
-														margin={{top: 5, right: 5, bottom: 0, left: 5}}
-													>
-														<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
-														<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#8884d8' fill='#8884d8' />
-													</AreaChart>
-													<AreaChart
-														width={200} height={18}
-														syncId={'footerSyncId'}
-														data={ingress.map(({value}) => ({ingress: -value || 0}))}
-														margin={{top: 0, right: 5, bottom: 5, left: 5}}
-													>
-														<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
-														<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#82ca9d' fill='#82ca9d' />
-													</AreaChart>
-												</div>
-											))}
+											<AreaChart
+												width={200} height={18}
+												syncId={'footerSyncId'}
+												data={peer.egress.map(({value}) => ({egress: value || 0}))}
+												margin={{top: 5, right: 5, bottom: 0, left: 5}}
+											>
+												<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
+												<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#8884d8' fill='#8884d8' />
+											</AreaChart>
+											<AreaChart
+												width={200} height={18}
+												syncId={'footerSyncId'}
+												data={peer.ingress.map(({value}) => ({ingress: -value || 0}))}
+												margin={{top: 0, right: 5, bottom: 5, left: 5}}
+											>
+												<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
+												<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#82ca9d' fill='#82ca9d' />
+											</AreaChart>
 										</TableCell>
 									</TableRow>
-								);
+								));
 							})}
 						</TableBody>
 					</Table>

@@ -18,6 +18,7 @@ package dashboard
 
 //go:generate yarn --cwd ./assets install
 //go:generate yarn --cwd ./assets build
+//go:generate yarn --cwd ./assets js-beautify -f bundle.js.map -r -w 1
 //go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/index.html assets/bundle.js assets/bundle.js.map
 //go:generate sh -c "sed 's#var _bundleJs#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate sh -c "sed 's#var _bundleJsMap#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
