@@ -388,7 +388,9 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 		allChunks = append(allChunks, chunks...)
+		ldb.lock.Lock()
 		log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n)
+		ldb.lock.Unlock()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
@@ -537,7 +539,9 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 		remaining -= putCount
 		for putCount > 0 {
 			ldb.Put(context.TODO(), chunks[puts])
+			ldb.lock.Lock()
 			log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n, "puts", puts, "remaining", remaining, "roundtarget", roundTarget)
+			ldb.lock.Unlock()
 			puts++
 			putCount--
 		}
