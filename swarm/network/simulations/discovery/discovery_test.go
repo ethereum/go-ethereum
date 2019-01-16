@@ -18,16 +18,12 @@ package discovery
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -86,12 +82,10 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount       = flag.Int("nodes", 10, "number of nodes to create (default 10)")
-	initCount       = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	snapshotFile    = flag.String("snapshot", "", "path to create snapshot file in")
-	loglevel        = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog          = flag.Bool("rawlog", false, "remove terminal formatting from logs")
-	serviceOverride = flag.String("services", "", "remove or add services to the node snapshot; prefix with \"+\" to add, \"-\" to remove; example: +pss,-discovery")
+	nodeCount = flag.Int("nodes", 10, "number of nodes to create (default 10)")
+	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
+	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
+	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 func init() {
@@ -247,25 +241,14 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	action := func(ctx context.Context) error {
 		return nil
 	}
-	wg := sync.WaitGroup{}
 	for i := range ids {
 		// collect the overlay addresses, to
 		addrs = append(addrs, ids[i].Bytes())
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = (i + 1) % len(ids)
-			} else {
-				k = rand.Intn(len(ids))
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
 	}
-	wg.Wait()
+	err := net.ConnectNodesChain(nil)
+	if err != nil {
+		return nil, err
+	}
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
 	ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
@@ -308,40 +291,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	})
 	if result.Error != nil {
 		return result, nil
-	}
-
-	if *snapshotFile != "" {
-		var err error
-		var snap *simulations.Snapshot
-		if len(*serviceOverride) > 0 {
-			var addServices []string
-			var removeServices []string
-			for _, osvc := range strings.Split(*serviceOverride, ",") {
-				if strings.Index(osvc, "+") == 0 {
-					addServices = append(addServices, osvc[1:])
-				} else if strings.Index(osvc, "-") == 0 {
-					removeServices = append(removeServices, osvc[1:])
-				} else {
-					panic("stick to the rules, you know what they are")
-				}
-			}
-			snap, err = net.SnapshotWithServices(addServices, removeServices)
-		} else {
-			snap, err = net.Snapshot()
-		}
-
-		if err != nil {
-			return nil, errors.New("no shapshot dude")
-		}
-		jsonsnapshot, err := json.Marshal(snap)
-		if err != nil {
-			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
-		}
-		log.Info("writing snapshot", "file", *snapshotFile)
-		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
-		if err != nil {
-			return nil, err
-		}
 	}
 	return result, nil
 }
@@ -457,23 +406,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 		return nil
 	}
-	//connects in a chain
-	wg := sync.WaitGroup{}
-	//connects in a ring
-	for i := range ids {
-		for j := 1; j <= conns; j++ {
-			k := (i + j) % len(ids)
-			if k == i {
-				k = (k + 1) % len(ids)
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
-	}
-	wg.Wait()
+	net.ConnectNodesChain(nil)
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
 	check := func(ctx context.Context, id enode.ID) (bool, error) {
