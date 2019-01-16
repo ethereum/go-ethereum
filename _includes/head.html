@@ -1,0 +1,27 @@
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Go Ethereum</title>
+    <link rel="icon" type="image/png" href="./static/images/favicon.png" />
+
+    <link href="./static/styles/bootstrap.min.css" rel="stylesheet" />
+    <link href="./static/styles/flatly.min.css" rel="stylesheet" />
+    <link href="./static/styles/font-awesome.min.css" rel="stylesheet" />
+
+    <link href="./static/styles/custom/common.css" rel="stylesheet" />
+    {% if page.css %}
+        {% for css in page.css %}
+    <link href="{{ css }}" rel="stylesheet" />
+        {% endfor %}
+    {% endif %}
+
+    <script src="./static/scripts/jquery.min.js"></script>
+    <script src="./static/scripts/bootstrap.min.js"></script>
+    <script src="./static/scripts/moment.min.js"></script>
+    <script src="./static/scripts/marked.min.js"></script>
+    <script src="./static/scripts/emojify.min.js"></script>
+
+    <script src="../static/scripts/custom/polyfills.js"></script>
+</head>
