@@ -173,8 +173,9 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
-	// first collect undersaturated bins starting from smallest size from shallow to deep
-	// saturation is a map: bin size (int) -> deepening list of PO bins with that size ([]int)
+	// collect undersaturated bins in ascending order of number of connected peers
+	// and from shallow to deep (ascending order of PO)
+	// insert them in a map of bin arrays, keyed with the number of connected peers
 	saturation := make(map[int][]int)
 	var lastPO int       // the last non-empty PO bin in the iteration
 	saturationDepth = -1 // the deepest PO such that all shallower bins have >= k.MinBinSize peers
