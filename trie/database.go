@@ -45,10 +45,6 @@ var (
 	memcacheGCNodesMeter = metrics.NewRegisteredMeter("trie/memcache/gc/nodes", nil)
 	memcacheGCSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/gc/size", nil)
 
-	memcachePruneTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/prune/time", nil)
-	memcachePruneNodesMeter = metrics.NewRegisteredMeter("trie/memcache/prune/nodes", nil)
-	memcachePruneSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/prune/size", nil)
-
 	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("trie/memcache/commit/nodes", nil)
 	memcacheCommitSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/commit/size", nil)

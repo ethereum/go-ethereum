@@ -26,7 +26,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	memcachePruneTimeTimer  = metrics.NewRegisteredResettingTimer("trie/memcache/prune/time", nil)
+	memcachePruneNodesMeter = metrics.NewRegisteredMeter("trie/memcache/prune/nodes", nil)
+	memcachePruneSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/prune/size", nil)
+
+	memcachePruneAssignHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/assign", nil, metrics.NewUniformSample(1024))
+	memcachePruneRemainHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/remain", nil, metrics.NewUniformSample(1024))
+	memcachePruneQueueHistogram  = metrics.NewRegisteredHistogram("trie/memcache/prune/queue", nil, metrics.NewUniformSample(1024))
+	memcachePruneDedupHistogram  = metrics.NewRegisteredHistogram("trie/memcache/prune/dedup", nil, metrics.NewUniformSample(1024))
 )
 
 // pruner is responsible for pruning the state trie based on liveness checks
@@ -67,7 +79,7 @@ func newPruner(db *Database) *pruner {
 }
 
 // enqueue adds a batch of potential prune targets to the removal queue to be
-// inspected and removed from the database if deemed unreferenced by recent
+// inspected and removed from the database if deemed unreferenced by recentMeter.
 // and snapshot tries.
 //
 // It's important to queue in batches as a single block might enque hundreds or
@@ -120,9 +132,11 @@ func (p *pruner) terminate() {
 // added, causing liveness checks and potentially database deletions in response.
 func (p *pruner) loop() {
 	var (
-		tasks []*prunerTarget // Batch of trie nodes queued for potential pruning
-		tries []*traverser    // Individual trie traversers for liveness checks
-		quit  chan struct{}   // Quit signal channel when termination is requested
+		tasks   []*prunerTarget             // Batch of trie nodes queued for potential pruning
+		taskset = make(map[string]struct{}) // Set of trie nodes queued to prevent duplication
+
+		tries []*traverser  // Individual trie traversers for liveness checks
+		quit  chan struct{} // Quit signal channel when termination is requested
 
 		batch = p.db.diskdb.NewBatch() // Create a write batch to minimize thrashing
 	)
@@ -133,7 +147,19 @@ func (p *pruner) loop() {
 			// New task received, queue it up. We will not start immediately processing
 			// this as the enqueueing is done whilst doing in-memory garbage collection,
 			// so the dirty caches are locked for writing.
-			tasks = append(tasks, targets...)
+			duplicates := 0
+			for _, task := range targets {
+				key := makeNodeKey(task.owner, task.hash)
+				if _, exists := taskset[key]; exists {
+					duplicates++
+					continue
+				}
+				tasks = append(tasks, task)
+				taskset[key] = struct{}{}
+			}
+			memcachePruneAssignHistogram.Update(int64(len(targets)))
+			memcachePruneQueueHistogram.Update(int64(len(tasks)))
+			memcachePruneDedupHistogram.Update(int64(duplicates))
 
 		case ch := <-p.resumeCh:
 			// Pruner was requested to resume operation. Obtain the necessary locks to
@@ -169,16 +195,39 @@ func (p *pruner) loop() {
 
 			interrupted := false
 			for i, task := range tasks {
-				remain := p.prune(task.owner, task.hash, task.path, tries, batch)
+				// Delete this particular task from the deduplication set
+				delete(taskset, makeNodeKey(task.owner, task.hash))
+
+				remain := p.prune(task.owner, task.hash, task.path, taskset, tries, batch)
 				if len(remain) > 0 {
+					// Schedule any newly discovered but interrupted tasks for later
+					for j := 0; j < len(remain); j++ {
+						// Dedup already scheduled tasks, no need to prune twice
+						key := makeNodeKey(remain[j].owner, remain[j].hash)
+						if _, exist := taskset[key]; exist {
+							if j == 0 {
+								remain = remain[j+1:]
+							} else {
+								remain = append(remain[:j-1], remain[j+1:]...)
+							}
+							j--
+							continue
+						}
+						taskset[key] = struct{}{}
+					}
 					tasks = append(remain, tasks[i+1:]...)
 					interrupted = true
+
+					memcachePruneRemainHistogram.Update(int64(len(remain)))
+					memcachePruneQueueHistogram.Update(int64(len(tasks)))
+
 					break
 				}
 			}
 			// If all tasks have been procesed, get rid of any allocated task slice and
 			// terminate the runner pathway.
 			if !interrupted {
+				memcachePruneQueueHistogram.Update(0)
 				tasks = nil
 			}
 			// Update all the stats with the results until now
@@ -214,12 +263,16 @@ func (p *pruner) loop() {
 // it, cascading until all dangling nodes are removed. If the pruner's interrupt
 // has been triggered (block processing pending), the remaining nodes are bubbled
 // up to the caller to reschedule later.
-func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, tries []*traverser, batch ethdb.Batch) []*prunerTarget {
+func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset map[string]struct{}, tries []*traverser, batch ethdb.Batch) []*prunerTarget {
+	// If the node is already queued for pruning, don't duplicate any effort on it
+	key := makeNodeKey(owner, hash)
+	if _, ok := taskset[makeNodeKey(owner, hash)]; ok {
+		return nil
+	}
 	// If the node is still live in the memory cache, it's still referenced so we
 	// can abort. This case is important when and old trie being pruned references
 	// a new node (maybe that node was recreted since), since currently live nodes
 	// are stored expanded, not as hashes.
-	key := makeNodeKey(owner, hash)
 	if p.db.dirties[key] != nil {
 		return nil
 	}
@@ -241,7 +294,8 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, tries [
 	dead := []byte(makeNodeKey(owner, hash))
 	blob, err := p.db.diskdb.Get(dead)
 	if blob == nil || err != nil {
-		log.Error("Missing prune target", "owner", owner, "hash", hash, "path", fmt.Sprintf("%x", path))
+		// Node already deleted by something else, happens with delayed pruning
+		//log.Error("Missing prune target", "owner", owner, "hash", hash, "path", fmt.Sprintf("%x", path))
 		return nil
 	}
 	node := mustDecodeNode(hash[:], blob, 0)
@@ -262,7 +316,7 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, tries [
 		// Pruning not interrupted until now, attempt to process children too. It's
 		// fine to assign the result directly to the `remain` slice because it's nil
 		// anyway until the interrupt triggers.
-		remain = p.prune(owner, hash, path, tries, batch)
+		remain = p.prune(owner, hash, path, taskset, tries, batch)
 		return nil
 	})
 	return remain
