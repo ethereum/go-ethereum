@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/karalabe/cookiejar/collections/deque"
 )
 
 var (
@@ -35,10 +36,11 @@ var (
 	memcachePruneNodesMeter = metrics.NewRegisteredMeter("trie/memcache/prune/nodes", nil)
 	memcachePruneSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/prune/size", nil)
 
-	memcachePruneAssignHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/assign", nil, metrics.NewUniformSample(1024))
-	memcachePruneRemainHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/remain", nil, metrics.NewUniformSample(1024))
-	memcachePruneQueueHistogram  = metrics.NewRegisteredHistogram("trie/memcache/prune/queue", nil, metrics.NewUniformSample(1024))
-	memcachePruneDedupHistogram  = metrics.NewRegisteredHistogram("trie/memcache/prune/dedup", nil, metrics.NewUniformSample(1024))
+	memcachePruneAssignHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/assign", nil, metrics.NewUniformSample(1024))
+	memcachePruneAssignDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/assigndup", nil, metrics.NewUniformSample(1024))
+	memcachePruneRemainHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/remain", nil, metrics.NewUniformSample(1024))
+	memcachePruneRemainDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/remaindup", nil, metrics.NewUniformSample(1024))
+	memcachePruneQueueHistogram     = metrics.NewRegisteredHistogram("trie/memcache/prune/queue", nil, metrics.NewUniformSample(1024))
 )
 
 // pruner is responsible for pruning the state trie based on liveness checks
@@ -132,7 +134,7 @@ func (p *pruner) terminate() {
 // added, causing liveness checks and potentially database deletions in response.
 func (p *pruner) loop() {
 	var (
-		tasks   []*prunerTarget             // Batch of trie nodes queued for potential pruning
+		tasks   = deque.New()               // Queue of trie nodes queued for potential pruning
 		taskset = make(map[string]struct{}) // Set of trie nodes queued to prevent duplication
 
 		tries []*traverser  // Individual trie traversers for liveness checks
@@ -154,18 +156,18 @@ func (p *pruner) loop() {
 					duplicates++
 					continue
 				}
-				tasks = append(tasks, task)
+				tasks.PushRight(task)
 				taskset[key] = struct{}{}
 			}
+			memcachePruneQueueHistogram.Update(int64(tasks.Size()))
 			memcachePruneAssignHistogram.Update(int64(len(targets)))
-			memcachePruneQueueHistogram.Update(int64(len(tasks)))
-			memcachePruneDedupHistogram.Update(int64(duplicates))
+			memcachePruneAssignDupHistogram.Update(int64(duplicates))
 
 		case ch := <-p.resumeCh:
 			// Pruner was requested to resume operation. Obtain the necessary locks to
 			// prevent the block processor for modifying the dirty caches, but allow any
 			// goroutines to still read the data.
-			if len(tasks) == 0 {
+			if tasks.Size() == 0 {
 				ch <- struct{}{} // signal back, but nothing to do really
 				continue
 			}
@@ -193,42 +195,41 @@ func (p *pruner) loop() {
 			// Process the tasks until an interrupt arrives
 			start, nodes, size := time.Now(), p.db.prunenodes, p.db.prunesize
 
-			interrupted := false
-			for i, task := range tasks {
+			for !tasks.Empty() {
 				// Delete this particular task from the deduplication set
+				task := tasks.PopLeft().(*prunerTarget)
 				delete(taskset, makeNodeKey(task.owner, task.hash))
 
+				// Prune the target and reschedule any interrupted sub-tasks
 				remain := p.prune(task.owner, task.hash, task.path, taskset, tries, batch)
-				if len(remain) > 0 {
-					// Schedule any newly discovered but interrupted tasks for later
-					for j := 0; j < len(remain); j++ {
+				if atomic.LoadUint32(&p.interrupt) == 1 {
+					duplicates := 0
+					for j := len(remain) - 1; j >= 0; j-- { // reverse to keep the depth priority
 						// Dedup already scheduled tasks, no need to prune twice
 						key := makeNodeKey(remain[j].owner, remain[j].hash)
 						if _, exist := taskset[key]; exist {
-							if j == 0 {
-								remain = remain[j+1:]
-							} else {
-								remain = append(remain[:j-1], remain[j+1:]...)
-							}
-							j--
+							duplicates++
 							continue
 						}
+						// Reschedule (high priority) anything that's not a duplicate
+						tasks.PushLeft(remain[j])
 						taskset[key] = struct{}{}
 					}
-					tasks = append(remain, tasks[i+1:]...)
-					interrupted = true
-
+					memcachePruneQueueHistogram.Update(int64(tasks.Size()))
 					memcachePruneRemainHistogram.Update(int64(len(remain)))
-					memcachePruneQueueHistogram.Update(int64(len(tasks)))
+					memcachePruneRemainDupHistogram.Update(int64(duplicates))
 
 					break
 				}
 			}
 			// If all tasks have been procesed, get rid of any allocated task slice and
 			// terminate the runner pathway.
-			if !interrupted {
+			if tasks.Empty() {
+				tasks.Reset()
+
 				memcachePruneQueueHistogram.Update(0)
-				tasks = nil
+				memcachePruneRemainHistogram.Update(0)
+				memcachePruneRemainDupHistogram.Update(0)
 			}
 			// Update all the stats with the results until now
 			memcachePruneNodesMeter.Mark(int64(p.db.prunenodes - nodes))
@@ -266,7 +267,7 @@ func (p *pruner) loop() {
 func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset map[string]struct{}, tries []*traverser, batch ethdb.Batch) []*prunerTarget {
 	// If the node is already queued for pruning, don't duplicate any effort on it
 	key := makeNodeKey(owner, hash)
-	if _, ok := taskset[makeNodeKey(owner, hash)]; ok {
+	if _, ok := taskset[key]; ok {
 		return nil
 	}
 	// If the node is still live in the memory cache, it's still referenced so we
@@ -291,7 +292,7 @@ func (p *pruner) prune(owner common.Hash, hash common.Hash, path []byte, taskset
 		trie.unref(2, unrefs)
 	}
 	// Dead node found, delete it from the database
-	dead := []byte(makeNodeKey(owner, hash))
+	dead := []byte(key)
 	blob, err := p.db.diskdb.Get(dead)
 	if blob == nil || err != nil {
 		// Node already deleted by something else, happens with delayed pruning
