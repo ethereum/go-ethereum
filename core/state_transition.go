@@ -33,8 +33,10 @@ var (
 
 /*
 The State Transitioning Model
+
 A state transition is a change made when a transaction is applied to the current world state
 The state transitioning model does all all the necessary work to work out a valid new state root.
+
 1) Nonce handling
 2) Pre pay gas
 3) Create a new state object if the recipient is \0*32
@@ -227,22 +229,15 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// error.
 		vmerr error
 	)
-	// for debugging purpose
-	// TODO: clean it after fixing the issue https://github.com/XDCchain/XDCchain/issues/401
-	var contractAction string
-	nonce := uint64(1)
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
-		contractAction = "contract creation"
 	} else {
 		// Increment the nonce for the next transaction
-		nonce = st.state.GetNonce(sender.Address()) + 1
-		st.state.SetNonce(sender.Address(), nonce)
+		st.state.SetNonce(sender.Address(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
-		contractAction = "contract call"
 	}
 	if vmerr != nil {
-		log.Debug("VM returned with error", "action", contractAction, "contract address", st.to().Address(), "gas", st.gas, "gasPrice", st.gasPrice, "nonce", nonce, "err", vmerr)
+		log.Debug("VM returned with error", "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
