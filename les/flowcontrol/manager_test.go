@@ -27,7 +27,7 @@ import (
 
 type testNode struct {
 	node                *ClientNode
-	bufLimit, bandwidth uint64
+	bufLimit, capacity uint64
 	waitUntil           mclock.AbsTime
 	index, totalCost    uint64
 }
@@ -37,35 +37,35 @@ const (
 	testLength  = 100000
 )
 
-// testConstantTotalBandwidth simulates multiple request sender nodes and verifies
+// testConstantTotalCapacity simulates multiple request sender nodes and verifies
 // whether the total amount of served requests matches the expected value based on
-// the total bandwidth and the duration of the test.
+// the total capacity and the duration of the test.
 // Some nodes are sending requests occasionally so that their buffer should regularly
 // reach the maximum while other nodes (the "max capacity nodes") are sending at the
 // maximum permitted rate. The max capacity nodes are changed multiple times during
 // a single test.
-func TestConstantTotalBandwidth(t *testing.T) {
-	testConstantTotalBandwidth(t, 10, 1, 0)
-	testConstantTotalBandwidth(t, 10, 1, 1)
-	testConstantTotalBandwidth(t, 30, 1, 0)
-	testConstantTotalBandwidth(t, 30, 2, 3)
-	testConstantTotalBandwidth(t, 100, 1, 0)
-	testConstantTotalBandwidth(t, 100, 3, 5)
-	testConstantTotalBandwidth(t, 100, 5, 10)
+func TestConstantTotalCapacity(t *testing.T) {
+	testConstantTotalCapacity(t, 10, 1, 0)
+	testConstantTotalCapacity(t, 10, 1, 1)
+	testConstantTotalCapacity(t, 30, 1, 0)
+	testConstantTotalCapacity(t, 30, 2, 3)
+	testConstantTotalCapacity(t, 100, 1, 0)
+	testConstantTotalCapacity(t, 100, 3, 5)
+	testConstantTotalCapacity(t, 100, 5, 10)
 }
 
-func testConstantTotalBandwidth(t *testing.T, nodeCount, maxCapacityNodes, randomSend int) {
+func testConstantTotalCapacity(t *testing.T, nodeCount, maxCapacityNodes, randomSend int) {
 	clock := &mclock.Simulated{}
 	nodes := make([]*testNode, nodeCount)
-	var totalBandwidth uint64
+	var totalCapacity uint64
 	for i, _ := range nodes {
-		nodes[i] = &testNode{bandwidth: uint64(50000 + rand.Intn(100000))}
-		totalBandwidth += nodes[i].bandwidth
+		nodes[i] = &testNode{capacity: uint64(50000 + rand.Intn(100000))}
+		totalCapacity += nodes[i].capacity
 	}
-	m := NewClientManager(PieceWiseLinear{{0, totalBandwidth}}, clock)
+	m := NewClientManager(PieceWiseLinear{{0, totalCapacity}}, clock)
 	for _, n := range nodes {
-		n.bufLimit = n.bandwidth * 6000 //uint64(2000+rand.Intn(10000))
-		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.bandwidth})
+		n.bufLimit = n.capacity * 6000 //uint64(2000+rand.Intn(10000))
+		n.node = NewClientNode(m, ServerParams{BufLimit: n.bufLimit, MinRecharge: n.capacity})
 	}
 	maxNodes := make([]int, maxCapacityNodes)
 	for i, _ := range maxNodes {
@@ -98,9 +98,9 @@ func testConstantTotalBandwidth(t *testing.T, nodeCount, maxCapacityNodes, rando
 	for _, n := range nodes {
 		totalCost += n.totalCost
 	}
-	ratio := float64(totalCost) / float64(totalBandwidth) / testLength
+	ratio := float64(totalCost) / float64(totalCapacity) / testLength
 	if ratio < 0.98 || ratio > 1.02 {
-		t.Errorf("totalCost/totalBandwidth/testLength ratio incorrect (expected: 1, got: %f)", ratio)
+		t.Errorf("totalCost/totalCapacity/testLength ratio incorrect (expected: 1, got: %f)", ratio)
 	}
 
 }
@@ -116,9 +116,9 @@ func (n *testNode) send(t *testing.T, now mclock.AbsTime) bool {
 	rcost := uint64(rand.Int63n(testMaxCost))
 	bv := n.node.RequestProcessed(0, n.index, testMaxCost, rcost)
 	if bv < testMaxCost {
-		n.waitUntil = now + mclock.AbsTime((testMaxCost-bv)*1001000/n.bandwidth)
+		n.waitUntil = now + mclock.AbsTime((testMaxCost-bv)*1001000/n.capacity)
 	}
-	//n.waitUntil = now + mclock.AbsTime(float64(testMaxCost)*1001000/float64(n.bandwidth)*(1-float64(bv)/float64(n.bufLimit)))
+	//n.waitUntil = now + mclock.AbsTime(float64(testMaxCost)*1001000/float64(n.capacity)*(1-float64(bv)/float64(n.bufLimit)))
 	n.totalCost += rcost
 	return true
 }

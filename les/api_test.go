@@ -52,33 +52,33 @@ request performance test. When testServerDataDir is empty, the test is skipped.
 
 const (
 	testServerDataDir   = "" // should always be empty on the master branch
-	testServerBandwidth = 200
+	testServerCapacity = 200
 	testMaxClients      = 10
 	testTolerance       = 0.1
 	minRelBw            = 0.2
 )
 
-func TestBandwidthAPI3(t *testing.T) {
-	testBandwidthAPI(t, 3)
+func TestCapacityAPI3(t *testing.T) {
+	testCapacityAPI(t, 3)
 }
 
-func TestBandwidthAPI6(t *testing.T) {
-	testBandwidthAPI(t, 6)
+func TestCapacityAPI6(t *testing.T) {
+	testCapacityAPI(t, 6)
 }
 
-func TestBandwidthAPI10(t *testing.T) {
-	testBandwidthAPI(t, 10)
+func TestCapacityAPI10(t *testing.T) {
+	testCapacityAPI(t, 10)
 }
 
-// testBandwidthAPI runs an end-to-end simulation test connecting one server with
-// a given number of clients. It sets different priority bandwidths to all clients
+// testCapacityAPI runs an end-to-end simulation test connecting one server with
+// a given number of clients. It sets different priority capacitys to all clients
 // except a randomly selected one which runs in free client mode. All clients send
 // similar requests at the maximum allowed rate and the test verifies whether the
-// ratio of processed requests is close enough to the ratio of assigned bandwidths.
-// Running multiple rounds with different settings ensures that changing bandwidth
+// ratio of processed requests is close enough to the ratio of assigned capacitys.
+// Running multiple rounds with different settings ensures that changing capacity
 // while connected and going back and forth between free and priority mode with
 // the supplied API calls is also thoroughly tested.
-func testBandwidthAPI(t *testing.T, clientCount int) {
+func testCapacityAPI(t *testing.T, clientCount int) {
 	if testServerDataDir == "" {
 		// Skip test if no data dir specified
 		return
@@ -97,11 +97,11 @@ func testBandwidthAPI(t *testing.T, clientCount int) {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
 		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		totalBw, minBw := bandwidthLimits(ctx, t, serverRpcClient)
+		totalBw, minBw := capacityLimits(ctx, t, serverRpcClient)
 		fmt.Printf("Server totalBw: %d  minBw: %d  head number: %d  head hash: %064x\n", totalBw, minBw, headNum, headHash)
 		reqMinBw := uint64(float64(totalBw) * minRelBw / (minRelBw + float64(len(clients)-1)))
 		if minBw > reqMinBw {
-			t.Fatalf("Minimum client bandwidth (%d) bigger than required minimum for this test (%d)", minBw, reqMinBw)
+			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minBw, reqMinBw)
 		}
 
 		freeIdx := rand.Intn(len(clients))
@@ -116,7 +116,7 @@ func testBandwidthAPI(t *testing.T, clientCount int) {
 
 			fmt.Println("connecting client", i)
 			if i != freeIdx {
-				setBandwidth(ctx, t, serverRpcClient, client.ID(), totalBw/uint64(len(clients)))
+				setCapacity(ctx, t, serverRpcClient, client.ID(), totalBw/uint64(len(clients)))
 			}
 			net.Connect(client.ID(), server.ID())
 
@@ -180,7 +180,7 @@ func testBandwidthAPI(t *testing.T, clientCount int) {
 
 		weights := make([]float64, len(clients))
 		for c := 0; c < 5; c++ {
-			setBandwidth(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeBw)
+			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeBw)
 			freeIdx = rand.Intn(len(clients))
 			var sum float64
 			for i, _ := range clients {
@@ -193,16 +193,16 @@ func testBandwidthAPI(t *testing.T, clientCount int) {
 			}
 			for i, client := range clients {
 				weights[i] *= float64(totalBw-freeBw-100) / sum
-				bandwidth := uint64(weights[i])
-				if i != freeIdx && bandwidth < getBandwidth(ctx, t, serverRpcClient, client.ID()) {
-					setBandwidth(ctx, t, serverRpcClient, client.ID(), bandwidth)
+				capacity := uint64(weights[i])
+				if i != freeIdx && capacity < getCapacity(ctx, t, serverRpcClient, client.ID()) {
+					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
 				}
 			}
-			setBandwidth(ctx, t, serverRpcClient, clients[freeIdx].ID(), 0)
+			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), 0)
 			for i, client := range clients {
-				bandwidth := uint64(weights[i])
-				if i != freeIdx && bandwidth > getBandwidth(ctx, t, serverRpcClient, client.ID()) {
-					setBandwidth(ctx, t, serverRpcClient, client.ID(), bandwidth)
+				capacity := uint64(weights[i])
+				if i != freeIdx && capacity > getCapacity(ctx, t, serverRpcClient, client.ID()) {
+					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
 				}
 			}
 			weights[freeIdx] = float64(freeBw)
@@ -295,39 +295,39 @@ func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) {
 	}
 }
 
-func setBandwidth(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, bw uint64) {
-	if err := server.CallContext(ctx, nil, "les_setClientBandwidth", clientID, bw); err != nil {
-		t.Fatalf("Failed to set client bandwidth: %v", err)
+func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, bw uint64) {
+	if err := server.CallContext(ctx, nil, "les_setClientCapacity", clientID, bw); err != nil {
+		t.Fatalf("Failed to set client capacity: %v", err)
 	}
 }
 
-func getBandwidth(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID) uint64 {
+func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID) uint64 {
 	var s string
-	if err := server.CallContext(ctx, &s, "les_getClientBandwidth", clientID); err != nil {
-		t.Fatalf("Failed to get client bandwidth: %v", err)
+	if err := server.CallContext(ctx, &s, "les_getClientCapacity", clientID); err != nil {
+		t.Fatalf("Failed to get client capacity: %v", err)
 	}
 	bw, err := hexutil.DecodeUint64(s)
 	if err != nil {
-		t.Fatalf("Failed to decode client bandwidth: %v", err)
+		t.Fatalf("Failed to decode client capacity: %v", err)
 	}
 	return bw
 }
 
-func bandwidthLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint64, uint64) {
+func capacityLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint64, uint64) {
 	var s string
-	if err := server.CallContext(ctx, &s, "les_totalBandwidth"); err != nil {
-		t.Fatalf("Failed to query total bandwidth: %v", err)
+	if err := server.CallContext(ctx, &s, "les_totalCapacity"); err != nil {
+		t.Fatalf("Failed to query total capacity: %v", err)
 	}
 	total, err := hexutil.DecodeUint64(s)
 	if err != nil {
-		t.Fatalf("Failed to decode total bandwidth: %v", err)
+		t.Fatalf("Failed to decode total capacity: %v", err)
 	}
-	if err := server.CallContext(ctx, &s, "les_minimumBandwidth"); err != nil {
-		t.Fatalf("Failed to query minimum bandwidth: %v", err)
+	if err := server.CallContext(ctx, &s, "les_minimumCapacity"); err != nil {
+		t.Fatalf("Failed to query minimum capacity: %v", err)
 	}
 	min, err := hexutil.DecodeUint64(s)
 	if err != nil {
-		t.Fatalf("Failed to decode minimum bandwidth: %v", err)
+		t.Fatalf("Failed to decode minimum capacity: %v", err)
 	}
 	return total, min
 }
@@ -459,7 +459,7 @@ func newLesClientService(ctx *adapters.ServiceContext) (node.Service, error) {
 func newLesServerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	config := eth.DefaultConfig
 	config.SyncMode = downloader.FullSync
-	config.LightServ = testServerBandwidth
+	config.LightServ = testServerCapacity
 	config.LightPeers = testMaxClients
 	ethereum, err := eth.New(ctx.NodeContext, &config)
 	if err != nil {

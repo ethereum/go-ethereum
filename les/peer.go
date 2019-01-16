@@ -43,7 +43,7 @@ var (
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
 
-// bandwidth limitation for parameter updates
+// capacity limitation for parameter updates
 const (
 	allowedUpdateBytes = 100000                // initial/maximum allowed update size
 	allowedUpdateRate  = time.Millisecond * 10 // time constant for recharging one byte of allowance
@@ -112,7 +112,7 @@ func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.Ms
 }
 
 // rejectUpdate returns true if a parameter update has to be rejected because
-// the size and/or rate of updates exceed the bandwidth limitation
+// the size and/or rate of updates exceed the capacity limitation
 func (p *peer) rejectUpdate(size uint64) bool {
 	now := mclock.Now()
 	if p.updateCounter == 0 {
@@ -186,9 +186,9 @@ func (p *peer) waitBefore(maxCost uint64) (time.Duration, float64) {
 	return p.fcServer.CanSend(maxCost)
 }
 
-// updateBandwidth updates the request serving bandwidth assigned to a given client
+// updateCapacity updates the request serving capacity assigned to a given client
 // and also sends an announcement about the updated flow control parameters
-func (p *peer) updateBandwidth(bw uint64) {
+func (p *peer) updateCapacity(bw uint64) {
 	p.responseLock.Lock()
 	defer p.responseLock.Unlock()
 

@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	ErrMinBW   = errors.New("bandwidth too small")
-	ErrTotalBW = errors.New("total bandwidth exceeded")
+	ErrMinBW   = errors.New("capacity too small")
+	ErrTotalBW = errors.New("total capacity exceeded")
 )
 
 // PublicLesServerAPI  provides an API to access the les server.
@@ -40,7 +40,7 @@ type PrivateLesServerAPI struct {
 func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
 	vip := &vipClientPool{
 		clients: make(map[enode.ID]vipClientInfo),
-		totalBw: server.totalBandwidth,
+		totalBw: server.totalCapacity,
 		pm:      server.protocolManager,
 	}
 	server.protocolManager.vipClientPool = vip
@@ -51,14 +51,14 @@ func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
 	}
 }
 
-// TotalBandwidth queries total available bandwidth for all clients
-func (api *PrivateLesServerAPI) TotalBandwidth() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.totalBandwidth)
+// TotalCapacity queries total available capacity for all clients
+func (api *PrivateLesServerAPI) TotalCapacity() hexutil.Uint64 {
+	return hexutil.Uint64(api.server.totalCapacity)
 }
 
-// MinimumBandwidth queries minimum assignable bandwidth for a single client
-func (api *PrivateLesServerAPI) MinimumBandwidth() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.minBandwidth)
+// MinimumCapacity queries minimum assignable capacity for a single client
+func (api *PrivateLesServerAPI) MinimumCapacity() hexutil.Uint64 {
+	return hexutil.Uint64(api.server.minCapacity)
 }
 
 // vipClientPool stores information about prioritized clients
@@ -77,15 +77,15 @@ type vipClientInfo struct {
 	updateBw  func(uint64)
 }
 
-// SetClientBandwidth sets the priority bandwidth assigned to a given client.
-// If the assigned bandwidth is bigger than zero then connection is always
-// guaranteed. The sum of bandwidth assigned to priority clients can not exceed
-// the total available bandwidth.
+// SetClientCapacity sets the priority capacity assigned to a given client.
+// If the assigned capacity is bigger than zero then connection is always
+// guaranteed. The sum of capacity assigned to priority clients can not exceed
+// the total available capacity.
 //
-// Note: assigned bandwidth can be changed while the client is connected with
+// Note: assigned capacity can be changed while the client is connected with
 // immediate effect.
-func (api *PrivateLesServerAPI) SetClientBandwidth(id enode.ID, bw uint64) error {
-	if bw != 0 && bw < api.server.minBandwidth {
+func (api *PrivateLesServerAPI) SetClientCapacity(id enode.ID, bw uint64) error {
+	if bw != 0 && bw < api.server.minCapacity {
 		return ErrMinBW
 	}
 
@@ -122,8 +122,8 @@ func (api *PrivateLesServerAPI) SetClientBandwidth(id enode.ID, bw uint64) error
 	return nil
 }
 
-// GetClientBandwidth returns the bandwidth assigned to a given client
-func (api *PrivateLesServerAPI) GetClientBandwidth(id enode.ID) hexutil.Uint64 {
+// GetClientCapacity returns the capacity assigned to a given client
+func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
 	api.vip.lock.Lock()
 	defer api.vip.lock.Unlock()
 
@@ -131,8 +131,8 @@ func (api *PrivateLesServerAPI) GetClientBandwidth(id enode.ID) hexutil.Uint64 {
 }
 
 // connect should be called when a new client is connected. The callback function
-// is called when the assigned bandwidth is changed while the client is connected.
-// It returns the priority bandwidth or zero if the client is not prioritized.
+// is called when the assigned capacity is changed while the client is connected.
+// It returns the priority capacity or zero if the client is not prioritized.
 // It also returns whether the client can be accepted.
 //
 // Note: vipClientPool also stores a record about free clients while they are

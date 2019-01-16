@@ -54,9 +54,9 @@ type LesServer struct {
 	quitSync     chan struct{}
 	onlyAnnounce bool
 
-	totalBandwidth, minBandwidth, minBufLimit, bufLimitRatio uint64
-	bwcNormal, bwcBlockProcessing                            flowcontrol.PieceWiseLinear // bandwidth curve for normal operation and block processing mode
-	thcNormal, thcBlockProcessing                            int                         // serving thread count for normal operation and block processing mode
+	totalCapacity, minCapacity, minBufLimit, bufLimitRatio uint64
+	bwcNormal, bwcBlockProcessing                          flowcontrol.PieceWiseLinear // capacity curve for normal operation and block processing mode
+	thcNormal, thcBlockProcessing                          int                         // serving thread count for normal operation and block processing mode
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -107,28 +107,28 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	bwNormal := uint64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
 	srv.bwcNormal = flowcontrol.PieceWiseLinear{{0, 0} /*{bwNormal / 10, bwNormal}, */, {bwNormal, bwNormal}}
 	// limit the serving thread count to at least 4 times the targeted average
-	// bandwidth, allowing more paralellization in short-term load spikes but
+	// capacity, allowing more paralellization in short-term load spikes but
 	// still limiting the total thread count at a reasonable level
 	srv.thcNormal = int(bwNormal * 4 / flowcontrol.FixedPointMultiplier)
 	if srv.thcNormal < 4 {
 		srv.thcNormal = 4
 	}
-	// while processing blocks use half of the normal target bandwidth
+	// while processing blocks use half of the normal target capacity
 	bwBlockProcessing := bwNormal / 2
 	srv.bwcBlockProcessing = flowcontrol.PieceWiseLinear{{0, 0} /*{bwBlockProcessing / 10, bwBlockProcessing}, */, {bwBlockProcessing, bwBlockProcessing}}
-	// limit the serving thread count just above the targeted average bandwidth,
+	// limit the serving thread count just above the targeted average capacity,
 	// ensuring that block processing is minimally hindered
 	srv.thcBlockProcessing = int(bwBlockProcessing/flowcontrol.FixedPointMultiplier) + 1
 
 	pm.servingQueue.setThreads(srv.thcNormal)
 	srv.fcManager = flowcontrol.NewClientManager(srv.bwcNormal, &mclock.System{})
 
-	srv.totalBandwidth = bwNormal
+	srv.totalCapacity = bwNormal
 	if config.LightBandwidthIn > 0 {
-		pm.inSizeCostFactor = float64(srv.totalBandwidth) / float64(config.LightBandwidthIn)
+		pm.inSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthIn)
 	}
 	if config.LightBandwidthOut > 0 {
-		pm.outSizeCostFactor = float64(srv.totalBandwidth) / float64(config.LightBandwidthOut)
+		pm.outSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthOut)
 	}
 	srv.fcCostList, srv.minBufLimit = pm.benchmarkCosts(srv.thcNormal, pm.inSizeCostFactor, pm.outSizeCostFactor)
 	srv.fcCostTable = srv.fcCostList.decode()
@@ -136,7 +136,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		srv.fcCostStats = newCostStats(srv.fcCostTable)
 	}
 
-	srv.minBandwidth = (srv.minBufLimit-1)/bufLimitRatio + 1
+	srv.minCapacity = (srv.minBufLimit-1)/bufLimitRatio + 1
 
 	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
 	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)

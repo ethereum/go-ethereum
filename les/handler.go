@@ -197,12 +197,12 @@ func (pm *ProtocolManager) removePeer(id string) {
 }
 
 // maxFreePeers returns the maximum number of free client slots based on the number
-// and total bandwidth of other clients
+// and total capacity of other clients
 func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherBw uint64) int {
-	if otherPeers >= pm.maxPeers || otherBw >= pm.server.totalBandwidth {
+	if otherPeers >= pm.maxPeers || otherBw >= pm.server.totalCapacity {
 		return 0
 	}
-	maxPeers := int((pm.server.totalBandwidth - otherBw) / pm.freeClientBw)
+	maxPeers := int((pm.server.totalCapacity - otherBw) / pm.freeClientBw)
 	if maxPeers <= pm.maxPeers-otherPeers {
 		return maxPeers
 	}
@@ -212,9 +212,9 @@ func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherBw uint64) int {
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 	if pm.server != nil && maxPeers > 0 {
-		pm.freeClientBw = pm.server.totalBandwidth / uint64(maxPeers)
-		if pm.freeClientBw < pm.server.minBandwidth {
-			pm.freeClientBw = pm.server.minBandwidth
+		pm.freeClientBw = pm.server.totalCapacity / uint64(maxPeers)
+		if pm.freeClientBw < pm.server.minCapacity {
+			pm.freeClientBw = pm.server.minCapacity
 		}
 		if pm.freeClientBw > 0 {
 			pm.server.defParams = flowcontrol.ServerParams{
@@ -365,7 +365,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 					free = false
 				}
 				vip = true
-				p.updateBandwidth(bw)
+				p.updateCapacity(bw)
 			}
 			if vip {
 				if bw == 0 {
@@ -378,10 +378,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 						free = true
 					}
 					vip = false
-					p.updateBandwidth(pm.freeClientBw)
+					p.updateCapacity(pm.freeClientBw)
 				} else {
-					// just update vip bandwidth
-					p.updateBandwidth(bw)
+					// just update vip capacity
+					p.updateCapacity(bw)
 				}
 			}
 		}
@@ -399,7 +399,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			defer pm.vipClientPool.disconnect(p.ID())
 			if vipBw != 0 {
 				vip = true
-				p.updateBandwidth(vipBw)
+				p.updateCapacity(vipBw)
 			}
 		}
 

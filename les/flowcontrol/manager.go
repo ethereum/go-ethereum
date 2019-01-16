@@ -45,7 +45,7 @@ type cmNodeFields struct {
 // values and perfect precision is required.
 const FixedPointMultiplier = 1000000
 
-// ClientManager controls the bandwidth assigned to the clients of a server.
+// ClientManager controls the capacity assigned to the clients of a server.
 // Since ServerParams guarantee a safe lower estimate for processable requests
 // even in case of all clients being active, ClientManager calculates a
 // corrigated buffer value and usually allows a higher remaining buffer value

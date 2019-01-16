@@ -30,9 +30,9 @@ const (
 	// fcTimeConst is the time constant applied for MinRecharge during linear
 	// buffer recharge period
 	fcTimeConst = time.Millisecond
-	// DecParamDelay is applied at server side when decreasing bandwidth in order to
+	// DecParamDelay is applied at server side when decreasing capacity in order to
 	// avoid a buffer underrun error due to requests sent by the client before
-	// receiving the bandwidth update announcement
+	// receiving the capacity update announcement
 	DecParamDelay = time.Second * 2
 	// keepLogs is the duration of keeping logs; logging is not used if zero
 	keepLogs = 0
@@ -40,7 +40,7 @@ const (
 
 // ServerParams are the flow control parameters specified by a server for a client
 //
-// Note: a server can assign different amounts of bandwidth to each client by giving
+// Note: a server can assign different amounts of capacity to each client by giving
 // different parameters to them.
 type ServerParams struct {
 	BufLimit, MinRecharge uint64
