@@ -104,7 +104,7 @@ type ProtocolManager struct {
 	serverPool                          *serverPool
 	clientPool                          *freeClientPool
 	freeClientCap                       uint64
-	vipClientPool                       *vipClientPool
+	priorityClientPool                  *priorityClientPool
 	lesTopic                            discv5.Topic
 	reqDist                             *requestDistributor
 	retriever                           *retrieveManager
@@ -342,8 +342,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 
 		var (
-			free, vip bool
-			lock      sync.Mutex // lock protects access to the free and vip flags
+			free, priority bool
+			lock           sync.Mutex // lock protects access to the free and priority flags
 		)
 
 		defer func() {
@@ -358,16 +358,16 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			lock.Lock()
 			defer lock.Unlock()
 
-			if !vip && cap != 0 {
-				// switch to vip mode
+			if !priority && cap != 0 {
+				// switch to priority mode
 				if free {
 					pm.clientPool.disconnect(freeId)
 					free = false
 				}
-				vip = true
+				priority = true
 				p.updateCapacity(cap)
 			}
-			if vip {
+			if priority {
 				if cap == 0 {
 					// priority revoked; switch to free client mode or drop
 					if freeId != "" {
@@ -377,33 +377,33 @@ func (pm *ProtocolManager) handle(p *peer) error {
 						}
 						free = true
 					}
-					vip = false
+					priority = false
 					p.updateCapacity(pm.freeClientCap)
 				} else {
-					// just update vip capacity
+					// just update priority capacity
 					p.updateCapacity(cap)
 				}
 			}
 		}
 
 		lock.Lock()
-		if pm.vipClientPool != nil {
-			// the vip client pool registers currently connected non-vip clients too
+		if pm.priorityClientPool != nil {
+			// the priority client pool registers currently connected non-priority clients too
 			// in order to be able to notify them if they get priority while connected
-			vipCap, ok := pm.vipClientPool.connect(p.ID(), updateCap)
+			priorityCap, ok := pm.priorityClientPool.connect(p.ID(), updateCap)
 			if !ok {
 				lock.Unlock()
 				return p2p.DiscAlreadyConnected
 			}
 			// always unregister
-			defer pm.vipClientPool.disconnect(p.ID())
-			if vipCap != 0 {
-				vip = true
-				p.updateCapacity(vipCap)
+			defer pm.priorityClientPool.disconnect(p.ID())
+			if priorityCap != 0 {
+				priority = true
+				p.updateCapacity(priorityCap)
 			}
 		}
 
-		if !vip && freeId != "" {
+		if !priority && freeId != "" {
 			// if freeId == "" then we are in test mode and let the client connect
 			// without entering the free client pool
 			if !pm.clientPool.connect(freeId, func() { go pm.removePeer(p.id) }) {
