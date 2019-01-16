@@ -42,7 +42,7 @@ ADD genesis.json /genesis.json
 RUN \
   echo 'geth --cache 512 init /genesis.json' > geth.sh && \{{if .Unlock}}
 	echo 'mkdir -p /root/.ethereum/keystore/ && cp /signer.json /root/.ethereum/keystore/' >> geth.sh && \{{end}}
-	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .Bootnodes}}--bootnodes {{.Bootnodes}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine --minerthreads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
+	echo $'exec geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --nat extip:{{.IP}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .Bootnodes}}--bootnodes {{.Bootnodes}}{{end}} {{if .Etherbase}}--miner.etherbase {{.Etherbase}} --mine --miner.threads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --miner.gastarget {{.GasTarget}} --miner.gaslimit {{.GasLimit}} --miner.gasprice {{.GasPrice}}' >> geth.sh
 
 ENTRYPOINT ["/bin/sh", "geth.sh"]
 `
@@ -55,6 +55,7 @@ services:
   {{.Type}}:
     build: .
     image: {{.Network}}/{{.Type}}
+    container_name: {{.Network}}_{{.Type}}_1
     ports:
       - "{{.Port}}:{{.Port}}"
       - "{{.Port}}:{{.Port}}/udp"
@@ -68,6 +69,7 @@ services:
       - STATS_NAME={{.Ethstats}}
       - MINER_NAME={{.Etherbase}}
       - GAS_TARGET={{.GasTarget}}
+      - GAS_LIMIT={{.GasLimit}}
       - GAS_PRICE={{.GasPrice}}
     logging:
       driver: "json-file"
@@ -98,12 +100,14 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 	template.Must(template.New("").Parse(nodeDockerfile)).Execute(dockerfile, map[string]interface{}{
 		"NetworkID": config.network,
 		"Port":      config.port,
+		"IP":        client.address,
 		"Peers":     config.peersTotal,
 		"LightFlag": lightFlag,
 		"Bootnodes": strings.Join(bootnodes, ","),
 		"Ethstats":  config.ethstats,
 		"Etherbase": config.etherbase,
 		"GasTarget": uint64(1000000 * config.gasTarget),
+		"GasLimit":  uint64(1000000 * config.gasLimit),
 		"GasPrice":  uint64(1000000000 * config.gasPrice),
 		"Unlock":    config.keyJSON != "",
 	})
@@ -122,6 +126,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 		"Ethstats":   config.ethstats[:strings.Index(config.ethstats, ":")],
 		"Etherbase":  config.etherbase,
 		"GasTarget":  config.gasTarget,
+		"GasLimit":   config.gasLimit,
 		"GasPrice":   config.gasPrice,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
@@ -139,9 +144,9 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 
 	// Build and deploy the boot or seal node service
 	if nocache {
-		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate --timeout 60", workdir, network, network))
 	}
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate --timeout 60", workdir, network))
 }
 
 // nodeInfos is returned from a boot or seal node status check to allow reporting
@@ -160,6 +165,7 @@ type nodeInfos struct {
 	keyJSON    string
 	keyPass    string
 	gasTarget  float64
+	gasLimit   float64
 	gasPrice   float64
 }
 
@@ -175,8 +181,9 @@ func (info *nodeInfos) Report() map[string]string {
 	}
 	if info.gasTarget > 0 {
 		// Miner or signer node
-		report["Gas limit (baseline target)"] = fmt.Sprintf("%0.3f MGas", info.gasTarget)
 		report["Gas price (minimum accepted)"] = fmt.Sprintf("%0.3f GWei", info.gasPrice)
+		report["Gas floor (baseline target)"] = fmt.Sprintf("%0.3f MGas", info.gasTarget)
+		report["Gas ceil  (target maximum)"] = fmt.Sprintf("%0.3f MGas", info.gasLimit)
 
 		if info.etherbase != "" {
 			// Ethash proof-of-work miner
@@ -217,14 +224,15 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 	totalPeers, _ := strconv.Atoi(infos.envvars["TOTAL_PEERS"])
 	lightPeers, _ := strconv.Atoi(infos.envvars["LIGHT_PEERS"])
 	gasTarget, _ := strconv.ParseFloat(infos.envvars["GAS_TARGET"], 64)
+	gasLimit, _ := strconv.ParseFloat(infos.envvars["GAS_LIMIT"], 64)
 	gasPrice, _ := strconv.ParseFloat(infos.envvars["GAS_PRICE"], 64)
 
 	// Container available, retrieve its node ID and its genesis json
 	var out []byte
-	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 geth --exec admin.nodeInfo.id attach", network, kind)); err != nil {
+	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 geth --exec admin.nodeInfo.enode --cache=16 attach", network, kind)); err != nil {
 		return nil, ErrServiceUnreachable
 	}
-	id := bytes.Trim(bytes.TrimSpace(out), "\"")
+	enode := bytes.Trim(bytes.TrimSpace(out), "\"")
 
 	if out, err = client.Run(fmt.Sprintf("docker exec %s_%s_1 cat /genesis.json", network, kind)); err != nil {
 		return nil, ErrServiceUnreachable
@@ -256,9 +264,10 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 		keyJSON:    keyJSON,
 		keyPass:    keyPass,
 		gasTarget:  gasTarget,
+		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
 	}
-	stats.enode = fmt.Sprintf("enode://%s@%s:%d", id, client.address, stats.port)
+	stats.enode = string(enode)
 
 	return stats, nil
 }

@@ -55,8 +55,9 @@ var (
 
 type testOdr struct {
 	OdrBackend
-	sdb, ldb ethdb.Database
-	disable  bool
+	indexerConfig *IndexerConfig
+	sdb, ldb      ethdb.Database
+	disable       bool
 }
 
 func (odr *testOdr) Database() ethdb.Database {
@@ -90,6 +91,10 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	}
 	req.StoreResult(odr.ldb)
 	return nil
+}
+
+func (odr *testOdr) IndexerConfig() *IndexerConfig {
+	return odr.indexerConfig
 }
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error)
@@ -252,13 +257,13 @@ func testChainOdr(t *testing.T, protocol int, fn odrTestFn) {
 	)
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{})
+	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil)
 	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		t.Fatal(err)
 	}
 
-	odr := &testOdr{sdb: sdb, ldb: ldb}
+	odr := &testOdr{sdb: sdb, ldb: ldb, indexerConfig: TestClientIndexerConfig}
 	lightchain, err := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker())
 	if err != nil {
 		t.Fatal(err)

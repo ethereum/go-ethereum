@@ -53,6 +53,19 @@ type URI struct {
 	Path string
 }
 
+func (u *URI) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + u.String() + `"`), nil
+}
+
+func (u *URI) UnmarshalJSON(value []byte) error {
+	uri, err := Parse(string(value))
+	if err != nil {
+		return err
+	}
+	*u = *uri
+	return nil
+}
+
 // Parse parses rawuri into a URI struct, where rawuri is expected to have one
 // of the following formats:
 //
@@ -73,7 +86,7 @@ func Parse(rawuri string) (*URI, error) {
 
 	// check the scheme is valid
 	switch uri.Scheme {
-	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzz-resource":
+	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzz-hash", "bzz-feed":
 	default:
 		return nil, fmt.Errorf("unknown scheme %q", u.Scheme)
 	}
@@ -95,8 +108,8 @@ func Parse(rawuri string) (*URI, error) {
 	}
 	return uri, nil
 }
-func (u *URI) Resource() bool {
-	return u.Scheme == "bzz-resource"
+func (u *URI) Feed() bool {
+	return u.Scheme == "bzz-feed"
 }
 
 func (u *URI) Raw() bool {

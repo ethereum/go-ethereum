@@ -436,7 +436,7 @@ func (l *txPricedList) Removed() {
 }
 
 // Cap finds all the transactions below the given price threshold, drops them
-// from the priced list and returs them for further removal from the entire pool.
+// from the priced list and returns them for further removal from the entire pool.
 func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transactions {
 	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)  // Local underpriced transactions to keep

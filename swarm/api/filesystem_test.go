@@ -60,11 +60,11 @@ func TestApiDirUpload0(t *testing.T) {
 
 		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash, "index.css")
-		exp = expResponse(content, "text/css", 0)
+		exp = expResponse(content, "text/css; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
 		addr := storage.Address(common.Hex2Bytes(bzzhash))
-		_, _, _, _, err = api.Get(context.TODO(), addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), NOOPDecrypt, addr, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -140,10 +140,10 @@ func TestApiDirUploadModify(t *testing.T) {
 
 		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash, "index.css")
-		exp = expResponse(content, "text/css", 0)
+		exp = expResponse(content, "text/css; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, _, err = api.Get(context.TODO(), addr, "")
+		_, _, _, _, err = api.Get(context.TODO(), nil, addr, "")
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}

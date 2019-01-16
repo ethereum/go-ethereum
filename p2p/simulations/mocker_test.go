@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package simulations simulates p2p networks.
-// A mokcer simulates starting and stopping real nodes in a network.
+// A mocker simulates starting and stopping real nodes in a network.
 package simulations
 
 import (
@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 func TestMocker(t *testing.T) {
@@ -82,7 +82,7 @@ func TestMocker(t *testing.T) {
 	defer sub.Unsubscribe()
 	//wait until all nodes are started and connected
 	//store every node up event in a map (value is irrelevant, mimic Set datatype)
-	nodemap := make(map[discover.NodeID]bool)
+	nodemap := make(map[enode.ID]bool)
 	wg.Add(1)
 	nodesComplete := false
 	connCount := 0
@@ -135,13 +135,13 @@ func TestMocker(t *testing.T) {
 	wg.Wait()
 
 	//check there are nodeCount number of nodes in the network
-	nodes_info, err := client.GetNodes()
+	nodesInfo, err := client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodes_info) != nodeCount {
-		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodes_info))
+	if len(nodesInfo) != nodeCount {
+		t.Fatalf("Expected %d number of nodes, got: %d", nodeCount, len(nodesInfo))
 	}
 
 	//stop the mocker
@@ -160,12 +160,12 @@ func TestMocker(t *testing.T) {
 	}
 
 	//now the number of nodes in the network should be zero
-	nodes_info, err = client.GetNodes()
+	nodesInfo, err = client.GetNodes()
 	if err != nil {
 		t.Fatalf("Could not get nodes list: %s", err)
 	}
 
-	if len(nodes_info) != 0 {
-		t.Fatalf("Expected empty list of nodes, got: %d", len(nodes_info))
+	if len(nodesInfo) != 0 {
+		t.Fatalf("Expected empty list of nodes, got: %d", len(nodesInfo))
 	}
 }

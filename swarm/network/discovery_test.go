@@ -31,9 +31,9 @@ func TestDiscovery(t *testing.T) {
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params, 1, nil)
 
-	id := s.IDs[0]
-	raddr := NewAddrFromNodeID(id)
-	pp.Register([]OverlayAddr{OverlayAddr(raddr)})
+	node := s.Nodes[0]
+	raddr := NewAddr(node)
+	pp.Register(raddr)
 
 	// start the hive and wait for the connection
 	pp.Start(s.Server)
@@ -46,7 +46,7 @@ func TestDiscovery(t *testing.T) {
 			{
 				Code: 1,
 				Msg:  &subPeersMsg{Depth: 0},
-				Peer: id,
+				Peer: node.ID(),
 			},
 		},
 	})

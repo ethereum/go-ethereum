@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/light"
 )
 
 var (
@@ -207,7 +208,7 @@ func (r *sentReq) stateRequesting() reqStateFn {
 					return r.stateNoMorePeers
 				}
 				// nothing to wait for, no more peers to ask, return with error
-				r.stop(ErrNoPeers)
+				r.stop(light.ErrNoPeers)
 				// no need to go to stopped state because waiting() already returned false
 				return nil
 			}
@@ -215,6 +216,13 @@ func (r *sentReq) stateRequesting() reqStateFn {
 			// last request timed out, try asking a new peer
 			go r.tryRequest()
 			r.lastReqQueued = true
+			return r.stateRequesting
+		case rpDeliveredInvalid:
+			// if it was the last sent request (set to nil by update) then start a new one
+			if !r.lastReqQueued && r.lastReqSentTo == nil {
+				go r.tryRequest()
+				r.lastReqQueued = true
+			}
 			return r.stateRequesting
 		case rpDeliveredValid:
 			r.stop(nil)
@@ -241,7 +249,11 @@ func (r *sentReq) stateNoMorePeers() reqStateFn {
 			r.stop(nil)
 			return r.stateStopped
 		}
-		return r.stateNoMorePeers
+		if r.waiting() {
+			return r.stateNoMorePeers
+		}
+		r.stop(light.ErrNoPeers)
+		return nil
 	case <-r.stopCh:
 		return r.stateStopped
 	}

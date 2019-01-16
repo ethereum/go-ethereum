@@ -27,6 +27,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var hashCommand = cli.Command{
+	Action:             hash,
+	CustomHelpTemplate: helpTemplate,
+	Name:               "hash",
+	Usage:              "print the swarm hash of a file or directory",
+	ArgsUsage:          "<file>",
+	Description:        "Prints the swarm hash of file or directory",
+}
+
 func hash(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {
@@ -39,7 +48,7 @@ func hash(ctx *cli.Context) {
 	defer f.Close()
 
 	stat, _ := f.Stat()
-	fileStore := storage.NewFileStore(storage.NewMapChunkStore(), storage.NewFileStoreParams())
+	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams())
 	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)

@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -49,6 +49,9 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// minimim number of peers to broadcast new blocks to
+	minBroadcastPeers = 4
 )
 
 var (
@@ -85,6 +88,8 @@ type ProtocolManager struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 
+	whitelist map[uint64]common.Hash
+
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
 	txsyncCh    chan *txsync
@@ -98,7 +103,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkID:   networkID,
@@ -107,6 +112,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		blockchain:  blockchain,
 		chainconfig: config,
 		peers:       newPeerSet(),
+		whitelist:   whitelist,
 		newPeerCh:   make(chan *peer),
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
@@ -147,7 +153,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
 			},
-			PeerInfo: func(id discover.NodeID) interface{} {
+			PeerInfo: func(id enode.ID) interface{} {
 				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
 					return p.Info()
 				}
@@ -304,7 +310,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}()
 	}
-	// main loop. handle incoming messages.
+	// If we have any explicit whitelist block hashes, request them
+	for number := range pm.whitelist {
+		if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+			return err
+		}
+	}
+	// Handle incoming messages until the connection is torn down
 	for {
 		if err := pm.handleMsg(p); err != nil {
 			p.Log().Debug("Ethereum message handling failed", "err", err)
@@ -462,6 +474,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				}
 				p.Log().Debug("Verified to be on the same side of the DAO fork")
 				return nil
+			}
+			// Otherwise if it's a whitelisted block, validate against the set
+			if want, ok := pm.whitelist[headers[0].Number.Uint64()]; ok {
+				if hash := headers[0].Hash(); want != hash {
+					p.Log().Info("Whitelist mismatch, dropping peer", "number", headers[0].Number.Uint64(), "hash", hash, "want", want)
+					return errors.New("whitelist block mismatch")
+				}
+				p.Log().Debug("Whitelist block verified", "number", headers[0].Number.Uint64(), "hash", want)
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(p.id, headers, time.Now())
@@ -650,12 +670,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			trueHead = request.Block.ParentHash()
 			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
 		)
-		// Update the peers total difficulty if better than the previous
+		// Update the peer's total difficulty if better than the previous
 		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
 			p.SetHead(trueHead, trueTD)
 
 			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
-			// a singe block (as the true TD is below the propagated block), however this
+			// a single block (as the true TD is below the propagated block), however this
 			// scenario should easily be covered by the fetcher.
 			currentBlock := pm.blockchain.CurrentBlock()
 			if trueTD.Cmp(pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())) > 0 {
@@ -705,7 +725,14 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		transferLen := int(math.Sqrt(float64(len(peers))))
+		if transferLen < minBroadcastPeers {
+			transferLen = minBroadcastPeers
+		}
+		if transferLen > len(peers) {
+			transferLen = len(peers)
+		}
+		transfer := peers[:transferLen]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
@@ -744,8 +771,7 @@ func (pm *ProtocolManager) BroadcastTxs(txs types.Transactions) {
 func (pm *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range pm.minedBlockSub.Chan() {
-		switch ev := obj.Data.(type) {
-		case core.NewMinedBlockEvent:
+		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
 			pm.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			pm.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}

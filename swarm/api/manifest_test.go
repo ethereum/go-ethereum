@@ -44,7 +44,7 @@ func testGetEntry(t *testing.T, path, match string, multiple bool, paths ...stri
 	quitC := make(chan bool)
 	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
 	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(manifest(paths...), ref, fileStore, false, quitC)
+	trie, err := readManifest(manifest(paths...), ref, fileStore, false, quitC, NOOPDecrypt)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestExactMatch(t *testing.T) {
 	mf := manifest("shouldBeExactMatch.css", "shouldBeExactMatch.css.map")
 	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
 	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(mf, ref, fileStore, false, quitC)
+	trie, err := readManifest(mf, ref, fileStore, false, quitC, nil)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	}
 	fileStore := storage.NewFileStore(nil, storage.NewFileStoreParams())
 	ref := make([]byte, fileStore.HashSize())
-	trie, err := readManifest(reader, ref, fileStore, false, nil)
+	trie, err := readManifest(reader, ref, fileStore, false, nil, NOOPDecrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestReadManifestOverSizeLimit(t *testing.T) {
 	reader := &storage.LazyTestSectionReader{
 		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
 	}
-	_, err := readManifest(reader, storage.Address{}, nil, false, nil)
+	_, err := readManifest(reader, storage.Address{}, nil, false, nil, NOOPDecrypt)
 	if err == nil {
 		t.Fatal("got no error from readManifest")
 	}

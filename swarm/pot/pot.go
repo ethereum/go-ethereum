@@ -144,13 +144,10 @@ func add(t *Pot, val Val, pof Pof) (*Pot, int, bool) {
 	return r, po, found
 }
 
-// Remove called on (v) deletes v from the Pot and returns
-// the proximity order of v and a boolean value indicating
-// if the value was found
-// Remove called on (t, v) returns a new Pot that contains all the elements of t
-// minus the value v, using the applicative remove
-// the second return value is the proximity order of the inserted element
-// the third is boolean indicating if the item was found
+// Remove deletes element v from the Pot t and returns three parameters:
+// 1. new Pot that contains all the elements of t minus the element v;
+// 2. proximity order of the removed element v;
+// 3. boolean indicating whether the item was found.
 func Remove(t *Pot, v Val, pof Pof) (*Pot, int, bool) {
 	return remove(t, v, pof)
 }
@@ -161,10 +158,7 @@ func remove(t *Pot, val Val, pof Pof) (r *Pot, po int, found bool) {
 	if found {
 		size--
 		if size == 0 {
-			r = &Pot{
-				po: t.po,
-			}
-			return r, po, true
+			return &Pot{}, po, true
 		}
 		i := len(t.bins) - 1
 		last := t.bins[i]
@@ -201,7 +195,7 @@ func remove(t *Pot, val Val, pof Pof) (r *Pot, po int, found bool) {
 	}
 	bins = append(bins, t.bins[j:]...)
 	r = &Pot{
-		pin:  val,
+		pin:  t.pin,
 		size: size,
 		po:   t.po,
 		bins: bins,
@@ -453,64 +447,50 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 	return n, common
 }
 
-// Each called with (f) is a synchronous iterator over the bins of a node
-// respecting an ordering
-// proximity > pinnedness
-func (t *Pot) Each(f func(Val, int) bool) bool {
+// Each is a synchronous iterator over the elements of pot with function f.
+func (t *Pot) Each(f func(Val) bool) bool {
 	return t.each(f)
 }
 
-func (t *Pot) each(f func(Val, int) bool) bool {
-	var next bool
-	for _, n := range t.bins {
-		if n == nil {
-			return true
-		}
-		next = n.each(f)
-		if !next {
-			return false
-		}
-	}
-	if t.size == 0 {
+// each is a synchronous iterator over the elements of pot with function f.
+// the iteration ends if the function return false or there are no more elements.
+func (t *Pot) each(f func(Val) bool) bool {
+	if t == nil || t.size == 0 {
 		return false
 	}
-	return f(t.pin, t.po)
-}
-
-// EachFrom called with (f, start) is a synchronous iterator over the elements of a Pot
-// within the inclusive range starting from proximity order start
-// the function argument is passed the value and the proximity order wrt the root pin
-// it does NOT include the pinned item of the root
-// respecting an ordering
-// proximity > pinnedness
-// the iteration ends if the function return false or there are no more elements
-// end of a po range can be implemented since po is passed to the function
-func (t *Pot) EachFrom(f func(Val, int) bool, po int) bool {
-	return t.eachFrom(f, po)
-}
-
-func (t *Pot) eachFrom(f func(Val, int) bool, po int) bool {
-	var next bool
-	_, lim := t.getPos(po)
-	for i := lim; i < len(t.bins); i++ {
-		n := t.bins[i]
-		next = n.each(f)
-		if !next {
+	for _, n := range t.bins {
+		if !n.each(f) {
 			return false
 		}
 	}
-	return f(t.pin, t.po)
+	return f(t.pin)
+}
+
+// eachFrom is a synchronous iterator over the elements of pot with function f,
+// starting from certain proximity order po, which is passed as a second parameter.
+// the iteration ends if the function return false or there are no more elements.
+func (t *Pot) eachFrom(f func(Val) bool, po int) bool {
+	if t == nil || t.size == 0 {
+		return false
+	}
+	_, beg := t.getPos(po)
+	for i := beg; i < len(t.bins); i++ {
+		if !t.bins[i].each(f) {
+			return false
+		}
+	}
+	return f(t.pin)
 }
 
 // EachBin iterates over bins of the pivot node and offers iterators to the caller on each
 // subtree passing the proximity order and the size
 // the iteration continues until the function's return value is false
 // or there are no more subtries
-func (t *Pot) EachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val, i int) bool) bool) bool) {
+func (t *Pot) EachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val) bool) bool) bool) {
 	t.eachBin(val, pof, po, f)
 }
 
-func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val, i int) bool) bool) bool) {
+func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val) bool) bool) bool) {
 	if t == nil || t.size == 0 {
 		return
 	}
@@ -530,8 +510,8 @@ func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 	}
 	if lim == len(t.bins) {
 		if spr >= po {
-			f(spr, 1, func(g func(Val, int) bool) bool {
-				return g(t.pin, spr)
+			f(spr, 1, func(g func(Val) bool) bool {
+				return g(t.pin)
 			})
 		}
 		return
@@ -545,9 +525,9 @@ func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 		size += n.size
 	}
 	if spr >= po {
-		if !f(spr, t.size-size, func(g func(Val, int) bool) bool {
-			return t.eachFrom(func(v Val, j int) bool {
-				return g(v, spr)
+		if !f(spr, t.size-size, func(g func(Val) bool) bool {
+			return t.eachFrom(func(v Val) bool {
+				return g(v)
 			}, spo)
 		}) {
 			return
@@ -595,7 +575,7 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 	}
 
 	for i := l - 1; i > ir; i-- {
-		next = t.bins[i].each(func(v Val, _ int) bool {
+		next = t.bins[i].each(func(v Val) bool {
 			return f(v, po)
 		})
 		if !next {
@@ -605,7 +585,7 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 
 	for i := il - 1; i >= 0; i-- {
 		n := t.bins[i]
-		next = n.each(func(v Val, _ int) bool {
+		next = n.each(func(v Val) bool {
 			return f(v, n.po)
 		})
 		if !next {
@@ -719,7 +699,7 @@ func (t *Pot) eachNeighbourAsync(val Val, pof Pof, max int, maxPos int, f func(V
 				wg.Add(m)
 			}
 			go func(pn *Pot, pm int) {
-				pn.each(func(v Val, _ int) bool {
+				pn.each(func(v Val) bool {
 					if wg != nil {
 						defer wg.Done()
 					}
@@ -746,7 +726,7 @@ func (t *Pot) eachNeighbourAsync(val Val, pof Pof, max int, maxPos int, f func(V
 			wg.Add(m)
 		}
 		go func(pn *Pot, pm int) {
-			pn.each(func(v Val, _ int) bool {
+			pn.each(func(v Val) bool {
 				if wg != nil {
 					defer wg.Done()
 				}

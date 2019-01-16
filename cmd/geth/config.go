@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
+	"math/big"
 	"os"
 	"reflect"
 	"unicode"
@@ -152,7 +152,9 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-
+	if ctx.GlobalIsSet(utils.ConstantinopleOverrideFlag.Name) {
+		cfg.Eth.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
+	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
@@ -167,6 +169,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		}
 		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
 			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
+		}
+		if ctx.GlobalIsSet(utils.WhisperRestrictConnectionBetweenLightClientsFlag.Name) {
+			cfg.Shh.RestrictConnectionBetweenLightClients = true
 		}
 		utils.RegisterShhService(stack, &cfg.Shh)
 	}
@@ -192,7 +197,17 @@ func dumpConfig(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	io.WriteString(os.Stdout, comment)
-	os.Stdout.Write(out)
+
+	dump := os.Stdout
+	if ctx.NArg() > 0 {
+		dump, err = os.OpenFile(ctx.Args().Get(0), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer dump.Close()
+	}
+	dump.WriteString(comment)
+	dump.Write(out)
+
 	return nil
 }

@@ -55,7 +55,7 @@ var nilValueNode = valueNode(nil)
 func (n *fullNode) EncodeRLP(w io.Writer) error {
 	var nodes [17]node
 
-	for i, child := range n.Children {
+	for i, child := range &n.Children {
 		if child != nil {
 			nodes[i] = child
 		} else {
@@ -98,7 +98,7 @@ func (n valueNode) String() string  { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
-	for i, node := range n.Children {
+	for i, node := range &n.Children {
 		if node == nil {
 			resp += fmt.Sprintf("%s: <nil> ", indices[i])
 		} else {

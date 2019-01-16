@@ -50,7 +50,7 @@ func (w *wizard) deployNode(boot bool) {
 		if boot {
 			infos = &nodeInfos{port: 30303, peersTotal: 512, peersLight: 256}
 		} else {
-			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
+			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasTarget: 7.5, gasLimit: 10, gasPrice: 1}
 		}
 	}
 	existed := err == nil
@@ -126,7 +126,7 @@ func (w *wizard) deployNode(boot bool) {
 				} else {
 					fmt.Println()
 					fmt.Printf("Reuse previous (%s) signing account (y/n)? (default = yes)\n", key.Address.Hex())
-					if w.readDefaultString("y") != "y" {
+					if !w.readDefaultYesNo(true) {
 						infos.keyJSON, infos.keyPass = "", ""
 					}
 				}
@@ -153,6 +153,10 @@ func (w *wizard) deployNode(boot bool) {
 		infos.gasTarget = w.readDefaultFloat(infos.gasTarget)
 
 		fmt.Println()
+		fmt.Printf("What gas limit should full blocks target (MGas)? (default = %0.3f)\n", infos.gasLimit)
+		infos.gasLimit = w.readDefaultFloat(infos.gasLimit)
+
+		fmt.Println()
 		fmt.Printf("What gas price should the signer require (GWei)? (default = %0.3f)\n", infos.gasPrice)
 		infos.gasPrice = w.readDefaultFloat(infos.gasPrice)
 	}
@@ -161,7 +165,7 @@ func (w *wizard) deployNode(boot bool) {
 	if existed {
 		fmt.Println()
 		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
-		nocache = w.readDefaultString("n") != "n"
+		nocache = w.readDefaultYesNo(false)
 	}
 	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)

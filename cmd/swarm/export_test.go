@@ -19,15 +19,15 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 // TestCLISwarmExportImport perform the following test:
@@ -38,14 +38,18 @@ import (
 // 5. imports the exported datastore
 // 6. fetches the uploaded random file from the second node
 func TestCLISwarmExportImport(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
 	cluster := newTestCluster(t, 1)
 
-	// generate random 10mb file
-	f, cleanup := generateRandomFile(t, 10000000)
-	defer cleanup()
+	// generate random 1mb file
+	content := testutil.RandomBytes(1, 1000000)
+	fileName := testutil.TempFileWithContent(t, string(content))
+	defer os.Remove(fileName)
 
 	// upload the file with 'swarm up' and expect a hash
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", f.Name())
+	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", fileName)
 	_, matches := up.ExpectRegexp(`[a-f\d]{64}`)
 	up.ExpectExit()
 	hash := matches[0]
@@ -92,7 +96,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 	}
 
 	// compare downloaded file with the generated random file
-	mustEqualFiles(t, f, res.Body)
+	mustEqualFiles(t, bytes.NewReader(content), res.Body)
 }
 
 func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {
@@ -112,28 +116,4 @@ func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {
 	if !bytes.Equal(upHash, downHash) || upLen != downLen {
 		t.Fatalf("downloaded imported file md5=%x (length %v) is not the same as the generated one mp5=%x (length %v)", downHash, downLen, upHash, upLen)
 	}
-}
-
-func generateRandomFile(t *testing.T, size int) (f *os.File, teardown func()) {
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// callback for tmp file cleanup
-	teardown = func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
-	}
-
-	// write 10mb random data to file
-	buf := make([]byte, 10000000)
-	_, err = rand.Read(buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ioutil.WriteFile(tmp.Name(), buf, 0755)
-
-	return tmp, teardown
 }

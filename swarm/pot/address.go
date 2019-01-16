@@ -41,10 +41,6 @@ func NewAddressFromBytes(b []byte) Address {
 	return Address(h)
 }
 
-func (a Address) IsZero() bool {
-	return a.Bin() == zerosBin
-}
-
 func (a Address) String() string {
 	return fmt.Sprintf("%x", a[:])
 }
@@ -77,46 +73,6 @@ func ToBin(a []byte) string {
 // Bytes returns the Address as a byte slice
 func (a Address) Bytes() []byte {
 	return a[:]
-}
-
-/*
-Proximity(x, y) returns the proximity order of the MSB distance between x and y
-
-The distance metric MSB(x, y) of two equal length byte sequences x an y is the
-value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
-the binary cast is big endian: most significant bit first (=MSB).
-
-Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
-It is defined as the reverse rank of the integer part of the base 2
-logarithm of the distance.
-It is calculated by counting the number of common leading zeros in the (MSB)
-binary representation of the x^y.
-
-(0 farthest, 255 closest, 256 self)
-*/
-func proximity(one, other Address) (ret int, eq bool) {
-	return posProximity(one, other, 0)
-}
-
-// posProximity(a, b, pos) returns proximity order of b wrt a (symmetric) pretending
-// the first pos bits match, checking only bits index >= pos
-func posProximity(one, other Address, pos int) (ret int, eq bool) {
-	for i := pos / 8; i < len(one); i++ {
-		if one[i] == other[i] {
-			continue
-		}
-		oxo := one[i] ^ other[i]
-		start := 0
-		if i == pos/8 {
-			start = pos % 8
-		}
-		for j := start; j < 8; j++ {
-			if (oxo>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j, false
-			}
-		}
-	}
-	return len(one) * 8, true
 }
 
 // ProxCmp compares the distances a->target and b->target.
@@ -206,7 +162,6 @@ func ToBytes(v Val) []byte {
 }
 
 // DefaultPof returns a proximity order comparison operator function
-// where all
 func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
 	return func(one, other Val, pos int) (int, bool) {
 		po, eq := proximityOrder(ToBytes(one), ToBytes(other), pos)
@@ -218,6 +173,9 @@ func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
 	}
 }
 
+// proximityOrder returns two parameters:
+// 1. relative proximity order of the arguments one & other;
+// 2. boolean indicating whether the full match occurred (one == other).
 func proximityOrder(one, other []byte, pos int) (int, bool) {
 	for i := pos / 8; i < len(one); i++ {
 		if one[i] == other[i] {

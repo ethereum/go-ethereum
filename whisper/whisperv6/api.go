@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -102,12 +102,12 @@ func (api *PublicWhisperAPI) SetBloomFilter(ctx context.Context, bloom hexutil.B
 
 // MarkTrustedPeer marks a peer trusted, which will allow it to send historic (expired) messages.
 // Note: This function is not adding new nodes, the node needs to exists as a peer.
-func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, enode string) (bool, error) {
-	n, err := discover.ParseNode(enode)
+func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, url string) (bool, error) {
+	n, err := enode.ParseV4(url)
 	if err != nil {
 		return false, err
 	}
-	return true, api.w.AllowP2PMessagesFromPeer(n.ID[:])
+	return true, api.w.AllowP2PMessagesFromPeer(n.ID().Bytes())
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
@@ -195,14 +195,14 @@ func (api *PublicWhisperAPI) DeleteSymKey(ctx context.Context, id string) bool {
 // MakeLightClient turns the node into light client, which does not forward
 // any incoming messages, and sends only messages originated in this node.
 func (api *PublicWhisperAPI) MakeLightClient(ctx context.Context) bool {
-	api.w.lightClient = true
-	return api.w.lightClient
+	api.w.SetLightClientMode(true)
+	return api.w.LightClientMode()
 }
 
 // CancelLightClient cancels light client mode.
 func (api *PublicWhisperAPI) CancelLightClient(ctx context.Context) bool {
-	api.w.lightClient = false
-	return !api.w.lightClient
+	api.w.SetLightClientMode(false)
+	return !api.w.LightClientMode()
 }
 
 //go:generate gencodec -type NewMessage -field-override newMessageOverride -out gen_newmessage_json.go
@@ -291,11 +291,11 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
-		n, err := discover.ParseNode(req.TargetPeer)
+		n, err := enode.ParseV4(req.TargetPeer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		err = api.w.SendP2PMessage(n.ID[:], env)
+		err = api.w.SendP2PMessage(n.ID().Bytes(), env)
 		if err == nil {
 			hash := env.Hash()
 			result = hash[:]

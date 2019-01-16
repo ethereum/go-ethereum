@@ -370,7 +370,7 @@ func (db *Dashboard) collectData() {
 			sys.ProcessCPU = append(sys.ProcessCPU[1:], processCPU)
 			sys.SystemCPU = append(sys.SystemCPU[1:], systemCPU)
 			sys.DiskRead = append(sys.DiskRead[1:], diskRead)
-			sys.DiskWrite = append(sys.DiskRead[1:], diskWrite)
+			sys.DiskWrite = append(sys.DiskWrite[1:], diskWrite)
 			db.lock.Unlock()
 
 			db.sendToAll(&Message{

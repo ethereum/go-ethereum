@@ -17,9 +17,13 @@
 package storage
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
+
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 var (
@@ -27,8 +31,8 @@ var (
 )
 
 // tests that the content address validator correctly checks the data
-// tests that resource update chunks are passed through content address validator
-// the test checking the resouce update validator internal correctness is found in resource_test.go
+// tests that feed update chunks are passed through content address validator
+// the test checking the resouce update validator internal correctness is found in storage/feeds/handler_test.go
 func TestValidator(t *testing.T) {
 	// set up localstore
 	datadir, err := ioutil.TempDir("", "storage-testvalidator")
@@ -48,29 +52,29 @@ func TestValidator(t *testing.T) {
 	chunks := GenerateRandomChunks(259, 2)
 	goodChunk := chunks[0]
 	badChunk := chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs := putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk in spite of no validation, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
+	if errs[1] != nil {
 		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
 
 	// add content address validator and check puts
 	// bad should fail, good should pass
 	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -79,16 +83,16 @@ func TestValidator(t *testing.T) {
 	var negV boolTestValidator
 	store.Validators = append(store.Validators, negV)
 
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -97,22 +101,111 @@ func TestValidator(t *testing.T) {
 	var posV boolTestValidator = true
 	store.Validators = append(store.Validators, posV)
 
-	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	chunks = GenerateRandomChunks(ch.DefaultSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = putChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
-		t.Fatalf("expected no error on bad content address chunk with content address validator only, but got: %s", err)
+	if errs[1] != nil {
+		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
+
 }
 
 type boolTestValidator bool
 
-func (self boolTestValidator) Validate(addr Address, data []byte) bool {
+func (self boolTestValidator) Validate(chunk Chunk) bool {
 	return bool(self)
+}
+
+// putChunks adds chunks  to localstore
+// It waits for receive on the stored channel
+// It logs but does not fail on delivery error
+func putChunks(store *LocalStore, chunks ...Chunk) []error {
+	i := 0
+	f := func(n int64) Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
+	}
+	_, errs := put(store, len(chunks), f)
+	return errs
+}
+
+func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
+	for i := int64(0); i < int64(n); i++ {
+		chunk := f(ch.DefaultSize)
+		err := store.Put(context.TODO(), chunk)
+		errs = append(errs, err)
+		hs = append(hs, chunk.Address())
+	}
+	return hs, errs
+}
+
+// TestGetFrequentlyAccessedChunkWontGetGarbageCollected tests that the most
+// frequently accessed chunk is not garbage collected from LDBStore, i.e.,
+// from disk when we are at the capacity and garbage collector runs. For that
+// we start putting random chunks into the DB while continuously accessing the
+// chunk we care about then check if we can still retrieve it from disk.
+func TestGetFrequentlyAccessedChunkWontGetGarbageCollected(t *testing.T) {
+	ldbCap := defaultGCRatio
+	store, cleanup := setupLocalStore(t, ldbCap)
+	defer cleanup()
+
+	var chunks []Chunk
+	for i := 0; i < ldbCap; i++ {
+		chunks = append(chunks, GenerateRandomChunk(ch.DefaultSize))
+	}
+
+	mostAccessed := chunks[0].Address()
+	for _, chunk := range chunks {
+		if err := store.Put(context.Background(), chunk); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := store.Get(context.Background(), mostAccessed); err != nil {
+			t.Fatal(err)
+		}
+		// Add time for MarkAccessed() to be able to finish in a separate Goroutine
+		time.Sleep(1 * time.Millisecond)
+	}
+
+	store.DbStore.collectGarbage()
+	if _, err := store.DbStore.Get(context.Background(), mostAccessed); err != nil {
+		t.Logf("most frequntly accessed chunk not found on disk (key: %v)", mostAccessed)
+		t.Fatal(err)
+	}
+
+}
+
+func setupLocalStore(t *testing.T, ldbCap int) (ls *LocalStore, cleanup func()) {
+	t.Helper()
+
+	var err error
+	datadir, err := ioutil.TempDir("", "storage")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := &LocalStoreParams{
+		StoreParams: NewStoreParams(uint64(ldbCap), uint(ldbCap), nil, nil),
+	}
+	params.Init(datadir)
+
+	store, err := NewLocalStore(params, nil)
+	if err != nil {
+		_ = os.RemoveAll(datadir)
+		t.Fatal(err)
+	}
+
+	cleanup = func() {
+		store.Close()
+		_ = os.RemoveAll(datadir)
+	}
+
+	return store, cleanup
 }

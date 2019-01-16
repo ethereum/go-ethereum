@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -32,7 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
@@ -119,6 +121,10 @@ type Config struct {
 	// exposed.
 	HTTPModules []string `toml:",omitempty"`
 
+	// HTTPTimeouts allows for customization of the timeout values used by the HTTP RPC
+	// interface.
+	HTTPTimeouts rpc.HTTPTimeouts
+
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
 	WSHost string `toml:",omitempty"`
@@ -147,6 +153,10 @@ type Config struct {
 
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
+
+	staticNodesWarning     bool
+	trustedNodesWarning    bool
+	oldGethResourceWarning bool
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -258,8 +268,8 @@ var isOldGethResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
-	"static-nodes.json":  true,
-	"trusted-nodes.json": true,
+	"static-nodes.json":  false, // no warning for these because they have their
+	"trusted-nodes.json": false, // own separate warning.
 }
 
 // ResolvePath resolves path in the instance directory.
@@ -272,13 +282,15 @@ func (c *Config) ResolvePath(path string) string {
 	}
 	// Backwards-compatibility: ensure that data directory files created
 	// by geth 1.4 are used if they exist.
-	if c.name() == "geth" && isOldGethResource[path] {
+	if warn, isOld := isOldGethResource[path]; isOld {
 		oldpath := ""
-		if c.Name == "geth" {
+		if c.name() == "geth" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
-			// TODO: print warning
+			if warn {
+				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+			}
 			return oldpath
 		}
 	}
@@ -331,18 +343,18 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 }
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
-func (c *Config) StaticNodes() []*discover.Node {
-	return c.parsePersistentNodes(c.ResolvePath(datadirStaticNodes))
+func (c *Config) StaticNodes() []*enode.Node {
+	return c.parsePersistentNodes(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
 }
 
 // TrustedNodes returns a list of node enode URLs configured as trusted nodes.
-func (c *Config) TrustedNodes() []*discover.Node {
-	return c.parsePersistentNodes(c.ResolvePath(datadirTrustedNodes))
+func (c *Config) TrustedNodes() []*enode.Node {
+	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(path string) []*discover.Node {
+func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
@@ -350,19 +362,21 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
+	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
+
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
+		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
-	var nodes []*discover.Node
+	var nodes []*enode.Node
 	for _, url := range nodelist {
 		if url == "" {
 			continue
 		}
-		node, err := discover.ParseNode(url)
+		node, err := enode.ParseV4(url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
@@ -434,4 +448,21 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		}
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
+}
+
+var warnLock sync.Mutex
+
+func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
+	warnLock.Lock()
+	defer warnLock.Unlock()
+
+	if *w {
+		return
+	}
+	l := c.Logger
+	if l == nil {
+		l = log.Root()
+	}
+	l.Warn(fmt.Sprintf(format, args...))
+	*w = true
 }

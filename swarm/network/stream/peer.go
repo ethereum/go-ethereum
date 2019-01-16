@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -33,8 +34,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var sendTimeout = 30 * time.Second
-
 type notFoundError struct {
 	t string
 	s Stream
@@ -47,6 +46,10 @@ func newNotFoundError(t string, s Stream) *notFoundError {
 func (e *notFoundError) Error() string {
 	return fmt.Sprintf("%s not found for stream %q", e.t, e.s)
 }
+
+// ErrMaxPeerServers will be returned if peer server limit is reached.
+// It will be sent in the SubscribeErrorMsg.
+var ErrMaxPeerServers = errors.New("max peer servers")
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
@@ -83,8 +86,40 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		p.Send(wmsg.Context, wmsg.Msg)
+		err := p.Send(wmsg.Context, wmsg.Msg)
+		if err != nil {
+			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
+			p.Drop(err)
+		}
 	})
+
+	// basic monitoring for pq contention
+	go func(pq *pq.PriorityQueue) {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				var len_maxi int
+				var cap_maxi int
+				for k := range pq.Queues {
+					if len_maxi < len(pq.Queues[k]) {
+						len_maxi = len(pq.Queues[k])
+					}
+
+					if cap_maxi < cap(pq.Queues[k]) {
+						cap_maxi = cap(pq.Queues[k])
+					}
+				}
+
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(len_maxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(cap_maxi))
+			case <-p.quit:
+				return
+			}
+		}
+	}(p.pq)
+
 	go func() {
 		<-p.quit
 		cancel()
@@ -93,17 +128,34 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (p *Peer) Deliver(ctx context.Context, chunk *storage.Chunk, priority uint8) error {
+// Depending on the `syncing` parameter we send different message types
+func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var sp opentracing.Span
+	var msg interface{}
+
+	spanName := "send.chunk.delivery"
+
+	//we send different types of messages if delivery is for syncing or retrievals,
+	//even if handling and content of the message are the same,
+	//because swap accounting decides which messages need accounting based on the message type
+	if syncing {
+		msg = &ChunkDeliveryMsgSyncing{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+		}
+		spanName += ".syncing"
+	} else {
+		msg = &ChunkDeliveryMsgRetrieval{
+			Addr:  chunk.Address(),
+			SData: chunk.Data(),
+		}
+		spanName += ".retrieval"
+	}
 	ctx, sp = spancontext.StartSpan(
 		ctx,
-		"send.chunk.delivery")
+		spanName)
 	defer sp.Finish()
 
-	msg := &ChunkDeliveryMsg{
-		Addr:  chunk.Addr,
-		SData: chunk.SData,
-	}
 	return p.SendPriority(ctx, msg, priority)
 }
 
@@ -111,13 +163,16 @@ func (p *Peer) Deliver(ctx context.Context, chunk *storage.Chunk, priority uint8
 func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8) error {
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
-	cctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
-	defer cancel()
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
 		Msg:     msg,
 	}
-	return p.pq.Push(cctx, wmsg, int(priority))
+	err := p.pq.Push(wmsg, int(priority))
+	if err == pq.ErrContention {
+		log.Warn("dropping peer on priority queue contention", "peer", p.ID())
+		p.Drop(err)
+	}
+	return err
 }
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
@@ -128,11 +183,11 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		"send.offered.hashes")
 	defer sp.Finish()
 
-	hashes, from, to, proof, err := s.SetNextBatch(f, t)
+	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
 		return err
 	}
-	// true only when quiting
+	// true only when quitting
 	if len(hashes) == 0 {
 		return nil
 	}
@@ -171,10 +226,20 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	if p.servers[s] != nil {
 		return nil, fmt.Errorf("server %s already registered", s)
 	}
+
+	if p.streamer.maxPeerServers > 0 && len(p.servers) >= p.streamer.maxPeerServers {
+		return nil, ErrMaxPeerServers
+	}
+
+	sessionIndex, err := o.SessionIndex()
+	if err != nil {
+		return nil, err
+	}
 	os := &server{
-		Server:   o,
-		stream:   s,
-		priority: priority,
+		Server:       o,
+		stream:       s,
+		priority:     priority,
+		sessionIndex: sessionIndex,
 	}
 	p.servers[s] = os
 	return os, nil
@@ -313,6 +378,7 @@ func (p *Peer) removeClient(s Stream) error {
 		return newNotFoundError("client", s)
 	}
 	client.close()
+	delete(p.clients, s)
 	return nil
 }
 

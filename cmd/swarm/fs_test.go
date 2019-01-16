@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// +build linux darwin freebsd
+// +build linux freebsd
 
 package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,21 +29,41 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
-	colorable "github.com/mattn/go-colorable"
 )
-
-func init() {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-}
 
 type testFile struct {
 	filePath string
 	content  string
 }
 
+// TestCLISwarmFsDefaultIPCPath tests if the most basic fs command, i.e., list
+// can find and correctly connect to a running Swarm node on the default
+// IPCPath.
+func TestCLISwarmFsDefaultIPCPath(t *testing.T) {
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+
+	handlingNode := cluster.Nodes[0]
+	list := runSwarm(t, []string{
+		"--datadir", handlingNode.Dir,
+		"fs",
+		"list",
+	}...)
+
+	list.WaitExit()
+	if list.Err != nil {
+		t.Fatal(list.Err)
+	}
+}
+
 // TestCLISwarmFs is a high-level test of swarmfs
+//
+// This test fails on travis for macOS as this executable exits with code 1
+// and without any log messages in the log:
+// /Library/Filesystems/osxfuse.fs/Contents/Resources/load_osxfuse.
+// This is the reason for this file not being built on darwin architecture.
 func TestCLISwarmFs(t *testing.T) {
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
@@ -60,9 +81,9 @@ func TestCLISwarmFs(t *testing.T) {
 	log.Debug("swarmfs cli test: mounting first run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	mount := runSwarm(t, []string{
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		"fs",
 		"mount",
-		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		mhash,
 		mountPoint,
 	}...)
@@ -75,6 +96,9 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal(err)
 	}
 	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
 	dirs := []string{
@@ -99,9 +123,9 @@ func TestCLISwarmFs(t *testing.T) {
 	log.Debug("swarmfs cli test: unmounting first run...", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmount := runSwarm(t, []string{
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		"fs",
 		"unmount",
-		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		mountPoint,
 	}...)
 	_, matches := unmount.ExpectRegexp(hashRegexp)
@@ -134,9 +158,9 @@ func TestCLISwarmFs(t *testing.T) {
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		"fs",
 		"mount",
-		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		hash, // the latest hash
 		secondMountPoint,
 	}...)
@@ -170,9 +194,9 @@ func TestCLISwarmFs(t *testing.T) {
 	log.Debug("swarmfs cli test: unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmountSec := runSwarm(t, []string{
+		fmt.Sprintf("--%s", utils.IPCPathFlag.Name), filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		"fs",
 		"unmount",
-		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		secondMountPoint,
 	}...)
 

@@ -30,7 +30,7 @@ func TestPriorityQueue(t *testing.T) {
 		results = append(results, v.(string))
 		wg.Done()
 	})
-	pq.Push(context.Background(), "2.0", 2)
+	pq.Push("2.0", 2)
 	wg.Wait()
 	if results[0] != "2.0" {
 		t.Errorf("expected first result %q, got %q", "2.0", results[0])
@@ -66,7 +66,7 @@ Loop:
 		{
 			priorities: []int{0, 0, 0},
 			values:     []string{"0.0", "0.0", "0.1"},
-			errors:     []error{nil, nil, errContention},
+			errors:     []error{nil, nil, ErrContention},
 		},
 	} {
 		var results []string
@@ -74,7 +74,7 @@ Loop:
 		pq := New(3, 2)
 		wg.Add(len(tc.values))
 		for j, value := range tc.values {
-			err := pq.Push(nil, value, tc.priorities[j])
+			err := pq.Push(value, tc.priorities[j])
 			if tc.errors != nil && err != tc.errors[j] {
 				t.Errorf("expected push error %v, got %v", tc.errors[j], err)
 				continue Loop
