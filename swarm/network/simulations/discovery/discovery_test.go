@@ -82,11 +82,10 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount       = flag.Int("nodes", 10, "number of nodes to create (default 10)")
-	initCount       = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
-	loglevel        = flag.Int("loglevel", 3, "verbosity of logs")
-	rawlog          = flag.Bool("rawlog", false, "remove terminal formatting from logs")
-	serviceOverride = flag.String("services", "", "remove or add services to the node snapshot; prefix with \"+\" to add, \"-\" to remove; example: +pss,-discovery")
+	nodeCount = flag.Int("nodes", 10, "number of nodes to create (default 10)")
+	initCount = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
+	loglevel  = flag.Int("loglevel", 3, "verbosity of logs")
+	rawlog    = flag.Bool("rawlog", false, "remove terminal formatting from logs")
 )
 
 func init() {

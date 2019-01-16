@@ -38,8 +38,6 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-const noConnectionTimeout = 1 * time.Second
-
 // create is used as the entry function for "create" app command.
 func create(ctx *cli.Context) error {
 	log.PrintOrigins(true)
@@ -82,20 +80,6 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 	if err != nil {
 		return fmt.Errorf("add nodes: %v", err)
 	}
-
-	// wait for two some time to ensure no connections
-	// are established
-	events := make(chan *simulations.Event)
-	sub := sim.Net.Events().Subscribe(events)
-	select {
-	case ev := <-events:
-		//only catch node up events
-		if ev.Type == simulations.EventTypeConn {
-			return errors.New("unexpected connection events")
-		}
-	case <-time.After(noConnectionTimeout):
-	}
-	sub.Unsubscribe()
 
 	err = sim.Net.ConnectNodesRing(nil)
 	if err != nil {
