@@ -223,11 +223,15 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 			}
 		}
 	}
+	freePeers := pm.maxFreePeers(0, 0)
+	if freePeers < maxPeers {
+		log.Warn("Light peer count limited", "specified", maxPeers, "allowed", freePeers)
+	}
 
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
-		pm.clientPool = newFreeClientPool(pm.chainDb, pm.maxFreePeers(0, 0), 10000, mclock.System{})
+		pm.clientPool = newFreeClientPool(pm.chainDb, freePeers, 10000, mclock.System{})
 		go func() {
 			for range pm.newPeerCh {
 			}
