@@ -436,7 +436,7 @@ func (_MultiSigWallet *MultiSigWalletCallerSession) Owners(arg0 *big.Int) (commo
 	return _MultiSigWallet.Contract.Owners(&_MultiSigWallet.CallOpts, arg0)
 }
 
-// Required is a free data retrieval call binding the contract method 0xdc8452cd.
+// Required is a free data retrieval call binding the contract method 0XDC8452cd.
 //
 // Solidity: function required() constant returns(uint256)
 func (_MultiSigWallet *MultiSigWalletCaller) Required(opts *bind.CallOpts) (*big.Int, error) {
@@ -448,14 +448,14 @@ func (_MultiSigWallet *MultiSigWalletCaller) Required(opts *bind.CallOpts) (*big
 	return *ret0, err
 }
 
-// Required is a free data retrieval call binding the contract method 0xdc8452cd.
+// Required is a free data retrieval call binding the contract method 0XDC8452cd.
 //
 // Solidity: function required() constant returns(uint256)
 func (_MultiSigWallet *MultiSigWalletSession) Required() (*big.Int, error) {
 	return _MultiSigWallet.Contract.Required(&_MultiSigWallet.CallOpts)
 }
 
-// Required is a free data retrieval call binding the contract method 0xdc8452cd.
+// Required is a free data retrieval call binding the contract method 0XDC8452cd.
 //
 // Solidity: function required() constant returns(uint256)
 func (_MultiSigWallet *MultiSigWalletCallerSession) Required() (*big.Int, error) {
