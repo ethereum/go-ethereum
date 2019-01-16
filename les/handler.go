@@ -103,7 +103,7 @@ type ProtocolManager struct {
 	server                              *LesServer
 	serverPool                          *serverPool
 	clientPool                          *freeClientPool
-	freeClientBw                        uint64
+	freeClientCap                       uint64
 	vipClientPool                       *vipClientPool
 	lesTopic                            discv5.Topic
 	reqDist                             *requestDistributor
@@ -198,11 +198,11 @@ func (pm *ProtocolManager) removePeer(id string) {
 
 // maxFreePeers returns the maximum number of free client slots based on the number
 // and total capacity of other clients
-func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherBw uint64) int {
-	if otherPeers >= pm.maxPeers || otherBw >= pm.server.totalCapacity {
+func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherCap uint64) int {
+	if otherPeers >= pm.maxPeers || otherCap >= pm.server.totalCapacity {
 		return 0
 	}
-	maxPeers := int((pm.server.totalCapacity - otherBw) / pm.freeClientBw)
+	maxPeers := int((pm.server.totalCapacity - otherCap) / pm.freeClientCap)
 	if maxPeers <= pm.maxPeers-otherPeers {
 		return maxPeers
 	}
@@ -212,14 +212,14 @@ func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherBw uint64) int {
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 	if pm.server != nil && maxPeers > 0 {
-		pm.freeClientBw = pm.server.totalCapacity / uint64(maxPeers)
-		if pm.freeClientBw < pm.server.minCapacity {
-			pm.freeClientBw = pm.server.minCapacity
+		pm.freeClientCap = pm.server.totalCapacity / uint64(maxPeers)
+		if pm.freeClientCap < pm.server.minCapacity {
+			pm.freeClientCap = pm.server.minCapacity
 		}
-		if pm.freeClientBw > 0 {
+		if pm.freeClientCap > 0 {
 			pm.server.defParams = flowcontrol.ServerParams{
-				BufLimit:    pm.freeClientBw * bufLimitRatio,
-				MinRecharge: pm.freeClientBw,
+				BufLimit:    pm.freeClientCap * bufLimitRatio,
+				MinRecharge: pm.freeClientCap,
 			}
 		}
 	}
@@ -354,21 +354,21 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			lock.Unlock()
 		}()
 
-		updateBw := func(bw uint64) {
+		updateCap := func(cap uint64) {
 			lock.Lock()
 			defer lock.Unlock()
 
-			if !vip && bw != 0 {
+			if !vip && cap != 0 {
 				// switch to vip mode
 				if free {
 					pm.clientPool.disconnect(freeId)
 					free = false
 				}
 				vip = true
-				p.updateCapacity(bw)
+				p.updateCapacity(cap)
 			}
 			if vip {
-				if bw == 0 {
+				if cap == 0 {
 					// priority revoked; switch to free client mode or drop
 					if freeId != "" {
 						if !pm.clientPool.connect(freeId, func() { go pm.removePeer(p.id) }) {
@@ -378,10 +378,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 						free = true
 					}
 					vip = false
-					p.updateCapacity(pm.freeClientBw)
+					p.updateCapacity(pm.freeClientCap)
 				} else {
 					// just update vip capacity
-					p.updateCapacity(bw)
+					p.updateCapacity(cap)
 				}
 			}
 		}
@@ -390,16 +390,16 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		if pm.vipClientPool != nil {
 			// the vip client pool registers currently connected non-vip clients too
 			// in order to be able to notify them if they get priority while connected
-			vipBw, ok := pm.vipClientPool.connect(p.ID(), updateBw)
+			vipCap, ok := pm.vipClientPool.connect(p.ID(), updateCap)
 			if !ok {
 				lock.Unlock()
 				return p2p.DiscAlreadyConnected
 			}
 			// always unregister
 			defer pm.vipClientPool.disconnect(p.ID())
-			if vipBw != 0 {
+			if vipCap != 0 {
 				vip = true
-				p.updateCapacity(vipBw)
+				p.updateCapacity(vipCap)
 			}
 		}
 

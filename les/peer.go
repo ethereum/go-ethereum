@@ -188,15 +188,15 @@ func (p *peer) waitBefore(maxCost uint64) (time.Duration, float64) {
 
 // updateCapacity updates the request serving capacity assigned to a given client
 // and also sends an announcement about the updated flow control parameters
-func (p *peer) updateCapacity(bw uint64) {
+func (p *peer) updateCapacity(cap uint64) {
 	p.responseLock.Lock()
 	defer p.responseLock.Unlock()
 
-	p.fcParams = flowcontrol.ServerParams{MinRecharge: bw, BufLimit: bw * bufLimitRatio}
+	p.fcParams = flowcontrol.ServerParams{MinRecharge: cap, BufLimit: cap * bufLimitRatio}
 	p.fcClient.UpdateParams(p.fcParams)
 	var kvList keyValueList
-	kvList = kvList.add("flowControl/MRR", bw)
-	kvList = kvList.add("flowControl/BL", bw*bufLimitRatio)
+	kvList = kvList.add("flowControl/MRR", cap)
+	kvList = kvList.add("flowControl/BL", cap*bufLimitRatio)
 	p.queueSend(func() { p.SendAnnounce(announceData{Update: kvList}) })
 }
 

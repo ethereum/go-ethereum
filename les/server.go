@@ -55,7 +55,7 @@ type LesServer struct {
 	onlyAnnounce bool
 
 	totalCapacity, minCapacity, minBufLimit, bufLimitRatio uint64
-	bwcNormal, bwcBlockProcessing                          flowcontrol.PieceWiseLinear // capacity curve for normal operation and block processing mode
+	rcNormal, rcBlockProcessing                            flowcontrol.PieceWiseLinear // buffer recharge curve for normal operation and block processing mode
 	thcNormal, thcBlockProcessing                          int                         // serving thread count for normal operation and block processing mode
 }
 
@@ -104,26 +104,26 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	logger := log.New()
 	pm.server = srv
 
-	bwNormal := uint64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
-	srv.bwcNormal = flowcontrol.PieceWiseLinear{{0, 0} /*{bwNormal / 10, bwNormal}, */, {bwNormal, bwNormal}}
+	capNormal := uint64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
+	srv.rcNormal = flowcontrol.PieceWiseLinear{{0, 0} /*{capNormal / 10, capNormal}, */, {capNormal, capNormal}}
 	// limit the serving thread count to at least 4 times the targeted average
 	// capacity, allowing more paralellization in short-term load spikes but
 	// still limiting the total thread count at a reasonable level
-	srv.thcNormal = int(bwNormal * 4 / flowcontrol.FixedPointMultiplier)
+	srv.thcNormal = int(capNormal * 4 / flowcontrol.FixedPointMultiplier)
 	if srv.thcNormal < 4 {
 		srv.thcNormal = 4
 	}
 	// while processing blocks use half of the normal target capacity
-	bwBlockProcessing := bwNormal / 2
-	srv.bwcBlockProcessing = flowcontrol.PieceWiseLinear{{0, 0} /*{bwBlockProcessing / 10, bwBlockProcessing}, */, {bwBlockProcessing, bwBlockProcessing}}
+	capBlockProcessing := capNormal / 2
+	srv.rcBlockProcessing = flowcontrol.PieceWiseLinear{{0, 0} /*{capBlockProcessing / 10, capBlockProcessing}, */, {capBlockProcessing, capBlockProcessing}}
 	// limit the serving thread count just above the targeted average capacity,
 	// ensuring that block processing is minimally hindered
-	srv.thcBlockProcessing = int(bwBlockProcessing/flowcontrol.FixedPointMultiplier) + 1
+	srv.thcBlockProcessing = int(capBlockProcessing/flowcontrol.FixedPointMultiplier) + 1
 
 	pm.servingQueue.setThreads(srv.thcNormal)
-	srv.fcManager = flowcontrol.NewClientManager(srv.bwcNormal, &mclock.System{})
+	srv.fcManager = flowcontrol.NewClientManager(srv.rcNormal, &mclock.System{})
 
-	srv.totalCapacity = bwNormal
+	srv.totalCapacity = capNormal
 	if config.LightBandwidthIn > 0 {
 		pm.inSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthIn)
 	}
@@ -183,10 +183,10 @@ func (s *LesServer) blockProcLoop(pm *ProtocolManager) {
 			case processing := <-procFeedback:
 				if processing {
 					pm.servingQueue.setThreads(s.thcBlockProcessing)
-					s.fcManager.SetRechargeCurve(s.bwcBlockProcessing)
+					s.fcManager.SetRechargeCurve(s.rcBlockProcessing)
 				} else {
 					pm.servingQueue.setThreads(s.thcNormal)
-					s.fcManager.SetRechargeCurve(s.bwcNormal)
+					s.fcManager.SetRechargeCurve(s.rcNormal)
 				}
 			case <-pm.quitSync:
 				pm.wg.Done()

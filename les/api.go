@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	ErrMinBW   = errors.New("capacity too small")
-	ErrTotalBW = errors.New("total capacity exceeded")
+	ErrMinCap   = errors.New("capacity too small")
+	ErrTotalCap = errors.New("total capacity exceeded")
 )
 
 // PublicLesServerAPI  provides an API to access the les server.
@@ -40,7 +40,7 @@ type PrivateLesServerAPI struct {
 func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
 	vip := &vipClientPool{
 		clients: make(map[enode.ID]vipClientInfo),
-		totalBw: server.totalCapacity,
+		totalCap: server.totalCapacity,
 		pm:      server.protocolManager,
 	}
 	server.protocolManager.vipClientPool = vip
@@ -66,15 +66,15 @@ type vipClientPool struct {
 	lock                                  sync.Mutex
 	pm                                    *ProtocolManager
 	clients                               map[enode.ID]vipClientInfo
-	totalBw, totalVipBw, totalConnectedBw uint64
+	totalCap, totalVipCap, totalConnectedCap uint64
 	vipCount                              int
 }
 
 // vipClientInfo entries exist for all prioritized clients and currently connected free clients
 type vipClientInfo struct {
-	bw        uint64 // zero for non-vip clients
+	cap        uint64 // zero for non-vip clients
 	connected bool
-	updateBw  func(uint64)
+	updateCap  func(uint64)
 }
 
 // SetClientCapacity sets the priority capacity assigned to a given client.
@@ -84,37 +84,37 @@ type vipClientInfo struct {
 //
 // Note: assigned capacity can be changed while the client is connected with
 // immediate effect.
-func (api *PrivateLesServerAPI) SetClientCapacity(id enode.ID, bw uint64) error {
-	if bw != 0 && bw < api.server.minCapacity {
-		return ErrMinBW
+func (api *PrivateLesServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
+	if cap != 0 && cap < api.server.minCapacity {
+		return ErrMinCap
 	}
 
 	api.vip.lock.Lock()
 	defer api.vip.lock.Unlock()
 
 	c := api.vip.clients[id]
-	if api.vip.totalVipBw+bw > api.vip.totalBw+c.bw {
-		return ErrTotalBW
+	if api.vip.totalVipCap+cap > api.vip.totalCap+c.cap {
+		return ErrTotalCap
 	}
-	api.vip.totalVipBw += bw - c.bw
-	if c.updateBw != nil && bw != 0 {
-		c.updateBw(bw)
+	api.vip.totalVipCap += cap - c.cap
+	if c.updateCap != nil && cap != 0 {
+		c.updateCap(cap)
 	}
 	if c.connected {
-		if c.bw != 0 {
+		if c.cap != 0 {
 			api.vip.vipCount--
 		}
-		if bw != 0 {
+		if cap != 0 {
 			api.vip.vipCount++
 		}
-		api.vip.totalConnectedBw += bw - c.bw
-		api.pm.clientPool.setConnLimit(api.pm.maxFreePeers(api.vip.vipCount, api.vip.totalConnectedBw))
+		api.vip.totalConnectedCap += cap - c.cap
+		api.pm.clientPool.setConnLimit(api.pm.maxFreePeers(api.vip.vipCount, api.vip.totalConnectedCap))
 	}
-	if c.updateBw != nil && bw == 0 {
-		c.updateBw(bw)
+	if c.updateCap != nil && cap == 0 {
+		c.updateCap(cap)
 	}
-	if bw != 0 || c.connected {
-		c.bw = bw
+	if cap != 0 || c.connected {
+		c.cap = cap
 		api.vip.clients[id] = c
 	} else {
 		delete(api.vip.clients, id)
@@ -127,7 +127,7 @@ func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
 	api.vip.lock.Lock()
 	defer api.vip.lock.Unlock()
 
-	return hexutil.Uint64(api.vip.clients[id].bw)
+	return hexutil.Uint64(api.vip.clients[id].cap)
 }
 
 // connect should be called when a new client is connected. The callback function
@@ -138,7 +138,7 @@ func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
 // Note: vipClientPool also stores a record about free clients while they are
 // connected in order to be able to assign priority to them later with the callback
 // function if necessary.
-func (v *vipClientPool) connect(id enode.ID, updateBw func(uint64)) (uint64, bool) {
+func (v *vipClientPool) connect(id enode.ID, updateCap func(uint64)) (uint64, bool) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
@@ -147,14 +147,14 @@ func (v *vipClientPool) connect(id enode.ID, updateBw func(uint64)) (uint64, boo
 		return 0, false
 	}
 	c.connected = true
-	c.updateBw = updateBw
+	c.updateCap = updateCap
 	v.clients[id] = c
-	if c.bw != 0 {
+	if c.cap != 0 {
 		v.vipCount++
 	}
-	v.totalConnectedBw += c.bw
-	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.vipCount, v.totalConnectedBw))
-	return c.bw, true
+	v.totalConnectedCap += c.cap
+	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.vipCount, v.totalConnectedCap))
+	return c.cap, true
 }
 
 // disconnect should be called when a client is disconnected.
@@ -165,12 +165,12 @@ func (v *vipClientPool) disconnect(id enode.ID) {
 
 	c := v.clients[id]
 	c.connected = false
-	if c.bw != 0 {
+	if c.cap != 0 {
 		v.clients[id] = c
 		v.vipCount--
 	} else {
 		delete(v.clients, id)
 	}
-	v.totalConnectedBw -= c.bw
-	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.vipCount, v.totalConnectedBw))
+	v.totalConnectedCap -= c.cap
+	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.vipCount, v.totalConnectedCap))
 }

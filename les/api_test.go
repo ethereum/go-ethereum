@@ -51,11 +51,11 @@ request performance test. When testServerDataDir is empty, the test is skipped.
 */
 
 const (
-	testServerDataDir   = "" // should always be empty on the master branch
+	testServerDataDir  = "" // should always be empty on the master branch
 	testServerCapacity = 200
-	testMaxClients      = 10
-	testTolerance       = 0.1
-	minRelBw            = 0.2
+	testMaxClients     = 10
+	testTolerance      = 0.1
+	minRelCap          = 0.2
 )
 
 func TestCapacityAPI3(t *testing.T) {
@@ -97,15 +97,15 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
 		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		totalBw, minBw := capacityLimits(ctx, t, serverRpcClient)
-		fmt.Printf("Server totalBw: %d  minBw: %d  head number: %d  head hash: %064x\n", totalBw, minBw, headNum, headHash)
-		reqMinBw := uint64(float64(totalBw) * minRelBw / (minRelBw + float64(len(clients)-1)))
-		if minBw > reqMinBw {
-			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minBw, reqMinBw)
+		totalCap, minCap := capacityLimits(ctx, t, serverRpcClient)
+		fmt.Printf("Server totalCap: %d  minCap: %d  head number: %d  head hash: %064x\n", totalCap, minCap, headNum, headHash)
+		reqMinCap := uint64(float64(totalCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
+		if minCap > reqMinCap {
+			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minCap, reqMinCap)
 		}
 
 		freeIdx := rand.Intn(len(clients))
-		freeBw := totalBw / testMaxClients
+		freeCap := totalCap / testMaxClients
 
 		for i, client := range clients {
 			var err error
@@ -116,7 +116,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 			fmt.Println("connecting client", i)
 			if i != freeIdx {
-				setCapacity(ctx, t, serverRpcClient, client.ID(), totalBw/uint64(len(clients)))
+				setCapacity(ctx, t, serverRpcClient, client.ID(), totalCap/uint64(len(clients)))
 			}
 			net.Connect(client.ID(), server.ID())
 
@@ -180,19 +180,19 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 		weights := make([]float64, len(clients))
 		for c := 0; c < 5; c++ {
-			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeBw)
+			setCapacity(ctx, t, serverRpcClient, clients[freeIdx].ID(), freeCap)
 			freeIdx = rand.Intn(len(clients))
 			var sum float64
 			for i, _ := range clients {
 				if i == freeIdx {
 					weights[i] = 0
 				} else {
-					weights[i] = rand.Float64()*(1-minRelBw) + minRelBw
+					weights[i] = rand.Float64()*(1-minRelCap) + minRelCap
 				}
 				sum += weights[i]
 			}
 			for i, client := range clients {
-				weights[i] *= float64(totalBw-freeBw-100) / sum
+				weights[i] *= float64(totalCap-freeCap-100) / sum
 				capacity := uint64(weights[i])
 				if i != freeIdx && capacity < getCapacity(ctx, t, serverRpcClient, client.ID()) {
 					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
@@ -205,9 +205,9 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
 				}
 			}
-			weights[freeIdx] = float64(freeBw)
+			weights[freeIdx] = float64(freeCap)
 			for i, _ := range clients {
-				weights[i] /= float64(totalBw)
+				weights[i] /= float64(totalCap)
 			}
 
 			time.Sleep(flowcontrol.DecParamDelay)
@@ -295,8 +295,8 @@ func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) {
 	}
 }
 
-func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, bw uint64) {
-	if err := server.CallContext(ctx, nil, "les_setClientCapacity", clientID, bw); err != nil {
+func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {
+	if err := server.CallContext(ctx, nil, "les_setClientCapacity", clientID, cap); err != nil {
 		t.Fatalf("Failed to set client capacity: %v", err)
 	}
 }
@@ -306,11 +306,11 @@ func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 	if err := server.CallContext(ctx, &s, "les_getClientCapacity", clientID); err != nil {
 		t.Fatalf("Failed to get client capacity: %v", err)
 	}
-	bw, err := hexutil.DecodeUint64(s)
+	cap, err := hexutil.DecodeUint64(s)
 	if err != nil {
 		t.Fatalf("Failed to decode client capacity: %v", err)
 	}
-	return bw
+	return cap
 }
 
 func capacityLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint64, uint64) {
