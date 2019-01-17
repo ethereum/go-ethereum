@@ -148,6 +148,12 @@ func main() {
 			Usage:   "feed update generate, upload and sync",
 			Action:  cliFeedUploadAndSync,
 		},
+		{
+			Name:    "upload_speed",
+			Aliases: []string{"u"},
+			Usage:   "measure upload speed",
+			Action:  cliUploadSpeed,
+		},
 	}
 
 	sort.Sort(cli.FlagsByName(app.Flags))
