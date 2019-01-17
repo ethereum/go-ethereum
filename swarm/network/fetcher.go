@@ -39,7 +39,7 @@ type RequestFunc func(context.Context, *Request) (*enode.ID, chan struct{}, erro
 // Fetcher is created when a chunk is not found locally. It starts a request handler loop once and
 // keeps it alive until all active requests are completed. This can happen:
 //     1. either because the chunk is delivered
-//     2. or becuse the requestor cancelled/timed out
+//     2. or because the requester cancelled/timed out
 // Fetcher self destroys itself after it is completed.
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
@@ -79,7 +79,7 @@ func (r *Request) SkipPeer(nodeID string) bool {
 	}
 	t, ok := val.(time.Time)
 	if ok && time.Now().After(t.Add(RequestTimeout)) {
-		// deadine expired
+		// deadline expired
 		r.peersToSkip.Delete(nodeID)
 		return false
 	}
@@ -100,9 +100,10 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	}
 }
 
-// New contructs a new Fetcher, for the given chunk. All peers in peersToSkip are not requested to
-// deliver the given chunk. peersToSkip should always contain the peers which are actively requesting
-// this chunk, to make sure we don't request back the chunks from them.
+// New constructs a new Fetcher, for the given chunk. All peers in peersToSkip
+// are not requested to deliver the given chunk. peersToSkip should always
+// contain the peers which are actively requesting this chunk, to make sure we
+// don't request back the chunks from them.
 // The created Fetcher is started and returned.
 func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peersToSkip *sync.Map) storage.NetFetcher {
 	fetcher := NewFetcher(source, f.request, f.skipCheck)
@@ -176,7 +177,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 	// loop that keeps the fetching process alive
 	// after every request a timer is set. If this goes off we request again from another peer
 	// note that the previous request is still alive and has the chance to deliver, so
-	// rerequesting extends the search. ie.,
+	// requesting again extends the search. ie.,
 	// if a peer we requested from is gone we issue a new request, so the number of active
 	// requests never decreases
 	for {
@@ -209,13 +210,13 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 		// search timeout: too much time passed since the last request,
 		// extend the search to a new peer if we can find one
 		case <-waitC:
-			log.Trace("search timed out: rerequesting", "request addr", f.addr)
+			log.Trace("search timed out: requesting", "request addr", f.addr)
 			doRequest = requested
 
 			// all Fetcher context closed, can quit
 		case <-ctx.Done():
 			log.Trace("terminate fetcher", "request addr", f.addr)
-			// TODO: send cancelations to all peers left over in peers map (i.e., those we requested from)
+			// TODO: send cancellations to all peers left over in peers map (i.e., those we requested from)
 			return
 		}
 
