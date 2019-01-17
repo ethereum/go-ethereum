@@ -26,13 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var searchTimeout = 1 * time.Second
+const (
+	defaultSearchTimeout = 1 * time.Second
+	// maximum number of forwarded requests (hops), to make sure requests are not
+	// forwarded forever in peer loops
+	maxHopCount uint8 = 20
+)
 
 // Time to consider peer to be skipped.
 // Also used in stream delivery.
 var RequestTimeout = 10 * time.Second
-
-var maxHopCount uint8 = 20 // maximum number of forwarded requests (hops), to make sure requests are not forwarded forever in peer loops
 
 type RequestFunc func(context.Context, *Request) (*enode.ID, chan struct{}, error)
 
@@ -47,6 +50,7 @@ type Fetcher struct {
 	addr             storage.Address // the address of the chunk to be fetched
 	offerC           chan *enode.ID  // channel of sources (peer node id strings)
 	requestC         chan uint8      // channel for incoming requests (with the hopCount value in it)
+	searchTimeout    time.Duration
 	skipCheck        bool
 }
 
@@ -118,6 +122,7 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 		protoRequestFunc: rf,
 		offerC:           make(chan *enode.ID),
 		requestC:         make(chan uint8),
+		searchTimeout:    defaultSearchTimeout,
 		skipCheck:        skipCheck,
 	}
 }
@@ -232,7 +237,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 		// if wait channel is not set, set it to a timer
 		if requested {
 			if wait == nil {
-				wait = time.NewTimer(searchTimeout)
+				wait = time.NewTimer(f.searchTimeout)
 				defer wait.Stop()
 				waitC = wait.C
 			} else {
@@ -243,8 +248,8 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 					default:
 					}
 				}
-				// reset the timer to go off after searchTimeout
-				wait.Reset(searchTimeout)
+				// reset the timer to go off after defaultSearchTimeout
+				wait.Reset(f.searchTimeout)
 			}
 		}
 		doRequest = false
