@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -224,7 +225,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 	for _, test := range lightNodeTests {
 		t.Run(test.name, func(t *testing.T) {
 			randomAddr := RandomAddr()
-			pt := newBzzHandshakeTester(t, 1, randomAddr, false)
+			pt := newBzzHandshakeTester(nil, 1, randomAddr, false) // TODO change signature - t is not used anywhere
 			node := pt.Nodes[0]
 			addr := NewAddr(node)
 
@@ -237,8 +238,14 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if pt.bzz.handshakes[node.ID()].LightNode != test.lightNode {
-				t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].LightNode, test.lightNode)
+			select {
+
+			case <-pt.bzz.handshakes[node.ID()].done:
+				if pt.bzz.handshakes[node.ID()].LightNode != test.lightNode {
+					t.Fatalf("peer LightNode flag is %v, should be %v", pt.bzz.handshakes[node.ID()].LightNode, test.lightNode)
+				}
+			case <-time.After(10 * time.Second):
+				t.Fatal("test timeout")
 			}
 		})
 	}
