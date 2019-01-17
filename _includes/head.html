@@ -22,6 +22,11 @@
     <script src="./static/scripts/moment.min.js"></script>
     <script src="./static/scripts/marked.min.js"></script>
     <script src="./static/scripts/emojify.min.js"></script>
+    {% if page.js %}
+        {% for js in page.js %}
+    <script src="{{ js }}" />
+        {% endfor %}
+    {% endif %}
 
     <script src="../static/scripts/custom/polyfills.js"></script>
 </head>
