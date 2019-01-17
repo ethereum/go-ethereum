@@ -284,14 +284,10 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
+	// set searchTimeOut to low value so the test is quicker
+	fetcher.searchTimeout = 250 * time.Millisecond
 
 	peersToSkip := &sync.Map{}
-
-	// set searchTimeOut to low value so the test is quicker
-	defer func(t time.Duration) {
-		searchTimeout = t
-	}(searchTimeout)
-	searchTimeout = 250 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -359,11 +355,9 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
 
-	// make sure searchTimeout is long so it is sure the request is not retried because of timeout
-	defer func(t time.Duration) {
-		searchTimeout = t
-	}(searchTimeout)
-	searchTimeout = 10 * time.Second
+	// make sure the searchTimeout is long so it is sure the request is not
+	// retried because of timeout
+	fetcher.searchTimeout = 10 * time.Second
 
 	peersToSkip := &sync.Map{}
 
