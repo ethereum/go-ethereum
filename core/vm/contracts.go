@@ -66,14 +66,14 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 // PrecompiledContractsEWASM contains the default set of pre-compiled Ethereum
 // contracts used for Ethereum 1.x release.
 var PrecompiledContractsEWASM = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): newEWASMPrecompile(ewasmEcrecoverCode),
+	common.BytesToAddress([]byte{1}): newEWASMPrecompile(ewasmEcRecoverCode),
 	common.BytesToAddress([]byte{2}): newEWASMPrecompile(ewasmSha256HashCode),
 	common.BytesToAddress([]byte{3}): newEWASMPrecompile(ewasmRipemd160hashCode),
-	common.BytesToAddress([]byte{4}): newEWASMPrecompile(ewasmDataCopyCode),
-	common.BytesToAddress([]byte{5}): newEWASMPrecompile(ewasmBigModExpCode),
-	common.BytesToAddress([]byte{6}): newEWASMPrecompile(ewasmBn256AddCode),
-	common.BytesToAddress([]byte{7}): newEWASMPrecompile(ewasmBn256ScalarMulCode),
-	common.BytesToAddress([]byte{8}): newEWASMPrecompile(ewasmBn256PairingCode),
+	common.BytesToAddress([]byte{4}): newEWASMPrecompile(ewasmIdentityCode),
+	common.BytesToAddress([]byte{5}): newEWASMPrecompile(ewasmExpModCode),
+	common.BytesToAddress([]byte{6}): newEWASMPrecompile(ewasmEcAddCode),
+	common.BytesToAddress([]byte{7}): newEWASMPrecompile(ewasmEcMulCode),
+	common.BytesToAddress([]byte{8}): newEWASMPrecompile(ewasmEcPairingCode),
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -91,17 +91,6 @@ type ewasmPrecompile struct {
 	code []byte
 	vm   *exec.VM
 }
-
-var (
-	ewasmEcrecoverCode      = []byte{}
-	ewasmSha256HashCode     = []byte{}
-	ewasmRipemd160hashCode  = []byte{}
-	ewasmDataCopyCode       = []byte{}
-	ewasmBigModExpCode      = []byte{}
-	ewasmBn256AddCode       = []byte{}
-	ewasmBn256ScalarMulCode = []byte{}
-	ewasmBn256PairingCode   = []byte{}
-)
 
 func newEWASMPrecompile(code []byte) *ewasmPrecompile {
 	module, err := wasm.ReadModule(bytes.NewReader(code), nil)
