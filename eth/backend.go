@@ -170,6 +170,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
+	if common.RollbackHash != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
+		curBlock := eth.blockchain.CurrentBlock()
+		prevBlock := eth.blockchain.GetBlockByHash(common.RollbackHash)
+
+		if curBlock.NumberU64() > prevBlock.NumberU64() {
+			for ; curBlock != nil && curBlock.NumberU64() != prevBlock.NumberU64(); curBlock = eth.blockchain.GetBlock(curBlock.ParentHash(), curBlock.NumberU64()-1) {
+				eth.blockchain.Rollback([]common.Hash{curBlock.Hash()})
+			}
+		}
+	}
+
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
