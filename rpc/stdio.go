@@ -26,8 +26,8 @@ import (
 
 // DialStdIO creates a client on stdin/stdout.
 func DialStdIO(ctx context.Context) (*Client, error) {
-	return newClient(ctx, func(_ context.Context) (net.Conn, error) {
-		return stdioConn{}, nil
+	return newClient(ctx, func(_ context.Context) (ServerCodec, error) {
+		return NewJSONCodec(stdioConn{}), nil
 	})
 }
 
@@ -45,20 +45,8 @@ func (io stdioConn) Close() error {
 	return nil
 }
 
-func (io stdioConn) LocalAddr() net.Addr {
-	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
-}
-
-func (io stdioConn) RemoteAddr() net.Addr {
-	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
-}
-
-func (io stdioConn) SetDeadline(t time.Time) error {
-	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
-}
-
-func (io stdioConn) SetReadDeadline(t time.Time) error {
-	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
+func (io stdioConn) RemoteAddr() string {
+	return "/dev/stdin"
 }
 
 func (io stdioConn) SetWriteDeadline(t time.Time) error {
