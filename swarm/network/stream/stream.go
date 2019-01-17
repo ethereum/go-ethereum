@@ -666,7 +666,7 @@ func peerStreamIntervalsKey(p *Peer, s Stream) string {
 	return p.ID().String() + s.String()
 }
 
-func (c client) AddInterval(start, end uint64) (err error) {
+func (c *client) AddInterval(start, end uint64) (err error) {
 	i := &intervals.Intervals{}
 	err = c.intervalsStore.Get(c.intervalsKey, i)
 	if err != nil {
@@ -676,7 +676,7 @@ func (c client) AddInterval(start, end uint64) (err error) {
 	return c.intervalsStore.Put(c.intervalsKey, i)
 }
 
-func (c client) NextInterval() (start, end uint64, err error) {
+func (c *client) NextInterval() (start, end uint64, err error) {
 	i := &intervals.Intervals{}
 	err = c.intervalsStore.Get(c.intervalsKey, i)
 	if err != nil {
