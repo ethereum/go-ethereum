@@ -36,11 +36,11 @@ var (
 	memcachePruneNodesMeter = metrics.NewRegisteredMeter("trie/memcache/prune/nodes", nil)
 	memcachePruneSizeMeter  = metrics.NewRegisteredMeter("trie/memcache/prune/size", nil)
 
-	memcachePruneAssignHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/assign", nil, metrics.NewUniformSample(1024))
-	memcachePruneAssignDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/assigndup", nil, metrics.NewUniformSample(1024))
-	memcachePruneRemainHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/remain", nil, metrics.NewUniformSample(1024))
-	memcachePruneRemainDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/remaindup", nil, metrics.NewUniformSample(1024))
-	memcachePruneQueueHistogram     = metrics.NewRegisteredHistogram("trie/memcache/prune/queue", nil, metrics.NewUniformSample(1024))
+	memcachePruneAssignHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/assign", nil, metrics.NewExpDecaySample(1028, 0.015))
+	memcachePruneAssignDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/assigndup", nil, metrics.NewExpDecaySample(1028, 0.015))
+	memcachePruneRemainHistogram    = metrics.NewRegisteredHistogram("trie/memcache/prune/remain", nil, metrics.NewExpDecaySample(1028, 0.015))
+	memcachePruneRemainDupHistogram = metrics.NewRegisteredHistogram("trie/memcache/prune/remaindup", nil, metrics.NewExpDecaySample(1028, 0.015))
+	memcachePruneQueueHistogram     = metrics.NewRegisteredHistogram("trie/memcache/prune/queue", nil, metrics.NewExpDecaySample(1028, 0.015))
 )
 
 // pruner is responsible for pruning the state trie based on liveness checks
