@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +34,10 @@ import (
 // It runs a few "create" commands with different flag values and loads generated
 // snapshot files to validate their content.
 func TestSnapshotCreate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	for _, v := range []struct {
 		name     string
 		nodes    int
