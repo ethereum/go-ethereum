@@ -691,6 +691,7 @@ func (tab *Table) bumpOrAdd(b *bucket, n *node) bool {
 
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
 	b.entries = deleteNode(b.entries, n)
+	b.replacements = deleteNode(b.replacements, n)
 	tab.removeIP(b, n.IP())
 }
 
