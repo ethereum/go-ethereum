@@ -283,6 +283,22 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
+
+	caps := p.Caps()
+
+	var found bool
+	for _, c := range caps {
+		if c.Name == "stream" {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		depth := uint8(k.saturation())
+		return depth, false
+	}
+
 	var ins bool
 	k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(v pot.Val) pot.Val {
 		// if not found live
