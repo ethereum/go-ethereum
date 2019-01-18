@@ -340,6 +340,7 @@ func (p *Pss) Register(topic *Topic, hndlr *handler) func() {
 	}
 	return func() { p.deregister(topic, hndlr) }
 }
+
 func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
@@ -360,13 +361,6 @@ func (p *Pss) deregister(topic *Topic, hndlr *handler) {
 		return
 	}
 	delete(handlers, hndlr)
-}
-
-// get all registered handlers for respective topics
-func (p *Pss) getHandlers(topic Topic) map[*handler]bool {
-	p.handlersMu.RLock()
-	defer p.handlersMu.RUnlock()
-	return p.handlers[topic]
 }
 
 // Filters incoming messages for processing or forwarding.
@@ -427,7 +421,6 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 		}
 	}
 	return nil
-
 }
 
 // Entry point to processing a message for which the current node can be the intended recipient.
@@ -472,7 +465,19 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
 
 	return nil
+}
 
+// copy all registered handlers for respective topic in order to avoid deadlock
+func (p *Pss) getHandlers(topic Topic) map[*handler]bool {
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+
+	ret := make(map[*handler]bool)
+	h := p.handlers[topic]
+	for k, v := range h {
+		ret[k] = v
+	}
+	return ret
 }
 
 func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
