@@ -125,30 +125,28 @@ func uploadAndSync(c *cli.Context) error {
 			for {
 				start := time.Now()
 				err := fetch(hash, endpoint, fhash, ruid)
-				fetchTime := time.Since(start)
 				if err != nil {
 					continue
 				}
 
-				metrics.GetOrRegisterMeter("upload-and-sync.single.fetch-time", nil).Mark(int64(fetchTime))
+				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).UpdateSince(start)
 				wg.Done()
 				return
 			}
 		}(endpoints[randIndex], ruid)
 	} else {
-		for _, endpoint := range endpoints {
+		for _, endpoint := range endpoints[1:] {
 			ruid := uuid.New()[:8]
 			wg.Add(1)
 			go func(endpoint string, ruid string) {
 				for {
 					start := time.Now()
 					err := fetch(hash, endpoint, fhash, ruid)
-					fetchTime := time.Since(start)
 					if err != nil {
 						continue
 					}
 
-					metrics.GetOrRegisterMeter("upload-and-sync.each.fetch-time", nil).Mark(int64(fetchTime))
+					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).UpdateSince(start)
 					wg.Done()
 					return
 				}
