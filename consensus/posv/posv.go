@@ -900,7 +900,8 @@ func (c *Posv) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 		return nil, errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if c.config.Period == 0 && len(block.Transactions()) == 0 {
+	// checkpoint blocks have no tx
+	if c.config.Period == 0 && len(block.Transactions()) == 0 && number % c.config.Epoch != 0 {
 		return nil, errWaitTransactions
 	}
 	// Don't hold the signer fields for the entire sealing procedure
