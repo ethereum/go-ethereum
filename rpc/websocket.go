@@ -76,7 +76,18 @@ func newWebsocketCodec(conn *websocket.Conn) ServerCodec {
 	decoder := func(v interface{}) error {
 		return websocketJSONCodec.Receive(conn, v)
 	}
-	return NewCodec(conn, encoder, decoder)
+	rpcconn := Conn(conn)
+	if conn.IsServerConn() {
+		// Override remote address with the actual socket address because
+		// package websocket crashes if there is no request origin.
+		addr := conn.Request().RemoteAddr
+		if wsaddr := conn.RemoteAddr().(*websocket.Addr); wsaddr.URL != nil {
+			// Add origin if present.
+			addr += "(" + wsaddr.URL.String() + ")"
+		}
+		rpcconn = connWithRemoteAddr{conn, addr}
+	}
+	return NewCodec(rpcconn, encoder, decoder)
 }
 
 // NewWSServer creates a new websocket RPC server around an API provider.
@@ -113,9 +124,6 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v", origins.ToSlice()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
-		// Set config origin to the peer address to make RemoteAddr work.
-		cfg.Origin = &url.URL{Scheme: "ws", Host: req.RemoteAddr}
-
 		// Verify origin against whitelist.
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Contains(origin) {

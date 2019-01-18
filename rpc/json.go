@@ -142,6 +142,14 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 }
 
+// connWithRemoteAddr overrides the remote address of a connection.
+type connWithRemoteAddr struct {
+	Conn
+	addr string
+}
+
+func (c connWithRemoteAddr) RemoteAddr() string { return c.addr }
+
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has
 // support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
@@ -166,12 +174,12 @@ func NewCodec(conn Conn, encode, decode func(v interface{}) error) ServerCodec {
 	}
 
 	// Try to figure out the remote address.
-	type remoteNetAddr interface{ RemoteAddr() net.Addr }
 	type remoteStringAddr interface{ RemoteAddr() string }
-	if netra, ok := conn.(remoteNetAddr); ok {
-		codec.remoteAddr = netra.RemoteAddr().String()
-	} else if sra, ok := conn.(remoteStringAddr); ok {
-		codec.remoteAddr = sra.RemoteAddr()
+	type remoteNetAddr interface{ RemoteAddr() net.Addr }
+	if ra, ok := conn.(remoteStringAddr); ok {
+		codec.remoteAddr = ra.RemoteAddr()
+	} else if ra, ok := conn.(remoteNetAddr); ok {
+		codec.remoteAddr = ra.RemoteAddr().String()
 	}
 	return codec
 }
