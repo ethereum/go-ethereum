@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -142,6 +141,13 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 }
 
+// ConnRemoteAddr wraps the RemoteAddr operation, which returns a description
+// of the peer address of a connection. If a Conn also implements ConnRemoteAddr, this
+// description is used in log messages.
+type ConnRemoteAddr interface {
+	RemoteAddr() string
+}
+
 // connWithRemoteAddr overrides the remote address of a connection.
 type connWithRemoteAddr struct {
 	Conn
@@ -166,20 +172,13 @@ type jsonCodec struct {
 // on explicitly given encoding and decoding methods.
 func NewCodec(conn Conn, encode, decode func(v interface{}) error) ServerCodec {
 	codec := &jsonCodec{
-		remoteAddr: "unknown",
-		closed:     make(chan interface{}),
-		encode:     encode,
-		decode:     decode,
-		conn:       conn,
+		closed: make(chan interface{}),
+		encode: encode,
+		decode: decode,
+		conn:   conn,
 	}
-
-	// Try to figure out the remote address.
-	type remoteStringAddr interface{ RemoteAddr() string }
-	type remoteNetAddr interface{ RemoteAddr() net.Addr }
-	if ra, ok := conn.(remoteStringAddr); ok {
+	if ra, ok := conn.(ConnRemoteAddr); ok {
 		codec.remoteAddr = ra.RemoteAddr()
-	} else if ra, ok := conn.(remoteNetAddr); ok {
-		codec.remoteAddr = ra.RemoteAddr().String()
 	}
 	return codec
 }

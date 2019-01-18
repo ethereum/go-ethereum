@@ -551,13 +551,13 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			log.Debug("RPC connection read error", "err", err)
+			conn.handler.log.Debug("RPC connection read error", "err", err)
 			conn.close(err, lastOp)
 			reading = false
 
 		// Reconnect:
 		case newcodec := <-c.reconnected:
-			log.Debug("RPC client reconnected", "reading", reading, "remote", newcodec.RemoteAddr())
+			log.Debug("RPC client reconnected", "reading", reading, "conn", newcodec.RemoteAddr())
 			go c.read(newcodec)
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case which
