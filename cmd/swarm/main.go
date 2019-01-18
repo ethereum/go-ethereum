@@ -296,6 +296,15 @@ func bzzd(ctx *cli.Context) error {
 		stack.Stop()
 	}()
 
+	// add swarm bootnodes, because swarm doesn't use p2p package's discovery discv5
+	go func() {
+		s := stack.Server()
+
+		for _, n := range cfg.P2P.BootstrapNodes {
+			s.AddPeer(n)
+		}
+	}()
+
 	stack.Wait()
 	return nil
 }
