@@ -1,0 +1,22 @@
+---
+layout: default
+---
+<div class="container" style="padding-top: 24px;">
+    <div class="row">
+          <div class="col-md-3" id="toc" style="padding-top: 16px;">
+            {% for group in site.data.sidebar %}
+            <div class="list-group">
+                <a class="list-group-item active">{{ group[0] }}</a>
+                {% for link in group[1] %}
+                    <a class="list-group-item" 
+                        href="{{ link.first[1] }}">{{ link.first[0] }}</a>
+                {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+          <div class="col-md-9" id="content">
+              {{ content }}
+          </div>
+    </div>
+
+</div>

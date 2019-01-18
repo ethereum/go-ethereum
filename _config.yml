@@ -4,3 +4,10 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - .gitignore
+
+defaults:
+  -
+    scope:
+      path: docs
+    values:
+      layout: sidebar
