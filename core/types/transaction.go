@@ -195,19 +195,6 @@ func (tx *Transaction) To() *common.Address {
 	return &to
 }
 
-func (tx *Transaction) From() *common.Address {
-	if tx.data.V != nil {
-		signer := deriveSigner(tx.data.V)
-		if f, err := Sender(signer, tx); err != nil {
-			return nil
-		} else {
-			return &f
-		}
-	} else {
-		return nil
-	}
-}
-
 // Hash hashes the RLP encoding of tx.
 // It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
@@ -285,13 +272,6 @@ func (tx *Transaction) IsSpecialTransaction() bool {
 		return false
 	}
 	return tx.To().String() == common.RandomizeSMC || tx.To().String() == common.BlockSigners
-}
-
-func (tx *Transaction) IsSigningTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-	return tx.To().String() == common.BlockSigners
 }
 
 func (tx *Transaction) String() string {
