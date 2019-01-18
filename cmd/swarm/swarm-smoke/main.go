@@ -49,6 +49,7 @@ var (
 	verbosity        int
 	timeout          int
 	single           bool
+	storeSize        int
 )
 
 func main() {
@@ -122,6 +123,12 @@ func main() {
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
 		},
+		cli.IntFlag{
+			Name:        "store",
+			Value:       5000,
+			Usage:       "individual node store size",
+			Destination: &storeSize,
+		},
 	}
 
 	app.Flags = append(app.Flags, []cli.Flag{
@@ -140,19 +147,25 @@ func main() {
 			Name:    "upload_and_sync",
 			Aliases: []string{"c"},
 			Usage:   "upload and sync",
-			Action:  cliUploadAndSync,
+			Action:  wrapCliCommand("upload-and-sync", uploadAndSync),
 		},
 		{
 			Name:    "feed_sync",
 			Aliases: []string{"f"},
 			Usage:   "feed update generate, upload and sync",
-			Action:  cliFeedUploadAndSync,
+			Action:  wrapCliCommand("feed-and-sync", feedUploadAndSync),
 		},
 		{
 			Name:    "upload_speed",
 			Aliases: []string{"u"},
 			Usage:   "measure upload speed",
-			Action:  cliUploadSpeed,
+			Action:  wrapCliCommand("upload-speed", uploadSpeed),
+		},
+		{
+			Name:    "sliding_window",
+			Aliases: []string{"s"},
+			Usage:   "measure network aggregate capacity",
+			Action:  wrapCliCommand("sliding-window", slidingWindow),
 		},
 	}
 
