@@ -115,10 +115,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	config.HiveParams.Discovery = true
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:   config.NetworkID,
-		OverlayAddr: common.FromHex(config.BzzKey),
-		HiveParams:  config.HiveParams,
-		LightNode:   config.LightNodeEnabled,
+		NetworkID:    config.NetworkID,
+		OverlayAddr:  common.FromHex(config.BzzKey),
+		HiveParams:   config.HiveParams,
+		LightNode:    config.LightNodeEnabled,
+		BootnodeMode: config.BootnodeMode,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -457,16 +458,7 @@ func (self *Swarm) Stop() error {
 // Protocols implements the node.Service interface
 func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 	if s.config.BootnodeMode {
-		protos = []p2p.Protocol{
-			{
-				Name:     network.DiscoverySpec.Name,
-				Version:  network.DiscoverySpec.Version,
-				Length:   network.DiscoverySpec.Length(),
-				Run:      s.bzz.RunProtocol(network.DiscoverySpec, s.bzz.Hive.Run),
-				NodeInfo: s.bzz.Hive.NodeInfo,
-				PeerInfo: s.bzz.Hive.PeerInfo,
-			},
-		}
+		protos = append(protos, s.bzz.Protocols()...)
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
 
