@@ -163,8 +163,6 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	ctx, sp := spancontext.StartSpan(context.Background(), "upload-and-sync.fetch")
 	defer sp.Finish()
 
-	log.Trace("sleeping", "ruid", ruid)
-	time.Sleep(3 * time.Second)
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
 
 	var tn time.Time
