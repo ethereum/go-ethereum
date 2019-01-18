@@ -19,7 +19,10 @@ package les
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
+	"math"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -37,16 +40,57 @@ import (
 )
 
 const (
-	bufLimitRatio = 6000  // fixed bufLimit/MRR ratio
-	makeCostStats = false // make request cost statistics during operation
+	bufLimitRatio = 6000 // fixed bufLimit/MRR ratio
+	makeCostStats = true // make request cost statistics during operation
+)
+
+var (
+	reqAvgTime = requestCostTable{
+		GetBlockHeadersMsg:     {150000, 30000},
+		GetBlockBodiesMsg:      {0, 700000},
+		GetReceiptsMsg:         {0, 1000000},
+		GetCodeMsg:             {0, 450000},
+		GetProofsV1Msg:         {0, 600000},
+		GetProofsV2Msg:         {0, 600000},
+		GetHeaderProofsMsg:     {0, 1000000},
+		GetHelperTrieProofsMsg: {0, 1000000},
+		SendTxMsg:              {0, 450000},
+		SendTxV2Msg:            {0, 450000},
+		GetTxStatusMsg:         {0, 250000},
+	}
+	reqMaxInSize = requestCostTable{
+		GetBlockHeadersMsg:     {40, 0},
+		GetBlockBodiesMsg:      {0, 40},
+		GetReceiptsMsg:         {0, 40},
+		GetCodeMsg:             {0, 80},
+		GetProofsV1Msg:         {0, 80},
+		GetProofsV2Msg:         {0, 80},
+		GetHeaderProofsMsg:     {0, 20},
+		GetHelperTrieProofsMsg: {0, 20},
+		SendTxMsg:              {0, 66000},
+		SendTxV2Msg:            {0, 66000},
+		GetTxStatusMsg:         {0, 50},
+	}
+	reqMaxOutSize = requestCostTable{
+		GetBlockHeadersMsg:     {0, 556},
+		GetBlockBodiesMsg:      {0, 100000},
+		GetReceiptsMsg:         {0, 200000},
+		GetCodeMsg:             {0, 50000},
+		GetProofsV1Msg:         {0, 4000},
+		GetProofsV2Msg:         {0, 4000},
+		GetHeaderProofsMsg:     {0, 4000},
+		GetHelperTrieProofsMsg: {0, 4000},
+		SendTxMsg:              {0, 0},
+		SendTxV2Msg:            {0, 100},
+		GetTxStatusMsg:         {0, 100},
+	}
+	minBufLimit = 100000000
 )
 
 type LesServer struct {
 	lesCommons
 
 	fcManager    *flowcontrol.ClientManager // nil if our node is client only
-	fcCostList   RequestCostList
-	fcCostTable  requestCostTable
 	fcCostStats  *requestCostStats
 	defParams    flowcontrol.ServerParams
 	lesTopics    []discv5.Topic
@@ -54,9 +98,15 @@ type LesServer struct {
 	quitSync     chan struct{}
 	onlyAnnounce bool
 
-	totalCapacity, minCapacity, minBufLimit, bufLimitRatio uint64
-	rcNormal, rcBlockProcessing                            flowcontrol.PieceWiseLinear // buffer recharge curve for normal operation and block processing mode
-	thcNormal, thcBlockProcessing                          int                         // serving thread count for normal operation and block processing mode
+	totalCapacity, minCapacity    uint64
+	rcNormal, rcBlockProcessing   flowcontrol.PieceWiseLinear // buffer recharge curve for normal operation and block processing mode
+	thcNormal, thcBlockProcessing int                         // serving thread count for normal operation and block processing mode
+
+	inSizeCostFactor, outSizeCostFactor float64
+
+	globalCostFactor float64
+	gcfUpdateCh      chan gcfUpdate
+	gcfLock          sync.RWMutex
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -125,18 +175,16 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 
 	srv.totalCapacity = capNormal
 	if config.LightBandwidthIn > 0 {
-		pm.inSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthIn)
+		srv.inSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthIn)
 	}
 	if config.LightBandwidthOut > 0 {
-		pm.outSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthOut)
+		srv.outSizeCostFactor = float64(srv.totalCapacity) / float64(config.LightBandwidthOut)
 	}
-	srv.fcCostList, srv.minBufLimit = pm.benchmarkCosts(srv.thcNormal, pm.inSizeCostFactor, pm.outSizeCostFactor)
-	srv.fcCostTable = srv.fcCostList.decode()
 	if makeCostStats {
-		srv.fcCostStats = newCostStats(srv.fcCostTable)
+		srv.fcCostStats = newCostStats(srv.makeCostList().decode())
 	}
 
-	srv.minCapacity = (srv.minBufLimit-1)/bufLimitRatio + 1
+	srv.minCapacity = uint64((minBufLimit-1)/bufLimitRatio + 1)
 
 	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
 	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)
@@ -159,6 +207,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 
 	srv.chtIndexer.Start(eth.BlockChain())
 	srv.blockProcLoop(pm)
+	srv.gcfLoop()
 	return srv, nil
 }
 
@@ -236,15 +285,126 @@ func (s *LesServer) Stop() {
 	s.protocolManager.Stop()
 }
 
-type requestCosts struct {
-	baseCost, reqCost uint64
+func (s *LesServer) makeCostList() RequestCostList {
+	maxCost := func(avgTime, inSize, outSize uint64) uint64 {
+		globalCostFactor := s.getGlobalCostFactor()
+
+		cost := avgTime * 2
+		inSizeCost := uint64(float64(inSize) * s.inSizeCostFactor * globalCostFactor * 1.2)
+		if inSizeCost > cost {
+			cost = inSizeCost
+		}
+		outSizeCost := uint64(float64(outSize) * s.outSizeCostFactor * globalCostFactor * 1.2)
+		if outSizeCost > cost {
+			cost = outSizeCost
+		}
+		return cost
+	}
+	var list RequestCostList
+	for code, data := range reqAvgTime {
+		list = append(list, requestCostListItem{
+			MsgCode:  code,
+			BaseCost: maxCost(data.baseCost, reqMaxInSize[code].baseCost, reqMaxOutSize[code].baseCost),
+			ReqCost:  maxCost(data.reqCost, reqMaxInSize[code].reqCost, reqMaxOutSize[code].reqCost),
+		})
+	}
+	return list
 }
 
-type requestCostTable map[uint64]*requestCosts
+const (
+	gcfMinWeight      = time.Second * 10
+	gcfMaxWeight      = time.Minute
+	gcfUsageThreshold = 0.5
+	gcfUsageTC        = time.Second
+	gcfDbKey          = "_globalCostFactor"
+)
 
-type RequestCostList []struct {
-	MsgCode, BaseCost, ReqCost uint64
+type gcfUpdate struct {
+	avgTime, servingTime float64
 }
+
+func (s *LesServer) gcfLoop() {
+	s.protocolManager.wg.Add(1)
+	var gcf, gcfUsage, gcfSum, gcfWeight float64
+	lastUpdate := mclock.Now()
+	expUpdate := lastUpdate
+
+	gcf = 1
+	data, _ := s.protocolManager.chainDb.Get([]byte(gcfDbKey))
+	if len(data) == 16 {
+		gcfSum = math.Float64frombits(binary.BigEndian.Uint64(data[0:8]))
+		gcfWeight = math.Float64frombits(binary.BigEndian.Uint64(data[8:16]))
+		if gcfWeight >= float64(gcfMinWeight) {
+			gcf = gcfSum / gcfWeight
+		}
+	}
+	s.globalCostFactor = gcf
+	s.gcfUpdateCh = make(chan gcfUpdate, 100)
+
+	go func() {
+		for {
+			select {
+			case r := <-s.gcfUpdateCh:
+				now := mclock.Now()
+				max := r.servingTime * gcf
+				if r.avgTime > max {
+					max = r.avgTime
+				}
+				dt := float64(now - expUpdate)
+				expUpdate = now
+				gcfUsage = gcfUsage*math.Exp(-dt/float64(gcfUsageTC)) + max*1000000/float64(gcfUsageTC)
+
+				if gcfUsage >= gcfUsageThreshold*float64(s.totalCapacity)*gcf {
+					gcfSum += r.avgTime
+					gcfWeight += r.servingTime
+					if time.Duration(now-lastUpdate) > time.Second && gcfWeight >= float64(gcfMinWeight) {
+						gcf = gcfSum / gcfWeight
+						if gcfWeight >= float64(gcfMaxWeight) {
+							gcfSum = gcf * float64(gcfMaxWeight)
+							gcfWeight = float64(gcfMaxWeight)
+						}
+						lastUpdate = now
+						s.gcfLock.Lock()
+						s.globalCostFactor = gcf
+						s.gcfLock.Unlock()
+						log.Debug("globalCostFactor updated", "gcf", gcf, "weight", time.Duration(gcfWeight))
+					}
+				}
+			case <-s.protocolManager.quitSync:
+				var data [16]byte
+				binary.BigEndian.PutUint64(data[0:8], math.Float64bits(gcfSum))
+				binary.BigEndian.PutUint64(data[8:16], math.Float64bits(gcfWeight))
+				s.protocolManager.chainDb.Put([]byte(gcfDbKey), data[:])
+				log.Debug("globalCostFactor saved", "sum", time.Duration(gcfSum), "weight", time.Duration(gcfWeight))
+				s.protocolManager.wg.Done()
+				return
+			}
+		}
+	}()
+}
+
+func (s *LesServer) getGlobalCostFactor() float64 {
+	s.gcfLock.RLock()
+	defer s.gcfLock.RUnlock()
+
+	return s.globalCostFactor
+}
+
+func (s *LesServer) updateGlobalCostFactor(avgTime, servingTime uint64) {
+	s.gcfUpdateCh <- gcfUpdate{float64(avgTime), float64(servingTime)}
+}
+
+type (
+	requestCosts struct {
+		baseCost, reqCost uint64
+	}
+	requestCostTable map[uint64]*requestCosts
+
+	RequestCostList     []requestCostListItem
+	requestCostListItem struct {
+		MsgCode, BaseCost, ReqCost uint64
+	}
+)
 
 func (list RequestCostList) decode() requestCostTable {
 	table := make(requestCostTable)

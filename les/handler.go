@@ -91,25 +91,24 @@ type txPool interface {
 }
 
 type ProtocolManager struct {
-	lightSync                           bool
-	txpool                              txPool
-	txrelay                             *LesTxRelay
-	networkId                           uint64
-	chainConfig                         *params.ChainConfig
-	iConfig                             *light.IndexerConfig
-	blockchain                          BlockChain
-	chainDb                             ethdb.Database
-	odr                                 *LesOdr
-	server                              *LesServer
-	serverPool                          *serverPool
-	clientPool                          *freeClientPool
-	freeClientCap                       uint64
-	priorityClientPool                  *priorityClientPool
-	lesTopic                            discv5.Topic
-	reqDist                             *requestDistributor
-	retriever                           *retrieveManager
-	servingQueue                        *servingQueue
-	inSizeCostFactor, outSizeCostFactor float64
+	lightSync          bool
+	txpool             txPool
+	txrelay            *LesTxRelay
+	networkId          uint64
+	chainConfig        *params.ChainConfig
+	iConfig            *light.IndexerConfig
+	blockchain         BlockChain
+	chainDb            ethdb.Database
+	odr                *LesOdr
+	server             *LesServer
+	serverPool         *serverPool
+	clientPool         *freeClientPool
+	freeClientCap      uint64
+	priorityClientPool *priorityClientPool
+	lesTopic           discv5.Topic
+	reqDist            *requestDistributor
+	retriever          *retrieveManager
+	servingQueue       *servingQueue
 
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
@@ -223,14 +222,14 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 			}
 		}
 	}
-	freePeers := pm.maxFreePeers(0, 0)
-	if freePeers < maxPeers {
-		log.Warn("Light peer count limited", "specified", maxPeers, "allowed", freePeers)
-	}
 
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
+		freePeers := pm.maxFreePeers(0, 0)
+		if freePeers < maxPeers {
+			log.Warn("Light peer count limited", "specified", maxPeers, "allowed", freePeers)
+		}
 		pm.clientPool = newFreeClientPool(pm.chainDb, freePeers, 10000, mclock.System{})
 		go func() {
 			for range pm.newPeerCh {
@@ -454,8 +453,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	p.responseCount++
 	responseCount := p.responseCount
 	var (
-		maxCost  uint64
-		priority int64
+		maxCost, avgTime uint64
+		priority         int64
 	)
 
 	reject := func(reqID, reqCnt, maxCnt uint64) bool {
@@ -470,6 +469,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if maxCost > p.fcParams.BufLimit {
 			maxCost = p.fcParams.BufLimit
 		}
+		costs = reqAvgTime[msg.Code]
+		avgTime = costs.baseCost + reqCnt*costs.reqCost
 
 		if accepted, bufShort, servingPriority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost); !accepted {
 			if bufShort > 0 {
@@ -499,19 +500,21 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.responseLock.Lock()
 		defer p.responseLock.Unlock()
 
-		realCost := servingTime
-		inSizeCost := uint64(float64(msg.Size) * pm.inSizeCostFactor)
-		if inSizeCost > realCost {
-			realCost = inSizeCost
+		cost := float64(servingTime)
+		inSizeCost := float64(msg.Size) * pm.server.inSizeCostFactor
+		if inSizeCost > cost {
+			cost = inSizeCost
 		}
 		if reply != nil {
-			outSizeCost := uint64(float64(reply.size()) * pm.outSizeCostFactor)
-			if outSizeCost > realCost {
-				realCost = outSizeCost
+			outSizeCost := float64(reply.size()) * pm.server.outSizeCostFactor
+			if outSizeCost > cost {
+				cost = outSizeCost
 			}
 		}
+		realCost := uint64(cost * pm.server.getGlobalCostFactor())
 
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
+		pm.server.updateGlobalCostFactor(avgTime, servingTime)
 		if pm.server.fcCostStats != nil {
 			pm.server.fcCostStats.update(msg.Code, amount, realCost)
 		}

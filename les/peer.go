@@ -519,8 +519,9 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		}
 		send = send.add("flowControl/BL", server.defParams.BufLimit)
 		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
-		send = send.add("flowControl/MRC", server.fcCostList)
-		p.fcCosts = server.fcCostTable
+		costList := server.makeCostList()
+		send = send.add("flowControl/MRC", costList)
+		p.fcCosts = costList.decode()
 		p.fcParams = server.defParams
 	} else {
 		//on client node
