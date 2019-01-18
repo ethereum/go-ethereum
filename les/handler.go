@@ -22,12 +22,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -37,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -91,24 +88,21 @@ type txPool interface {
 }
 
 type ProtocolManager struct {
-	lightSync          bool
-	txpool             txPool
-	txrelay            *LesTxRelay
-	networkId          uint64
-	chainConfig        *params.ChainConfig
-	iConfig            *light.IndexerConfig
-	blockchain         BlockChain
-	chainDb            ethdb.Database
-	odr                *LesOdr
-	server             *LesServer
-	serverPool         *serverPool
-	clientPool         *freeClientPool
-	freeClientCap      uint64
-	priorityClientPool *priorityClientPool
-	lesTopic           discv5.Topic
-	reqDist            *requestDistributor
-	retriever          *retrieveManager
-	servingQueue       *servingQueue
+	lightSync    bool
+	txpool       txPool
+	txrelay      *LesTxRelay
+	networkId    uint64
+	chainConfig  *params.ChainConfig
+	iConfig      *light.IndexerConfig
+	blockchain   BlockChain
+	chainDb      ethdb.Database
+	odr          *LesOdr
+	server       *LesServer
+	serverPool   *serverPool
+	lesTopic     discv5.Topic
+	reqDist      *requestDistributor
+	retriever    *retrieveManager
+	servingQueue *servingQueue
 
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
@@ -195,42 +189,11 @@ func (pm *ProtocolManager) removePeer(id string) {
 	pm.peers.Unregister(id)
 }
 
-// maxFreePeers returns the maximum number of free client slots based on the number
-// and total capacity of other clients
-func (pm *ProtocolManager) maxFreePeers(otherPeers int, otherCap uint64) int {
-	if otherPeers >= pm.maxPeers || otherCap >= pm.server.totalCapacity {
-		return 0
-	}
-	maxPeers := int((pm.server.totalCapacity - otherCap) / pm.freeClientCap)
-	if maxPeers <= pm.maxPeers-otherPeers {
-		return maxPeers
-	}
-	return pm.maxPeers - otherPeers
-}
-
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
-	if pm.server != nil && maxPeers > 0 {
-		pm.freeClientCap = pm.server.totalCapacity / uint64(maxPeers)
-		if pm.freeClientCap < pm.server.minCapacity {
-			pm.freeClientCap = pm.server.minCapacity
-		}
-		if pm.freeClientCap > 0 {
-			pm.server.defParams = flowcontrol.ServerParams{
-				BufLimit:    pm.freeClientCap * bufLimitRatio,
-				MinRecharge: pm.freeClientCap,
-			}
-		}
-	}
-
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
-		freePeers := pm.maxFreePeers(0, 0)
-		if freePeers < maxPeers {
-			log.Warn("Light peer count limited", "specified", maxPeers, "allowed", freePeers)
-		}
-		pm.clientPool = newFreeClientPool(pm.chainDb, freePeers, 10000, mclock.System{})
 		go func() {
 			for range pm.newPeerCh {
 			}
@@ -248,9 +211,6 @@ func (pm *ProtocolManager) Stop() {
 	pm.noMorePeers <- struct{}{}
 
 	close(pm.quitSync) // quits syncer, fetcher
-	if pm.clientPool != nil {
-		pm.clientPool.stop()
-	}
 
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
@@ -333,86 +293,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	defer func() {
 		pm.removePeer(p.id)
 	}()
-
-	if !pm.lightSync && !p.Peer.Info().Network.Trusted {
-		var freeId string
-		if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
-			freeId = addr.IP.String()
-		}
-
-		var (
-			free, priority bool
-			lock           sync.Mutex // lock protects access to the free and priority flags
-		)
-
-		defer func() {
-			lock.Lock()
-			if free {
-				pm.clientPool.disconnect(freeId)
-			}
-			lock.Unlock()
-		}()
-
-		updateCap := func(cap uint64) {
-			lock.Lock()
-			defer lock.Unlock()
-
-			if !priority && cap != 0 {
-				// switch to priority mode
-				if free {
-					pm.clientPool.disconnect(freeId)
-					free = false
-				}
-				priority = true
-				p.updateCapacity(cap)
-			}
-			if priority {
-				if cap == 0 {
-					// priority revoked; switch to free client mode or drop
-					if freeId != "" {
-						if !pm.clientPool.connect(freeId, func() { go pm.removePeer(p.id) }) {
-							pm.removePeer(p.id)
-							return
-						}
-						free = true
-					}
-					priority = false
-					p.updateCapacity(pm.freeClientCap)
-				} else {
-					// just update priority capacity
-					p.updateCapacity(cap)
-				}
-			}
-		}
-
-		lock.Lock()
-		if pm.priorityClientPool != nil {
-			// the priority client pool registers currently connected non-priority clients too
-			// in order to be able to notify them if they get priority while connected
-			priorityCap, ok := pm.priorityClientPool.connect(p.ID(), updateCap)
-			if !ok {
-				lock.Unlock()
-				return p2p.DiscAlreadyConnected
-			}
-			// always unregister
-			defer pm.priorityClientPool.disconnect(p.ID())
-			if priorityCap != 0 {
-				priority = true
-				p.updateCapacity(priorityCap)
-			}
-		}
-
-		if !priority && freeId != "" {
-			// if freeId == "" then we are in test mode and let the client connect
-			// without entering the free client pool
-			if !pm.clientPool.connect(freeId, func() { go pm.removePeer(p.id) }) {
-				lock.Unlock()
-				return p2p.DiscTooManyPeers
-			}
-			free = true
-		}
-		lock.Unlock()
-	}
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if pm.lightSync {

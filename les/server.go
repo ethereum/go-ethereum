@@ -85,6 +85,7 @@ var (
 		GetTxStatusMsg:         {0, 100},
 	}
 	minBufLimit = 100000000
+	minCapacity = uint64((minBufLimit-1)/bufLimitRatio + 1)
 )
 
 type LesServer struct {
@@ -98,7 +99,7 @@ type LesServer struct {
 	quitSync     chan struct{}
 	onlyAnnounce bool
 
-	totalCapacity, minCapacity    uint64
+	totalCapacity                 uint64
 	rcNormal, rcBlockProcessing   flowcontrol.PieceWiseLinear // buffer recharge curve for normal operation and block processing mode
 	thcNormal, thcBlockProcessing int                         // serving thread count for normal operation and block processing mode
 
@@ -107,6 +108,10 @@ type LesServer struct {
 	globalCostFactor float64
 	gcfUpdateCh      chan gcfUpdate
 	gcfLock          sync.RWMutex
+
+	freeClientCap      uint64
+	freeClientPool     *freeClientPool
+	priorityClientPool *priorityClientPool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -184,8 +189,6 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		srv.fcCostStats = newCostStats(srv.makeCostList().decode())
 	}
 
-	srv.minCapacity = uint64((minBufLimit-1)/bufLimitRatio + 1)
-
 	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
 	chtV2SectionCount := chtV1SectionCount / (params.CHTFrequencyClient / params.CHTFrequencyServer)
 	if chtV2SectionCount != 0 {
@@ -251,6 +254,29 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
+	maxPeers := s.config.LightPeers
+	if maxPeers > 0 {
+		s.freeClientCap = s.totalCapacity / uint64(maxPeers)
+		if s.freeClientCap < minCapacity {
+			s.freeClientCap = minCapacity
+		}
+		if s.freeClientCap > 0 {
+			s.defParams = flowcontrol.ServerParams{
+				BufLimit:    s.freeClientCap * bufLimitRatio,
+				MinRecharge: s.freeClientCap,
+			}
+		}
+	}
+	freePeers := int(s.totalCapacity / s.freeClientCap)
+	if freePeers < maxPeers {
+		log.Warn("Light peer count limited", "specified", maxPeers, "allowed", freePeers)
+	}
+
+	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, s.protocolManager.removePeer)
+	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool)
+	s.priorityClientPool.setLimits(maxPeers, s.totalCapacity)
+	s.protocolManager.peers.notify(s.priorityClientPool)
+
 	s.protocolManager.Start(s.config.LightPeers)
 	if srvr.DiscV5 != nil {
 		for _, topic := range s.lesTopics {
@@ -282,6 +308,7 @@ func (s *LesServer) Stop() {
 	go func() {
 		<-s.protocolManager.noMorePeers
 	}()
+	s.freeClientPool.stop()
 	s.protocolManager.Stop()
 }
 

@@ -31,23 +31,13 @@ var (
 // PublicLesServerAPI  provides an API to access the les server.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PrivateLesServerAPI struct {
-	server   *LesServer
-	pm       *ProtocolManager
-	priority *priorityClientPool
+	server *LesServer
 }
 
 // NewPublicLesServerAPI creates a new les server API.
 func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
-	priority := &priorityClientPool{
-		clients:  make(map[enode.ID]priorityClientInfo),
-		totalCap: server.totalCapacity,
-		pm:       server.protocolManager,
-	}
-	server.protocolManager.priorityClientPool = priority
 	return &PrivateLesServerAPI{
-		server:   server,
-		pm:       server.protocolManager,
-		priority: priority,
+		server: server,
 	}
 }
 
@@ -58,23 +48,29 @@ func (api *PrivateLesServerAPI) TotalCapacity() hexutil.Uint64 {
 
 // MinimumCapacity queries minimum assignable capacity for a single client
 func (api *PrivateLesServerAPI) MinimumCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.minCapacity)
+	return hexutil.Uint64(minCapacity)
+}
+
+type clientPool interface {
+	peerSetNotify
+	setLimits(count int, totalCap uint64)
 }
 
 // priorityClientPool stores information about prioritized clients
 type priorityClientPool struct {
-	lock                                          sync.Mutex
-	pm                                            *ProtocolManager
-	clients                                       map[enode.ID]priorityClientInfo
-	totalCap, totalpriorityCap, totalConnectedCap uint64
-	priorityCount                                 int
+	lock                                       sync.Mutex
+	child                                      clientPool
+	ps                                         *peerSet
+	clients                                    map[enode.ID]priorityClientInfo
+	totalCap, totalConnectedCap, freeClientCap uint64
+	maxPeers, priorityCount                    int
 }
 
 // priorityClientInfo entries exist for all prioritized clients and currently connected free clients
 type priorityClientInfo struct {
 	cap       uint64 // zero for non-priority clients
 	connected bool
-	updateCap func(uint64)
+	peer      *peer
 }
 
 // SetClientCapacity sets the priority capacity assigned to a given client.
@@ -85,49 +81,27 @@ type priorityClientInfo struct {
 // Note: assigned capacity can be changed while the client is connected with
 // immediate effect.
 func (api *PrivateLesServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
-	if cap != 0 && cap < api.server.minCapacity {
+	if cap != 0 && cap < minCapacity {
 		return ErrMinCap
 	}
-
-	api.priority.lock.Lock()
-	defer api.priority.lock.Unlock()
-
-	c := api.priority.clients[id]
-	if api.priority.totalpriorityCap+cap > api.priority.totalCap+c.cap {
-		return ErrTotalCap
-	}
-	api.priority.totalpriorityCap += cap - c.cap
-	if c.updateCap != nil && cap != 0 {
-		c.updateCap(cap)
-	}
-	if c.connected {
-		if c.cap != 0 {
-			api.priority.priorityCount--
-		}
-		if cap != 0 {
-			api.priority.priorityCount++
-		}
-		api.priority.totalConnectedCap += cap - c.cap
-		api.pm.clientPool.setConnLimit(api.pm.maxFreePeers(api.priority.priorityCount, api.priority.totalConnectedCap))
-	}
-	if c.updateCap != nil && cap == 0 {
-		c.updateCap(cap)
-	}
-	if cap != 0 || c.connected {
-		c.cap = cap
-		api.priority.clients[id] = c
-	} else {
-		delete(api.priority.clients, id)
-	}
-	return nil
+	return api.server.priorityClientPool.setClientCapacity(id, cap)
 }
 
 // GetClientCapacity returns the capacity assigned to a given client
 func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
-	api.priority.lock.Lock()
-	defer api.priority.lock.Unlock()
+	api.server.priorityClientPool.lock.Lock()
+	defer api.server.priorityClientPool.lock.Unlock()
 
-	return hexutil.Uint64(api.priority.clients[id].cap)
+	return hexutil.Uint64(api.server.priorityClientPool.clients[id].cap)
+}
+
+func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool) *priorityClientPool {
+	return &priorityClientPool{
+		clients:       make(map[enode.ID]priorityClientInfo),
+		freeClientCap: freeClientCap,
+		ps:            ps,
+		child:         child,
+	}
 }
 
 // connect should be called when a new client is connected. The callback function
@@ -138,39 +112,125 @@ func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
 // Note: priorityClientPool also stores a record about free clients while they are
 // connected in order to be able to assign priority to them later with the callback
 // function if necessary.
-func (v *priorityClientPool) connect(id enode.ID, updateCap func(uint64)) (uint64, bool) {
+func (v *priorityClientPool) registerPeer(p *peer) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
+	id := p.ID()
 	c := v.clients[id]
 	if c.connected {
-		return 0, false
+		return
 	}
+	if c.cap == 0 && v.child != nil {
+		v.child.registerPeer(p)
+	}
+	if c.cap != 0 && v.totalConnectedCap+c.cap > v.totalCap {
+		v.ps.Unregister(p.id)
+		return
+	}
+
 	c.connected = true
-	c.updateCap = updateCap
+	c.peer = p
 	v.clients[id] = c
 	if c.cap != 0 {
 		v.priorityCount++
+		v.totalConnectedCap += c.cap
+		if v.child != nil {
+			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
+		}
+		p.updateCapacity(c.cap)
 	}
-	v.totalConnectedCap += c.cap
-	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.priorityCount, v.totalConnectedCap))
-	return c.cap, true
 }
 
 // disconnect should be called when a client is disconnected.
 // It should be called for all clients accepted by connect even if not prioritized.
-func (v *priorityClientPool) disconnect(id enode.ID) {
+func (v *priorityClientPool) unregisterPeer(p *peer) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	id := p.ID()
+	c := v.clients[id]
+	if !c.connected {
+		return
+	}
+	if c.cap != 0 {
+		c.connected = false
+		v.clients[id] = c
+		v.priorityCount--
+		v.totalConnectedCap -= c.cap
+		if v.child != nil {
+			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
+		}
+	} else {
+		if v.child != nil {
+			v.child.unregisterPeer(p)
+		}
+		delete(v.clients, id)
+	}
+}
+
+func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	if v.priorityCount > count || v.totalConnectedCap > totalCap {
+		for id, c := range v.clients {
+			if c.connected {
+				c.connected = false
+				v.totalConnectedCap -= c.cap
+				v.priorityCount--
+				v.clients[id] = c
+				v.ps.Unregister(c.peer.id)
+				if v.priorityCount <= count && v.totalConnectedCap <= totalCap {
+					break
+				}
+			}
+		}
+	}
+
+	v.maxPeers = count
+	v.totalCap = totalCap
+	if v.child != nil {
+		v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
+	}
+}
+
+func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
 	c := v.clients[id]
-	c.connected = false
-	if c.cap != 0 {
+	if c.cap == cap {
+		return nil
+	}
+	if c.connected {
+		if v.totalConnectedCap+cap > v.totalCap+c.cap {
+			return ErrTotalCap
+		}
+		if c.cap == 0 {
+			if v.child != nil {
+				v.child.unregisterPeer(c.peer)
+			}
+			v.priorityCount++
+			c.peer.updateCapacity(cap)
+		}
+		v.totalConnectedCap += cap - c.cap
+		if v.child != nil {
+			v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
+		}
+		if cap == 0 {
+			if v.child != nil {
+				v.child.registerPeer(c.peer)
+			}
+			v.priorityCount--
+			c.peer.updateCapacity(v.freeClientCap)
+		}
+	}
+	if cap != 0 || c.connected {
+		c.cap = cap
 		v.clients[id] = c
-		v.priorityCount--
 	} else {
 		delete(v.clients, id)
 	}
-	v.totalConnectedCap -= c.cap
-	v.pm.clientPool.setConnLimit(v.pm.maxFreePeers(v.priorityCount, v.totalConnectedCap))
+	return nil
 }

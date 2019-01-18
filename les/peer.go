@@ -106,7 +106,7 @@ func newPeer(version int, network uint64, isTrusted bool, p *p2p.Peer, rw p2p.Ms
 		rw:        rw,
 		version:   version,
 		network:   network,
-		id:        fmt.Sprintf("%x", id[:8]),
+		id:        fmt.Sprintf("%x", id),
 		isTrusted: isTrusted,
 	}
 }
