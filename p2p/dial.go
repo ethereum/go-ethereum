@@ -228,18 +228,18 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	//}
 	// Create dynamic dials from random lookup results, removing tried
 	// items from the result buffer.
-	i := 0
-	for ; i < len(s.lookupBuf) && needDynDials > 0; i++ {
-		if addDial(dynDialedConn, s.lookupBuf[i]) {
-			needDynDials--
-		}
-	}
-	s.lookupBuf = s.lookupBuf[:copy(s.lookupBuf, s.lookupBuf[i:])]
+	//i := 0
+	//for ; i < len(s.lookupBuf) && needDynDials > 0; i++ {
+	//if addDial(dynDialedConn, s.lookupBuf[i]) {
+	//needDynDials--
+	//}
+	//}
+	//s.lookupBuf = s.lookupBuf[:copy(s.lookupBuf, s.lookupBuf[i:])]
 	// Launch a discovery lookup if more candidates are needed.
-	if len(s.lookupBuf) < needDynDials && !s.lookupRunning {
-		s.lookupRunning = true
-		newtasks = append(newtasks, &discoverTask{})
-	}
+	//if len(s.lookupBuf) < needDynDials && !s.lookupRunning {
+	//s.lookupRunning = true
+	//newtasks = append(newtasks, &discoverTask{})
+	//}
 
 	// Launch a timer to wait for the next node to expire if all
 	// candidates have been tried and no task is currently active.
