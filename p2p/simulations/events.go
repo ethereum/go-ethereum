@@ -73,7 +73,8 @@ func NewEvent(v interface{}) *Event {
 	switch v := v.(type) {
 	case *Node:
 		event.Type = EventTypeNode
-		event.Node = v
+		node := *v
+		event.Node = &node
 	case *Conn:
 		event.Type = EventTypeConn
 		conn := *v
