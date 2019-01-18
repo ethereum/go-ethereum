@@ -455,23 +455,23 @@ func (self *Swarm) Stop() error {
 }
 
 // Protocols implements the node.Service interface
-func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-	if self.config.BootnodeMode {
+func (s *Swarm) Protocols() (protos []p2p.Protocol) {
+	if s.config.BootnodeMode {
 		protos = []p2p.Protocol{
 			{
 				Name:     network.DiscoverySpec.Name,
 				Version:  network.DiscoverySpec.Version,
 				Length:   network.DiscoverySpec.Length(),
-				Run:      self.bzz.RunProtocol(network.DiscoverySpec, self.bzz.Hive.Run),
-				NodeInfo: self.bzz.Hive.NodeInfo,
-				PeerInfo: self.bzz.Hive.PeerInfo,
+				Run:      s.bzz.RunProtocol(network.DiscoverySpec, s.bzz.Hive.Run),
+				NodeInfo: s.bzz.Hive.NodeInfo,
+				PeerInfo: s.bzz.Hive.PeerInfo,
 			},
 		}
 	} else {
-		protos = append(protos, self.bzz.Protocols()...)
+		protos = append(protos, s.bzz.Protocols()...)
 
-		if self.ps != nil {
-			protos = append(protos, self.ps.Protocols()...)
+		if s.ps != nil {
+			protos = append(protos, s.ps.Protocols()...)
 		}
 	}
 	return
