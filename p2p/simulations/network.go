@@ -171,13 +171,16 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 
 	node := net.getNode(id)
 	if node == nil {
+		net.lock.Unlock()
 		return fmt.Errorf("node %v does not exist", id)
 	}
 	if node.Up {
+		net.lock.Unlock()
 		return fmt.Errorf("node %v already up", id)
 	}
 	log.Trace("Starting node", "id", id, "adapter", net.nodeAdapter.Name())
 	if err := node.Start(snapshots); err != nil {
+		net.lock.Unlock()
 		log.Warn("Node startup failed", "id", id, "err", err)
 		return err
 	}
@@ -210,13 +213,14 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 
 		// assume the node is now down
 		net.lock.Lock()
+		defer net.lock.Unlock()
+
 		node := net.getNode(id)
 		if node == nil {
 			return
 		}
 		node.Up = false
 		ev := NewEvent(node)
-		net.lock.Unlock()
 		net.events.Send(ev)
 	}()
 	for {
@@ -256,9 +260,11 @@ func (net *Network) Stop(id enode.ID) error {
 	net.lock.Lock()
 	node := net.getNode(id)
 	if node == nil {
+		net.lock.Unlock()
 		return fmt.Errorf("node %v does not exist", id)
 	}
 	if !node.Up {
+		net.lock.Unlock()
 		return fmt.Errorf("node %v already down", id)
 	}
 	node.Up = false
