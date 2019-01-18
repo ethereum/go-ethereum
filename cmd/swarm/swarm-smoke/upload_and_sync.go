@@ -86,9 +86,8 @@ func cliUploadAndSync(c *cli.Context) error {
 func uploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) {
 		totalTime := time.Since(now)
-
 		log.Info("total time", "time", totalTime, "kb", filesize)
-		metrics.GetOrRegisterCounter("upload-and-sync.total-time", nil).Inc(int64(totalTime))
+		metrics.GetOrRegisterResettingTimer("upload-and-sync.total-time", nil).Update(totalTime)
 	}(time.Now())
 
 	generateEndpoints(scheme, cluster, appName, from, to)
@@ -103,7 +102,7 @@ func uploadAndSync(c *cli.Context) error {
 		log.Error(err.Error())
 		return err
 	}
-	metrics.GetOrRegisterCounter("upload-and-sync.upload-time", nil).Inc(int64(time.Since(t1)))
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).UpdateSince(t1)
 
 	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
