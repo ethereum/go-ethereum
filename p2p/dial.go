@@ -217,15 +217,15 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	}
 	// Use random nodes from the table for half of the necessary
 	// dynamic dials.
-	randomCandidates := needDynDials / 2
-	if randomCandidates > 0 {
-		n := s.ntab.ReadRandomNodes(s.randomNodes)
-		for i := 0; i < randomCandidates && i < n; i++ {
-			if addDial(dynDialedConn, s.randomNodes[i]) {
-				needDynDials--
-			}
-		}
-	}
+	//randomCandidates := needDynDials / 2
+	//if randomCandidates > 0 {
+	//n := s.ntab.ReadRandomNodes(s.randomNodes)
+	//for i := 0; i < randomCandidates && i < n; i++ {
+	//if addDial(dynDialedConn, s.randomNodes[i]) {
+	//needDynDials--
+	//}
+	//}
+	//}
 	// Create dynamic dials from random lookup results, removing tried
 	// items from the result buffer.
 	i := 0
