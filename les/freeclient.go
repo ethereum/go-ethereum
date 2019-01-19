@@ -142,6 +142,7 @@ func (f *freeClientPool) connect(address, id string) bool {
 	}
 	f.disconnPool.Remove(e.index)
 	e.connected = true
+	e.id = id
 	f.connPool.Push(e, e.linUsage)
 	if f.connPool.Size()+f.disconnPool.Size() > f.totalLimit {
 		f.disconnPool.Pop()
