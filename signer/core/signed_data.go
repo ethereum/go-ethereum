@@ -116,8 +116,8 @@ type TypedDataDomain struct {
 	Salt              string   `json:"salt"`
 }
 
-var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[\])?$`)
-var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[])?$`)
+// var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|int|uint|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[\])?$`)
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
 // Sign receives a request and produces a signature
 
@@ -299,9 +299,6 @@ func SignTextPlain(data hexutil.Bytes) (hexutil.Bytes, string) {
 // SignTypedData signs EIP-712 conformant typed data
 // hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
 func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, typedData TypedData) (hexutil.Bytes, error) {
-	if err := typedData.Validate(); err != nil {
-		return nil, err
-	}
 	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
 	if err != nil {
 		return nil, err
@@ -396,6 +393,10 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 //
 // each encoded member is 32-byte long
 func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}, depth int) (hexutil.Bytes, error) {
+	if err := typedData.validate(); err != nil {
+		return nil, err
+	}
+
 	buffer := bytes.Buffer{}
 
 	// Verify extra data
@@ -430,7 +431,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					}
 					arrayBuffer.Write(encodedData)
 				} else {
-					bytesValue, err := typedData.EncodePrimitiveValue(encType, encValue, depth)
+					bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
 					if err != nil {
 						return nil, err
 					}
@@ -495,15 +496,14 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		}
 		return crypto.Keccak256(bytesValue), nil
 	}
-	// bytes32 etc
 	if strings.HasPrefix(encType, "bytes") {
-		sizeStr := strings.TrimPrefix(encType, "bytes")
-		size, err := strconv.Atoi(sizeStr)
+		lengthStr := strings.TrimPrefix(encType, "bytes")
+		length, err := strconv.Atoi(lengthStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid size on bytes: %v", sizeStr)
+			return nil, fmt.Errorf("invalid size on bytes: %v", lengthStr)
 		}
-		if size < 0 || size > 32 {
-			return nil, fmt.Errorf("invalid size on bytes: %d", size)
+		if length < 0 || length > 32 {
+			return nil, fmt.Errorf("invalid size on bytes: %d", length)
 		}
 		if byteValue, ok := encValue.(hexutil.Bytes); !ok {
 			return nil, dataMismatchError(encType, encValue)
@@ -511,8 +511,22 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 			return math.PaddedBigBytes(new(big.Int).SetBytes(byteValue), 32), nil
 		}
 	}
-	if strings.HasPrefix(encType, "uint") || strings.HasPrefix(encType, "int") {
+	if strings.HasPrefix(encType, "int") || strings.HasPrefix(encType, "uint") {
+		length := 0
+		if encType == "int" || encType == "uint" {
+			length = 256
+		} else {
+			lengthStr := strings.TrimPrefix(strings.TrimPrefix(encType, "uint"), "int")
+			atoiSize, err := strconv.Atoi(lengthStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid size on integer: %v", lengthStr)
+			}
+			length = atoiSize
+		}
 		bigIntValue, ok := encValue.(*big.Int)
+		if bigIntValue.BitLen() > length {
+			return nil, fmt.Errorf("integer larger than '%v'", encType)
+		}
 		if !ok {
 			return nil, dataMismatchError(encType, encValue)
 		}
@@ -591,12 +605,12 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 	}, nil
 }
 
-// Validate make sure the types are sound
-func (typedData *TypedData) Validate() error {
-	if err := typedData.Types.Validate(); err != nil {
+// Validate makes sure the types are sound
+func (typedData *TypedData) validate() error {
+	if err := typedData.Types.validate(); err != nil {
 		return err
 	}
-	if err := typedData.Domain.Validate(); err != nil {
+	if err := typedData.Domain.validate(); err != nil {
 		return err
 	}
 	return nil
@@ -724,7 +738,7 @@ func (nvt *NameValueType) Pprint(depth int) string {
 }
 
 // Validate checks if the types object is conformant to the specs
-func (t Types) Validate() error {
+func (t Types) validate() error {
 	for typeKey, typeArr := range t {
 		for _, typeObj := range typeArr {
 			if typeKey == typeObj.Type {
@@ -737,8 +751,7 @@ func (t Types) Validate() error {
 				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
 					return fmt.Errorf("unknown reference type '%s", typeObj.Type)
 				}
-
-			} else if !typedDataRegexp.MatchString(typeObj.Type) {
+			} else if !isPrimitiveTypeValid(typeObj.Type) {
 				return fmt.Errorf("unknown type '%s'", typeObj.Type)
 			}
 		}
@@ -746,9 +759,120 @@ func (t Types) Validate() error {
 	return nil
 }
 
+// Checks if the primitive value is valid
+func isPrimitiveTypeValid(primitiveType string) bool {
+	if primitiveType == "address" ||
+		primitiveType == "address[]" ||
+		primitiveType == "bool" ||
+		primitiveType == "bool[]" ||
+		primitiveType == "string" ||
+		primitiveType == "string[]" {
+		return true
+	}
+	if primitiveType == "bytes" ||
+		primitiveType == "bytes[]" ||
+		primitiveType == "bytes1" ||
+		primitiveType == "bytes1[]" ||
+		primitiveType == "bytes2" ||
+		primitiveType == "bytes2[]" ||
+		primitiveType == "bytes3" ||
+		primitiveType == "bytes3[]" ||
+		primitiveType == "bytes4" ||
+		primitiveType == "bytes4[]" ||
+		primitiveType == "bytes5" ||
+		primitiveType == "bytes5[]" ||
+		primitiveType == "bytes6" ||
+		primitiveType == "bytes6[]" ||
+		primitiveType == "bytes7" ||
+		primitiveType == "bytes7[]" ||
+		primitiveType == "bytes8" ||
+		primitiveType == "bytes8[]" ||
+		primitiveType == "bytes9" ||
+		primitiveType == "bytes9[]" ||
+		primitiveType == "bytes10" ||
+		primitiveType == "bytes10[]" ||
+		primitiveType == "bytes11" ||
+		primitiveType == "bytes11[]" ||
+		primitiveType == "bytes12" ||
+		primitiveType == "bytes12[]" ||
+		primitiveType == "bytes13" ||
+		primitiveType == "bytes13[]" ||
+		primitiveType == "bytes14" ||
+		primitiveType == "bytes14[]" ||
+		primitiveType == "bytes15" ||
+		primitiveType == "bytes15[]" ||
+		primitiveType == "bytes16" ||
+		primitiveType == "bytes16[]" ||
+		primitiveType == "bytes17" ||
+		primitiveType == "bytes17[]" ||
+		primitiveType == "bytes18" ||
+		primitiveType == "bytes18[]" ||
+		primitiveType == "bytes19" ||
+		primitiveType == "bytes19[]" ||
+		primitiveType == "bytes20" ||
+		primitiveType == "bytes20[]" ||
+		primitiveType == "bytes21" ||
+		primitiveType == "bytes21[]" ||
+		primitiveType == "bytes22" ||
+		primitiveType == "bytes22[]" ||
+		primitiveType == "bytes23" ||
+		primitiveType == "bytes23[]" ||
+		primitiveType == "bytes24" ||
+		primitiveType == "bytes24[]" ||
+		primitiveType == "bytes25" ||
+		primitiveType == "bytes25[]" ||
+		primitiveType == "bytes26" ||
+		primitiveType == "bytes26[]" ||
+		primitiveType == "bytes27" ||
+		primitiveType == "bytes27[]" ||
+		primitiveType == "bytes28" ||
+		primitiveType == "bytes28[]" ||
+		primitiveType == "bytes29" ||
+		primitiveType == "bytes29[]" ||
+		primitiveType == "bytes30" ||
+		primitiveType == "bytes30[]" ||
+		primitiveType == "bytes31" ||
+		primitiveType == "bytes31[]" {
+		return true
+	}
+	if primitiveType == "int" ||
+		primitiveType == "int[]" ||
+		primitiveType == "int8" ||
+		primitiveType == "int8[]" ||
+		primitiveType == "int16" ||
+		primitiveType == "int16[]" ||
+		primitiveType == "int32" ||
+		primitiveType == "int32[]" ||
+		primitiveType == "int64" ||
+		primitiveType == "int64[]" ||
+		primitiveType == "int128" ||
+		primitiveType == "int128[]" ||
+		primitiveType == "int256" ||
+		primitiveType == "int256[]" {
+		return true
+	}
+	if primitiveType == "uint" ||
+		primitiveType == "uint[]" ||
+		primitiveType == "uint8" ||
+		primitiveType == "uint8[]" ||
+		primitiveType == "uint16" ||
+		primitiveType == "uint16[]" ||
+		primitiveType == "uint32" ||
+		primitiveType == "uint32[]" ||
+		primitiveType == "uint64" ||
+		primitiveType == "uint64[]" ||
+		primitiveType == "uint128" ||
+		primitiveType == "uint128[]" ||
+		primitiveType == "uint256" ||
+		primitiveType == "uint256[]" {
+		return true
+	}
+	return false
+}
+
 // Validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
-func (domain *TypedDataDomain) Validate() error {
+func (domain *TypedDataDomain) validate() error {
 	if domain.ChainId == big.NewInt(0) {
 		return errors.New("chainId must be specified according to EIP-155")
 	}

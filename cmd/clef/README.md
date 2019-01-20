@@ -383,8 +383,8 @@ Response
 
 ```json
 {
-  "jsonrpc": "2.0",
   "id": 3,
+  "jsonrpc": "2.0",
   "result": "0x5b6693f153b48ec1c706ba4169960386dbaa6903e249cc79a8e6ddc434451d417e1e57327872c7f538beeb323c300afa9999a3d4a5de6caf3be0d5ef832b67ef1c"
 }
 ```
@@ -480,8 +480,8 @@ Response
 
 ```json
 {
-    "jsonrpc": "2.0",
     "id": 1,
+    "jsonrpc": "2.0",
     "result": "0x4355c47d63924e8a72e509b65029052eb6c299d53a04e167c5775fd466751c9d07299936d304c153f6443dfa05f40ff007d72911b6f72307f996231605b915621c"
 }
 ```
