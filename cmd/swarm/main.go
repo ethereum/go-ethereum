@@ -275,7 +275,7 @@ func bzzd(ctx *cli.Context) error {
 	utils.SetNodeConfig(ctx, &cfg)
 
 	//always disable discovery from p2p package - swarm discovery is done with the `hive` protocol
-	cfg.NoDiscovery = true
+	cfg.P2P.NoDiscovery = true
 
 	stack, err := node.New(&cfg)
 	if err != nil {
