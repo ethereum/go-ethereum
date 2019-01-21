@@ -49,7 +49,7 @@ import (
 
 const (
 	inmemorySnapshots      = 128 // Number of recent vote snapshots to keep in memory
-	blockSignersCacheLimit = 36000
+	blockSignersCacheLimit = 9000
 	M2ByteLength           = 4
 )
 
