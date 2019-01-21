@@ -24,7 +24,7 @@ or import). Without it you are not able to unlock your account.
 Note that exporting your key in unencrypted format is NOT supported.
 
 Keys are stored under `<DATADIR>/keystore`. Make sure you backup your keys regularly! See
-[DATADIR backup & restore](Backup-&-restore)
+[DATADIR backup & restore](Backup--restore)
 for more information. If a custom datadir and keystore option are given the keystore
 option takes preference over the datadir option.
 

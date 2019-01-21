@@ -11,7 +11,7 @@ Main entry points:
 * [Command Line Options](/docs/Command-Line-Options)
 * [JavaScript Console](/docs/JavaScript-Console)
 * [Private Network](/docs/Private-network)
-* [Developers' Guide](/docs/Developers'-Guide)
+* [Developers' Guide](/docs/Developers-Guide)
 * [Whisper v6](/docs/Whisper)
 
 Sidebar lists all pages.

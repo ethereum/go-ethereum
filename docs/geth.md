@@ -17,7 +17,7 @@ Supported Platforms are Linux, Mac Os and Windows.
 We support two types of installation: binary or scripted install for users. 
 See [Install instructions](Building-Ethereum) for binary and scripted installs.
 
-Developers and community enthusiast are advised to read the [Developers' Guide](Developers%27-Guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
+Developers and community enthusiast are advised to read the [Developers' Guide](Developers-Guide), which contains detailed instructions for manual build from source (on any platform) as well as detailed tips on testing, monitoring, contributing, debugging and submitting pull requests on github.
 
 ## Interfaces
 
@@ -28,7 +28,7 @@ Developers and community enthusiast are advised to read the [Developers' Guide](
 ## Basic Use Case Documentation
 
 * [Managing accounts](Managing-your-accounts)
-* [Mining](mining)
+* [Mining](Mining)
 
 **Note** buying and selling ether through exchanges is not discussed here. 
 
