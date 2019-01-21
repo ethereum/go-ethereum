@@ -5,6 +5,8 @@ exclude:
   - Gemfile.lock
   - .gitignore
 
+google_analytics: UA-131485733-1
+
 defaults:
   -
     scope:
