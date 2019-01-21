@@ -154,7 +154,6 @@ func init() {
 		utils.BootnodesFlag,
 		utils.KeyStoreDirFlag,
 		utils.ListenPortFlag,
-		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
@@ -274,6 +273,10 @@ func bzzd(ctx *cli.Context) error {
 	setSwarmBootstrapNodes(ctx, &cfg)
 	//setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
+
+	//always disable discovery from p2p package - swarm discovery is done with the `hive` protocol
+	cfg.NoDiscovery = true
+
 	stack, err := node.New(&cfg)
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
