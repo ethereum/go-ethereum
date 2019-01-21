@@ -378,7 +378,7 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 		log.Warn("Failed transaction send attempt", "from", args.From, "to", args.To, "value", args.Value.ToInt(), "err", err)
 		return common.Hash{}, err
 	}
-	return submitTransaction(ctx, s.b, signed)
+	return SubmitTransaction(ctx, s.b, signed)
 }
 
 // SignTransaction will create a transaction from the given arguments and
@@ -675,41 +675,54 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 
 // CallArgs represents the arguments for a call.
 type CallArgs struct {
-	From     common.Address  `json:"from"`
+	From     *common.Address `json:"from"`
 	To       *common.Address `json:"to"`
-	Gas      hexutil.Uint64  `json:"gas"`
-	GasPrice hexutil.Big     `json:"gasPrice"`
-	Value    hexutil.Big     `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
+	Gas      *hexutil.Uint64 `json:"gas"`
+	GasPrice *hexutil.Big    `json:"gasPrice"`
+	Value    *hexutil.Big    `json:"value"`
+	Data     *hexutil.Bytes  `json:"data"`
 }
 
-func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber, timeout time.Duration) ([]byte, uint64, bool, error) {
+func DoCall(ctx context.Context, b Backend, args CallArgs, blockNr rpc.BlockNumber, vmCfg vm.Config, timeout time.Duration) ([]byte, uint64, bool, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
-	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	state, header, err := b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, 0, false, err
 	}
 	// Set sender address or use a default if none specified
-	addr := args.From
-	if addr == (common.Address{}) {
-		if wallets := s.b.AccountManager().Wallets(); len(wallets) > 0 {
+	var addr common.Address
+	if args.From == nil {
+		if wallets := b.AccountManager().Wallets(); len(wallets) > 0 {
 			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 				addr = accounts[0].Address
 			}
 		}
+	} else {
+		addr = *args.From
 	}
 	// Set default gas & gas price if none were set
-	gas, gasPrice := uint64(args.Gas), args.GasPrice.ToInt()
-	if gas == 0 {
-		gas = math.MaxUint64 / 2
+	gas := uint64(math.MaxUint64 / 2)
+	if args.Gas != nil {
+		gas = uint64(*args.Gas)
 	}
-	if gasPrice.Sign() == 0 {
-		gasPrice = new(big.Int).SetUint64(defaultGasPrice)
+	gasPrice := new(big.Int).SetUint64(defaultGasPrice)
+	if args.GasPrice != nil {
+		gasPrice = args.GasPrice.ToInt()
+	}
+
+	value := new(big.Int)
+	if args.Value != nil {
+		value = args.Value.ToInt()
+	}
+
+	var data []byte
+	if args.Data != nil {
+		data = []byte(*args.Data)
 	}
 
 	// Create new call message
-	msg := types.NewMessage(addr, args.To, 0, args.Value.ToInt(), gas, gasPrice, args.Data, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, false)
 
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
@@ -724,7 +737,7 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	defer cancel()
 
 	// Get a new instance of the EVM.
-	evm, vmError, err := s.b.GetEVM(ctx, msg, state, header)
+	evm, vmError, err := b.GetEVM(ctx, msg, state, header)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -748,24 +761,22 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 // Call executes the given transaction on the state for the given block number.
 // It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
-	result, _, _, err := s.doCall(ctx, args, blockNr, 5*time.Second)
+	result, _, _, err := DoCall(ctx, s.b, args, blockNr, vm.Config{}, 5*time.Second)
 	return (hexutil.Bytes)(result), err
 }
 
-// EstimateGas returns an estimate of the amount of gas needed to execute the
-// given transaction against the current pending block.
-func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args CallArgs, blockNr rpc.BlockNumber) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1
 		hi  uint64
 		cap uint64
 	)
-	if uint64(args.Gas) >= params.TxGas {
-		hi = uint64(args.Gas)
+	if args.Gas != nil && uint64(*args.Gas) >= params.TxGas {
+		hi = uint64(*args.Gas)
 	} else {
-		// Retrieve the current pending block to act as the gas ceiling
-		block, err := s.b.BlockByNumber(ctx, rpc.PendingBlockNumber)
+		// Retrieve the block to act as the gas ceiling
+		block, err := b.BlockByNumber(ctx, blockNr)
 		if err != nil {
 			return 0, err
 		}
@@ -775,9 +786,9 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
-		args.Gas = hexutil.Uint64(gas)
+		args.Gas = (*hexutil.Uint64)(&gas)
 
-		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, 0)
+		_, _, failed, err := DoCall(ctx, b, args, rpc.PendingBlockNumber, vm.Config{}, 0)
 		if err != nil || failed {
 			return false
 		}
@@ -799,6 +810,12 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (h
 		}
 	}
 	return hexutil.Uint64(hi), nil
+}
+
+// EstimateGas returns an estimate of the amount of gas needed to execute the
+// given transaction against the current pending block.
+func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
+	return DoEstimateGas(ctx, s.b, args, rpc.PendingBlockNumber)
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
@@ -825,7 +842,7 @@ type StructLogRes struct {
 	Storage *map[string]string `json:"storage,omitempty"`
 }
 
-// formatLogs formats EVM returned structured logs for json output
+// FormatLogs formats EVM returned structured logs for json output
 func FormatLogs(logs []vm.StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
@@ -1256,8 +1273,8 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
 }
 
-// submitTransaction is a helper function that submits tx to txPool and logs a message.
-func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
+// SubmitTransaction is a helper function that submits tx to txPool and logs a message.
+func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	if err := b.SendTx(ctx, tx); err != nil {
 		return common.Hash{}, err
 	}
@@ -1309,7 +1326,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return submitTransaction(ctx, s.b, signed)
+	return SubmitTransaction(ctx, s.b, signed)
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
@@ -1319,7 +1336,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
 		return common.Hash{}, err
 	}
-	return submitTransaction(ctx, s.b, tx)
+	return SubmitTransaction(ctx, s.b, tx)
 }
 
 // Sign calculates an ECDSA signature for:

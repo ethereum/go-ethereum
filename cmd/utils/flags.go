@@ -435,6 +435,30 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
+	GraphQLEnabledFlag = cli.BoolFlag{
+		Name:  "graphql",
+		Usage: "Enable the GraphQL server",
+	}
+	GraphQLListenAddrFlag = cli.StringFlag{
+		Name:  "graphql.addr",
+		Usage: "GraphQL server listening interface",
+		Value: node.DefaultGraphQLHost,
+	}
+	GraphQLPortFlag = cli.IntFlag{
+		Name:  "graphql.port",
+		Usage: "GraphQL server listening port",
+		Value: node.DefaultGraphQLPort,
+	}
+	GraphQLCORSDomainFlag = cli.StringFlag{
+		Name:  "graphql.rpccorsdomain",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value: "",
+	}
+	GraphQLVirtualHostsFlag = cli.StringFlag{
+		Name:  "graphql.rpcvhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
@@ -796,6 +820,24 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+// setGraphQL creates the GraphQL listener interface string from the set
+// command line flags, returning empty if the GraphQL endpoint is disabled.
+func setGraphQL(ctx *cli.Context, cfg *node.Config) {
+	if ctx.GlobalBool(GraphQLEnabledFlag.Name) && cfg.GraphQLHost == "" {
+		cfg.GraphQLHost = "127.0.0.1"
+		if ctx.GlobalIsSet(GraphQLListenAddrFlag.Name) {
+			cfg.GraphQLHost = ctx.GlobalString(GraphQLListenAddrFlag.Name)
+		}
+	}
+	cfg.GraphQLPort = ctx.GlobalInt(GraphQLPortFlag.Name)
+	if ctx.GlobalIsSet(GraphQLCORSDomainFlag.Name) {
+		cfg.GraphQLCors = splitAndTrim(ctx.GlobalString(GraphQLCORSDomainFlag.Name))
+	}
+	if ctx.GlobalIsSet(GraphQLVirtualHostsFlag.Name) {
+		cfg.GraphQLVirtualHosts = splitAndTrim(ctx.GlobalString(GraphQLVirtualHostsFlag.Name))
+	}
+}
+
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setWS(ctx *cli.Context, cfg *node.Config) {
@@ -978,6 +1020,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
+	setGraphQL(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 
