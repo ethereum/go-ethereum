@@ -155,31 +155,19 @@ func (h *Hive) Run(p *BzzPeer) error {
 	defer h.untrackPeer(p)
 
 	dp := NewPeer(p, h.Kademlia)
-
-	hasCap := func(capName string) (yes bool) {
-		for _, c := range p.Caps() {
-			if c.Name == capName {
-				return true
-			}
+	depth, changed := h.On(dp)
+	// if we want discovery, advertise change of depth
+	if h.Discovery {
+		if changed {
+			// if depth changed, send to all peers
+			NotifyDepth(depth, h.Kademlia)
+		} else {
+			// otherwise just send depth to new peer
+			dp.NotifyDepth(depth)
 		}
-		return false
+		NotifyPeer(p.BzzAddr, h.Kademlia)
 	}
-
-	if hasCap("stream") && hasCap("pss") {
-		depth, changed := h.On(dp)
-		// if we want discovery, advertise change of depth
-		if h.Discovery {
-			if changed {
-				// if depth changed, send to all peers
-				NotifyDepth(depth, h.Kademlia)
-			} else {
-				// otherwise just send depth to new peer
-				dp.NotifyDepth(depth)
-			}
-			NotifyPeer(p.BzzAddr, h.Kademlia)
-		}
-		defer h.Off(dp)
-	}
+	defer h.Off(dp)
 	return dp.Run(dp.HandleMsg)
 }
 
