@@ -259,6 +259,11 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 				//log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
 				return true
 			}
+			// nodes that do not provide stream protocol
+			// should not be requested, e.g. bootnodes
+			if !hasStreamCap(sp.Peer.Peer) {
+				return true
+			}
 			spID = &id
 			return false
 		})
