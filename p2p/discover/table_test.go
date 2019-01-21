@@ -272,7 +272,9 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 		N:      rand.Intn(bucketSize),
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
-		n := enode.SignNull(new(enr.Record), id)
+		r := new(enr.Record)
+		r.Set(enr.IP(genIP(rand)))
+		n := enode.SignNull(r, id)
 		t.All = append(t.All, wrapNode(n))
 	}
 	return reflect.ValueOf(t)
@@ -289,7 +291,7 @@ func TestTable_Lookup(t *testing.T) {
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
 	seedKey, _ := decodePubkey(lookupTestnet.dists[256][0])
-	seed := wrapNode(enode.NewV4(seedKey, net.IP{}, 0, 256))
+	seed := wrapNode(enode.NewV4(seedKey, net.IP{127, 0, 0, 1}, 0, 256))
 	tab.stuff([]*node{seed})
 
 	results := tab.lookup(lookupTestnet.target, true)
@@ -576,6 +578,12 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))
 	}
 	return v.Interface()
+}
+
+func genIP(rand *rand.Rand) net.IP {
+	ip := make(net.IP, 4)
+	rand.Read(ip)
+	return ip
 }
 
 func quickcfg() *quick.Config {

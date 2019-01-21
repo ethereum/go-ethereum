@@ -33,7 +33,8 @@ import (
 // The fields of Node may not be modified.
 type node struct {
 	enode.Node
-	addedAt time.Time // time when the node was added to the table
+	addedAt        time.Time // time when the node was added to the table
+	livenessChecks int       // how often liveness was checked
 }
 
 type encPubkey [64]byte

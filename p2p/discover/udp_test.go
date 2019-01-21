@@ -166,18 +166,18 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		// with ptype <= 128 will not get a reply and should time out.
 		// For all other requests, a reply is scheduled to arrive
 		// within the timeout window.
-		p := &pending{
+		p := &replyMatcher{
 			ptype:    byte(rand.Intn(255)),
-			callback: func(interface{}) bool { return true },
+			callback: func(interface{}) (bool, bool) { return true, true },
 		}
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
-			test.udp.addpending <- p
+			test.udp.addReplyMatcher <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
-			test.udp.addpending <- p
+			test.udp.addReplyMatcher <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
@@ -252,7 +252,7 @@ func TestUDP_findnode(t *testing.T) {
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
 	remoteID := encodePubkey(&test.remotekey.PublicKey).id()
-	test.table.db.UpdateLastPongReceived(remoteID, time.Now())
+	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.IP, time.Now())
 
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
@@ -279,7 +279,7 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	defer test.table.Close()
 
 	rid := enode.PubkeyToIDV4(&test.remotekey.PublicKey)
-	test.table.db.UpdateLastPingReceived(rid, time.Now())
+	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.IP, time.Now())
 
 	// queue a pending findnode request
 	resultc, errc := make(chan []*node), make(chan error)
@@ -327,6 +327,14 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Error("findnode did not return within 5 seconds")
 	}
+}
+
+func TestUDP_pingMatch(t *testing.T) {
+	test := newUDPTest(t)
+	defer test.table.Close()
+
+	test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
+	test.packetIn(errUnsolicitedReply, pongPacket, &pong{To: testLocalAnnounced, Expiration: futureExp})
 }
 
 func TestUDP_successfulPing(t *testing.T) {
