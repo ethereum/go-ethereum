@@ -471,7 +471,7 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 func (p *Pss) getHandlers(topic Topic) (ret []*handler) {
 	p.handlersMu.RLock()
 	defer p.handlersMu.RUnlock()
-	for k, _ := range p.handlers[topic] {
+	for k := range p.handlers[topic] {
 		ret = append(ret, k)
 	}
 	return ret
