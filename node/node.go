@@ -147,6 +147,14 @@ func (n *Node) Start() error {
 		return err
 	}
 
+	if n.accman == nil {
+		var err error
+		n.accman, n.ephemeralKeystore, err = makeAccountManager(n.config)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
 	n.serverConfig = n.config.P2P
@@ -434,6 +442,13 @@ func (n *Node) Stop() error {
 
 	// unblock n.Wait
 	close(n.stop)
+
+	if n.accman != nil {
+		if err := n.accman.Close(); err != nil {
+			return err
+		}
+		n.accman = nil
+	}
 
 	// Remove the keystore if it was created ephemerally.
 	var keystoreErr error
