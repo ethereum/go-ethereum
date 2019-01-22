@@ -519,7 +519,12 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		}
 		send = send.add("flowControl/BL", server.defParams.BufLimit)
 		send = send.add("flowControl/MRR", server.defParams.MinRecharge)
-		costList := server.costTracker.makeCostList()
+		var costList RequestCostList
+		if server.costTracker != nil {
+			costList = server.costTracker.makeCostList()
+		} else {
+			costList = testRCL()
+		}
 		send = send.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode()
 		p.fcParams = server.defParams

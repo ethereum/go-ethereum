@@ -381,9 +381,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if reply != nil {
 			replySize = reply.size()
 		}
-		realCost := pm.server.costTracker.realCost(servingTime, msg.Size, replySize)
+		var realCost uint64
+		if pm.server.costTracker != nil {
+			realCost = pm.server.costTracker.realCost(servingTime, msg.Size, replySize)
+			pm.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
+		} else {
+			realCost = maxCost
+		}
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
-		pm.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
 		if reply != nil {
 			p.queueSend(func() {
 				if err := reply.send(bv); err != nil {
