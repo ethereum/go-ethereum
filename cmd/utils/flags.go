@@ -112,6 +112,12 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// Tomo flags.
+	RollbackFlag = cli.StringFlag{
+		Name:  "rollback",
+		Usage: "Rollback chain at hash",
+		Value: "",
+	}
 	// General settings
 	AnnounceTxsFlag = cli.BoolFlag{
 		Name:  "announce-txs",

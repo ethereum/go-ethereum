@@ -17,11 +17,11 @@ package validator
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
-	"math/rand"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"

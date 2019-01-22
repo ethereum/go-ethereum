@@ -157,6 +157,11 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		common.IsTestnet = true
 	}
 
+	// Check rollback hash exist.
+	if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
+		common.RollbackHash = common.HexToHash(rollbackHash)
+	}
+
 	// read passwords from environment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
