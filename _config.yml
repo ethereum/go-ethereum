@@ -6,6 +6,7 @@ exclude:
   - .gitignore
 
 google_analytics: UA-131485733-1
+favicon: /static/images/favicon.png
 
 defaults:
   -

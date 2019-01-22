@@ -1,3 +1,17 @@
+---
+common-css:
+- /static/styles/bootstrap.min.css
+- /static/styles/flatly.min.css
+- /static/styles/font-awesome.min.css
+- /static/styles/custom/common.css
+common-js:
+- /static/scripts/jquery.min.js
+- /static/scripts/bootstrap.min.js
+- /static/scripts/moment.min.js
+- /static/scripts/marked.min.js
+- /static/scripts/emojify.min.js
+- /static/scripts/custom/polyfills.js
+---
 <!DOCTYPE html>
 <html lang="en">
   {% include head.html %}
@@ -12,14 +26,15 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/">Go Ethereum</a>
+          <a class="navbar-brand" href="{{ site.url }}">Go Ethereum</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
-            <li><a href="/docs/Installing-Geth">Install</a></li>
-            <li><a href="/downloads">Downloads</a></li>
-            <li><a href="/docs">Documentation</a></li>
-            <!--<li><a href="/guide/">Guide</a></li>-->
+              {% for link in site.data.navbar %}
+              <li>
+                  <a href="{{ link[1] | prepend: site.baseurl | replace: '//', '/' }}">{{ link[0] }}</a>
+              </li>
+              {% endfor %}
           </ul>
         </div>
       </div>

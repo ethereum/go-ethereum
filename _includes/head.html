@@ -19,28 +19,29 @@
     <!-- End Google Analytics -->
     {% endif %}
 
-    <link rel="icon" type="image/png" href="../static/images/favicon.png" />
+    <link rel="icon" type="image/png" href="{{ site.favicon | prepend: site.baseurl | replace: '//', '/'}}" />
+    {% if layout.common-css %}
+        {% for css in layout.common-css %}
+    <link rel="stylesheet" href="{{ css | prepend: site.baseurl | replace: '//', '/' }}" />
+        {% endfor %}
+    {% endif %}
 
-    <link href="../static/styles/bootstrap.min.css" rel="stylesheet" />
-    <link href="../static/styles/flatly.min.css" rel="stylesheet" />
-    <link href="../static/styles/font-awesome.min.css" rel="stylesheet" />
-    <link href="../static/styles/custom/common.css" rel="stylesheet" />
     {% if page.css %}
         {% for css in page.css %}
-    <link href="{{ css }}" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ css | prepend: site.baseurl | replace: '//', '/' }}" />
         {% endfor %}
     {% endif %}
 
-    <script src="../static/scripts/jquery.min.js"></script>
-    <script src="../static/scripts/bootstrap.min.js"></script>
-    <script src="../static/scripts/moment.min.js"></script>
-    <script src="../static/scripts/marked.min.js"></script>
-    <script src="../static/scripts/emojify.min.js"></script>
+    {% if layout.common-js %}
+        {% for js in layout.common-js %}
+    <script src="{{ js | prepend: site.baseurl | replace: '//', '/' }}"></script>
+        {% endfor %}
+    {% endif %}
+  
     {% if page.js %}
         {% for js in page.js %}
-    <script src="{{ js }}"></script>
+    <script src="{{ js | prepend: site.baseurl | replace: '//', '/' }}"></script>
         {% endfor %}
     {% endif %}
 
-    <script src="../static/scripts/custom/polyfills.js"></script>
 </head>
