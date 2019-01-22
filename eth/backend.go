@@ -274,6 +274,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
+				goodSigners := make(map[common.Address]*big.Int)
 				if len(penSigners) > 0 {
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
@@ -282,23 +283,31 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 							bhash := bheader.Hash()
 							block := chain.GetBlock(bhash, i)
 							if len(penSigners) > 0 {
-								signedMasternodes, err := contracts.GetSignersFromContract(canonicalState, block)
+								signer, err := c.RecoverSigner(block.Header())
 								if err != nil {
 									return nil, err
 								}
-								if len(signedMasternodes) > 0 {
-									// Check signer signed?
-									for _, signed := range signedMasternodes {
-										for j, addr := range penSigners {
-											if signed == addr {
-												// Remove it from dupSigners.
-												penSigners = append(penSigners[:j], penSigners[j+1:]...)
-											}
-										}
+								for _, addr := range penSigners {
+									if signer == addr {
+										// Remove it from dupSigners.
+										goodSigners[signer] = goodSigners[signer].Add(goodSigners[signer], big.NewInt(1))
 									}
 								}
 							} else {
 								break
+							}
+						}
+
+						if len(goodSigners) > 0 {
+							for signer, totalSign := range goodSigners {
+								if totalSign.Cmp(big.NewInt(4)) >= 0 {
+									for j, addr := range penSigners {
+										if signer == addr {
+											// Remove it from dupSigners.
+											penSigners = append(penSigners[:j], penSigners[j+1:]...)
+										}
+									}
+								}
 							}
 						}
 					}
