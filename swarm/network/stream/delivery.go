@@ -261,7 +261,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 			}
 			// nodes that do not provide stream protocol
 			// should not be requested, e.g. bootnodes
-			if !hasStreamCap(sp.Peer.Peer) {
+			if !p.HasCap("stream") {
 				return true
 			}
 			spID = &id

@@ -518,7 +518,7 @@ func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enod
 	kad.EachConn(nil, 255, func(p *network.Peer, po int) bool {
 		// nodes that do not provide stream protocol
 		// should not be subscribed, e.g. bootnodes
-		if !hasStreamCap(p.Peer.Peer) {
+		if !p.HasCap("stream") {
 			return true
 		}
 		//if the peer's bin is shallower than the kademlia depth,
@@ -928,14 +928,4 @@ func (api *API) SubscribeStream(peerId enode.ID, s Stream, history *Range, prior
 
 func (api *API) UnsubscribeStream(peerId enode.ID, s Stream) error {
 	return api.streamer.Unsubscribe(peerId, s)
-}
-
-// hasStreamCap check if p2p.Peer the "stream" capability.
-func hasStreamCap(p *p2p.Peer) (yes bool) {
-	for _, c := range p.Caps() {
-		if c.Name == "stream" {
-			return true
-		}
-	}
-	return false
 }
