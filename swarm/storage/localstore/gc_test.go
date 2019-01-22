@@ -294,18 +294,6 @@ func TestDB_gcSize(t *testing.T) {
 	t.Run("gc uncounted hashes index count", newItemsCountTest(db.gcUncountedHashesIndex, 0))
 }
 
-func testStoredGCSize(t *testing.T, db *DB, want uint64) {
-	t.Helper()
-
-	got, err := db.storedGCSize.Get()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != want {
-		t.Errorf("got stored gc size %v, want %v", got, want)
-	}
-}
-
 // setTestHookCollectGarbage sets testHookCollectGarbage and
 // returns a function that will reset it to the
 // value before the change.

@@ -33,8 +33,6 @@ var (
 	// ErrInvalidMode is retuned when an unknown Mode
 	// is provided to the function.
 	ErrInvalidMode = errors.New("invalid mode")
-	// ErrDBClosed is returned when database is closed.
-	ErrDBClosed = errors.New("db closed")
 	// ErrAddressLockTimeout is returned when the same chunk
 	// is updated in parallel and one of the updates
 	// takes longer then the configured timeout duration.
