@@ -118,7 +118,7 @@ You are ready to compile solidity code in the `geth` JS console using [`eth.comp
 }
 ```
 
-The compiler is also available via [RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) and therefore via [web3.js](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethcompilesolidity) to any in-browser Ðapp connecting to `geth` via RPC.
+The compiler is also available via [RPC](https://github.com/ethereum/wiki/JSON-RPC) and therefore via [web3.js](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethcompilesolidity) to any in-browser Ðapp connecting to `geth` via RPC.
 
 The following example shows how you interface `geth` via JSON-RPC to use the compiler.
 

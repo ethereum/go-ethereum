@@ -25,7 +25,7 @@ Developers and community enthusiast are advised to read the [Developers' Guide](
 ## Interfaces
 
 * Javascript Console: `geth` can be launched with an interactive console, that provides a javascript runtime environment exposing a javascript API to interact with your node. [Javascript Console API](JavaScript-Console) includes the `web3` javascript Ðapp API as well as an additional admin API. 
-* JSON-RPC server: `geth` can be launched with a json-rpc server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/wiki/JSON-RPC)
+* JSON-RPC server: `geth` can be launched with a json-rpc server that exposes the [JSON-RPC API](https://github.com/ethereum/wiki/JSON-RPC)
 * [Command line options](Command-Line-Options) documents command line parameters as well as subcommands.
 
 ## Basic Use Case Documentation

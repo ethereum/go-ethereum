@@ -72,6 +72,6 @@ In addition to the full functionality of JS (as per ECMA5), the ethereum JSRE is
 
 # Management APIs
 
-Beside the official [DApp API](https://github.com/ethereum/wiki/wiki/JSON-RPC) interface the go ethereum node has support for additional management API's. These API's are offered using [JSON-RPC](http://www.jsonrpc.org/specification) and follow the same conventions as used in the DApp API. The go ethereum package comes with a console client which has support for all additional API's.
+Beside the official [DApp API](https://github.com/ethereum/wiki/JSON-RPC) interface the go ethereum node has support for additional management API's. These API's are offered using [JSON-RPC](http://www.jsonrpc.org/specification) and follow the same conventions as used in the DApp API. The go ethereum package comes with a console client which has support for all additional API's.
 
 [The management API has its own wiki page](Management-APIs).

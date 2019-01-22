@@ -65,8 +65,8 @@ The Mist UI must support:
 
 The RPC API must support:
 
-1. The list of accounts is exposed through the eth_accounts API: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_accounts
-2. Using any of the available accounts as from/sender with the eth_transact API: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_transact  (NOTE: the current API definition on that wiki page does not include a from/sender field!)
+1. The list of accounts is exposed through the eth_accounts API: https://github.com/ethereum/wiki/JSON-RPC#eth_accounts
+2. Using any of the available accounts as from/sender with the eth_transact API: https://github.com/ethereum/wiki/JSON-RPC#eth_transact  (NOTE: the current API definition on that wiki page does not include a from/sender field!)
 
 
 ## Wallet DAPP

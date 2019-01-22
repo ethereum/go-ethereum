@@ -1,1 +1,1 @@
-See [Installing Geth](/docs/Installing-Geth).
+See [Installing Geth](docs/Installing-Geth).

@@ -10,7 +10,7 @@ Interface Documentation:
   - Command Line Options: /docs/Command-Line-Options
   - JavaScript Console: /docs/JavaScript-Console
   - Management API: /docs/Management-APIs
-  - JSON-RPC server: https://github.com/ethereum/wiki/wiki/JSON-RPC
+  - JSON-RPC server: https://github.com/ethereum/wiki/JSON-RPC
 Issues and support:
   - FAQ: /docs/FAQ
   - Reporting issues: /docs/geth#reporting
