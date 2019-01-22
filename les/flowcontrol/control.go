@@ -82,6 +82,10 @@ func NewClientNode(cm *ClientManager, params ServerParams) *ClientNode {
 	return node
 }
 
+func (node *ClientNode) Disconnect() {
+	node.cm.disconnect(node)
+}
+
 func (node *ClientNode) update(now mclock.AbsTime) {
 	for len(node.updateSchedule) > 0 && node.updateSchedule[0].time <= now {
 		node.recalcBV(node.updateSchedule[0].time)

@@ -21,7 +21,6 @@ import (
 	"math/big"
 	"math/rand"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -526,6 +525,7 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	}
 	serverPeer.fcParams = flowcontrol.ServerParams{BufLimit: 1, MinRecharge: 1}
 	serverPeer.fcClient = flowcontrol.NewClientNode(pm.server.fcManager, serverPeer.fcParams)
+	defer serverPeer.fcClient.Disconnect()
 
 	if err := setup.req.init(pm, count); err != nil {
 		return err
@@ -583,50 +583,4 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	serverPipe.Close()
 	//serverPeer.fcClient.Remove(pm.server.fcManager)
 	return nil
-}
-
-// requestCostStats is a statistics tool that compares the distribution of actual
-// request serving costs during normal operation to the costs estimated by the benchmark
-type requestCostStats struct {
-	costs requestCostTable
-	stats map[uint64][]uint64
-}
-
-// newCostStats creates a new requestCostStats
-func newCostStats(table requestCostTable) *requestCostStats {
-	stats := make(map[uint64][]uint64)
-	for code, _ := range table {
-		stats[code] = make([]uint64, 10)
-	}
-	return &requestCostStats{
-		costs: table,
-		stats: stats,
-	}
-}
-
-// update adds a new data point to the statistics
-func (s *requestCostStats) update(msgCode, reqCnt, cost uint64) {
-	if s == nil {
-		return // not initialized yet during benchmark
-	}
-	c := s.costs[msgCode]
-	est := c.baseCost + reqCnt*c.reqCost
-	cost <<= 4
-	l := 0
-	for l < 9 && cost > est {
-		l++
-		cost >>= 1
-	}
-	ptr := &s.stats[msgCode][l]
-	atomic.AddUint64(ptr, 1)
-}
-
-// printStats prints the distribution of real request cost relative to the estimates
-func (s *requestCostStats) printStats() {
-	if s.stats == nil {
-		return
-	}
-	for code, arr := range s.stats {
-		log.Info("cost stats", "code", code, "1/16", arr[0], "1/8", arr[1], "1/4", arr[2], "1/2", arr[3], "1", arr[4], "2", arr[5], "4", arr[6], "8", arr[7], "16", arr[8], ">16", arr[9])
-	}
 }

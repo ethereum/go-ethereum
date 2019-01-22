@@ -43,7 +43,7 @@ func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
 
 // TotalCapacity queries total available capacity for all clients
 func (api *PrivateLesServerAPI) TotalCapacity() hexutil.Uint64 {
-	return hexutil.Uint64(api.server.totalCapacity)
+	return hexutil.Uint64(api.server.priorityClientPool.totalCapacity())
 }
 
 // MinimumCapacity queries minimum assignable capacity for a single client
@@ -193,6 +193,13 @@ func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
 	if v.child != nil {
 		v.child.setLimits(v.maxPeers-v.priorityCount, v.totalCap-v.totalConnectedCap)
 	}
+}
+
+func (v *priorityClientPool) totalCapacity() uint64 {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	return v.totalCap
 }
 
 func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {

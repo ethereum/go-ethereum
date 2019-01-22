@@ -19,7 +19,9 @@ package flowcontrol
 
 import (
 	"fmt"
+	"math"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -45,6 +47,12 @@ type cmNodeFields struct {
 // values and perfect precision is required.
 const FixedPointMultiplier = 1000000
 
+var (
+	capFactorDropTC         = time.Second * 10
+	capFactorRaiseTC        = time.Hour
+	capFactorRaiseThreshold = 0.75
+)
+
 // ClientManager controls the capacity assigned to the clients of a server.
 // Since ServerParams guarantee a safe lower estimate for processable requests
 // even in case of all clients being active, ClientManager calculates a
@@ -53,11 +61,14 @@ const FixedPointMultiplier = 1000000
 type ClientManager struct {
 	clock     mclock.Clock
 	lock      sync.Mutex
-	nodes     map[*ClientNode]struct{}
 	enabledCh chan struct{}
 
-	curve       PieceWiseLinear
-	sumRecharge uint64
+	curve                                      PieceWiseLinear
+	sumRecharge, totalRecharge, totalConnected uint64
+	capLogFactor, totalCapacity                float64
+	capLastUpdate                              mclock.AbsTime
+	totalCapacityCh                            chan uint64
+
 	// recharge integrator is increasing in each moment with a rate of
 	// (totalRecharge / sumRecharge)*FixedPointMultiplier or 0 if sumRecharge==0
 	rcLastUpdate   mclock.AbsTime // last time the recharge integrator was updated
@@ -93,10 +104,12 @@ type ClientManager struct {
 // any moment.
 func NewClientManager(curve PieceWiseLinear, clock mclock.Clock) *ClientManager {
 	cm := &ClientManager{
-		clock:   clock,
-		nodes:   make(map[*ClientNode]struct{}),
-		rcQueue: prque.New(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
-		curve:   curve,
+		clock:         clock,
+		rcQueue:       prque.New(func(a interface{}, i int) { a.(*ClientNode).queueIndex = i }),
+		capLastUpdate: clock.Now(),
+	}
+	if curve != nil {
+		cm.SetRechargeCurve(curve)
 	}
 	return cm
 }
@@ -106,8 +119,16 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
-	cm.updateRecharge(cm.clock.Now())
+	now := cm.clock.Now()
+	cm.updateRecharge(now)
+	cm.updateCapFactor(now, false)
 	cm.curve = curve
+	if len(curve) > 0 {
+		cm.totalRecharge = curve[len(curve)-1].Y
+	} else {
+		cm.totalRecharge = 0
+	}
+	cm.refreshCapacity()
 }
 
 // init initializes the ClientManager specific fields of a ClientNode structure
@@ -115,9 +136,23 @@ func (cm *ClientManager) init(node *ClientNode) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
+	now := cm.clock.Now()
+	cm.updateRecharge(now)
 	node.corrBufValue = int64(node.params.BufLimit)
 	node.rcLastIntValue = cm.rcLastIntValue
 	node.queueIndex = -1
+	cm.updateCapFactor(now, true)
+	cm.totalConnected += node.params.MinRecharge
+}
+
+func (cm *ClientManager) disconnect(node *ClientNode) {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
+
+	now := cm.clock.Now()
+	cm.updateRecharge(cm.clock.Now())
+	cm.updateCapFactor(now, true)
+	cm.totalConnected -= node.params.MinRecharge
 }
 
 // accepted deduces the upper estimate for request cost from the buffer and returns a priority
@@ -155,6 +190,9 @@ func (cm *ClientManager) updateParams(node *ClientNode, params ServerParams, now
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
+	cm.updateRecharge(now)
+	cm.updateCapFactor(now, true)
+	cm.totalConnected += params.MinRecharge - node.params.MinRecharge
 	cm.updateNodeRc(node, 0, &params, now)
 }
 
@@ -172,12 +210,6 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 		}
 		dt := now - lastUpdate
 		// fetch the client that finishes first
-
-		if cm.rcQueue.Empty() { // debug
-			fmt.Println("cm.sumRecharge", cm.sumRecharge)
-			panic("rcQueue is empty")
-		}
-
 		rcqNode := cm.rcQueue.PopItem().(*ClientNode) // if sumRecharge > 0 then the queue cannot be empty
 		// check whether it has already finished
 		dtNext := mclock.AbsTime(float64(rcqNode.rcFullIntValue-cm.rcLastIntValue) / bonusRatio)
@@ -188,12 +220,13 @@ func (cm *ClientManager) updateRecharge(now mclock.AbsTime) {
 			cm.rcLastIntValue += int64(bonusRatio * float64(dt))
 			return
 		}
+		lastUpdate += dtNext
 		// finished recharging, update corrBufValue and sumRecharge if necessary and do next step
 		if rcqNode.corrBufValue < int64(rcqNode.params.BufLimit) {
 			rcqNode.corrBufValue = int64(rcqNode.params.BufLimit)
+			cm.updateCapFactor(lastUpdate, true)
 			cm.sumRecharge -= rcqNode.params.MinRecharge
 		}
-		lastUpdate += dtNext
 		cm.rcLastIntValue = rcqNode.rcFullIntValue
 	}
 }
@@ -224,14 +257,15 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		node.corrBufValue = int64(params.BufLimit)
 		isFull = true
 	}
+	sumRecharge := cm.sumRecharge
 	if !wasFull {
-		cm.sumRecharge -= node.params.MinRecharge
+		sumRecharge -= node.params.MinRecharge
 	}
 	if params != &node.params {
 		node.params = *params
 	}
 	if !isFull {
-		cm.sumRecharge += node.params.MinRecharge
+		sumRecharge += node.params.MinRecharge
 		if node.queueIndex != -1 {
 			cm.rcQueue.Remove(node.queueIndex)
 		}
@@ -239,6 +273,66 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 		node.rcFullIntValue = cm.rcLastIntValue + (int64(node.params.BufLimit)-node.corrBufValue)*FixedPointMultiplier/int64(node.params.MinRecharge)
 		cm.rcQueue.Push(node, -node.rcFullIntValue)
 	}
+	if sumRecharge != cm.sumRecharge {
+		cm.updateCapFactor(now, true)
+		cm.sumRecharge = sumRecharge
+	}
+
+}
+
+func (cm *ClientManager) updateCapFactor(now mclock.AbsTime, refresh bool) {
+	dt := now - cm.capLastUpdate
+	cm.capLastUpdate = now
+
+	var d float64
+	if cm.sumRecharge > cm.totalRecharge {
+		d = (1 - float64(cm.sumRecharge)/float64(cm.totalRecharge)) / float64(capFactorDropTC)
+	} else {
+		r := float64(cm.totalConnected) / cm.totalCapacity
+		if r > 1 {
+			r = 1
+		}
+		if r > capFactorRaiseThreshold {
+			m := cm.totalRecharge
+			if cm.totalConnected < m {
+				m = cm.totalConnected
+			}
+			if cm.sumRecharge < m {
+				d = (1 - float64(cm.sumRecharge)/float64(m)) * (r - capFactorRaiseThreshold) / (1 - capFactorRaiseThreshold) / float64(capFactorRaiseTC)
+			}
+		}
+	}
+	if d != 0 {
+		cm.capLogFactor += d * float64(dt)
+		if cm.capLogFactor < 0 {
+			cm.capLogFactor = 0
+		}
+		if refresh {
+			cm.refreshCapacity()
+		}
+	}
+}
+
+func (cm *ClientManager) refreshCapacity() {
+	totalCapacity := float64(cm.totalRecharge) * math.Exp(cm.capLogFactor)
+	if totalCapacity >= cm.totalCapacity*0.999 && totalCapacity <= cm.totalCapacity*1.001 {
+		return
+	}
+	cm.totalCapacity = totalCapacity
+	if cm.totalCapacityCh != nil {
+		select {
+		case cm.totalCapacityCh <- uint64(cm.totalCapacity):
+		default:
+		}
+	}
+}
+
+func (cm *ClientManager) SubscribeTotalCapacity(ch chan uint64) uint64 {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
+
+	cm.totalCapacityCh = ch
+	return uint64(cm.totalCapacity)
 }
 
 // PieceWiseLinear is used to describe recharge curves

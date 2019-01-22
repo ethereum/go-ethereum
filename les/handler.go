@@ -280,6 +280,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
+	if p.fcClient != nil {
+		defer p.fcClient.Disconnect()
+	}
 
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
@@ -333,8 +336,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	p.responseCount++
 	responseCount := p.responseCount
 	var (
-		maxCost, avgTime uint64
-		priority         int64
+		maxCost  uint64
+		priority int64
 	)
 
 	reject := func(reqID, reqCnt, maxCnt uint64) bool {
@@ -344,13 +347,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if p.fcClient == nil || reqCnt > maxCnt {
 			return true
 		}
-		costs := p.fcCosts[msg.Code]
-		maxCost = costs.baseCost + reqCnt*costs.reqCost
-		if maxCost > p.fcParams.BufLimit {
-			maxCost = p.fcParams.BufLimit
-		}
-		costs = reqAvgTime[msg.Code]
-		avgTime = costs.baseCost + reqCnt*costs.reqCost
+		maxCost = p.fcCosts.getCost(msg.Code, reqCnt)
 
 		if accepted, bufShort, servingPriority := p.fcClient.AcceptRequest(reqID, responseCount, maxCost); !accepted {
 			if bufShort > 0 {
@@ -380,24 +377,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.responseLock.Lock()
 		defer p.responseLock.Unlock()
 
-		cost := float64(servingTime)
-		inSizeCost := float64(msg.Size) * pm.server.inSizeCostFactor
-		if inSizeCost > cost {
-			cost = inSizeCost
-		}
+		var replySize uint32
 		if reply != nil {
-			outSizeCost := float64(reply.size()) * pm.server.outSizeCostFactor
-			if outSizeCost > cost {
-				cost = outSizeCost
-			}
+			replySize = reply.size()
 		}
-		realCost := uint64(cost * pm.server.getGlobalCostFactor())
-
+		realCost := pm.server.costTracker.realCost(servingTime, msg.Size, replySize)
 		bv := p.fcClient.RequestProcessed(reqID, responseCount, maxCost, realCost)
-		pm.server.updateGlobalCostFactor(avgTime, servingTime)
-		if pm.server.fcCostStats != nil {
-			pm.server.fcCostStats.update(msg.Code, amount, realCost)
-		}
+		pm.server.costTracker.updateStats(msg.Code, amount, servingTime, realCost)
 		if reply != nil {
 			p.queueSend(func() {
 				if err := reply.send(bv); err != nil {
