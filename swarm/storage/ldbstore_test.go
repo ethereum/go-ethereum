@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
@@ -392,9 +391,7 @@ func testLDBStoreCollectGarbage(t *testing.T) {
 		log.Debug("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt, "cap", capacity, "n", n)
 		ldb.lock.RUnlock()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-		waitGc(ctx, ldb)
+		waitGc(ldb)
 	}
 
 	// attempt gets on all put chunks
@@ -498,9 +495,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	waitGc(ctx, ldb)
+	waitGc(ldb)
 
 	// delete all chunks
 	// (only count the ones actually deleted, the rest will have been gc'd)
@@ -546,9 +541,7 @@ func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 			putCount--
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-		waitGc(ctx, ldb)
+		waitGc(ldb)
 	}
 
 	// expect first surplus chunks to be missing, because they have the smallest access value
@@ -601,9 +594,7 @@ func TestLDBStoreCollectGarbageAccessUnlikeIndex(t *testing.T) {
 	}
 
 	// wait for garbage collection to kick in on the responsible actor
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	waitGc(ctx, ldb)
+	waitGc(ldb)
 
 	var missing int
 	for i, ch := range chunks[2 : capacity/2] {
@@ -792,7 +783,7 @@ func TestCleanIndex(t *testing.T) {
 	}
 }
 
-func waitGc(ctx context.Context, ldb *LDBStore) {
+func waitGc(ldb *LDBStore) {
 	<-ldb.gc.runC
 	ldb.gc.runC <- struct{}{}
 }
