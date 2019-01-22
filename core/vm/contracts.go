@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -85,25 +86,129 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 	return nil, ErrOutOfGas
 }
 
-// SHA256 implemented as a native contract; WASM version of the
-// contract above.
 type ewasmPrecompile struct {
 	code []byte
 	vm   *exec.VM
+	contract *Contract
+	retData []byte
+}
+
+// This is a subset of the functions available in the full EEI at
+// https://github.com/ethereum/go-ethereum/pull/16957. It is safer
+// not to provide all functions in case of a vulnerability in the
+// interpreter.
+var eeiFunctionList = []string{
+	"useGas",
+	"callDataCopy",
+	"getCallDataSize",
+	"finish",
+	"revert",
+} 
+
+func moduleResolver(name string, precompile *ewasmPrecompile) (*wasm.Module, error) {
+	if name != "ethereum" {
+		return nil, fmt.Errorf("Unknown module name: %s", name)
+	}
+
+	m := wasm.NewModule()
+	m.Types = &wasm.SectionTypes{
+		Entries: []wasm.FunctionSig{
+			{
+				ParamTypes:  []wasm.ValueType{wasm.ValueTypeI64},
+				ReturnTypes: []wasm.ValueType{},
+			},
+			{
+				ParamTypes:  []wasm.ValueType{wasm.ValueTypeI32, wasm.ValueTypeI32},
+				ReturnTypes: []wasm.ValueType{},
+			},
+			{
+				ParamTypes:  []wasm.ValueType{wasm.ValueTypeI32, wasm.ValueTypeI32, wasm.ValueTypeI32},
+				ReturnTypes: []wasm.ValueType{},
+			},
+			{
+				ParamTypes:  []wasm.ValueType{},
+				ReturnTypes: []wasm.ValueType{wasm.ValueTypeI32},
+			},
+		},
+	}
+	m.FunctionIndexSpace = []wasm.Function{
+		{
+			Sig:  &m.Types.Entries[0],
+			Host: reflect.ValueOf(func(p *exec.Process, a int64) {
+				precompile.contract.UseGas(uint64(a))
+			}),
+			Body: &wasm.FunctionBody{},
+		},
+		{
+			Sig:  &m.Types.Entries[2],
+			Host: reflect.ValueOf(func(p *exec.Process, r, d, l int32) {
+				// Unlike regular EEI functions, the gas is not charged at this
+				// time but I'm leaving that code here for future reference.
+				// in.gasAccounting(GasCostVeryLow + GasCostCopy*(uint64(l+31)>>5))
+				p.WriteAt(precompile.contract.Input[d:d+l], int64(r))
+			}),
+			Body: &wasm.FunctionBody{},
+		},
+		{
+			Sig:  &m.Types.Entries[3],
+			Host: reflect.ValueOf(func(p *exec.Process) int32 {
+				return int32(len(precompile.contract.Input))
+			}),
+			Body: &wasm.FunctionBody{},
+		},
+		{
+			Sig:  &m.Types.Entries[1],
+			Host: reflect.ValueOf(func(p *exec.Process, d, l int32) {
+				precompile.retData = make([]byte, int64(l))
+				p.ReadAt(precompile.retData, int64(d))
+				p.Terminate()
+			}),
+			Body: &wasm.FunctionBody{},
+		},
+		{
+			Sig:  &m.Types.Entries[1],
+			Host: reflect.ValueOf(func(p *exec.Process, d, l int32) {
+				precompile.retData = make([]byte, int64(l))
+				p.ReadAt(precompile.retData, int64(d))
+				p.Terminate()
+			}),
+			Body: &wasm.FunctionBody{},
+		},
+	}
+
+	entries := make(map[string]wasm.ExportEntry)
+
+	for idx, name := range eeiFunctionList {
+		entries[name] = wasm.ExportEntry{
+			FieldStr: name,
+			Kind:     wasm.ExternalFunction,
+			Index:    uint32(idx),
+		}
+	}
+
+	m.Export = &wasm.SectionExports{
+		Entries: entries,
+	}
+
+	return m, nil
 }
 
 func newEWASMPrecompile(code []byte) *ewasmPrecompile {
-	module, err := wasm.ReadModule(bytes.NewReader(code), nil)
+	ret := &ewasmPrecompile{}
+	module, err := wasm.ReadModule(bytes.NewReader(code), func(s string)(*wasm.Module, error) {
+		return moduleResolver(s, ret)
+	})
 	if err != nil {
-		panic("Could not read precompile module")
+		panic(fmt.Sprintf("Could not read precompile module: %v", err))
 	}
 
 	vm, err := exec.NewVM(module)
 	if err != nil {
 		panic("Could not create precompile VM")
 	}
+	ret.vm = vm
 
-	return &ewasmPrecompile{vm: vm}
+	return ret
 }
 
 func (c *ewasmPrecompile) RequiredGas(input []byte) uint64 {
@@ -119,12 +224,9 @@ func (c *ewasmPrecompile) Run(input []byte) ([]byte, error) {
 	}
 
 	/* Run the contract */
-	ret, err := c.vm.ExecCode(0)
+	_, err := c.vm.ExecCode(0)
 	if err == nil {
-		if r, ok := ret.([]byte); ok {
-			return r, nil
-		}
-		return nil, fmt.Errorf("invalid return data in call to precompile")
+		return c.retData, nil
 	}
 	return nil, err
 }
