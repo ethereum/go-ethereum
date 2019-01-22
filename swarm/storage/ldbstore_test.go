@@ -465,6 +465,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 }
 
 func testLDBStoreRemoveThenCollectGarbage(t *testing.T) {
+	t.Skip("flaky with -race flag")
 
 	params := strings.Split(t.Name(), "/")
 	capacity, err := strconv.Atoi(params[2])
@@ -783,6 +784,9 @@ func TestCleanIndex(t *testing.T) {
 	}
 }
 
+// Note: waitGc does not guarantee that we wait 1 GC round; it only
+// guarantees that if the GC is running we wait for that run to finish
+// ticket: https://github.com/ethersphere/go-ethereum/issues/1151
 func waitGc(ldb *LDBStore) {
 	<-ldb.gc.runC
 	ldb.gc.runC <- struct{}{}
