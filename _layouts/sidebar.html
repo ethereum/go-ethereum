@@ -9,7 +9,7 @@ layout: default
                 <a class="list-group-item active">{{ group[0] }}</a>
                 {% for link in group[1] %}
                     <a class="list-group-item" 
-                        href="{% if link.first[1] contains 'http' %}{{ link.first[1] }}{% else %}{{ link.first[1] | prepend: site.baseurl | replace: '//', '/'}}">
+                        href="{% if link.first[1] contains 'http' %}{{ link.first[1] }}{% else %}{{ link.first[1] | prepend: site.baseurl | replace: '//', '/'}}{% endif %}">
                         {{ link.first[0] }}</a>
                 {% endfor %}
             </div>
