@@ -424,7 +424,7 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 	return rhs, nil
 }
 
-// HasCap returns true fi Peer has a capability
+// HasCap returns true if Peer has a capability
 // with provided name.
 func (p *Peer) HasCap(capName string) (yes bool) {
 	if p == nil || p.Peer == nil {
