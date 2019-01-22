@@ -16,16 +16,22 @@
 package les
 
 import (
+	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
 	ErrMinCap   = errors.New("capacity too small")
 	ErrTotalCap = errors.New("total capacity exceeded")
+
+	dropCapacityDelay = time.Second
 )
 
 // PublicLesServerAPI  provides an API to access the les server.
@@ -46,6 +52,40 @@ func (api *PrivateLesServerAPI) TotalCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(api.server.priorityClientPool.totalCapacity())
 }
 
+func (api *PrivateLesServerAPI) SubscribeTotalCapacity(ctx context.Context, onlyUnderrun bool) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+	api.server.priorityClientPool.subscribeTotalCapacity(&tcSubscription{notifier, rpcSub, onlyUnderrun})
+	return rpcSub, nil
+}
+
+type (
+	tcSubscription struct {
+		notifier     *rpc.Notifier
+		rpcSub       *rpc.Subscription
+		onlyUnderrun bool
+	}
+	tcSubs map[*tcSubscription]struct{}
+)
+
+func (s tcSubs) send(tc uint64, underrun bool) {
+	for sub, _ := range s {
+		select {
+		case <-sub.rpcSub.Err():
+			delete(s, sub)
+		case <-sub.notifier.Closed():
+			delete(s, sub)
+		default:
+			if underrun || !sub.onlyUnderrun {
+				sub.notifier.Notify(sub.rpcSub.ID, tc)
+			}
+		}
+	}
+}
+
 // MinimumCapacity queries minimum assignable capacity for a single client
 func (api *PrivateLesServerAPI) MinimumCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(minCapacity)
@@ -64,6 +104,15 @@ type priorityClientPool struct {
 	clients                                    map[enode.ID]priorityClientInfo
 	totalCap, totalConnectedCap, freeClientCap uint64
 	maxPeers, priorityCount                    int
+
+	subs            tcSubs
+	updateSchedule  []scheduledUpdate
+	scheduleCounter uint64
+}
+
+type scheduledUpdate struct {
+	time         mclock.AbsTime
+	totalCap, id uint64
 }
 
 // priorityClientInfo entries exist for all prioritized clients and currently connected free clients
@@ -173,6 +222,52 @@ func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
+	if totalCap > v.totalCap {
+		v.setLimitsNow(count, totalCap)
+		v.subs.send(totalCap, false)
+		return
+	}
+	v.setLimitsNow(count, v.totalCap)
+	if totalCap < v.totalCap {
+		v.subs.send(totalCap, totalCap < v.totalConnectedCap)
+		for i, s := range v.updateSchedule {
+			if totalCap >= s.totalCap {
+				s.totalCap = totalCap
+				v.updateSchedule = v.updateSchedule[:i+1]
+				return
+			}
+		}
+		v.updateSchedule = append(v.updateSchedule, scheduledUpdate{time: mclock.Now() + mclock.AbsTime(dropCapacityDelay), totalCap: totalCap})
+		if len(v.updateSchedule) == 1 {
+			v.scheduleCounter++
+			id := v.scheduleCounter
+			v.updateSchedule[0].id = id
+			time.AfterFunc(dropCapacityDelay, func() { v.checkUpdate(id) })
+		}
+	} else {
+		v.updateSchedule = nil
+	}
+}
+
+func (v *priorityClientPool) checkUpdate(id uint64) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	if len(v.updateSchedule) == 0 || v.updateSchedule[0].id != id {
+		return
+	}
+	v.setLimitsNow(v.maxPeers, v.updateSchedule[0].totalCap)
+	v.updateSchedule = v.updateSchedule[1:]
+	if len(v.updateSchedule) != 0 {
+		v.scheduleCounter++
+		id := v.scheduleCounter
+		v.updateSchedule[0].id = id
+		dt := time.Duration(v.updateSchedule[0].time - mclock.Now())
+		time.AfterFunc(dt, func() { v.checkUpdate(id) })
+	}
+}
+
+func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 	if v.priorityCount > count || v.totalConnectedCap > totalCap {
 		for id, c := range v.clients {
 			if c.connected {
@@ -200,6 +295,13 @@ func (v *priorityClientPool) totalCapacity() uint64 {
 	defer v.lock.Unlock()
 
 	return v.totalCap
+}
+
+func (v *priorityClientPool) subscribeTotalCapacity(sub *tcSubscription) {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+
+	v.subs[sub] = struct{}{}
 }
 
 func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
