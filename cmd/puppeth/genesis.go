@@ -448,7 +448,7 @@ func (spec *parityChainSpec) setConstantinople(num *big.Int) {
 }
 
 func (spec *parityChainSpec) setConstantinopleFix(num *big.Int) {
-	spec.Params.EIP1283DisableTransition = n
+	spec.Params.EIP1283DisableTransition = hexutil.Uint64(num.Uint64())
 }
 
 // pyEthereumGenesisSpec represents the genesis specification format used by the
