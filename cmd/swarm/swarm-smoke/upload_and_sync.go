@@ -49,6 +49,10 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, port))
 		}
+	} else if cluster == "private-internal" {
+		for port := from; port < to; port++ {
+			endpoints = append(endpoints, fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, port))
+		}
 	} else {
 		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, port, cluster))
