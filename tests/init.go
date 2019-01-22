@@ -63,7 +63,6 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(10000000),
-
 	},
 	"ConstantinopleFix": {
 		ChainID:             big.NewInt(1),
@@ -75,7 +74,6 @@ var Forks = map[string]*params.ChainConfig{
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
-
 	},
 	"FrontierToHomesteadAt5": {
 		ChainID:        big.NewInt(1),
