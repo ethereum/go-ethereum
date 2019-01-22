@@ -1,3 +1,6 @@
+---
+title: Mining
+---
 * [Introduction to Ethereum mining](https://github.com/ethereum/wiki/wiki/Mining#introduction) _(main wiki)_
 
 # CPU Mining with Geth

@@ -1,3 +1,6 @@
+---
+title: Management APIs
+---
 Beside the official [DApp APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) interface go-ethereum
 has support for additional management APIs. Similar to the DApp APIs, these are also provided using
 [JSON-RPC](http://www.jsonrpc.org/specification) and follow exactly the same conventions. Geth comes

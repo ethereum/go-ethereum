@@ -1,4 +1,6 @@
-## Whisper v6
+---
+title: Whisper v6
+---
 
 [Whisper Overview](Whisper-Overview)
 

@@ -1,3 +1,6 @@
+---
+title: URL Scheme
+---
 # URLs in DAPP browsers 
 
 URLs should contain all allowable urls in browsers and _all_ `http(s)` urls that resolve in a usual browser must resolve the same way. 

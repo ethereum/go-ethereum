@@ -1,3 +1,6 @@
+---
+title: Installation instructions for FreeBSD
+---
 ## Building from source
 
 ### Installing binary package

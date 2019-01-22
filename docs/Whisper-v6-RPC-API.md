@@ -1,4 +1,6 @@
-# Whisper RPC API 6.0
+---
+title: Whisper RPC API 6.0
+---
 
 This is the proposed API for whisper v6.
 

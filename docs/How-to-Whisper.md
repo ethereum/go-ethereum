@@ -1,3 +1,6 @@
+---
+title: How to Whisper
+---
 Whisper is a pure identity-based messaging system. Whisper provides a low-level (non-application-specific) but easily-accessible API without being based upon or prejudiced by the low-level hardware attributes and characteristics, particularly the notion of singular endpoints.
 
 This tutorial assumes you've read [p2p 101](Peer-to-Peer). If you haven't read it I suggest you read it. This tutorial will guide you to setting up a full p2p server with whisper capabilities.

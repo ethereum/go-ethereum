@@ -15,8 +15,11 @@ layout: default
             {% endfor %}
           </div>
           <div class="col-md-9" id="content">
-              {{ content }}
+            {% if page.title %}
+            <h1 class="featurette-heading">{{ page.title }}</h1>
+            {% endif %}
+
+            {{ content }}
           </div>
     </div>
-
 </div>

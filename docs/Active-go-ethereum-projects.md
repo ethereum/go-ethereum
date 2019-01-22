@@ -1,4 +1,7 @@
-# Direction of development until the end of 2018
+---
+title: Active go-ethereum projects
+---
+## Direction of development until the end of 2018
 
 - Clef: move account management out of geth to clef
 - Constantinople - Tools for testing

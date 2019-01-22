@@ -1,3 +1,6 @@
+---
+title: Cross-compiling Ethereum
+---
 **Note: All of these and much more have been merged into the project Makefile.
 You can cross build via `make geth-<os>-<platform>` without needing to know any
 of these details from below.**

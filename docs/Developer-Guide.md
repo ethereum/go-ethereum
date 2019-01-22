@@ -1,3 +1,6 @@
+---
+title: Developer guide
+---
 ### Native DApps
 
 [Introduction and packages](Native:-Introduction)

@@ -1,3 +1,6 @@
+---
+title: Building Ethereum
+---
 ## Installation Instructions
 
 Follow the appropriate link below to find installation instructions for

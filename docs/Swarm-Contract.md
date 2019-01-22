@@ -1,3 +1,6 @@
+---
+title: Swarm contract
+---
 This one contract regulates the incentive structure of Swarm.
 
 The corresponding solidity code can be browsed [here](https://github.com/ethersphere/go-ethereum/blob/bzz/bzz/bzzcontract/swarm.sol).

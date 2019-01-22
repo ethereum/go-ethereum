@@ -1,3 +1,6 @@
+---
+title: Swarm channels, namereg-resolution draft
+---
 # Channels and streams
 
 a *swarm chain* is an ordered list of content that are linked as a forkless chain.

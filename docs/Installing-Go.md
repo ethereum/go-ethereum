@@ -1,3 +1,6 @@
+---
+title: Installing Go
+---
 ### Windows 
 
 Download and run the installer found at http://golang.org/doc/install

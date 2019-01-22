@@ -1,4 +1,6 @@
-# Javascript example
+---
+title: Whisper JavaScript example
+---
 
 [This link](https://github.com/gballet/whisper-chat-example) contains a full-fledged example of how to use Whisper in a small chat application.
 

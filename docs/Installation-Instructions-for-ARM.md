@@ -1,4 +1,6 @@
-# Installation Instructions for ARM
+---
+title: Installation instructions for ARM
+---
 
 Geth is built for ARM using cross-compilation. See [Cross compiling Ethereum](Cross-compiling-Ethereum) for more details.
 

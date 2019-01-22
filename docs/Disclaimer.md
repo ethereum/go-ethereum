@@ -1,4 +1,6 @@
-# Disclaimer 
+---
+title: Disclaimer
+---
 
 Safety caveats
 

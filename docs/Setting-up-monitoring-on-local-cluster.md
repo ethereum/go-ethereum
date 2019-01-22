@@ -1,3 +1,6 @@
+---
+title: Setting up monitoring on local cluster
+---
 This page describes how to set up a monitoring site, [like this one](http://eth-netstats.herokuapp.com/), for your private network. It builds upon [this wiki article](Setting-up-private-network-or-local-cluster) and assumes you've created a local cluster using [this script (gethcluster.sh)](https://github.com/ethersphere/eth-utils).
 
 The monitoring system consists of two components:

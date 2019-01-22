@@ -1,4 +1,6 @@
-# Running in Docker
+---
+title: Running in Docker
+---
 
 We keep a Docker image with recent snapshot builds from the `develop` branch [on DockerHub](https://hub.docker.com/r/ethereum/client-go/). In addition to the container based on [Ubuntu](http://www.ubuntu.com) (158 MB), there is a smaller image using [Alpine Linux](https://alpinelinux.org) (35 MB). To use the alpine [tag](https://hub.docker.com/r/ethereum/client-go/tags), replace `ethereum/client-go` with `ethereum/client-go:alpine` in the examples below.
 

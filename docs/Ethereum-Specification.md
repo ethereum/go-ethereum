@@ -1,3 +1,6 @@
+---
+title: Ethereum specification
+---
 Specifications of all ethereum technologies, languages, protocols, etc.
 
 ### Whitepapers and design rationale

@@ -1,3 +1,6 @@
+---
+title: Contracts and transactions (Japanese)
+---
 THIS WIKI IS BEING EDITED AND REVIEWED NOW. PLEASE DO NOT RELY ON IT.
 
 # Account types and transactions

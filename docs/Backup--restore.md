@@ -1,3 +1,6 @@
+---
+title: Backup & restore
+---
 **DO NOT FORGET YOUR PASSWORD** and **BACKUP YOUR KEYSTORE**
 
 # Backup & restore

@@ -1,3 +1,6 @@
+---
+title: Installation instructions for Mac
+---
 ## Installing with Homebrew
 
 By far the easiest way to install go-ethereum is to use our

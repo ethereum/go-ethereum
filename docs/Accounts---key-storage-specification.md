@@ -1,3 +1,6 @@
+---
+title: Accounts
+---
 **THIS PAGE IS PARTLY OUTDATED! TODO: REFACTOR OR DELETE**
 
 # Accounts / key storage specification

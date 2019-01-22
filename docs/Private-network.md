@@ -1,3 +1,6 @@
+---
+title: Private network
+---
 An Ethereum network is a private network if the nodes are not connected to the main
 network nodes. In this context private only means reserved or isolated, rather than
 protected or secure.

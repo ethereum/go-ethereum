@@ -1,3 +1,6 @@
+---
+title: Setting up Ethereum Native
+---
 ## Dream API
 
 i.e., something I'm envisioning for *soon*(tm)

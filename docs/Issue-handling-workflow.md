@@ -1,3 +1,6 @@
+---
+title: Issue handling workflow
+---
 ### (Draft proposal)
 Keep the number of open issues under 820
 

@@ -1,3 +1,6 @@
+---
+title: Installation instructions for Windows
+---
 # Binaries
 
 ## Download stable binaries

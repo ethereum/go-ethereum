@@ -1,3 +1,6 @@
+---
+title: Commandline options
+---
 ```
 $ geth help
 NAME:

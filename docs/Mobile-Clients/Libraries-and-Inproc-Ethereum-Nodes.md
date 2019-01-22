@@ -1,3 +1,6 @@
+---
+title: Mobile Clients
+---
 **This page has been obsoleted. An new guide is in the progress at [[Mobile: Introduction]]**
 
 ---

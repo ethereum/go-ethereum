@@ -1,3 +1,6 @@
+---
+title: Managing your accounts
+---
 **WARNING**
 Remember your password. 
 

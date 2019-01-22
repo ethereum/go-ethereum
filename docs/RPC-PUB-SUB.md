@@ -1,3 +1,6 @@
+---
+title: RPS pub-sub
+---
 # Introduction
 
 From version 1.4 geth has **_experimental_** support for pub/sub using subscriptions as defined in the JSON-RPC 2.0 specification. This allows clients to wait for events instead of polling for them.

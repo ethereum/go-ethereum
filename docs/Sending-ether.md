@@ -1,4 +1,6 @@
-# Sending ether
+---
+title: Sending ether
+---
 
 The basic way of sending a simple transaction of ether with the console is as follows:
 ```js

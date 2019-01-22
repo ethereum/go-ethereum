@@ -1,3 +1,6 @@
+---
+title: Swarm - distributed preimage archive
+---
 # Resources
 
 ## Swarm, the name

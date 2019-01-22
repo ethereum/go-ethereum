@@ -1,3 +1,6 @@
+---
+title: Swarm POC series
+---
 now project features and POC milestones are managed under
 https://github.com/ethereum/go-ethereum/projects/6
 

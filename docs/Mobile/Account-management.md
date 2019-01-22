@@ -1,3 +1,6 @@
+---
+title: Mobile / Account management
+---
 To provide Ethereum integration for your mobile applications, the very first thing you should be interested in doing is account management.
 
 Although all current leading Ethereum implementations provide account management built in, it is ill advised to keep accounts in any location that is shared between multiple applications and/or multiple people. The same way you do not entrust your ISP (who is after all your gateway into the internet) with your login credentials; you should not entrust an Ethereum node (who is your gateway into the Ethereum network) with your credentials either. 

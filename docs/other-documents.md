@@ -1,3 +1,6 @@
+---
+title: Other documents
+---
 - [Accounts key-storage specification](/docs/Accounts---key-storage-specification)
 - [Connecting to the network](/docs/Connecting-to-the-network)
 - [Creating your own Ethereum apps using Eth go](/docs/Creating-your-own-Ethereum-apps-using-Eth-go)

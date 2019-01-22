@@ -1,3 +1,6 @@
+---
+title: Mobile / Introduction
+---
 The Ethereum blockchain along with its two extension protocols Whisper and Swarm was originally conceptualized to become the supporting pillar of web3, providing the consensus, messaging and storage backbone for a new generation of distributed (actually, decentralized) applications called DApps.
 
 The first incarnation towards this dream of web3 was a command line client providing an RPC interface into the peer-to-peer protocols. The client was soon enough extended with a web-browser-like graphical user interface, permitting developers to write DApps based on the tried and proven HTML/CSS/JS technologies.

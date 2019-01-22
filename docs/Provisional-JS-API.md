@@ -1,3 +1,6 @@
+---
+title: Provisional JS API
+---
 The *provisional* JavaScript API is a purposed API for all things JavaScript. JavaScript technologies can be embedded within Qt(QML) technologies, local web and remote web and therefor the purposed API is written in a ASYNC fashion so that it may be used across all implementations. Hereby it should be known that all functions, unless explicitly specified, take a callback as last function argument which will be called when the operation has been completed.
 
 Please note that the provisional JavaScript API tries to leverage existing JS idioms as much as possible.

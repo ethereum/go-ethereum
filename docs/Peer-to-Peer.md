@@ -1,3 +1,6 @@
+---
+title: Peer-to-peer
+---
 The peer to peer package ([go-ethereum/p2p](https://github.com/ethereum/go-ethereum/tree/develop/p2p)) allows you to rapidly and easily add peer to peer networking to any type of application. The p2p package is set up in a modular structure and extending the p2p with your own additional sub protocols is easy and straight forward.
 
 Starting the p2p service only requires you setup a `p2p.Server{}` with a few settings:

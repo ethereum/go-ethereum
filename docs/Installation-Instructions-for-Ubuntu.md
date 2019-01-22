@@ -1,3 +1,6 @@
+---
+title: Installation instructions for Ubuntu
+---
 ## Installing from PPA
 
 ```shell

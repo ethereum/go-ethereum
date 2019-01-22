@@ -1,3 +1,6 @@
+---
+title: Developers' guide
+---
 **NOTE: These instructions are for people who want to contribute Go source code changes.
 If you just want to run ethereum, use the normal [Installation Instructions](Building-Ethereum)**
 

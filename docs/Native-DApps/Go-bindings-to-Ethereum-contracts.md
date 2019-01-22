@@ -1,3 +1,6 @@
+---
+title: Native DApps / Go bindings to Ethereum contracts
+---
 **[Please note, events are not yet implemented as they need some RPC subscription
 features that are still under review.]**
 

@@ -1,3 +1,6 @@
+---
+title: Ethereum on Android
+---
 Building Geth for Android is a non trivial task, as it requires cross compiling external C dependencies ([GNU Arithmetic Library](https://gmplib.org/)); internal C dependencies ([ethash](https://github.com/ethereum/ethash)); as well as the entire CGO enabled Go code-base to Android. This is further complicated by the Position Independent Executables (PIE) security feature introduced since Android 4.1 Jelly Bean, requiring different compiler and linker options based on the target Android platform version.
 
 To cope with all the build issues, the [`xgo`](https://github.com/karalabe/xgo) CGO enabled Go cross compiler is used, which assembles an entire multi-platform cross compiler suite into a single mega docker container. Details about using `xgo` can be found in the project's [README](https://github.com/karalabe/xgo/blob/master/README.md), with Ethereum specifics on the go-ethereum cross compilation [wiki page](Cross-compiling-Ethereum).
