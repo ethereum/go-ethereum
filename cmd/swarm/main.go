@@ -66,9 +66,10 @@ OPTIONS:
 {{end}}{{end}}
 `
 
-var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-)
+// Git SHA1 commit hash of the release (set via linker flags)
+// this variable will be assigned if corresponding parameter is passed with install, but not with test
+// e.g.: go install -ldflags "-X main.gitCommit=ed1312d01b19e04ef578946226e5d8069d5dfd5a" ./cmd/swarm
+var gitCommit string
 
 //declare a few constant error messages, useful for later error check comparisons in test
 var (
@@ -89,6 +90,7 @@ var defaultNodeConfig = node.DefaultConfig
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
 func init() {
+	sv.GitCommit = gitCommit
 	defaultNodeConfig.Name = clientIdentifier
 	defaultNodeConfig.Version = sv.VersionWithCommit(gitCommit)
 	defaultNodeConfig.P2P.ListenAddr = ":30399"

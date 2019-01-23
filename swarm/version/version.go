@@ -41,8 +41,7 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
-// this variable will be assigned if corresponding parameter is passed with install, but not with test
-// e.g.: go install -ldflags "-X main.gitCommit=ed1312d01b19e04ef578946226e5d8069d5dfd5a" ./cmd/swarm
+// Git SHA1 commit hash of the release, will be set by main.init() function
 var GitCommit string
 
 // ArchiveVersion holds the textual version string used for Swarm archives.
@@ -55,7 +54,6 @@ func ArchiveVersion(gitCommit string) string {
 	}
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
-		GitCommit = gitCommit[:8]
 	}
 	return vsn
 }
@@ -64,7 +62,6 @@ func VersionWithCommit(gitCommit string) string {
 	vsn := Version
 	if len(gitCommit) >= 8 {
 		vsn += "-" + gitCommit[:8]
-		GitCommit = gitCommit[:8]
 	}
 	return vsn
 }
