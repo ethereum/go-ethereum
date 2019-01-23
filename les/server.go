@@ -185,7 +185,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.maxPeers = s.config.LightPeers
 	totalRecharge := s.costTracker.totalRecharge()
 	if s.maxPeers > 0 {
-		s.freeClientCap = totalRecharge / uint64(s.maxPeers)
+		s.freeClientCap = minCapacity //totalRecharge / uint64(s.maxPeers)
 		if s.freeClientCap < minCapacity {
 			s.freeClientCap = minCapacity
 		}
@@ -198,7 +198,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	}
 	freePeers := int(totalRecharge / s.freeClientCap)
 	if freePeers < s.maxPeers {
-		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers) //qqq
+		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers)
 	}
 
 	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, s.protocolManager.removePeer)

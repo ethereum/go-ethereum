@@ -84,7 +84,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		return
 	}
 
-	testSim(t, 1, clientCount, []string{testServerDataDir}, nil, func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node) {
+	for !testSim(t, 1, clientCount, []string{testServerDataDir}, nil, func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node) bool {
 		if len(servers) != 1 {
 			t.Fatalf("Invalid number of servers: %d", len(servers))
 		}
@@ -97,15 +97,17 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			t.Fatalf("Failed to obtain rpc client: %v", err)
 		}
 		headNum, headHash := getHead(ctx, t, serverRpcClient)
-		totalCap, minCap := capacityLimits(ctx, t, serverRpcClient)
-		fmt.Printf("Server totalCap: %d  minCap: %d  head number: %d  head hash: %064x\n", totalCap, minCap, headNum, headHash)
-		reqMinCap := uint64(float64(totalCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
+		totalCap := getTotalCap(ctx, t, serverRpcClient)
+		minCap := getMinCap(ctx, t, serverRpcClient)
+		testCap := totalCap * 3 / 4
+		fmt.Printf("Server testCap: %d  minCap: %d  head number: %d  head hash: %064x\n", testCap, minCap, headNum, headHash)
+		reqMinCap := uint64(float64(testCap) * minRelCap / (minRelCap + float64(len(clients)-1)))
 		if minCap > reqMinCap {
 			t.Fatalf("Minimum client capacity (%d) bigger than required minimum for this test (%d)", minCap, reqMinCap)
 		}
 
 		freeIdx := rand.Intn(len(clients))
-		freeCap := totalCap / testMaxClients
+		freeCap := getFreeCap(ctx, t, serverRpcClient)
 
 		for i, client := range clients {
 			var err error
@@ -116,7 +118,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 
 			fmt.Println("connecting client", i)
 			if i != freeIdx {
-				setCapacity(ctx, t, serverRpcClient, client.ID(), totalCap/uint64(len(clients)))
+				setCapacity(ctx, t, serverRpcClient, client.ID(), testCap/uint64(len(clients)))
 			}
 			net.Connect(client.ID(), server.ID())
 
@@ -139,6 +141,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		stop := make(chan struct{})
 
 		reqCount := make([]uint64, len(clientRpcClients))
+
 		for i, c := range clientRpcClients {
 			wg.Add(1)
 			i, c := i, c
@@ -148,14 +151,25 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				for {
 					select {
 					case queue <- struct{}{}:
-						wg.Add(1)
-						go func() {
-							testRequest(ctx, t, c)
+						select {
+						case <-stop:
 							wg.Done()
-							<-queue
-							count++
-							atomic.StoreUint64(&reqCount[i], count)
-						}()
+							return
+						case <-ctx.Done():
+							wg.Done()
+							return
+						default:
+							wg.Add(1)
+							go func() {
+								ok := testRequest(ctx, t, c)
+								wg.Done()
+								<-queue
+								if ok {
+									count++
+									atomic.StoreUint64(&reqCount[i], count)
+								}
+							}()
+						}
 					case <-stop:
 						wg.Done()
 						return
@@ -192,7 +206,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 				sum += weights[i]
 			}
 			for i, client := range clients {
-				weights[i] *= float64(totalCap-freeCap-100) / sum
+				weights[i] *= float64(testCap-freeCap-100) / sum
 				capacity := uint64(weights[i])
 				if i != freeIdx && capacity < getCapacity(ctx, t, serverRpcClient, client.ID()) {
 					setCapacity(ctx, t, serverRpcClient, client.ID(), capacity)
@@ -207,17 +221,30 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 			}
 			weights[freeIdx] = float64(freeCap)
 			for i, _ := range clients {
-				weights[i] /= float64(totalCap)
+				weights[i] /= float64(testCap)
 			}
 
 			time.Sleep(flowcontrol.DecParamDelay)
-			fmt.Println("starting measurement")
+			fmt.Println("Starting measurement")
+			fmt.Printf("Relative weights:")
+			for i, _ := range clients {
+				fmt.Printf("  %f", weights[i])
+			}
+			fmt.Println()
 			start := processedSince(nil)
 			for {
 				select {
 				case <-ctx.Done():
 					t.Fatalf("Timeout")
 				default:
+				}
+
+				totalCap = getTotalCap(ctx, t, serverRpcClient)
+				if totalCap < testCap {
+					fmt.Println("Total capacity underrun")
+					close(stop)
+					wg.Wait()
+					return false
 				}
 
 				processed := processedSince(start)
@@ -242,7 +269,7 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 							maxDev = dev
 						}
 					}
-					fmt.Printf("  max deviation: %f\n", maxDev)
+					fmt.Printf("  max deviation: %f  totalCap: %d\n", maxDev, totalCap)
 					if maxDev <= testTolerance {
 						fmt.Println("success")
 						break
@@ -260,7 +287,10 @@ func testCapacityAPI(t *testing.T, clientCount int) {
 		for i, count := range reqCount {
 			fmt.Println("client", i, "processed", count)
 		}
-	})
+		return true
+	}) {
+		fmt.Println("restarting test")
+	}
 }
 
 func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, common.Hash) {
@@ -284,15 +314,18 @@ func getHead(ctx context.Context, t *testing.T, client *rpc.Client) (uint64, com
 	return num, hash
 }
 
-func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) {
+func testRequest(ctx context.Context, t *testing.T, client *rpc.Client) bool {
 	//res := make(map[string]interface{})
 	var res string
 	var addr common.Address
 	rand.Read(addr[:])
+	c, _ := context.WithTimeout(ctx, time.Second*12)
 	//	if err := client.CallContext(ctx, &res, "eth_getProof", addr, nil, "latest"); err != nil {
-	if err := client.CallContext(ctx, &res, "eth_getBalance", addr, "latest"); err != nil {
-		t.Fatalf("Failed to obtain Merkle proof: %v", err)
+	err := client.CallContext(c, &res, "eth_getBalance", addr, "latest")
+	if err != nil {
+		fmt.Println("request error:", err)
 	}
+	return err == nil
 }
 
 func setCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID enode.ID, cap uint64) {
@@ -313,7 +346,7 @@ func getCapacity(ctx context.Context, t *testing.T, server *rpc.Client, clientID
 	return cap
 }
 
-func capacityLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint64, uint64) {
+func getTotalCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
 	var s string
 	if err := server.CallContext(ctx, &s, "les_totalCapacity"); err != nil {
 		t.Fatalf("Failed to query total capacity: %v", err)
@@ -322,6 +355,11 @@ func capacityLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint
 	if err != nil {
 		t.Fatalf("Failed to decode total capacity: %v", err)
 	}
+	return total
+}
+
+func getMinCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
+	var s string
 	if err := server.CallContext(ctx, &s, "les_minimumCapacity"); err != nil {
 		t.Fatalf("Failed to query minimum capacity: %v", err)
 	}
@@ -329,7 +367,19 @@ func capacityLimits(ctx context.Context, t *testing.T, server *rpc.Client) (uint
 	if err != nil {
 		t.Fatalf("Failed to decode minimum capacity: %v", err)
 	}
-	return total, min
+	return min
+}
+
+func getFreeCap(ctx context.Context, t *testing.T, server *rpc.Client) uint64 {
+	var s string
+	if err := server.CallContext(ctx, &s, "les_freeClientCapacity"); err != nil {
+		t.Fatalf("Failed to query free client capacity: %v", err)
+	}
+	free, err := hexutil.DecodeUint64(s)
+	if err != nil {
+		t.Fatalf("Failed to decode free client capacity: %v", err)
+	}
+	return free
 }
 
 func init() {
@@ -396,7 +446,7 @@ func NewAdapter(adapterType string, services adapters.Services) (adapter adapter
 	return adapter, teardown, nil
 }
 
-func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []string, test func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node)) {
+func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []string, test func(ctx context.Context, net *simulations.Network, servers []*simulations.Node, clients []*simulations.Node) bool) bool {
 	net, teardown, err := NewNetwork()
 	defer teardown()
 	if err != nil {
@@ -446,7 +496,7 @@ func testSim(t *testing.T, serverCount, clientCount int, serverDir, clientDir []
 		}
 	}
 
-	test(ctx, net, servers, clients)
+	return test(ctx, net, servers, clients)
 }
 
 func newLesClientService(ctx *adapters.ServiceContext) (node.Service, error) {

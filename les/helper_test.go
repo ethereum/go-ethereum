@@ -134,16 +134,6 @@ func testIndexers(db ethdb.Database, odr light.OdrBackend, iConfig *light.Indexe
 	return chtIndexer, bloomIndexer, bloomTrieIndexer
 }
 
-func testRCL() RequestCostList {
-	cl := make(RequestCostList, len(reqBenchMap))
-	for i, req := range reqBenchMap {
-		cl[i].MsgCode = req.code
-		cl[i].BaseCost = 0
-		cl[i].ReqCost = 0
-	}
-	return cl
-}
-
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, potential notification
 // channels for different events and relative chain indexers array.
@@ -305,7 +295,7 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 	expList = expList.add("txRelay", nil)
 	expList = expList.add("flowControl/BL", testBufLimit)
 	expList = expList.add("flowControl/MRR", uint64(1))
-	expList = expList.add("flowControl/MRC", testRCL())
+	expList = expList.add("flowControl/MRC", testCostList())
 
 	if err := p2p.ExpectMsg(p.app, StatusMsg, expList); err != nil {
 		t.Fatalf("status recv: %v", err)

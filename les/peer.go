@@ -523,7 +523,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		if server.costTracker != nil {
 			costList = server.costTracker.makeCostList()
 		} else {
-			costList = testRCL()
+			costList = testCostList()
 		}
 		send = send.add("flowControl/MRC", costList)
 		p.fcCosts = costList.decode()

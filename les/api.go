@@ -91,6 +91,10 @@ func (api *PrivateLesServerAPI) MinimumCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(minCapacity)
 }
 
+func (api *PrivateLesServerAPI) FreeClientCapacity() hexutil.Uint64 {
+	return hexutil.Uint64(api.server.freeClientCap)
+}
+
 type clientPool interface {
 	peerSetNotify
 	setLimits(count int, totalCap uint64)
@@ -98,12 +102,13 @@ type clientPool interface {
 
 // priorityClientPool stores information about prioritized clients
 type priorityClientPool struct {
-	lock                                       sync.Mutex
-	child                                      clientPool
-	ps                                         *peerSet
-	clients                                    map[enode.ID]priorityClientInfo
-	totalCap, totalConnectedCap, freeClientCap uint64
-	maxPeers, priorityCount                    int
+	lock                             sync.Mutex
+	child                            clientPool
+	ps                               *peerSet
+	clients                          map[enode.ID]priorityClientInfo
+	totalCap, totalCapAnnounced      uint64
+	totalConnectedCap, freeClientCap uint64
+	maxPeers, priorityCount          int
 
 	subs            tcSubs
 	updateSchedule  []scheduledUpdate
@@ -174,7 +179,7 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 		v.child.registerPeer(p)
 	}
 	if c.cap != 0 && v.totalConnectedCap+c.cap > v.totalCap {
-		v.ps.Unregister(p.id)
+		go v.ps.Unregister(p.id)
 		return
 	}
 
@@ -222,6 +227,7 @@ func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
+	v.totalCapAnnounced = totalCap
 	if totalCap > v.totalCap {
 		v.setLimitsNow(count, totalCap)
 		v.subs.send(totalCap, false)
@@ -275,7 +281,7 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 				v.totalConnectedCap -= c.cap
 				v.priorityCount--
 				v.clients[id] = c
-				v.ps.Unregister(c.peer.id)
+				go v.ps.Unregister(c.peer.id)
 				if v.priorityCount <= count && v.totalConnectedCap <= totalCap {
 					break
 				}
@@ -294,7 +300,7 @@ func (v *priorityClientPool) totalCapacity() uint64 {
 	v.lock.Lock()
 	defer v.lock.Unlock()
 
-	return v.totalCap
+	return v.totalCapAnnounced
 }
 
 func (v *priorityClientPool) subscribeTotalCapacity(sub *tcSubscription) {
@@ -321,7 +327,9 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 				v.child.unregisterPeer(c.peer)
 			}
 			v.priorityCount++
-			c.peer.updateCapacity(cap)
+		}
+		if cap == 0 {
+			v.priorityCount--
 		}
 		v.totalConnectedCap += cap - c.cap
 		if v.child != nil {
@@ -331,8 +339,9 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 			if v.child != nil {
 				v.child.registerPeer(c.peer)
 			}
-			v.priorityCount--
 			c.peer.updateCapacity(v.freeClientCap)
+		} else {
+			c.peer.updateCapacity(cap)
 		}
 	}
 	if cap != 0 || c.connected {
