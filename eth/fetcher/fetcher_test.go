@@ -244,7 +244,7 @@ func verifyImportEvent(t *testing.T, imported chan *types.Block, arrive bool) {
 		select {
 		case <-imported:
 			t.Fatalf("import invoked")
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(20 * time.Millisecond):
 		}
 	}
 }

@@ -269,8 +269,11 @@ func TestProtocolHook(t *testing.T) {
 	if !testHook.send {
 		t.Fatal("Expected a send message, but it is not")
 	}
-	if testHook.peer == nil || testHook.peer.ID() != tester.Nodes[0].ID() {
-		t.Fatal("Expected peer ID to be set correctly, but it is not")
+	if testHook.peer == nil {
+		t.Fatal("Expected peer to be set, is nil")
+	}
+	if peerId := testHook.peer.ID(); peerId != tester.Nodes[0].ID() && peerId != tester.Nodes[1].ID() {
+		t.Fatalf("Expected peer ID to be set correctly, but it is not (got %v, exp %v or %v", peerId, tester.Nodes[0].ID(), tester.Nodes[1].ID())
 	}
 	if testHook.size != 11 { //11 is the length of the encoded message
 		t.Fatalf("Expected size to be %d, but it is %d ", 1, testHook.size)
