@@ -228,12 +228,16 @@ func main() {
 
 func keys(ctx *cli.Context) error {
 	privateKey := getPrivKey(ctx)
-	pub := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
+	pubkey := crypto.FromECDSAPub(&privateKey.PublicKey)
+	pubkeyhex := hex.EncodeToString(pubkey)
 	pubCompressed := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
 	if !ctx.Bool(SwarmCompressedFlag.Name) {
-		fmt.Println(fmt.Sprintf("publicKey=%s", pub))
+		fmt.Println(fmt.Sprintf("publicKey=%s", pubkeyhex))
 	}
 	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
+
+	bzzkey := crypto.Keccak256Hash(pubkey).Hex()
+	fmt.Println(fmt.Sprintf("bzzkey=%s", bzzkey[2:]))
 	return nil
 }
 
