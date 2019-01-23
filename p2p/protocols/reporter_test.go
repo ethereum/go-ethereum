@@ -39,7 +39,7 @@ func TestReporter(t *testing.T) {
 
 	//setup the metrics
 	log.Debug("Setting up metrics first time")
-	reportInterval := 5 * time.Millisecond
+	reportInterval := 2 * time.Millisecond
 	metrics := SetupAccountingMetrics(reportInterval, filepath.Join(dir, "test.db"))
 	log.Debug("Done.")
 
