@@ -82,8 +82,8 @@ type receiptStorageRLP struct {
 	GasUsed           uint64
 }
 
-// receiptSwollenStorageRLP is the previous storage encoding of a receipt including some unnecessary fields.
-type receiptSwollenStorageRLP struct {
+// LegacyReceiptStorageRLP is the previous storage encoding of a receipt including some unnecessary fields.
+type LegacyReceiptStorageRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Bloom             Bloom
@@ -186,7 +186,7 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	var dec receiptStorageRLP
 	if err := s.Decode(&dec); err != nil {
-		var sdec receiptSwollenStorageRLP
+		var sdec LegacyReceiptStorageRLP
 		if err := s.Decode(&sdec); err != nil {
 			return err
 		}

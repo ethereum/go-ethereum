@@ -70,6 +70,7 @@ const (
 	// the following incompatible database changes were added.
 	// * the `BlockNumber`, `TxHash`, `TxIndex`, `BlockHash` and `Index` fields of log are deleted
 	// * the `Bloom` field of receipt is deleted
+	// * the `BlockIndex` and `TxIndex` fields of txlookup are deleted
 	BlockChainVersion uint64 = 4
 )
 
