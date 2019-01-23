@@ -443,10 +443,10 @@ func (n *Node) Stop() error {
 	// unblock n.Wait
 	close(n.stop)
 
+	// Close the accounts manager.
+	var accmanError error
 	if n.accman != nil {
-		if err := n.accman.Close(); err != nil {
-			return err
-		}
+		accmanError = n.accman.Close()
 		n.accman = nil
 	}
 
@@ -458,6 +458,9 @@ func (n *Node) Stop() error {
 
 	if len(failure.Services) > 0 {
 		return failure
+	}
+	if accmanError != nil {
+		return accmanError
 	}
 	if keystoreErr != nil {
 		return keystoreErr
