@@ -179,6 +179,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				eth.blockchain.Rollback([]common.Hash{curBlock.Hash()})
 			}
 		}
+
+		if prevBlock != nil {
+			err := eth.blockchain.SetHead(prevBlock.NumberU64())
+			if err != nil {
+				log.Crit("Err Rollback", "err", err)
+				return nil, err
+			}
+		}
 	}
 
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
