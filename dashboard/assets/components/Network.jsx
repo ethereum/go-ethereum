@@ -24,11 +24,15 @@ import TableBody from '@material-ui/core/TableBody';
 import TableRow from '@material-ui/core/TableRow';
 import TableCell from '@material-ui/core/TableCell';
 import Grid from '@material-ui/core/Grid/Grid';
+import Typography from '@material-ui/core/Typography';
 import AreaChart from 'recharts/es6/chart/AreaChart';
 import Tooltip from 'recharts/es6/component/Tooltip';
 import Area from 'recharts/es6/cartesian/Area';
+import {Icon as FontAwesome} from 'react-fa';
+
 import CustomTooltip, {bytePlotter, multiplier} from 'CustomTooltip';
 import type {Network as NetworkType, PeerEvent} from '../types/content';
+import {styles as commonStyles} from '../common';
 
 // inserter is a state updater function for the main component, which handles the peers.
 export const inserter = (sampleLimit: number) => (update: NetworkType, prev: NetworkType) => {
@@ -44,9 +48,10 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 				return;
 			}
 			switch (event.remove) {
-			case 'bundle':
+			case 'bundle': {
 				delete prev.peers.bundles[event.ip];
 				return;
+			}
 			case 'known': {
 				if (!event.id) {
 					console.error('Remove known peer event without ID', event.ip);
@@ -97,20 +102,40 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 				});
 				return;
 			}
-			if (!bundle.knownPeers || !bundle.knownPeers[event.id]) {
+			if (!bundle.knownPeers) {
+				bundle.knownPeers = {};
+			}
+			if (!bundle.knownPeers[event.id]) {
 				bundle.knownPeers[event.id] = {
 					connected:    [],
 					disconnected: [],
 					ingress:      [],
 					egress:       [],
+					active:       false,
 				};
 			}
 			const peer = bundle.knownPeers[event.id];
 			if (event.connected) {
+				if (!peer.connected) {
+					console.warn('peer.connected should exist');
+					peer.connected = [];
+				}
 				peer.connected.push(event.connected);
 			}
 			if (event.disconnected) {
+				if (!peer.disconnected) {
+					console.warn('peer.disconnected should exist');
+					peer.disconnected = [];
+				}
 				peer.disconnected.push(event.disconnected);
+			}
+			switch (event.activity) {
+			case 'active':
+				peer.active = true;
+				break;
+			case 'inactive':
+				peer.active = false;
+				break;
 			}
 			if (Array.isArray(event.ingress) && Array.isArray(event.egress)) {
 				if (event.ingress.length !== event.egress.length) {
@@ -132,7 +157,21 @@ export const inserter = (sampleLimit: number) => (update: NetworkType, prev: Net
 };
 
 // styles contains the constant styles of the component.
-const styles = {};
+const styles = {
+	tableHead: {
+		height: 'auto',
+	},
+	tableRow: {
+		height: 'auto',
+	},
+	tableCell: {
+		paddingTop:    0,
+		paddingRight:  5,
+		paddingBottom: 0,
+		paddingLeft:   5,
+		border:        'none',
+	},
+};
 
 export type Props = {
     container:    Object,
@@ -157,16 +196,67 @@ class Network extends Component<Props, State> {
 		return `${month}/${date}/${hours}:${minutes}:${seconds}`;
 	};
 
+	copyToClipboard = (id) => (event) => {
+		event.preventDefault();
+		navigator.clipboard.writeText(id).then(() => {}, () => {
+			console.error("Failed to copy node id", id);
+		});
+	};
+
+	// TODO (kurkomisi): add single tooltip and move it to the mouse position on copy button click.
+	// Tried with TooltipTrigger components for each button, but it seems to be a big load.
+	peerTableRow = (ip, id, bundle, peer) => (
+		<TableRow key={`known_${ip}_${id}`} style={styles.tableRow}>
+			<TableCell style={styles.tableCell}>
+				<FontAwesome name='circle' style={{color: peer.active ? 'green' : 'red'}} />
+			</TableCell>
+			<TableCell style={{fontFamily: 'monospace', ...styles.tableCell}}>
+				{id.substring(0, 10) + ' '}
+				<FontAwesome name='copy' style={commonStyles.light} onClick={this.copyToClipboard(id)} />
+			</TableCell>
+			<TableCell style={styles.tableCell}>
+				{bundle.location ? (() => {
+					const l = bundle.location;
+					return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
+				})() : ''}
+			</TableCell>
+			<TableCell style={styles.tableCell}>
+				<AreaChart
+					width={200} height={18}
+					syncId={'footerSyncId'}
+					data={peer.ingress.map(({value}) => ({ingress: value || 0}))}
+					margin={{top: 5, right: 5, bottom: 0, left: 5}}
+				>
+					<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
+					<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#8884d8' fill='#8884d8' />
+				</AreaChart>
+				<AreaChart
+					width={200} height={18}
+					syncId={'footerSyncId'}
+					data={peer.egress.map(({value}) => ({egress: -value || 0}))}
+					margin={{top: 0, right: 5, bottom: 5, left: 5}}
+				>
+					<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
+					<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#82ca9d' fill='#82ca9d' />
+				</AreaChart>
+			</TableCell>
+		</TableRow>
+	);
+
 	render() {
 		return (
-			<Grid container direction='row' justify='space-between' spacing={24}>
-				<Grid item xs={6}>
+			<Grid container direction='row' justify='space-between'>
+				<Grid item>
+					<Typography variant='subtitle1' gutterBottom>
+						Known peers
+					</Typography>
 					<Table>
-						<TableHead>
-							<TableRow>
-								<TableCell>Node ID</TableCell>
-								<TableCell>Location</TableCell>
-								<TableCell>Traffic</TableCell>
+						<TableHead style={styles.tableHead}>
+							<TableRow style={styles.tableRow}>
+								<TableCell style={styles.tableCell} />
+								<TableCell style={styles.tableCell}>Node ID</TableCell>
+								<TableCell style={styles.tableCell}>Location</TableCell>
+								<TableCell style={styles.tableCell}>Traffic</TableCell>
 							</TableRow>
 						</TableHead>
 						<TableBody>
@@ -174,50 +264,39 @@ class Network extends Component<Props, State> {
 								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
 									return null;
 								}
-								return Object.entries(bundle.knownPeers).map(([id, peer]) => (
-									<TableRow key={`known_${ip}_${id}`}>
-										<TableCell>
-											{id.substring(0, 10)}
-										</TableCell>
-										<TableCell>
-											{bundle.location ? (() => {
-												const l = bundle.location;
-												return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
-											})() : ''}
-										</TableCell>
-										<TableCell>
-											<AreaChart
-												width={200} height={18}
-												syncId={'footerSyncId'}
-												data={peer.egress.map(({value}) => ({egress: value || 0}))}
-												margin={{top: 5, right: 5, bottom: 0, left: 5}}
-											>
-												<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Download')} />} />
-												<Area isAnimationActive={false} type='monotone' dataKey='egress' stroke='#8884d8' fill='#8884d8' />
-											</AreaChart>
-											<AreaChart
-												width={200} height={18}
-												syncId={'footerSyncId'}
-												data={peer.ingress.map(({value}) => ({ingress: -value || 0}))}
-												margin={{top: 0, right: 5, bottom: 5, left: 5}}
-											>
-												<Tooltip cursor={false} content={<CustomTooltip tooltip={bytePlotter('Upload', multiplier(-1))} />} />
-												<Area isAnimationActive={false} type='monotone' dataKey='ingress' stroke='#82ca9d' fill='#82ca9d' />
-											</AreaChart>
-										</TableCell>
-									</TableRow>
-								));
+								return Object.entries(bundle.knownPeers).map(([id, peer]) => {
+									if (peer.active === false) {
+										return null;
+									}
+									return this.peerTableRow(ip, id, bundle, peer);
+								});
+							})}
+						</TableBody>
+						<TableBody>
+							{Object.entries(this.props.content.peers.bundles).map(([ip, bundle]) => {
+								if (!bundle.knownPeers || Object.keys(bundle.knownPeers).length < 1) {
+									return null;
+								}
+								return Object.entries(bundle.knownPeers).map(([id, peer]) => {
+									if (peer.active === true) {
+										return null;
+									}
+									return this.peerTableRow(ip, id, bundle, peer);
+								});
 							})}
 						</TableBody>
 					</Table>
 				</Grid>
-				<Grid item xs={6}>
+				<Grid item>
+					<Typography variant='subtitle1' gutterBottom>
+						Connection attempts
+					</Typography>
 					<Table>
-						<TableHead>
-							<TableRow>
-								<TableCell>IP</TableCell>
-								<TableCell>Location</TableCell>
-								<TableCell>Attempts</TableCell>
+						<TableHead style={styles.tableHead}>
+							<TableRow style={styles.tableRow}>
+								<TableCell style={styles.tableCell}>IP</TableCell>
+								<TableCell style={styles.tableCell}>Location</TableCell>
+								<TableCell style={styles.tableCell}>Nr</TableCell>
 							</TableRow>
 						</TableHead>
 						<TableBody>
@@ -226,15 +305,15 @@ class Network extends Component<Props, State> {
 									return null;
 								}
 								return (
-									<TableRow key={`attempt_${ip}`}>
-										<TableCell>{ip}</TableCell>
-										<TableCell>
+									<TableRow key={`attempt_${ip}`} style={styles.tableRow}>
+										<TableCell style={styles.tableCell}>{ip}</TableCell>
+										<TableCell style={styles.tableCell}>
 											{bundle.location ? (() => {
 												const l = bundle.location;
 												return `${l.country ? l.country : ''}${l.city ? `/${l.city}` : ''}`;
 											})() : ''}
 										</TableCell>
-										<TableCell>
+										<TableCell style={styles.tableCell}>
 											{Object.values(bundle.attempts).length}
 										</TableCell>
 									</TableRow>

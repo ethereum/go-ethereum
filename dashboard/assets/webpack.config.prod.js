@@ -29,8 +29,8 @@ module.exports = merge(common, {
 				uglifyOptions: {
 					compress: true,
 					output:   {
-						comments:   false,
-						beautify:   true,
+						comments: false,
+						beautify: true,
 					},
 					// warnings: true,
 				},

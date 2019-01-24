@@ -63,6 +63,7 @@ export type PeerEvent = {
 	disconnected: Date,
 	ingress:      ChartEntries,
 	egress:       ChartEntries,
+	activity:     string,
 };
 
 export type Peers = {
@@ -80,6 +81,7 @@ export type KnownPeer = {
 	disconnected: Array<Date>,
 	ingress:      Array<ChartEntries>,
 	egress:       Array<ChartEntries>,
+	active:       boolean,
 };
 
 export type UnknownPeer = {

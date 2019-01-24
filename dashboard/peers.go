@@ -30,7 +30,7 @@ import (
 const (
 	eventBufferLimit = 128 // Maximum number of buffered peer events.
 	knownPeerLimit   = 100 // Maximum number of stored peers, which successfully made the handshake.
-	attemptLimit     = 100 // Maximum number of stored peers, which failed to make the handshake.
+	attemptLimit     = 200 // Maximum number of stored peers, which failed to make the handshake.
 
 	// eventLimit is the maximum number of the dashboard's custom peer events,
 	// that are collected between two metering period and sent to the clients
@@ -78,8 +78,7 @@ type peerContainer struct {
 	// Bundles is the outer map using the peer's IP address as key.
 	Bundles map[string]*peerBundle `json:"bundles,omitempty"`
 
-	// activePeers contains the peers with opened connection in random order.
-	activePeers *list.List
+	activeCount int // Number of the still connected peers
 
 	// inactivePeers contains the peers with closed connection in chronological order.
 	inactivePeers *list.List
@@ -100,7 +99,6 @@ type peerContainer struct {
 func newPeerContainer(geodb *geoDB) *peerContainer {
 	return &peerContainer{
 		Bundles:       make(map[string]*peerBundle),
-		activePeers:   list.New(),
 		inactivePeers: list.New(),
 		attemptOrder:  make([]string, 0, attemptLimit),
 		geodb:         geodb,
@@ -142,21 +140,37 @@ func (pc *peerContainer) extendKnown(event *peerEvent) []*peerEvent {
 		if first := len(peer.Connected) - sampleLimit; first > 0 {
 			peer.Connected = peer.Connected[first:]
 		}
+		peer.Active = true
+		events = append(events, &peerEvent{
+			Activity: Active,
+			IP:       peer.ip,
+			ID:       peer.id,
+		})
+		pc.activeCount++
+		if peer.listElement != nil {
+			_ = pc.inactivePeers.Remove(peer.listElement)
+			peer.listElement = nil
+		}
 	case event.Disconnected != nil:
 		peer.Disconnected = append(peer.Disconnected, event.Disconnected)
 		if first := len(peer.Disconnected) - sampleLimit; first > 0 {
 			peer.Disconnected = peer.Disconnected[first:]
 		}
+		peer.Active = false
+		events = append(events, &peerEvent{
+			Activity: Inactive,
+			IP:       peer.ip,
+			ID:       peer.id,
+		})
+		pc.activeCount--
+		if peer.listElement != nil {
+			// If the peer is already in the list, remove and reinsert it.
+			_ = pc.inactivePeers.Remove(peer.listElement)
+		}
+		// Insert the peer into the list.
+		peer.listElement = pc.inactivePeers.PushBack(peer)
 	}
-	if peer.listElement != nil {
-		// If the peer is already in the list, remove and reinsert it.
-		_ = pc.activePeers.Remove(peer.listElement)
-		_ = pc.inactivePeers.Remove(peer.listElement)
-		peer.listElement = nil
-	}
-	// Insert the peer into the list.
-	peer.listElement = pc.activePeers.PushBack(peer)
-	for pc.activePeers.Len()+pc.inactivePeers.Len() > knownPeerLimit {
+	for pc.inactivePeers.Len() > 0 && pc.activeCount+pc.inactivePeers.Len() > knownPeerLimit {
 		// While the count of the known peers is greater than the limit,
 		// remove the first element from the inactive peer list and from the map.
 		if removedPeer, ok := pc.inactivePeers.Remove(pc.inactivePeers.Front()).(*knownPeer); ok {
@@ -165,12 +179,8 @@ func (pc *peerContainer) extendKnown(event *peerEvent) []*peerEvent {
 			log.Warn("Failed to parse the removed peer")
 		}
 	}
-	for pc.activePeers.Len() > knownPeerLimit {
-		if removedPeer, ok := pc.activePeers.Remove(pc.activePeers.Front()).(*knownPeer); ok {
-			events = append(events, pc.removeKnown(removedPeer.ip, removedPeer.id)...)
-		} else {
-			log.Warn("Failed to parse the removed peer")
-		}
+	if pc.activeCount > knownPeerLimit {
+		log.Warn("Number of active peers is greater than the limit")
 	}
 	return events
 }
@@ -194,28 +204,6 @@ func (pc *peerContainer) handleAttempt(event *peerEvent) []*peerEvent {
 	return events
 }
 
-// setActive pushes the peer denoted by the given IP address and node ID
-// into the active peer list. Takes no effect if the peer doesn't exist.
-func (pc *peerContainer) setActive(ip, id string) {
-	if bundle, ok := pc.Bundles[ip]; ok {
-		if peer, ok := bundle.KnownPeers[id]; ok {
-			if peer.listElement != nil {
-				_ = pc.inactivePeers.Remove(peer.listElement)
-				_ = pc.activePeers.Remove(peer.listElement)
-			}
-			peer.listElement = pc.activePeers.PushBack(peer)
-		}
-	}
-}
-
-// resetActive pushes the active peers to the end of the inactive peer
-// list, denoting that active peers are not considered active anymore.
-func (pc *peerContainer) resetActive() {
-	for pc.activePeers.Front() != nil {
-		pc.inactivePeers.PushBack(pc.activePeers.Remove(pc.activePeers.Front()))
-	}
-}
-
 // peerBundle contains the peers belonging to a given IP address.
 type peerBundle struct {
 	// Location contains the geographical location based on the bundle's IP address.
@@ -233,6 +221,7 @@ type peerBundle struct {
 // removeKnown removes the known peer belonging to the
 // given IP address and node ID from the peer tree.
 func (pc *peerContainer) removeKnown(ip, id string) (events []*peerEvent) {
+	// TODO (kurkomisi): Remove peers that don't have traffic samples anymore.
 	if bundle, ok := pc.Bundles[ip]; ok {
 		if _, ok := bundle.KnownPeers[id]; ok {
 			events = append(events, &peerEvent{
@@ -251,6 +240,8 @@ func (pc *peerContainer) removeKnown(ip, id string) (events []*peerEvent) {
 			})
 			delete(pc.Bundles, ip)
 		}
+	} else {
+		log.Warn("No bundle to remove", "ip", ip)
 	}
 	return events
 }
@@ -321,6 +312,8 @@ type knownPeer struct {
 	Ingress ChartEntries `json:"ingress,omitempty"`
 	Egress  ChartEntries `json:"egress,omitempty"`
 
+	Active bool `json:"active"` // Denotes if the peer is still connected.
+
 	listElement *list.Element // Pointer to the peer element in the list.
 	ip, id      string        // The IP and the ID by which the peer can be accessed in the tree.
 	prevIngress float64
@@ -338,11 +331,15 @@ type peerAttempt struct {
 }
 
 type RemovedPeerType string
+type ActivityType string
 
 const (
 	RemoveKnown   RemovedPeerType = "known"
 	RemoveAttempt RemovedPeerType = "attempt"
 	RemoveBundle  RemovedPeerType = "bundle"
+
+	Active   ActivityType = "active"
+	Inactive ActivityType = "inactive"
 )
 
 // peerEvent contains the attributes of a peer event.
@@ -355,6 +352,7 @@ type peerEvent struct {
 	Disconnected *time.Time      `json:"disconnected,omitempty"` // Timestamp of the disonnection moment.
 	Ingress      ChartEntries    `json:"ingress,omitempty"`      // Ingress samples.
 	Egress       ChartEntries    `json:"egress,omitempty"`       // Egress samples.
+	Activity     ActivityType    `json:"activity,omitempty"`     // Connection status change.
 }
 
 // trafficMap is a container for the periodically collected peer traffic.
@@ -475,30 +473,6 @@ func (db *Dashboard) collectPeerData() {
 			// Protect 'peers', because it is part of the history.
 			db.peerLock.Lock()
 
-			// Usually the active peers don't produce events, and marking
-			// them as active makes it sure that they won't be removed from
-			// the tree. Only the active peers are registered into the peer
-			// registry, so after the traffic collection the ingress and the
-			// egress maps contain all the active peers.
-			//
-			// It is important to mark the active ones before the merge with
-			// the diff, otherwise the active peers can be removed.
-			//
-			// After a metering period the active peers can become inactive,
-			// so at the beginning it is necessary to transpose them to the
-			// inactive list.
-			peers.resetActive()
-			for ip, bundle := range *ingress {
-				for id := range bundle {
-					// Only set the peers that are inserted both
-					// into the ingress and the egress maps.
-					if _, ok := (*egress)[ip][id]; ok {
-						peers.setActive(ip, id)
-					} else {
-						log.Warn("Peer missing traffic sample", "IP", ip, "ID", id)
-					}
-				}
-			}
 			var diff []*peerEvent
 			for i := 0; i < len(newPeerEvents); i++ {
 				if newPeerEvents[i].IP == "" {
@@ -558,9 +532,11 @@ func (db *Dashboard) collectPeerData() {
 			}
 			db.peerLock.Unlock()
 
-			db.sendToAll(&Message{Network: &NetworkMessage{
-				Diff: diff,
-			}})
+			if len(diff) > 0 {
+				db.sendToAll(&Message{Network: &NetworkMessage{
+					Diff: diff,
+				}})
+			}
 			// Clear the traffic maps, and the event array,
 			// prepare them for the next metering.
 			*ingress, *egress = make(trafficMap), make(trafficMap)
