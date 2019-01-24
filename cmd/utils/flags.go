@@ -1463,7 +1463,7 @@ func SetupMetrics(ctx *cli.Context) {
 		)
 
 		if enableExport {
-			tagsMap := splitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
+			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
 			log.Info("Enabling metrics export to InfluxDB")
 
@@ -1472,7 +1472,7 @@ func SetupMetrics(ctx *cli.Context) {
 	}
 }
 
-func splitTagsFlag(tagsFlag string) map[string]string {
+func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
 
