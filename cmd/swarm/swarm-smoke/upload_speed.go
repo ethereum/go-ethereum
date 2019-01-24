@@ -35,6 +35,8 @@ var endpoint string
 func generateEndpoint(scheme string, cluster string, app string, from int) {
 	if cluster == "prod" {
 		endpoint = fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, from)
+	} else if cluster == "private-internal" {
+		endpoint = fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, from)
 	} else {
 		endpoint = fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, from, cluster)
 	}

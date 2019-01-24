@@ -156,6 +156,10 @@ var (
 		Name:  "compressed",
 		Usage: "Prints encryption keys in compressed form",
 	}
+	SwarmBootnodeModeFlag = cli.BoolFlag{
+		Name:  "bootnode-mode",
+		Usage: "Run Swarm in Bootnode mode",
+	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",

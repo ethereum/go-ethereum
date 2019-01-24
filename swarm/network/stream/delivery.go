@@ -255,8 +255,15 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 				return true
 			}
 			sp = d.getPeer(id)
+			// sp is nil, when we encounter a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
 			if sp == nil {
-				//log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
+				return true
+			}
+			// nodes that do not provide stream protocol
+			// should not be requested, e.g. bootnodes
+			if !p.HasCap("stream") {
+				// TODO: if we have no errors, delete this if
+				log.Error("Delivery.RequestFromPeers: peer doesn't have stream cap. we should have returned at sp == nil")
 				return true
 			}
 			spID = &id
