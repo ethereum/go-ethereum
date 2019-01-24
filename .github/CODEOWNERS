@@ -10,6 +10,7 @@ les/                            @zsfelfoldi
 light/                          @zsfelfoldi
 mobile/                         @karalabe
 p2p/                            @fjl @zsfelfoldi
-p2p/simulations                 @zelig @nonsense @janos
-p2p/protocols                   @zelig @nonsense @janos
+p2p/simulations                 @zelig @nonsense @janos @justelad
+p2p/protocols                   @zelig @nonsense @janos @justelad
+p2p/testing                     @zelig @nonsense @janos @justelad
 whisper/                        @gballet @gluk256
