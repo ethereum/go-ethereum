@@ -23,10 +23,12 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NetworkId               uint64
 		SyncMode                downloader.SyncMode
 		NoPruning               bool
-		LightServ               int  `toml:",omitempty"`
-		LightPeers              int  `toml:",omitempty"`
-		SkipBcVersionCheck      bool `toml:"-"`
-		DatabaseHandles         int  `toml:"-"`
+		LightServ               int `toml:",omitempty"`
+		LightPeers              int `toml:",omitempty"`
+		OnlyAnnounce            bool
+		ULC                     *ULCConfig `toml:",omitempty"`
+		SkipBcVersionCheck      bool       `toml:"-"`
+		DatabaseHandles         int        `toml:"-"`
 		DatabaseCache           int
 		TrieCleanCache          int
 		TrieDirtyCache          int
@@ -54,6 +56,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoPruning = c.NoPruning
 	enc.LightServ = c.LightServ
 	enc.LightPeers = c.LightPeers
+	enc.OnlyAnnounce = c.OnlyAnnounce
+	enc.ULC = c.ULC
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
@@ -71,6 +75,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
+
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
 	enc.EWASMInterpreter = c.EWASMInterpreter
@@ -85,10 +90,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NetworkId               *uint64
 		SyncMode                *downloader.SyncMode
 		NoPruning               *bool
-		LightServ               *int  `toml:",omitempty"`
-		LightPeers              *int  `toml:",omitempty"`
-		SkipBcVersionCheck      *bool `toml:"-"`
-		DatabaseHandles         *int  `toml:"-"`
+		LightServ               *int `toml:",omitempty"`
+		LightPeers              *int `toml:",omitempty"`
+		OnlyAnnounce            *bool
+		ULC                     *ULCConfig `toml:",omitempty"`
+		SkipBcVersionCheck      *bool      `toml:"-"`
+		DatabaseHandles         *int       `toml:"-"`
 		DatabaseCache           *int
 		TrieCleanCache          *int
 		TrieDirtyCache          *int
@@ -130,6 +137,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.LightPeers != nil {
 		c.LightPeers = *dec.LightPeers
+	}
+	if dec.OnlyAnnounce != nil {
+		c.OnlyAnnounce = *dec.OnlyAnnounce
+	}
+	if dec.ULC != nil {
+		c.ULC = dec.ULC
 	}
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck

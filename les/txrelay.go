@@ -121,7 +121,7 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return peer.GetRequestCost(SendTxMsg, len(ll))
 			},
 			canSend: func(dp distPeer) bool {
-				return dp.(*peer) == pp
+				return !dp.(*peer).isOnlyAnnounce && dp.(*peer) == pp
 			},
 			request: func(dp distPeer) func() {
 				peer := dp.(*peer)

@@ -76,6 +76,9 @@ type NodeConfig struct {
 
 	// Listening address of pprof server.
 	PprofAddress string
+
+	// Ultra Light client options
+	ULC *eth.ULCConfig
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -131,6 +134,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			MaxPeers:         config.MaxPeers,
 		},
 	}
+
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
 		return nil, err
