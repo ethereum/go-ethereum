@@ -226,7 +226,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			randomAddr := RandomAddr()
 			pt := newBzzHandshakeTester(1, randomAddr, false)
-      
+
 			node := pt.Nodes[0]
 			addr := NewAddr(node)
 
