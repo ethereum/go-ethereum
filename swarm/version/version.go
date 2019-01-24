@@ -41,6 +41,9 @@ var VersionWithMeta = func() string {
 	return v
 }()
 
+// Git SHA1 commit hash of the release, will be set by main.init() function
+var GitCommit string
+
 // ArchiveVersion holds the textual version string used for Swarm archives.
 // e.g. "0.3.0-dea1ce05" for stable releases, or
 //      "0.3.1-unstable-21c059b6" for unstable releases
