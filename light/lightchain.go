@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -50,6 +50,7 @@ type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
+	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
 	chainSideFeed event.Feed
@@ -57,21 +58,18 @@ type LightChain struct {
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
-	chainmu sync.RWMutex
-
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
 	blockCache   *lru.Cache // Cache for the most recent entire blocks
 
+	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
-	running int32 // running must be called automically
-	// procInterrupt must be atomically called
-	procInterrupt int32 // interrupt signaler for block processing
-	wg            sync.WaitGroup
+	wg      sync.WaitGroup
 
-	engine consensus.Engine
-
-	disableCheckFreq bool
+	// Atomic boolean switches:
+	running          int32 // whether LightChain is running or stopped
+	procInterrupt    int32 // interrupts chain insert
+	disableCheckFreq int32 // disables header verification
 }
 
 // NewLightChain returns a fully initialised light chain using information
@@ -356,7 +354,7 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	if self.disableCheckFreq {
+	if atomic.LoadInt32(&self.disableCheckFreq) == 1 {
 		checkFreq = 0
 	}
 	start := time.Now()
@@ -532,16 +530,12 @@ func (self *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 	return self.scope.Track(new(event.Feed).Subscribe(ch))
 }
 
-//DisableCheckFreq disables header validation. It needs for ULC
+// DisableCheckFreq disables header validation. This is used for ultralight mode.
 func (self *LightChain) DisableCheckFreq() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.disableCheckFreq = true
+	atomic.StoreInt32(&self.disableCheckFreq, 1)
 }
 
-//EnableCheckFreq enables header validation
+// EnableCheckFreq enables header validation.
 func (self *LightChain) EnableCheckFreq() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.disableCheckFreq = false
+	atomic.StoreInt32(&self.disableCheckFreq, 0)
 }
