@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"io/ioutil"
 	"net"
@@ -106,6 +107,46 @@ func runTestScript(t *testing.T, file string) {
 			}
 		default:
 			panic("invalid line in test script: " + line)
+		}
+	}
+}
+
+// This test checks that responses are delivered for very short-lived connections that
+// only carry a single request.
+func TestServerShortLivedConn(t *testing.T) {
+	server := newTestServer()
+	defer server.Stop()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal("can't listen:", err)
+	}
+	defer listener.Close()
+	go server.ServeListener(listener)
+
+	var (
+		request  = `{"jsonrpc":"2.0","id":1,"method":"rpc_modules"}` + "\n"
+		wantResp = `{"jsonrpc":"2.0","id":1,"result":{"nftest":"1.0","rpc":"1.0","test":"1.0"}}` + "\n"
+		deadline = time.Now().Add(10 * time.Second)
+	)
+	for i := 0; i < 20; i++ {
+		conn, err := net.Dial("tcp", listener.Addr().String())
+		if err != nil {
+			t.Fatal("can't dial:", err)
+		}
+		defer conn.Close()
+		conn.SetDeadline(deadline)
+		// Write the request, then half-close the connection so the server stops reading.
+		conn.Write([]byte(request))
+		conn.(*net.TCPConn).CloseWrite()
+		// Now try to get the response.
+		buf := make([]byte, 2000)
+		n, err := conn.Read(buf)
+		if err != nil {
+			t.Fatal("read error:", err)
+		}
+		if !bytes.Equal(buf[:n], []byte(wantResp)) {
+			t.Fatalf("wrong response: %s", buf[:n])
 		}
 	}
 }

@@ -117,8 +117,8 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {
-	cc.codec.Close()
 	cc.handler.close(err, inflightReq)
+	cc.codec.Close()
 }
 
 type readOp struct {
@@ -558,7 +558,6 @@ func (c *Client) dispatch(codec ServerCodec) {
 		// Reconnect:
 		case newcodec := <-c.reconnected:
 			log.Debug("RPC client reconnected", "reading", reading, "conn", newcodec.RemoteAddr())
-			go c.read(newcodec)
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case which
 				// happens if this loop isn't notified in time after the connection breaks.
@@ -568,6 +567,7 @@ func (c *Client) dispatch(codec ServerCodec) {
 				conn.close(errClientReconnected, lastOp)
 				c.drainRead()
 			}
+			go c.read(newcodec)
 			reading = true
 			conn = c.newClientConn(newcodec)
 			// Re-register the in-flight request on the new handler
