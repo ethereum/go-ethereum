@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// memoryGasCosts calculates the quadratic gas for memory expansion. It does so
+// memoryGasCost calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.
 func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 
@@ -382,7 +382,7 @@ func gasExp(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem 
 		gas      = expByteLen * gt.ExpByte // no overflow check required. Max is 256 * ExpByte gas
 		overflow bool
 	)
-	if gas, overflow = math.SafeAdd(gas, GasSlowStep); overflow {
+	if gas, overflow = math.SafeAdd(gas, params.ExpGas); overflow {
 		return 0, errGasUintOverflow
 	}
 	return gas, nil
