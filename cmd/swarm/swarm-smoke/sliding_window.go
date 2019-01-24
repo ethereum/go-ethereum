@@ -54,7 +54,7 @@ func slidingWindow(c *cli.Context) error {
 	nodes := to - from
 	networkCapacity := float64(storeSize) * float64(nodes)
 	const iterationTimeout = 30 * time.Second
-	log.Info("sliding window test started", "store size(kb)", int(storeSize/1000), "nodes", nodes, "filesize(kb)", int(filesize/1000), "network capacity(kb)", int(networkCapacity/1000), "timeout", timeout)
+	log.Info("sliding window test started", "store size(kb)", int(storeSize/1000), "nodes", nodes, "filesize(kb)", filesize, "network capacity(kb)", int(networkCapacity/1000), "timeout", timeout)
 	uploadedBytes := 0
 	networkDepth := 0
 	errored := false
@@ -64,7 +64,7 @@ outer:
 		seed := int(time.Now().UnixNano() / 1e6)
 		log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-		randomBytes := testutil.RandomBytes(seed, filesize)
+		randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 		t1 := time.Now()
 		hash, err := upload(&randomBytes, endpoints[0])
@@ -83,7 +83,7 @@ outer:
 		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "sleeping", syncDelay)
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
 		time.Sleep(time.Duration(syncDelay) * time.Second)
-		uploadedBytes += filesize
+		uploadedBytes += filesize * 1000
 
 		for i, v := range hashes {
 			rand.Seed(time.Now().UTC().UnixNano())
@@ -104,8 +104,8 @@ outer:
 		}
 	}
 
-	log.Info("sliding window test finished", "errored?", errored, "networkDepth", networkDepth, "networkDepth(kb)", int(networkDepth*filesize/1000))
-	log.Info("stats", "uploadedFiles", len(hashes), "uploadedKb", uploadedBytes/1000, "filesizeKb", filesize/1000, "networkCapacityKb", int(networkCapacity/1000), "networkCapacityMb", int(networkCapacity/1000000))
+	log.Info("sliding window test finished", "errored?", errored, "networkDepth", networkDepth, "networkDepth(kb)", int(networkDepth*filesize))
+	log.Info("stats", "uploadedFiles", len(hashes), "uploadedKb", uploadedBytes/1000, "filesizeKb", filesize, "networkCapacityKb", int(networkCapacity/1000), "networkCapacityMb", int(networkCapacity/1000000))
 
 	metrics.GetOrRegisterMeter("sliding-window.network-depth", nil).Mark(int64(networkDepth))
 	return nil
