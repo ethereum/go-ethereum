@@ -56,7 +56,6 @@ import (
 )
 
 var (
-	startTime          time.Time
 	updateGaugesPeriod = 5 * time.Second
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
@@ -80,6 +79,7 @@ type Swarm struct {
 	swap              *swap.Swap
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
+	startTime         time.Time
 
 	tracerClose io.Closer
 }
@@ -344,7 +344,7 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
-	startTime = time.Now()
+	self.startTime = time.Now()
 
 	self.tracerClose = tracing.Closer
 
@@ -414,7 +414,7 @@ func (self *Swarm) periodicallyUpdateGauges() {
 }
 
 func (self *Swarm) updateGauges() {
-	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
+	uptimeGauge.Update(time.Since(self.startTime).Nanoseconds())
 	requestsCacheGauge.Update(int64(self.netStore.RequestsCacheLen()))
 }
 
