@@ -84,12 +84,11 @@ type Swarm struct {
 	tracerClose io.Closer
 }
 
-// creates a new swarm service instance
+// NewSwarm creates a new swarm service instance
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
 func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
-
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -116,10 +115,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	config.HiveParams.Discovery = true
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:   config.NetworkID,
-		OverlayAddr: common.FromHex(config.BzzKey),
-		HiveParams:  config.HiveParams,
-		LightNode:   config.LightNodeEnabled,
+		NetworkID:    config.NetworkID,
+		OverlayAddr:  common.FromHex(config.BzzKey),
+		HiveParams:   config.HiveParams,
+		LightNode:    config.LightNodeEnabled,
+		BootnodeMode: config.BootnodeMode,
 	}
 
 	self.stateStore, err = state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
@@ -455,12 +455,16 @@ func (self *Swarm) Stop() error {
 	return err
 }
 
-// implements the node.Service interface
-func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-	protos = append(protos, self.bzz.Protocols()...)
+// Protocols implements the node.Service interface
+func (s *Swarm) Protocols() (protos []p2p.Protocol) {
+	if s.config.BootnodeMode {
+		protos = append(protos, s.bzz.Protocols()...)
+	} else {
+		protos = append(protos, s.bzz.Protocols()...)
 
-	if self.ps != nil {
-		protos = append(protos, self.ps.Protocols()...)
+		if s.ps != nil {
+			protos = append(protos, s.ps.Protocols()...)
+		}
 	}
 	return
 }

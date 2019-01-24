@@ -66,6 +66,7 @@ type Config struct {
 	DeliverySkipCheck    bool
 	MaxStreamPeerServers int
 	LightNodeEnabled     bool
+	BootnodeMode         bool
 	SyncUpdateDelay      time.Duration
 	SwapAPI              string
 	Cors                 string

@@ -516,6 +516,11 @@ func (r *Registry) requestPeerSubscriptions(kad *network.Kademlia, subs map[enod
 	// nil as base takes the node's base; we need to pass 255 as `EachConn` runs
 	// from deepest bins backwards
 	kad.EachConn(nil, 255, func(p *network.Peer, po int) bool {
+		// nodes that do not provide stream protocol
+		// should not be subscribed, e.g. bootnodes
+		if !p.HasCap("stream") {
+			return true
+		}
 		//if the peer's bin is shallower than the kademlia depth,
 		//only the peer's bin should be subscribed
 		if po < kadDepth {

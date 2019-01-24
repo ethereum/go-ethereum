@@ -279,7 +279,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 	return suggestedPeer, 0, false
 }
 
-// On inserts  the peer as a kademlia peer into the live peers
+// On inserts the peer as a kademlia peer into the live peers
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
