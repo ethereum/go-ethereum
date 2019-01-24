@@ -118,16 +118,16 @@ func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 			return err
 		}
 		// Only return the PIN request if the device wasn't unlocked until now
-		if res == 2 {
-			return nil // Device responded with trezor.Success
-		}
-		if res == 0 {
+		switch res {
+		case 0:
 			w.pinwait = true
 			return ErrTrezorPINNeeded
-		} else if res == 1 {
+		case 1:
 			w.pinwait = false
 			w.passphrasewait = true
 			return ErrTrezorPassphraseNeeded
+		case 2:
+			return nil // responded with trezor.Success
 		}
 	}
 	// Phase 2 requested with actual PIN entry
