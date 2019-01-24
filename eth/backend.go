@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math/big"
 	"runtime"
 	"sync"
@@ -36,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/state"
 	//"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -342,6 +342,59 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				}
 
 				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
+				return penSigners, nil
+			}
+			return []common.Address{}, nil
+		}
+
+		// Hook scans for bad masternodes and decide to penalty them
+		c.HookPenaltyTIPEVM = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
+			}
+			prevEpoc := blockNumberEpoc - chain.Config().Posv.Epoch
+			if prevEpoc >= 0 {
+				start := time.Now()
+				prevHeader := chain.GetHeaderByNumber(prevEpoc)
+				penSigners := c.GetMasternodes(chain, prevHeader)
+				if len(penSigners) > 0 {
+					// Loop for each block to check missing sign.
+					blockHash := map[common.Hash]bool{}
+					for i := prevEpoc; i < blockNumberEpoc; i++ {
+						if len(penSigners) > 0 {
+							bheader := chain.GetHeaderByNumber(i)
+							bhash := bheader.Hash()
+							if i%common.MergeSignRange == 0 {
+								blockHash[bhash] = true
+							}
+							signData, ok := c.BlockSigners.Get(bhash)
+							if !ok {
+								block := chain.GetBlock(bhash, i)
+								txs := block.Transactions()
+								signData = c.CacheSigner(bheader, txs);
+							}
+							txs := signData.([]*types.Transaction)
+							// Check signer signed?
+							for _, tx := range txs {
+								blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+								from := *tx.From()
+								if blockHash[blkHash] == true {
+									for j, addr := range penSigners {
+										if from == addr {
+											// Remove it from dupSigners.
+											penSigners = append(penSigners[:j], penSigners[j+1:]...)
+											break
+										}
+									}
+								}
+							}
+						} else {
+							break
+						}
+					}
+				}
+				log.Debug("Time Calculated HookPenaltyTIPEVM ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
 				return penSigners, nil
 			}
 			return []common.Address{}, nil

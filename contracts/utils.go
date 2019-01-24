@@ -373,10 +373,27 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, header *t
 	mapBlkHash := map[uint64]common.Hash{}
 
 	data := make(map[common.Hash][]common.Address)
-	for curNumber := prevCheckpoint + (rCheckpoint * 2) - 1; curNumber >= startBlockNumber; curNumber-- {
-		header = chain.GetHeader(header.ParentHash, curNumber)
-		mapBlkHash[curNumber] = header.Hash()
-		data = GetSignersSignedAtBlockHash(c, chain, data, header, curNumber)
+	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
+		header = chain.GetHeader(header.ParentHash, i)
+		mapBlkHash[i] = header.Hash()
+		signData, ok := c.BlockSigners.Get(header.Hash())
+		if !ok {
+			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
+			block := chain.GetBlock(header.Hash(), i)
+			txs := block.Transactions()
+			if !chain.Config().IsTIPEVMSigner(header.Number) {
+				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+				signData = c.CacheData(header, txs, receipts);
+			} else {
+				signData = c.CacheSigner(header, txs);
+			}
+		}
+		txs := signData.([]*types.Transaction)
+		for _, tx := range txs {
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			from := *tx.From()
+			data[blkHash] = append(data[blkHash], from)
+		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
 	masternodes := posv.GetMasternodesFromCheckpointHeader(header)
