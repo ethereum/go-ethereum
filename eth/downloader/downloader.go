@@ -414,7 +414,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			latest := d.blockchain.CurrentHeader()
+			latest := d.lightchain.CurrentHeader()
 			d.mux.Post(DoneEvent{latest})
 		}
 	}()

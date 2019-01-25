@@ -33,8 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/les"
@@ -333,33 +333,27 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}()
 
-	if exitWhenSynced := ctx.GlobalDuration(utils.ExitWhenSyncedFlag.Name); exitWhenSynced == true {
+	// Spawn a standalone goroutine for status synchronization monitoring,
+	// close the node when synchronization is complete if user required.
+	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
 		go func() {
-			if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
-				var lightEthereum *les.LightEthereum
-				if err := stack.Service(&lightEthereum); err != nil {
-					utils.Fatalf("LightEthereum service not running: %v", err)
-				}
-			} else {
-				var ethereum *eth.Ethereum
-				if err := stack.Service(&ethereum); err != nil {
-					utils.Fatalf("Ethereum service not running: %v", err)
-				}
-			}
-			var mux = stack.EventMux()
-			var sub = mux.Subscribe(downloader.DoneEvent{})
+			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
+			defer sub.Unsubscribe()
 			for {
 				select {
-				case headers := <-sub.Chan():
-					if headers == nil {
-						return
+				case event := <-sub.Chan():
+					if event == nil {
+						continue
 					}
-					latest :=headers.Data.(*types.Header).Time
-					if 600 >= time.Now().Unix()-latest.Int64() {
-						log.Info("Synchronisation completed, checking", "check", exitWhenSynced)
+					done, ok := event.Data.(downloader.DoneEvent)
+					if !ok {
+						continue
+					}
+					if timestamp := time.Unix(done.Latest.Time.Int64(), 0); time.Since(timestamp) < 10*time.Minute {
+						log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+							"age", common.PrettyAge(timestamp))
 						stack.Stop()
 					}
-				default:
 				}
 			}
 		}()

@@ -16,10 +16,10 @@
 
 package downloader
 
-import (
-  "github.com/ethereum/go-ethereum/core/types"
-)
+import "github.com/ethereum/go-ethereum/core/types"
 
-type DoneEvent struct{ *types.Header }
+type DoneEvent struct {
+	*types.Header
+}
 type StartEvent struct{}
 type FailedEvent struct{ Err error }
