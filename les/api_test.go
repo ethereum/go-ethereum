@@ -71,10 +71,10 @@ func TestCapacityAPI10(t *testing.T) {
 }
 
 // testCapacityAPI runs an end-to-end simulation test connecting one server with
-// a given number of clients. It sets different priority capacitys to all clients
+// a given number of clients. It sets different priority capacities to all clients
 // except a randomly selected one which runs in free client mode. All clients send
 // similar requests at the maximum allowed rate and the test verifies whether the
-// ratio of processed requests is close enough to the ratio of assigned capacitys.
+// ratio of processed requests is close enough to the ratio of assigned capacities.
 // Running multiple rounds with different settings ensures that changing capacity
 // while connected and going back and forth between free and priority mode with
 // the supplied API calls is also thoroughly tested.

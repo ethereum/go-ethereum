@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package les
 
 import (
@@ -34,25 +35,32 @@ var (
 	dropCapacityDelay = time.Second
 )
 
-// PublicLesServerAPI  provides an API to access the les server.
+// PrivateLightServerAPI provides an API to access the LES light server.
 // It offers only methods that operate on public data that is freely available to anyone.
-type PrivateLesServerAPI struct {
+type PrivateLightServerAPI struct {
 	server *LesServer
 }
 
-// NewPublicLesServerAPI creates a new les server API.
-func NewPrivateLesServerAPI(server *LesServer) *PrivateLesServerAPI {
-	return &PrivateLesServerAPI{
+// NewPrivateLightServerAPI creates a new LES light server API.
+func NewPrivateLightServerAPI(server *LesServer) *PrivateLightServerAPI {
+	return &PrivateLightServerAPI{
 		server: server,
 	}
 }
 
 // TotalCapacity queries total available capacity for all clients
-func (api *PrivateLesServerAPI) TotalCapacity() hexutil.Uint64 {
+func (api *PrivateLightServerAPI) TotalCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(api.server.priorityClientPool.totalCapacity())
 }
 
-func (api *PrivateLesServerAPI) SubscribeTotalCapacity(ctx context.Context, onlyUnderrun bool) (*rpc.Subscription, error) {
+// SubscribeTotalCapacity subscribes to changed total capacity events.
+// If onlyUnderrun is true then notification is sent only if the total capacity
+// drops under the total capacity of connected priority clients.
+//
+// Note: actually applying decreasing total capacity values is delayed while the
+// notification is sent instantly. This allows lowering the capacity of a priority client
+// or choosing which one to drop before the system drops some of them automatically.
+func (api *PrivateLightServerAPI) SubscribeTotalCapacity(ctx context.Context, onlyUnderrun bool) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -63,6 +71,7 @@ func (api *PrivateLesServerAPI) SubscribeTotalCapacity(ctx context.Context, only
 }
 
 type (
+	// tcSubscription represents a total capacity subscription
 	tcSubscription struct {
 		notifier     *rpc.Notifier
 		rpcSub       *rpc.Subscription
@@ -71,6 +80,7 @@ type (
 	tcSubs map[*tcSubscription]struct{}
 )
 
+// send sends a changed total capacity event to the subscribers
 func (s tcSubs) send(tc uint64, underrun bool) {
 	for sub, _ := range s {
 		select {
@@ -87,12 +97,35 @@ func (s tcSubs) send(tc uint64, underrun bool) {
 }
 
 // MinimumCapacity queries minimum assignable capacity for a single client
-func (api *PrivateLesServerAPI) MinimumCapacity() hexutil.Uint64 {
+func (api *PrivateLightServerAPI) MinimumCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(minCapacity)
 }
 
-func (api *PrivateLesServerAPI) FreeClientCapacity() hexutil.Uint64 {
+// FreeClientCapacity queries the capacity provided for free clients
+func (api *PrivateLightServerAPI) FreeClientCapacity() hexutil.Uint64 {
 	return hexutil.Uint64(api.server.freeClientCap)
+}
+
+// SetClientCapacity sets the priority capacity assigned to a given client.
+// If the assigned capacity is bigger than zero then connection is always
+// guaranteed. The sum of capacity assigned to priority clients can not exceed
+// the total available capacity.
+//
+// Note: assigned capacity can be changed while the client is connected with
+// immediate effect.
+func (api *PrivateLightServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
+	if cap != 0 && cap < minCapacity {
+		return ErrMinCap
+	}
+	return api.server.priorityClientPool.setClientCapacity(id, cap)
+}
+
+// GetClientCapacity returns the capacity assigned to a given client
+func (api *PrivateLightServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
+	api.server.priorityClientPool.lock.Lock()
+	defer api.server.priorityClientPool.lock.Unlock()
+
+	return hexutil.Uint64(api.server.priorityClientPool.clients[id].cap)
 }
 
 type clientPool interface {
@@ -115,6 +148,7 @@ type priorityClientPool struct {
 	scheduleCounter uint64
 }
 
+// scheduledUpdate represents a delayed total capacity update
 type scheduledUpdate struct {
 	time         mclock.AbsTime
 	totalCap, id uint64
@@ -127,28 +161,7 @@ type priorityClientInfo struct {
 	peer      *peer
 }
 
-// SetClientCapacity sets the priority capacity assigned to a given client.
-// If the assigned capacity is bigger than zero then connection is always
-// guaranteed. The sum of capacity assigned to priority clients can not exceed
-// the total available capacity.
-//
-// Note: assigned capacity can be changed while the client is connected with
-// immediate effect.
-func (api *PrivateLesServerAPI) SetClientCapacity(id enode.ID, cap uint64) error {
-	if cap != 0 && cap < minCapacity {
-		return ErrMinCap
-	}
-	return api.server.priorityClientPool.setClientCapacity(id, cap)
-}
-
-// GetClientCapacity returns the capacity assigned to a given client
-func (api *PrivateLesServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 {
-	api.server.priorityClientPool.lock.Lock()
-	defer api.server.priorityClientPool.lock.Unlock()
-
-	return hexutil.Uint64(api.server.priorityClientPool.clients[id].cap)
-}
-
+// newPriorityClientPool creates a new priority client pool
 func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool) *priorityClientPool {
 	return &priorityClientPool{
 		clients:       make(map[enode.ID]priorityClientInfo),
@@ -223,6 +236,12 @@ func (v *priorityClientPool) unregisterPeer(p *peer) {
 	}
 }
 
+// setLimits updates the allowed peer count and total capacity of the priority
+// client pool. Since the free client pool is a child of the priority pool the
+// remaining peer count and capacity is assigned to the free pool by calling its
+// own setLimits function.
+//
+// Note: a decreasing change of the total capacity is applied with a delay.
 func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -255,6 +274,8 @@ func (v *priorityClientPool) setLimits(count int, totalCap uint64) {
 	}
 }
 
+// checkUpdate performs the next scheduled update if possible and schedules
+// the one after that
 func (v *priorityClientPool) checkUpdate(id uint64) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -273,6 +294,7 @@ func (v *priorityClientPool) checkUpdate(id uint64) {
 	}
 }
 
+// setLimits updates the allowed peer count and total capacity immediately
 func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 	if v.priorityCount > count || v.totalConnectedCap > totalCap {
 		for id, c := range v.clients {
@@ -296,6 +318,7 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 	}
 }
 
+// totalCapacity queries total available capacity for all clients
 func (v *priorityClientPool) totalCapacity() uint64 {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -303,6 +326,7 @@ func (v *priorityClientPool) totalCapacity() uint64 {
 	return v.totalCapAnnounced
 }
 
+// subscribeTotalCapacity subscribes to changed total capacity events
 func (v *priorityClientPool) subscribeTotalCapacity(sub *tcSubscription) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -310,6 +334,7 @@ func (v *priorityClientPool) subscribeTotalCapacity(sub *tcSubscription) {
 	v.subs[sub] = struct{}{}
 }
 
+// setClientCapacity sets the priority capacity assigned to a given client
 func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 	v.lock.Lock()
 	defer v.lock.Unlock()

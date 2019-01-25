@@ -46,6 +46,7 @@ type ServerParams struct {
 	BufLimit, MinRecharge uint64
 }
 
+// scheduledUpdate represents a delayed flow control parameter update
 type scheduledUpdate struct {
 	time   mclock.AbsTime
 	params ServerParams
@@ -78,14 +79,17 @@ func NewClientNode(cm *ClientManager, params ServerParams) *ClientNode {
 	if keepLogs > 0 {
 		node.log = newLogger(keepLogs)
 	}
-	cm.init(node)
+	cm.connect(node)
 	return node
 }
 
+// Disconnect should be called when a client is disconnected
 func (node *ClientNode) Disconnect() {
 	node.cm.disconnect(node)
 }
 
+// update recalculates the buffer value at a specified time while also performing
+// scheduled flow control parameter updates if necessary
 func (node *ClientNode) update(now mclock.AbsTime) {
 	for len(node.updateSchedule) > 0 && node.updateSchedule[0].time <= now {
 		node.recalcBV(node.updateSchedule[0].time)
@@ -95,6 +99,7 @@ func (node *ClientNode) update(now mclock.AbsTime) {
 	node.recalcBV(now)
 }
 
+// recalcBV recalculates the buffer value at a specified time
 func (node *ClientNode) recalcBV(now mclock.AbsTime) {
 	dt := uint64(now - node.lastTime)
 	if now < node.lastTime {
@@ -110,6 +115,7 @@ func (node *ClientNode) recalcBV(now mclock.AbsTime) {
 	node.lastTime = now
 }
 
+// UpdateParams updates the flow control parameters of a client node
 func (node *ClientNode) UpdateParams(params ServerParams) {
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -131,6 +137,7 @@ func (node *ClientNode) UpdateParams(params ServerParams) {
 	}
 }
 
+// updateParams updates the flow control parameters of the node
 func (node *ClientNode) updateParams(params ServerParams, now mclock.AbsTime) {
 	diff := params.BufLimit - node.params.BufLimit
 	if int64(diff) > 0 {
@@ -212,7 +219,7 @@ func NewServerNode(params ServerParams, clock mclock.Clock) *ServerNode {
 	return node
 }
 
-// UpdateParams updates flow control parameters
+// UpdateParams updates the flow control parameters of the node
 func (node *ServerNode) UpdateParams(params ServerParams) {
 	node.lock.Lock()
 	defer node.lock.Unlock()
@@ -228,6 +235,8 @@ func (node *ServerNode) UpdateParams(params ServerParams) {
 	node.params = params
 }
 
+// recalcBLE recalculates the lowest estimate for the client's buffer value at
+// the given server at the specified time
 func (node *ServerNode) recalcBLE(now mclock.AbsTime) {
 	if now < node.lastTime {
 		return

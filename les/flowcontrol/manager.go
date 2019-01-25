@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package flowcontrol implements a client side flow control mechanism
 package flowcontrol
 
 import (
@@ -48,9 +47,9 @@ type cmNodeFields struct {
 const FixedPointMultiplier = 1000000
 
 var (
-	capFactorDropTC         = time.Second * 10
-	capFactorRaiseTC        = time.Hour
-	capFactorRaiseThreshold = 0.75
+	capFactorDropTC         = 1 / float64(time.Second*10) // time constant for dropping the capacity factor
+	capFactorRaiseTC        = 1 / float64(time.Hour)      // time constant for raising the capacity factor
+	capFactorRaiseThreshold = 0.75                        // connected / total capacity ratio threshold for raising the capacity factor
 )
 
 // ClientManager controls the capacity assigned to the clients of a server.
@@ -131,8 +130,9 @@ func (cm *ClientManager) SetRechargeCurve(curve PieceWiseLinear) {
 	cm.refreshCapacity()
 }
 
-// init initializes the ClientManager specific fields of a ClientNode structure
-func (cm *ClientManager) init(node *ClientNode) {
+// connect should be called when a client is connected, before passing it to any
+// other ClientManager funtion
+func (cm *ClientManager) connect(node *ClientNode) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
@@ -145,6 +145,7 @@ func (cm *ClientManager) init(node *ClientNode) {
 	cm.totalConnected += node.params.MinRecharge
 }
 
+// disconnect should be called when a client is disconnected
 func (cm *ClientManager) disconnect(node *ClientNode) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
@@ -155,8 +156,10 @@ func (cm *ClientManager) disconnect(node *ClientNode) {
 	cm.totalConnected -= node.params.MinRecharge
 }
 
-// accepted deduces the upper estimate for request cost from the buffer and returns a priority
-// value based on current buffer status which is used by the serving queue.
+// accepted is called when a request with given maximum cost is accepted.
+// It returns a priority indicator for the request which is used to determine placement
+// in the serving queue. Older requests have higher priority by default. If the client
+// is almost out of buffer, request priority is reduced.
 func (cm *ClientManager) accepted(node *ClientNode, maxCost uint64, now mclock.AbsTime) (priority int64) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
@@ -186,6 +189,7 @@ func (cm *ClientManager) processed(node *ClientNode, maxCost, realCost uint64, n
 	}
 }
 
+// updateParams updates the flow control parameters of a client node
 func (cm *ClientManager) updateParams(node *ClientNode, params ServerParams, now mclock.AbsTime) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
@@ -280,25 +284,38 @@ func (cm *ClientManager) updateNodeRc(node *ClientNode, bvc int64, params *Serve
 
 }
 
+// updateCapFactor updates the total capacity factor. The capacity factor allows
+// the total capacity of the system to go over the allowed total recharge value
+// if the sum of momentarily recharging clients only exceeds the total recharge
+// allowance in a very small fraction of time.
+// The capacity factor is dropped quickly (with a small time constant) if sumRecharge
+// exceeds totalRecharge. It is raised slowly (with a large time constant) if most
+// of the total capacity is used by connected clients (totalConnected is larger than
+// totalCapacity*capFactorRaiseThreshold) and sumRecharge stays under
+// totalRecharge*totalConnected/totalCapacity.
 func (cm *ClientManager) updateCapFactor(now mclock.AbsTime, refresh bool) {
+	if cm.totalRecharge == 0 {
+		return
+	}
 	dt := now - cm.capLastUpdate
 	cm.capLastUpdate = now
 
 	var d float64
 	if cm.sumRecharge > cm.totalRecharge {
-		d = (1 - float64(cm.sumRecharge)/float64(cm.totalRecharge)) / float64(capFactorDropTC)
+		d = (1 - float64(cm.sumRecharge)/float64(cm.totalRecharge)) * capFactorDropTC
 	} else {
-		r := float64(cm.totalConnected) / cm.totalCapacity
-		if r > 1 {
-			r = 1
+		totalConnected := float64(cm.totalConnected)
+		var connRatio float64
+		if totalConnected < cm.totalCapacity {
+			connRatio = totalConnected / cm.totalCapacity
+		} else {
+			connRatio = 1
 		}
-		if r > capFactorRaiseThreshold {
-			m := cm.totalRecharge
-			if cm.totalConnected < m {
-				m = cm.totalConnected
-			}
-			if cm.sumRecharge < m {
-				d = (1 - float64(cm.sumRecharge)/float64(m)) * (r - capFactorRaiseThreshold) / (1 - capFactorRaiseThreshold) / float64(capFactorRaiseTC)
+		if connRatio > capFactorRaiseThreshold {
+			sumRecharge := float64(cm.sumRecharge)
+			limit := float64(cm.totalRecharge) * connRatio
+			if sumRecharge < limit {
+				d = (1 - sumRecharge/limit) * (connRatio - capFactorRaiseThreshold) * (1 / (1 - capFactorRaiseThreshold)) * capFactorRaiseTC
 			}
 		}
 	}
@@ -313,6 +330,8 @@ func (cm *ClientManager) updateCapFactor(now mclock.AbsTime, refresh bool) {
 	}
 }
 
+// refreshCapacity recalculates the total capacity value and sends an update to the subscription
+// channel if the relative change of the value since the last update is more than 0.1 percent
 func (cm *ClientManager) refreshCapacity() {
 	totalCapacity := float64(cm.totalRecharge) * math.Exp(cm.capLogFactor)
 	if totalCapacity >= cm.totalCapacity*0.999 && totalCapacity <= cm.totalCapacity*1.001 {
@@ -327,6 +346,8 @@ func (cm *ClientManager) refreshCapacity() {
 	}
 }
 
+// SubscribeTotalCapacity returns all future updates to the total capacity value
+// through a channel and also returns the current value
 func (cm *ClientManager) SubscribeTotalCapacity(ch chan uint64) uint64 {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()

@@ -14,11 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
 package les
 
 import (
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -189,7 +187,6 @@ func (f *freeClientPool) setLimits(count int, totalCap uint64) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
-	fmt.Println("setLimits", count, totalCap, f.freeClientCap)
 	f.connectedLimit = int(totalCap / f.freeClientCap)
 	if count < f.connectedLimit {
 		f.connectedLimit = count

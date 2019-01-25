@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package flowcontrol implements a client side flow control mechanism
 package les
 
 import (
@@ -93,8 +92,6 @@ func (sq *servingQueue) addTask(task *servingTask) {
 // Note: either blocking should be false or currentTask should be nil.
 func (sq *servingQueue) getNewTask(currentTask *servingTask, blocking bool) *servingTask {
 	sq.lock.Lock()
-	if sq.stopCount != 0 {
-	}
 	if sq.stopCount == 0 {
 		if sq.best != nil && (currentTask == nil || sq.best.priority <= currentTask.priority-sq.suspendBias) {
 			best := sq.best
