@@ -65,14 +65,13 @@ func randomtestAddr(n int, i int) *testAddr {
 	return newTestAddr(v, i)
 }
 
-func indexes(t *Pot) (i []int, po []int) {
-	t.Each(func(v Val, p int) bool {
+func indexes(t *Pot) (i []int) {
+	t.Each(func(v Val) bool {
 		a := v.(*testAddr)
 		i = append(i, a.i)
-		po = append(po, p)
 		return true
 	})
-	return i, po
+	return i
 }
 
 func testAdd(t *Pot, pof Pof, j int, values ...string) (_ *Pot, n int, f bool) {
@@ -80,6 +79,69 @@ func testAdd(t *Pot, pof Pof, j int, values ...string) (_ *Pot, n int, f bool) {
 		t, n, f = Add(t, newTestAddr(val, i+j), pof)
 	}
 	return t, n, f
+}
+
+// removing non-existing element from pot
+func TestPotRemoveNonExisting(t *testing.T) {
+	pof := DefaultPof(8)
+	n := NewPot(newTestAddr("00111100", 0), 0)
+	n, _, _ = Remove(n, newTestAddr("00000101", 0), pof)
+	exp := "00111100"
+	got := Label(n.Pin())
+	if got[:8] != exp {
+		t.Fatalf("incorrect pinned value. Expected %v, got %v", exp, got[:8])
+	}
+}
+
+// this test creates hierarchical pot tree, and therefore any child node will have
+// child_po = parent_po + 1.
+// then removes a node from the middle of the tree.
+func TestPotRemoveSameBin(t *testing.T) {
+	pof := DefaultPof(8)
+	n := NewPot(newTestAddr("11111111", 0), 0)
+	n, _, _ = testAdd(n, pof, 1, "00000000", "01000000", "01100000", "01110000", "01111000")
+	n, _, _ = Remove(n, newTestAddr("01110000", 0), pof)
+	inds := indexes(n)
+	goti := n.Size()
+	expi := 5
+	if goti != expi {
+		t.Fatalf("incorrect number of elements in Pot. Expected %v, got %v", expi, goti)
+	}
+	inds = indexes(n)
+	got := fmt.Sprintf("%v", inds)
+	exp := "[5 3 2 1 0]"
+	if got != exp {
+		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
+	}
+}
+
+// this test creates a flat pot tree (all the elements are leafs of one root),
+// and therefore they all have the same po.
+// then removes an arbitrary element from the pot.
+func TestPotRemoveDifferentBins(t *testing.T) {
+	pof := DefaultPof(8)
+	n := NewPot(newTestAddr("11111111", 0), 0)
+	n, _, _ = testAdd(n, pof, 1, "00000000", "10000000", "11000000", "11100000", "11110000")
+	n, _, _ = Remove(n, newTestAddr("11100000", 0), pof)
+	inds := indexes(n)
+	goti := n.Size()
+	expi := 5
+	if goti != expi {
+		t.Fatalf("incorrect number of elements in Pot. Expected %v, got %v", expi, goti)
+	}
+	inds = indexes(n)
+	got := fmt.Sprintf("%v", inds)
+	exp := "[1 2 3 5 0]"
+	if got != exp {
+		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
+	}
+	n, _, _ = testAdd(n, pof, 4, "11100000")
+	inds = indexes(n)
+	got = fmt.Sprintf("%v", inds)
+	exp = "[1 2 3 4 5 0]"
+	if got != exp {
+		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
+	}
 }
 
 func TestPotAdd(t *testing.T) {
@@ -105,16 +167,11 @@ func TestPotAdd(t *testing.T) {
 	if goti != expi {
 		t.Fatalf("incorrect number of elements in Pot. Expected %v, got %v", expi, goti)
 	}
-	inds, po := indexes(n)
+	inds := indexes(n)
 	got = fmt.Sprintf("%v", inds)
 	exp = "[3 4 2]"
 	if got != exp {
 		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
-	}
-	got = fmt.Sprintf("%v", po)
-	exp = "[1 2 0]"
-	if got != exp {
-		t.Fatalf("incorrect po-s in iteration over Pot. Expected %v, got %v", exp, got)
 	}
 }
 
@@ -134,26 +191,25 @@ func TestPotRemove(t *testing.T) {
 	if goti != expi {
 		t.Fatalf("incorrect number of elements in Pot. Expected %v, got %v", expi, goti)
 	}
-	inds, po := indexes(n)
+	inds := indexes(n)
 	got = fmt.Sprintf("%v", inds)
-	exp = "[2 4 0]"
+	exp = "[2 4 1]"
 	if got != exp {
 		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
 	}
-	got = fmt.Sprintf("%v", po)
-	exp = "[1 3 0]"
+	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof) // remove again same element
+	inds = indexes(n)
+	got = fmt.Sprintf("%v", inds)
 	if got != exp {
-		t.Fatalf("incorrect po-s in iteration over Pot. Expected %v, got %v", exp, got)
+		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
 	}
-	// remove again
-	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof)
-	inds, _ = indexes(n)
+	n, _, _ = Remove(n, newTestAddr("00000000", 0), pof) // remove the first element
+	inds = indexes(n)
 	got = fmt.Sprintf("%v", inds)
 	exp = "[2 4]"
 	if got != exp {
 		t.Fatalf("incorrect indexes in iteration over Pot. Expected %v, got %v", exp, got)
 	}
-
 }
 
 func TestPotSwap(t *testing.T) {
@@ -202,7 +258,7 @@ func TestPotSwap(t *testing.T) {
 			})
 		}
 		sum := 0
-		n.Each(func(v Val, i int) bool {
+		n.Each(func(v Val) bool {
 			if v == nil {
 				return true
 			}

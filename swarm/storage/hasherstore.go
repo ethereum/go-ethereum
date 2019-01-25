@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
+	"golang.org/x/crypto/sha3"
 )
 
 type hasherStore struct {
@@ -232,11 +232,11 @@ func (h *hasherStore) decrypt(chunkData ChunkData, key encryption.Key) ([]byte, 
 }
 
 func (h *hasherStore) newSpanEncryption(key encryption.Key) encryption.Encryption {
-	return encryption.New(key, 0, uint32(ch.DefaultSize/h.refSize), sha3.NewKeccak256)
+	return encryption.New(key, 0, uint32(ch.DefaultSize/h.refSize), sha3.NewLegacyKeccak256)
 }
 
 func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryption {
-	return encryption.New(key, int(ch.DefaultSize), 0, sha3.NewKeccak256)
+	return encryption.New(key, int(ch.DefaultSize), 0, sha3.NewLegacyKeccak256)
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {

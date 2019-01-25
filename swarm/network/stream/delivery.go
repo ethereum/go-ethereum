@@ -19,7 +19,6 @@ package stream
 import (
 	"context"
 	"errors"
-
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -39,6 +38,7 @@ const (
 var (
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.stream.handle_retrieve_request_msg.count", nil)
+	retrieveChunkFail             = metrics.NewRegisteredCounter("network.stream.retrieve_chunks_fail.count", nil)
 
 	requestFromPeersCount     = metrics.NewRegisteredCounter("network.stream.request_from_peers.count", nil)
 	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
@@ -169,7 +169,8 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	go func() {
 		chunk, err := d.chunkStore.Get(ctx, req.Addr)
 		if err != nil {
-			log.Warn("ChunkStore.Get can not retrieve chunk", "err", err)
+			retrieveChunkFail.Inc(1)
+			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
 			return
 		}
 		if req.SkipCheck {
@@ -243,7 +244,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 			return nil, nil, fmt.Errorf("source peer %v not found", spID.String())
 		}
 	} else {
-		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int, nn bool) bool {
+		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 			id := p.ID()
 			if p.LightNode {
 				// skip light nodes
@@ -254,8 +255,15 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 				return true
 			}
 			sp = d.getPeer(id)
+			// sp is nil, when we encounter a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
 			if sp == nil {
-				log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
+				return true
+			}
+			// nodes that do not provide stream protocol
+			// should not be requested, e.g. bootnodes
+			if !p.HasCap("stream") {
+				// TODO: if we have no errors, delete this if
+				log.Error("Delivery.RequestFromPeers: peer doesn't have stream cap. we should have returned at sp == nil")
 				return true
 			}
 			spID = &id

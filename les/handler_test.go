@@ -494,7 +494,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 
 func TestTransactionStatusLes2(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db)
+	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db, nil)
 	chain := pm.blockchain.(*core.BlockChain)
 	config := core.DefaultTxPoolConfig
 	config.Journal = ""

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
@@ -160,6 +161,41 @@ func TestAddNodeWithService(t *testing.T) {
 	}
 }
 
+func TestAddNodeMultipleServices(t *testing.T) {
+	sim := New(map[string]ServiceFunc{
+		"noop1": noopServiceFunc,
+		"noop2": noopService2Func,
+	})
+	defer sim.Close()
+
+	id, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := sim.Net.GetNode(id).Node.(*adapters.SimNode)
+	if n.Service("noop1") == nil {
+		t.Error("service noop1 not found on node")
+	}
+	if n.Service("noop2") == nil {
+		t.Error("service noop2 not found on node")
+	}
+}
+
+func TestAddNodeDuplicateServiceError(t *testing.T) {
+	sim := New(map[string]ServiceFunc{
+		"noop1": noopServiceFunc,
+		"noop2": noopServiceFunc,
+	})
+	defer sim.Close()
+
+	wantErr := "duplicate service: *simulation.noopService"
+	_, err := sim.AddNode()
+	if err.Error() != wantErr {
+		t.Errorf("got error %q, want %q", err, wantErr)
+	}
+}
+
 func TestAddNodes(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()
@@ -193,7 +229,7 @@ func TestAddNodesAndConnectFull(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testFull(t, sim, ids)
+	simulations.VerifyFull(t, sim.Net, ids)
 }
 
 func TestAddNodesAndConnectChain(t *testing.T) {
@@ -212,7 +248,7 @@ func TestAddNodesAndConnectChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testChain(t, sim, sim.UpNodeIDs())
+	simulations.VerifyChain(t, sim.Net, sim.UpNodeIDs())
 }
 
 func TestAddNodesAndConnectRing(t *testing.T) {
@@ -224,7 +260,7 @@ func TestAddNodesAndConnectRing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testRing(t, sim, ids)
+	simulations.VerifyRing(t, sim.Net, ids)
 }
 
 func TestAddNodesAndConnectStar(t *testing.T) {
@@ -236,7 +272,7 @@ func TestAddNodesAndConnectStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testStar(t, sim, ids, 0)
+	simulations.VerifyStar(t, sim.Net, ids, 0)
 }
 
 //To test that uploading a snapshot works
@@ -276,45 +312,6 @@ func TestUploadSnapshot(t *testing.T) {
 		return nil
 	})
 	log.Debug("Done.")
-}
-
-func TestPivotNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	id, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	id2, err := sim.AddNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if sim.PivotNodeID() != nil {
-		t.Error("expected no pivot node")
-	}
-
-	sim.SetPivotNode(id)
-
-	pid := sim.PivotNodeID()
-
-	if pid == nil {
-		t.Error("pivot node not set")
-	} else if *pid != id {
-		t.Errorf("expected pivot node %s, got %s", id, *pid)
-	}
-
-	sim.SetPivotNode(id2)
-
-	pid = sim.PivotNodeID()
-
-	if pid == nil {
-		t.Error("pivot node not set")
-	} else if *pid != id2 {
-		t.Errorf("expected pivot node %s, got %s", id2, *pid)
-	}
 }
 
 func TestStartStopNode(t *testing.T) {

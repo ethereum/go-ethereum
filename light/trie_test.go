@@ -64,7 +64,7 @@ func diffTries(t1, t2 state.Trie) error {
 			spew.Dump(i2)
 			return fmt.Errorf("tries have different keys %x, %x", i1.Key, i2.Key)
 		}
-		if !bytes.Equal(i2.Value, i2.Value) {
+		if !bytes.Equal(i1.Value, i2.Value) {
 			return fmt.Errorf("tries differ at key %x", i1.Key)
 		}
 	}

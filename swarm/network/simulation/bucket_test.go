@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-// TestServiceBucket tests all bucket functionalities using subtests.
+// TestServiceBucket tests all bucket functionality using subtests.
 // It constructs a simulation of two nodes by adding items to their buckets
 // in ServiceFunc constructor, then by SetNodeItem. Testing UpNodesItems
 // is done by stopping one node and validating availability of its items.

@@ -25,13 +25,13 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 )
 
@@ -368,58 +368,99 @@ func newTestSigner() (*feed.GenericSigner, error) {
 	return feed.NewGenericSigner(privKey), nil
 }
 
-// test the transparent resolving of multihash feed updates with bzz:// scheme
+// Test the transparent resolving of feed updates with bzz:// scheme
 //
-// first upload data, and store the multihash to the resulting manifest in a feed update
-// retrieving the update with the multihash should return the manifest pointing directly to the data
+// First upload data to bzz:, and store the Swarm hash to the resulting manifest in a feed update.
+// This effectively uses a feed to store a pointer to content rather than the content itself
+// Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
-func TestClientCreateFeedMultihash(t *testing.T) {
+func TestClientBzzWithFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
+	// Initialize a Swarm test server
 	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
-	client := NewClient(srv.URL)
+	swarmClient := NewClient(srv.URL)
 	defer srv.Close()
 
-	// add the data our multihash aliased manifest will point to
-	databytes := []byte("bar")
+	// put together some data for our test:
+	dataBytes := []byte(`
+	//
+	// Create some data our manifest will point to. Data that could be very big and wouldn't fit in a feed update.
+	// So what we are going to do is upload it to Swarm bzz:// and obtain a **manifest hash** pointing to it:
+	//
+	// MANIFEST HASH --> DATA
+	//
+	// Then, we store that **manifest hash** into a Swarm Feed update. Once we have done this,
+	// we can use the **feed manifest hash** in bzz:// instead, this way: bzz://feed-manifest-hash.
+	//
+	// FEED MANIFEST HASH --> MANIFEST HASH --> DATA
+	//
+	// Given that we can update the feed at any time with a new **manifest hash** but the **feed manifest hash**
+	// stays constant, we have effectively created a fixed address to changing content. (Applause)
+	//
+	// FEED MANIFEST HASH (the same) --> MANIFEST HASH(2) --> DATA(2)
+	//
+	`)
 
-	swarmHash, err := client.UploadRaw(bytes.NewReader(databytes), int64(len(databytes)), false)
-	if err != nil {
-		t.Fatalf("Error uploading raw test data: %s", err)
+	// Create a virtual File out of memory containing the above data
+	f := &File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(dataBytes)),
+		ManifestEntry: api.ManifestEntry{
+			ContentType: "text/plain",
+			Mode:        0660,
+			Size:        int64(len(dataBytes)),
+		},
 	}
 
-	s := common.FromHex(swarmHash)
-	mh := multihash.ToMultihash(s)
+	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
+	manifestAddressHex, err := swarmClient.Upload(f, "", false)
+	if err != nil {
+		t.Fatalf("Error creating manifest: %s", err)
+	}
 
-	// our feed topic
-	topic, _ := feed.NewTopic("foo.eth", nil)
+	// convert the hex-encoded manifest hash to a 32-byte slice
+	manifestAddress := common.FromHex(manifestAddressHex)
 
-	createRequest := feed.NewFirstRequest(topic)
+	if len(manifestAddress) != storage.AddressLength {
+		t.Fatalf("Something went wrong. Got a hash of an unexpected length. Expected %d bytes. Got %d", storage.AddressLength, len(manifestAddress))
+	}
 
-	createRequest.SetData(mh)
-	if err := createRequest.Sign(signer); err != nil {
+	// Now create a **feed manifest**. For that, we need a topic:
+	topic, _ := feed.NewTopic("interesting topic indeed", nil)
+
+	// Build a feed request to update data
+	request := feed.NewFirstRequest(topic)
+
+	// Put the 32-byte address of the manifest into the feed update
+	request.SetData(manifestAddress)
+
+	// Sign the update
+	if err := request.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
-	feedManifestHash, err := client.CreateFeedWithManifest(createRequest)
-
+	// Publish the update and at the same time request a **feed manifest** to be created
+	feedManifestAddressHex, err := swarmClient.CreateFeedWithManifest(request)
 	if err != nil {
 		t.Fatalf("Error creating feed manifest: %s", err)
 	}
 
-	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
-	if feedManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestHash)
+	// Check we have received the exact **feed manifest** to be expected
+	// given the topic and user signing the updates:
+	correctFeedManifestAddrHex := "747c402e5b9dc715a25a4393147512167bab018a007fad7cdcd9adc7fce1ced2"
+	if feedManifestAddressHex != correctFeedManifestAddrHex {
+		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctFeedManifestAddrHex, feedManifestAddressHex)
 	}
 
 	// Check we get a not found error when trying to get feed updates with a made-up manifest
-	_, err = client.QueryFeed(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	_, err = swarmClient.QueryFeed(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	if err != ErrNoFeedUpdatesFound {
 		t.Fatalf("Expected to receive ErrNoFeedUpdatesFound error. Got: %s", err)
 	}
 
-	reader, err := client.QueryFeed(nil, correctManifestAddrHex)
+	// If we query the feed directly we should get **manifest hash** back:
+	reader, err := swarmClient.QueryFeed(nil, correctFeedManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving feed updates: %s", err)
 	}
@@ -428,10 +469,27 @@ func TestClientCreateFeedMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(mh, gotData) {
-		t.Fatalf("Expected: %v, got %v", mh, gotData)
+
+	//Check that indeed the **manifest hash** is retrieved
+	if !bytes.Equal(manifestAddress, gotData) {
+		t.Fatalf("Expected: %v, got %v", manifestAddress, gotData)
 	}
 
+	// Now the final test we were looking for: Use bzz://<feed-manifest> and that should resolve all manifests
+	// and return the original data directly:
+	f, err = swarmClient.Download(feedManifestAddressHex, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotData, err = ioutil.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that we get back the original data:
+	if !bytes.Equal(dataBytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", manifestAddress, gotData)
+	}
 }
 
 // TestClientCreateUpdateFeed will check that feeds can be created and updated via the HTTP client.

@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -101,6 +102,29 @@ type Config struct {
 	// for ephemeral nodes).
 	HTTPPort int `toml:",omitempty"`
 
+	// GraphQLHost is the host interface on which to start the GraphQL server. If this
+	// field is empty, no GraphQL API endpoint will be started.
+	GraphQLHost string `toml:",omitempty"`
+
+	// GraphQLPort is the TCP port number on which to start the GraphQL server. The
+	// default zero value is/ valid and will pick a port number randomly (useful
+	// for ephemeral nodes).
+	GraphQLPort int `toml:",omitempty"`
+
+	// GraphQLCors is the Cross-Origin Resource Sharing header to send to requesting
+	// clients. Please be aware that CORS is a browser enforced security, it's fully
+	// useless for custom HTTP clients.
+	GraphQLCors []string `toml:",omitempty"`
+
+	// GraphQLVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
+	// This is by default {'localhost'}. Using this prevents attacks like
+	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
+	// origin. These attacks do not utilize CORS, since they are not cross-domain.
+	// By explicitly checking the Host-header, the server will not allow requests
+	// made against the server with a malicious host domain.
+	// Requests using ip address directly are not affected
+	GraphQLVirtualHosts []string `toml:",omitempty"`
+
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
 	// useless for custom HTTP clients.
@@ -152,6 +176,10 @@ type Config struct {
 
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
+
+	staticNodesWarning     bool
+	trustedNodesWarning    bool
+	oldGethResourceWarning bool
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -206,6 +234,15 @@ func (c *Config) HTTPEndpoint() string {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d", c.HTTPHost, c.HTTPPort)
+}
+
+// GraphQLEndpoint resolves a GraphQL endpoint based on the configured host interface
+// and port parameters.
+func (c *Config) GraphQLEndpoint() string {
+	if c.GraphQLHost == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", c.GraphQLHost, c.GraphQLPort)
 }
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
@@ -263,8 +300,8 @@ var isOldGethResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
-	"static-nodes.json":  true,
-	"trusted-nodes.json": true,
+	"static-nodes.json":  false, // no warning for these because they have their
+	"trusted-nodes.json": false, // own separate warning.
 }
 
 // ResolvePath resolves path in the instance directory.
@@ -277,13 +314,15 @@ func (c *Config) ResolvePath(path string) string {
 	}
 	// Backwards-compatibility: ensure that data directory files created
 	// by geth 1.4 are used if they exist.
-	if c.name() == "geth" && isOldGethResource[path] {
+	if warn, isOld := isOldGethResource[path]; isOld {
 		oldpath := ""
-		if c.Name == "geth" {
+		if c.name() == "geth" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
-			// TODO: print warning
+			if warn {
+				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+			}
 			return oldpath
 		}
 	}
@@ -337,17 +376,17 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
 func (c *Config) StaticNodes() []*enode.Node {
-	return c.parsePersistentNodes(c.ResolvePath(datadirStaticNodes))
+	return c.parsePersistentNodes(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
 }
 
 // TrustedNodes returns a list of node enode URLs configured as trusted nodes.
 func (c *Config) TrustedNodes() []*enode.Node {
-	return c.parsePersistentNodes(c.ResolvePath(datadirTrustedNodes))
+	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(path string) []*enode.Node {
+func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
@@ -355,10 +394,12 @@ func (c *Config) parsePersistentNodes(path string) []*enode.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
+	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
+
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
+		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
@@ -439,4 +480,21 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		}
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
+}
+
+var warnLock sync.Mutex
+
+func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
+	warnLock.Lock()
+	defer warnLock.Unlock()
+
+	if *w {
+		return
+	}
+	l := c.Logger
+	if l == nil {
+		l = log.Root()
+	}
+	l.Warn(fmt.Sprintf(format, args...))
+	*w = true
 }

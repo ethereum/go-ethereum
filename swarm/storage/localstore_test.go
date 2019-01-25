@@ -118,7 +118,7 @@ func TestValidator(t *testing.T) {
 
 type boolTestValidator bool
 
-func (self boolTestValidator) Validate(addr Address, data []byte) bool {
+func (self boolTestValidator) Validate(chunk Chunk) bool {
 	return bool(self)
 }
 

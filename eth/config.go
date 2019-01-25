@@ -87,9 +87,16 @@ type Config struct {
 	SyncMode  downloader.SyncMode
 	NoPruning bool
 
+	// Whitelist of required block number -> hash values to accept
+	Whitelist map[uint64]common.Hash `toml:"-"`
+
 	// Light client options
-	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
-	LightPeers int `toml:",omitempty"` // Maximum number of LES client peers
+	LightServ    int  `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
+	LightPeers   int  `toml:",omitempty"` // Maximum number of LES client peers
+	OnlyAnnounce bool // Maximum number of LES client peers
+
+	// Ultra Light client options
+	ULC *ULCConfig `toml:",omitempty"`
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
@@ -126,8 +133,12 @@ type Config struct {
 
 	// Type of the EWASM interpreter ("" for default)
 	EWASMInterpreter string
+
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
+
+	// Constantinople block override (TODO: remove after the fork)
+	ConstantinopleOverride *big.Int
 }
 
 type configMarshaling struct {

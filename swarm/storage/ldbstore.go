@@ -248,10 +248,6 @@ func U64ToBytes(val uint64) []byte {
 	return data
 }
 
-func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
-	index.Access = s.accessCnt
-}
-
 func getIndexKey(hash Address) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
@@ -777,18 +773,6 @@ func (s *LDBStore) BinIndex(po uint8) uint64 {
 	return s.bucketCnt[po]
 }
 
-func (s *LDBStore) Size() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.entryCnt
-}
-
-func (s *LDBStore) CurrentStorageIndex() uint64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.dataIdx
-}
-
 // Put adds a chunk to the database, adding indices and incrementing global counters.
 // If it already exists, it merely increments the access count of the existing entry.
 // Is thread safe
@@ -810,11 +794,11 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	batch := s.batch
 
 	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
-	idata, err := s.db.Get(ikey)
+	_, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, &index, po)
 	}
-	idata = encodeIndex(&index)
+	idata := encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 
 	// add the access-chunkindex index for garbage collection

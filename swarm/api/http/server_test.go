@@ -45,7 +45,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
@@ -69,60 +68,91 @@ func newTestSigner() (*feed.GenericSigner, error) {
 	return feed.NewGenericSigner(privKey), nil
 }
 
-// test the transparent resolving of multihash-containing feed updates with bzz:// scheme
+// Test the transparent resolving of feed updates with bzz:// scheme
 //
-// first upload data, and store the multihash to the resulting manifest in a feed update
-// retrieving the update with the multihash should return the manifest pointing directly to the data
+// First upload data to bzz:, and store the Swarm hash to the resulting manifest in a feed update.
+// This effectively uses a feed to store a pointer to content rather than the content itself
+// Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
-func TestBzzFeedMultihash(t *testing.T) {
+func TestBzzWithFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
+	// Initialize Swarm test server
 	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
-	// add the data our multihash aliased manifest will point to
-	databytes := "bar"
-	testBzzUrl := fmt.Sprintf("%s/bzz:/", srv.URL)
-	resp, err := http.Post(testBzzUrl, "text/plain", bytes.NewReader([]byte(databytes)))
+	// put together some data for our test:
+	dataBytes := []byte(`
+	//
+	// Create some data our manifest will point to. Data that could be very big and wouldn't fit in a feed update.
+	// So what we are going to do is upload it to Swarm bzz:// and obtain a **manifest hash** pointing to it:
+	//
+	// MANIFEST HASH --> DATA
+	//
+	// Then, we store that **manifest hash** into a Swarm Feed update. Once we have done this,
+	// we can use the **feed manifest hash** in bzz:// instead, this way: bzz://feed-manifest-hash.
+	//
+	// FEED MANIFEST HASH --> MANIFEST HASH --> DATA
+	//
+	// Given that we can update the feed at any time with a new **manifest hash** but the **feed manifest hash**
+	// stays constant, we have effectively created a fixed address to changing content. (Applause)
+	//
+	// FEED MANIFEST HASH (the same) --> MANIFEST HASH(2) --> DATA(2) ...
+	//
+	`)
+
+	// POST data to bzz and get back a content-addressed **manifest hash** pointing to it.
+	resp, err := http.Post(fmt.Sprintf("%s/bzz:/", srv.URL), "text/plain", bytes.NewReader([]byte(dataBytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	manifestAddressHex, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := common.FromHex(string(b))
-	mh := multihash.ToMultihash(s)
 
-	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
+	manifestAddress := common.FromHex(string(manifestAddressHex))
 
-	topic, _ := feed.NewTopic("foo.eth", nil)
+	log.Info("added data", "manifest", string(manifestAddressHex))
+
+	// At this point we have uploaded the data and have a manifest pointing to it
+	// Now store that manifest address in a feed update.
+	// We also want a feed manifest, so we can use it to refer to the feed.
+
+	// First, create a topic for our feed:
+	topic, _ := feed.NewTopic("interesting topic indeed", nil)
+
+	// Create a feed update request:
 	updateRequest := feed.NewFirstRequest(topic)
 
-	updateRequest.SetData(mh)
+	// Store the **manifest address** as data into the feed update.
+	updateRequest.SetData(manifestAddress)
 
+	// Sign the update
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
+	log.Info("added data", "data", common.ToHex(manifestAddress))
 
-	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
+	// Build the feed update http request:
+	feedUpdateURL, err := url.Parse(fmt.Sprintf("%s/bzz-feed:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := testUrl.Query()
+	query := feedUpdateURL.Query()
 	body := updateRequest.AppendValues(query) // this adds all query parameters and returns the data to be posted
-	query.Set("manifest", "1")                // indicate we want a manifest back
-	testUrl.RawQuery = query.Encode()
+	query.Set("manifest", "1")                // indicate we want a feed manifest back
+	feedUpdateURL.RawQuery = query.Encode()
 
-	// create the multihash update
-	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
+	// submit the feed update request to Swarm
+	resp, err = http.Post(feedUpdateURL.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,24 +160,25 @@ func TestBzzFeedMultihash(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err = ioutil.ReadAll(resp.Body)
+
+	feedManifestAddressHex, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &storage.Address{}
-	err = json.Unmarshal(b, rsrcResp)
+	feedManifestAddress := &storage.Address{}
+	err = json.Unmarshal(feedManifestAddressHex, feedManifestAddress)
 	if err != nil {
-		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
+		t.Fatalf("data %s could not be unmarshaled: %v", feedManifestAddressHex, err)
 	}
 
-	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
-	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+	correctManifestAddrHex := "747c402e5b9dc715a25a4393147512167bab018a007fad7cdcd9adc7fce1ced2"
+	if feedManifestAddress.Hex() != correctManifestAddrHex {
+		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, feedManifestAddress.Hex())
 	}
 
 	// get bzz manifest transparent feed update resolve
-	testBzzUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(testBzzUrl)
+	getBzzURL := fmt.Sprintf("%s/bzz:/%s", srv.URL, feedManifestAddress)
+	resp, err = http.Get(getBzzURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,12 +186,12 @@ func TestBzzFeedMultihash(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err = ioutil.ReadAll(resp.Body)
+	retrievedData, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(b, []byte(databytes)) {
-		t.Fatalf("retrieved data mismatch, expected %x, got %x", databytes, b)
+	if !bytes.Equal(retrievedData, []byte(dataBytes)) {
+		t.Fatalf("retrieved data mismatch, expected %x, got %x", dataBytes, retrievedData)
 	}
 }
 
@@ -245,7 +276,8 @@ func TestBzzFeed(t *testing.T) {
 		t.Fatalf("Expected manifest Feed '%s', got '%s'", correctFeedHex, manifest.Entries[0].Feed.Hex())
 	}
 
-	// get bzz manifest transparent feed update resolve
+	// take the chance to have bzz: crash on resolving a feed update that does not contain
+	// a swarm hash:
 	testBzzUrl := fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(testBzzUrl)
 	if err != nil {
@@ -253,7 +285,7 @@ func TestBzzFeed(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusOK {
-		t.Fatal("Expected error status since feed update does not contain multihash. Received 200 OK")
+		t.Fatal("Expected error status since feed update does not contain a Swarm hash. Received 200 OK")
 	}
 	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {

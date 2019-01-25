@@ -325,16 +325,14 @@ func ReadEntity(packets *packet.Reader) (*Entity, error) {
 		if e.PrivateKey, ok = p.(*packet.PrivateKey); !ok {
 			packets.Unread(p)
 			return nil, errors.StructuralError("first packet was not a public/private key")
-		} else {
-			e.PrimaryKey = &e.PrivateKey.PublicKey
 		}
+		e.PrimaryKey = &e.PrivateKey.PublicKey
 	}
 
 	if !e.PrimaryKey.PubKeyAlgo.CanSign() {
 		return nil, errors.StructuralError("primary key cannot be used for signatures")
 	}
 
-	var current *Identity
 	var revocations []*packet.Signature
 EachPacket:
 	for {
@@ -347,32 +345,8 @@ EachPacket:
 
 		switch pkt := p.(type) {
 		case *packet.UserId:
-			current = new(Identity)
-			current.Name = pkt.Id
-			current.UserId = pkt
-			e.Identities[pkt.Id] = current
-
-			for {
-				p, err = packets.Next()
-				if err == io.EOF {
-					return nil, io.ErrUnexpectedEOF
-				} else if err != nil {
-					return nil, err
-				}
-
-				sig, ok := p.(*packet.Signature)
-				if !ok {
-					return nil, errors.StructuralError("user ID packet not followed by self-signature")
-				}
-
-				if (sig.SigType == packet.SigTypePositiveCert || sig.SigType == packet.SigTypeGenericCert) && sig.IssuerKeyId != nil && *sig.IssuerKeyId == e.PrimaryKey.KeyId {
-					if err = e.PrimaryKey.VerifyUserIdSignature(pkt.Id, e.PrimaryKey, sig); err != nil {
-						return nil, errors.StructuralError("user ID self-signature invalid: " + err.Error())
-					}
-					current.SelfSignature = sig
-					break
-				}
-				current.Signatures = append(current.Signatures, sig)
+			if err := addUserID(e, packets, pkt); err != nil {
+				return nil, err
 			}
 		case *packet.Signature:
 			if pkt.SigType == packet.SigTypeKeyRevocation {
@@ -381,11 +355,9 @@ EachPacket:
 				// TODO: RFC4880 5.2.1 permits signatures
 				// directly on keys (eg. to bind additional
 				// revocation keys).
-			} else if current == nil {
-				return nil, errors.StructuralError("signature packet found before user id packet")
-			} else {
-				current.Signatures = append(current.Signatures, pkt)
 			}
+			// Else, ignoring the signature as it does not follow anything
+			// we would know to attach it to.
 		case *packet.PrivateKey:
 			if pkt.IsSubkey == false {
 				packets.Unread(p)
@@ -426,31 +398,103 @@ EachPacket:
 	return e, nil
 }
 
+func addUserID(e *Entity, packets *packet.Reader, pkt *packet.UserId) error {
+	// Make a new Identity object, that we might wind up throwing away.
+	// We'll only add it if we get a valid self-signature over this
+	// userID.
+	identity := new(Identity)
+	identity.Name = pkt.Id
+	identity.UserId = pkt
+
+	for {
+		p, err := packets.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		sig, ok := p.(*packet.Signature)
+		if !ok {
+			packets.Unread(p)
+			break
+		}
+
+		if (sig.SigType == packet.SigTypePositiveCert || sig.SigType == packet.SigTypeGenericCert) && sig.IssuerKeyId != nil && *sig.IssuerKeyId == e.PrimaryKey.KeyId {
+			if err = e.PrimaryKey.VerifyUserIdSignature(pkt.Id, e.PrimaryKey, sig); err != nil {
+				return errors.StructuralError("user ID self-signature invalid: " + err.Error())
+			}
+			identity.SelfSignature = sig
+			e.Identities[pkt.Id] = identity
+		} else {
+			identity.Signatures = append(identity.Signatures, sig)
+		}
+	}
+
+	return nil
+}
+
 func addSubkey(e *Entity, packets *packet.Reader, pub *packet.PublicKey, priv *packet.PrivateKey) error {
 	var subKey Subkey
 	subKey.PublicKey = pub
 	subKey.PrivateKey = priv
-	p, err := packets.Next()
-	if err == io.EOF {
-		return io.ErrUnexpectedEOF
+
+	for {
+		p, err := packets.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return errors.StructuralError("subkey signature invalid: " + err.Error())
+		}
+
+		sig, ok := p.(*packet.Signature)
+		if !ok {
+			packets.Unread(p)
+			break
+		}
+
+		if sig.SigType != packet.SigTypeSubkeyBinding && sig.SigType != packet.SigTypeSubkeyRevocation {
+			return errors.StructuralError("subkey signature with wrong type")
+		}
+
+		if err := e.PrimaryKey.VerifyKeySignature(subKey.PublicKey, sig); err != nil {
+			return errors.StructuralError("subkey signature invalid: " + err.Error())
+		}
+
+		switch sig.SigType {
+		case packet.SigTypeSubkeyRevocation:
+			subKey.Sig = sig
+		case packet.SigTypeSubkeyBinding:
+
+			if shouldReplaceSubkeySig(subKey.Sig, sig) {
+				subKey.Sig = sig
+			}
+		}
 	}
-	if err != nil {
-		return errors.StructuralError("subkey signature invalid: " + err.Error())
-	}
-	var ok bool
-	subKey.Sig, ok = p.(*packet.Signature)
-	if !ok {
+
+	if subKey.Sig == nil {
 		return errors.StructuralError("subkey packet not followed by signature")
 	}
-	if subKey.Sig.SigType != packet.SigTypeSubkeyBinding && subKey.Sig.SigType != packet.SigTypeSubkeyRevocation {
-		return errors.StructuralError("subkey signature with wrong type")
-	}
-	err = e.PrimaryKey.VerifyKeySignature(subKey.PublicKey, subKey.Sig)
-	if err != nil {
-		return errors.StructuralError("subkey signature invalid: " + err.Error())
-	}
+
 	e.Subkeys = append(e.Subkeys, subKey)
+
 	return nil
+}
+
+func shouldReplaceSubkeySig(existingSig, potentialNewSig *packet.Signature) bool {
+	if potentialNewSig == nil {
+		return false
+	}
+
+	if existingSig == nil {
+		return true
+	}
+
+	if existingSig.SigType == packet.SigTypeSubkeyRevocation {
+		return false // never override a revocation signature
+	}
+
+	return potentialNewSig.CreationTime.After(existingSig.CreationTime)
 }
 
 const defaultRSAKeyBits = 2048
@@ -487,7 +531,7 @@ func NewEntity(name, comment, email string, config *packet.Config) (*Entity, err
 	}
 	isPrimaryId := true
 	e.Identities[uid.Id] = &Identity{
-		Name:   uid.Name,
+		Name:   uid.Id,
 		UserId: uid,
 		SelfSignature: &packet.Signature{
 			CreationTime: currentTime,
@@ -501,11 +545,20 @@ func NewEntity(name, comment, email string, config *packet.Config) (*Entity, err
 			IssuerKeyId:  &e.PrimaryKey.KeyId,
 		},
 	}
+	err = e.Identities[uid.Id].SelfSignature.SignUserId(uid.Id, e.PrimaryKey, e.PrivateKey, config)
+	if err != nil {
+		return nil, err
+	}
 
 	// If the user passes in a DefaultHash via packet.Config,
 	// set the PreferredHash for the SelfSignature.
 	if config != nil && config.DefaultHash != 0 {
 		e.Identities[uid.Id].SelfSignature.PreferredHash = []uint8{hashToHashId(config.DefaultHash)}
+	}
+
+	// Likewise for DefaultCipher.
+	if config != nil && config.DefaultCipher != 0 {
+		e.Identities[uid.Id].SelfSignature.PreferredSymmetric = []uint8{uint8(config.DefaultCipher)}
 	}
 
 	e.Subkeys = make([]Subkey, 1)
@@ -525,13 +578,16 @@ func NewEntity(name, comment, email string, config *packet.Config) (*Entity, err
 	}
 	e.Subkeys[0].PublicKey.IsSubkey = true
 	e.Subkeys[0].PrivateKey.IsSubkey = true
-
+	err = e.Subkeys[0].Sig.SignKey(e.Subkeys[0].PublicKey, e.PrivateKey, config)
+	if err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
-// SerializePrivate serializes an Entity, including private key material, to
-// the given Writer. For now, it must only be used on an Entity returned from
-// NewEntity.
+// SerializePrivate serializes an Entity, including private key material, but
+// excluding signatures from other entities, to the given Writer.
+// Identities and subkeys are re-signed in case they changed since NewEntry.
 // If config is nil, sensible defaults will be used.
 func (e *Entity) SerializePrivate(w io.Writer, config *packet.Config) (err error) {
 	err = e.PrivateKey.Serialize(w)
@@ -569,8 +625,8 @@ func (e *Entity) SerializePrivate(w io.Writer, config *packet.Config) (err error
 	return nil
 }
 
-// Serialize writes the public part of the given Entity to w. (No private
-// key material will be output).
+// Serialize writes the public part of the given Entity to w, including
+// signatures from other entities. No private key material will be output.
 func (e *Entity) Serialize(w io.Writer) error {
 	err := e.PrimaryKey.Serialize(w)
 	if err != nil {

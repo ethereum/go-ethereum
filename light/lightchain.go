@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -50,6 +50,7 @@ type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
 	chainDb       ethdb.Database
+	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
 	chainSideFeed event.Feed
@@ -57,20 +58,18 @@ type LightChain struct {
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
-	mu      sync.RWMutex
-	chainmu sync.RWMutex
-
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
 	blockCache   *lru.Cache // Cache for the most recent entire blocks
 
+	chainmu sync.RWMutex // protects header inserts
 	quit    chan struct{}
-	running int32 // running must be called automically
-	// procInterrupt must be atomically called
-	procInterrupt int32 // interrupt signaler for block processing
-	wg            sync.WaitGroup
+	wg      sync.WaitGroup
 
-	engine consensus.Engine
+	// Atomic boolean switches:
+	running          int32 // whether LightChain is running or stopped
+	procInterrupt    int32 // interrupts chain insert
+	disableCheckFreq int32 // disables header verification
 }
 
 // NewLightChain returns a fully initialised light chain using information
@@ -165,8 +164,8 @@ func (self *LightChain) loadLastState() error {
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
 func (bc *LightChain) SetHead(head uint64) {
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
 	bc.hc.SetHead(head, nil)
 	bc.loadLastState()
@@ -188,8 +187,8 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	// Dump the entire block chain and purge the caches
 	bc.SetHead(0)
 
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
+	bc.chainmu.Lock()
+	defer bc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
 	rawdb.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
@@ -315,8 +314,8 @@ func (bc *LightChain) Stop() {
 // Rollback is designed to remove a chain of links from the database that aren't
 // certain enough to be valid.
 func (self *LightChain) Rollback(chain []common.Hash) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	self.chainmu.Lock()
+	defer self.chainmu.Unlock()
 
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
@@ -355,6 +354,9 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	if atomic.LoadInt32(&self.disableCheckFreq) == 1 {
+		checkFreq = 0
+	}
 	start := time.Now()
 	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
 		return i, err
@@ -362,19 +364,13 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
-	defer func() {
-		self.chainmu.Unlock()
-		time.Sleep(time.Millisecond * 10) // ugly hack; do not hog chain lock in case syncing is CPU-limited by validation
-	}()
+	defer self.chainmu.Unlock()
 
 	self.wg.Add(1)
 	defer self.wg.Done()
 
 	var events []interface{}
 	whFunc := func(header *types.Header) error {
-		self.mu.Lock()
-		defer self.mu.Unlock()
-
 		status, err := self.hc.WriteHeader(header)
 
 		switch status {
@@ -441,8 +437,8 @@ func (self *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []c
 //
 // Note: ancestor == 0 returns the same block, 1 returns its parent and so on.
 func (bc *LightChain) GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
+	bc.chainmu.RLock()
+	defer bc.chainmu.RUnlock()
 
 	return bc.hc.GetAncestor(hash, number, ancestor, maxNonCanonical)
 }
@@ -483,8 +479,8 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	}
 	// Retrieve the latest useful header and update to it
 	if header, err := GetHeaderByNumber(ctx, self.odr, latest); header != nil && err == nil {
-		self.mu.Lock()
-		defer self.mu.Unlock()
+		self.chainmu.Lock()
+		defer self.chainmu.Unlock()
 
 		// Ensure the chain didn't move past the latest block while retrieving it
 		if self.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
@@ -532,4 +528,14 @@ func (self *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (self *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return self.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+// DisableCheckFreq disables header validation. This is used for ultralight mode.
+func (self *LightChain) DisableCheckFreq() {
+	atomic.StoreInt32(&self.disableCheckFreq, 1)
+}
+
+// EnableCheckFreq enables header validation.
+func (self *LightChain) EnableCheckFreq() {
+	atomic.StoreInt32(&self.disableCheckFreq, 0)
 }

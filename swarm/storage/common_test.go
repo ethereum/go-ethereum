@@ -179,8 +179,9 @@ func testStoreCorrect(m ChunkStore, n int, chunksize int64, t *testing.T) {
 			return fmt.Errorf("key does not match retrieved chunk Address")
 		}
 		hasher := MakeHashFunc(DefaultHash)()
-		hasher.ResetWithLength(chunk.SpanBytes())
-		hasher.Write(chunk.Payload())
+		data := chunk.Data()
+		hasher.ResetWithLength(data[:8])
+		hasher.Write(data[8:])
 		exp := hasher.Sum(nil)
 		if !bytes.Equal(h, exp) {
 			return fmt.Errorf("key is not hash of chunk data")

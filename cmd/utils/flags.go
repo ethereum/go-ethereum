@@ -19,6 +19,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -140,6 +141,10 @@ var (
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
+	ConstantinopleOverrideFlag = cli.Uint64Flag{
+		Name:  "override.constantinople",
+		Usage: "Manually specify constantinople fork-block, overriding the bundled setting",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -160,6 +165,22 @@ var (
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
 		Usage: "Exists syncing by given time (default 0) after block synchronisation",
+	}
+	ULCModeConfigFlag = cli.StringFlag{
+		Name:  "ulc.config",
+		Usage: "Config file to use for ultra light client mode",
+	}
+	OnlyAnnounceModeFlag = cli.BoolFlag{
+		Name:  "ulc.onlyannounce",
+		Usage: "ULC server sends announcements only",
+	}
+	ULCMinTrustedFractionFlag = cli.IntFlag{
+		Name:  "ulc.fraction",
+		Usage: "Minimum % of trusted ULC servers required to announce a new head",
+	}
+	ULCTrustedNodesFlag = cli.StringFlag{
+		Name:  "ulc.trusted",
+		Usage: "List of trusted ULC servers",
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
@@ -185,6 +206,10 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	WhitelistFlag = cli.StringFlag{
+		Name:  "whitelist",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
@@ -430,6 +455,30 @@ var (
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
+	}
+	GraphQLEnabledFlag = cli.BoolFlag{
+		Name:  "graphql",
+		Usage: "Enable the GraphQL server",
+	}
+	GraphQLListenAddrFlag = cli.StringFlag{
+		Name:  "graphql.addr",
+		Usage: "GraphQL server listening interface",
+		Value: node.DefaultGraphQLHost,
+	}
+	GraphQLPortFlag = cli.IntFlag{
+		Name:  "graphql.port",
+		Usage: "GraphQL server listening port",
+		Value: node.DefaultGraphQLPort,
+	}
+	GraphQLCORSDomainFlag = cli.StringFlag{
+		Name:  "graphql.rpccorsdomain",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
+		Value: "",
+	}
+	GraphQLVirtualHostsFlag = cli.StringFlag{
+		Name:  "graphql.rpcvhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
+		Value: strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -703,11 +752,13 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 
 	cfg.BootstrapNodes = make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {
-		node, err := enode.ParseV4(url)
-		if err != nil {
-			log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
+		if url != "" {
+			node, err := enode.ParseV4(url)
+			if err != nil {
+				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
+			}
+			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
 		}
-		cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
 	}
 }
 
@@ -792,6 +843,24 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+// setGraphQL creates the GraphQL listener interface string from the set
+// command line flags, returning empty if the GraphQL endpoint is disabled.
+func setGraphQL(ctx *cli.Context, cfg *node.Config) {
+	if ctx.GlobalBool(GraphQLEnabledFlag.Name) && cfg.GraphQLHost == "" {
+		cfg.GraphQLHost = "127.0.0.1"
+		if ctx.GlobalIsSet(GraphQLListenAddrFlag.Name) {
+			cfg.GraphQLHost = ctx.GlobalString(GraphQLListenAddrFlag.Name)
+		}
+	}
+	cfg.GraphQLPort = ctx.GlobalInt(GraphQLPortFlag.Name)
+	if ctx.GlobalIsSet(GraphQLCORSDomainFlag.Name) {
+		cfg.GraphQLCors = splitAndTrim(ctx.GlobalString(GraphQLCORSDomainFlag.Name))
+	}
+	if ctx.GlobalIsSet(GraphQLVirtualHostsFlag.Name) {
+		cfg.GraphQLVirtualHosts = splitAndTrim(ctx.GlobalString(GraphQLVirtualHostsFlag.Name))
+	}
+}
+
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setWS(ctx *cli.Context, cfg *node.Config) {
@@ -825,20 +894,49 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+// SetULC setup ULC config from file if given.
+func SetULC(ctx *cli.Context, cfg *eth.Config) {
+	// ULC config isn't loaded from global config and ULC config and ULC trusted nodes are not defined.
+	if cfg.ULC == nil && !(ctx.GlobalIsSet(ULCModeConfigFlag.Name) || ctx.GlobalIsSet(ULCTrustedNodesFlag.Name)) {
+		return
+	}
+	cfg.ULC = &eth.ULCConfig{}
+
+	path := ctx.GlobalString(ULCModeConfigFlag.Name)
+	if path != "" {
+		cfgData, err := ioutil.ReadFile(path)
+		if err != nil {
+			Fatalf("Failed to unmarshal ULC configuration: %v", err)
+		}
+
+		err = json.Unmarshal(cfgData, &cfg.ULC)
+		if err != nil {
+			Fatalf("Failed to unmarshal ULC configuration: %s", err.Error())
+		}
+	}
+
+	if trustedNodes := ctx.GlobalString(ULCTrustedNodesFlag.Name); trustedNodes != "" {
+		cfg.ULC.TrustedServers = strings.Split(trustedNodes, ",")
+	}
+
+	if trustedFraction := ctx.GlobalInt(ULCMinTrustedFractionFlag.Name); trustedFraction > 0 {
+		cfg.ULC.MinTrustedFraction = trustedFraction
+	}
+	if cfg.ULC.MinTrustedFraction <= 0 && cfg.ULC.MinTrustedFraction > 100 {
+		log.Error("MinTrustedFraction is invalid", "MinTrustedFraction", cfg.ULC.MinTrustedFraction, "Changed to default", eth.DefaultULCMinTrustedFraction)
+		cfg.ULC.MinTrustedFraction = eth.DefaultULCMinTrustedFraction
+	}
+}
+
 // makeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func makeDatabaseHandles() int {
-	limit, err := fdlimit.Current()
+	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if limit < 2048 {
-		if err := fdlimit.Raise(2048); err != nil {
-			Fatalf("Failed to raise file descriptor allowance: %v", err)
-		}
-	}
-	if limit > 2048 { // cap database file descriptors even if more is available
-		limit = 2048
+	if err := fdlimit.Raise(uint64(limit)); err != nil {
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
 	return limit / 2 // Leave half for networking and other stuff
 }
@@ -979,19 +1077,11 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
+	setGraphQL(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 
-	switch {
-	case ctx.GlobalIsSet(DataDirFlag.Name):
-		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
-	case ctx.GlobalBool(DeveloperFlag.Name):
-		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.GlobalBool(TestnetFlag.Name):
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
-	}
+	setDataDir(ctx, cfg)
 
 	if ctx.GlobalIsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.GlobalString(KeyStoreDirFlag.Name)
@@ -1001,6 +1091,19 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) {
 		cfg.NoUSB = ctx.GlobalBool(NoUSBFlag.Name)
+	}
+}
+
+func setDataDir(ctx *cli.Context, cfg *node.Config) {
+	switch {
+	case ctx.GlobalIsSet(DataDirFlag.Name):
+		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		cfg.DataDir = "" // unless explicitly requested, use memory databases
+	case ctx.GlobalBool(TestnetFlag.Name):
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
+	case ctx.GlobalBool(RinkebyFlag.Name):
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	}
 }
 
@@ -1077,6 +1180,29 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
+func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
+	whitelist := ctx.GlobalString(WhitelistFlag.Name)
+	if whitelist == "" {
+		return
+	}
+	cfg.Whitelist = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(whitelist, ",") {
+		parts := strings.Split(entry, "=")
+		if len(parts) != 2 {
+			Fatalf("Invalid whitelist entry: %s", entry)
+		}
+		number, err := strconv.ParseUint(parts[0], 0, 64)
+		if err != nil {
+			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
+		}
+		var hash common.Hash
+		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
+			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
+		}
+		cfg.Whitelist[number] = hash
+	}
+}
+
 // checkExclusive verifies that only a single instance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
@@ -1142,6 +1268,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setWhitelist(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
@@ -1151,6 +1278,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(LightPeersFlag.Name) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
+	}
+	if ctx.GlobalIsSet(OnlyAnnounceModeFlag.Name) {
+		cfg.OnlyAnnounce = ctx.GlobalBool(OnlyAnnounceModeFlag.Name)
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
@@ -1379,7 +1509,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
-
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
