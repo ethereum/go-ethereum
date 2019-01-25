@@ -146,8 +146,8 @@ func (s *LesServer) startEventLoop() {
 	s.protocolManager.wg.Add(1)
 
 	var processing bool
-	procFeedback := make(chan bool, 100)
-	s.protocolManager.blockchain.(*core.BlockChain).SetProcFeedback(procFeedback)
+	blockProcFeed := make(chan bool, 100)
+	s.protocolManager.blockchain.(*core.BlockChain).SubscribeBlockProcessingEvent(blockProcFeed)
 	totalRechargeCh := make(chan uint64, 100)
 	totalRecharge := s.costTracker.subscribeTotalRecharge(totalRechargeCh)
 	totalCapacityCh := make(chan uint64, 100)
@@ -163,7 +163,7 @@ func (s *LesServer) startEventLoop() {
 				s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
 			}
 			select {
-			case processing = <-procFeedback:
+			case processing = <-blockProcFeed:
 			case totalRecharge = <-totalRechargeCh:
 			case totalCapacity = <-totalCapacityCh:
 				s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)

@@ -111,6 +111,7 @@ type BlockChain struct {
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
+	blockProcFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -134,11 +135,10 @@ type BlockChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 
-	engine       consensus.Engine
-	processor    Processor // block processor interface
-	validator    Validator // block and state validator interface
-	vmConfig     vm.Config
-	procFeedback chan bool
+	engine    consensus.Engine
+	processor Processor // block processor interface
+	validator Validator // block and state validator interface
+	vmConfig  vm.Config
 
 	badBlocks      *lru.Cache              // Bad block cache
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
@@ -369,14 +369,6 @@ func (bc *BlockChain) CurrentBlock() *types.Block {
 // chain. The block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) CurrentFastBlock() *types.Block {
 	return bc.currentFastBlock.Load().(*types.Block)
-}
-
-// SetProcFeedback adds a feedback channel where true is sent each time block
-// processing begins and false is sent when it is finished.
-func (bc *BlockChain) SetProcFeedback(procFeedback chan bool) {
-	bc.procmu.Lock()
-	defer bc.procmu.Unlock()
-	bc.procFeedback = procFeedback
 }
 
 // SetProcessor sets the processor required for making state modifications.
@@ -1100,23 +1092,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, nil
 	}
 
-	// send block processing feedback if needed
-	bc.procmu.RLock()
-	procFeedback := bc.procFeedback
-	bc.procmu.RUnlock()
-
-	if procFeedback != nil {
-		select {
-		case procFeedback <- true:
-		default:
-		}
-		defer func() {
-			select {
-			case procFeedback <- false:
-			default:
-			}
-		}()
-	}
+	bc.blockProcFeed.Send(true)
+	defer bc.blockProcFeed.Send(false)
 
 	// Remove already known canon-blocks
 	var (
@@ -1752,4 +1729,10 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeBlockProcessingEvent registers a subscription of bool where true means
+// block processing has started while false means it has stopped.
+func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
+	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
