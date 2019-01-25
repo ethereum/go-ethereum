@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -117,7 +118,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 						// if until is reached
 						return
 					}
-					log.Error("localstore pull subscription iteration", "err", err)
+					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
 			case <-stopChan:
@@ -131,7 +132,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 			case <-ctx.Done():
 				err := ctx.Err()
 				if err != nil {
-					log.Error("localstore pull subscription", "err", err)
+					log.Error("localstore pull subscription", "bin", bin, "since", since, "until", until, "err", err)
 				}
 				return
 			}
@@ -162,6 +163,13 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 type ChunkDescriptor struct {
 	Address        storage.Address
 	StoreTimestamp int64
+}
+
+func (c *ChunkDescriptor) String() string {
+	if c == nil {
+		return "none"
+	}
+	return fmt.Sprintf("%s stored at %v", c.Address.Hex(), c.StoreTimestamp)
 }
 
 // triggerPullSubscriptions is used internally for starting iterations
