@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -58,7 +59,6 @@ func slidingWindow(c *cli.Context) error {
 	uploadedBytes := 0
 	networkDepth := 0
 	errored := false
-
 outer:
 	for {
 		seed := int(time.Now().UnixNano() / 1e6)
@@ -84,23 +84,39 @@ outer:
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
 		time.Sleep(time.Duration(syncDelay) * time.Second)
 		uploadedBytes += filesize * 1000
-
+		var wg sync.WaitGroup
 		for i, v := range hashes {
-			rand.Seed(time.Now().UTC().UnixNano())
-			randIndex := 1 + rand.Intn(len(endpoints)-1)
-			ruid := uuid.New()[:8]
-			start := time.Now()
-			err := fetch(v.hash, endpoints[randIndex], v.digest, ruid)
-			fetchTime := time.Since(start)
-			if err != nil {
-				errored = true
-				log.Error("error retrieving hash", "hash idx", i, "err", err)
-				metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
-				networkDepth = i
+			timeout := time.After(30 * time.Second)
+			errored = false
+			wg.Add(1)
+			go func(i int, v uploadResult) {
+				defer wg.Done()
+				for {
+					select {
+					case <-timeout:
+						errored = true
+						log.Error("error retrieving hash. timeout", "hash idx", i, "err", err)
+						metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
+						return
+					default:
+					}
+					rand.Seed(time.Now().UTC().UnixNano())
+					randIndex := 1 + rand.Intn(len(endpoints)-1)
+					ruid := uuid.New()[:8]
+					start := time.Now()
+					err := fetch(v.hash, endpoints[randIndex], v.digest, ruid)
+					fetchTime := time.Since(start)
+					if err != nil {
+						continue
+					}
+					metrics.GetOrRegisterMeter("sliding-window.single.fetch-time", nil).Mark(int64(fetchTime))
+				}
+			}(i, v)
+			wg.Wait()
+			if errored {
 				break outer
 			}
-
-			metrics.GetOrRegisterMeter("sliding-window.single.fetch-time", nil).Mark(int64(fetchTime))
+			networkDepth = i
 		}
 	}
 
