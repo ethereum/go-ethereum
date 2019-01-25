@@ -31,6 +31,10 @@ var (
 		Name:  "metrics.influxdb.export",
 		Usage: "Enable metrics export/push to an external InfluxDB database",
 	}
+	MetricsEnableInfluxDBAccountingExportFlag = cli.BoolFlag{
+		Name:  "metrics.influxdb.accounting",
+		Usage: "Enable accounting metrics export/push to an external InfluxDB database",
+	}
 	MetricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "Metrics InfluxDB endpoint",
@@ -66,6 +70,7 @@ var (
 var Flags = []cli.Flag{
 	utils.MetricsEnabledFlag,
 	MetricsEnableInfluxDBExportFlag,
+	MetricsEnableInfluxDBAccountingExportFlag,
 	MetricsInfluxDBEndpointFlag,
 	MetricsInfluxDBDatabaseFlag,
 	MetricsInfluxDBUsernameFlag,
@@ -77,12 +82,13 @@ func Setup(ctx *cli.Context) {
 	if gethmetrics.Enabled {
 		log.Info("Enabling swarm metrics collection")
 		var (
-			enableExport = ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name)
-			endpoint     = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
-			database     = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
-			username     = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
-			password     = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
-			hosttag      = ctx.GlobalString(MetricsInfluxDBHostTagFlag.Name)
+			enableExport           = ctx.GlobalBool(MetricsEnableInfluxDBExportFlag.Name)
+			enableAccountingExport = ctx.GlobalBool(MetricsEnableInfluxDBAccountingExportFlag.Name)
+			endpoint               = ctx.GlobalString(MetricsInfluxDBEndpointFlag.Name)
+			database               = ctx.GlobalString(MetricsInfluxDBDatabaseFlag.Name)
+			username               = ctx.GlobalString(MetricsInfluxDBUsernameFlag.Name)
+			password               = ctx.GlobalString(MetricsInfluxDBPasswordFlag.Name)
+			hosttag                = ctx.GlobalString(MetricsInfluxDBHostTagFlag.Name)
 		)
 
 		// Start system runtime metrics collection
@@ -91,6 +97,13 @@ func Setup(ctx *cli.Context) {
 		if enableExport {
 			log.Info("Enabling swarm metrics export to InfluxDB")
 			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
+				"host": hosttag,
+			})
+		}
+
+		if enableAccountingExport {
+			log.Info("Exporting accounting metrics to InfluxDB")
+			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", map[string]string{
 				"host": hosttag,
 			})
 		}

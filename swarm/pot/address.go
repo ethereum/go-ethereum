@@ -162,7 +162,6 @@ func ToBytes(v Val) []byte {
 }
 
 // DefaultPof returns a proximity order comparison operator function
-// where all
 func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
 	return func(one, other Val, pos int) (int, bool) {
 		po, eq := proximityOrder(ToBytes(one), ToBytes(other), pos)
@@ -174,6 +173,9 @@ func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
 	}
 }
 
+// proximityOrder returns two parameters:
+// 1. relative proximity order of the arguments one & other;
+// 2. boolean indicating whether the full match occurred (one == other).
 func proximityOrder(one, other []byte, pos int) (int, bool) {
 	for i := pos / 8; i < len(one); i++ {
 		if one[i] == other[i] {

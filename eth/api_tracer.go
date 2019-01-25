@@ -576,6 +576,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 
 			vmConf vm.Config
 			dump   *os.File
+			writer *bufio.Writer
 			err    error
 		)
 		// If the transaction needs tracing, swap out the configs
@@ -590,16 +591,19 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 			dumps = append(dumps, dump.Name())
 
 			// Swap out the noop logger to the standard tracer
+			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
 				Debug:                   true,
-				Tracer:                  vm.NewJSONLogger(&logConfig, bufio.NewWriter(dump)),
+				Tracer:                  vm.NewJSONLogger(&logConfig, writer),
 				EnablePreimageRecording: true,
 			}
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
 		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
-
+		if writer != nil {
+			writer.Flush()
+		}
 		if dump != nil {
 			dump.Close()
 			log.Info("Wrote standard trace", "file", dump.Name())
