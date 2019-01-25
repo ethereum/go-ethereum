@@ -17,6 +17,7 @@ package secp256k1
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
 #include "ext.h"
+#include "./libsecp256k1/contrib/lax_der_parsing.c"
 
 typedef void (*callbackFunc) (const char* msg, void* data);
 extern void secp256k1GoPanicIllegal(const char* msg, void* data);
@@ -47,6 +48,7 @@ var (
 	ErrInvalidPubkey       = errors.New("invalid public key")
 	ErrSignFailed          = errors.New("signing failed")
 	ErrRecoverFailed       = errors.New("recovery failed")
+	ErrInvalidSigEncoding  = errors.New("invalid signature encoding")
 )
 
 // Sign creates a recoverable ECDSA signature.
@@ -164,4 +166,24 @@ func checkSignature(sig []byte) error {
 		return ErrInvalidRecoveryID
 	}
 	return nil
+}
+
+// NormalizeLaxDERSignature normalizes a Lax DER encoded signature to a "low S" form.
+// See normalize_s in https://github.com/rust-bitcoin/rust-secp256k1 for an explanation.
+func NormalizeLaxDERSignature(sig []byte) ([]byte, error) {
+	var signature C.secp256k1_ecdsa_signature
+	in := (*C.uchar)(unsafe.Pointer(&sig[0]))
+	inLen := C.size_t(len(sig))
+
+	if C.ecdsa_signature_parse_der_lax(context, &signature, in, inLen) == 0 {
+		return nil, ErrInvalidSigEncoding
+	}
+
+	var normalizedSig C.secp256k1_ecdsa_signature
+	C.secp256k1_ecdsa_signature_normalize(context, &normalizedSig, &signature)
+
+	out := make([]byte, 64)
+	outPtr := (*C.uchar)(unsafe.Pointer(&out[0]))
+	C.secp256k1_ecdsa_signature_serialize_compact(context, outPtr, &normalizedSig)
+	return out, nil
 }
