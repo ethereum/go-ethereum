@@ -200,7 +200,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 		log.Warn("Light peer count limited", "specified", s.maxPeers, "allowed", freePeers)
 	}
 
-	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, s.protocolManager.removePeer)
+	s.freeClientPool = newFreeClientPool(s.chainDb, s.freeClientCap, 10000, mclock.System{}, func(id string) { go s.protocolManager.removePeer(id) })
 	s.priorityClientPool = newPriorityClientPool(s.freeClientCap, s.protocolManager.peers, s.freeClientPool)
 
 	s.protocolManager.peers.notify(s.priorityClientPool)

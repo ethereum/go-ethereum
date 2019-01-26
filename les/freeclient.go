@@ -91,7 +91,9 @@ func (f *freeClientPool) stop() {
 // registerPeer implements clientPool
 func (f *freeClientPool) registerPeer(p *peer) {
 	if addr, ok := p.RemoteAddr().(*net.TCPAddr); ok {
-		f.connect(addr.IP.String(), p.id)
+		if !f.connect(addr.IP.String(), p.id) {
+			f.removePeer(p.id)
+		}
 	}
 }
 
@@ -107,7 +109,6 @@ func (f *freeClientPool) connect(address, id string) bool {
 
 	if f.connectedLimit == 0 {
 		log.Debug("Client rejected", "address", address)
-		go f.removePeer(id)
 		return false
 	}
 	e := f.addressMap[address]
@@ -119,7 +120,6 @@ func (f *freeClientPool) connect(address, id string) bool {
 	} else {
 		if e.connected {
 			log.Debug("Client already connected", "address", address)
-			go f.removePeer(id)
 			return false
 		}
 		recentUsage = int64(math.Exp(float64(e.logUsage-f.logOffset(now)) / fixedPointMultiplier))
@@ -135,7 +135,6 @@ func (f *freeClientPool) connect(address, id string) bool {
 			// keep the old client and reject the new one
 			f.connPool.Push(i, i.linUsage)
 			log.Debug("Client rejected", "address", address)
-			go f.removePeer(id)
 			return false
 		}
 	}
@@ -206,7 +205,7 @@ func (f *freeClientPool) dropClient(i *freeClientPoolEntry, now mclock.AbsTime) 
 	i.connected = false
 	f.disconnPool.Push(i, -i.logUsage)
 	log.Debug("Client kicked out", "address", i.address)
-	go f.removePeer(i.id)
+	f.removePeer(i.id)
 }
 
 // logOffset calculates the time-dependent offset for the logarithmic
