@@ -124,7 +124,13 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
 	if ip = net.ParseIP(host); ip == nil {
-		return nil, errors.New("invalid IP address")
+		// attempt to look up IP addresses if host is a FQDN
+		lookupIPs, err := net.LookupIP(host)
+		if err != nil {
+			return nil, errors.New("invalid IP address")
+		}
+		// set to first ip by default
+		ip = lookupIPs[0]
 	}
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
