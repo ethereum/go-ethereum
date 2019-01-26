@@ -339,21 +339,20 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
 			defer sub.Unsubscribe()
 			for {
-				select {
-				case event := <-sub.Chan():
-					if event == nil {
-						continue
-					}
-					done, ok := event.Data.(downloader.DoneEvent)
-					if !ok {
-						continue
-					}
-					if timestamp := time.Unix(done.Latest.Time.Int64(), 0); time.Since(timestamp) < 10*time.Minute {
-						log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
-							"age", common.PrettyAge(timestamp))
-						stack.Stop()
-					}
+				event := <-sub.Chan()
+				if event == nil {
+					continue
 				}
+				done, ok := event.Data.(downloader.DoneEvent)
+				if !ok {
+					continue
+				}
+				if timestamp := time.Unix(done.Latest.Time.Int64(), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					stack.Stop()
+				}
+
 			}
 		}()
 	}

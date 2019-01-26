@@ -159,7 +159,7 @@ var (
 	}
 	ExitWhenSyncedFlag = cli.BoolFlag{
 		Name:  "exitwhensynced",
-		Usage: "Exists syncing by given time (default 0) after block synchronisation",
+		Usage: "Exists syncing after block synchronisation",
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
