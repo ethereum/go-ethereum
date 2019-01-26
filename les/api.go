@@ -33,7 +33,7 @@ var (
 	ErrTotalCap             = errors.New("total capacity exceeded")
 	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
 
-	dropCapacityDelay = time.Second
+	dropCapacityDelay = time.Second // delay applied to decreasing capacity changes
 )
 
 // PrivateLightServerAPI provides an API to access the LES light server.
@@ -129,6 +129,7 @@ func (api *PrivateLightServerAPI) GetClientCapacity(id enode.ID) hexutil.Uint64 
 	return hexutil.Uint64(api.server.priorityClientPool.clients[id].cap)
 }
 
+// clientPool is implemented by both the free and priority client pools
 type clientPool interface {
 	peerSetNotify
 	setLimits(count int, totalCap uint64)
@@ -155,7 +156,7 @@ type scheduledUpdate struct {
 	totalCap, id uint64
 }
 
-// priorityClientInfo entries exist for all prioritized clients and currently connected free clients
+// priorityClientInfo entries exist for all prioritized clients and currently connected non-priority clients
 type priorityClientInfo struct {
 	cap       uint64 // zero for non-priority clients
 	connected bool
@@ -172,14 +173,12 @@ func newPriorityClientPool(freeClientCap uint64, ps *peerSet, child clientPool) 
 	}
 }
 
-// connect should be called when a new client is connected. The callback function
-// is called when the assigned capacity is changed while the client is connected.
-// It returns the priority capacity or zero if the client is not prioritized.
-// It also returns whether the client can be accepted.
+// registerPeer is called when a new client is connected. If the client has no
+// priority assigned then it is passed to the child pool which may either keep it
+// or disconnect it.
 //
 // Note: priorityClientPool also stores a record about free clients while they are
-// connected in order to be able to assign priority to them later with the callback
-// function if necessary.
+// connected in order to be able to assign priority to them later.
 func (v *priorityClientPool) registerPeer(p *peer) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -210,8 +209,8 @@ func (v *priorityClientPool) registerPeer(p *peer) {
 	}
 }
 
-// disconnect should be called when a client is disconnected.
-// It should be called for all clients accepted by connect even if not prioritized.
+// unregisterPeer is called when a client is disconnected. If the client has no
+// priority assigned then it is also removed from the child pool.
 func (v *priorityClientPool) unregisterPeer(p *peer) {
 	v.lock.Lock()
 	defer v.lock.Unlock()
@@ -311,7 +310,6 @@ func (v *priorityClientPool) setLimitsNow(count int, totalCap uint64) {
 			}
 		}
 	}
-
 	v.maxPeers = count
 	v.totalCap = totalCap
 	if v.child != nil {

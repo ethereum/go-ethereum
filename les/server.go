@@ -142,6 +142,9 @@ func (s *LesServer) APIs() []rpc.API {
 	}
 }
 
+// startEventLoop starts an event handler loop that updates the recharge curve of
+// the client manager and adjusts the client pool's size according to the total
+// capacity updates coming from the client manager
 func (s *LesServer) startEventLoop() {
 	s.protocolManager.wg.Add(1)
 
@@ -154,7 +157,7 @@ func (s *LesServer) startEventLoop() {
 	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
 
 	go func() {
-		for {
+		updateRecharge := func() {
 			if processing {
 				s.protocolManager.servingQueue.setThreads(s.thcBlockProcessing)
 				s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
@@ -162,9 +165,13 @@ func (s *LesServer) startEventLoop() {
 				s.protocolManager.servingQueue.setThreads(s.thcNormal)
 				s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
 			}
+		}
+		for {
 			select {
 			case processing = <-blockProcFeed:
+				updateRecharge()
 			case totalRecharge = <-totalRechargeCh:
+				updateRecharge()
 			case totalCapacity = <-totalCapacityCh:
 				s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
 			case <-s.protocolManager.quitSync:

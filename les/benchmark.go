@@ -44,6 +44,7 @@ type requestBenchmark interface {
 	request(peer *peer, index int) error
 }
 
+// benchmarkBlockHeaders implements requestBenchmark
 type benchmarkBlockHeaders struct {
 	amount, skip    int
 	reverse, byHash bool
@@ -78,6 +79,7 @@ func (b *benchmarkBlockHeaders) request(peer *peer, index int) error {
 	}
 }
 
+// benchmarkBodiesOrReceipts implements requestBenchmark
 type benchmarkBodiesOrReceipts struct {
 	receipts bool
 	hashes   []common.Hash
@@ -100,6 +102,7 @@ func (b *benchmarkBodiesOrReceipts) request(peer *peer, index int) error {
 	}
 }
 
+// benchmarkProofsOrCode implements requestBenchmark
 type benchmarkProofsOrCode struct {
 	code     bool
 	headHash common.Hash
@@ -120,6 +123,7 @@ func (b *benchmarkProofsOrCode) request(peer *peer, index int) error {
 	}
 }
 
+// benchmarkHelperTrie implements requestBenchmark
 type benchmarkHelperTrie struct {
 	bloom                 bool
 	reqCount              int
@@ -162,6 +166,7 @@ func (b *benchmarkHelperTrie) request(peer *peer, index int) error {
 	return peer.RequestHelperTrieProofs(0, 0, reqs)
 }
 
+// benchmarkTxSend implements requestBenchmark
 type benchmarkTxSend struct {
 	txs types.Transactions
 }
@@ -189,6 +194,7 @@ func (b *benchmarkTxSend) request(peer *peer, index int) error {
 	return peer.SendTxs(0, 0, enc)
 }
 
+// benchmarkTxStatus implements requestBenchmark
 type benchmarkTxStatus struct{}
 
 func (b *benchmarkTxStatus) init(pm *ProtocolManager, count int) error {
