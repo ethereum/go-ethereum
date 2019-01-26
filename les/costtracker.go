@@ -327,7 +327,7 @@ func (ct *costTracker) printStats() {
 		return
 	}
 	for code, arr := range ct.stats {
-		log.Info("request", "code", code, "1/16", arr[0], "1/8", arr[1], "1/4", arr[2], "1/2", arr[3], "1", arr[4], "2", arr[5], "4", arr[6], "8", arr[7], "16", arr[8], ">16", arr[9])
+		log.Info("Request cost statistics", "code", code, "1/16", arr[0], "1/8", arr[1], "1/4", arr[2], "1/2", arr[3], "1", arr[4], "2", arr[5], "4", arr[6], "8", arr[7], "16", arr[8], ">16", arr[9])
 	}
 }
 
@@ -369,10 +369,20 @@ func (list RequestCostList) decode() requestCostTable {
 // testCostList returns a dummy request cost list used by tests
 func testCostList() RequestCostList {
 	cl := make(RequestCostList, len(reqAvgTimeCost))
-	for i, req := range reqBenchMap {
-		cl[i].MsgCode = req.code
-		cl[i].BaseCost = 0
-		cl[i].ReqCost = 0
+	var max uint64
+	for code, _ := range reqAvgTimeCost {
+		if code > max {
+			max = code
+		}
+	}
+	i := 0
+	for code := uint64(0); code <= max; code++ {
+		if _, ok := reqAvgTimeCost[code]; ok {
+			cl[i].MsgCode = code
+			cl[i].BaseCost = 0
+			cl[i].ReqCost = 0
+			i++
+		}
 	}
 	return cl
 }

@@ -29,8 +29,9 @@ import (
 )
 
 var (
-	ErrMinCap   = errors.New("capacity too small")
-	ErrTotalCap = errors.New("total capacity exceeded")
+	ErrMinCap               = errors.New("capacity too small")
+	ErrTotalCap             = errors.New("total capacity exceeded")
+	ErrUnknownBenchmarkType = errors.New("unknown benchmark type")
 
 	dropCapacityDelay = time.Second
 )
@@ -376,4 +377,80 @@ func (v *priorityClientPool) setClientCapacity(id enode.ID, cap uint64) error {
 		delete(v.clients, id)
 	}
 	return nil
+}
+
+// Benchmark runs a request performance benchmark with a given set of measurement setups
+// in multiple passes specified by passCount. The measurement time for each setup in each
+// pass is specified in milliseconds by length.
+//
+// Note: measurement time is adjusted for each pass depending on the previous ones.
+// Therefore a controlled total measurement time is achievable in multiple passes.
+func (api *PrivateLightServerAPI) Benchmark(setups []map[string]interface{}, passCount, length int) ([]map[string]interface{}, error) {
+	benchmarks := make([]requestBenchmark, len(setups))
+	for i, setup := range setups {
+		if t, ok := setup["type"].(string); ok {
+			getInt := func(field string, def int) int {
+				if value, ok := setup[field].(float64); ok {
+					return int(value)
+				}
+				return def
+			}
+			getBool := func(field string, def bool) bool {
+				if value, ok := setup[field].(bool); ok {
+					return value
+				}
+				return def
+			}
+			switch t {
+			case "header":
+				benchmarks[i] = &benchmarkBlockHeaders{
+					amount:  getInt("amount", 1),
+					skip:    getInt("skip", 1),
+					byHash:  getBool("byHash", false),
+					reverse: getBool("reverse", false),
+				}
+			case "body":
+				benchmarks[i] = &benchmarkBodiesOrReceipts{receipts: false}
+			case "receipts":
+				benchmarks[i] = &benchmarkBodiesOrReceipts{receipts: true}
+			case "proof":
+				benchmarks[i] = &benchmarkProofsOrCode{code: false}
+			case "code":
+				benchmarks[i] = &benchmarkProofsOrCode{code: true}
+			case "cht":
+				benchmarks[i] = &benchmarkHelperTrie{
+					bloom:    false,
+					reqCount: getInt("amount", 1),
+				}
+			case "bloom":
+				benchmarks[i] = &benchmarkHelperTrie{
+					bloom:    true,
+					reqCount: getInt("amount", 1),
+				}
+			case "txSend":
+				benchmarks[i] = &benchmarkTxSend{}
+			case "txStatus":
+				benchmarks[i] = &benchmarkTxStatus{}
+			default:
+				return nil, ErrUnknownBenchmarkType
+			}
+		} else {
+			return nil, ErrUnknownBenchmarkType
+		}
+	}
+	rs := api.server.protocolManager.runBenchmark(benchmarks, passCount, time.Millisecond*time.Duration(length))
+	result := make([]map[string]interface{}, len(setups))
+	for i, r := range rs {
+		res := make(map[string]interface{})
+		if r.err == nil {
+			res["totalCount"] = r.totalCount
+			res["avgTime"] = r.avgTime
+			res["maxInSize"] = r.maxInSize
+			res["maxOutSize"] = r.maxOutSize
+		} else {
+			res["error"] = r.err.Error()
+		}
+		result[i] = res
+	}
+	return result, nil
 }

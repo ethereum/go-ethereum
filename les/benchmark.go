@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -202,260 +201,25 @@ func (b *benchmarkTxStatus) request(peer *peer, index int) error {
 	return peer.RequestTxStatus(0, 0, []common.Hash{hash})
 }
 
-type benchmarkType struct {
-	name        string
-	newInstance func() requestBenchmark
-	outSizeCorr uint32
-	avgTimeCorr float64
-}
-
-// benchmarkTypes describes different benchmark scenarios
-var benchmarkTypes = map[string]benchmarkType{
-	"header1n": {name: "header by number (single)", newInstance: func() requestBenchmark {
-		return &benchmarkBlockHeaders{amount: 1}
-	}},
-	"header1h": {name: "header by hash (single)", newInstance: func() requestBenchmark {
-		return &benchmarkBlockHeaders{amount: 1, byHash: true}
-	}},
-	"header192n": {name: "headers by number (192)", newInstance: func() requestBenchmark {
-		return &benchmarkBlockHeaders{amount: 192}
-	}},
-	"header192hr": {name: "headers by hash  (192, reverse)", newInstance: func() requestBenchmark {
-		return &benchmarkBlockHeaders{amount: 192, byHash: true, reverse: true}
-	}},
-	"body": {name: "block body", newInstance: func() requestBenchmark {
-		return &benchmarkBodiesOrReceipts{receipts: false}
-	}},
-	"receipts": {name: "block receipts", newInstance: func() requestBenchmark {
-		return &benchmarkBodiesOrReceipts{receipts: true}
-	}},
-	"proof": {name: "merkle proof", newInstance: func() requestBenchmark {
-		return &benchmarkProofsOrCode{code: false}
-	}, outSizeCorr: 500, avgTimeCorr: 2.5},
-	"code": {name: "contract code", newInstance: func() requestBenchmark {
-		return &benchmarkProofsOrCode{code: true}
-	}, outSizeCorr: 100000, avgTimeCorr: 1.5},
-	"cht1": {name: "cht (single)", newInstance: func() requestBenchmark {
-		return &benchmarkHelperTrie{bloom: false, reqCount: 1}
-	}},
-	"cht16": {name: "cht (16)", newInstance: func() requestBenchmark {
-		return &benchmarkHelperTrie{bloom: false, reqCount: 16}
-	}},
-	"bloom1": {name: "bloom trie (single)", newInstance: func() requestBenchmark {
-		return &benchmarkHelperTrie{bloom: true, reqCount: 1}
-	}},
-	"bloom16": {name: "bloom trie (16)", newInstance: func() requestBenchmark {
-		return &benchmarkHelperTrie{bloom: true, reqCount: 16}
-	}},
-	"txsend": {name: "send transaction", newInstance: func() requestBenchmark {
-		return &benchmarkTxSend{}
-	}, outSizeCorr: 50},
-	"txstatus": {name: "get transaction status", newInstance: func() requestBenchmark {
-		return &benchmarkTxStatus{}
-	}, outSizeCorr: 50},
-}
-
-// reqBenchMap defines the calculation method for different request costs based on
-// the benchmark results
-var reqBenchMap = []struct {
-	code uint64 // message code
-	// id contains a list of benchmarks that correspond to the cost of a single request
-	// the cost estimate of a single request is based on the highest benchmark result from the list
-	id []string
-	// idMax contains a list of benchmarks that correspond to the cost of a request with maxCount elements
-	// if idMax is not specified then the cost of additional request elements is the same as the cost
-	// of the single request
-	idMax    []string
-	maxCount uint64
-}{
-	{GetBlockHeadersMsg, []string{"header1n", "header1h"}, []string{"header192n", "header192hr"}, 192},
-	{GetBlockBodiesMsg, []string{"body"}, nil, 1},
-	{GetReceiptsMsg, []string{"receipts"}, nil, 1},
-	{GetCodeMsg, []string{"code"}, nil, 1},
-	{GetProofsV1Msg, []string{"proof"}, nil, 1},
-	{GetProofsV2Msg, []string{"proof"}, nil, 1},
-	{GetHeaderProofsMsg, []string{"cht1"}, []string{"cht16"}, 16},
-	{GetHelperTrieProofsMsg, []string{"cht1", "bloom1"}, []string{"cht16", "bloom16"}, 16},
-	{SendTxMsg, []string{"txsend"}, nil, 1},
-	{SendTxV2Msg, []string{"txsend"}, nil, 1},
-	{GetTxStatusMsg, []string{"txstatus"}, nil, 1},
-}
-
 // benchmarkSetup stores measurement data for a single benchmark type
 type benchmarkSetup struct {
 	req                   requestBenchmark
-	id, name              string
 	totalCount            int
 	totalTime, avgTime    time.Duration
 	maxInSize, maxOutSize uint32
 	err                   error
 }
 
-// reqBenchmarkKey is the database key for storing measurement data
-var reqBenchmarkKey = []byte("_requestBenchmarks__")
-
-const (
-	passCount          = 10               // number of passes in which all benchmark types are measured
-	firstCount         = 50               // request count for each type in the first pass (adjusted in subsequent passes)
-	totalBenchmarkTime = time.Second * 20 // targeted total run time for the given number of passes
-	discardAge         = 100000           // block age after which a stored benchmark entry is discarded
-	rerunAge           = 10000            // if the newest entry is older than rerunAge then a new benchmark is started
-	rerunCount         = 5                // if the number of stored entries is less than rerunCount then a new benchmark is started
-)
-
-// benchmarkData is the database storage format of benchmark results for a single type
-type benchmarkData struct {
-	BlockNumber, AvgTime  uint64
-	MaxInSize, MaxOutSize uint32
-}
-
-type benchmarkDataByTime []benchmarkData
-
-func (s benchmarkDataByTime) Len() int           { return len(s) }
-func (s benchmarkDataByTime) Less(i, j int) bool { return s[i].AvgTime < s[j].AvgTime }
-func (s benchmarkDataByTime) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-// dataToCost calculates request cost estimates used by the flow control system
-func dataToCost(id string, data []benchmarkData, inSizeCostFactor, outSizeCostFactor float64) uint64 {
-	var (
-		maxInSize, maxOutSize uint32
-		avgTime               uint64
-	)
-	for _, d := range data {
-		if d.MaxInSize > maxInSize {
-			maxInSize = d.MaxInSize
-		}
-		if d.MaxOutSize > maxOutSize {
-			maxOutSize = d.MaxOutSize
-		}
-	}
-	var cost uint64
-	if len(data) > 0 {
-		sort.Sort(benchmarkDataByTime(data))
-		skip := len(data) / 5
-		for i := skip; i < len(data)-skip; i++ {
-			avgTime += data[i].AvgTime
-		}
-		avgTime /= uint64(len(data) - skip*2)
-		bt := benchmarkTypes[id]
-		maxOutSize += bt.outSizeCorr
-		if bt.avgTimeCorr != 0 {
-			avgTime = uint64(float64(avgTime) * bt.avgTimeCorr)
-		}
-		cost = avgTime * 2
-	}
-	inSizeCost := uint64(float64(maxInSize) * inSizeCostFactor * 1.25)
-	outSizeCost := uint64(float64(maxOutSize) * outSizeCostFactor * 1.25)
-	if inSizeCost > cost {
-		cost = inSizeCost
-	}
-	if outSizeCost > cost {
-		cost = outSizeCost
-	}
-	return cost
-}
-
-// benchmarkCosts checks the database for existing entries and initiates a benchmark
-// cycle for all types if necessary. It returns the cost list to be announced for
-// clients and the minimum buffer limit that can be assigned to each client.
-func (pm *ProtocolManager) benchmarkCosts(threadCount int, inSizeCostFactor, outSizeCostFactor float64) (costList RequestCostList, minBufLimit uint64) {
-	blockNumber := pm.blockchain.CurrentHeader().Number.Uint64()
-	allData := make(map[string][]benchmarkData)
-	run := false
-	for id, _ := range benchmarkTypes {
-		var data []benchmarkData
-		if enc, err := pm.chainDb.Get(append(reqBenchmarkKey, []byte(id)...)); err == nil {
-			if rlp.DecodeBytes(enc, &data) != nil {
-				data = nil
-			}
-		}
-		for len(data) > 0 && data[0].BlockNumber+discardAge <= blockNumber {
-			data = data[1:]
-		}
-		if len(data) < rerunCount || data[len(data)-1].BlockNumber+rerunAge <= blockNumber {
-			run = true
-		}
-		allData[id] = data
-	}
-
-	if run {
-		res := pm.runBenchmark()
-		for _, r := range res {
-			if r.err == nil {
-				data := append(allData[r.id], benchmarkData{BlockNumber: blockNumber, AvgTime: uint64(r.avgTime) * uint64(threadCount), MaxInSize: r.maxInSize, MaxOutSize: r.maxOutSize})
-				allData[r.id] = data
-				if enc, err := rlp.EncodeToBytes(data); err == nil {
-					pm.chainDb.Put(append(reqBenchmarkKey, []byte(r.id)...), enc)
-				}
-			}
-		}
-	}
-
-	// calculate upper cost estimates based on AvgTime and MaxSize
-	costs := make(map[string]uint64)
-	for id, data := range allData {
-		costs[id] = dataToCost(id, data, inSizeCostFactor, outSizeCostFactor)
-	}
-	var maxAllCosts uint64
-	// create linear cost functions for actual request types using reqBenchMap
-	res := make(RequestCostList, len(reqBenchMap))
-	for i, m := range reqBenchMap {
-		res[i].MsgCode = m.code
-		var cost uint64
-		for _, id := range m.id {
-			if c, ok := costs[id]; ok {
-				if c > cost {
-					cost = c
-				}
-			} else {
-				panic(nil)
-			}
-		}
-		if m.idMax == nil {
-			res[i].BaseCost = 0
-			res[i].ReqCost = cost
-		} else {
-			var maxCost uint64
-			for _, id := range m.idMax {
-				if c, ok := costs[id]; ok {
-					if c > maxCost {
-						maxCost = c
-					}
-				} else {
-					panic(nil)
-				}
-			}
-			if maxCost < cost {
-				maxCost = cost
-			}
-			if maxCost > maxAllCosts {
-				maxAllCosts = maxCost
-			}
-			dc := (maxCost - cost) / (m.maxCount - 1)
-			if cost < dc {
-				dc = maxCost / m.maxCount
-				cost = dc
-			}
-			res[i].BaseCost = cost - dc
-			res[i].ReqCost = dc
-		}
-	}
-	return res, maxAllCosts * 2
-}
-
 // runBenchmark runs a benchmark cycle for all benchmark types in the specified
 // number of passes
-func (pm *ProtocolManager) runBenchmark() []*benchmarkSetup {
-	log.Info("running benchmark")
-	setup := make([]*benchmarkSetup, len(benchmarkTypes))
-	i := 0
-	for id, bt := range benchmarkTypes {
-		setup[i] = &benchmarkSetup{id: id, name: bt.name, req: bt.newInstance()}
-		i++
+func (pm *ProtocolManager) runBenchmark(benchmarks []requestBenchmark, passCount int, targetTime time.Duration) []*benchmarkSetup {
+	setup := make([]*benchmarkSetup, len(benchmarks))
+	for i, b := range benchmarks {
+		setup[i] = &benchmarkSetup{req: b}
 	}
-	targetTime := totalBenchmarkTime / time.Duration(len(benchmarkTypes)*passCount)
 	for i := 0; i < passCount; i++ {
-		todo := make([]*benchmarkSetup, len(benchmarkTypes))
+		log.Info("Running benchmark", "pass", i+1, "total", passCount)
+		todo := make([]*benchmarkSetup, len(benchmarks))
 		copy(todo, setup)
 		for len(todo) > 0 {
 			// select a random element
@@ -466,7 +230,7 @@ func (pm *ProtocolManager) runBenchmark() []*benchmarkSetup {
 
 			if next.err == nil {
 				// calculate request count
-				count := firstCount
+				count := 50
 				if next.totalTime > 0 {
 					count = int(uint64(next.totalCount) * uint64(targetTime) / uint64(next.totalTime))
 				}
@@ -475,15 +239,12 @@ func (pm *ProtocolManager) runBenchmark() []*benchmarkSetup {
 				}
 			}
 		}
-		log.Info("benchmark completed", "percent", (i+1)*100/passCount)
 	}
+	log.Info("Benchmark completed")
 
 	for _, s := range setup {
 		if s.err == nil {
 			s.avgTime = s.totalTime / time.Duration(s.totalCount)
-			log.Debug("benchmark result", "name", s.name, "avgTime", s.avgTime, "reqCount", s.totalCount, "maxInSize", s.maxInSize, "maxOutSize", s.maxOutSize)
-		} else {
-			log.Warn("benchmark failed", "name", s.name, "error", s.err)
 		}
 	}
 	return setup
@@ -582,6 +343,5 @@ func (pm *ProtocolManager) measure(setup *benchmarkSetup, count int) error {
 	setup.maxOutSize = serverMeteredPipe.maxSize
 	clientPipe.Close()
 	serverPipe.Close()
-	//serverPeer.fcClient.Remove(pm.server.fcManager)
 	return nil
 }
