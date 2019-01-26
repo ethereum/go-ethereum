@@ -39,7 +39,7 @@ func (s *Simulation) Service(name string, id enode.ID) node.Service {
 // RandomService returns a single Service by name on a
 // randomly chosen node that is up.
 func (s *Simulation) RandomService(name string) node.Service {
-	n := s.RandomUpNode()
+	n := s.Net.GetRandomUpNode().Node.(*adapters.SimNode)
 	if n == nil {
 		return nil
 	}

@@ -127,7 +127,7 @@ func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (i
 	if err != nil {
 		return nil, err
 	}
-	err = s.ConnectNodesFull(ids)
+	err = s.Net.ConnectNodesFull(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 	if err != nil {
 		return nil, err
 	}
-	err = s.ConnectToLastNode(id)
+	err = s.Net.ConnectToLastNode(id)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 		return nil, err
 	}
 	ids = append([]enode.ID{id}, ids...)
-	err = s.ConnectNodesChain(ids)
+	err = s.Net.ConnectNodesChain(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (i
 	if err != nil {
 		return nil, err
 	}
-	err = s.ConnectNodesRing(ids)
+	err = s.Net.ConnectNodesRing(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -188,16 +188,16 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 	if err != nil {
 		return nil, err
 	}
-	err = s.ConnectNodesStar(ids[0], ids[1:])
+	err = s.Net.ConnectNodesStar(ids[1:], ids[0])
 	if err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
-//UploadSnapshot uploads a snapshot to the simulation
-//This method tries to open the json file provided, applies the config to all nodes
-//and then loads the snapshot into the Simulation network
+// UploadSnapshot uploads a snapshot to the simulation
+// This method tries to open the json file provided, applies the config to all nodes
+// and then loads the snapshot into the Simulation network
 func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
@@ -241,25 +241,6 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	return nil
 }
 
-// SetPivotNode sets the NodeID of the network's pivot node.
-// Pivot node is just a specific node that should be treated
-// differently then other nodes in test. SetPivotNode and
-// PivotNodeID are just a convenient functions to set and
-// retrieve it.
-func (s *Simulation) SetPivotNode(id enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.pivotNodeID = &id
-}
-
-// PivotNodeID returns NodeID of the pivot node set by
-// Simulation.SetPivotNode method.
-func (s *Simulation) PivotNodeID() (id *enode.ID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.pivotNodeID
-}
-
 // StartNode starts a node by NodeID.
 func (s *Simulation) StartNode(id enode.ID) (err error) {
 	return s.Net.Start(id)
@@ -267,27 +248,26 @@ func (s *Simulation) StartNode(id enode.ID) (err error) {
 
 // StartRandomNode starts a random node.
 func (s *Simulation) StartRandomNode() (id enode.ID, err error) {
-	n := s.randomDownNode()
+	n := s.Net.GetRandomDownNode()
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
-	return n.ID, s.Net.Start(n.ID)
+	return n.ID(), s.Net.Start(n.ID())
 }
 
 // StartRandomNodes starts random nodes.
 func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
-	downIDs := s.DownNodeIDs()
 	for i := 0; i < count; i++ {
-		n := s.randomNode(downIDs, ids...)
+		n := s.Net.GetRandomDownNode()
 		if n == nil {
 			return nil, ErrNodeNotFound
 		}
-		err = s.Net.Start(n.ID)
+		err = s.Net.Start(n.ID())
 		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, n.ID)
+		ids = append(ids, n.ID())
 	}
 	return ids, nil
 }
@@ -299,27 +279,26 @@ func (s *Simulation) StopNode(id enode.ID) (err error) {
 
 // StopRandomNode stops a random node.
 func (s *Simulation) StopRandomNode() (id enode.ID, err error) {
-	n := s.RandomUpNode()
+	n := s.Net.GetRandomUpNode()
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
-	return n.ID, s.Net.Stop(n.ID)
+	return n.ID(), s.Net.Stop(n.ID())
 }
 
 // StopRandomNodes stops random nodes.
 func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
-	upIDs := s.UpNodeIDs()
 	for i := 0; i < count; i++ {
-		n := s.randomNode(upIDs, ids...)
+		n := s.Net.GetRandomUpNode()
 		if n == nil {
 			return nil, ErrNodeNotFound
 		}
-		err = s.Net.Stop(n.ID)
+		err = s.Net.Stop(n.ID())
 		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, n.ID)
+		ids = append(ids, n.ID())
 	}
 	return ids, nil
 }
@@ -327,36 +306,4 @@ func (s *Simulation) StopRandomNodes(count int) (ids []enode.ID, err error) {
 // seed the random generator for Simulation.randomNode.
 func init() {
 	rand.Seed(time.Now().UnixNano())
-}
-
-// RandomUpNode returns a random SimNode that is up.
-// Arguments are NodeIDs for nodes that should not be returned.
-func (s *Simulation) RandomUpNode(exclude ...enode.ID) *adapters.SimNode {
-	return s.randomNode(s.UpNodeIDs(), exclude...)
-}
-
-// randomDownNode returns a random SimNode that is not up.
-func (s *Simulation) randomDownNode(exclude ...enode.ID) *adapters.SimNode {
-	return s.randomNode(s.DownNodeIDs(), exclude...)
-}
-
-// randomNode returns a random SimNode from the slice of NodeIDs.
-func (s *Simulation) randomNode(ids []enode.ID, exclude ...enode.ID) *adapters.SimNode {
-	for _, e := range exclude {
-		var i int
-		for _, id := range ids {
-			if id == e {
-				ids = append(ids[:i], ids[i+1:]...)
-			} else {
-				i++
-			}
-		}
-	}
-	l := len(ids)
-	if l == 0 {
-		return nil
-	}
-	n := s.Net.GetNode(ids[rand.Intn(l)])
-	node, _ := n.Node.(*adapters.SimNode)
-	return node
 }

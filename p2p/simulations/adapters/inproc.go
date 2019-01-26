@@ -130,7 +130,7 @@ func (s *SimAdapter) Dial(dest *enode.Node) (conn net.Conn, err error) {
 		return nil, err
 	}
 	// this is simulated 'listening'
-	// asynchronously call the dialed destintion node's p2p server
+	// asynchronously call the dialed destination node's p2p server
 	// to set up connection on the 'listening' side
 	go srv.SetupConn(pipe1, 0, nil)
 	return pipe2, nil
@@ -350,18 +350,4 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 		}
 	}
 	return server.NodeInfo()
-}
-
-func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int) error {
-	if v, ok := conn.(*net.UnixConn); ok {
-		err := v.SetReadBuffer(socketReadBuffer)
-		if err != nil {
-			return err
-		}
-		err = v.SetWriteBuffer(socketWriteBuffer)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -61,7 +61,7 @@ const (
 )
 
 // BaseHasherFunc is a hash.Hash constructor function used for the base hash of the BMT.
-// implemented by Keccak256 SHA3 sha3.NewKeccak256
+// implemented by Keccak256 SHA3 sha3.NewLegacyKeccak256
 type BaseHasherFunc func() hash.Hash
 
 // Hasher a reusable hasher for fixed maximum size chunks representing a BMT

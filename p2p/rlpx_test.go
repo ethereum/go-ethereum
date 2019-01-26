@@ -34,9 +34,9 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestSharedSecret(t *testing.T) {
@@ -334,8 +334,8 @@ func TestRLPXFrameRW(t *testing.T) {
 	s1 := secrets{
 		AES:        aesSecret,
 		MAC:        macSecret,
-		EgressMAC:  sha3.NewKeccak256(),
-		IngressMAC: sha3.NewKeccak256(),
+		EgressMAC:  sha3.NewLegacyKeccak256(),
+		IngressMAC: sha3.NewLegacyKeccak256(),
 	}
 	s1.EgressMAC.Write(egressMACinit)
 	s1.IngressMAC.Write(ingressMACinit)
@@ -344,8 +344,8 @@ func TestRLPXFrameRW(t *testing.T) {
 	s2 := secrets{
 		AES:        aesSecret,
 		MAC:        macSecret,
-		EgressMAC:  sha3.NewKeccak256(),
-		IngressMAC: sha3.NewKeccak256(),
+		EgressMAC:  sha3.NewLegacyKeccak256(),
+		IngressMAC: sha3.NewLegacyKeccak256(),
 	}
 	s2.EgressMAC.Write(ingressMACinit)
 	s2.IngressMAC.Write(egressMACinit)

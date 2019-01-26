@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
@@ -64,10 +65,6 @@ If all is well it is possible to implement this by simply composing readers so t
 The hashing itself does use extra copies and allocation though, since it does need it.
 */
 
-var (
-	errAppendOppNotSuported = errors.New("Append operation not supported")
-)
-
 type ChunkerParams struct {
 	chunkSize int64
 	hashSize  int64
@@ -98,7 +95,6 @@ type TreeChunker struct {
 	ctx context.Context
 
 	branches int64
-	hashFunc SwarmHasher
 	dataSize int64
 	data     io.Reader
 	// calculated
@@ -364,10 +360,6 @@ func (tc *TreeChunker) runWorker(ctx context.Context) {
 	}()
 }
 
-func (tc *TreeChunker) Append() (Address, func(), error) {
-	return nil, nil, errAppendOppNotSuported
-}
-
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
 	ctx       context.Context
@@ -410,18 +402,16 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
+		startTime := time.Now()
 		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
 		if err != nil {
+			metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 			return 0, err
 		}
+		metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 		r.chunkData = chunkData
-		s := r.chunkData.Size()
-		log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
-		if s < 0 {
-			return 0, errors.New("corrupt size")
-		}
-		return int64(s), nil
 	}
+
 	s := r.chunkData.Size()
 	log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
 
@@ -542,8 +532,10 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childAddress := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
+			startTime := time.Now()
 			chunkData, err := r.getter.Get(r.ctx, Reference(childAddress))
 			if err != nil {
+				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
@@ -551,6 +543,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 				}
 				return
 			}
+			metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 			if l := len(chunkData); l < 9 {
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v incomplete; key: %s, data length %v", off, off+treeSize, fmt.Sprintf("%x", childAddress), l):

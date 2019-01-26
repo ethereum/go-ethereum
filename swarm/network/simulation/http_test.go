@@ -73,7 +73,8 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	//this time the timeout should be long enough so that it doesn't kick in too early
 	ctx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel2()
-	go sendRunSignal(t)
+	errC := make(chan error, 1)
+	go triggerSimulationRun(t, errC)
 	result = sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
 		log.Debug("This run waits for the run signal from `frontend`...")
 		//ensure with a Sleep that simulation doesn't terminate before the signal is received
@@ -83,10 +84,13 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
+	if err := <-errC; err != nil {
+		t.Fatal(err)
+	}
 	log.Debug("Test terminated successfully")
 }
 
-func sendRunSignal(t *testing.T) {
+func triggerSimulationRun(t *testing.T, errC chan error) {
 	//We need to first wait for the sim HTTP server to start running...
 	time.Sleep(2 * time.Second)
 	//then we can send the signal
@@ -94,16 +98,13 @@ func sendRunSignal(t *testing.T) {
 	log.Debug("Sending run signal to simulation: POST /runsim...")
 	resp, err := http.Post(fmt.Sprintf("http://localhost%s/runsim", DefaultHTTPSimAddr), "application/json", nil)
 	if err != nil {
-		t.Fatalf("Request failed: %v", err)
+		errC <- fmt.Errorf("Request failed: %v", err)
+		return
 	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Error("Error closing response body", "err", err)
-		}
-	}()
 	log.Debug("Signal sent")
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
+		errC <- fmt.Errorf("err %s", resp.Status)
+		return
 	}
+	errC <- resp.Body.Close()
 }

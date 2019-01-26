@@ -381,7 +381,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 // * arguments
 //   * context
 //   * the local handshake to be sent to the remote peer
-//   * funcion to be called on the remote handshake (can be nil)
+//   * function to be called on the remote handshake (can be nil)
 // * expects a remote handshake back of the same type
 // * the dialing peer needs to send the handshake first and then waits for remote
 // * the listening peer waits for the remote handshake and then sends it
@@ -422,4 +422,18 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 		}
 	}
 	return rhs, nil
+}
+
+// HasCap returns true if Peer has a capability
+// with provided name.
+func (p *Peer) HasCap(capName string) (yes bool) {
+	if p == nil || p.Peer == nil {
+		return false
+	}
+	for _, c := range p.Caps() {
+		if c.Name == capName {
+			return true
+		}
+	}
+	return false
 }

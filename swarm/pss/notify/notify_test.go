@@ -121,14 +121,14 @@ func TestStart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	rmsgC := make(chan *pss.APIMsg)
-	rightSub, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", controlTopic)
+	rightSub, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", controlTopic, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rightSub.Unsubscribe()
 
 	updateC := make(chan []byte)
-	updateMsg := []byte{}
+	var updateMsg []byte
 	ctrlClient := NewController(psses[rightPub])
 	ctrlNotifier := NewController(psses[leftPub])
 	ctrlNotifier.NewNotifier("foo.eth", 2, updateC)
@@ -145,17 +145,24 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	copyOfUpdateMsg := make([]byte, len(updateMsg))
+	copy(copyOfUpdateMsg, updateMsg)
+	ctrlClientError := make(chan error, 1)
 	ctrlClient.Subscribe(rsrcName, pubkey, addrbytes, func(s string, b []byte) error {
-		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
-			t.Fatalf("unexpected result in client handler: '%s':'%x'", s, b)
+		if s != "foo.eth" || !bytes.Equal(copyOfUpdateMsg, b) {
+			ctrlClientError <- fmt.Errorf("unexpected result in client handler: '%s':'%x'", s, b)
+		} else {
+			log.Info("client handler receive", "s", s, "b", b)
 		}
-		log.Info("client handler receive", "s", s, "b", b)
 		return nil
 	})
 
 	var inMsg *pss.APIMsg
 	select {
 	case inMsg = <-rmsgC:
+	case err := <-ctrlClientError:
+		t.Fatal(err)
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
@@ -174,7 +181,7 @@ func TestStart(t *testing.T) {
 		t.Fatalf("expected payload length %d, have %d", len(updateMsg)+symKeyLength, len(dMsg.Payload))
 	}
 
-	rightSubUpdate, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", rsrcTopic)
+	rightSubUpdate, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", rsrcTopic, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +216,7 @@ func newServices(allowRaw bool) adapters.Services {
 			return k
 		}
 		params := network.NewKadParams()
-		params.MinProxBinSize = 2
+		params.NeighbourhoodSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
 		params.MaxRetries = 1000

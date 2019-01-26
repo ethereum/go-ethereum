@@ -31,8 +31,9 @@ import (
 
 // Every node can have a Kademlia associated using the node bucket under
 // BucketKeyKademlia key. This allows to use WaitTillHealthy to block until
-// all nodes have the their Kadmlias healthy.
+// all nodes have the their Kademlias healthy.
 func ExampleSimulation_WaitTillHealthy() {
+
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
@@ -60,7 +61,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	ill, err := sim.WaitTillHealthy(ctx, 2)
+	ill, err := sim.WaitTillHealthy(ctx)
 	if err != nil {
 		// inspect the latest detected not healthy kademlias
 		for id, kad := range ill {
@@ -71,6 +72,7 @@ func ExampleSimulation_WaitTillHealthy() {
 	}
 
 	// continue with the test
+
 }
 
 // Watch all peer events in the simulation network, buy receiving from a channel.

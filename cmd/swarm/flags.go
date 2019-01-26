@@ -156,6 +156,10 @@ var (
 		Name:  "compressed",
 		Usage: "Prints encryption keys in compressed form",
 	}
+	SwarmBootnodeModeFlag = cli.BoolFlag{
+		Name:  "bootnode-mode",
+		Usage: "Run Swarm in Bootnode mode",
+	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",
@@ -163,10 +167,6 @@ var (
 	SwarmFeedTopicFlag = cli.StringFlag{
 		Name:  "topic",
 		Usage: "User-defined topic this feed is tracking, hex encoded. Limited to 64 hexadecimal characters",
-	}
-	SwarmFeedDataOnCreateFlag = cli.StringFlag{
-		Name:  "data",
-		Usage: "Initializes the feed with the given hex-encoded data. Data must be prefixed by 0x",
 	}
 	SwarmFeedManifestFlag = cli.StringFlag{
 		Name:  "manifest",

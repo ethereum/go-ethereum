@@ -139,7 +139,7 @@ func initialize(t *testing.T) {
 
 		err = node.server.Start()
 		if err != nil {
-			t.Fatalf("failed to start server %d.", i)
+			t.Fatalf("failed to start server %d. err: %v", i, err)
 		}
 
 		for j := 0; j < i; j++ {

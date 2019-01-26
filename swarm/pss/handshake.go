@@ -321,9 +321,7 @@ func (ctl *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMsg
 		for _, key := range keymsg.Keys {
 			sendsymkey := make([]byte, len(key))
 			copy(sendsymkey, key)
-			var address PssAddress
-			copy(address[:], keymsg.From)
-			sendsymkeyid, err := ctl.pss.setSymmetricKey(sendsymkey, keymsg.Topic, &address, false, false)
+			sendsymkeyid, err := ctl.pss.setSymmetricKey(sendsymkey, keymsg.Topic, PssAddress(keymsg.From), false, false)
 			if err != nil {
 				return err
 			}
@@ -356,7 +354,7 @@ func (ctl *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMsg
 func (ctl *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount uint8) ([]string, error) {
 
 	var requestcount uint8
-	to := &PssAddress{}
+	to := PssAddress{}
 	if _, ok := ctl.pss.pubKeyPool[pubkeyid]; !ok {
 		return []string{}, errors.New("Invalid public key")
 	} else if psp, ok := ctl.pss.pubKeyPool[pubkeyid][*topic]; ok {
@@ -486,7 +484,7 @@ func (api *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flus
 
 // Activate handshake functionality on a topic
 func (api *HandshakeAPI) AddHandshake(topic Topic) error {
-	api.ctrl.deregisterFuncs[topic] = api.ctrl.pss.Register(&topic, api.ctrl.handler)
+	api.ctrl.deregisterFuncs[topic] = api.ctrl.pss.Register(&topic, NewHandler(api.ctrl.handler))
 	return nil
 }
 
@@ -564,5 +562,5 @@ func (api *HandshakeAPI) SendSym(symkeyid string, topic Topic, msg hexutil.Bytes
 		api.ctrl.symKeyIndex[symkeyid].count++
 		log.Trace("increment symkey send use", "symkeyid", symkeyid, "count", api.ctrl.symKeyIndex[symkeyid].count, "limit", api.ctrl.symKeyIndex[symkeyid].limit, "receiver", common.ToHex(crypto.FromECDSAPub(api.ctrl.pss.PublicKey())))
 	}
-	return
+	return err
 }
