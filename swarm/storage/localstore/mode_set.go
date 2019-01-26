@@ -63,11 +63,16 @@ func (s *Setter) Set(addr storage.Address) (err error) {
 // of this function for the same address in parallel.
 func (db *DB) set(mode ModeSet, addr storage.Address) (err error) {
 	// protect parallel updates
-	unlock, err := db.lockAddr(addr)
-	if err != nil {
-		return err
+	if db.useGlobalLock {
+		db.globalMu.Lock()
+		defer db.globalMu.Unlock()
+	} else {
+		unlock, err := db.lockAddr(addr)
+		if err != nil {
+			return err
+		}
+		defer unlock()
 	}
-	defer unlock()
 
 	batch := new(leveldb.Batch)
 

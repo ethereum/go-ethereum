@@ -104,6 +104,12 @@ type DB struct {
 
 	addressLocks sync.Map
 
+	// useGlobalLock specifies that DB should not perform
+	// any batch writes in parallel. This is for benchmarks only.
+	useGlobalLock bool
+	// This is for benchmarks only.
+	globalMu sync.Mutex
+
 	// this channel is closed when close function is called
 	// to terminate other goroutines
 	close chan struct{}
@@ -122,6 +128,9 @@ type Options struct {
 	Capacity int64
 	// MetricsPrefix defines a prefix for metrics names.
 	MetricsPrefix string
+	// useGlobalLock specifies that DB should not perform
+	// any batch writes in parallel. This is for benchmarks only.
+	useGlobalLock bool
 }
 
 // New returns a new DB.  All fields and indexes are initialized
@@ -132,8 +141,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		o = new(Options)
 	}
 	db = &DB{
-		capacity: o.Capacity,
-		baseKey:  baseKey,
+		capacity:      o.Capacity,
+		useGlobalLock: o.useGlobalLock,
+		baseKey:       baseKey,
 		// channels collectGarbageTrigger and writeGCSizeTrigger
 		// need to be buffered with the size of 1
 		// to signal another event if it

@@ -81,11 +81,16 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		// protect parallel updates
-		unlock, err := db.lockAddr(item.Address)
-		if err != nil {
-			return false, err
+		if db.useGlobalLock {
+			db.globalMu.Lock()
+			defer db.globalMu.Unlock()
+		} else {
+			unlock, err := db.lockAddr(item.Address)
+			if err != nil {
+				return false, err
+			}
+			defer unlock()
 		}
-		defer unlock()
 
 		gcSize := db.getGCSize()
 		if gcSize-collectedCount <= target {
