@@ -36,6 +36,10 @@ type AccountingMetrics struct {
 //for a graceful cleanup
 func (am *AccountingMetrics) Close() {
 	close(am.reporter.quit)
+	// save account metrics on close to avoid data loss
+	// when more metrics are measured between the last
+	// reporter run ticker tick and the close
+	am.reporter.save()
 	am.reporter.db.Close()
 }
 
