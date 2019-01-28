@@ -17,13 +17,14 @@
 package main
 
 import (
-	"bytes"
+	"crypto/md5"
+	crand "crypto/rand"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -40,21 +41,18 @@ func uploadSpeed(c *cli.Context) error {
 	seed := int(time.Now().UnixNano() / 1e6)
 	log.Info("uploading to "+endpoint, "seed", seed)
 
-	randomBytes := testutil.RandomBytes(seed, filesize*1000)
+	h := md5.New()
+	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
 	t1 := time.Now()
-	hash, err := upload(&randomBytes, endpoint)
+	hash, err := upload(r, filesize*1000, endpoint)
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 	metrics.GetOrRegisterCounter("upload-speed.upload-time", nil).Inc(int64(time.Since(t1)))
 
-	fhash, err := digest(bytes.NewReader(randomBytes))
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
+	fhash := h.Sum(nil)
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 	return nil

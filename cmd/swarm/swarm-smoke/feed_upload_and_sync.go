@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	crand "crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -203,9 +203,10 @@ func feedUploadAndSync(c *cli.Context) error {
 	seed := int(time.Now().UnixNano() / 1e6)
 	log.Info("feed uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-	randomBytes := testutil.RandomBytes(seed, filesize*1000)
+	h = md5.New()
+	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
-	hash, err := upload(&randomBytes, endpoints[0])
+	hash, err := upload(r, filesize*1000, endpoints[0])
 	if err != nil {
 		return err
 	}
@@ -214,10 +215,7 @@ func feedUploadAndSync(c *cli.Context) error {
 		return err
 	}
 	multihashHex := hexutil.Encode(hashBytes)
-	fileHash, err := digest(bytes.NewReader(randomBytes))
-	if err != nil {
-		return err
-	}
+	fileHash := h.Sum(nil)
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fileHash))
 

@@ -17,15 +17,16 @@
 package main
 
 import (
-	"bytes"
+	"crypto/md5"
+	crand "crypto/rand"
 	"fmt"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -40,23 +41,21 @@ func uploadAndSync(c *cli.Context) error {
 
 	generateEndpoints(scheme, cluster, appName, from, to)
 	seed := int(time.Now().UnixNano() / 1e6)
+
 	log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
 
-	randomBytes := testutil.RandomBytes(seed, filesize*1000)
+	h := md5.New()
+	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
 	t1 := time.Now()
-	hash, err := upload(&randomBytes, endpoints[0])
+	hash, err := upload(r, filesize*1000, endpoints[0])
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).UpdateSince(t1)
 
-	fhash, err := digest(bytes.NewReader(randomBytes))
-	if err != nil {
-		log.Error(err.Error())
-		return err
-	}
+	fhash := h.Sum(nil)
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 

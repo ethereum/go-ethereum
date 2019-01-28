@@ -203,14 +203,14 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 }
 
 // upload an arbitrary byte as a plaintext file  to `endpoint` using the api client
-func upload(dataBytes *[]byte, endpoint string) (string, error) {
+func upload(r io.Reader, size int, endpoint string) (string, error) {
 	swarm := client.NewClient(endpoint)
 	f := &client.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(*dataBytes)),
+		ReadCloser: ioutil.NopCloser(r),
 		ManifestEntry: api.ManifestEntry{
 			ContentType: "text/plain",
 			Mode:        0660,
-			Size:        int64(len(*dataBytes)),
+			Size:        int64(size),
 		},
 	}
 
