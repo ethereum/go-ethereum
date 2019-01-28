@@ -51,6 +51,7 @@ func TestStart(t *testing.T) {
 		ID:             "0",
 		DefaultService: "bzz",
 	})
+	defer net.Shutdown()
 	leftNodeConf := adapters.RandomNodeConfig()
 	leftNodeConf.Services = []string{"bzz", "pss"}
 	leftNode, err := net.NewNodeWithConfig(leftNodeConf)
