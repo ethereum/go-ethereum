@@ -1,0 +1,28 @@
+name: Docker Build and publish to Github
+
+on:
+  push:
+    branches:
+      - statediff_at_anyblock-1.9.11
+      - v1.9.23-statediff-0.0.11
+      - v1.9.23-statediff-0.0.10
+      - v1.9.23-statediff-0.0.9
+
+jobs:
+  build:
+    name: Run docker build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run docker build
+        run: docker build -t vulcanize/go-ethereum -f Dockerfile.amd64 .
+      - name: Get the version
+        id: vars
+        run: echo ::set-output name=sha::$(echo ${GITHUB_SHA:0:7})
+      - name: Tag docker image
+        run: docker tag vulcanize/go-ethereum docker.pkg.github.com/vulcanize/go-ethereum/go-ethereum:${{steps.vars.outputs.sha}}
+      - name: Docker Login
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login https://docker.pkg.github.com -u vulcanize --password-stdin
+      - name: Docker Push
+        run: docker push docker.pkg.github.com/vulcanize/go-ethereum/go-ethereum:${{steps.vars.outputs.sha}}
+

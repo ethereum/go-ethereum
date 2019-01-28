@@ -24,6 +24,9 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/statediff"
+
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -145,6 +148,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 	utils.SetShhConfig(ctx, stack)
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.Diffing = true
+	}
 
 	return stack, cfg
 }
@@ -162,18 +168,58 @@ func checkWhisper(ctx *cli.Context) {
 func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 
+	if cfg.Eth.SyncMode == downloader.LightSync {
+		return makeLightNode(ctx, stack, cfg)
+	}
+
 	backend := utils.RegisterEthService(stack, &cfg.Eth)
 
 	checkWhisper(ctx)
+
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		var dbParams *statediff.DBParams
+		if ctx.GlobalIsSet(utils.StateDiffDBFlag.Name) {
+			dbParams = new(statediff.DBParams)
+			dbParams.ConnectionURL = ctx.GlobalString(utils.StateDiffDBFlag.Name)
+			if ctx.GlobalIsSet(utils.StateDiffDBNodeIDFlag.Name) {
+				dbParams.ID = ctx.GlobalString(utils.StateDiffDBNodeIDFlag.Name)
+			} else {
+				utils.Fatalf("Must specify node ID for statediff DB output")
+			}
+			if ctx.GlobalIsSet(utils.StateDiffDBClientNameFlag.Name) {
+				dbParams.ClientName = ctx.GlobalString(utils.StateDiffDBClientNameFlag.Name)
+			} else {
+				utils.Fatalf("Must specify client name for statediff DB output")
+			}
+		}
+		utils.RegisterStateDiffService(stack, backend, dbParams, ctx.GlobalBool(utils.StateDiffWritingFlag.Name))
+	}
+
 	// Configure GraphQL if requested
 	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
-		utils.RegisterGraphQLService(stack, backend, cfg.Node)
+		utils.RegisterGraphQLService(stack, backend.APIBackend, cfg.Node)
 	}
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
+		utils.RegisterEthStatsService(stack, backend.APIBackend, cfg.Ethstats.URL)
 	}
-	return stack, backend
+	return stack, backend.APIBackend
+}
+
+func makeLightNode(ctx *cli.Context, stack *node.Node, cfg gethConfig) (*node.Node, ethapi.Backend) {
+	backend := utils.RegisterLesEthService(stack, &cfg.Eth)
+
+	checkWhisper(ctx)
+
+	// Configure GraphQL if requested
+	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, backend.ApiBackend, cfg.Node)
+	}
+	// Add the Ethereum Stats daemon if requested.
+	if cfg.Ethstats.URL != "" {
+		utils.RegisterEthStatsService(stack, backend.ApiBackend, cfg.Ethstats.URL)
+	}
+	return stack, backend.ApiBackend
 }
 
 // dumpConfig is the dumpconfig command.

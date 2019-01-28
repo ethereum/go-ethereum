@@ -82,7 +82,7 @@ func newSyncPath(path []byte) SyncPath {
 	if len(path) < 64 {
 		return SyncPath{hexToCompact(path)}
 	}
-	return SyncPath{hexToKeybytes(path[:64]), hexToCompact(path[64:])}
+	return SyncPath{hexToKeyBytes(path[:64]), hexToCompact(path[64:])}
 }
 
 // SyncResult is a response with requested data along with it's hash.

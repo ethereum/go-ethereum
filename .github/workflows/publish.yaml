@@ -1,0 +1,34 @@
+name: Publish geth to release
+on:
+  release:
+    types: [published]
+jobs:
+  push_to_registries:
+    name: Publish assets to Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the version
+        id: vars
+        run: |
+          echo ::set-output name=sha::$(echo ${GITHUB_SHA:0:7})
+      - name: Docker Login to Github Registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login https://docker.pkg.github.com -u vulcanize --password-stdin
+      - name: Docker Pull
+        run: docker pull docker.pkg.github.com/vulcanize/go-ethereum/go-ethereum:${{steps.vars.outputs.sha}}
+      - name: Copy ethereum binary file
+        run: docker run --rm --entrypoint cat docker.pkg.github.com/vulcanize/go-ethereum/go-ethereum:${{steps.vars.outputs.sha}} /go-ethereum/build/bin/geth > geth-linux-amd64
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: geth-linux-amd64
+          asset_name: geth-linux-amd64
+          asset_content_type: application/octet-stream

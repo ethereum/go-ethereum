@@ -157,6 +157,11 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
+		utils.StateDiffFlag,
+		utils.StateDiffDBFlag,
+		utils.StateDiffDBNodeIDFlag,
+		utils.StateDiffDBClientNameFlag,
+		utils.StateDiffWritingFlag,
 		configFileFlag,
 	}
 

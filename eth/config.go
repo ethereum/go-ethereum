@@ -186,4 +186,8 @@ type Config struct {
 
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
+
+	// Signify whether or not we are producing statediffs
+	// If we are, do not dereference state roots until the statediffing service is done with them
+	Diffing bool
 }
