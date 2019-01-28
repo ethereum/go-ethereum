@@ -213,59 +213,60 @@ func TestModePutUpload_parallel(t *testing.T) {
 // goos: darwin
 // goarch: amd64
 // pkg: github.com/ethereum/go-ethereum/swarm/storage/localstore
-// BenchmarkPutUpload/count_100_parallel_1-addr_lock-8         	     300         5955129 ns/op     2500357 B/op	    2672 allocs/op
-// BenchmarkPutUpload/count_100_parallel_1-glob_lock-8         	     300         5693210 ns/op     2480057 B/op	    2070 allocs/op
-// BenchmarkPutUpload/count_100_parallel_2-addr_lock-8         	     300         5147344 ns/op     2500580 B/op	    2673 allocs/op
-// BenchmarkPutUpload/count_100_parallel_2-glob_lock-8         	     300         5801207 ns/op     2480237 B/op	    2072 allocs/op
-// BenchmarkPutUpload/count_100_parallel_4-addr_lock-8         	     500         3900634 ns/op     2500283 B/op	    2630 allocs/op
-// BenchmarkPutUpload/count_100_parallel_4-glob_lock-8         	     300         5956225 ns/op     2480160 B/op	    2071 allocs/op
-// BenchmarkPutUpload/count_100_parallel_8-addr_lock-8         	     500         3204571 ns/op     2500840 B/op	    2604 allocs/op
-// BenchmarkPutUpload/count_100_parallel_8-glob_lock-8         	     200         5804689 ns/op     2480354 B/op	    2073 allocs/op
-// BenchmarkPutUpload/count_100_parallel_16-addr_lock-8        	     500         3209578 ns/op     2502570 B/op	    2609 allocs/op
-// BenchmarkPutUpload/count_100_parallel_16-glob_lock-8        	     300         5868150 ns/op     2480533 B/op	    2076 allocs/op
-// BenchmarkPutUpload/count_100_parallel_32-addr_lock-8        	     500         3091060 ns/op     2503923 B/op	    2634 allocs/op
-// BenchmarkPutUpload/count_100_parallel_32-glob_lock-8        	     300         5620684 ns/op     2481332 B/op	    2087 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_1-addr_lock-8        	      20        83724617 ns/op    29397827 B/op	   26226 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_1-glob_lock-8        	      20        79737650 ns/op    29202973 B/op	   20228 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_2-addr_lock-8        	      20        73382431 ns/op    29405901 B/op	   26234 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_2-glob_lock-8        	      20        87743895 ns/op    29200106 B/op	   20230 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_4-addr_lock-8        	      20        59550383 ns/op    29397483 B/op	   25761 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_4-glob_lock-8        	      20        80713765 ns/op    29195823 B/op	   20232 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_8-addr_lock-8        	      30        54826082 ns/op    29405468 B/op	   25448 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_8-glob_lock-8        	      20        82545759 ns/op    29205908 B/op	   20233 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_16-addr_lock-8       	      30        53334438 ns/op    29406540 B/op	   25332 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_16-glob_lock-8       	      20        81493550 ns/op    29205267 B/op	   20233 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_32-addr_lock-8       	      30        51840371 ns/op    29411834 B/op	   25336 allocs/op
-// BenchmarkPutUpload/count_1000_parallel_32-glob_lock-8       	      20        80898167 ns/op    29209452 B/op	   20234 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_1-addr_lock-8       	       2       668323148 ns/op   259038900 B/op	  280705 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_1-glob_lock-8       	       2       679351952 ns/op   257010124 B/op	  219969 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_2-addr_lock-8       	       2       666368239 ns/op   258808396 B/op	  278026 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_2-glob_lock-8       	       2       670005612 ns/op   256970316 B/op	  219983 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_4-addr_lock-8       	       2       551150500 ns/op   258527680 B/op	  272697 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_4-glob_lock-8       	       2       685501375 ns/op   256762796 B/op	  219901 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_8-addr_lock-8       	       2       518875154 ns/op   258491000 B/op	  268423 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_8-glob_lock-8       	       2       692095806 ns/op   256747644 B/op	  219858 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_16-addr_lock-8      	       2       528648421 ns/op   257939932 B/op	  264513 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_16-glob_lock-8      	       2       716251691 ns/op   256762568 B/op	  219120 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_32-addr_lock-8      	       3       473578608 ns/op   257253077 B/op	  259673 allocs/op
-// BenchmarkPutUpload/count_10000_parallel_32-glob_lock-8      	       2       676274817 ns/op   256824384 B/op	  219168 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_1-addr_lock-8      	       1     24740576226 ns/op  2778786256 B/op	 4525586 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_1-glob_lock-8      	       1     24704378905 ns/op  2760701208 B/op	 3930715 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_2-addr_lock-8      	       1     24391650224 ns/op  2778239744 B/op	 4501266 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_2-glob_lock-8      	       1     25900543952 ns/op  2750693384 B/op	 3870144 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_4-addr_lock-8      	       1     23036622183 ns/op  2756547704 B/op	 4316307 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_4-glob_lock-8      	       1     25068711098 ns/op  2761207392 B/op	 3935577 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_8-addr_lock-8      	       1     21948692932 ns/op  2742785760 B/op	 4196817 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_8-glob_lock-8      	       1     24591707861 ns/op  2760381320 B/op	 3929831 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_16-addr_lock-8     	       1     22399527760 ns/op  2750030272 B/op	 4218608 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_16-glob_lock-8     	       1     24758066757 ns/op  2749799200 B/op	 3864641 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_32-addr_lock-8     	       1     23118686208 ns/op  2762324560 B/op	 4283463 allocs/op
-// BenchmarkPutUpload/count_100000_parallel_32-glob_lock-8     	       1     25448525628 ns/op  2771420720 B/op	 3998428 allocs/op
+// BenchmarkPutUpload/count_100_parallel_1-addr_lock-8         	     300	   5075184 ns/op	 2081455 B/op	    2374 allocs/op
+// BenchmarkPutUpload/count_100_parallel_1-glob_lock-8         	     300	   5032374 ns/op	 2061207 B/op	    1772 allocs/op
+// BenchmarkPutUpload/count_100_parallel_2-addr_lock-8         	     300	   5079732 ns/op	 2081731 B/op	    2370 allocs/op
+// BenchmarkPutUpload/count_100_parallel_2-glob_lock-8         	     300	   5179478 ns/op	 2061380 B/op	    1773 allocs/op
+// BenchmarkPutUpload/count_100_parallel_4-addr_lock-8         	     500	   3748581 ns/op	 2081535 B/op	    2323 allocs/op
+// BenchmarkPutUpload/count_100_parallel_4-glob_lock-8         	     300	   5367513 ns/op	 2061337 B/op	    1774 allocs/op
+// BenchmarkPutUpload/count_100_parallel_8-addr_lock-8         	     500	   3311724 ns/op	 2082696 B/op	    2297 allocs/op
+// BenchmarkPutUpload/count_100_parallel_8-glob_lock-8         	     300	   5677622 ns/op	 2061636 B/op	    1776 allocs/op
+// BenchmarkPutUpload/count_100_parallel_16-addr_lock-8        	     500	   3606605 ns/op	 2085559 B/op	    2282 allocs/op
+// BenchmarkPutUpload/count_100_parallel_16-glob_lock-8        	     300	   6057814 ns/op	 2062032 B/op	    1780 allocs/op
+// BenchmarkPutUpload/count_100_parallel_32-addr_lock-8        	     500	   3720995 ns/op	 2089247 B/op	    2280 allocs/op
+// BenchmarkPutUpload/count_100_parallel_32-glob_lock-8        	     200	   6186910 ns/op	 2062744 B/op	    1789 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_1-addr_lock-8        	      20	  84397760 ns/op	25210142 B/op	   23222 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_1-glob_lock-8        	      20	  83432699 ns/op	25011813 B/op	   17222 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_2-addr_lock-8        	      20	  80471064 ns/op	25208653 B/op	   23182 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_2-glob_lock-8        	      20	  87841819 ns/op	25008899 B/op	   17223 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_4-addr_lock-8        	      20	  71364750 ns/op	25206981 B/op	   22704 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_4-glob_lock-8        	      20	  91491913 ns/op	25013307 B/op	   17225 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_8-addr_lock-8        	      20	  67776485 ns/op	25210323 B/op	   22315 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_8-glob_lock-8        	      20	  88658733 ns/op	25008864 B/op	   17228 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_16-addr_lock-8       	      20	  61599020 ns/op	25213746 B/op	   22000 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_16-glob_lock-8       	      20	  92734980 ns/op	25012744 B/op	   17228 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_32-addr_lock-8       	      20	  57465216 ns/op	25224471 B/op	   21844 allocs/op
+// BenchmarkPutUpload/count_1000_parallel_32-glob_lock-8       	      20	  92420562 ns/op	25013237 B/op	   17244 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_1-addr_lock-8       	       2	 611387455 ns/op	216747724 B/op	  248218 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_1-glob_lock-8       	       2	 616212255 ns/op	214871528 B/op	  188983 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_2-addr_lock-8       	       2	 576871975 ns/op	216552736 B/op	  246849 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_2-glob_lock-8       	       2	 601008305 ns/op	214713748 B/op	  188931 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_4-addr_lock-8       	       2	 551001371 ns/op	216701032 B/op	  241935 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_4-glob_lock-8       	       2	 605576690 ns/op	214719292 B/op	  188949 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_8-addr_lock-8       	       2	 504949238 ns/op	216431280 B/op	  236326 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_8-glob_lock-8       	       2	 611631748 ns/op	214809276 B/op	  188957 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_16-addr_lock-8      	       3	 510030296 ns/op	216088080 B/op	  231171 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_16-glob_lock-8      	       2	 611416284 ns/op	214855916 B/op	  189724 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_32-addr_lock-8      	       3	 481631118 ns/op	215341840 B/op	  224716 allocs/op
+// BenchmarkPutUpload/count_10000_parallel_32-glob_lock-8      	       2	 633612977 ns/op	214904164 B/op	  189775 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_1-addr_lock-8      	       1	23289076334 ns/op	2354337552 B/op	 4190917 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_1-glob_lock-8      	       1	22155535580 ns/op	2312803760 B/op	 3455566 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_2-addr_lock-8      	       1	21908455154 ns/op	2328191128 B/op	 4014009 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_2-glob_lock-8      	       1	22956308053 ns/op	2325078528 B/op	 3530270 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_4-addr_lock-8      	       1	22334786914 ns/op	2338677488 B/op	 4028700 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_4-glob_lock-8      	       1	23222406988 ns/op	2334153480 B/op	 3580197 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_8-addr_lock-8      	       1	21569685948 ns/op	2322310120 B/op	 3880022 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_8-glob_lock-8      	       1	22730998001 ns/op	2318311616 B/op	 3494378 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_16-addr_lock-8     	       1	22005406658 ns/op	2324345744 B/op	 3862100 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_16-glob_lock-8     	       1	24246335163 ns/op	2341373784 B/op	 3626749 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_32-addr_lock-8     	       1	22764682771 ns/op	2332867552 B/op	 3896808 allocs/op
+// BenchmarkPutUpload/count_100000_parallel_32-glob_lock-8     	       1	24617688531 ns/op	2343609240 B/op	 3647404 allocs/op
 // PASS
 //
 // As expected, global lock introduces performance penalty, but in much less degree then expected.
 // Higher levels of parallelization do not give high level of performance boost. For 8 parallel
-// uploads on 8 core benchmark, the speedup is only ~1.5x at best.
+// uploads on 8 core benchmark, the speedup is only ~1.72x at best. There is no significant difference
+// when a larger number of chunks is uploaded.
 func BenchmarkPutUpload(b *testing.B) {
 	for _, count := range []int{
 		100,
@@ -304,6 +305,10 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
+	chunks := make([]storage.Chunk, count)
+	for i := 0; i < count; i++ {
+		chunks[i] = generateFakeRandomChunk()
+	}
 	errs := make(chan error)
 	b.StartTimer()
 
@@ -312,12 +317,11 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 		for i := 0; i < count; i++ {
 			sem <- struct{}{}
 
-			go func() {
+			go func(i int) {
 				defer func() { <-sem }()
 
-				chunk := generateFakeRandomChunk()
-				errs <- uploader.Put(chunk)
-			}()
+				errs <- uploader.Put(chunks[i])
+			}(i)
 		}
 	}()
 
