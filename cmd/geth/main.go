@@ -148,6 +148,9 @@ var (
 		utils.GpoPercentileFlag,
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
+		utils.StateDiffFlag,
+		utils.StateDiffModeFlag,
+		utils.StateDiffPathFlag,
 		configFileFlag,
 	}
 
