@@ -500,6 +500,12 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'listAccounts',
+			call: 'eth_listAccounts',
+			params: 3,
+			inputFormatter: [null, null, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

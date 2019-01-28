@@ -568,6 +568,11 @@ func (self *StateDB) GetRefund() uint64 {
 	return self.refund
 }
 
+// GetTrie returns the current value of the trie.
+func (self *StateDB) GetTrie() Trie {
+	return self.trie
+}
+
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
