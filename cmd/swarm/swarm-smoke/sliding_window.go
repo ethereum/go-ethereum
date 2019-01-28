@@ -111,12 +111,12 @@ outer:
 				break outer
 			}
 			networkDepth = i
+			metrics.GetOrRegisterGauge("sliding-window.network-depth", nil).Update(int64(networkDepth))
 		}
 	}
 
 	log.Info("sliding window test finished", "errored?", errored, "networkDepth", networkDepth, "networkDepth(kb)", networkDepth*filesize)
 	log.Info("stats", "uploadedFiles", len(hashes), "uploadedKb", uploadedBytes/1000, "filesizeKb", filesize)
 
-	metrics.GetOrRegisterMeter("sliding-window.network-depth", nil).Mark(int64(networkDepth))
 	return nil
 }

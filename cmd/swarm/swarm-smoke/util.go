@@ -43,15 +43,31 @@ var (
 	commandName = ""
 )
 
-func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
+func wrapCliCommand(name string, killOnTimeout bool, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+		defer func(now time.Time) {
+			totalTime := time.Since(now)
+
+			log.Info("total time", "time", totalTime)
+			metrics.GetOrRegisterCounter(name+".total-time", nil).Inc(int64(totalTime))
+		}(time.Now())
+
 		log.Info("smoke test starting", "task", name, "timeout", timeout)
 		commandName = name
 		metrics.GetOrRegisterCounter(name, nil).Inc(1)
 
 		errc := make(chan error)
+		done := make(chan struct{})
+
+		if killOnTimeout {
+			go func() {
+				<-time.After(time.Duration(timeout) * time.Second)
+				close(done)
+			}()
+		}
+
 		go func() {
 			errc <- command(ctx)
 		}()
@@ -62,7 +78,7 @@ func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Con
 				metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", name), nil).Inc(1)
 			}
 			return err
-		case <-time.After(time.Duration(timeout) * time.Second):
+		case <-done:
 			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", name), nil).Inc(1)
 			return fmt.Errorf("timeout after %v sec", timeout)
 		}
