@@ -335,16 +335,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	p.responseCount++
 	responseCount := p.responseCount
 	var (
-		maxCost  uint64
-		priority int64
+		maxCost uint64
+		task    *servingTask
 	)
 
-	reject := func(reqID, reqCnt, maxCnt uint64) bool {
+	accept := func(reqID, reqCnt, maxCnt uint64) bool {
 		if reqCnt == 0 {
-			return true
+			return false
 		}
 		if p.fcClient == nil || reqCnt > maxCnt {
-			return true
+			return false
 		}
 		maxCost = p.fcCosts.getCost(msg.Code, reqCnt)
 
@@ -352,11 +352,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if bufShort > 0 {
 				p.Log().Error("Request came too early", "remaining", common.PrettyDuration(time.Duration(bufShort*1000000/p.fcParams.MinRecharge)))
 			}
-			return true
+			return false
 		} else {
-			priority = servingPriority
+			task = pm.servingQueue.newTask(servingPriority)
 		}
-		return false
+		return task.start()
 	}
 
 	if msg.Size > ProtocolMaxMsgSize {
@@ -365,12 +365,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	var deliverMsg *Msg
-
-	errorFn := func(err error) {
-		if err != nil {
-			p.errCh <- err
-		}
-	}
 
 	sendReq := func(reqID, amount uint64, reply *reply, servingTime uint64) {
 		p.responseLock.Lock()
@@ -448,24 +442,21 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		query := req.Query
-		if reject(req.ReqID, query.Amount, MaxHeaderFetch) {
+		if !accept(req.ReqID, query.Amount, MaxHeaderFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
+		go func() {
+			hashMode := query.Origin.Hash != (common.Hash{})
+			first := true
+			maxNonCanonical := uint64(100)
 
-		hashMode := query.Origin.Hash != (common.Hash{})
-		first := true
-		maxNonCanonical := uint64(100)
-
-		// Gather headers until the fetch or network limits is reached
-		var (
-			bytes   common.StorageSize
-			headers []*types.Header
-			unknown bool
-		)
-
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
+			// Gather headers until the fetch or network limits is reached
+			var (
+				bytes   common.StorageSize
+				headers []*types.Header
+				unknown bool
+			)
+			for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit {
 				// Retrieve the next header satisfying the query
 				var origin *types.Header
 				if hashMode {
@@ -482,7 +473,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
 				}
 				if origin == nil {
-					return true, nil
+					break
 				}
 				headers = append(headers, origin)
 				bytes += estHeaderRlpSize
@@ -533,14 +524,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					// Number based traversal towards the leaf block
 					query.Origin.Number += query.Skip + 1
 				}
-				return unknown || len(headers) >= int(query.Amount) || bytes >= softResponseLimit, nil
-			},
-			//			after: sendFunc(query.Amount, func(bv uint64) error { return p.SendBlockHeaders(req.ReqID, bv, headers) }),
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, query.Amount, p.ReplyBlockHeaders(req.ReqID, headers), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, query.Amount, p.ReplyBlockHeaders(req.ReqID, headers), task.done())
+		}()
 
 	case BlockHeadersMsg:
 		if pm.downloader == nil {
@@ -582,18 +568,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			bodies []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if reject(req.ReqID, uint64(reqCnt), MaxBodyFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxBodyFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				hash := req.Hashes[index]
-				index++
+		go func() {
+			for _, hash := range req.Hashes {
 				if bytes >= softResponseLimit {
-					return true, nil
+					break
 				}
 				// Retrieve the requested block body, stopping if enough was found
 				if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
@@ -602,13 +583,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						bytes += len(data)
 					}
 				}
-				return index == reqCnt, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyBlockBodiesRLP(req.ReqID, bodies), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyBlockBodiesRLP(req.ReqID, bodies), task.done())
+		}()
 
 	case BlockBodiesMsg:
 		if pm.odr == nil {
@@ -647,42 +624,33 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			data  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if reject(req.ReqID, uint64(reqCnt), MaxCodeFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxCodeFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				req := req.Reqs[index]
-				index++
-				done := index == reqCnt
+		go func() {
+			for _, req := range req.Reqs {
 				// Retrieve the requested state entry, stopping if enough was found
 				if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != nil {
 					if header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number); header != nil {
 						statedb, err := pm.blockchain.State()
 						if err != nil {
-							return done, nil
+							continue
 						}
 						account, err := pm.getAccount(statedb, header.Root, common.BytesToHash(req.AccKey))
 						if err != nil {
-							return done, nil
+							continue
 						}
 						code, _ := statedb.Database().TrieDB().Node(common.BytesToHash(account.CodeHash))
 
 						data = append(data, code)
 						if bytes += len(code); bytes >= softResponseLimit {
-							return true, nil
+							break
 						}
 					}
 				}
-				return done, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyCode(req.ReqID, data), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyCode(req.ReqID, data), task.done())
+		}()
 
 	case CodeMsg:
 		if pm.odr == nil {
@@ -721,19 +689,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			receipts []rlp.RawValue
 		)
 		reqCnt := len(req.Hashes)
-		if reject(req.ReqID, uint64(reqCnt), MaxReceiptFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxReceiptFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				hash := req.Hashes[index]
-				index++
-				done := index == reqCnt
+		go func() {
+			for _, hash := range req.Hashes {
 				if bytes >= softResponseLimit {
-					return true, nil
+					break
 				}
 				// Retrieve the requested block's receipts, skipping if unknown to us
 				var results types.Receipts
@@ -742,7 +704,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				}
 				if results == nil {
 					if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
-						return done, nil
+						continue
 					}
 				}
 				// If known, encode and queue for response packet
@@ -752,13 +714,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					receipts = append(receipts, encoded)
 					bytes += len(encoded)
 				}
-				return done, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyReceiptsRLP(req.ReqID, receipts), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyReceiptsRLP(req.ReqID, receipts), task.done())
+		}()
 
 	case ReceiptsMsg:
 		if pm.odr == nil {
@@ -797,29 +755,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			proofs proofsData
 		)
 		reqCnt := len(req.Reqs)
-		if reject(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				req := req.Reqs[index]
-				index++
-				done := index == reqCnt
+		go func() {
+			for _, req := range req.Reqs {
 				// Retrieve the requested state entry, stopping if enough was found
 				if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != nil {
 					if header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number); header != nil {
 						statedb, err := pm.blockchain.State()
 						if err != nil {
-							return done, nil
+							continue
 						}
 						var trie state.Trie
 						if len(req.AccKey) > 0 {
 							account, err := pm.getAccount(statedb, header.Root, common.BytesToHash(req.AccKey))
 							if err != nil {
-								return done, nil
+								continue
 							}
 							trie, _ = statedb.Database().OpenStorageTrie(common.BytesToHash(req.AccKey), account.Root)
 						} else {
@@ -831,18 +783,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 							proofs = append(proofs, proof)
 							if bytes += proof.DataSize(); bytes >= softResponseLimit {
-								return true, nil
+								break
 							}
 						}
 					}
 				}
-				return done, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyProofs(req.ReqID, proofs), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyProofs(req.ReqID, proofs), task.done())
+		}()
 
 	case GetProofsV2Msg:
 		p.Log().Trace("Received les/2 proofs request")
@@ -861,19 +809,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			root      common.Hash
 		)
 		reqCnt := len(req.Reqs)
-		if reject(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
+		go func() {
 
-		nodes := light.NewNodeSet()
+			nodes := light.NewNodeSet()
 
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				req := req.Reqs[index]
-				index++
-				done := index == reqCnt
+			for _, req := range req.Reqs {
 				// Look up the state belonging to the request
 				if statedb == nil || req.BHash != lastBHash {
 					statedb, root, lastBHash = nil, common.Hash{}, req.BHash
@@ -886,34 +829,30 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 				}
 				if statedb == nil {
-					return done, nil
+					continue
 				}
 				// Pull the account or storage trie of the request
 				var trie state.Trie
 				if len(req.AccKey) > 0 {
 					account, err := pm.getAccount(statedb, root, common.BytesToHash(req.AccKey))
 					if err != nil {
-						return done, nil
+						continue
 					}
 					trie, _ = statedb.Database().OpenStorageTrie(common.BytesToHash(req.AccKey), account.Root)
 				} else {
 					trie, _ = statedb.Database().OpenTrie(root)
 				}
 				if trie == nil {
-					return done, nil
+					continue
 				}
 				// Prove the user's request from the account or stroage trie
 				trie.Prove(req.Key, req.FromLevel, nodes)
 				if nodes.DataSize() >= softResponseLimit {
-					return true, nil
+					break
 				}
-				return done, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyProofsV2(req.ReqID, nodes.NodeList()), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyProofsV2(req.ReqID, nodes.NodeList()), task.done())
+		}()
 
 	case ProofsV1Msg:
 		if pm.odr == nil {
@@ -973,24 +912,18 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			proofs []ChtResp
 		)
 		reqCnt := len(req.Reqs)
-		if reject(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
-		trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
-
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				req := req.Reqs[index]
-				index++
-				done := index == reqCnt
+		go func() {
+			trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
+			for _, req := range req.Reqs {
 				if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
 					sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, req.ChtNum*pm.iConfig.ChtSize-1)
 					if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
 						trie, err := trie.New(root, trieDb)
 						if err != nil {
-							return done, nil
+							continue
 						}
 						var encNumber [8]byte
 						binary.BigEndian.PutUint64(encNumber[:], req.BlockNum)
@@ -1000,17 +933,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 						proofs = append(proofs, ChtResp{Header: header, Proof: proof})
 						if bytes += proof.DataSize() + estHeaderRlpSize; bytes >= softResponseLimit {
-							return true, nil
+							break
 						}
 					}
 				}
-				return done, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyHeaderProofs(req.ReqID, proofs), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyHeaderProofs(req.ReqID, proofs), task.done())
+		}()
 
 	case GetHelperTrieProofsMsg:
 		p.Log().Trace("Received helper trie proof request")
@@ -1028,24 +957,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			auxData  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if reject(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
+		go func() {
 
-		var (
-			lastIdx  uint64
-			lastType uint
-			root     common.Hash
-			auxTrie  *trie.Trie
-		)
-		nodes := light.NewNodeSet()
-
-		index := 0
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				req := req.Reqs[index]
-				index++
+			var (
+				lastIdx  uint64
+				lastType uint
+				root     common.Hash
+				auxTrie  *trie.Trie
+			)
+			nodes := light.NewNodeSet()
+			for _, req := range req.Reqs {
 				if auxTrie == nil || req.Type != lastType || req.TrieIdx != lastIdx {
 					auxTrie, lastType, lastIdx = nil, req.Type, req.TrieIdx
 
@@ -1072,15 +996,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					}
 				}
 				if nodes.DataSize()+auxBytes >= softResponseLimit {
-					return true, nil
+					break
 				}
-				return index == reqCnt, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData}), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyHelperTrieProofs(req.ReqID, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData}), task.done())
+		}()
 
 	case HeaderProofsMsg:
 		if pm.odr == nil {
@@ -1133,21 +1053,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(txs)
-		if reject(0, uint64(reqCnt), MaxTxSend) {
+		if !accept(0, uint64(reqCnt), MaxTxSend) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				pm.txpool.AddRemotes(txs)
-				return true, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(0, uint64(reqCnt), nil, servingTime)
-			},
-			fail: errorFn,
-		})
+		go func() {
+			pm.txpool.AddRemotes(txs)
+			sendReq(0, uint64(reqCnt), nil, task.done())
+		}()
 
 	case SendTxV2Msg:
 		if pm.txpool == nil {
@@ -1162,35 +1074,26 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Txs)
-		if reject(req.ReqID, uint64(reqCnt), MaxTxSend) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxTxSend) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		var stats []txStatus
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				hashes := make([]common.Hash, len(req.Txs))
-				for i, tx := range req.Txs {
-					hashes[i] = tx.Hash()
-				}
-				stats = pm.txStatus(hashes)
-				for i, stat := range stats {
-					if stat.Status == core.TxStatusUnknown {
-						if errs := pm.txpool.AddRemotes([]*types.Transaction{req.Txs[i]}); errs[0] != nil {
-							stats[i].Error = errs[0].Error()
-							continue
-						}
-						stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
+		go func() {
+			hashes := make([]common.Hash, len(req.Txs))
+			for i, tx := range req.Txs {
+				hashes[i] = tx.Hash()
+			}
+			stats := pm.txStatus(hashes)
+			for i, stat := range stats {
+				if stat.Status == core.TxStatusUnknown {
+					if errs := pm.txpool.AddRemotes([]*types.Transaction{req.Txs[i]}); errs[0] != nil {
+						stats[i].Error = errs[0].Error()
+						continue
 					}
+					stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
 				}
-				return true, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), servingTime)
-			},
-			fail: errorFn,
-		})
+			}
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), task.done())
+		}()
 
 	case GetTxStatusMsg:
 		if pm.txpool == nil {
@@ -1205,22 +1108,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		reqCnt := len(req.Hashes)
-		if reject(req.ReqID, uint64(reqCnt), MaxTxStatus) {
+		if !accept(req.ReqID, uint64(reqCnt), MaxTxStatus) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		var stats []txStatus
-		pm.servingQueue.addTask(&servingTask{
-			priority: priority,
-			run: func() (bool, error) {
-				stats = pm.txStatus(req.Hashes)
-				return true, nil
-			},
-			send: func(servingTime uint64) {
-				sendReq(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), servingTime)
-			},
-			fail: errorFn,
-		})
+		go func() {
+			stats := pm.txStatus(req.Hashes)
+			sendReq(req.ReqID, uint64(reqCnt), p.ReplyTxStatus(req.ReqID, stats), task.done())
+		}()
 
 	case TxStatusMsg:
 		if pm.odr == nil {

@@ -26,13 +26,16 @@ import (
 // servingQueue runs serving tasks in a limited number of threads and puts the
 // waiting tasks in a priority queue
 type servingQueue struct {
-	lock        sync.Mutex
-	threadCount int                 // number of currently running threads
-	stopCount   int                 // number of threads to be stopped after they finish their current task
-	queue       *prque.Prque        // priority queue for waiting or suspended tasks
-	best        *servingTask        // either best == nil (queue empty) or waitingForTask is empty
-	waiting     []chan *servingTask // threads waiting for a task
-	suspendBias int64               // priority bias against suspending an already running task
+	tokenCh                 chan runToken
+	queueAddCh, queueBestCh chan *servingTask
+	stopThreadCh, quit      chan struct{}
+	setThreadsCh            chan int
+
+	wg          sync.WaitGroup
+	threadCount int          // number of currently running threads
+	queue       *prque.Prque // priority queue for waiting or suspended tasks
+	best        *servingTask // either best == nil (queue empty) or waitingForTask is empty
+	suspendBias int64        // priority bias against suspending an already running task
 }
 
 // servingTask represents a request serving task. Tasks can be implemented to
@@ -44,145 +47,191 @@ type servingQueue struct {
 // - run: execute a single step; return true if finished
 // - after: executed after run finishes or returns an error, receives the total serving time
 type servingTask struct {
+	sq          *servingQueue
 	servingTime uint64
-	done        bool
-	err         error
 	priority    int64
-	run         func() (finished bool, err error)
-	send        func(servingTime uint64)
-	fail        func(err error)
+	biasAdded   bool
+	token       runToken
+	tokenCh     chan runToken
+}
+
+type runToken chan struct{}
+
+func (t *servingTask) start() bool {
+	select {
+	case t.token = <-t.sq.tokenCh:
+	default:
+		t.tokenCh = make(chan runToken, 1)
+		select {
+		case t.sq.queueAddCh <- t:
+		case <-t.sq.quit:
+			return false
+		}
+		select {
+		case t.token = <-t.tokenCh:
+		case <-t.sq.quit:
+			return false
+		}
+	}
+	if t.token == nil {
+		return false
+	}
+	t.servingTime -= uint64(mclock.Now())
+	return true
+}
+
+func (t *servingTask) done() uint64 {
+	t.servingTime += uint64(mclock.Now())
+	close(t.token)
+	return t.servingTime
+}
+
+func (t *servingTask) waitOrStop() bool {
+	t.done()
+	if !t.biasAdded {
+		t.priority += t.sq.suspendBias
+		t.biasAdded = true
+	}
+	return t.start()
 }
 
 // newServingQueue returns a new servingQueue
-func newServingQueue(_suspendBias int64) *servingQueue {
-	return &servingQueue{
-		queue:       prque.New(nil),
-		suspendBias: _suspendBias,
+func newServingQueue(suspendBias int64) *servingQueue {
+	sq := &servingQueue{
+		queue:        prque.New(nil),
+		suspendBias:  suspendBias,
+		tokenCh:      make(chan runToken),
+		queueAddCh:   make(chan *servingTask, 100),
+		queueBestCh:  make(chan *servingTask),
+		stopThreadCh: make(chan struct{}),
+		quit:         make(chan struct{}),
+		setThreadsCh: make(chan int, 10),
+	}
+	sq.wg.Add(2)
+	go sq.queueLoop()
+	go sq.threadCountLoop()
+	return sq
+}
+
+func (sq *servingQueue) newTask(priority int64) *servingTask {
+	return &servingTask{
+		sq:       sq,
+		priority: priority,
 	}
 }
 
-// addTask adds a new task, either starting it immediately or queueing it
-func (sq *servingQueue) addTask(task *servingTask) {
-	sq.lock.Lock()
-	defer sq.lock.Unlock()
-
-	if l := len(sq.waiting); l != 0 {
-		l--
-		sq.waiting[l] <- task
-		sq.waiting = sq.waiting[:l]
-		return
+func (sq *servingQueue) threadController() {
+	for {
+		token := make(runToken)
+		select {
+		case best := <-sq.queueBestCh:
+			best.tokenCh <- token
+		default:
+			select {
+			case best := <-sq.queueBestCh:
+				best.tokenCh <- token
+			case sq.tokenCh <- token:
+			case <-sq.stopThreadCh:
+				sq.wg.Done()
+				return
+			case <-sq.quit:
+				sq.wg.Done()
+				return
+			}
+		}
+		<-token
+		select {
+		case <-sq.stopThreadCh:
+			sq.wg.Done()
+			return
+		case <-sq.quit:
+			sq.wg.Done()
+			return
+		default:
+		}
 	}
+}
 
+func (sq *servingQueue) addTask(task *servingTask) {
 	if sq.best == nil {
 		sq.best = task
-		return
-	}
-	if task.priority < sq.best.priority {
+	} else if task.priority > sq.best.priority {
 		sq.queue.Push(sq.best, sq.best.priority)
 		sq.best = task
 		return
+	} else {
+		sq.queue.Push(task, task.priority)
 	}
-	sq.queue.Push(task, task.priority)
 }
 
-// getNewTask selects a new task to be processed. If blocking == true then it waits
-// until a runnable task arrives or returns nil if the thread should be stopped.
-// if currentTask != nil then it returns immediately and only returns a new task
-// if the current one should be suspended.
-// Note: either blocking should be false or currentTask should be nil.
-func (sq *servingQueue) getNewTask(currentTask *servingTask, blocking bool) *servingTask {
-	sq.lock.Lock()
-	if sq.stopCount == 0 {
-		if sq.best != nil && (currentTask == nil || sq.best.priority <= currentTask.priority-sq.suspendBias) {
-			best := sq.best
-			if sq.queue.Size() == 0 {
-				sq.best = nil
-			} else {
-				sq.best, _ = sq.queue.PopItem().(*servingTask)
+func (sq *servingQueue) queueLoop() {
+	for {
+		if sq.best != nil {
+			select {
+			case task := <-sq.queueAddCh:
+				sq.addTask(task)
+			case sq.queueBestCh <- sq.best:
+				if sq.queue.Size() == 0 {
+					sq.best = nil
+				} else {
+					sq.best, _ = sq.queue.PopItem().(*servingTask)
+				}
+			case <-sq.quit:
+				sq.wg.Done()
+				return
 			}
-			sq.lock.Unlock()
-			return best
+		} else {
+			select {
+			case task := <-sq.queueAddCh:
+				sq.addTask(task)
+			case <-sq.quit:
+				sq.wg.Done()
+				return
+			}
 		}
-		if blocking {
-			ch := make(chan *servingTask)
-			sq.waiting = append(sq.waiting, ch)
-			sq.lock.Unlock()
-			return <-ch
-		}
-	} else {
-		sq.stopCount--
-		sq.threadCount--
 	}
-	sq.lock.Unlock()
-	return nil
+}
+
+func (sq *servingQueue) threadCountLoop() {
+	var threadCountTarget int
+	for {
+		for threadCountTarget > sq.threadCount {
+			sq.wg.Add(1)
+			go sq.threadController()
+			sq.threadCount++
+		}
+		if threadCountTarget < sq.threadCount {
+			select {
+			case threadCountTarget = <-sq.setThreadsCh:
+			case sq.stopThreadCh <- struct{}{}:
+				sq.threadCount--
+			case <-sq.quit:
+				sq.wg.Done()
+				return
+			}
+		} else {
+			select {
+			case threadCountTarget = <-sq.setThreadsCh:
+			case <-sq.quit:
+				sq.wg.Done()
+				return
+			}
+		}
+	}
 }
 
 // setThreads sets the processing thread count, suspending tasks as soon as
 // possible if necessary.
 func (sq *servingQueue) setThreads(threadCount int) {
-	sq.lock.Lock()
-	defer sq.lock.Unlock()
-
-	diff := threadCount - sq.threadCount + sq.stopCount
-	if diff > 0 {
-		// start more threads
-		if sq.stopCount >= diff {
-			sq.stopCount -= diff
-		} else {
-			diff -= sq.stopCount
-			sq.stopCount = 0
-			sq.threadCount += diff
-			for ; diff > 0; diff-- {
-				go sq.servingThread()
-			}
-		}
-	}
-	if diff < 0 {
-		// stop some threads
-		lw := len(sq.waiting)
-		sq.stopCount -= diff
-		for diff < 0 && lw > 0 {
-			diff++
-			lw--
-			sq.waiting[lw] <- nil
-			sq.stopCount--
-			sq.threadCount--
-		}
-		sq.waiting = sq.waiting[:lw]
+	select {
+	case sq.setThreadsCh <- threadCount:
+	case <-sq.quit:
+		return
 	}
 }
 
 // stop stops task processing as soon as possible
 func (sq *servingQueue) stop() {
-	sq.setThreads(0)
-}
-
-// servingThread implements a single serving thread
-func (sq *servingQueue) servingThread() {
-	for {
-		task := sq.getNewTask(nil, true)
-		if task == nil {
-			return
-		}
-		task.servingTime -= uint64(mclock.Now())
-		for {
-			task.done, task.err = task.run()
-			if task.done || task.err != nil {
-				task.servingTime += uint64(mclock.Now())
-				if task.err == nil {
-					task.send(task.servingTime)
-				} else {
-					task.fail(task.err)
-				}
-				break
-			}
-			if newTask := sq.getNewTask(task, false); newTask != nil {
-				now := uint64(mclock.Now())
-				task.servingTime += now
-				sq.addTask(task)
-				task = newTask
-				task.servingTime -= now
-			}
-		}
-	}
+	close(sq.quit)
+	sq.wg.Wait()
 }
