@@ -83,7 +83,7 @@ outer:
 		uploadedBytes += filesize * 1000
 
 		for i, v := range hashes {
-			timeout := time.After(30 * time.Second)
+			timeout := time.After(time.Duration(timeout) * time.Second)
 			errored = false
 
 		inner:
@@ -93,6 +93,7 @@ outer:
 					errored = true
 					log.Error("error retrieving hash. timeout", "hash idx", i, "err", err)
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
+					break inner
 				default:
 					randIndex := 1 + rand.Intn(len(endpoints)-1)
 					ruid := uuid.New()[:8]

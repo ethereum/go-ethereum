@@ -39,11 +39,14 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+var commandName = ""
+
 func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 		log.Info("smoke test starting", "task", name, "timeout", timeout)
+		commandName = name
 		metrics.GetOrRegisterCounter(name, nil).Inc(1)
 
 		errc := make(chan error)
@@ -162,7 +165,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header))
 
-	trace := client.GetClientTrace("upload-and-sync - http get", "upload-and-sync", ruid, &tn)
+	trace := client.GetClientTrace(commandName+" - http get", commandName, ruid, &tn)
 
 	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
 	transport := http.DefaultTransport
