@@ -39,7 +39,9 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-var commandName = ""
+var (
+	commandName = ""
+)
 
 func wrapCliCommand(name string, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
@@ -72,6 +74,10 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, port))
 		}
+	} else if cluster == "private-internal" {
+		for port := from; port < to; port++ {
+			endpoints = append(endpoints, fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, port))
+		}
 	} else {
 		for port := from; port < to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, port, cluster))
@@ -87,6 +93,8 @@ func generateEndpoints(scheme string, cluster string, app string, from int, to i
 func generateEndpoint(scheme string, cluster string, app string, from int) string {
 	if cluster == "prod" {
 		return fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, from)
+	} else if cluster == "private-internal" {
+		return fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, from)
 	} else {
 		return fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, from, cluster)
 	}
