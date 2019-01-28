@@ -384,9 +384,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		eth.txPool.IsMasterNode = func(address common.Address) bool {
 			currentHeader := eth.blockchain.CurrentHeader()
-			snap, err := c.GetSnapshot(eth.blockchain, currentHeader)
+			header := currentHeader
+			// Sometimes, the latest block hasn't been inserted to chain yet
+			// getSnapshot from parent block if it exists
+			parentHeader := eth.blockchain.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64() - 1)
+			if parentHeader != nil {
+				// not genesis block
+				header = parentHeader
+			}
+			snap, err := c.GetSnapshot(eth.blockchain, header)
 			if err != nil {
-				log.Error("Can't get snapshot with current header ", "number", currentHeader.Number, "hash", currentHeader.Hash().Hex(), "err", err)
+				log.Error("Can't get snapshot with at ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
 				return false
 			}
 			if _, ok := snap.Signers[address]; ok {
