@@ -306,6 +306,62 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 	return random, nil
 }
 
+// Get txw signed for block using cache or block body inside.
+func GetSignersSignedAtBlockHash(c *posv.Posv, chain consensus.ChainReader, data map[common.Hash][]common.Address, header *types.Header, curNumber uint64) map[common.Hash][]common.Address {
+	if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
+		txs := signData.([]*types.Transaction)
+		for _, tx := range txs {
+			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+			from := *tx.From()
+			data[blkHash] = append(data[blkHash], from)
+		}
+	} else {
+		log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", curNumber)
+		block := chain.GetBlock(header.Hash(), curNumber)
+		txs := block.Transactions()
+		receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), curNumber)
+
+		var signTxs []*types.Transaction
+		for _, tx := range txs {
+			if tx.IsSigningTransaction() {
+				var b uint
+				for _, r := range receipts {
+					if r.TxHash == tx.Hash() {
+						if len(r.PostState) > 0 {
+							b = types.ReceiptStatusSuccessful
+						} else {
+							b = r.Status
+						}
+						break
+					}
+				}
+
+				if b == types.ReceiptStatusFailed {
+					continue
+				}
+
+				signTxs = append(signTxs, tx)
+				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+				from := *tx.From()
+				data[blkHash] = append(data[blkHash], from)
+			}
+		}
+		c.BlockSigners.Add(header.Hash(), signTxs)
+	}
+
+	return data
+}
+
+// Get signers list from bytes.
+func GetSignersFromBytes(byteHeader []byte) []common.Address {
+	signers := make([]common.Address, len(byteHeader)/common.AddressLength)
+	for i := 0; i < len(masternodes); i++ {
+		copy(signers[i][:], byteHeader[i*common.AddressLength:])
+	}
+
+	return signers
+}
+
 // Calculate reward for reward checkpoint.
 func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
@@ -317,49 +373,10 @@ func GetRewardForCheckpoint(c *posv.Posv, chain consensus.ChainReader, header *t
 	mapBlkHash := map[uint64]common.Hash{}
 
 	data := make(map[common.Hash][]common.Address)
-	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
-		header = chain.GetHeader(header.ParentHash, i)
-		mapBlkHash[i] = header.Hash()
-		if signData, ok := c.BlockSigners.Get(header.Hash()); ok {
-			txs := signData.([]*types.Transaction)
-			for _, tx := range txs {
-				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-				from := *tx.From()
-				data[blkHash] = append(data[blkHash], from)
-			}
-		} else {
-			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
-			block := chain.GetBlock(header.Hash(), i)
-			txs := block.Transactions()
-			receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-
-			var signTxs []*types.Transaction
-			for _, tx := range txs {
-				if tx.IsSigningTransaction() {
-					var b uint
-					for _, r := range receipts {
-						if r.TxHash == tx.Hash() {
-							if len(r.PostState) > 0 {
-								b = types.ReceiptStatusSuccessful
-							} else {
-								b = r.Status
-							}
-							break
-						}
-					}
-
-					if b == types.ReceiptStatusFailed {
-						continue
-					}
-
-					signTxs = append(signTxs, tx)
-					blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
-					from := *tx.From()
-					data[blkHash] = append(data[blkHash], from)
-				}
-			}
-			c.BlockSigners.Add(header.Hash(), signTxs)
-		}
+	for curNumber := prevCheckpoint + (rCheckpoint * 2) - 1; curNumber >= startBlockNumber; curNumber-- {
+		header = chain.GetHeader(header.ParentHash, curNumber)
+		mapBlkHash[curNumber] = header.Hash()
+		data = GetSignersSignedAtBlockHash(c, chain, data, header, curNumber)
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
 	masternodes := posv.GetMasternodesFromCheckpointHeader(header)

@@ -274,7 +274,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
 				penSigners := c.GetMasternodes(chain, prevHeader)
-				goodSigners := make(map[common.Address]*big.Int)
+				signedSigners := make(map[common.Address]*big.Int)
 				if len(penSigners) > 0 {
 					// Loop for each block to check missing sign.
 					for i := prevEpoc; i < blockNumberEpoc; i++ {
@@ -289,8 +289,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 								}
 								for _, addr := range penSigners {
 									if signer == addr {
-										// Remove it from dupSigners.
-										goodSigners[signer] = goodSigners[signer].Add(goodSigners[signer], big.NewInt(1))
+										signedSigners[signer] = signedSigners[signer].Add(signedSigners[signer], big.NewInt(1))
 									}
 								}
 							} else {
@@ -298,12 +297,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 							}
 						}
 
-						if len(goodSigners) > 0 {
-							for signer, totalSign := range goodSigners {
+						if len(signedSigners) > 0 {
+							for signer, totalSign := range signedSigners {
 								if totalSign.Cmp(big.NewInt(4)) >= 0 {
 									for j, addr := range penSigners {
 										if signer == addr {
-											// Remove it from dupSigners.
+											// If create block above 4 times then remove it from penSigners.
 											penSigners = append(penSigners[:j], penSigners[j+1:]...)
 										}
 									}
@@ -312,6 +311,38 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 						}
 					}
 				}
+
+				// Check penalty signer return chain.
+				prevSigners := contracts.GetSignersFromBytes(prevHeader.Penalties)
+				if len(prevSigners) > 0 {
+					startCheck := blockNumberEpoc - common.RangeReturnSigner
+					data := make(map[common.Hash][]common.Address)
+					mapBlkHash := map[uint64]common.Hash{}
+					for curNumber := startCheck; curNumber < blockNumberEpoc; curNumber++ {
+						signers := make(map[common.Hash][]common.Address)
+						header := chain.GetHeaderByNumber(curNumber)
+						mapBlkHash[curNumber] = header.Hash()
+						data = contracts.GetSignersSignedAtBlockHash(c, chain, signers, header, curNumber)
+					}
+
+					for _, blkHash := range mapBlkHash {
+						signers := data[blkHash]
+						for j, addr := range prevSigners {
+							for _, signer := range signers {
+								if signer == addr {
+									// If create block above 4 times then remove it from penSigners.
+									prevSigners = append(prevSigners[:j], prevSigners[j+1:]...)
+								}
+							}
+						}
+					}
+					if len(prevSigners) > 0 {
+						for _, signer := range prevSigners {
+							penSigners = append(penSigners, signer)
+						}
+					}
+				}
+
 				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
 				return penSigners, nil
 			}
