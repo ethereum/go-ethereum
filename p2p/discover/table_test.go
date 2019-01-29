@@ -175,7 +175,7 @@ func TestTable_closest(t *testing.T) {
 		tab, db := newTestTable(transport)
 		defer tab.Close()
 		defer db.Close()
-		tab.stuff(test.All)
+		fillTable(tab, test.All)
 
 		// check that closest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -240,7 +240,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
-			tab.stuff([]*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
+			fillTable(tab, []*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
 		}
 		gotN := tab.ReadRandomNodes(buf)
 		if gotN != tab.len() {
@@ -274,8 +274,9 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
 		r.Set(enr.IP(genIP(rand)))
-		n := enode.SignNull(r, id)
-		t.All = append(t.All, wrapNode(n))
+		n := wrapNode(enode.SignNull(r, id))
+		n.livenessChecks = 1
+		t.All = append(t.All, n)
 	}
 	return reflect.ValueOf(t)
 }
@@ -292,7 +293,8 @@ func TestTable_Lookup(t *testing.T) {
 	// seed table with initial node (otherwise lookup will terminate immediately)
 	seedKey, _ := decodePubkey(lookupTestnet.dists[256][0])
 	seed := wrapNode(enode.NewV4(seedKey, net.IP{127, 0, 0, 1}, 0, 256))
-	tab.stuff([]*node{seed})
+	seed.livenessChecks = 1
+	fillTable(tab, []*node{seed})
 
 	results := tab.lookup(lookupTestnet.target, true)
 	t.Logf("results:")

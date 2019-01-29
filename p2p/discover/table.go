@@ -583,23 +583,6 @@ func (tab *Table) addThroughPing(n *node) {
 	tab.add(n)
 }
 
-// stuff adds nodes the table to the end of their corresponding bucket
-// if the bucket is not full. The caller must not hold tab.mutex.
-func (tab *Table) stuff(nodes []*node) {
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-
-	for _, n := range nodes {
-		if n.ID() == tab.self().ID() {
-			continue // don't add self
-		}
-		b := tab.bucket(n.ID())
-		if len(b.entries) < bucketSize {
-			tab.bumpOrAdd(b, n)
-		}
-	}
-}
-
 // delete removes an entry from the node table. It is used to evacuate dead nodes.
 func (tab *Table) delete(node *node) {
 	tab.mutex.Lock()
