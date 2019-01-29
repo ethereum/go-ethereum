@@ -37,7 +37,7 @@ on the database.
 
 Getters, Putters and Setters accept different get, put and set modes
 to perform different actions. For example, ModeGet has two different
-variables ModeGetRequest and ModeGetSync and dwo different Getters
+variables ModeGetRequest and ModeGetSync and two different Getters
 can be constructed with them that are used when the chunk is requested
 or when the chunk is synced as this two events are differently changing
 the database.

@@ -54,7 +54,7 @@ type DB struct {
 
 	// schema name of loaded data
 	schemaName shed.StringField
-	// filed that stores number of intems in gc index
+	// field that stores number of intems in gc index
 	storedGCSize shed.Uint64Field
 
 	// retrieval indexes

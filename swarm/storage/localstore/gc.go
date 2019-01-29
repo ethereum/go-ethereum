@@ -32,7 +32,7 @@ var (
 	// in range (0,1]. For example, with 0.9 value,
 	// garbage collection will leave 90% of defined capacity
 	// in database after its run. This prevents frequent
-	// garbage collection runt.
+	// garbage collection runs.
 	gcTargetRatio = 0.9
 	// gcBatchSize limits the number of chunks in a single
 	// leveldb batch on garbage collection.

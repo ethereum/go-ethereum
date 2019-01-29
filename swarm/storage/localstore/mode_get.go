@@ -65,7 +65,7 @@ func (g *Getter) Get(addr storage.Address) (chunk storage.Chunk, err error) {
 	return storage.NewChunk(out.Address, out.Data), nil
 }
 
-// get returns Item with from the retrieval index
+// get returns Item from the retrieval index
 // and updates other indexes.
 func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
@@ -138,7 +138,7 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 		return err
 	}
 	if item.AccessTimestamp == 0 {
-		// chunk is not yes synced
+		// chunk is not yet synced
 		// do not add it to the gc index
 		return nil
 	}

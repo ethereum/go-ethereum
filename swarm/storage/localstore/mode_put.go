@@ -27,11 +27,11 @@ type ModePut int
 
 // Putter modes.
 const (
-	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery, it is put only in
+	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery
 	ModePutRequest ModePut = iota
-	// ModePutSync: when a chunk is received via syncing in it is put in
+	// ModePutSync: when a chunk is received via syncing
 	ModePutSync
-	// ModePutUpload: when a chunk is created by local upload it is put in
+	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
 )
 
