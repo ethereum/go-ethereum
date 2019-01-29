@@ -286,8 +286,13 @@ func TestUDP_findnode(t *testing.T) {
 			}
 		})
 	}
-	waitNeighbors(expected.entries[:maxNeighbors])
-	waitNeighbors(expected.entries[maxNeighbors:])
+	// Receive replies.
+	want := expected.entries
+	if len(want) > maxNeighbors {
+		waitNeighbors(want[:maxNeighbors])
+		want = want[maxNeighbors:]
+	}
+	waitNeighbors(want)
 }
 
 func TestUDP_findnodeMultiReply(t *testing.T) {
