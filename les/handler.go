@@ -211,6 +211,10 @@ func (pm *ProtocolManager) Stop() {
 
 	close(pm.quitSync) // quits syncer, fetcher
 
+	if pm.servingQueue != nil {
+		pm.servingQueue.stop()
+	}
+
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
 	// sessions which are already established but not added to pm.peers yet
