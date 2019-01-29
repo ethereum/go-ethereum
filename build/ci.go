@@ -513,7 +513,7 @@ func doDebianSource(cmdline []string) {
 		for _, distro := range debDistros {
 			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
-			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc")
+			debuild := exec.Command("debuild", "-S", "-sa", "-us", "-uc", "-d")
 			debuild.Dir = pkgdir
 			build.MustRun(debuild)
 
@@ -523,7 +523,7 @@ func doDebianSource(cmdline []string) {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				build.MustRunCommand("dput", *upload, changes)
+				build.MustRunCommand("dput", "--passive", "--no-upload-log", *upload, changes)
 			}
 		}
 	}
