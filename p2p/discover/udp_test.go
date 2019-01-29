@@ -58,6 +58,7 @@ type udpTest struct {
 	t                   *testing.T
 	pipe                *dgramPipe
 	table               *Table
+	db                  *enode.DB
 	udp                 *udp
 	sent                [][]byte
 	localkey, remotekey *ecdsa.PrivateKey
@@ -72,12 +73,17 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	db, _ := enode.OpenDB("")
-	ln := enode.NewLocalNode(db, test.localkey)
+	test.db, _ = enode.OpenDB("")
+	ln := enode.NewLocalNode(test.db, test.localkey)
 	test.table, test.udp, _ = newUDP(test.pipe, ln, Config{PrivateKey: test.localkey})
 	// Wait for initial refresh so the table doesn't send unexpected findnode.
 	<-test.table.initDone
 	return test
+}
+
+func (test *udpTest) close() {
+	test.table.Close()
+	test.db.Close()
 }
 
 // handles a packet as if it had been sent to the transport.
@@ -131,7 +137,7 @@ func (test *udpTest) errorf(format string, args ...interface{}) error {
 
 func TestUDP_packetErrors(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	test.packetIn(errExpired, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4})
 	test.packetIn(errUnsolicitedReply, pongPacket, &pong{ReplyTok: []byte{}, Expiration: futureExp})
@@ -142,7 +148,7 @@ func TestUDP_packetErrors(t *testing.T) {
 func TestUDP_pingTimeout(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	toid := enode.ID{1, 2, 3, 4}
@@ -154,7 +160,7 @@ func TestUDP_pingTimeout(t *testing.T) {
 func TestUDP_responseTimeouts(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	rand.Seed(time.Now().UnixNano())
 	randomDuration := func(max time.Duration) time.Duration {
@@ -226,7 +232,7 @@ func TestUDP_responseTimeouts(t *testing.T) {
 func TestUDP_findnodeTimeout(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	toid := enode.ID{1, 2, 3, 4}
@@ -242,7 +248,7 @@ func TestUDP_findnodeTimeout(t *testing.T) {
 
 func TestUDP_findnode(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, although we need to
@@ -297,7 +303,7 @@ func TestUDP_findnode(t *testing.T) {
 
 func TestUDP_findnodeMultiReply(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	rid := enode.PubkeyToIDV4(&test.remotekey.PublicKey)
 	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.IP, time.Now())
@@ -352,7 +358,7 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 
 func TestUDP_pingMatch(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	randToken := make([]byte, 32)
 	crand.Read(randToken)
@@ -365,7 +371,7 @@ func TestUDP_pingMatch(t *testing.T) {
 
 func TestUDP_pingMatchIP(t *testing.T) {
 	test := newUDPTest(t)
-	defer test.table.Close()
+	defer test.close()
 
 	test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
 	test.waitPacketOut(func(*pong) error { return nil })
@@ -383,7 +389,7 @@ func TestUDP_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
 	added := make(chan *node, 1)
 	test.table.nodeAddedHook = func(n *node) { added <- n }
-	defer test.table.Close()
+	defer test.close()
 
 	// The remote side sends a ping packet to initiate the exchange.
 	go test.packetIn(nil, pingPacket, &ping{From: testRemote, To: testLocalAnnounced, Version: 4, Expiration: futureExp})
