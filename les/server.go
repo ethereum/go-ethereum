@@ -154,18 +154,20 @@ func (s *LesServer) startEventLoop() {
 	totalRechargeCh := make(chan uint64, 100)
 	totalRecharge := s.costTracker.subscribeTotalRecharge(totalRechargeCh)
 	totalCapacityCh := make(chan uint64, 100)
+	updateRecharge := func() {
+		if processing {
+			s.protocolManager.servingQueue.setThreads(s.thcBlockProcessing)
+			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
+		} else {
+			s.protocolManager.servingQueue.setThreads(s.thcNormal)
+			s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
+		}
+	}
+	updateRecharge()
 	totalCapacity := s.fcManager.SubscribeTotalCapacity(totalCapacityCh)
+	s.priorityClientPool.setLimits(s.maxPeers, totalCapacity)
 
 	go func() {
-		updateRecharge := func() {
-			if processing {
-				s.protocolManager.servingQueue.setThreads(s.thcBlockProcessing)
-				s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge, totalRecharge}})
-			} else {
-				s.protocolManager.servingQueue.setThreads(s.thcNormal)
-				s.fcManager.SetRechargeCurve(flowcontrol.PieceWiseLinear{{0, 0}, {totalRecharge / 10, totalRecharge}, {totalRecharge, totalRecharge}})
-			}
-		}
 		for {
 			select {
 			case processing = <-blockProcFeed:

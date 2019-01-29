@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 )
 
-// servingQueue runs serving tasks in a limited number of threads and puts the
+// servingQueue allows running tasks in a limited number of threads and puts the
 // waiting tasks in a priority queue
 type servingQueue struct {
 	tokenCh                 chan runToken
@@ -34,7 +34,7 @@ type servingQueue struct {
 	wg          sync.WaitGroup
 	threadCount int          // number of currently running threads
 	queue       *prque.Prque // priority queue for waiting or suspended tasks
-	best        *servingTask // either best == nil (queue empty) or waitingForTask is empty
+	best        *servingTask // the highest priority task (not included in the queue)
 	suspendBias int64        // priority bias against suspending an already running task
 }
 
@@ -55,8 +55,13 @@ type servingTask struct {
 	tokenCh     chan runToken
 }
 
+// runToken received by servingTask.start allows the task to run. Closing the
+// channel by servingTask.stop signals the thread controller to allow a new task
+// to start running.
 type runToken chan struct{}
 
+// start blocks until the task can start and returns true if it is allowed to run.
+// Returning false means that the task should be cancelled.
 func (t *servingTask) start() bool {
 	select {
 	case t.token = <-t.sq.tokenCh:
@@ -80,12 +85,18 @@ func (t *servingTask) start() bool {
 	return true
 }
 
+// done signals the thread controller about the task being finished and returns
+// the total serving time of the task in nanoseconds.
 func (t *servingTask) done() uint64 {
 	t.servingTime += uint64(mclock.Now())
 	close(t.token)
 	return t.servingTime
 }
 
+// waitOrStop can be called during the execution of the task. It blocks if there
+// is a higher priority task waiting (a bias is applied in favor of the currently
+// running task). Returning true means that the execution can be resumed. False
+// means the task should be cancelled.
 func (t *servingTask) waitOrStop() bool {
 	t.done()
 	if !t.biasAdded {
@@ -113,6 +124,7 @@ func newServingQueue(suspendBias int64) *servingQueue {
 	return sq
 }
 
+// newTask creates a new task with the given priority
 func (sq *servingQueue) newTask(priority int64) *servingTask {
 	return &servingTask{
 		sq:       sq,
@@ -120,6 +132,12 @@ func (sq *servingQueue) newTask(priority int64) *servingTask {
 	}
 }
 
+// threadController is started in multiple goroutines and controls the execution
+// of tasks. The number of active thread controllers equals the allowed number of
+// concurrently running threads. It tries to fetch the highest priority queued
+// task first. If there are no queued tasks waiting then it can directly catch
+// run tokens from the token channel and allow the corresponding tasks to run
+// without entering the priority queue.
 func (sq *servingQueue) threadController() {
 	for {
 		token := make(runToken)
@@ -152,6 +170,7 @@ func (sq *servingQueue) threadController() {
 	}
 }
 
+// addTask inserts a task into the priority queue
 func (sq *servingQueue) addTask(task *servingTask) {
 	if sq.best == nil {
 		sq.best = task
@@ -164,6 +183,9 @@ func (sq *servingQueue) addTask(task *servingTask) {
 	}
 }
 
+// queueLoop is an event loop running in a goroutine. It receives tasks from queueAddCh
+// and always tries to send the highest priority task to queueBestCh. Successfully sent
+// tasks are removed from the queue.
 func (sq *servingQueue) queueLoop() {
 	for {
 		if sq.best != nil {
@@ -192,6 +214,8 @@ func (sq *servingQueue) queueLoop() {
 	}
 }
 
+// threadCountLoop is an event loop running in a goroutine. It adjusts the number
+// of active thread controller goroutines.
 func (sq *servingQueue) threadCountLoop() {
 	var threadCountTarget int
 	for {
@@ -220,7 +244,7 @@ func (sq *servingQueue) threadCountLoop() {
 	}
 }
 
-// setThreads sets the processing thread count, suspending tasks as soon as
+// setThreads sets the allowed processing thread count, suspending tasks as soon as
 // possible if necessary.
 func (sq *servingQueue) setThreads(threadCount int) {
 	select {
@@ -230,7 +254,7 @@ func (sq *servingQueue) setThreads(threadCount int) {
 	}
 }
 
-// stop stops task processing as soon as possible
+// stop stops task processing as soon as possible and shuts down the serving queue.
 func (sq *servingQueue) stop() {
 	close(sq.quit)
 	sq.wg.Wait()
