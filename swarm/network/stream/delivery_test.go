@@ -285,7 +285,7 @@ func TestRequestFromPeers(t *testing.T) {
 	addr := network.RandomAddr()
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "stream"}}), nil, nil)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 	peer := network.NewPeer(&network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: false,
@@ -325,7 +325,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
 
-	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", []p2p.Cap{{Name: "stream"}}), nil, nil)
+	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 	// setting up a lightnode
 	peer := network.NewPeer(&network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
