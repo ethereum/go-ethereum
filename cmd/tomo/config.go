@@ -162,6 +162,14 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 		common.RollbackHash = common.HexToHash(rollbackHash)
 	}
 
+	// Check GasPrice
+	common.MinGasPrice = common.DefaultMinGasPrice
+	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
+		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+			common.MinGasPrice = gasPrice
+		}
+	}
+
 	// read passwords from environment
 	passwords := []string{}
 	for _, env := range cfg.Account.Passwords {
