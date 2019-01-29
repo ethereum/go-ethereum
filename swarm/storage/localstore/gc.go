@@ -199,8 +199,8 @@ func (db *DB) writeGCSizeWorker() {
 
 // writeGCSize stores the number of items in gcIndex.
 // It removes all hashes from gcUncountedHashesIndex
-// not to include them on the next database initialization
-// when gcSize is counted.
+// not to include them on the next DB initialization
+// (New function) when gcSize is counted.
 func (db *DB) writeGCSize(gcSize int64) (err error) {
 	const maxBatchSize = 1000
 
