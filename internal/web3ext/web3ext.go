@@ -237,6 +237,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'increaseTime',
+			call: 'debug_increaseTime',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'seedHash',
 			call: 'debug_seedHash',
 			params: 1

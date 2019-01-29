@@ -26,6 +26,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/aclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
@@ -820,15 +821,19 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	tstart := time.Now()
+	tstart, startOffset := aclock.NowWithOffset()
 	parent := w.chain.CurrentBlock()
 
 	if parent.Time().Cmp(new(big.Int).SetInt64(timestamp)) >= 0 {
 		timestamp = parent.Time().Int64() + 1
 	}
 	// this will ensure we're not going off too far in the future
-	if now := time.Now().Unix(); timestamp > now+1 {
-		wait := time.Duration(timestamp-now) * time.Second
+	now, nowOffset := aclock.NowWithOffset()
+	// nowWithOffset accounts for differences between the current aclock offset
+	// the offset when the current block was mined.
+	nowWithOffset := now.Unix() + int64(nowOffset.Seconds()-startOffset.Seconds())
+	if timestamp > nowWithOffset+1 {
+		wait := time.Duration(timestamp-nowWithOffset) * time.Second
 		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
 		time.Sleep(wait)
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/aclock"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -1560,6 +1561,16 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 // SetHead rewinds the head of the blockchain to a previous block.
 func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
+}
+
+// IncreaseTime increase the time offset for the clock used in consensus and
+// mining. It has the effect of changing the timestamp of the next mined block.
+func (api *PrivateDebugAPI) IncreaseTime(seconds uint64) (uint64, error) {
+	offset, err := aclock.AddOffset(time.Duration(seconds) * time.Second)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(offset.Seconds()), nil
 }
 
 // PublicNetAPI offers network related RPC methods
