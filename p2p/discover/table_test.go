@@ -50,8 +50,8 @@ func TestTable_pingReplace(t *testing.T) {
 func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding bool) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	<-tab.initDone
 
@@ -137,8 +137,8 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 func TestTable_IPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	for i := 0; i < tableIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
@@ -153,8 +153,8 @@ func TestTable_IPLimit(t *testing.T) {
 func TestTable_BucketIPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
@@ -173,9 +173,9 @@ func TestTable_closest(t *testing.T) {
 		// for any node table, Target and N
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport)
-		defer tab.Close()
 		defer db.Close()
-		tab.stuff(test.All)
+		defer tab.Close()
+		fillTable(tab, test.All)
 
 		// check that closest(Target, N) returns nodes
 		result := tab.closest(test.Target, test.N).entries
@@ -234,13 +234,13 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 	test := func(buf []*enode.Node) bool {
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport)
-		defer tab.Close()
 		defer db.Close()
+		defer tab.Close()
 		<-tab.initDone
 
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
-			tab.stuff([]*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
+			fillTable(tab, []*node{nodeAtDistance(tab.self().ID(), ld, intIP(ld))})
 		}
 		gotN := tab.ReadRandomNodes(buf)
 		if gotN != tab.len() {
@@ -272,16 +272,19 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 		N:      rand.Intn(bucketSize),
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
-		n := enode.SignNull(new(enr.Record), id)
-		t.All = append(t.All, wrapNode(n))
+		r := new(enr.Record)
+		r.Set(enr.IP(genIP(rand)))
+		n := wrapNode(enode.SignNull(r, id))
+		n.livenessChecks = 1
+		t.All = append(t.All, n)
 	}
 	return reflect.ValueOf(t)
 }
 
 func TestTable_Lookup(t *testing.T) {
 	tab, db := newTestTable(lookupTestnet)
-	defer tab.Close()
 	defer db.Close()
+	defer tab.Close()
 
 	// lookup on empty table returns no nodes
 	if results := tab.lookup(lookupTestnet.target, false); len(results) > 0 {
@@ -289,8 +292,9 @@ func TestTable_Lookup(t *testing.T) {
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
 	seedKey, _ := decodePubkey(lookupTestnet.dists[256][0])
-	seed := wrapNode(enode.NewV4(seedKey, net.IP{}, 0, 256))
-	tab.stuff([]*node{seed})
+	seed := wrapNode(enode.NewV4(seedKey, net.IP{127, 0, 0, 1}, 0, 256))
+	seed.livenessChecks = 1
+	fillTable(tab, []*node{seed})
 
 	results := tab.lookup(lookupTestnet.target, true)
 	t.Logf("results:")
@@ -576,6 +580,12 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))
 	}
 	return v.Interface()
+}
+
+func genIP(rand *rand.Rand) net.IP {
+	ip := make(net.IP, 4)
+	rand.Read(ip)
+	return ip
 }
 
 func quickcfg() *quick.Config {

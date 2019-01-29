@@ -83,6 +83,23 @@ func fillBucket(tab *Table, n *node) (last *node) {
 	return b.entries[bucketSize-1]
 }
 
+// fillTable adds nodes the table to the end of their corresponding bucket
+// if the bucket is not full. The caller must not hold tab.mutex.
+func fillTable(tab *Table, nodes []*node) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	for _, n := range nodes {
+		if n.ID() == tab.self().ID() {
+			continue // don't add self
+		}
+		b := tab.bucket(n.ID())
+		if len(b.entries) < bucketSize {
+			tab.bumpOrAdd(b, n)
+		}
+	}
+}
+
 type pingRecorder struct {
 	mu           sync.Mutex
 	dead, pinged map[enode.ID]bool
@@ -107,10 +124,6 @@ func (t *pingRecorder) self() *enode.Node {
 
 func (t *pingRecorder) findnode(toid enode.ID, toaddr *net.UDPAddr, target encPubkey) ([]*node, error) {
 	return nil, nil
-}
-
-func (t *pingRecorder) waitping(from enode.ID) error {
-	return nil // remote always pings
 }
 
 func (t *pingRecorder) ping(toid enode.ID, toaddr *net.UDPAddr) error {
