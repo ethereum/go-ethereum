@@ -19,9 +19,9 @@ package types
 
 import (
 	"encoding/binary"
-	"reflect"
 	"io"
 	"math/big"
+	"reflect"
 	"sort"
 	"sync/atomic"
 	"time"
