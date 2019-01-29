@@ -123,12 +123,6 @@ func main() {
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
 		},
-		cli.IntFlag{
-			Name:        "store",
-			Value:       5000,
-			Usage:       "individual node store size",
-			Destination: &storeSize,
-		},
 	}
 
 	app.Flags = append(app.Flags, []cli.Flag{
