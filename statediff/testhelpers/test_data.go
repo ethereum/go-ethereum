@@ -21,12 +21,12 @@ var (
 		Key:   &StorageKey,
 		Value: &StorageValue,
 	}}
-	emptyStorage         = map[string]builder.DiffStorage{}
+	emptyStorage           = map[string]builder.DiffStorage{}
 	address                = common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476592")
 	anotherAddress         = common.HexToAddress("0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476593")
 	ContractAddress        = address.String()
 	AnotherContractAddress = anotherAddress.String()
-	CreatedAccountDiffs = map[common.Address]builder.AccountDiff{
+	CreatedAccountDiffs    = map[common.Address]builder.AccountDiff{
 		address: {
 			Nonce:        builder.DiffUint64{Value: &NewNonceValue},
 			Balance:      builder.DiffBigInt{Value: big.NewInt(NewBalanceValue)},

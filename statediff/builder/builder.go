@@ -113,7 +113,7 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (map[common.Address
 	it, _ := trie.NewDifferenceIterator(a, b)
 
 	for {
-		log.Debug("Current Path and Hash", "path", pathToStr(it), "hashold", common.Hash(it.Hash()))
+		log.Debug("Current Path and Hash", "path", pathToStr(it), "hashold", it.Hash())
 		if it.Leaf() {
 
 			// lookup address
@@ -242,7 +242,7 @@ func buildStorageDiffsFromTrie(it trie.NodeIterator) map[string]DiffStorage {
 		if it.Leaf() {
 			log.Debug("Found leaf in storage", "path", pathToStr(it))
 			path := pathToStr(it)
-			storageKey:= hexutil.Encode(it.LeafKey())
+			storageKey := hexutil.Encode(it.LeafKey())
 			storageValue := hexutil.Encode(it.LeafBlob())
 			storageDiffs[path] = DiffStorage{
 				Key:   &storageKey,
