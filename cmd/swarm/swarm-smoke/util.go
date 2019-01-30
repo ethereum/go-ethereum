@@ -46,12 +46,12 @@ var (
 func wrapCliCommand(name string, killOnTimeout bool, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
-		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
+
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
-
-			log.Info("total time", "time", totalTime)
-			metrics.GetOrRegisterCounter(name+".total-time", nil).Inc(int64(totalTime))
+			log.Info("total time", "time", totalTime, "kb", filesize)
+			metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 		}(time.Now())
 
 		log.Info("smoke test starting", "task", name, "timeout", timeout)

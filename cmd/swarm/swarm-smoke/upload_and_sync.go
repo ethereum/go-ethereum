@@ -33,12 +33,6 @@ import (
 )
 
 func uploadAndSync(c *cli.Context) error {
-	defer func(now time.Time) {
-		totalTime := time.Since(now)
-		log.Info("total time", "time", totalTime, "kb", filesize)
-		metrics.GetOrRegisterResettingTimer("upload-and-sync.total-time", nil).Update(totalTime)
-	}(time.Now())
-
 	generateEndpoints(scheme, cluster, appName, from, to)
 	seed := int(time.Now().UnixNano() / 1e6)
 
