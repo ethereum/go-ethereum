@@ -17,8 +17,6 @@
 package localstore
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -36,7 +34,7 @@ var (
 	gcTargetRatio = 0.9
 	// gcBatchSize limits the number of chunks in a single
 	// leveldb batch on garbage collection.
-	gcBatchSize int64 = 1000
+	gcBatchSize uint64 = 1000
 )
 
 // collectGarbageWorker is a long running function that waits for
@@ -74,27 +72,21 @@ func (db *DB) collectGarbageWorker() {
 // is false, another call to this function is needed to collect
 // the rest of the garbage as the batch size limit is reached.
 // This function is called in collectGarbageWorker.
-func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
+func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	batch := new(leveldb.Batch)
 	target := db.gcTarget()
 
-	if db.useGlobalLock {
-		db.globalMu.Lock()
-		defer db.globalMu.Unlock()
+	// protect database from changing idexes and gcSize
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	gcSize, err := db.gcSize.Get()
+	if err != nil {
+		return 0, true, err
 	}
 
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		// protect parallel updates
-		if !db.useGlobalLock {
-			unlock, err := db.lockAddr(item.Address)
-			if err != nil {
-				return false, err
-			}
-			defer unlock()
-		}
-
-		gcSize := db.getGCSize()
 		if gcSize-collectedCount <= target {
 			return true, nil
 		}
@@ -116,49 +108,19 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 		return 0, false, err
 	}
 
+	db.gcSize.PutInBatch(batch, gcSize-collectedCount)
+
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		return 0, false, err
 	}
-	// batch is written, decrement gcSize
-	db.incGCSize(-collectedCount)
 	return collectedCount, done, nil
 }
 
 // gcTrigger retruns the absolute value for garbage collection
 // target value, calculated from db.capacity and gcTargetRatio.
-func (db *DB) gcTarget() (target int64) {
-	return int64(float64(db.capacity) * gcTargetRatio)
-}
-
-// incGCSize increments gcSize by the provided number.
-// If count is negative, it will decrement gcSize.
-func (db *DB) incGCSize(count int64) {
-	if count == 0 {
-		return
-	}
-
-	db.gcSizeMu.Lock()
-	new := db.gcSize + count
-	db.gcSize = new
-	db.gcSizeMu.Unlock()
-
-	select {
-	case db.writeGCSizeTrigger <- struct{}{}:
-	default:
-	}
-	if new >= db.capacity {
-		db.triggerGarbageCollection()
-	}
-}
-
-// getGCSize returns gcSize value by locking it
-// with gcSizeMu mutex.
-func (db *DB) getGCSize() (count int64) {
-	db.gcSizeMu.RLock()
-	count = db.gcSize
-	db.gcSizeMu.RUnlock()
-	return count
+func (db *DB) gcTarget() (target uint64) {
+	return uint64(float64(db.capacity) * gcTargetRatio)
 }
 
 // triggerGarbageCollection signals collectGarbageWorker
@@ -171,66 +133,40 @@ func (db *DB) triggerGarbageCollection() {
 	}
 }
 
-// writeGCSizeWorker writes gcSize on trigger event
-// and waits writeGCSizeDelay after each write.
-// It implements a linear backoff with delay of
-// writeGCSizeDelay duration to avoid very frequent
-// database operations.
-func (db *DB) writeGCSizeWorker() {
-	for {
-		select {
-		case <-db.writeGCSizeTrigger:
-			err := db.writeGCSize(db.getGCSize())
-			if err != nil {
-				log.Error("localstore write gc size", "err", err)
-			}
-			// Wait some time before writing gc size in the next
-			// iteration. This prevents frequent I/O operations.
-			select {
-			case <-time.After(10 * time.Second):
-			case <-db.close:
-				return
-			}
-		case <-db.close:
-			return
-		}
+// incGCSizeInBatch changes gcSize field value
+// by change which can be negative.
+func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
+	if change == 0 {
+		return nil
 	}
-}
-
-// writeGCSize stores the number of items in gcIndex.
-// It removes all hashes from gcUncountedHashesIndex
-// not to include them on the next DB initialization
-// (New function) when gcSize is counted.
-func (db *DB) writeGCSize(gcSize int64) (err error) {
-	const maxBatchSize = 1000
-
-	batch := new(leveldb.Batch)
-	db.storedGCSize.PutInBatch(batch, uint64(gcSize))
-	batchSize := 1
-
-	// use only one iterator as it acquires its snapshot
-	// not to remove hashes from index that are added
-	// after stored gc size is written
-	err = db.gcUncountedHashesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
-		batchSize++
-		if batchSize >= maxBatchSize {
-			err = db.shed.WriteBatch(batch)
-			if err != nil {
-				return false, err
-			}
-			batch.Reset()
-			batchSize = 0
-		}
-		return false, nil
-	}, nil)
+	gcSize, err := db.gcSize.Get()
 	if err != nil {
 		return err
 	}
-	return db.shed.WriteBatch(batch)
+
+	var new uint64
+	if change > 0 {
+		new = gcSize + uint64(change)
+	} else {
+		// 'change' is an int64 and is negative
+		// a conversion is needed with correct sign
+		c := uint64(-change)
+		if c > gcSize {
+			// protect uint64 undeflow
+			return nil
+		}
+		new = gcSize - c
+	}
+	db.gcSize.PutInBatch(batch, new)
+
+	// trigger garbage collection if we reached the capacity
+	if new >= db.capacity {
+		db.triggerGarbageCollection()
+	}
+	return nil
 }
 
 // testHookCollectGarbage is a hook that can provide
 // information when a garbage collection run is done
 // and how many items it removed.
-var testHookCollectGarbage func(collectedCount int64)
+var testHookCollectGarbage func(collectedCount uint64)
