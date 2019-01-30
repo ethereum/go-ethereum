@@ -116,7 +116,6 @@ type TypedDataDomain struct {
 	Salt              string   `json:"salt"`
 }
 
-// var typedDataRegexp = regexp.MustCompile(`^((address|bool|bytes|int|uint|string)|((bytes)([1-9]|[1-2][0-9]|3[0-2]))|((int|uint)(8|16|32|64|128|256)))(\[\])?$`)
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
 // Sign receives a request and produces a signature
@@ -170,7 +169,7 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 	return signature, nil
 }
 
-// Determines which signature method should be used based upon the mime type
+// determineSignatureFormat determines which signature method should be used based upon the mime type
 // In the cases where it matters ensure that the charset is handled. The charset
 // resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
 // charset, ok := params["charset"]
@@ -516,7 +515,12 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if encType == "int" || encType == "uint" {
 			length = 256
 		} else {
-			lengthStr := strings.TrimPrefix(strings.TrimPrefix(encType, "uint"), "int")
+			lengthStr := ""
+			if strings.HasPrefix(encType, "uint") {
+				lengthStr = strings.TrimPrefix(encType, "uint")
+			} else {
+				lengthStr = strings.TrimPrefix(encType, "int")
+			}
 			atoiSize, err := strconv.Atoi(lengthStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid size on integer: %v", lengthStr)
@@ -605,7 +609,7 @@ func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
 	}, nil
 }
 
-// Validate makes sure the types are sound
+// validate makes sure the types are sound
 func (typedData *TypedData) validate() error {
 	if err := typedData.Types.validate(); err != nil {
 		return err
@@ -870,7 +874,7 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 	return false
 }
 
-// Validate checks if the given domain is valid, i.e. contains at least
+// validate checks if the given domain is valid, i.e. contains at least
 // the minimum viable keys and values
 func (domain *TypedDataDomain) validate() error {
 	if domain.ChainId == big.NewInt(0) {
