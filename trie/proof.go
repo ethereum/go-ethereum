@@ -37,11 +37,11 @@ import (
 func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
-	nodes := []node{}
+	nodes := []Node{}
 	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
-		case *shortNode:
+		case *ShortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
 				tn = nil
@@ -50,11 +50,11 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
-		case *fullNode:
+		case *FullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case hashNode:
+		case HashNode:
 			var err error
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
@@ -71,7 +71,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 		// if encoding doesn't work and we're not writing to any database.
 		n, _, _ = hasher.hashChildren(n, nil)
 		hn, _ := hasher.store(n, nil, false)
-		if hash, ok := hn.(hashNode); ok || i == 0 {
+		if hash, ok := hn.(HashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
 			if fromLevel > 0 {
@@ -119,32 +119,32 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (valu
 		case nil:
 			// The trie doesn't contain the key.
 			return nil, nil, i
-		case hashNode:
+		case HashNode:
 			key = keyrest
 			copy(wantHash[:], cld)
-		case valueNode:
+		case ValueNode:
 			return cld, nil, i + 1
 		}
 	}
 }
 
-func get(tn node, key []byte) ([]byte, node) {
+func get(tn Node, key []byte) ([]byte, Node) {
 	for {
 		switch n := tn.(type) {
-		case *shortNode:
+		case *ShortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				return nil, nil
 			}
 			tn = n.Val
 			key = key[len(n.Key):]
-		case *fullNode:
+		case *FullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
-		case hashNode:
+		case HashNode:
 			return key, n
 		case nil:
 			return key, nil
-		case valueNode:
+		case ValueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
