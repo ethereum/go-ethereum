@@ -387,7 +387,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			header := currentHeader
 			// Sometimes, the latest block hasn't been inserted to chain yet
 			// getSnapshot from parent block if it exists
-			parentHeader := eth.blockchain.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64() - 1)
+			parentHeader := eth.blockchain.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
 			if parentHeader != nil {
 				// not genesis block
 				header = parentHeader
@@ -722,4 +722,8 @@ func rewardInflation(chainReward *big.Int, number uint64, blockPerYear uint64) *
 	}
 
 	return chainReward
+}
+
+func (s *Ethereum) GetPeer() int {
+	return len(s.protocolManager.peers.peers)
 }
