@@ -162,6 +162,10 @@ var (
 		Usage: "Document Root for HTTPClient file scheme",
 		Value: DirectoryString{homeDir()},
 	}
+	ExitWhenSyncedFlag = cli.BoolFlag{
+		Name:  "exitwhensynced",
+		Usage: "Exists syncing after block synchronisation",
+	}
 	ULCModeConfigFlag = cli.StringFlag{
 		Name:  "ulc.config",
 		Usage: "Config file to use for ultra light client mode",
@@ -178,7 +182,6 @@ var (
 		Name:  "ulc.trusted",
 		Usage: "List of trusted ULC servers",
 	}
-
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
