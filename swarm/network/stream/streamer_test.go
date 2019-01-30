@@ -1122,16 +1122,71 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	}
 }
 
+// TestGetSubscriptions is a unit test for the api.GetPeerSubscriptions() function
+func TestGetSubscriptions(t *testing.T) {
+	// create an amount of dummy peers
+	testPeerCount := 8
+	// every peer will have this amount of dummy servers
+	testServerCount := 4
+	// the peerMap which will store this data for the registry
+	peerMap := make(map[enode.ID]*Peer)
+	// create the registry
+	r := &Registry{}
+	api := NewAPI(r)
+	// call once, at this point should be empty
+	regs := api.GetPeerSubscriptions()
+	if len(regs) != 0 {
+		t.Fatal("Expected subscription count to be 0, but it is not")
+	}
+
+	// now create a number of dummy servers for each node
+	for i := 0; i < testPeerCount; i++ {
+		addr := network.RandomAddr()
+		id := addr.ID()
+		p := &Peer{}
+		p.servers = make(map[Stream]*server)
+		for k := 0; k < testServerCount; k++ {
+			s := Stream{
+				Name: strconv.Itoa(k),
+				Key:  "",
+				Live: false,
+			}
+			p.servers[s] = &server{}
+		}
+		peerMap[id] = p
+	}
+	r.peers = peerMap
+
+	// call the subscriptions again
+	regs = api.GetPeerSubscriptions()
+	// count how many (fake) subscriptions there are
+	cnt := 0
+	for _, reg := range regs {
+		for range reg {
+			cnt++
+		}
+	}
+	// check expected value
+	expectedCount := testPeerCount * testServerCount
+	if cnt != expectedCount {
+		t.Fatalf("Expected %d subscriptions, but got %d", expectedCount, cnt)
+	}
+}
+
 /*
-TestGetSubscriptionsRPC sets up a simulation network of 16 nodes,
+TestGetSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
 starts the simulation, waits for SyncUpdateDelay in order to kick off
 stream registration, then tests that there are subscriptions.
 */
 func TestGetSubscriptionsRPC(t *testing.T) {
-	// arbitrarily set to 16
-	nodeCount := 16
+	// arbitrarily set to 4
+	nodeCount := 4
+	// run with more nodes if `longrunning` flag is set
+	if *longrunning {
+		nodeCount = 64
+	}
 	// set the syncUpdateDelay for sync registrations to start
-	syncUpdateDelay := 500 * time.Millisecond
+	syncUpdateDelay := 200 * time.Millisecond
 	// holds the msg code for SubscribeMsg
 	var subscribeMsgCode uint64
 	var ok bool
@@ -1209,13 +1264,15 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	)
 
 	// strategy: listen to all SubscribeMsg events; after every event we wait
-	// if after 1 second no more messages are being received, we assume the
+	// if after `waitDuration` no more messages are being received, we assume the
 	// subscription phase has terminated!
 
 	// the loop in this go routine will either wait for new message events
 	// or times out after 1 second, which signals that we are not receiving
 	// any new subscriptions any more
 	go func() {
+		//for long running sims, waiting 1 sec will not be enough
+		waitDuration := time.Duration(nodeCount/16) * time.Second
 		for {
 			select {
 			case <-ctx.Done():
@@ -1226,7 +1283,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 					continue
 				}
 				log.Trace("stream message", "node", m.NodeID, "peer", m.PeerID)
-			case <-time.After(time.Second):
+			case <-time.After(waitDuration):
 				// one second passed, don't assume more subscriptions
 				allSubscriptionsDone <- struct{}{}
 				log.Info("All subscriptions received")
@@ -1265,11 +1322,11 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 				t.Fatal(err)
 			}
 			//length of the subscriptions can not be smaller than number of peers
-			log.Debug(fmt.Sprintf("node %s subscriptions:", node.String()))
+			log.Debug("node subscriptions:", "node", node.String())
 			for p, ps := range pstreams {
-				log.Debug(fmt.Sprintf("...with node %s: ", p))
+				log.Debug("... with: ", "peer", p)
 				for _, s := range ps {
-					log.Debug(fmt.Sprintf("......%s", s))
+					log.Debug(".......", "stream", s)
 					// each node also has subscriptions to RETRIEVE_REQUEST streams,
 					// we need to ignore those, we are only counting SYNC streams
 					if !strings.HasPrefix(s, "RETRIEVE_REQUEST") {
@@ -1280,7 +1337,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		}
 		// every node is mutually subscribed to each other, so the actual count is half of it
 		if realCount/2 != expectedMsgCount {
-			return errors.New(fmt.Sprintf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, expectedMsgCount))
+			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, expectedMsgCount)
 		}
 		return nil
 	})
