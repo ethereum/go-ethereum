@@ -622,12 +622,6 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 			db.lock.RUnlock()
 			return err
 		}
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
-				return err
-			}
-			batch.Reset()
-		}
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.nodes), db.nodesSize
@@ -685,13 +679,6 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
-	}
-	// If we've reached an optimal batch size, commit and start over
-	if batch.ValueSize() >= ethdb.IdealBatchSize {
-		if err := batch.Write(); err != nil {
-			return err
-		}
-		batch.Reset()
 	}
 	return nil
 }
