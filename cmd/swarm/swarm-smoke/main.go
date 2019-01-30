@@ -49,7 +49,6 @@ var (
 	verbosity        int
 	timeout          int
 	single           bool
-	storeSize        int
 )
 
 func main() {
