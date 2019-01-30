@@ -30,13 +30,6 @@ import (
 )
 
 func uploadSpeed(c *cli.Context) error {
-	defer func(now time.Time) {
-		totalTime := time.Since(now)
-
-		log.Info("total time", "time", totalTime, "kb", filesize)
-		metrics.GetOrRegisterCounter("upload-speed.total-time", nil).Inc(int64(totalTime))
-	}(time.Now())
-
 	endpoint := generateEndpoint(scheme, cluster, appName, from)
 	seed := int(time.Now().UnixNano() / 1e6)
 	log.Info("uploading to "+endpoint, "seed", seed)
