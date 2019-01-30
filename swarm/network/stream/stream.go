@@ -929,3 +929,27 @@ func (api *API) SubscribeStream(peerId enode.ID, s Stream, history *Range, prior
 func (api *API) UnsubscribeStream(peerId enode.ID, s Stream) error {
 	return api.streamer.Unsubscribe(peerId, s)
 }
+
+/*
+GetPeerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
+It can be called via RPC.
+It returns a map of node IDs with an array of string representations of Stream objects.
+*/
+func (api *API) GetPeerSubscriptions() map[string][]string {
+	//create the empty map
+	pstreams := make(map[string][]string)
+	//iterate all streamer peers
+	for id, p := range api.streamer.peers {
+		var streams []string
+		//every peer has a map of stream servers
+		//every stream server represents a subscription
+		for s := range p.servers {
+			//append the string representation of the stream
+			//to the list for this peer
+			streams = append(streams, s.String())
+		}
+		//set the array of stream servers to the map
+		pstreams[id.String()] = streams
+	}
+	return pstreams
+}
