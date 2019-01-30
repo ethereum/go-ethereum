@@ -43,13 +43,6 @@ type uploadResult struct {
 }
 
 func slidingWindow(c *cli.Context) error {
-	defer func(now time.Time) {
-		totalTime := time.Since(now)
-
-		log.Info("total time", "time", totalTime)
-		metrics.GetOrRegisterCounter("sliding-window.total-time", nil).Inc(int64(totalTime))
-	}(time.Now())
-
 	generateEndpoints(scheme, cluster, appName, from, to)
 	hashes := []uploadResult{} //swarm hashes of the uploads
 	nodes := to - from
