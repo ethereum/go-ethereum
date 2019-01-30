@@ -312,7 +312,7 @@ func NewPublicDebugAPI(node *Node) *PublicDebugAPI {
 // Metrics retrieves all the known system metric collected by the node.
 func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 	// Create a rate formatter
-	units := []string{"", "K", "M", "G", "T", "P", "E", "Z", "Y"}
+	units := []string{"", "k", "M", "G", "T", "P", "E", "Z", "Y"}
 	round := func(value float64, prec int) string {
 		unit := 0
 		for value >= 1000 && unit < 9 {
