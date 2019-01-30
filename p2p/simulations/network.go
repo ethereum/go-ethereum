@@ -136,7 +136,7 @@ func (net *Network) Config() *NetworkConfig {
 // StartAll starts all nodes in the network
 func (net *Network) StartAll() error {
 	for _, node := range net.Nodes {
-		if node.Up {
+		if node.Up() {
 			continue
 		}
 		if err := net.Start(node.ID()); err != nil {
@@ -149,7 +149,7 @@ func (net *Network) StartAll() error {
 // StopAll stops all nodes in the network
 func (net *Network) StopAll() error {
 	for _, node := range net.Nodes {
-		if !node.Up {
+		if !node.Up() {
 			continue
 		}
 		if err := net.Stop(node.ID()); err != nil {
@@ -174,7 +174,7 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 		net.lock.Unlock()
 		return fmt.Errorf("node %v does not exist", id)
 	}
-	if node.Up {
+	if node.Up() {
 		net.lock.Unlock()
 		return fmt.Errorf("node %v already up", id)
 	}
@@ -184,7 +184,7 @@ func (net *Network) startWithSnapshots(id enode.ID, snapshots map[string][]byte)
 		log.Warn("Node startup failed", "id", id, "err", err)
 		return err
 	}
-	node.Up = true
+	node.SetUp(true)
 	log.Info("Started node", "id", id)
 	ev := NewEvent(node)
 	net.lock.Unlock()
@@ -219,7 +219,7 @@ func (net *Network) watchPeerEvents(id enode.ID, events chan *p2p.PeerEvent, sub
 		if node == nil {
 			return
 		}
-		node.Up = false
+		node.SetUp(false)
 		ev := NewEvent(node)
 		net.events.Send(ev)
 	}()
@@ -263,17 +263,17 @@ func (net *Network) Stop(id enode.ID) error {
 		net.lock.Unlock()
 		return fmt.Errorf("node %v does not exist", id)
 	}
-	if !node.Up {
+	if !node.Up() {
 		net.lock.Unlock()
 		return fmt.Errorf("node %v already down", id)
 	}
-	node.Up = false
+	node.SetUp(false)
 	net.lock.Unlock()
 
 	err := node.Stop()
 	if err != nil {
 		net.lock.Lock()
-		node.Up = true
+		node.SetUp(true)
 		net.lock.Unlock()
 		return err
 	}
@@ -430,7 +430,7 @@ func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
 
 func (net *Network) getUpNodeIDs() (ids []enode.ID) {
 	for _, node := range net.Nodes {
-		if node.Up {
+		if node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -446,7 +446,7 @@ func (net *Network) GetRandomDownNode(excludeIDs ...enode.ID) *Node {
 
 func (net *Network) getDownNodeIDs() (ids []enode.ID) {
 	for _, node := range net.GetNodes() {
-		if !node.Up {
+		if !node.Up() {
 			ids = append(ids, node.ID())
 		}
 	}
@@ -595,8 +595,21 @@ type Node struct {
 	// Config if the config used to created the node
 	Config *adapters.NodeConfig `json:"config"`
 
-	// Up tracks whether or not the node is running
-	Up bool `json:"up"`
+	// up tracks whether or not the node is running
+	up   bool         `json:"up"`
+	upMu sync.RWMutex `json:"-"`
+}
+
+func (n *Node) Up() bool {
+	n.upMu.RLock()
+	defer n.upMu.RUnlock()
+	return n.up
+}
+
+func (n *Node) SetUp(up bool) {
+	n.upMu.Lock()
+	defer n.upMu.Unlock()
+	n.up = up
 }
 
 // ID returns the ID of the node
@@ -630,7 +643,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	}{
 		Info:   n.NodeInfo(),
 		Config: n.Config,
-		Up:     n.Up,
+		Up:     n.Up(),
 	})
 }
 
@@ -653,10 +666,10 @@ type Conn struct {
 
 // nodesUp returns whether both nodes are currently up
 func (c *Conn) nodesUp() error {
-	if !c.one.Up {
+	if !c.one.Up() {
 		return fmt.Errorf("one %v is not up", c.One)
 	}
-	if !c.other.Up {
+	if !c.other.Up() {
 		return fmt.Errorf("other %v is not up", c.Other)
 	}
 	return nil
@@ -728,7 +741,7 @@ func (net *Network) snapshot(addServices []string, removeServices []string) (*Sn
 	}
 	for i, node := range net.Nodes {
 		snap.Nodes[i] = NodeSnapshot{Node: *node}
-		if !node.Up {
+		if !node.Up() {
 			continue
 		}
 		snapshots, err := node.Snapshots()
@@ -783,7 +796,7 @@ func (net *Network) Load(snap *Snapshot) error {
 		if _, err := net.NewNodeWithConfig(n.Node.Config); err != nil {
 			return err
 		}
-		if !n.Node.Up {
+		if !n.Node.Up() {
 			continue
 		}
 		if err := net.startWithSnapshots(n.Node.Config.ID, n.Snapshots); err != nil {
@@ -855,7 +868,7 @@ func (net *Network) Load(snap *Snapshot) error {
 	// Start connecting.
 	for _, conn := range snap.Conns {
 
-		if !net.GetNode(conn.One).Up || !net.GetNode(conn.Other).Up {
+		if !net.GetNode(conn.One).Up() || !net.GetNode(conn.Other).Up() {
 			//in this case, at least one of the nodes of a connection is not up,
 			//so it would result in the snapshot `Load` to fail
 			continue
@@ -909,7 +922,7 @@ func (net *Network) executeControlEvent(event *Event) {
 }
 
 func (net *Network) executeNodeEvent(e *Event) error {
-	if !e.Node.Up {
+	if !e.Node.Up() {
 		return net.Stop(e.Node.ID())
 	}
 

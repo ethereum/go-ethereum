@@ -178,7 +178,7 @@ func watchSimEvents(net *simulations.Network, ctx context.Context, trigger chan 
 		case ev := <-events:
 			//only catch node up events
 			if ev.Type == simulations.EventTypeNode {
-				if ev.Node.Up {
+				if ev.Node.Up() {
 					log.Debug("got node up event", "event", ev, "node", ev.Node.Config.ID)
 					select {
 					case trigger <- ev.Node.Config.ID:
