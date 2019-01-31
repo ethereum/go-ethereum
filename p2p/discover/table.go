@@ -586,7 +586,7 @@ func (tab *Table) addSeenNode(n *node) {
 	}
 }
 
-// addLiveNode adds a node whose existence has been verified recently to the front of a
+// addVerifiedNode adds a node whose existence has been verified recently to the front of a
 // bucket. If the node is already in the bucket, it is moved to the front. If the bucket
 // has no space, the node is added to the replacements list.
 //
@@ -696,7 +696,7 @@ func (tab *Table) replace(b *bucket, last *node) *node {
 	return r
 }
 
-// bump moves the given node to the front of the bucket entry list
+// bumpInBucket moves the given node to the front of the bucket entry list
 // if it is contained in that list.
 func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 	for i := range b.entries {
