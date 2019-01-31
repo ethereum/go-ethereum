@@ -70,7 +70,7 @@ func startWS(ctx *cli.Context) (err error) {
 // Returned cleanup function should be called only if err is nil.
 func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error) {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
 
 	cleanup = func() {}
 	var globalStore mock.GlobalStorer
