@@ -647,6 +647,25 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface so that we don't lose
+// Node.up status. IMPORTANT: The implementation is incomplete; we lose
+// p2p.NodeInfo.
+func (n *Node) UnmarshalJSON(raw []byte) error {
+	// TODO: How should we turn back NodeInfo into n.Node?
+	// Ticket: https://github.com/ethersphere/go-ethereum/issues/1177
+	no := struct {
+		Config *adapters.NodeConfig `json:"config,omitempty"`
+		Up     bool                 `json:"up"`
+	}{}
+	if err := json.Unmarshal(raw, &no); err != nil {
+		return err
+	}
+
+	n.SetUp(no.Up)
+	n.Config = no.Config
+	return nil
+}
+
 // Conn represents a connection between two nodes in the network
 type Conn struct {
 	// One is the node which initiated the connection
