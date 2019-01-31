@@ -328,7 +328,7 @@ func (tab *Table) findnode(n *node, targetKey encPubkey, reply chan<- []*node) {
 	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
 	// just remove those again during revalidation.
 	for _, n := range r {
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	reply <- r
 }
@@ -443,7 +443,7 @@ func (tab *Table) loadSeedNodes() {
 		seed := seeds[i]
 		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
 		log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
-		tab.add(seed)
+		tab.addSeenNode(seed)
 	}
 }
 
@@ -468,7 +468,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 		// The node responded, move it to the front.
 		last.livenessChecks++
 		log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
-		b.bump(last)
+		tab.bumpInBucket(b, last)
 		return
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
@@ -551,12 +551,12 @@ func (tab *Table) bucket(id enode.ID) *bucket {
 	return tab.buckets[d-bucketMinDistance-1]
 }
 
-// add attempts to add the given node to its corresponding bucket. If the bucket has space
-// available, adding the node succeeds immediately. Otherwise, the node is added if the
-// least recently active node in the bucket does not respond to a ping packet.
+// addSeenNode adds a node which may or may not be live to the end of a bucket. If the
+// bucket has space available, adding the node succeeds immediately. Otherwise, the node is
+// added to the replacements list.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) add(n *node) {
+func (tab *Table) addSeenNode(n *node) {
 	if n.ID() == tab.self().ID() {
 		return
 	}
@@ -564,23 +564,68 @@ func (tab *Table) add(n *node) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 	b := tab.bucket(n.ID())
-	if !tab.bumpOrAdd(b, n) {
-		// Node is not in table. Add it to the replacement list.
+	if contains(b.entries, n.ID()) {
+		// Already in bucket, don't add.
+		return
+	}
+	if len(b.entries) >= bucketSize {
+		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, n)
+		return
+	}
+	if !tab.addIP(b, n.IP()) {
+		// Can't add: IP limit reached.
+		return
+	}
+	// Add to end of bucket:
+	b.entries = append(b.entries, n)
+	b.replacements = deleteNode(b.replacements, n)
+	n.addedAt = time.Now()
+	if tab.nodeAddedHook != nil {
+		tab.nodeAddedHook(n)
 	}
 }
 
-// addThroughPing adds the given node to the table. Compared to plain
-// 'add' there is an additional safety measure: if the table is still
-// initializing the node is not added. This prevents an attack where the
-// table could be filled by just sending ping repeatedly.
+// addVerifiedNode adds a node whose existence has been verified recently to the front of a
+// bucket. If the node is already in the bucket, it is moved to the front. If the bucket
+// has no space, the node is added to the replacements list.
+//
+// There is an additional safety measure: if the table is still initializing the node
+// is not added. This prevents an attack where the table could be filled by just sending
+// ping repeatedly.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addThroughPing(n *node) {
+func (tab *Table) addVerifiedNode(n *node) {
 	if !tab.isInitDone() {
 		return
 	}
-	tab.add(n)
+	if n.ID() == tab.self().ID() {
+		return
+	}
+
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	b := tab.bucket(n.ID())
+	if tab.bumpInBucket(b, n) {
+		// Already in bucket, moved to front.
+		return
+	}
+	if len(b.entries) >= bucketSize {
+		// Bucket full, maybe add as replacement.
+		tab.addReplacement(b, n)
+		return
+	}
+	if !tab.addIP(b, n.IP()) {
+		// Can't add: IP limit reached.
+		return
+	}
+	// Add to front of bucket.
+	b.entries, _ = pushNode(b.entries, n, bucketSize)
+	b.replacements = deleteNode(b.replacements, n)
+	n.addedAt = time.Now()
+	if tab.nodeAddedHook != nil {
+		tab.nodeAddedHook(n)
+	}
 }
 
 // delete removes an entry from the node table. It is used to evacuate dead nodes.
@@ -651,12 +696,21 @@ func (tab *Table) replace(b *bucket, last *node) *node {
 	return r
 }
 
-// bump moves the given node to the front of the bucket entry list
+// bumpInBucket moves the given node to the front of the bucket entry list
 // if it is contained in that list.
-func (b *bucket) bump(n *node) bool {
+func (tab *Table) bumpInBucket(b *bucket, n *node) bool {
 	for i := range b.entries {
 		if b.entries[i].ID() == n.ID() {
-			// move it to the front
+			if !n.IP().Equal(b.entries[i].IP()) {
+				// Endpoint has changed, ensure that the new IP fits into table limits.
+				tab.removeIP(b, b.entries[i].IP())
+				if !tab.addIP(b, n.IP()) {
+					// It doesn't, put the previous one back.
+					tab.addIP(b, b.entries[i].IP())
+					return false
+				}
+			}
+			// Move it to the front.
 			copy(b.entries[1:], b.entries[:i])
 			b.entries[0] = n
 			return true
@@ -665,27 +719,18 @@ func (b *bucket) bump(n *node) bool {
 	return false
 }
 
-// bumpOrAdd moves n to the front of the bucket entry list or adds it if the list isn't
-// full. The return value is true if n is in the bucket.
-func (tab *Table) bumpOrAdd(b *bucket, n *node) bool {
-	if b.bump(n) {
-		return true
-	}
-	if len(b.entries) >= bucketSize || !tab.addIP(b, n.IP()) {
-		return false
-	}
-	b.entries, _ = pushNode(b.entries, n, bucketSize)
-	b.replacements = deleteNode(b.replacements, n)
-	n.addedAt = time.Now()
-	if tab.nodeAddedHook != nil {
-		tab.nodeAddedHook(n)
-	}
-	return true
-}
-
 func (tab *Table) deleteInBucket(b *bucket, n *node) {
 	b.entries = deleteNode(b.entries, n)
 	tab.removeIP(b, n.IP())
+}
+
+func contains(ns []*node, id enode.ID) bool {
+	for _, n := range ns {
+		if n.ID() == id {
+			return true
+		}
+	}
+	return false
 }
 
 // pushNode adds n to the front of list, keeping at most max items.

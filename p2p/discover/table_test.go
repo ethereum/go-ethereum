@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func TestTable_pingReplace(t *testing.T) {
@@ -64,7 +65,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	// its bucket if it is unresponsive. Revalidate again to ensure that
 	transport.dead[last.ID()] = !lastInBucketIsResponding
 	transport.dead[pingSender.ID()] = !newNodeIsResponding
-	tab.add(pingSender)
+	tab.addSeenNode(pingSender)
 	tab.doRevalidate(make(chan struct{}, 1))
 	tab.doRevalidate(make(chan struct{}, 1))
 
@@ -114,10 +115,14 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 	}
 
 	prop := func(nodes []*node, bumps []int) (ok bool) {
+		tab, db := newTestTable(newPingRecorder())
+		defer db.Close()
+		defer tab.Close()
+
 		b := &bucket{entries: make([]*node, len(nodes))}
 		copy(b.entries, nodes)
 		for i, pos := range bumps {
-			b.bump(b.entries[pos])
+			tab.bumpInBucket(b, b.entries[pos])
 			if hasDuplicates(b.entries) {
 				t.Logf("bucket has duplicates after %d/%d bumps:", i+1, len(bumps))
 				for _, n := range b.entries {
@@ -126,6 +131,7 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 				return false
 			}
 		}
+		checkIPLimitInvariant(t, tab)
 		return true
 	}
 	if err := quick.Check(prop, cfg); err != nil {
@@ -142,11 +148,12 @@ func TestTable_IPLimit(t *testing.T) {
 
 	for i := 0; i < tableIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	if tab.len() > tableIPLimit {
 		t.Errorf("too many nodes in table")
 	}
+	checkIPLimitInvariant(t, tab)
 }
 
 // This checks that the per-bucket IP limit is applied correctly.
@@ -159,10 +166,27 @@ func TestTable_BucketIPLimit(t *testing.T) {
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), d, net.IP{172, 0, 1, byte(i)})
-		tab.add(n)
+		tab.addSeenNode(n)
 	}
 	if tab.len() > bucketIPLimit {
 		t.Errorf("too many nodes in table")
+	}
+	checkIPLimitInvariant(t, tab)
+}
+
+// checkIPLimitInvariant checks that ip limit sets contain an entry for every
+// node in the table and no extra entries.
+func checkIPLimitInvariant(t *testing.T, tab *Table) {
+	t.Helper()
+
+	tabset := netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit}
+	for _, b := range tab.buckets {
+		for _, n := range b.entries {
+			tabset.Add(n.IP())
+		}
+	}
+	if tabset.String() != tab.ips.String() {
+		t.Errorf("table IP set is incorrect:\nhave: %v\nwant: %v", tab.ips, tabset)
 	}
 }
 
@@ -279,6 +303,69 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 		t.All = append(t.All, n)
 	}
 	return reflect.ValueOf(t)
+}
+
+func TestTable_addVerifiedNode(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder())
+	<-tab.initDone
+	defer db.Close()
+	defer tab.Close()
+
+	// Insert two nodes.
+	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
+	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
+	tab.addSeenNode(n1)
+	tab.addSeenNode(n2)
+
+	// Verify bucket content:
+	bcontent := []*node{n1, n2}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
+	}
+
+	// Add a changed version of n2.
+	newrec := n2.Record()
+	newrec.Set(enr.IP{99, 99, 99, 99})
+	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
+	tab.addVerifiedNode(newn2)
+
+	// Check that bucket is updated correctly.
+	newBcontent := []*node{newn2, n1}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, newBcontent) {
+		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
+	}
+	checkIPLimitInvariant(t, tab)
+}
+
+func TestTable_addSeenNode(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder())
+	<-tab.initDone
+	defer db.Close()
+	defer tab.Close()
+
+	// Insert two nodes.
+	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
+	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
+	tab.addSeenNode(n1)
+	tab.addSeenNode(n2)
+
+	// Verify bucket content:
+	bcontent := []*node{n1, n2}
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
+	}
+
+	// Add a changed version of n2.
+	newrec := n2.Record()
+	newrec.Set(enr.IP{99, 99, 99, 99})
+	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
+	tab.addSeenNode(newn2)
+
+	// Check that bucket content is unchanged.
+	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
+		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
+	}
+	checkIPLimitInvariant(t, tab)
 }
 
 func TestTable_Lookup(t *testing.T) {
@@ -535,7 +622,6 @@ func (tn *preminedTestnet) findnode(toid enode.ID, toaddr *net.UDPAddr, target e
 }
 
 func (*preminedTestnet) close()                                        {}
-func (*preminedTestnet) waitping(from enode.ID) error                  { return nil }
 func (*preminedTestnet) ping(toid enode.ID, toaddr *net.UDPAddr) error { return nil }
 
 // mine generates a testnet struct literal with nodes at
