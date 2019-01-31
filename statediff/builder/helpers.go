@@ -54,7 +54,6 @@ func findIntersection(a, b []string) []string {
 			if iOfA >= lenA {
 				return updates
 			}
-			break
 			// a[iOfA] == b[iOfB]
 		case 0:
 			updates = append(updates, a[iOfA])
@@ -63,14 +62,12 @@ func findIntersection(a, b []string) []string {
 			if iOfA >= lenA || iOfB >= lenB {
 				return updates
 			}
-			break
 			// a[iOfA] > b[iOfB]
 		case 1:
 			iOfB++
 			if iOfB >= lenB {
 				return updates
 			}
-			break
 		}
 	}
 
