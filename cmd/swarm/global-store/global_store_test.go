@@ -30,10 +30,14 @@ import (
 	mockRPC "github.com/ethereum/go-ethereum/swarm/storage/mock/rpc"
 )
 
+// TestHTTP_InMemory tests in-memory global store that exposes
+// HTTP server.
 func TestHTTP_InMemory(t *testing.T) {
 	testHTTP(t, true)
 }
 
+// TestHTTP_Database tests global store with persisted database
+// that exposes HTTP server.
 func TestHTTP_Database(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarm-global-store-")
 	if err != nil {
@@ -41,11 +45,18 @@ func TestHTTP_Database(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	// create a fresh global store
 	testHTTP(t, true, "--dir", dir)
 
+	// check if data saved by the previous global store instance
 	testHTTP(t, false, "--dir", dir)
 }
 
+// testWebsocket starts global store binary with HTTP server
+// and validates that it can store and retrieve data.
+// If put is false, no data will be stored, only retrieved,
+// giving the possibility to check if data is present in the
+// storage directory.
 func testHTTP(t *testing.T, put bool, args ...string) {
 	addr := findFreeTCPAddress(t)
 	testCmd := runGlobalStore(t, append([]string{"http", "--addr", addr}, args...)...)
@@ -94,10 +105,14 @@ func testHTTP(t *testing.T, put bool, args ...string) {
 	}
 }
 
+// TestWebsocket_InMemory tests in-memory global store that exposes
+// WebSocket server.
 func TestWebsocket_InMemory(t *testing.T) {
 	testWebsocket(t, true)
 }
 
+// TestWebsocket_Database tests global store with persisted database
+// that exposes HTTP server.
 func TestWebsocket_Database(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarm-global-store-")
 	if err != nil {
@@ -105,11 +120,18 @@ func TestWebsocket_Database(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	// create a fresh global store
 	testWebsocket(t, true, "--dir", dir)
 
+	// check if data saved by the previous global store instance
 	testWebsocket(t, false, "--dir", dir)
 }
 
+// testWebsocket starts global store binary with WebSocket server
+// and validates that it can store and retrieve data.
+// If put is false, no data will be stored, only retrieved,
+// giving the possibility to check if data is present in the
+// storage directory.
 func testWebsocket(t *testing.T, put bool, args ...string) {
 	addr := findFreeTCPAddress(t)
 	testCmd := runGlobalStore(t, append([]string{"ws", "--addr", addr}, args...)...)
@@ -154,6 +176,8 @@ func testWebsocket(t *testing.T, put bool, args ...string) {
 	}
 }
 
+// findFreeTCPAddress returns a local address (IP:Port) to which
+// global store can listen on.
 func findFreeTCPAddress(t *testing.T) (addr string) {
 	t.Helper()
 

@@ -29,6 +29,8 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+// startHTTP starts a global store with HTTP RPC server.
+// It is used for "http" cli command.
 func startHTTP(ctx *cli.Context) (err error) {
 	server, cleanup, err := newServer(ctx)
 	if err != nil {
@@ -45,6 +47,8 @@ func startHTTP(ctx *cli.Context) (err error) {
 	return http.Serve(listener, server)
 }
 
+// startWS starts a global store with WebSocket RPC server.
+// It is used for "websocket" cli command.
 func startWS(ctx *cli.Context) (err error) {
 	server, cleanup, err := newServer(ctx)
 	if err != nil {
@@ -62,6 +66,8 @@ func startWS(ctx *cli.Context) (err error) {
 	return http.Serve(listener, server.WebsocketHandler(origins))
 }
 
+// newServer creates a global store and returns its RPC server.
+// Returned cleanup function should be called only if err is nil.
 func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error) {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
@@ -86,6 +92,7 @@ func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error)
 
 	server = rpc.NewServer()
 	if err := server.RegisterName("mockStore", globalStore); err != nil {
+		cleanup()
 		return nil, nil, err
 	}
 
