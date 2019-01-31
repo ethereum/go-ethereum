@@ -653,16 +653,16 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 func (n *Node) UnmarshalJSON(raw []byte) error {
 	// TODO: How should we turn back NodeInfo into n.Node?
 	// Ticket: https://github.com/ethersphere/go-ethereum/issues/1177
-	no := struct {
+	node := struct {
 		Config *adapters.NodeConfig `json:"config,omitempty"`
 		Up     bool                 `json:"up"`
 	}{}
-	if err := json.Unmarshal(raw, &no); err != nil {
+	if err := json.Unmarshal(raw, &node); err != nil {
 		return err
 	}
 
-	n.SetUp(no.Up)
-	n.Config = no.Config
+	n.SetUp(node.Up)
+	n.Config = node.Config
 	return nil
 }
 

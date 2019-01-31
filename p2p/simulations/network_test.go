@@ -494,6 +494,12 @@ func TestNode_UnmarshalJSON(t *testing.T) {
 			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONUpField())
 		},
 	)
+	t.Run(
+		"test unmarshal of Node Config field",
+		func(t *testing.T) {
+			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfig())
+		},
+	)
 }
 
 func runNodeUnmarshalJSON(t *testing.T, tests []nodeUnmarshalTestCase) {
@@ -580,6 +586,37 @@ func casesNodeUnmarshalJSONUpField() []nodeUnmarshalTestCase {
 			name:      "bool value expected but got something else (string)",
 			marshaled: "{\"up\": \"true\"}",
 			wantErr:   "cannot unmarshal string into Go struct",
+		},
+	}
+}
+
+func casesNodeUnmarshalJSONConfig() []nodeUnmarshalTestCase {
+	// Don't do a big fuss around testing, as adapters.NodeConfig should
+	// handle it's own serialization. Just do a sanity check.
+	return []nodeUnmarshalTestCase{
+		{
+			name:      "missing Config field",
+			marshaled: "{}",
+			want: Node{
+				Config: nil,
+			},
+		},
+		{
+			name:      "Config field is nil",
+			marshaled: "{\"config\": nil}",
+			want: Node{
+				Config: nil,
+			},
+		},
+		{
+			name:      "a non default Config field",
+			marshaled: "{\"config\":{\"name\":\"node_ecdd0\",\"port\":44665}}",
+			want: Node{
+				Config: &adapters.NodeConfig{
+					Name: "node_ecdd0",
+					Port: 44665,
+				},
+			},
 		},
 	}
 }
