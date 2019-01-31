@@ -81,6 +81,8 @@ var (
 
 	ErrZeroGasPrice = errors.New("zero gas price")
 
+	ErrUnderMinGasPrice = errors.New("under min gas price")
+
 	ErrDuplicateSpecialTransaction = errors.New("duplicate a special transaction")
 
 	ErrMinDeploySMC = errors.New("smart contract creation cost is under allowance")
@@ -620,6 +622,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		// Check zero gas price.
 		if tx.GasPrice().Cmp(new(big.Int).SetInt64(0)) == 0 {
 			return ErrZeroGasPrice
+		}
+
+		// under min gas price
+		if tx.GasPrice().Cmp(new(big.Int).SetInt64(common.MinGasPrice)) < 0 {
+			return ErrUnderMinGasPrice
 		}
 	}
 
