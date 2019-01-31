@@ -497,7 +497,7 @@ func TestNode_UnmarshalJSON(t *testing.T) {
 	t.Run(
 		"test unmarshal of Node Config field",
 		func(t *testing.T) {
-			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfig())
+			runNodeUnmarshalJSON(t, casesNodeUnmarshalJSONConfigField())
 		},
 	)
 }
@@ -590,12 +590,12 @@ func casesNodeUnmarshalJSONUpField() []nodeUnmarshalTestCase {
 	}
 }
 
-func casesNodeUnmarshalJSONConfig() []nodeUnmarshalTestCase {
+func casesNodeUnmarshalJSONConfigField() []nodeUnmarshalTestCase {
 	// Don't do a big fuss around testing, as adapters.NodeConfig should
 	// handle it's own serialization. Just do a sanity check.
 	return []nodeUnmarshalTestCase{
 		{
-			name:      "missing Config field",
+			name:      "Config field is omitted",
 			marshaled: "{}",
 			want: Node{
 				Config: nil,
