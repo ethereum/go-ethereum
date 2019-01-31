@@ -586,8 +586,8 @@ type Node struct {
 	Config *adapters.NodeConfig `json:"config"`
 
 	// up tracks whether or not the node is running
-	up   bool         `json:"up"`
-	upMu sync.RWMutex `json:"-"`
+	up   bool
+	upMu sync.RWMutex
 }
 
 func (n *Node) Up() bool {
