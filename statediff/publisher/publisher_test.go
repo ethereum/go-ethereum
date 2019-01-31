@@ -3,11 +3,6 @@ package publisher_test
 import (
 	"bytes"
 	"encoding/csv"
-	"github.com/ethereum/go-ethereum/statediff"
-	"github.com/ethereum/go-ethereum/statediff/builder"
-	p "github.com/ethereum/go-ethereum/statediff/publisher"
-	"github.com/ethereum/go-ethereum/statediff/testhelpers"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,6 +10,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/statediff"
+	"github.com/ethereum/go-ethereum/statediff/builder"
+	p "github.com/ethereum/go-ethereum/statediff/publisher"
+	"github.com/ethereum/go-ethereum/statediff/testhelpers"
+	"github.com/pkg/errors"
 )
 
 var (

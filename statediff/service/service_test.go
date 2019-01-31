@@ -1,15 +1,16 @@
 package service_test
 
 import (
+	"math/big"
+	"math/rand"
+	"reflect"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	service2 "github.com/ethereum/go-ethereum/statediff/service"
 	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
-	"math/big"
-	"math/rand"
-	"reflect"
-	"testing"
 )
 
 func TestServiceLoop(t *testing.T) {

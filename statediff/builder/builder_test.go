@@ -2,6 +2,10 @@ package builder_test
 
 import (
 	"bytes"
+	"math/big"
+	"reflect"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -10,9 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	b "github.com/ethereum/go-ethereum/statediff/builder"
-	"math/big"
-	"reflect"
-	"testing"
 )
 
 var (

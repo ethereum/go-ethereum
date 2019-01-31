@@ -2,14 +2,15 @@ package extractor_test
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/core/types"
-	b "github.com/ethereum/go-ethereum/statediff/builder"
-	e "github.com/ethereum/go-ethereum/statediff/extractor"
-	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core/types"
+	b "github.com/ethereum/go-ethereum/statediff/builder"
+	e "github.com/ethereum/go-ethereum/statediff/extractor"
+	"github.com/ethereum/go-ethereum/statediff/testhelpers/mocks"
 )
 
 var publisher mocks.Publisher

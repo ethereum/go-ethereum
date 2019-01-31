@@ -2,12 +2,13 @@ package publisher
 
 import (
 	"encoding/csv"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/statediff/builder"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/statediff/builder"
 )
 
 var (

@@ -1,9 +1,10 @@
 package statediff_test
 
 import (
+	"testing"
+
 	"github.com/ethereum/go-ethereum/statediff"
 	"github.com/ethereum/go-ethereum/statediff/testhelpers"
-	"testing"
 )
 
 func TestNewMode(t *testing.T) {

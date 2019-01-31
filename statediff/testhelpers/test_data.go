@@ -1,10 +1,11 @@
 package testhelpers
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/statediff/builder"
 	"math/big"
 	"math/rand"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/statediff/builder"
 )
 
 var (
