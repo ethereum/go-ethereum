@@ -32,10 +32,11 @@ import (
 var explorerDockerfile = `
 FROM puppeth/blockscout:latest
 
+
 ADD genesis.json /genesis.json
 RUN \
   echo 'geth --cache 512 init /genesis.json' > explorer.sh && \
-	echo $'exec geth --networkid {{.NetworkID}} --syncmode "full"  --port {{.NodePort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" &' >> explorer.sh && \
+	echo $'exec geth --networkid {{.NetworkID}} --syncmode "full"  --port {{.NodePort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcapi "net,web3,eth,shh,debug" --rpccorsdomain "*" --rpcvhosts "*" --ws --wsorigins "*" &' >> explorer.sh && \
 	echo '/usr/local/bin/docker-entrypoint.sh postgres &' >> explorer.sh && \
 	echo 'sleep 5' >> explorer.sh && \
   	echo 'mix do ecto.drop --force, ecto.create, ecto.migrate' >> explorer.sh && \
@@ -63,6 +64,7 @@ services:
             - VIRTUAL_PORT=4000{{end}}
             - NODE_PORT={{.NodePort}}/tcp
             - STATS={{.Ethstats}}
+            - BLOCK_TRANSFORMER={{.Transformer}}
         volumes:
             - {{.Datadir}}:/root/.ethereum
             - {{.DBDir}}:/var/lib/postgresql/data
@@ -77,7 +79,7 @@ services:
 // deployExplorer deploys a new block explorer container to a remote machine via
 // SSH, docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployExplorer(client *sshClient, network string, bootnodes []string, config *explorerInfos, nocache bool) ([]byte, error) {
+func deployExplorer(client *sshClient, network string, bootnodes []string, config *explorerInfos, nocache bool, isClique bool) ([]byte, error) {
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())
 	files := make(map[string][]byte)
@@ -91,6 +93,10 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
+	transformer := "base"
+	if isClique {
+		transformer = "clique"
+	}
 	composefile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(explorerComposefile)).Execute(composefile, map[string]interface{}{
 		"NetworkName": network,
@@ -101,6 +107,7 @@ func deployExplorer(client *sshClient, network string, bootnodes []string, confi
 		"Network":     network,
 		"NodePort":    config.nodePort,
 		"WebPort":     config.webPort,
+		"Transformer": transformer,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 	files[filepath.Join(workdir, "genesis.json")] = config.genesis
