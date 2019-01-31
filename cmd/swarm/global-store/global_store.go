@@ -29,18 +29,54 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+func startHTTP(ctx *cli.Context) (err error) {
+	server, cleanup, err := newServer(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	listener, err := net.Listen("tcp", ctx.String("addr"))
+	if err != nil {
+		return err
+	}
+	log.Info("http", "address", listener.Addr().String())
+
+	return http.Serve(listener, server)
+}
+
 func startWS(ctx *cli.Context) (err error) {
+	server, cleanup, err := newServer(ctx)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	listener, err := net.Listen("tcp", ctx.String("addr"))
+	if err != nil {
+		return err
+	}
+	origins := ctx.StringSlice("origins")
+	log.Info("websocket", "address", listener.Addr().String(), "origins", origins)
+
+	return http.Serve(listener, server.WebsocketHandler(origins))
+}
+
+func newServer(ctx *cli.Context) (server *rpc.Server, cleanup func(), err error) {
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(ctx.Int("verbosity")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
+	cleanup = func() {}
 	var globalStore mock.GlobalStorer
 	dir := ctx.String("dir")
 	if dir != "" {
 		dbStore, err := db.NewGlobalStore(dir)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		defer dbStore.Close()
+		cleanup = func() {
+			dbStore.Close()
+		}
 		globalStore = dbStore
 		log.Info("database global store", "dir", dir)
 	} else {
@@ -48,19 +84,10 @@ func startWS(ctx *cli.Context) (err error) {
 		log.Info("in-memory global store")
 	}
 
-	server := rpc.NewServer()
+	server = rpc.NewServer()
 	if err := server.RegisterName("mockStore", globalStore); err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	endpoint := ctx.String("endpoint")
-	listener, err := net.Listen("tcp", endpoint)
-	if err != nil {
-		return err
-	}
-	wsAddress := listener.Addr().String()
-	origins := ctx.StringSlice("origins")
-	log.Info("websocket", "address", wsAddress, "origins", origins)
-
-	return http.Serve(listener, server.WebsocketHandler(origins))
+	return server, cleanup, nil
 }

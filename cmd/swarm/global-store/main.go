@@ -52,9 +52,30 @@ func newApp() (app *cli.App) {
 
 	app.Commands = []cli.Command{
 		{
+			Name:    "http",
+			Aliases: []string{"h"},
+			Usage:   "start swarm global store with http server",
+			Action:  startHTTP,
+			// Flags only for "start" command.
+			// Allow app flags to be specified after the
+			// command argument.
+			Flags: append(app.Flags,
+				cli.StringFlag{
+					Name:  "dir",
+					Value: "",
+					Usage: "data directory",
+				},
+				cli.StringFlag{
+					Name:  "addr",
+					Value: "0.0.0.0:3033",
+					Usage: "address to listen for http connection",
+				},
+			),
+		},
+		{
 			Name:    "websocket",
 			Aliases: []string{"ws"},
-			Usage:   "start swarm global store with websocket endpoint",
+			Usage:   "start swarm global store with websocket server",
 			Action:  startWS,
 			// Flags only for "start" command.
 			// Allow app flags to be specified after the
@@ -66,9 +87,9 @@ func newApp() (app *cli.App) {
 					Usage: "data directory",
 				},
 				cli.StringFlag{
-					Name:  "endpoint",
+					Name:  "addr",
 					Value: "0.0.0.0:3033",
-					Usage: "websocket endpoint",
+					Usage: "address to listen for websocket connection",
 				},
 				cli.StringSliceFlag{
 					Name:  "origins",
