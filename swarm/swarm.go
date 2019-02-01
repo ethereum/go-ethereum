@@ -514,6 +514,7 @@ func (self *Swarm) APIs() []rpc.API {
 		apis = append(apis, self.ps.APIs()...)
 	}
 
+	// Only provide certain endpoints if the `debug-api` flag is set
 	if self.config.DebugAPI {
 		log.Info("Running node with debug APIs attached")
 		apis = append(apis, api.GetDebugAPIDesc(self.netStore))

@@ -48,6 +48,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
+// HasChunk needed to implement SyncChunkStore
 func (m *MemStore) HasChunk(_ context.Context, addr Address) bool {
 	return m.cache.Contains(addr)
 }

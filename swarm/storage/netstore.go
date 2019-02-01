@@ -158,6 +158,9 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 	return chunk, nil, nil
 }
 
+// HasChunk is the storage layer entry point to query the underlying
+// database to return if it has a chunk or not.
+// Called from the DebugAPI
 func (n *NetStore) HasChunk(ctx context.Context, ref Address) bool {
 	return n.store.HasChunk(ctx, ref)
 }

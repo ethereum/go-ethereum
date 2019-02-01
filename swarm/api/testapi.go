@@ -37,6 +37,7 @@ func (c *Control) Hive() string {
 	return c.hive.String()
 }
 
+// DebugAPI is a umbrella structure to provide additional debug API endpoints
 type DebugAPI struct {
 	netStore *storage.NetStore
 }
@@ -47,14 +48,13 @@ func NewDebugAPI(nstore *storage.NetStore) *DebugAPI {
 	}
 }
 
-func (dapi *DebugAPI) String() string {
-	return "debugapi"
-}
-
+// HasChunk returns true if the underlying datastore has
+// the chunk stored with the given address, false if it does not store it
 func (dapi *DebugAPI) HasChunk(chunkAddress storage.Address) bool {
 	return dapi.netStore.HasChunk(context.Background(), chunkAddress)
 }
 
+// The description for the DebugAPI to add to the APIs if the flag is set
 func GetDebugAPIDesc(nstore *storage.NetStore) rpc.API {
 	return rpc.API{
 		Namespace: "debugapi",
