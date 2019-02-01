@@ -980,6 +980,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 			// Find the next state trie we need to commit
 			header := bc.GetHeaderByNumber(current - triesInMemory)
+			if header == nil {
+				// TODO! Investigate why this happens. See https://github.com/ethereum/go-ethereum/issues/18977 .
+				// It appears that when importing large sidechains, there's some edgecase where
+				// sidechain tip (S - 128) does not have a corresponding canonical block. This seems odd, since
+				// any sidechain larger than 128 blocks longer than the 'canon' chain _should_ already have been
+				// reorged into canon chain.
+
+				// For now, just break out of here, and hope that a reorg event will settle this
+				break
+			}
 			chosen := header.Number.Uint64()
 
 			// If we exceeded out time allowance, flush an entire trie to disk
