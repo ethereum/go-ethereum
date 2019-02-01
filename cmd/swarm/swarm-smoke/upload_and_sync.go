@@ -35,7 +35,10 @@ import (
 func uploadAndSync(c *cli.Context) error {
 	seed := int(time.Now().UnixNano() / 1e6)
 
-	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
+	// test uuid
+	tuid := uuid.New()[:8]
+
+	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
 
 	h := md5.New()
 	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
@@ -46,11 +49,12 @@ func uploadAndSync(c *cli.Context) error {
 		log.Error(err.Error())
 		return err
 	}
-	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).UpdateSince(t1)
+	t2 := time.Since(t1)
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 
 	fhash := h.Sum(nil)
 
-	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
+	log.Info("uploaded successfully", "tuid", tuid, "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
 	time.Sleep(time.Duration(syncDelay) * time.Second)
 
@@ -63,12 +67,14 @@ func uploadAndSync(c *cli.Context) error {
 		go func(endpoint string, ruid string) {
 			for {
 				start := time.Now()
-				err := fetch(hash, endpoint, fhash, ruid)
+				err := fetch(hash, endpoint, fhash, ruid, tuid)
 				if err != nil {
 					continue
 				}
+				ended := time.Since(start)
 
-				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).UpdateSince(start)
+				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+				log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
 				wg.Done()
 				return
 			}
@@ -80,12 +86,14 @@ func uploadAndSync(c *cli.Context) error {
 			go func(endpoint string, ruid string) {
 				for {
 					start := time.Now()
-					err := fetch(hash, endpoint, fhash, ruid)
+					err := fetch(hash, endpoint, fhash, ruid, tuid)
 					if err != nil {
 						continue
 					}
+					ended := time.Since(start)
 
-					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).UpdateSince(start)
+					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).Update(ended)
+					log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
 					wg.Done()
 					return
 				}

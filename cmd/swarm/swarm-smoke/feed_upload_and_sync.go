@@ -256,7 +256,7 @@ func feedUploadAndSync(c *cli.Context) error {
 			ruid := uuid.New()[:8]
 			go func(url string, endpoint string, ruid string) {
 				for {
-					err := fetch(url, endpoint, fileHash, ruid)
+					err := fetch(url, endpoint, fileHash, ruid, "")
 					if err != nil {
 						continue
 					}
