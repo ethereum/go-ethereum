@@ -34,8 +34,8 @@ type (
 )
 
 type NetFetcher interface {
-	Request(ctx context.Context, hopCount uint8)
-	Offer(ctx context.Context, source *enode.ID)
+	Request(hopCount uint8)
+	Offer(source *enode.ID)
 }
 
 // NetStore is an extension of local storage
@@ -271,9 +271,9 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
 			return nil, err
 		}
-		f.netFetcher.Offer(rctx, &source)
+		f.netFetcher.Offer(&source)
 	} else {
-		f.netFetcher.Request(rctx, hopCount)
+		f.netFetcher.Request(hopCount)
 	}
 
 	// wait until either the chunk is delivered or the context is done
