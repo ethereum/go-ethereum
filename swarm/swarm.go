@@ -514,6 +514,11 @@ func (self *Swarm) APIs() []rpc.API {
 		apis = append(apis, self.ps.APIs()...)
 	}
 
+	if self.config.DebugAPI {
+		log.Info("Running node with debug APIs attached")
+		apis = append(apis, api.GetDebugAPIDesc(self.netStore))
+	}
+
 	return apis
 }
 

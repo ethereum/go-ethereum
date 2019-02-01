@@ -48,6 +48,10 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
+func (m *MemStore) HasChunk(_ context.Context, addr Address) bool {
+	return m.cache.Contains(addr)
+}
+
 func (m *MemStore) Get(_ context.Context, addr Address) (Chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound

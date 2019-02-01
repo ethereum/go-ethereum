@@ -60,6 +60,7 @@ type Config struct {
 	BzzKey               string
 	NodeID               string
 	NetworkID            uint64
+	DebugAPI             bool
 	SwapEnabled          bool
 	SyncEnabled          bool
 	SyncingSkipCheck     bool
@@ -90,6 +91,7 @@ func NewConfig() (c *Config) {
 		EnsAPIs:              nil,
 		EnsRoot:              ens.TestNetAddress,
 		NetworkID:            network.DefaultNetworkID,
+		DebugAPI:             false,
 		SwapEnabled:          false,
 		SyncEnabled:          true,
 		SyncingSkipCheck:     false,

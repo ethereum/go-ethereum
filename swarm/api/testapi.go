@@ -17,7 +17,11 @@
 package api
 
 import (
+	"context"
+
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 type Control struct {
@@ -31,4 +35,31 @@ func NewControl(api *API, hive *network.Hive) *Control {
 
 func (c *Control) Hive() string {
 	return c.hive.String()
+}
+
+type DebugAPI struct {
+	netStore *storage.NetStore
+}
+
+func NewDebugAPI(nstore *storage.NetStore) *DebugAPI {
+	return &DebugAPI{
+		netStore: nstore,
+	}
+}
+
+func (dapi *DebugAPI) String() string {
+	return "debugapi"
+}
+
+func (dapi *DebugAPI) HasChunk(chunkAddress storage.Address) bool {
+	return dapi.netStore.HasChunk(context.Background(), chunkAddress)
+}
+
+func GetDebugAPIDesc(nstore *storage.NetStore) rpc.API {
+	return rpc.API{
+		Namespace: "debugapi",
+		Version:   "1.0",
+		Service:   NewDebugAPI(nstore),
+		Public:    false,
+	}
 }

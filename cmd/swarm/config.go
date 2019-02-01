@@ -80,6 +80,7 @@ const (
 	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
 	SWARM_ENV_BOOTNODE_MODE           = "SWARM_BOOTNODE_MODE"
+	SWARM_ENV_DEBUG_API               = "SWARM_DEBUG_API"
 	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
 	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
 	GETH_ENV_DATADIR                  = "GETH_DATADIR"
@@ -262,6 +263,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(SwarmDebugAPIFlag.Name) {
+		currentConfig.DebugAPI = ctx.GlobalBool(SwarmDebugAPIFlag.Name)
+	}
+
 	return currentConfig
 
 }
@@ -373,6 +378,14 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_BOOTNODE_MODE, err)
 		}
 		currentConfig.BootnodeMode = bootnodeMode
+	}
+
+	if debugAPIenable := os.Getenv(SWARM_ENV_DEBUG_API); debugAPIenable != "" {
+		debug, err := strconv.ParseBool(debugAPIenable)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_DEBUG_API, err)
+		}
+		currentConfig.DebugAPI = debug
 	}
 
 	return currentConfig

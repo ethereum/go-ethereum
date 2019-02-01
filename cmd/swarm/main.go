@@ -194,6 +194,8 @@ func init() {
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
+		// provide debug API endpoints
+		SwarmDebugAPIFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
