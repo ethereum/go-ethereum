@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -1209,26 +1207,18 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+			addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
 			if err != nil {
 				return nil, nil, err
 			}
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
+
 			// configure so that sync registrations actually happen
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval:       RetrievalEnabled,
 				Syncing:         SyncingAutoSubscribe, //enable sync registrations
 				SyncUpdateDelay: syncUpdateDelay,
 			}, nil)
+
 			// get the SubscribeMsg code
 			subscribeMsgCode, ok = r.GetSpec().GetCode(SubscribeMsg{})
 			if !ok {
@@ -1236,13 +1226,11 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			}
 
 			cleanup = func() {
-				os.RemoveAll(datadir)
-				netStore.Close()
 				r.Close()
+				clean()
 			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()
@@ -1322,9 +1310,9 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 				t.Fatal(err)
 			}
 			//length of the subscriptions can not be smaller than number of peers
-			log.Debug("node subscriptions:", "node", node.String())
+			log.Debug("node subscriptions", "node", node.String())
 			for p, ps := range pstreams {
-				log.Debug("... with: ", "peer", p)
+				log.Debug("... with", "peer", p)
 				for _, s := range ps {
 					log.Debug(".......", "stream", s)
 					// each node also has subscriptions to RETRIEVE_REQUEST streams,

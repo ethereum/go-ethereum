@@ -107,42 +107,27 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 }
 
 var simServiceMap = map[string]simulation.ServiceFunc{
-	"streamer": streamerFunc,
-}
+	"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+		addr, netStore, delivery, clean, err := newNetStoreAndDeliveryWithRequestFunc(ctx, bucket, dummyRequestFromPeers)
+		if err != nil {
+			return nil, nil, err
+		}
 
-func streamerFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-	n := ctx.Config.Node()
-	addr := network.NewAddr(n)
-	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
-	if err != nil {
-		return nil, nil, err
-	}
-	bucket.Store(bucketKeyStore, store)
-	localStore := store.(*storage.LocalStore)
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	delivery := NewDelivery(kad, netStore)
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
+		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			Retrieval:       RetrievalDisabled,
+			Syncing:         SyncingAutoSubscribe,
+			SyncUpdateDelay: 3 * time.Second,
+		}, nil)
 
-	r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-		Retrieval:       RetrievalDisabled,
-		Syncing:         SyncingAutoSubscribe,
-		SyncUpdateDelay: 3 * time.Second,
-	}, nil)
+		bucket.Store(bucketKeyRegistry, r)
 
-	bucket.Store(bucketKeyRegistry, r)
+		cleanup = func() {
+			r.Close()
+			clean()
+		}
 
-	cleanup = func() {
-		os.RemoveAll(datadir)
-		netStore.Close()
-		r.Close()
-	}
-
-	return r, cleanup, nil
-
+		return r, cleanup, nil
+	},
 }
 
 func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
