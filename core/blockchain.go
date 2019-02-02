@@ -1143,7 +1143,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	switch {
 	// First block is pruned, insert as sidechain and reorg only if TD grows enough
 	case err == consensus.ErrPrunedAncestor:
-		return bc.insertSidechain(it)
+		return bc.insertSidechain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case err == consensus.ErrFutureBlock || (err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(it.first().ParentHash())):
@@ -1285,7 +1285,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-func (bc *BlockChain) insertSidechain(it *insertIterator) (int, []interface{}, []*types.Log, error) {
+func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (int, []interface{}, []*types.Log, error) {
 	var (
 		externTd *big.Int
 		current  = bc.CurrentBlock()
@@ -1294,7 +1294,7 @@ func (bc *BlockChain) insertSidechain(it *insertIterator) (int, []interface{}, [
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
 	// ones. Any other errors means that the block is invalid, and should not be written
 	// to disk.
-	block, err := it.current(), consensus.ErrPrunedAncestor
+	err := consensus.ErrPrunedAncestor
 	for ; block != nil && (err == consensus.ErrPrunedAncestor); block, err = it.next() {
 		// Check the canonical state root for that number
 		if number := block.NumberU64(); current.NumberU64() >= number {
