@@ -142,6 +142,8 @@ func init() {
 		dbCommand,
 		// See config.go
 		DumpConfigCommand,
+		// chunkExploreCommand
+		chunkExploreCommand,
 	}
 
 	// append a hidden help subcommand to all commands that have subcommands

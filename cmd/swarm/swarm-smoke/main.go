@@ -88,6 +88,12 @@ func main() {
 			Usage:       "http or https",
 			Destination: &scheme,
 		},
+		cli.StringFlag{
+			Name:        "addr",
+			Value:       "<hash>",
+			Usage:       "chunk address",
+			Destination: &addr,
+		},
 		cli.BoolFlag{
 			Name:        "include-localhost",
 			Usage:       "whether to include localhost:8500 as an endpoint",
@@ -159,6 +165,12 @@ func main() {
 			Aliases: []string{"s"},
 			Usage:   "measure network aggregate capacity",
 			Action:  wrapCliCommand("sliding-window", false, slidingWindow),
+		},
+		{
+			Name:    "chunk_explorer",
+			Aliases: []string{"x"},
+			Usage:   "query nodes if they are storing a specific chunk (by address)",
+			Action:  wrapCliCommand("chunkExplorer", false, chunkExplorer),
 		},
 	}
 
