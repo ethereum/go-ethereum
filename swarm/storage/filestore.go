@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"io"
+	"sort"
 )
 
 /*
@@ -98,8 +99,7 @@ func (f *FileStore) HashSize() int {
 }
 
 // Public API. This endpoint returns all chunk hashes (only) for a given file
-func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs []Address, err error) {
-	addrs = make([]Address, 0)
+func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
 	putter := &HashExplorer{
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
@@ -111,9 +111,12 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 		return nil, err
 	}
 	// collect all references
+	arr := make([]Address, 0)
 	for _, ref := range putter.References {
-		addrs = append(addrs, Address(ref))
+		arr = append(arr, Address(ref))
 	}
+	addrs = NewAddressCollection(len(arr))
+	sort.Sort(addrs)
 	return addrs, nil
 }
 
