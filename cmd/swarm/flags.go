@@ -176,8 +176,4 @@ var (
 		Name:  "user",
 		Usage: "Indicates the user who updates the feed",
 	}
-	SwarmDebugAPIFlag = cli.BoolFlag{
-		Name:  "debug-api",
-		Usage: "Make debug APIs available",
-	}
 )

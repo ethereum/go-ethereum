@@ -485,7 +485,7 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewControl(self.api, self.bzz.Hive),
+			Service:   api.NewInspector(self.api, self.bzz.Hive, self.netStore),
 			Public:    false,
 		},
 		{
@@ -512,12 +512,6 @@ func (self *Swarm) APIs() []rpc.API {
 
 	if self.ps != nil {
 		apis = append(apis, self.ps.APIs()...)
-	}
-
-	// Only provide certain endpoints if the `debug-api` flag is set
-	if self.config.DebugAPI {
-		log.Info("Running node with debug APIs attached")
-		apis = append(apis, api.GetDebugAPIDesc(self.netStore))
 	}
 
 	return apis

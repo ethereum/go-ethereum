@@ -194,8 +194,6 @@ func init() {
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
-		// provide debug API endpoints
-		SwarmDebugAPIFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -451,5 +449,5 @@ func setSwarmBootstrapNodes(ctx *cli.Context, cfg *node.Config) {
 		}
 		cfg.P2P.BootstrapNodes = append(cfg.P2P.BootstrapNodes, node)
 	}
-	log.Debug("added default swarm bootnodes", "length", len(cfg.P2P.BootstrapNodes))
+
 }
