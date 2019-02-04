@@ -36,6 +36,13 @@ func (e *subscriptionNotFoundError) Error() string {
 	return fmt.Sprintf("no %q subscription in %s namespace", e.subscription, e.namespace)
 }
 
+// Invalid JSON was received by the server.
+type parseError struct{ message string }
+
+func (e *parseError) ErrorCode() int { return -32700 }
+
+func (e *parseError) Error() string { return e.message }
+
 // received message isn't a valid request
 type invalidRequestError struct{ message string }
 

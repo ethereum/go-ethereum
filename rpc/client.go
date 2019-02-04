@@ -612,6 +612,9 @@ func (c *Client) drainRead() {
 func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.Read()
+		if _, ok := err.(*json.SyntaxError); ok {
+			codec.Write(context.Background(), errorMessage(&parseError{err.Error()}))
+		}
 		if err != nil {
 			c.readErr <- err
 			return
