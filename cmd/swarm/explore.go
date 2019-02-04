@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -28,15 +28,15 @@ import (
 )
 
 var chunkExploreCommand = cli.Command{
-	Action:             explore,
+	Action:             hashes,
 	CustomHelpTemplate: helpTemplate,
-	Name:               "explore",
+	Name:               "hashes",
 	Usage:              "print all hashes of a file to STDOUT",
 	ArgsUsage:          "<file>",
 	Description:        "Prints all hashes of a file to STDOUT",
 }
 
-func explore(ctx *cli.Context) {
+func hashes(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {
 		utils.Fatalf("Usage: swarm explore <file name>")
