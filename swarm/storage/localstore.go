@@ -132,11 +132,11 @@ func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 	return err
 }
 
-// HasChunk queries the underlying DbStore if a chunk with the given address
+// Has queries the underlying DbStore if a chunk with the given address
 // is being stored there.
 // Returns true if it is stored, false if not
-func (ls *LocalStore) HasChunk(ctx context.Context, addr Address) bool {
-	return ls.DbStore.HasChunk(ctx, addr)
+func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
+	return ls.DbStore.Has(ctx, addr)
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

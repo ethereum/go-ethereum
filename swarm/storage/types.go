@@ -292,7 +292,7 @@ func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
 type ChunkStore interface {
 	Put(ctx context.Context, ch Chunk) (err error)
 	Get(rctx context.Context, ref Address) (ch Chunk, err error)
-	HasChunk(rctx context.Context, ref Address) bool
+	Has(rctx context.Context, ref Address) bool
 	Close()
 }
 
@@ -315,8 +315,8 @@ func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
 	return nil
 }
 
-// HasChunk doesn't do anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) HasChunk(_ context.Context, ref Address) bool {
+// Has doesn't do anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Has(_ context.Context, ref Address) bool {
 	panic("FakeChunkStore doesn't support HasChunk")
 }
 

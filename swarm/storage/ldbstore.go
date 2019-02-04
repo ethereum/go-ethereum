@@ -969,14 +969,18 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 	return s.get(addr)
 }
 
-// HasChunk queries the underlying DB if a chunk with the given address is stored
+// Has queries the underlying DB if a chunk with the given address is stored
 // Returns true if the chunk is found, false if not
-func (s *LDBStore) HasChunk(_ context.Context, addr Address) bool {
+func (s *LDBStore) Has(_ context.Context, addr Address) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	proximity := s.po(addr)
-	_, found := s.tryAccessIdx(addr, proximity)
-	return found
+
+	ikey := getIndexKey(addr)
+	_, err := s.db.Get(ikey)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // TODO: To conform with other private methods of this object indices should not be updated
