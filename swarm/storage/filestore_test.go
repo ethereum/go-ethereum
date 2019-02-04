@@ -193,7 +193,7 @@ func TestGetAllReferences(t *testing.T) {
 	checkRefs := func(dataSize int, expectedLen int) {
 		slice := testutil.RandomBytes(1, dataSize)
 
-		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice))
+		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice), false)
 		if err != nil {
 			t.Fatal(err)
 		}
