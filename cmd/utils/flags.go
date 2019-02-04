@@ -28,10 +28,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ubiq/ubqhash"
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/accounts/keystore"
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/fdlimit"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/vm"
@@ -53,6 +53,7 @@ import (
 	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rpc"
 	whisper "github.com/ubiq/go-ubiq/whisper/whisperv2"
+	"github.com/ubiq/ubqhash"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -565,18 +566,15 @@ func MakeWSRpcHost(ctx *cli.Context) string {
 	return ctx.GlobalString(WSListenAddrFlag.Name)
 }
 
-// MakeDatabaseHandles raises out the number of allowed file handles per process
+// makeDatabaseHandles raises out the number of allowed file handles per process
 // for Gubiq and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles() int {
-	if err := raiseFdLimit(2048); err != nil {
-		Fatalf("Failed to raise file descriptor allowance: %v", err)
-	}
-	limit, err := getFdLimit()
+func makeDatabaseHandles() int {
+	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if limit > 2048 { // cap database file descriptors even if more is available
-		limit = 2048
+	if err := fdlimit.Raise(uint64(limit)); err != nil {
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
 	return limit / 2 // Leave half for networking and other stuff
 }
@@ -732,7 +730,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
-		DatabaseHandles:         MakeDatabaseHandles(),
+		DatabaseHandles:         makeDatabaseHandles(),
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
@@ -885,7 +883,7 @@ func ChainDbName(ctx *cli.Context) string {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name)
-		handles = MakeDatabaseHandles()
+		handles = makeDatabaseHandles()
 		name    = ChainDbName(ctx)
 	)
 
