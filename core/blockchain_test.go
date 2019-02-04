@@ -1483,3 +1483,51 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 
 	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
 }
+
+// Tests that importing a very large side fork, which is larger than the canon chain,
+// but where the difficulty per block is kept low: this means that it will not
+// overtake the 'canon' chain until after it's passed canon by about 200 blocks.
+func TestLargeOldSidechainWithALowTdChain(t *testing.T) {
+
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+
+	db := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+	// We must use a pretty long chain to ensure that the fork
+	// doesn't overtake us until after at least 128 blocks post tip
+	blocks, _ := generateChain(params.TestChainConfig, genesis, engine, db, 6*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) }, makeHeaderWithLargeDifficulty)
+
+	// Import the canonical chain
+	diskdb := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	for i := 0; i < len(blocks); i++ {
+		if _, err := chain.InsertChain(blocks[i : i+1]); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", i, err)
+		}
+	}
+	// Dereference all the recent tries and ensure no past trie is left in
+	for i := 0; i < triesInMemory; i++ {
+		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root())
+	}
+
+	// Generate fork chain, starting from an early block
+	parent := blocks[10]
+	fork, _ := generateChain(params.TestChainConfig, parent, engine, db, 256+6*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) }, makeHeaderWithSmallDifficulty)
+
+	// And now import the fork
+	if i, err := chain.InsertChain(fork); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", i, err)
+	}
+	head := chain.CurrentBlock()
+	if got := fork[len(fork)-1].Hash(); got != head.Hash() {
+		t.Fatalf("head wrong, expected %x got %x", head.Hash(), got)
+	}
+	td := chain.GetTd(head.Hash(), head.NumberU64())
+	fmt.Printf("td %v", td)
+}
