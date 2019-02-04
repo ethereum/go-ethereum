@@ -64,16 +64,11 @@ func (p *Putter) Put(ch storage.Chunk) (err error) {
 // with their nil values.
 func (db *DB) put(mode ModePut, item shed.Item) (err error) {
 	// protect parallel updates
-	if db.useGlobalLock {
-		db.globalMu.Lock()
-		defer db.globalMu.Unlock()
-	} else {
-		unlock, err := db.lockAddr(item.Address)
-		if err != nil {
-			return err
-		}
-		defer unlock()
+	unlock, err := db.lockAddr(item.Address)
+	if err != nil {
+		return err
 	}
+	defer unlock()
 
 	batch := new(leveldb.Batch)
 

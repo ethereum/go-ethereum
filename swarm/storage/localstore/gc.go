@@ -78,21 +78,14 @@ func (db *DB) collectGarbage() (collectedCount int64, done bool, err error) {
 	batch := new(leveldb.Batch)
 	target := db.gcTarget()
 
-	if db.useGlobalLock {
-		db.globalMu.Lock()
-		defer db.globalMu.Unlock()
-	}
-
 	done = true
 	err = db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		// protect parallel updates
-		if !db.useGlobalLock {
-			unlock, err := db.lockAddr(item.Address)
-			if err != nil {
-				return false, err
-			}
-			defer unlock()
+		unlock, err := db.lockAddr(item.Address)
+		if err != nil {
+			return false, err
 		}
+		defer unlock()
 
 		gcSize := db.getGCSize()
 		if gcSize-collectedCount <= target {
