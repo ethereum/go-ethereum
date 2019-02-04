@@ -111,11 +111,10 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 		return nil, err
 	}
 	// collect all references
-	arr := make([]Address, 0)
+	addrs = NewAddressCollection(0)
 	for _, ref := range putter.References {
-		arr = append(arr, Address(ref))
+		addrs = append(addrs, Address(ref))
 	}
-	addrs = NewAddressCollection(len(arr))
 	sort.Sort(addrs)
 	return addrs, nil
 }
