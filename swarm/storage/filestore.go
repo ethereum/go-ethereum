@@ -99,14 +99,15 @@ func (f *FileStore) HashSize() int {
 }
 
 // Public API. This endpoint returns all chunk hashes (only) for a given file
-func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
+func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader) (addrs []Address, err error) {
+	var addrs = make([]Address, 0)
 	// create a special kind of putter, which only will store the references
 	putter := &HashExplorer{
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, false),
 		References:  make([]Reference, 0),
 	}
 	// do the actual splitting anyway, no way around it
-	_, _, err = PyramidSplit(ctx, data, putter, putter)
+	_, _, err := PyramidSplit(ctx, data, putter, putter)
 	if err != nil {
 		return nil, err
 	}
