@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -120,7 +119,6 @@ func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peers 
 
 // NewFetcher creates a new Fetcher for the given chunk address using the given request function.
 func NewFetcher(ctx context.Context, addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
-	sctx, sp := spancontext.StartSpan(ctx, "fetcher")
 	return &Fetcher{
 		addr:             addr,
 		protoRequestFunc: rf,
@@ -128,9 +126,8 @@ func NewFetcher(ctx context.Context, addr storage.Address, rf RequestFunc, skipC
 		requestC:         make(chan uint8),
 		searchTimeout:    defaultSearchTimeout,
 		skipCheck:        skipCheck,
-		ctx:              sctx,
+		ctx:              ctx,
 		quitFunc: func() {
-			sp.Finish()
 		},
 	}
 }

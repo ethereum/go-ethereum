@@ -213,11 +213,12 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	ctx, osp = spancontext.StartSpan(
 		ctx,
 		"chunk.delivery")
-	defer osp.Finish()
 
 	processReceivedChunksCount.Inc(1)
 
 	go func() {
+		defer osp.Finish()
+
 		req.peer = sp
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
