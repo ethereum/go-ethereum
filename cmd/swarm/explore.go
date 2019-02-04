@@ -48,7 +48,7 @@ func explore(ctx *cli.Context) {
 	defer f.Close()
 
 	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams())
-	_, err = fileStore.StoreToExplore(context.TODO(), f)
+	_, err = fileStore.GetAllReferences(context.TODO(), f, false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {

@@ -29,28 +29,25 @@ var (
 )
 
 func chunkExplorer(c *cli.Context) error {
-	fmt.Println("generate endpoints...")
-	//generateEndpoints(scheme, cluster, appName, from, to)
-	fmt.Println("done.")
+	log.Debug("generate endpoints...")
+	generateEndpoints(scheme, cluster, appName, from, to)
+	log.Debug("done.")
 
 	var has bool
-	//for _, e := range endpoints {
-	e := "ws://localhost"
-	fmt.Println("dialing...." + e + ":8546")
-	client, _ := rpc.Dial(e + ":8546")
-	fmt.Println("Trying...." + e)
-	if err := client.Call(&has, "debugapi_hasChunk", addr); err != nil {
-		fmt.Println("err")
-		log.Error("Error requesting hasChunk from endpoint", "endpoint", e, "chunkAddress", addr, "err", err)
-	} else {
-		if has {
-			fmt.Println("has")
-			log.Info("Endpoint "+e+" reports to HAVE chunk", "chunk", addr)
+	for _, e := range endpoints {
+		e = e + ":8546"
+		log.Debug("dialing...." + e)
+		client, _ := rpc.Dial(e)
+		log.Debug("Trying...." + e)
+		if err := client.Call(&has, "debugapi_hasChunk", addr); err != nil {
+			log.Error("Error requesting hasChunk from endpoint", "endpoint", e, "chunkAddress", addr, "err", err)
 		} else {
-			fmt.Println("not")
-			log.Debug("Endpoint "+e+" reports to NOT have chunk", "chunk", addr)
+			if has {
+				log.Info("Endpoint "+e+" reports to HAVE chunk", "chunk", addr)
+			} else {
+				log.Info("Endpoint "+e+" reports to NOT have chunk", "chunk", addr)
+			}
 		}
 	}
-	//}
 	return nil
 }
