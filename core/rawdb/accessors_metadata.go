@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,19 +25,21 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const NoVersion = uint64(0)
+
 // ReadDatabaseVersion retrieves the version number of the database.
-func ReadDatabaseVersion(db DatabaseReader) *uint64 {
+func ReadDatabaseVersion(db DatabaseReader) uint64 {
 	var version uint64
 
 	enc, _ := db.Get(databaseVerisionKey)
 	if len(enc) == 0 {
-		return nil
+		return NoVersion
 	}
 	if err := rlp.DecodeBytes(enc, &version); err != nil {
-		return nil
+		return NoVersion
 	}
 
-	return &version
+	return version
 }
 
 // WriteDatabaseVersion stores the version number of the database
