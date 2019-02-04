@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -43,10 +44,20 @@ var (
 	commandName = ""
 )
 
+func httpEndpoint(host string) string {
+	return fmt.Sprintf("http://%s:%d", host, httpPort)
+}
+
+func wsEndpoint(host string) string {
+	return fmt.Sprintf("ws://%s:%d", host, wsPort)
+}
+
 func wrapCliCommand(name string, killOnTimeout bool, command func(*cli.Context) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
+
+		hosts = strings.Split(allhosts, ",")
 
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
@@ -82,37 +93,6 @@ func wrapCliCommand(name string, killOnTimeout bool, command func(*cli.Context) 
 			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", name), nil).Inc(1)
 			return fmt.Errorf("timeout after %v sec", timeout)
 		}
-	}
-}
-
-func generateEndpoints(scheme string, cluster string, app string, from int, to int) {
-	if cluster == "prod" {
-		for port := from; port < to; port++ {
-			endpoints = append(endpoints, fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, port))
-		}
-	} else if cluster == "private-internal" {
-		for port := from; port < to; port++ {
-			endpoints = append(endpoints, fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, port))
-		}
-	} else {
-		for port := from; port < to; port++ {
-			endpoints = append(endpoints, fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, port, cluster))
-		}
-	}
-
-	if includeLocalhost {
-		endpoints = append(endpoints, "http://localhost:8500")
-	}
-}
-
-//just use the first endpoint
-func generateEndpoint(scheme string, cluster string, app string, from int) string {
-	if cluster == "prod" {
-		return fmt.Sprintf("%s://%v.swarm-gateways.net", scheme, from)
-	} else if cluster == "private-internal" {
-		return fmt.Sprintf("%s://swarm-private-internal-%v:8500", scheme, from)
-	} else {
-		return fmt.Sprintf("%s://%s-%v-%s.stg.swarm-gateways.net", scheme, app, from, cluster)
 	}
 }
 

@@ -43,9 +43,8 @@ type uploadResult struct {
 }
 
 func slidingWindow(c *cli.Context) error {
-	generateEndpoints(scheme, cluster, appName, from, to)
 	hashes := []uploadResult{} //swarm hashes of the uploads
-	nodes := to - from
+	nodes := len(hosts)
 	const iterationTimeout = 30 * time.Second
 	log.Info("sliding window test started", "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
 	uploadedBytes := 0
@@ -54,13 +53,13 @@ func slidingWindow(c *cli.Context) error {
 
 outer:
 	for {
-		log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
+		log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 		h := md5.New()
 		r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 		t1 := time.Now()
 
-		hash, err := upload(r, filesize*1000, endpoints[0])
+		hash, err := upload(r, filesize*1000, httpEndpoint(hosts[0]))
 		if err != nil {
 			log.Error(err.Error())
 			return err
@@ -88,10 +87,10 @@ outer:
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
 					break inner
 				default:
-					randIndex := 1 + rand.Intn(len(endpoints)-1)
+					idx := 1 + rand.Intn(len(hosts)-1)
 					ruid := uuid.New()[:8]
 					start := time.Now()
-					err := fetch(v.hash, endpoints[randIndex], v.digest, ruid)
+					err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid)
 					if err != nil {
 						continue inner
 					}

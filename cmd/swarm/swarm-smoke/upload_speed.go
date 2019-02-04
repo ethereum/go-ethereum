@@ -30,15 +30,18 @@ import (
 )
 
 func uploadSpeed(c *cli.Context) error {
-	endpoint := generateEndpoint(scheme, cluster, appName, from)
+	if len(hosts) < 2 {
+		log.Crit("less than 2 hosts")
+	}
+
 	seed := int(time.Now().UnixNano() / 1e6)
-	log.Info("uploading to "+endpoint, "seed", seed)
+	log.Info("uploading to "+hosts[0], "seed", seed)
 
 	h := md5.New()
 	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
 	t1 := time.Now()
-	hash, err := upload(r, filesize*1000, endpoint)
+	hash, err := upload(r, filesize*1000, hosts[0])
 	if err != nil {
 		log.Error(err.Error())
 		return err

@@ -33,16 +33,15 @@ import (
 )
 
 func uploadAndSync(c *cli.Context) error {
-	generateEndpoints(scheme, cluster, appName, from, to)
 	seed := int(time.Now().UnixNano() / 1e6)
 
-	log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
+	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 	h := md5.New()
 	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
 	t1 := time.Now()
-	hash, err := upload(r, filesize*1000, endpoints[0])
+	hash, err := upload(r, filesize*1000, httpEndpoint(hosts[0]))
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -58,7 +57,7 @@ func uploadAndSync(c *cli.Context) error {
 	wg := sync.WaitGroup{}
 	if single {
 		rand.Seed(time.Now().UTC().UnixNano())
-		randIndex := 1 + rand.Intn(len(endpoints)-1)
+		randIndex := 1 + rand.Intn(len(hosts)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
@@ -73,9 +72,9 @@ func uploadAndSync(c *cli.Context) error {
 				wg.Done()
 				return
 			}
-		}(endpoints[randIndex], ruid)
+		}(httpEndpoint(hosts[randIndex]), ruid)
 	} else {
-		for _, endpoint := range endpoints[1:] {
+		for _, endpoint := range hosts[1:] {
 			ruid := uuid.New()[:8]
 			wg.Add(1)
 			go func(endpoint string, ruid string) {
@@ -90,11 +89,11 @@ func uploadAndSync(c *cli.Context) error {
 					wg.Done()
 					return
 				}
-			}(endpoint, ruid)
+			}(httpEndpoint(endpoint), ruid)
 		}
 	}
 	wg.Wait()
-	log.Info("all endpoints synced random file successfully")
+	log.Info("all hosts synced random file successfully")
 
 	return nil
 }

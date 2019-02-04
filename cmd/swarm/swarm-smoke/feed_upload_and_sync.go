@@ -29,9 +29,7 @@ const (
 func feedUploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
 
-	generateEndpoints(scheme, cluster, appName, from, to)
-
-	log.Info("generating and uploading feeds to " + endpoints[0] + " and syncing")
+	log.Info("generating and uploading feeds to " + httpEndpoint(hosts[0]) + " and syncing")
 
 	// create a random private key to sign updates with and derive the address
 	pkFile, err := ioutil.TempFile("", "swarm-feed-smoke-test")
@@ -85,7 +83,7 @@ func feedUploadAndSync(c *cli.Context) error {
 
 	// create feed manifest, topic only
 	var out bytes.Buffer
-	cmd := exec.Command("swarm", "--bzzapi", endpoints[0], "feed", "create", "--topic", topicHex, "--user", userHex)
+	cmd := exec.Command("swarm", "--bzzapi", httpEndpoint(hosts[0]), "feed", "create", "--topic", topicHex, "--user", userHex)
 	cmd.Stdout = &out
 	log.Debug("create feed manifest topic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -100,7 +98,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// create feed manifest, subtopic only
-	cmd = exec.Command("swarm", "--bzzapi", endpoints[0], "feed", "create", "--name", subTopicHex, "--user", userHex)
+	cmd = exec.Command("swarm", "--bzzapi", httpEndpoint(hosts[0]), "feed", "create", "--name", subTopicHex, "--user", userHex)
 	cmd.Stdout = &out
 	log.Debug("create feed manifest subtopic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -115,7 +113,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// create feed manifest, merged topic
-	cmd = exec.Command("swarm", "--bzzapi", endpoints[0], "feed", "create", "--topic", topicHex, "--name", subTopicHex, "--user", userHex)
+	cmd = exec.Command("swarm", "--bzzapi", httpEndpoint(hosts[0]), "feed", "create", "--topic", topicHex, "--name", subTopicHex, "--user", userHex)
 	cmd.Stdout = &out
 	log.Debug("create feed manifest mergetopic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -141,7 +139,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	dataHex := hexutil.Encode(data)
 
 	// update with topic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--topic", topicHex, dataHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--topic", topicHex, dataHex)
 	cmd.Stdout = &out
 	log.Debug("update feed manifest topic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -152,7 +150,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// update with subtopic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--name", subTopicHex, dataHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--name", subTopicHex, dataHex)
 	cmd.Stdout = &out
 	log.Debug("update feed manifest subtopic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -163,7 +161,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// update with merged topic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--topic", topicHex, "--name", subTopicHex, dataHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--topic", topicHex, "--name", subTopicHex, dataHex)
 	cmd.Stdout = &out
 	log.Debug("update feed manifest merged topic cmd", "cmd", cmd)
 	err = cmd.Run()
@@ -177,14 +175,14 @@ func feedUploadAndSync(c *cli.Context) error {
 
 	// retrieve the data
 	wg := sync.WaitGroup{}
-	for _, endpoint := range endpoints {
+	for _, host := range hosts {
 		// raw retrieve, topic only
 		for _, hex := range []string{topicHex, subTopicOnlyHex, mergedSubTopicHex} {
 			wg.Add(1)
 			ruid := uuid.New()[:8]
 			go func(hex string, endpoint string, ruid string) {
 				for {
-					err := fetchFeed(hex, userHex, endpoint, dataHash, ruid)
+					err := fetchFeed(hex, userHex, httpEndpoint(host), dataHash, ruid)
 					if err != nil {
 						continue
 					}
@@ -192,8 +190,7 @@ func feedUploadAndSync(c *cli.Context) error {
 					wg.Done()
 					return
 				}
-			}(hex, endpoint, ruid)
-
+			}(hex, httpEndpoint(host), ruid)
 		}
 	}
 	wg.Wait()
@@ -201,12 +198,12 @@ func feedUploadAndSync(c *cli.Context) error {
 
 	// upload test file
 	seed := int(time.Now().UnixNano() / 1e6)
-	log.Info("feed uploading to "+endpoints[0]+" and syncing", "seed", seed)
+	log.Info("feed uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 	h = md5.New()
 	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 
-	hash, err := upload(r, filesize*1000, endpoints[0])
+	hash, err := upload(r, filesize*1000, httpEndpoint(hosts[0]))
 	if err != nil {
 		return err
 	}
@@ -220,7 +217,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fileHash))
 
 	// update file with topic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--topic", topicHex, multihashHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--topic", topicHex, multihashHex)
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
@@ -230,7 +227,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// update file with subtopic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--name", subTopicHex, multihashHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--name", subTopicHex, multihashHex)
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
@@ -240,7 +237,7 @@ func feedUploadAndSync(c *cli.Context) error {
 	out.Reset()
 
 	// update file with merged topic
-	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", endpoints[0], "feed", "update", "--topic", topicHex, "--name", subTopicHex, multihashHex)
+	cmd = exec.Command("swarm", "--bzzaccount", pkFile.Name(), "--bzzapi", httpEndpoint(hosts[0]), "feed", "update", "--topic", topicHex, "--name", subTopicHex, multihashHex)
 	cmd.Stdout = &out
 	err = cmd.Run()
 	if err != nil {
@@ -251,7 +248,7 @@ func feedUploadAndSync(c *cli.Context) error {
 
 	time.Sleep(3 * time.Second)
 
-	for _, endpoint := range endpoints {
+	for _, host := range hosts {
 
 		// manifest retrieve, topic only
 		for _, url := range []string{manifestWithTopic, manifestWithSubTopic, manifestWithMergedTopic} {
@@ -267,7 +264,7 @@ func feedUploadAndSync(c *cli.Context) error {
 					wg.Done()
 					return
 				}
-			}(url, endpoint, ruid)
+			}(url, httpEndpoint(host), ruid)
 		}
 
 	}
