@@ -24,8 +24,8 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/crypto/sha3"
 )
 
 // Account represents an Ethereum account located at a specific location defined
@@ -175,9 +175,20 @@ type Backend interface {
 //
 // This gives context to the signed message and prevents signing of transactions.
 func TextHash(data []byte) []byte {
-	hash := sha3.NewLegacyKeccak256()
-	fmt.Fprintf(hash, "\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return hash.Sum(nil)
+	hash, _ := TextAndHash(data)
+	return hash
+}
+
+// TextAndHash is a helper function that calculates a hash for the given message that can be
+// safely used to calculate a signature from.
+//
+// The hash is calulcated as
+//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+//
+// This gives context to the signed message and prevents signing of transactions.
+func TextAndHash(data []byte) ([]byte, string) {
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), string(data))
+	return crypto.Keccak256([]byte(msg)), msg
 }
 
 // WalletEventType represents the different event types that can be fired by
