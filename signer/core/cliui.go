@@ -169,7 +169,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 		fmt.Printf("%v\n", nvt.Pprint(1))
 	}
 	//fmt.Printf("message:  \n%v\n", request.Message)
-	fmt.Printf("raw data:  \n%v\n", request.Rawdata)
+	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

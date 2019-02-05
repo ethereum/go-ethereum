@@ -175,8 +175,6 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 // This method returns the mimetype for signing along with the request
 func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (*SignDataRequest, error) {
 	var req *SignDataRequest
-	req.Address = addr
-	req.Meta = MetadataFromContext(ctx)
 
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
@@ -201,7 +199,11 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
 	case ApplicationClique.Mime:
 		// Clique is the Ethereum PoA standard
-		cliqueData, err := hexutil.Decode(data.(string))
+		stringData, ok := data.(string)
+		if !ok {
+			return nil, fmt.Errorf("input for %v plain must be an hex-encoded string", ApplicationClique.Mime)
+		}
+		cliqueData, err := hexutil.Decode(stringData)
 		if err != nil {
 			return nil, err
 		}
@@ -226,11 +228,16 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
-		plainData, err := hexutil.Decode(data.(string))
-		if err != nil {
-			return nil, err
+		// We expect it to be a string
+		stringData, ok := data.(string)
+		if !ok {
+			return nil, fmt.Errorf("input for text/plain must be a string")
 		}
-		sighash, msg := accounts.TextAndHash(plainData)
+		//plainData, err := hexutil.Decode(stringdata)
+		//if err != nil {
+		//	return nil, err
+		//}
+		sighash, msg := accounts.TextAndHash([]byte(stringData))
 		message := []*NameValueType{
 			{
 				Name:  "message",
@@ -240,6 +247,8 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		}
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
 	}
+	req.Address = addr
+	req.Meta = MetadataFromContext(ctx)
 	return req, nil
 
 }
@@ -552,8 +561,10 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 
 // UnmarshalValidatorData converts the bytes input to typed data
 func UnmarshalValidatorData(data interface{}) (ValidatorData, error) {
-	raw := data.(map[string]interface{})
-
+	raw, ok := data.(map[string]interface{})
+	if !ok {
+		return ValidatorData{}, errors.New("validator input is not a map[string]interface{}")
+	}
 	addr, ok := raw["address"].(string)
 	if !ok {
 		return ValidatorData{}, errors.New("validator address is not sent as a string")
