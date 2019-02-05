@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"math/big"
 	"mime"
 	"regexp"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 type SigFormat struct {
@@ -47,19 +47,19 @@ type SigFormat struct {
 
 var (
 	TextValidator = SigFormat{
-		"text/validator",
+		accounts.MimetypeTextWithValidator,
 		0x00,
 	}
 	DataTyped = SigFormat{
-		"data/typed",
+		accounts.MimetypeTypedData,
 		0x01,
 	}
 	ApplicationClique = SigFormat{
-		"application/clique",
+		accounts.MimetypeClique,
 		0x02,
 	}
 	TextPlain = SigFormat{
-		"text/plain",
+		accounts.MimetypeTextPlain,
 		0x45,
 	}
 )
@@ -118,13 +118,11 @@ type TypedDataDomain struct {
 
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
-// Sign receives a request and produces a signature
+// sign receives a request and produces a signature
 
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
-func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, req *SignDataRequest) (hexutil.Bytes, error) {
-	req.Address = addr
-	req.Meta = MetadataFromContext(ctx)
+func (api *SignerAPI) sign(ctx context.Context, addr common.MixedcaseAddress, req *SignDataRequest) (hexutil.Bytes, error) {
 
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
@@ -142,7 +140,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, re
 		return nil, err
 	}
 	// Sign the data with the wallet
-	signature, err := wallet.SignHashWithPassphrase(account, res.Password, req.Hash)
+	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Hash)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +153,12 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, re
 //
 // Different types of validation occur.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
-	var req, err = api.determineSignatureFormat(contentType, addr, data)
+	var req, err = api.determineSignatureFormat(ctx, contentType, addr, data)
 	if err != nil {
 		return nil, err
 	}
 
-	signature, err := api.Sign(ctx, addr, req)
+	signature, err := api.sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
@@ -174,8 +172,12 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 // resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
 // charset, ok := params["charset"]
 // As it is now, we accept any charset and just treat it as 'raw'.
-func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.MixedcaseAddress, data interface{}) (*SignDataRequest, error) {
+// This method returns the mimetype for signing along with the request
+func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (*SignDataRequest, error) {
 	var req *SignDataRequest
+	req.Address = addr
+	req.Meta = MetadataFromContext(ctx)
+
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, err
@@ -234,7 +236,6 @@ func (api *SignerAPI) determineSignatureFormat(contentType string, addr common.M
 				Value: msg,
 			},
 		}
-
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: plainData, Message: message, Hash: sighash}
 	}
 	return req, nil
@@ -258,29 +259,30 @@ func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 // in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
 func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
-	hash := common.Hash{}
+	//hash := common.Hash{}
 	if len(header.Extra) < 65 {
-		return hash.Bytes(), fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+		return nil, fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
 	}
-	hasher := sha3.NewLegacyKeccak256()
-	rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra[:len(header.Extra)-65],
-		header.MixDigest,
-		header.Nonce,
-	})
-	hasher.Sum(hash[:0])
+	//hasher := sha3.NewLegacyKeccak256()
+	hash := clique.SealHash(header)
+	//rlp.Encode(hasher, []interface{}{
+	//	header.ParentHash,
+	//	header.UncleHash,
+	//	header.Coinbase,
+	//	header.Root,
+	//	header.TxHash,
+	//	header.ReceiptHash,
+	//	header.Bloom,
+	//	header.Difficulty,
+	//	header.Number,
+	//	header.GasLimit,
+	//	header.GasUsed,
+	//	header.Time,
+	//	header.Extra[:len(header.Extra)-65],
+	//	header.MixDigest,
+	//	header.Nonce,
+	//})
+	//hasher.Sum(hash[:0])
 	return hash.Bytes(), nil
 }
 
@@ -309,7 +311,7 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	sighash := crypto.Keccak256([]byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))))
 	message := typedData.Format()
 	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: typedData.Map(), Message: message, Hash: sighash}
-	signature, err := api.Sign(ctx, addr, req)
+	signature, err := api.sign(ctx, addr, req)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err

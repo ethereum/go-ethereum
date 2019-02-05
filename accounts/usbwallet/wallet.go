@@ -507,6 +507,13 @@ func (w *wallet) SignData(account accounts.Account, mimeType string, data []byte
 	return w.signHash(account, crypto.Keccak256(data))
 }
 
+// SignDataWithPassphrase implements accounts.Wallet, attempting to sign the given
+// data with the given account using passphrase as extra authentication.
+// Since USB wallets don't rely on passphrases, these are silently ignored.
+func (w *wallet) SignDataWithPassphrase(account accounts.Account, passphrase, mimeType string, data []byte) ([]byte, error) {
+	return w.SignData(account, mimeType, data)
+}
+
 func (w *wallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
 	return w.signHash(account, accounts.TextHash(text))
 }
