@@ -784,6 +784,11 @@ func (db *Database) uncache(hash common.Hash) {
 	}
 	delete(db.dirties, hash)
 	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+
+	// Move the flushed node into the clean cache to prevent insta-reloads
+	if db.cleans != nil {
+		db.cleans.Set(string(hash[:]), node.rlp())
+	}
 }
 
 // Size returns the current storage size of the memory cache in front of the
