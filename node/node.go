@@ -123,28 +123,7 @@ func New(conf *Config) (*Node, error) {
 
 // Close releases resources acquired in Node constructor New.
 func (n *Node) Close() error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	// Close account manager
-	var accmanErr error
-	if n.accman != nil {
-		accmanErr = n.accman.Close()
-		if accmanErr == nil {
-			n.accman = nil
-		}
-	}
-
-	// Remove the keystore if it was created ephemerally.
-	var keystoreErr error
-	if n.ephemeralKeystore != "" {
-		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
-	}
-
-	if accmanErr != nil {
-		return accmanErr
-	}
-	return keystoreErr
+	return n.accman.Close()
 }
 
 // Register injects a new service into the node's stack. The service created by
@@ -461,8 +440,17 @@ func (n *Node) Stop() error {
 	// unblock n.Wait
 	close(n.stop)
 
+	// Remove the keystore if it was created ephemerally.
+	var keystoreErr error
+	if n.ephemeralKeystore != "" {
+		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
+	}
+
 	if len(failure.Services) > 0 {
 		return failure
+	}
+	if keystoreErr != nil {
+		return keystoreErr
 	}
 	return nil
 }
