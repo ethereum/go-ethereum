@@ -70,7 +70,7 @@ func testHTTP(t *testing.T, put bool, args ...string) {
 	// wait until global store process is started as
 	// rpc.DialHTTP is actually not connecting
 	for i := 0; i < 1000; i++ {
-		_, err := http.DefaultClient.Get("http://" + addr)
+		_, err = http.DefaultClient.Get("http://" + addr)
 		if err == nil {
 			break
 		}
