@@ -568,8 +568,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 			// Retrieve the requested block body, stopping if enough was found
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-				if data := rawdb.ReadBodyRLP(pm.chainDb, hash, *number); len(data) != 0 {
+			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != rawdb.UnknownNumber {
+				if data := rawdb.ReadBodyRLP(pm.chainDb, hash, number); len(data) != 0 {
 					bodies = append(bodies, data)
 					bytes += len(data)
 				}
@@ -621,8 +621,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		for _, req := range req.Reqs {
 			// Retrieve the requested state entry, stopping if enough was found
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != nil {
-				if header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number); header != nil {
+			if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != rawdb.UnknownNumber {
+				if header := rawdb.ReadHeader(pm.chainDb, req.BHash, number); header != nil {
 					statedb, err := pm.blockchain.State()
 					if err != nil {
 						continue
@@ -690,8 +690,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// Retrieve the requested block's receipts, skipping if unknown to us
 			var results types.Receipts
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-				results = rawdb.ReadReceipts(pm.chainDb, hash, *number)
+			if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != rawdb.UnknownNumber {
+				results = rawdb.ReadReceipts(pm.chainDb, hash, number)
 			}
 			if results == nil {
 				if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
@@ -752,8 +752,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		for _, req := range req.Reqs {
 			// Retrieve the requested state entry, stopping if enough was found
-			if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != nil {
-				if header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number); header != nil {
+			if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != rawdb.UnknownNumber {
+				if header := rawdb.ReadHeader(pm.chainDb, req.BHash, number); header != nil {
 					statedb, err := pm.blockchain.State()
 					if err != nil {
 						continue
@@ -812,8 +812,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if statedb == nil || req.BHash != lastBHash {
 				statedb, root, lastBHash = nil, common.Hash{}, req.BHash
 
-				if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != nil {
-					if header := rawdb.ReadHeader(pm.chainDb, req.BHash, *number); header != nil {
+				if number := rawdb.ReadHeaderNumber(pm.chainDb, req.BHash); number != rawdb.UnknownNumber {
+					if header := rawdb.ReadHeader(pm.chainDb, req.BHash, number); header != nil {
 						statedb, _ = pm.blockchain.State()
 						root = header.Root
 					}

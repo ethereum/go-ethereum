@@ -110,14 +110,14 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 
 // GetBlockNumber retrieves the block number belonging to the given hash
 // from the cache or database
-func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
+func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
 		number := cached.(uint64)
-		return &number
+		return number
 	}
 	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
-	if number != nil {
-		hc.numberCache.Add(hash, *number)
+	if number != rawdb.UnknownNumber {
+		hc.numberCache.Add(hash, number)
 	}
 	return number
 }
@@ -381,10 +381,10 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 // database by hash, caching it if found.
 func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
 	number := hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	return hc.GetTd(hash, *number)
+	return hc.GetTd(hash, number)
 }
 
 // WriteTd stores a block's total difficulty into the database, also caching it
@@ -415,10 +415,10 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	number := hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	return hc.GetHeader(hash, *number)
+	return hc.GetHeader(hash, number)
 }
 
 // HasHeader checks if a block header is present in the database or not.

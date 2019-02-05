@@ -223,10 +223,10 @@ func (self *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.B
 		return body, nil
 	}
 	number := self.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil, errors.New("unknown block")
 	}
-	body, err := GetBody(ctx, self.odr, hash, *number)
+	body, err := GetBody(ctx, self.odr, hash, number)
 	if err != nil {
 		return nil, err
 	}
@@ -243,10 +243,10 @@ func (self *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.R
 		return cached.(rlp.RawValue), nil
 	}
 	number := self.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil, errors.New("unknown block")
 	}
-	body, err := GetBodyRLP(ctx, self.odr, hash, *number)
+	body, err := GetBodyRLP(ctx, self.odr, hash, number)
 	if err != nil {
 		return nil, err
 	}
@@ -282,10 +282,10 @@ func (self *LightChain) GetBlock(ctx context.Context, hash common.Hash, number u
 // caching it if found.
 func (self *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	number := self.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil, errors.New("unknown block")
 	}
-	return self.GetBlock(ctx, hash, *number)
+	return self.GetBlock(ctx, hash, number)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by

@@ -27,6 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// The block number is unknown.
+const UnknownNumber = ^uint64(0)
+
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db DatabaseReader, number uint64) common.Hash {
 	data, _ := db.Get(headerHashKey(number))
@@ -51,13 +54,13 @@ func DeleteCanonicalHash(db DatabaseDeleter, number uint64) {
 }
 
 // ReadHeaderNumber returns the header number assigned to a hash.
-func ReadHeaderNumber(db DatabaseReader, hash common.Hash) *uint64 {
+func ReadHeaderNumber(db DatabaseReader, hash common.Hash) uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
 	if len(data) != 8 {
-		return nil
+		return UnknownNumber
 	}
 	number := binary.BigEndian.Uint64(data)
-	return &number
+	return number
 }
 
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.

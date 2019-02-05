@@ -531,10 +531,10 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 		return body
 	}
 	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	body := rawdb.ReadBody(bc.db, hash, *number)
+	body := rawdb.ReadBody(bc.db, hash, number)
 	if body == nil {
 		return nil
 	}
@@ -551,10 +551,10 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 		return cached.(rlp.RawValue)
 	}
 	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	body := rawdb.ReadBodyRLP(bc.db, hash, *number)
+	body := rawdb.ReadBodyRLP(bc.db, hash, number)
 	if len(body) == 0 {
 		return nil
 	}
@@ -618,10 +618,10 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	return bc.GetBlock(hash, *number)
+	return bc.GetBlock(hash, number)
 }
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
@@ -640,10 +640,10 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 		return receipts.(types.Receipts)
 	}
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+	receipts := rawdb.ReadReceipts(bc.db, hash, number)
 	if receipts == nil {
 		return nil
 	}
@@ -655,17 +655,17 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 // [deprecated by eth/62]
 func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
 	number := bc.hc.GetBlockNumber(hash)
-	if number == nil {
+	if number == rawdb.UnknownNumber {
 		return nil
 	}
 	for i := 0; i < n; i++ {
-		block := bc.GetBlock(hash, *number)
+		block := bc.GetBlock(hash, number)
 		if block == nil {
 			break
 		}
 		blocks = append(blocks, block)
 		hash = block.ParentHash()
-		*number--
+		number--
 	}
 	return
 }
@@ -1408,10 +1408,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		collectLogs = func(hash common.Hash) {
 			// Coalesce logs and set 'Removed'.
 			number := bc.hc.GetBlockNumber(hash)
-			if number == nil {
+			if number == rawdb.UnknownNumber {
 				return
 			}
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+			receipts := rawdb.ReadReceipts(bc.db, hash, number)
 			for _, receipt := range receipts {
 				for _, log := range receipt.Logs {
 					del := *log

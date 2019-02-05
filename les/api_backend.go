@@ -88,15 +88,15 @@ func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*t
 }
 
 func (b *LesApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockReceipts(ctx, b.eth.odr, hash, *number)
+	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != rawdb.UnknownNumber {
+		return light.GetBlockReceipts(ctx, b.eth.odr, hash, number)
 	}
 	return nil, nil
 }
 
 func (b *LesApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != nil {
-		return light.GetBlockLogs(ctx, b.eth.odr, hash, *number)
+	if number := rawdb.ReadHeaderNumber(b.eth.chainDb, hash); number != rawdb.UnknownNumber {
+		return light.GetBlockLogs(ctx, b.eth.odr, hash, number)
 	}
 	return nil, nil
 }
