@@ -140,19 +140,25 @@ func main() {
 			Name:    "upload_and_sync",
 			Aliases: []string{"c"},
 			Usage:   "upload and sync",
-			Action:  cliUploadAndSync,
+			Action:  wrapCliCommand("upload-and-sync", true, uploadAndSync),
 		},
 		{
 			Name:    "feed_sync",
 			Aliases: []string{"f"},
 			Usage:   "feed update generate, upload and sync",
-			Action:  cliFeedUploadAndSync,
+			Action:  wrapCliCommand("feed-and-sync", true, feedUploadAndSync),
 		},
 		{
 			Name:    "upload_speed",
 			Aliases: []string{"u"},
 			Usage:   "measure upload speed",
-			Action:  cliUploadSpeed,
+			Action:  wrapCliCommand("upload-speed", true, uploadSpeed),
+		},
+		{
+			Name:    "sliding_window",
+			Aliases: []string{"s"},
+			Usage:   "measure network aggregate capacity",
+			Action:  wrapCliCommand("sliding-window", false, slidingWindow),
 		},
 	}
 

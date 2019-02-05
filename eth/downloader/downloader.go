@@ -415,7 +415,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
 		} else {
-			d.mux.Post(DoneEvent{})
+			latest := d.lightchain.CurrentHeader()
+			d.mux.Post(DoneEvent{latest})
 		}
 	}()
 	if p.version < 62 {
@@ -1369,7 +1370,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			}
 			// Otherwise split the chunk of headers into batches and process them
 			gotHeaders = true
-
 			for len(headers) > 0 {
 				// Terminate if something failed in between processing chunks
 				select {
@@ -1432,7 +1432,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				headers = headers[limit:]
 				origin += uint64(limit)
 			}
-
 			// Update the highest block number we know if a higher one is found.
 			d.syncStatsLock.Lock()
 			if d.syncStatsChainHeight < origin {

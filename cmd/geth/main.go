@@ -31,8 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
@@ -60,6 +62,7 @@ var (
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
+		utils.ExternalSignerFlag,
 		utils.NoUSBFlag,
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
@@ -87,6 +90,7 @@ var (
 		utils.ULCTrustedNodesFlag,
 		utils.ULCMinTrustedFractionFlag,
 		utils.SyncModeFlag,
+		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
 		utils.LightPeersFlag,
@@ -125,6 +129,7 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.TestnetFlag,
 		utils.RinkebyFlag,
+		utils.GoerliFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.ConstantinopleOverrideFlag,
@@ -289,13 +294,14 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-
-	passwords := utils.MakePasswordList(ctx)
-	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range unlocks {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, ks, trimmed, i, passwords)
+	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
+		ks := keystores[0].(*keystore.KeyStore)
+		passwords := utils.MakePasswordList(ctx)
+		unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+		for i, account := range unlocks {
+			if trimmed := strings.TrimSpace(account); trimmed != "" {
+				unlockAccount(ctx, ks, trimmed, i, passwords)
+			}
 		}
 	}
 	// Register wallet event handlers to open and auto-derive wallets
@@ -339,6 +345,32 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 	}()
+
+	// Spawn a standalone goroutine for status synchronization monitoring,
+	// close the node when synchronization is complete if user required.
+	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
+		go func() {
+			sub := stack.EventMux().Subscribe(downloader.DoneEvent{})
+			defer sub.Unsubscribe()
+			for {
+				event := <-sub.Chan()
+				if event == nil {
+					continue
+				}
+				done, ok := event.Data.(downloader.DoneEvent)
+				if !ok {
+					continue
+				}
+				if timestamp := time.Unix(done.Latest.Time.Int64(), 0); time.Since(timestamp) < 10*time.Minute {
+					log.Info("Synchronisation completed", "latestnum", done.Latest.Number, "latesthash", done.Latest.Hash(),
+						"age", common.PrettyAge(timestamp))
+					stack.Stop()
+				}
+
+			}
+		}()
+	}
+
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running

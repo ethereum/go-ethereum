@@ -26,16 +26,19 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	mockmem "github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -64,6 +67,80 @@ func init() {
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
+
+// newNetStoreAndDelivery is a default constructor for BzzAddr, NetStore and Delivery, used in Simulations
+func newNetStoreAndDelivery(ctx *adapters.ServiceContext, bucket *sync.Map) (*network.BzzAddr, *storage.NetStore, *Delivery, func(), error) {
+	addr := network.NewAddr(ctx.Config.Node())
+
+	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+
+	return addr, netStore, delivery, cleanup, nil
+}
+
+// newNetStoreAndDeliveryWithBzzAddr is a constructor for NetStore and Delivery, used in Simulations, accepting any BzzAddr
+func newNetStoreAndDeliveryWithBzzAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*storage.NetStore, *Delivery, func(), error) {
+	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+
+	return netStore, delivery, cleanup, nil
+}
+
+// newNetStoreAndDeliveryWithRequestFunc is a constructor for NetStore and Delivery, used in Simulations, accepting any NetStore.RequestFunc
+func newNetStoreAndDeliveryWithRequestFunc(ctx *adapters.ServiceContext, bucket *sync.Map, rf network.RequestFunc) (*network.BzzAddr, *storage.NetStore, *Delivery, func(), error) {
+	addr := network.NewAddr(ctx.Config.Node())
+
+	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	netStore.NewNetFetcherFunc = network.NewFetcherFactory(rf, true).New
+
+	return addr, netStore, delivery, cleanup, nil
+}
+
+func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*storage.NetStore, *Delivery, func(), error) {
+	n := ctx.Config.Node()
+
+	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+	if *useMockStore {
+		store, datadir, err = createMockStore(mockmem.NewGlobalStore(), n.ID(), addr)
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	localStore := store.(*storage.LocalStore)
+	netStore, err := storage.NewNetStore(localStore, nil)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	delivery := NewDelivery(kad, netStore)
+
+	bucket.Store(bucketKeyStore, store)
+	bucket.Store(bucketKeyDB, netStore)
+	bucket.Store(bucketKeyDelivery, delivery)
+	bucket.Store(bucketKeyFileStore, fileStore)
+
+	cleanup := func() {
+		netStore.Close()
+		os.RemoveAll(datadir)
+	}
+
+	return netStore, delivery, cleanup, nil
 }
 
 func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {

@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -62,26 +60,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	externalStreamMaxKeys := uint64(100)
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-			store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
+		"intervalsStreamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Service, func(), error) {
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
 			if err != nil {
 				return nil, nil, err
 			}
-			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				store.Close()
-				os.RemoveAll(datadir)
-			}
-			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewNetStore(localStore, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				Retrieval: RetrievalDisabled,
@@ -97,11 +80,12 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
 			})
 
-			fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
-			bucket.Store(bucketKeyFileStore, fileStore)
+			cleanup := func() {
+				r.Close()
+				clean()
+			}
 
 			return r, cleanup, nil
-
 		},
 	})
 	defer sim.Close()

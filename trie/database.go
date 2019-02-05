@@ -679,6 +679,7 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
+				db.lock.RUnlock()
 				return err
 			}
 			batch.Reset()

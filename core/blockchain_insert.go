@@ -111,14 +111,6 @@ func (it *insertIterator) next() (*types.Block, error) {
 	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
 }
 
-// current returns the current block that's being processed.
-func (it *insertIterator) current() *types.Block {
-	if it.index < 0 || it.index+1 >= len(it.chain) {
-		return nil
-	}
-	return it.chain[it.index]
-}
-
 // previous returns the previous block was being processed, or nil
 func (it *insertIterator) previous() *types.Block {
 	if it.index < 1 {

@@ -52,12 +52,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// ExternalAPIVersion -- see extapi_changelog.md
-const ExternalAPIVersion = "5.0.0"
-
-// InternalAPIVersion -- see intapi_changelog.md
-const InternalAPIVersion = "3.1.0"
-
 const legalWarning = `
 WARNING! 
 
@@ -482,8 +476,8 @@ func signer(c *cli.Context) error {
 	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"extapi_version": ExternalAPIVersion,
-			"intapi_version": InternalAPIVersion,
+			"extapi_version": core.ExternalAPIVersion,
+			"intapi_version": core.InternalAPIVersion,
 			"extapi_http":    extapiURL,
 			"extapi_ipc":     ipcapiURL,
 		},
