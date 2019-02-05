@@ -932,6 +932,7 @@ func TestPeerCapabilityMismatch(t *testing.T) {
 		Payload: &whisper.Envelope{},
 	}
 	ps := newTestPss(privkey, kad, nil)
+	defer ps.Stop()
 
 	// run the forward
 	// it is enough that it completes; trying to send to incapable peers would create segfault
