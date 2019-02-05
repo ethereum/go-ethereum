@@ -36,8 +36,14 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
-const numberOfAccountsToDerive = 10
+const (
+	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
+	numberOfAccountsToDerive = 10
+	// ExternalAPIVersion -- see extapi_changelog.md
+	ExternalAPIVersion = "4.0.0"
+	// InternalAPIVersion -- see intapi_changelog.md
+	InternalAPIVersion = "3.0.0"
+)
 
 // ExternalAPI defines the external API through which signing requests are made.
 type ExternalAPI interface {
@@ -55,6 +61,7 @@ type ExternalAPI interface {
 	// Should be moved to Internal API, in next phase when we have
 	// bi-directional communication
 	//Import(ctx context.Context, keyJSON json.RawMessage) (Account, error)
+	Version(ctx context.Context) (string, error)
 }
 
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI for the signer
@@ -539,7 +546,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 		return nil, err
 	}
 	// Assemble sign the data with the wallet
-	signature, err := wallet.SignHashWithPassphrase(account, res.Password, sighash)
+	signature, err := wallet.SignTextWithPassphrase(account, res.Password, data)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
@@ -609,4 +616,10 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 		return Account{}, err
 	}
 	return Account{Typ: "Account", URL: acc.URL, Address: acc.Address}, nil
+}
+
+// Returns the external api version. This method does not require user acceptance. Available methods are
+// available via enumeration anyway, and this info does not contain user-specific data
+func (api *SignerAPI) Version(ctx context.Context) (string, error) {
+	return ExternalAPIVersion, nil
 }

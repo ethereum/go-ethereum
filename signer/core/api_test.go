@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -135,7 +134,7 @@ func setup(t *testing.T) (*SignerAPI, chan string) {
 
 	db, err := NewAbiDBFromFile("../../cmd/clef/4byte.json")
 	if err != nil {
-		utils.Fatalf(err.Error())
+		t.Fatal(err.Error())
 	}
 	var (
 		ui  = &HeadlessUI{controller}
