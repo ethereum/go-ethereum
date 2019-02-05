@@ -142,10 +142,11 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 		close(errc)
 	}()
 	var err error
+	timeout := 10 * time.Second
 	select {
 	case err = <-errc:
-	case <-time.NewTimer(5 * time.Second).C:
-		err = fmt.Errorf("timed out after 5 seconds")
+	case <-time.NewTimer(timeout).C:
+		err = fmt.Errorf("timed out after %v", timeout)
 	}
 	return err
 }
