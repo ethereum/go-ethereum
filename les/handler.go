@@ -92,14 +92,14 @@ type txPool interface {
 type ProtocolManager struct {
 	lightSync   bool
 	txpool      txPool
-	txrelay     *LesTxRelay
+	txrelay     *TxRelay
 	networkId   uint64
 	chainConfig *params.ChainConfig
 	iConfig     *light.IndexerConfig
 	blockchain  BlockChain
 	chainDb     ethdb.Database
-	odr         *LesOdr
-	server      *LesServer
+	odr         *Odr
+	server      *Server
 	serverPool  *serverPool
 	clientPool  *freeClientPool
 	lesTopic    discv5.Topic
@@ -137,8 +137,8 @@ func NewProtocolManager(
 	blockchain BlockChain,
 	txpool txPool,
 	chainDb ethdb.Database,
-	odr *LesOdr,
-	txrelay *LesTxRelay,
+	odr *Odr,
+	txrelay *TxRelay,
 	serverPool *serverPool,
 	quitSync chan struct{},
 	wg *sync.WaitGroup,

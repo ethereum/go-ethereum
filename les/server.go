@@ -38,8 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type LesServer struct {
-	lesCommons
+type Server struct {
+	commons
 
 	fcManager    *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats  *requestCostStats
@@ -50,7 +50,7 @@ type LesServer struct {
 	onlyAnnounce bool
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewServer(eth *eth.Ethereum, config *eth.Config) (*Server, error) {
 	quitSync := make(chan struct{})
 	pm, err := NewProtocolManager(
 		eth.BlockChain().Config(),
@@ -78,8 +78,8 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		lesTopics[i] = lesTopic(eth.BlockChain().Genesis().Hash(), pv)
 	}
 
-	srv := &LesServer{
-		lesCommons: lesCommons{
+	srv := &Server{
+		commons: commons{
 			config:           config,
 			chainDb:          eth.ChainDb(),
 			iConfig:          light.DefaultServerIndexerConfig,
@@ -125,12 +125,12 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	return srv, nil
 }
 
-func (s *LesServer) Protocols() []p2p.Protocol {
+func (s *Server) Protocols() []p2p.Protocol {
 	return s.makeProtocols(ServerProtocolVersions)
 }
 
 // Start starts the LES server
-func (s *LesServer) Start(srvr *p2p.Server) {
+func (s *Server) Start(srvr *p2p.Server) {
 	s.protocolManager.Start(s.config.LightPeers)
 	if srvr.DiscV5 != nil {
 		for _, topic := range s.lesTopics {
@@ -148,12 +148,12 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.protocolManager.blockLoop()
 }
 
-func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
+func (s *Server) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
 	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
 // Stop stops the LES service
-func (s *LesServer) Stop() {
+func (s *Server) Stop() {
 	s.chtIndexer.Close()
 	// bloom trie indexer is closed by parent bloombits indexer
 	s.fcCostStats.store()

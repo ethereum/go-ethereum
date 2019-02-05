@@ -42,7 +42,7 @@ const (
 // and announced that block.
 type lightFetcher struct {
 	pm    *ProtocolManager
-	odr   *LesOdr
+	odr   *Odr
 	chain lightChain
 
 	lock            sync.Mutex // lock protects access to the fetcher's internal state variables except sent requests

@@ -46,10 +46,10 @@ import (
 )
 
 type LightEthereum struct {
-	lesCommons
+	commons
 
-	odr         *LesOdr
-	relay       *LesTxRelay
+	odr         *Odr
+	relay       *TxRelay
 	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan chan bool
@@ -65,7 +65,7 @@ type LightEthereum struct {
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer
 
-	ApiBackend *LesApiBackend
+	ApiBackend *ApiBackend
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -92,7 +92,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	quitSync := make(chan struct{})
 
 	leth := &LightEthereum{
-		lesCommons: lesCommons{
+		commons: commons{
 			chainDb: chainDb,
 			config:  config,
 			iConfig: light.DefaultClientIndexerConfig,
@@ -113,11 +113,11 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if leth.config.ULC != nil {
 		trustedNodes = leth.config.ULC.TrustedServers
 	}
-	leth.relay = NewLesTxRelay(peers, leth.reqDist)
+	leth.relay = NewTxRelay(peers, leth.reqDist)
 	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg, trustedNodes)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 
-	leth.odr = NewLesOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
+	leth.odr = NewOdr(chainDb, light.DefaultClientIndexerConfig, leth.retriever)
 	leth.chtIndexer = light.NewChtIndexer(chainDb, leth.odr, params.CHTFrequencyClient, params.HelperTrieConfirmations)
 	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, leth.odr, params.BloomBitsBlocksClient, params.BloomTrieFrequency)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
@@ -165,7 +165,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		log.Warn("Ultra light client is enabled", "trustedNodes", len(leth.protocolManager.ulc.trustedKeys), "minTrustedFraction", leth.protocolManager.ulc.minTrustedFraction)
 		leth.blockchain.DisableCheckFreq()
 	}
-	leth.ApiBackend = &LesApiBackend{leth, nil}
+	leth.ApiBackend = &ApiBackend{leth, nil}
 
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {

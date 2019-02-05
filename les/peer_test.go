@@ -237,8 +237,8 @@ func TestPeerHandshakeClientReturnErrorOnUselessPeer(t *testing.T) {
 	}
 }
 
-func generateLesServer() *LesServer {
-	s := &LesServer{
+func generateLesServer() *Server {
+	s := &Server{
 		defParams: &flowcontrol.ServerParams{
 			BufLimit:    uint64(300000000),
 			MinRecharge: uint64(50000),

@@ -146,7 +146,7 @@ func testRCL() RequestCostList {
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, potential notification
 // channels for different events and relative chain indexers array.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *LesOdr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) (*ProtocolManager, error) {
+func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *Odr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) (*ProtocolManager, error) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -181,7 +181,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		return nil, err
 	}
 	if !lightSync {
-		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
+		srv := &Server{commons: commons{protocolManager: pm}}
 		pm.server = srv
 
 		srv.defParams = &flowcontrol.ServerParams{
@@ -200,7 +200,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 // with the given number of blocks already known, potential notification
 // channels for different events and relative chain indexers array. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *LesOdr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) *ProtocolManager {
+func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), odr *Odr, peers *peerSet, db ethdb.Database, ulcConfig *eth.ULCConfig) *ProtocolManager {
 	pm, err := newTestProtocolManager(lightSync, blocks, generator, odr, peers, db, ulcConfig)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
@@ -377,7 +377,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers fun
 
 	dist := newRequestDistributor(lPeers, make(chan struct{}))
 	rm := newRetrieveManager(lPeers, dist, nil)
-	odr := NewLesOdr(ldb, light.TestClientIndexerConfig, rm)
+	odr := NewOdr(ldb, light.TestClientIndexerConfig, rm)
 
 	cIndexer, bIndexer, btIndexer := testIndexers(db, nil, light.TestServerIndexerConfig)
 	lcIndexer, lbIndexer, lbtIndexer := testIndexers(ldb, odr, light.TestClientIndexerConfig)

@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// lesCommons contains fields needed by both server and client.
-type lesCommons struct {
+// commons contains fields needed by both server and client.
+type commons struct {
 	config                       *eth.Config
 	iConfig                      *light.IndexerConfig
 	chainDb                      ethdb.Database
@@ -51,7 +51,7 @@ type NodeInfo struct {
 }
 
 // makeProtocols creates protocol descriptors for the given LES versions.
-func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
+func (c *commons) makeProtocols(versions []uint) []p2p.Protocol {
 	protos := make([]p2p.Protocol, len(versions))
 	for i, version := range versions {
 		version := version
@@ -75,7 +75,7 @@ func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
 }
 
 // nodeInfo retrieves some protocol metadata about the running host node.
-func (c *lesCommons) nodeInfo() interface{} {
+func (c *commons) nodeInfo() interface{} {
 	var cht params.TrustedCheckpoint
 	sections, _, _ := c.chtIndexer.Sections()
 	sections2, _, _ := c.bloomTrieIndexer.Sections()

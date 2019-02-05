@@ -221,7 +221,7 @@ func newLightPeer(t *testing.T, ulcConfig *eth.ULCConfig) pairPeer {
 	rm := newRetrieveManager(peers, dist, nil)
 	ldb := ethdb.NewMemDatabase()
 
-	odr := NewLesOdr(ldb, light.DefaultClientIndexerConfig, rm)
+	odr := NewOdr(ldb, light.DefaultClientIndexerConfig, rm)
 
 	pmLight := newTestProtocolManagerMust(t, true, 0, nil, odr, peers, ldb, ulcConfig)
 	peerPairLight := pairPeer{
