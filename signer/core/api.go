@@ -41,7 +41,7 @@ const (
 	// ExternalAPIVersion -- see extapi_changelog.md
 	ExternalAPIVersion = "5.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "3.1.0"
+	InternalAPIVersion = "3.2.0"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.

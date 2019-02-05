@@ -49,6 +49,16 @@ func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interf
 	return err
 }
 
+// notify sends a request over the stdio, and does not listen for a response
+func (ui *StdIOUI) notify(serviceMethod string, args interface{}) error {
+	ctx := context.Background()
+	err := ui.client.Notify(ctx, serviceMethod, args)
+	if err != nil {
+		log.Info("Error", "exc", err.Error())
+	}
+	return err
+}
+
 func (ui *StdIOUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 	var result SignTxResponse
 	err := ui.dispatch("ApproveTx", request, &result)
@@ -86,27 +96,27 @@ func (ui *StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResp
 }
 
 func (ui *StdIOUI) ShowError(message string) {
-	err := ui.dispatch("ShowError", &Message{message}, nil)
+	err := ui.notify("ShowError", &Message{message})
 	if err != nil {
 		log.Info("Error calling 'ShowError'", "exc", err.Error(), "msg", message)
 	}
 }
 
 func (ui *StdIOUI) ShowInfo(message string) {
-	err := ui.dispatch("ShowInfo", Message{message}, nil)
+	err := ui.notify("ShowInfo", Message{message})
 	if err != nil {
 		log.Info("Error calling 'ShowInfo'", "exc", err.Error(), "msg", message)
 	}
 }
 func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
-	err := ui.dispatch("OnApprovedTx", tx, nil)
+	err := ui.notify("OnApprovedTx", tx)
 	if err != nil {
 		log.Info("Error calling 'OnApprovedTx'", "exc", err.Error(), "tx", tx)
 	}
 }
 
 func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
-	err := ui.dispatch("OnSignerStartup", info, nil)
+	err := ui.notify("OnSignerStartup", info)
 	if err != nil {
 		log.Info("Error calling 'OnSignerStartup'", "exc", err.Error(), "info", info)
 	}
