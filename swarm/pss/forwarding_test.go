@@ -54,6 +54,7 @@ func TestForwardBasic(t *testing.T) {
 
 	kad := network.NewKademlia(base[:], network.NewKadParams())
 	ps := createPss(t, kad)
+	defer ps.Stop()
 	addPeers(kad, peerAddresses)
 
 	const firstNearest = depth * 2 // shallowest peer in the nearest neighbours' bin
