@@ -362,9 +362,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					return fmt.Errorf("error getting node string %s", err)
 				}
 				log.Info(nodeStr)
-				for _, a := range addrs {
-					log.Info(common.Bytes2Hex(a))
-				}
 				if !healthy.ConnectNN || healthy.CountKnowNN == 0 {
 					isHealthy = false
 					break
