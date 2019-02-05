@@ -637,8 +637,7 @@ function ApproveSignData(r){
 		return
 	}
 	message := "baz bazonk foo"
-	hash, _ := core.SignTextPlain([]byte(message))
-	raw := hexutil.Bytes(message)
+	hash, rawdata := accounts.TextAndHash([]byte(message))
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
 
 	fmt.Printf("address %v %v\n", addr.String(), addr.Original())
@@ -655,7 +654,7 @@ function ApproveSignData(r){
 		Message: nvt,
 		Hash:    hash,
 		Meta:    core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
-		Rawdata: raw,
+		Rawdata: []byte(rawdata),
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
