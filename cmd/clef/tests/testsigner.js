@@ -1,4 +1,9 @@
 // This file is a test-utility for testing clef-functionality
+//
+// Start clef with
+//
+// build/bin/clef --4bytedb=./cmd/clef/4byte.json --rpc
+//
 // Start geth with
 //
 // build/bin/geth --nodiscover --maxpeers 0 --signer http://localhost:8550 console --preload=cmd/clef/tests/testsigner.js
@@ -12,9 +17,12 @@
 function reload(){
 	loadScript("./cmd/clef/tests/testsigner.js");
 }
+
 function init(){
-    accts = eth.accounts
-    console.log("Got accounts ", accts);
+    if (typeof accts == 'undefined' || accts.length == 0){
+        accts = eth.accounts
+        console.log("Got accounts ", accts);
+    }
 }
 init()
 function testTx(){
@@ -30,17 +38,26 @@ function testSignText(){
         var r = eth.sign(a, "0x68656c6c6f20776f726c64"); //hello world
         console.log("signing response",  r)
     }
-
 }
-function test(){
-	try{
-		testTx()
-    }catch(err){
-		console.log(err)
-	}
-    try{
-        testSignText()
-    }catch(err){
-        console.log(err)
+function testClique(){
+    if( accts && accts.length > 0){
+        var a = accts[0]
+        var r = debug.testSignCliqueBlock(a, 0); // Sign genesis
+        console.log("signing response",  r)
     }
 }
+
+function test(){
+    var tests = [
+        testTx,
+        testSignText,
+        testSignClique,
+    ]
+    for( i in tests){
+        try{
+            tests[i]()
+        }catch(err){
+            console.log(err)
+        }
+    }
+ }
