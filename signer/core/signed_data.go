@@ -229,23 +229,23 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 		// We expect it to be a string
-		stringData, ok := data.(string)
-		if !ok {
-			return nil, fmt.Errorf("input for text/plain must be a string")
+		if stringData, ok := data.(string); !ok {
+			return nil, fmt.Errorf("input for text/plain must be an hex-encoded string")
+		} else {
+			if textData, err := hexutil.Decode(stringData); err != nil {
+				return nil, err
+			} else {
+				sighash, msg := accounts.TextAndHash(textData)
+				message := []*NameValueType{
+					{
+						Name:  "message",
+						Typ:   "text/plain",
+						Value: msg,
+					},
+				}
+				req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
+			}
 		}
-		//plainData, err := hexutil.Decode(stringdata)
-		//if err != nil {
-		//	return nil, err
-		//}
-		sighash, msg := accounts.TextAndHash([]byte(stringData))
-		message := []*NameValueType{
-			{
-				Name:  "message",
-				Typ:   "text/plain",
-				Value: msg,
-			},
-		}
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
 	}
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
@@ -722,7 +722,7 @@ func (nvt *NameValueType) Pprint(depth int) string {
 			output.WriteString(sublevel)
 		}
 	} else {
-		output.WriteString(fmt.Sprintf("%s\n", nvt.Value))
+		output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
 	}
 	return output.String()
 }

@@ -160,7 +160,15 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 }
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
-	return api.signHash(account, accounts.TextHash(text))
+	var res hexutil.Bytes
+	var signAddress = common.NewMixedcaseAddress(account.Address)
+	if err := api.client.Call(&res, "account_signData",
+		accounts.MimetypeTextPlain,
+		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
+		hexutil.Encode(text)); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
