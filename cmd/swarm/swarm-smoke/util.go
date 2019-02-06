@@ -43,12 +43,12 @@ import (
 )
 
 var (
-	commandName       = ""
-	seed        int64 = time.Now().UTC().UnixNano()
+	commandName = ""
+	seed        = int(time.Now().UTC().UnixNano())
 )
 
 func init() {
-	rand.Seed(seed)
+	rand.Seed(int64(seed))
 }
 
 func httpEndpoint(host string) string {
