@@ -19,9 +19,8 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"

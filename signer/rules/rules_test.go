@@ -624,7 +624,7 @@ func TestSignData(t *testing.T) {
 function ApproveSignData(r){
     if( r.address.toLowerCase() == "0x694267f14675d7e1b9494fd8d72fefe1755710fa")
     {
-        if(r.message.indexOf("bazonk") >= 0){
+        if(r.message[0].value.indexOf("bazonk") >= 0){
             return "Approve"
         }
         return "Reject"
@@ -636,18 +636,25 @@ function ApproveSignData(r){
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	message := []byte("baz bazonk foo")
-	hash, msg := core.SignHash(message)
-	raw := hexutil.Bytes(message)
+	message := "baz bazonk foo"
+	hash, rawdata := accounts.TextAndHash([]byte(message))
 	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
 
 	fmt.Printf("address %v %v\n", addr.String(), addr.Original())
+
+	nvt := []*core.NameValueType{
+		{
+			Name:  "message",
+			Typ:   "text/plain",
+			Value: message,
+		},
+	}
 	resp, err := r.ApproveSignData(&core.SignDataRequest{
 		Address: *addr,
-		Message: msg,
+		Message: nvt,
 		Hash:    hash,
 		Meta:    core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
-		Rawdata: raw,
+		Rawdata: []byte(rawdata),
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)

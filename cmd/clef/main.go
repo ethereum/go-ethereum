@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"os/signal"
 	"os/user"
@@ -39,9 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/rules"
@@ -623,10 +626,40 @@ func testExternalUI(api *core.SignerAPI) {
 	}
 	var err error
 
+	cliqueHeader := types.Header{
+		common.HexToHash("0000H45H"),
+		common.HexToHash("0000H45H"),
+		common.HexToAddress("0000H45H"),
+		common.HexToHash("0000H00H"),
+		common.HexToHash("0000H45H"),
+		common.HexToHash("0000H45H"),
+		types.Bloom{},
+		big.NewInt(1337),
+		big.NewInt(1337),
+		1338,
+		1338,
+		big.NewInt(1338),
+		[]byte("Extra data Extra data Extra data  Extra data  Extra data  Extra data  Extra data Extra data"),
+		common.HexToHash("0x0000H45H"),
+		types.BlockNonce{},
+	}
+	cliqueRlp, err := rlp.EncodeToBytes(cliqueHeader)
+	if err != nil {
+		utils.Fatalf("Should not error: %v", err)
+	}
+	addr, err := common.NewMixedcaseAddressFromString("0x0011223344556677889900112233445566778899")
+	if err != nil {
+		utils.Fatalf("Should not error: %v", err)
+	}
+	_, err = api.SignData(ctx, "application/clique", *addr, cliqueRlp)
+	checkErr("SignData", err)
+
 	_, err = api.SignTransaction(ctx, core.SendTxArgs{From: common.MixedcaseAddress{}}, nil)
 	checkErr("SignTransaction", err)
-	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
-	checkErr("Sign", err)
+	_, err = api.SignData(ctx, "text/plain", common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
+	checkErr("SignData", err)
+	//_, err = api.SignTypedData(ctx, common.MixedcaseAddress{}, core.TypedData{})
+	//checkErr("SignTypedData", err)
 	_, err = api.List(ctx)
 	checkErr("List", err)
 	_, err = api.New(ctx)
@@ -646,7 +679,6 @@ func testExternalUI(api *core.SignerAPI) {
 	} else {
 		log.Info("No errors")
 	}
-
 }
 
 // getPassPhrase retrieves the password associated with clef, either fetched

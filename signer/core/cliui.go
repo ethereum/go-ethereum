@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
 	"sync"
 
 	"github.com/davecgh/go-spew/spew"
@@ -165,8 +164,12 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %s\n", request.Address.String())
-	fmt.Printf("message:  \n%q\n", request.Message)
-	fmt.Printf("raw data: \n%v\n", request.Rawdata)
+	fmt.Printf("message:\n")
+	for _, nvt := range request.Message {
+		fmt.Printf("%v\n", nvt.Pprint(1))
+	}
+	//fmt.Printf("message:  \n%v\n", request.Message)
+	fmt.Printf("raw data:  \n%q\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

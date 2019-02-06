@@ -244,45 +244,6 @@ func TestNewAcc(t *testing.T) {
 	}
 }
 
-func TestSignData(t *testing.T) {
-	api, control := setup(t)
-	//Create two accounts
-	createAccount(control, api, t)
-	createAccount(control, api, t)
-	control <- "1"
-	list, err := api.List(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := common.NewMixedcaseAddress(list[0])
-
-	control <- "Y"
-	control <- "wrongpassword"
-	h, err := api.Sign(context.Background(), a, []byte("EHLO world"))
-	if h != nil {
-		t.Errorf("Expected nil-data, got %x", h)
-	}
-	if err != keystore.ErrDecrypt {
-		t.Errorf("Expected ErrLocked! %v", err)
-	}
-	control <- "No way"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
-	if h != nil {
-		t.Errorf("Expected nil-data, got %x", h)
-	}
-	if err != ErrRequestDenied {
-		t.Errorf("Expected ErrRequestDenied! %v", err)
-	}
-	control <- "Y"
-	control <- "a_long_password"
-	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if h == nil || len(h) != 65 {
-		t.Errorf("Expected 65 byte signature (got %d bytes)", len(h))
-	}
-}
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := hexutil.Uint64(21000)

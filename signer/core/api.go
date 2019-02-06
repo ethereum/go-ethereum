@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -40,9 +39,9 @@ const (
 	// numberOfAccountsToDerive For hardware wallets, the number of accounts to derive
 	numberOfAccountsToDerive = 10
 	// ExternalAPIVersion -- see extapi_changelog.md
-	ExternalAPIVersion = "4.0.0"
+	ExternalAPIVersion = "5.0.0"
 	// InternalAPIVersion -- see intapi_changelog.md
-	InternalAPIVersion = "3.0.0"
+	InternalAPIVersion = "3.1.0"
 )
 
 // ExternalAPI defines the external API through which signing requests are made.
@@ -53,8 +52,12 @@ type ExternalAPI interface {
 	New(ctx context.Context) (accounts.Account, error)
 	// SignTransaction request to sign the specified transaction
 	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
-	// Sign - request to sign the given data (plus prefix)
-	Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	// SignData - request to sign the given data (plus prefix)
+	SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error)
+	// SignTypedData - request to sign the given structured data (plus prefix)
+	SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error)
+	// EcRecover - recover public key from given message and signature
+	EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error)
 	// Export - request to export an account
 	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
 	// Import - request to import an account
@@ -177,11 +180,12 @@ type (
 		NewPassword string `json:"new_password"`
 	}
 	SignDataRequest struct {
-		Address common.MixedcaseAddress `json:"address"`
-		Rawdata hexutil.Bytes           `json:"raw_data"`
-		Message string                  `json:"message"`
-		Hash    hexutil.Bytes           `json:"hash"`
-		Meta    Metadata                `json:"meta"`
+		ContentType string                  `json:"content_type"`
+		Address     common.MixedcaseAddress `json:"address"`
+		Rawdata     []byte                  `json:"raw_data"`
+		Message     []*NameValueType        `json:"message"`
+		Hash        hexutil.Bytes           `json:"hash"`
+		Meta        Metadata                `json:"meta"`
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
@@ -515,56 +519,6 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	// ...and to the external caller
 	return &response, nil
 
-}
-
-// Sign calculates an Ethereum ECDSA signature for:
-// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
-//
-// The key used to calculate the signature is decrypted with the given password.
-//
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
-	sighash, msg := SignHash(data)
-	// We make the request prior to looking up if we actually have the account, to prevent
-	// account-enumeration via the API
-	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: MetadataFromContext(ctx)}
-	res, err := api.UI.ApproveSignData(req)
-
-	if err != nil {
-		return nil, err
-	}
-	if !res.Approved {
-		return nil, ErrRequestDenied
-	}
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr.Address()}
-	wallet, err := api.am.Find(account)
-	if err != nil {
-		return nil, err
-	}
-	// Assemble sign the data with the wallet
-	signature, err := wallet.SignTextWithPassphrase(account, res.Password, data)
-	if err != nil {
-		api.UI.ShowError(err.Error())
-		return nil, err
-	}
-	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-	return signature, nil
-}
-
-// SignHash is a helper function that calculates a hash for the given message that can be
-// safely used to calculate a signature from.
-//
-// The hash is calculated as
-//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
-//
-// This gives context to the signed message and prevents signing of transactions.
-func SignHash(data []byte) ([]byte, string) {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return crypto.Keccak256([]byte(msg)), msg
 }
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.

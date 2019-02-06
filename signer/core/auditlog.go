@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -63,11 +62,27 @@ func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	return res, e
 }
 
-func (l *AuditLogger) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
-	l.log.Info("Sign", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.String(), "data", common.Bytes2Hex(data))
-	b, e := l.api.Sign(ctx, addr, data)
-	l.log.Info("Sign", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+func (l *AuditLogger) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
+	l.log.Info("SignData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", data, "content-type", contentType)
+	b, e := l.api.SignData(ctx, contentType, addr, data)
+	l.log.Info("SignData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+	return b, e
+}
+
+func (l *AuditLogger) SignTypedData(ctx context.Context, addr common.MixedcaseAddress, data TypedData) (hexutil.Bytes, error) {
+	l.log.Info("SignTypedData", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", data)
+	b, e := l.api.SignTypedData(ctx, addr, data)
+	l.log.Info("SignTypedData", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+	return b, e
+}
+
+func (l *AuditLogger) EcRecover(ctx context.Context, data hexutil.Bytes, sig hexutil.Bytes) (common.Address, error) {
+	l.log.Info("EcRecover", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"data", common.Bytes2Hex(data), "sig", common.Bytes2Hex(sig))
+	b, e := l.api.EcRecover(ctx, data, sig)
+	l.log.Info("EcRecover", "type", "response", "address", b.String(), "error", e)
 	return b, e
 }
 
