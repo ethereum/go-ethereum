@@ -28,8 +28,7 @@ init()
 function testTx(){
     if( accts && accts.length > 0) {
         var a = accts[0]
-        var r = eth.signTransaction({from: a, to: a, value: 1, nonce: 1, gas: 1, gasPrice: 1})
-   		console.log("signing response", r)
+        eth.signTransaction({from: a, to: a, value: 1, nonce: 1, gas: 1, gasPrice: 1})
     }
 }
 function testSignText(){
@@ -54,7 +53,7 @@ function test(){
     var tests = [
         testTx,
         testSignText,
-        testSignClique,
+        testClique,
     ]
     for( i in tests){
         try{
