@@ -683,6 +683,24 @@ func NewPeerPotMap(neighbourhoodSize int, addrs [][]byte) map[string]*PeerPot {
 	return ppmap
 }
 
+// saturation returns the smallest po value in which the node has less than MinBinSize peers
+// if the iterator reaches neighbourhood radius, then the last bin + 1 is returned
+func (k *Kademlia) saturation() int {
+	prev := -1
+	radius := neighbourhoodRadiusForPot(k.conns, k.NeighbourhoodSize, k.base)
+	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
+		prev++
+		if po >= radius {
+			return false
+		}
+		return prev == po && size >= k.MinBinSize
+	})
+	if prev < 0 {
+		return 0
+	}
+	return prev
+}
+
 // getUnsaturatedBins returns an array of ints; each item in that array corresponds
 // to the bin which is unsaturated (number of connections < k.MinBinSize).
 // The bin is considered unsaturated only if there are actual peers in that PeerPot's bin (peersPerBin)
