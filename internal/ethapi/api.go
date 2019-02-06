@@ -1490,11 +1490,9 @@ func (api *PublicDebugAPI) TestSignCliqueBlock(ctx context.Context, address comm
 		return common.Address{}, fmt.Errorf("block #%d not found", number)
 	}
 	header := block.Header()
-	header.Extra = make([]byte, 65)
-	encoded, err := rlp.EncodeToBytes(header)
-	if err != nil {
-		return common.Address{}, err
-	}
+	header.Extra = make([]byte, 32+65)
+	encoded := clique.CliqueRLP(header)
+
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: address}
 	wallet, err := api.b.AccountManager().Find(account)

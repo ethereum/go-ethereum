@@ -140,7 +140,7 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, l
 		return nil, err
 	}
 	// Sign the data with the wallet
-	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Hash)
+	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Rawdata)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +213,13 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		header := &types.Header{}
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
 			return nil, useLegacyV, err
+		}
+		// The incoming clique header is already truncated, sent to us with a extradata already shortened
+		if len(header.Extra) < 65 {
+			// Need to add it back, to get a suitable length for hashing
+			newExtra := make([]byte, len(header.Extra)+65)
+			copy(newExtra, header.Extra)
+			header.Extra = newExtra
 		}
 		// Get back the rlp data, encoded by us
 		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)

@@ -44,6 +44,9 @@ function testClique(){
         var a = accts[0]
         var r = debug.testSignCliqueBlock(a, 0); // Sign genesis
         console.log("signing response",  r)
+        if( a != r){
+            throw new Error("Requested signing by "+a+ " but got sealer "+r)
+        }
     }
 }
 
