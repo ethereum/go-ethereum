@@ -863,11 +863,11 @@ func (srv *Server) listenLoop() {
 			}
 		}
 
-		var ip net.IP
+		var addr *net.TCPAddr
 		if tcp, ok := fd.RemoteAddr().(*net.TCPAddr); ok {
-			ip = tcp.IP
+			addr = tcp
 		}
-		fd = newMeteredConn(fd, true, ip)
+		fd = newMeteredConn(fd, true, addr)
 		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
@@ -921,7 +921,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
 	if conn, ok := c.fd.(*meteredConn); ok {
-		conn.handshakeDone(c.node.ID())
+		conn.handshakeDone(c.node)
 	}
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.posthandshake)
