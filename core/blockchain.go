@@ -98,6 +98,7 @@ type BlockChain struct {
 	db     ethdb.Database // Low level persistent database to store final content in
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
+	gcreal time.Time      // Real timer for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -171,6 +172,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:         engine,
 		vmConfig:       vmConfig,
 		badBlocks:      badBlocks,
+		gcreal:         time.Now(),
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
@@ -982,7 +984,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			chosen := current - triesInMemory
 
 			// If we exceeded out time allowance, flush an entire trie to disk
-			if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+			if bc.gcproc > bc.cacheConfig.TrieTimeLimit || time.Since(bc.gcreal) > bc.cacheConfig.TrieTimeLimit {
 				// If the header is missing (canonical chain behind), we're reorging a low
 				// diff sidechain. Suspend committing until this operation is completed.
 				header := bc.GetHeaderByNumber(chosen)
@@ -993,11 +995,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					// warn the user that the system is becoming unstable.
 					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					} else if bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+						log.Info("Flush triedb: ", "time", bc.gcproc, "> allowance", bc.cacheConfig.TrieTimeLimit)
+					} else {
+						log.Info("Flush triedb: ", "since", time.Since(bc.gcreal), "> allowance", bc.cacheConfig.TrieTimeLimit)
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
+					if time.Since(bc.gcreal) > bc.cacheConfig.TrieTimeLimit {
+						bc.gcreal = time.Now()
+					}
 				}
 			}
 			// Garbage collect anything below our required write retention
