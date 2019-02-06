@@ -192,6 +192,12 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	return &Node{rawStack}, nil
 }
 
+// Close terminates a running node along with all it's services, tearing internal
+// state doen too. It's not possible to restart a closed node.
+func (n *Node) Close() error {
+	return n.node.Close()
+}
+
 // Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
 	return n.node.Start()
