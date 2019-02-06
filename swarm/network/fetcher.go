@@ -53,7 +53,6 @@ type Fetcher struct {
 	searchTimeout    time.Duration
 	skipCheck        bool
 	ctx              context.Context
-	quitFunc         func()
 }
 
 type Request struct {
@@ -127,8 +126,6 @@ func NewFetcher(ctx context.Context, addr storage.Address, rf RequestFunc, skipC
 		searchTimeout:    defaultSearchTimeout,
 		skipCheck:        skipCheck,
 		ctx:              ctx,
-		quitFunc: func() {
-		},
 	}
 }
 
@@ -227,7 +224,6 @@ func (f *Fetcher) run(peers *sync.Map) {
 		case <-f.ctx.Done():
 			log.Trace("terminate fetcher", "request addr", f.addr)
 			// TODO: send cancellations to all peers left over in peers map (i.e., those we requested from)
-			f.quitFunc()
 			return
 		}
 
