@@ -18,12 +18,12 @@ package core
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -264,7 +264,11 @@ func (ui *CommandlineUI) ShowInfo(message string) {
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	fmt.Printf("Transaction signed:\n ")
-	spew.Dump(tx.Tx)
+	if jsn, err := json.MarshalIndent(tx.Tx, "  ", "  "); err != nil {
+		fmt.Printf("WARN: marshalling error %v\n", err)
+	} else {
+		fmt.Println(string(jsn))
+	}
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
