@@ -977,10 +977,8 @@ func (s *LDBStore) Has(_ context.Context, addr Address) bool {
 
 	ikey := getIndexKey(addr)
 	_, err := s.db.Get(ikey)
-	if err != nil {
-		return false
-	}
-	return true
+
+	return err != nil
 }
 
 // TODO: To conform with other private methods of this object indices should not be updated
