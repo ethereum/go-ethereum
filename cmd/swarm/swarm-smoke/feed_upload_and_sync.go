@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	crand "crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,7 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -25,10 +26,27 @@ const (
 	feedRandomDataLength = 8
 )
 
-// TODO: retrieve with manifest + extract repeating code
-func feedUploadAndSync(c *cli.Context) error {
-	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size (kb)", filesize) }(time.Now())
+func feedUploadAndSync(ctx *cli.Context, tuid string) error {
+	errc := make(chan error)
 
+	go func() {
+		errc <- fuas(ctx, tuid)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+func fuas(c *cli.Context, tuid string) error {
 	log.Info("generating and uploading feeds to " + httpEndpoint(hosts[0]) + " and syncing")
 
 	// create a random private key to sign updates with and derive the address
@@ -197,13 +215,11 @@ func feedUploadAndSync(c *cli.Context) error {
 	log.Info("all endpoints synced random data successfully")
 
 	// upload test file
-	seed := int(time.Now().UnixNano() / 1e6)
 	log.Info("feed uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
-	h = md5.New()
-	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	hash, err := upload(r, filesize*1000, httpEndpoint(hosts[0]))
+	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
 	if err != nil {
 		return err
 	}

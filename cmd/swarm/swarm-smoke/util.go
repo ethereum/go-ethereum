@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"os"
@@ -37,12 +38,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
-	commandName = ""
+	commandName       = ""
+	seed        int64 = time.Now().UTC().UnixNano()
 )
+
+func init() {
+	rand.Seed(seed)
+}
 
 func httpEndpoint(host string) string {
 	return fmt.Sprintf("http://%s:%d", host, httpPort)
@@ -52,47 +59,28 @@ func wsEndpoint(host string) string {
 	return fmt.Sprintf("ws://%s:%d", host, wsPort)
 }
 
-func wrapCliCommand(name string, killOnTimeout bool, command func(*cli.Context) error) func(*cli.Context) error {
+func wrapCliCommand(name string, command func(*cli.Context, string) error) func(*cli.Context) error {
 	return func(ctx *cli.Context) error {
 		log.PrintOrigins(true)
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(os.Stdout, log.TerminalFormat(false))))
+
+		// test uuid
+		tuid := uuid.New()[:8]
+
+		commandName = name
 
 		hosts = strings.Split(allhosts, ",")
 
 		defer func(now time.Time) {
 			totalTime := time.Since(now)
-			log.Info("total time", "time", totalTime, "kb", filesize)
+			log.Info("total time", "tuid", tuid, "time", totalTime, "kb", filesize)
 			metrics.GetOrRegisterResettingTimer(name+".total-time", nil).Update(totalTime)
 		}(time.Now())
 
-		log.Info("smoke test starting", "task", name, "timeout", timeout)
-		commandName = name
+		log.Info("smoke test starting", "tuid", tuid, "task", name, "timeout", timeout)
 		metrics.GetOrRegisterCounter(name, nil).Inc(1)
 
-		errc := make(chan error)
-		done := make(chan struct{})
-
-		if killOnTimeout {
-			go func() {
-				<-time.After(time.Duration(timeout) * time.Second)
-				close(done)
-			}()
-		}
-
-		go func() {
-			errc <- command(ctx)
-		}()
-
-		select {
-		case err := <-errc:
-			if err != nil {
-				metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", name), nil).Inc(1)
-			}
-			return err
-		case <-done:
-			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", name), nil).Inc(1)
-			return fmt.Errorf("timeout after %v sec", timeout)
-		}
+		return command(ctx, tuid)
 	}
 }
 
@@ -210,14 +198,14 @@ func fetch(hash string, endpoint string, original []byte, ruid string, tuid stri
 }
 
 // upload an arbitrary byte as a plaintext file  to `endpoint` using the api client
-func upload(r io.Reader, size int, endpoint string) (string, error) {
+func upload(data []byte, endpoint string) (string, error) {
 	swarm := client.NewClient(endpoint)
 	f := &client.File{
-		ReadCloser: ioutil.NopCloser(r),
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 		ManifestEntry: api.ManifestEntry{
 			ContentType: "text/plain",
 			Mode:        0660,
-			Size:        int64(size),
+			Size:        int64(len(data)),
 		},
 	}
 

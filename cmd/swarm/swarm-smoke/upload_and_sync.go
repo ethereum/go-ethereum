@@ -17,34 +17,49 @@
 package main
 
 import (
-	"crypto/md5"
-	crand "crypto/rand"
+	"bytes"
 	"fmt"
-	"io"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func uploadAndSync(c *cli.Context) error {
-	seed := int(time.Now().UnixNano() / 1e6)
+func uploadAndSync(ctx *cli.Context, tuid string) error {
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	// test uuid
-	tuid := uuid.New()[:8]
+	errc := make(chan error)
 
+	go func() {
+		errc <- uas(ctx, randomBytes, tuid)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		// trigger debug functionality on randomBytes
+
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+func uas(c *cli.Context, randomBytes []byte, tuid string) error {
 	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
 
-	h := md5.New()
-	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
-
 	t1 := time.Now()
-	hash, err := upload(r, filesize*1000, httpEndpoint(hosts[0]))
+	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -52,7 +67,11 @@ func uploadAndSync(c *cli.Context) error {
 	t2 := time.Since(t1)
 	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 
-	fhash := h.Sum(nil)
+	fhash, err := digest(bytes.NewReader(randomBytes))
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 
 	log.Info("uploaded successfully", "tuid", tuid, "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
@@ -60,7 +79,6 @@ func uploadAndSync(c *cli.Context) error {
 
 	wg := sync.WaitGroup{}
 	if single {
-		rand.Seed(time.Now().UTC().UnixNano())
 		randIndex := 1 + rand.Intn(len(hosts)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
