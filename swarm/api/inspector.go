@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -33,18 +33,18 @@ func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Ins
 	return &Inspector{api, hive, netStore}
 }
 
-// prints the kademlia table
+// Hive prints the kademlia table
 func (inspector *Inspector) Hive() string {
 	return inspector.hive.String()
 }
 
 type HasInfo struct {
 	Addr string `json:"address"`
-	Has  bool   `json: "has"`
+	Has  bool   `json:"has"`
 }
 
-// HasChunk returns an array of HasInfo structs,
-// the bool indicating if the underlying datastore has
+// Has checks whether each chunk address is present in the underlying datastore,
+// the bool in the returned structs indicates if the underlying datastore has
 // the chunk stored with the given address (true), or not (false)
 func (inspector *Inspector) Has(chunkAddresses []storage.Address) []HasInfo {
 	results := make([]HasInfo, 0)
