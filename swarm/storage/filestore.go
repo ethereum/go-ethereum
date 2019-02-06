@@ -75,7 +75,7 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 	}
 }
 
-// Public API. Main entry point for document retrieval directly. Used by the
+// Retrieve is a public API. Main entry point for document retrieval directly. Used by the
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
@@ -87,7 +87,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	return
 }
 
-// Public API. Main entry point for document storage directly. Used by the
+// Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
@@ -98,7 +98,7 @@ func (f *FileStore) HashSize() int {
 	return f.hashFunc().Size()
 }
 
-// Public API. This endpoint returns all chunk hashes (only) for a given file
+// GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
 	putter := &HashExplorer{

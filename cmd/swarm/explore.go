@@ -27,7 +27,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var chunkExploreCommand = cli.Command{
+var hashesCommand = cli.Command{
 	Action:             hashes,
 	CustomHelpTemplate: helpTemplate,
 	Name:               "hashes",
@@ -39,7 +39,7 @@ var chunkExploreCommand = cli.Command{
 func hashes(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 1 {
-		utils.Fatalf("Usage: swarm explore <file name>")
+		utils.Fatalf("Usage: swarm hashes <file name>")
 	}
 	f, err := os.Open(args[0])
 	if err != nil {
