@@ -197,8 +197,18 @@ type Transaction struct {
 	tx *types.Transaction
 }
 
-// NewTransaction creates a new transaction with the given properties.
+// NewContractCreation creates a new transaction for deploying a new contract with
+// the given properties.
+func NewContractCreation(nonce int64, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte) *Transaction {
+	return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
+}
+
+// NewTransaction creates a new transaction with the given properties. Contracts
+// can be created by transacting with a nil recipient.
 func NewTransaction(nonce int64, to *Address, amount *BigInt, gasLimit int64, gasPrice *BigInt, data []byte) *Transaction {
+	if to == nil {
+		return &Transaction{types.NewContractCreation(uint64(nonce), amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
+	}
 	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, uint64(gasLimit), gasPrice.bigint, common.CopyBytes(data))}
 }
 
