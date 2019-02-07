@@ -142,6 +142,8 @@ func init() {
 		dbCommand,
 		// See config.go
 		DumpConfigCommand,
+		// hashesCommand
+		hashesCommand,
 	}
 
 	// append a hidden help subcommand to all commands that have subcommands
