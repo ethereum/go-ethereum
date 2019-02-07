@@ -158,6 +158,13 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 	return chunk, nil, nil
 }
 
+// Has is the storage layer entry point to query the underlying
+// database to return if it has a chunk or not.
+// Called from the DebugAPI
+func (n *NetStore) Has(ctx context.Context, ref Address) bool {
+	return n.store.Has(ctx, ref)
+}
+
 // getOrCreateFetcher attempts at retrieving an existing fetchers
 // if none exists, creates one and saves it in the fetchers cache
 // caller must hold the lock

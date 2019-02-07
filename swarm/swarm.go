@@ -485,7 +485,7 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewControl(self.api, self.bzz.Hive),
+			Service:   api.NewInspector(self.api, self.bzz.Hive, self.netStore),
 			Public:    false,
 		},
 		{
