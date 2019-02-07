@@ -151,7 +151,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		return err
 	}
 
-	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancelSimRun := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancelSimRun()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
