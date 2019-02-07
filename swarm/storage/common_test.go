@@ -83,7 +83,7 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	return db, cleanup
 }
 
-func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Chunk, error) {
+func mputRandomChunks(store ChunkStore, n int) ([]Chunk, error) {
 	return mput(store, n, GenerateRandomChunk)
 }
 
@@ -159,8 +159,8 @@ func (r *brokenLimitedReader) Read(buf []byte) (int, error) {
 	return r.lr.Read(buf)
 }
 
-func testStoreRandom(m ChunkStore, n int, chunksize int64, t *testing.T) {
-	chunks, err := mputRandomChunks(m, n, chunksize)
+func testStoreRandom(m ChunkStore, n int, t *testing.T) {
+	chunks, err := mputRandomChunks(m, n)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -170,8 +170,8 @@ func testStoreRandom(m ChunkStore, n int, chunksize int64, t *testing.T) {
 	}
 }
 
-func testStoreCorrect(m ChunkStore, n int, chunksize int64, t *testing.T) {
-	chunks, err := mputRandomChunks(m, n, chunksize)
+func testStoreCorrect(m ChunkStore, n int, t *testing.T) {
+	chunks, err := mputRandomChunks(m, n)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -195,7 +195,7 @@ func testStoreCorrect(m ChunkStore, n int, chunksize int64, t *testing.T) {
 	}
 }
 
-func benchmarkStorePut(store ChunkStore, n int, chunksize int64, b *testing.B) {
+func benchmarkStorePut(store ChunkStore, n int, b *testing.B) {
 	chunks := make([]Chunk, n)
 	i := 0
 	f := func(dataSize int64) Chunk {
@@ -222,8 +222,8 @@ func benchmarkStorePut(store ChunkStore, n int, chunksize int64, b *testing.B) {
 	}
 }
 
-func benchmarkStoreGet(store ChunkStore, n int, chunksize int64, b *testing.B) {
-	chunks, err := mputRandomChunks(store, n, chunksize)
+func benchmarkStoreGet(store ChunkStore, n int, b *testing.B) {
+	chunks, err := mputRandomChunks(store, n)
 	if err != nil {
 		b.Fatalf("expected no error, got %v", err)
 	}
