@@ -190,22 +190,18 @@ func TestGetAllReferences(t *testing.T) {
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 
-	checkRefs := func(dataSize int, expectedLen int) {
-		slice := testutil.RandomBytes(1, dataSize)
+	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively
+	testRuns := []int{1024, 8192, 16000, 30000, 1000000}
+	expectedLens := []int{1, 3, 5, 9, 248}
+	for i, r := range testRuns {
+		slice := testutil.RandomBytes(1, r)
 
 		addrs, err := fileStore.GetAllReferences(context.Background(), bytes.NewReader(slice), false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(addrs) != expectedLen {
-			t.Fatalf("Expected reference array length to be %d, but is %d", expectedLen, len(addrs))
+		if len(addrs) != expectedLens[i] {
+			t.Fatalf("Expected reference array length to be %d, but is %d", expectedLens[i], len(addrs))
 		}
-	}
-
-	// testRuns[i] and expectedLen[i] are dataSize and expected length respectively
-	testRuns := []int{1024, 8192, 16000, 30000, 1000000}
-	expectedLens := []int{1, 3, 5, 9, 248}
-	for i, r := range testRuns {
-		checkRefs(r, expectedLens[i])
 	}
 }
