@@ -82,17 +82,17 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 
 	// AllXDPoSProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the XDPoS consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil,nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000},nil}
-    TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,nil}
-	TestRules       = TestChainConfig.Rules(new(big.Int))
+	AllXDPoSProtocolChanges   = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	TestChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
+	TestRules                = TestChainConfig.Rules(new(big.Int))
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -143,14 +143,14 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
-
-// XDPoSConfig is the consensus engine configs for proof-of-stake-voting based sealing.
+// XDPoSConfig is the consensus engine configs for XinFin-DPoS based sealing.
 type XDPoSConfig struct {
-	Period           uint64 `json:"period"`           // Number of seconds between blocks to enforce
-	Epoch            uint64 `json:"epoch"`            // Epoch length to reset votes and checkpoint
-	Reward           uint64 `json:"reward"`           // Block reward - unit Ether
-	RewardCheckpoint uint64 `json:"rewardCheckpoint"` // Checkpoint block for calculate rewards.
-	Gap              uint64 `json:"gap"`              // Gap time preparing for the next epoch
+	Period              uint64         `json:"period"`              // Number of seconds between blocks to enforce
+	Epoch               uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
+	Reward              uint64         `json:"reward"`              // Block reward - unit Ether
+	RewardCheckpoint    uint64         `json:"rewardCheckpoint"`    // Checkpoint block for calculate rewards.
+	Gap                 uint64         `json:"gap"`                 // Gap time preparing for the next epoch
+	FoudationWalletAddr common.Address `json:"foudationWalletAddr"` // Foundation Address Wallet
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -213,14 +213,6 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
-func (c *ChainConfig) IsTIP2019(num *big.Int) bool {
-	return isForked(common.TIP2019Block, num)
-}		
-
-func (c *ChainConfig) IsTIPEVMSigner(num *big.Int) bool {
-	return isForked(common.TIPEVMSignerBlock, num)
-}
-	
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
