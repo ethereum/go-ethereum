@@ -17,50 +17,62 @@
 package main
 
 import (
-	"crypto/md5"
-	crand "crypto/rand"
+	"bytes"
 	"fmt"
-	"io"
 	"math/rand"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
-
-var seed = time.Now().UTC().UnixNano()
-
-func init() {
-	rand.Seed(seed)
-}
 
 type uploadResult struct {
 	hash   string
 	digest []byte
 }
 
-func slidingWindow(c *cli.Context) error {
-	generateEndpoints(scheme, cluster, appName, from, to)
+func slidingWindowCmd(ctx *cli.Context, tuid string) error {
+	errc := make(chan error)
+
+	go func() {
+		errc <- slidingWindow(ctx, tuid)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+func slidingWindow(ctx *cli.Context, tuid string) error {
 	hashes := []uploadResult{} //swarm hashes of the uploads
-	nodes := to - from
+	nodes := len(hosts)
 	const iterationTimeout = 30 * time.Second
-	log.Info("sliding window test started", "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
+	log.Info("sliding window test started", "tuid", tuid, "nodes", nodes, "filesize(kb)", filesize, "timeout", timeout)
 	uploadedBytes := 0
 	networkDepth := 0
 	errored := false
 
 outer:
 	for {
-		log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
+		log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
-		h := md5.New()
-		r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
 		t1 := time.Now()
 
-		hash, err := upload(r, filesize*1000, endpoints[0])
+		randomBytes := testutil.RandomBytes(seed, filesize*1000)
+
+		hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
 		if err != nil {
 			log.Error(err.Error())
 			return err
@@ -68,7 +80,11 @@ outer:
 
 		metrics.GetOrRegisterResettingTimer("sliding-window.upload-time", nil).UpdateSince(t1)
 
-		fhash := h.Sum(nil)
+		fhash, err := digest(bytes.NewReader(randomBytes))
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
 
 		log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash), "sleeping", syncDelay)
 		hashes = append(hashes, uploadResult{hash: hash, digest: fhash})
@@ -88,10 +104,10 @@ outer:
 					metrics.GetOrRegisterCounter("sliding-window.single.error", nil).Inc(1)
 					break inner
 				default:
-					randIndex := 1 + rand.Intn(len(endpoints)-1)
+					idx := 1 + rand.Intn(len(hosts)-1)
 					ruid := uuid.New()[:8]
 					start := time.Now()
-					err := fetch(v.hash, endpoints[randIndex], v.digest, ruid)
+					err := fetch(v.hash, httpEndpoint(hosts[idx]), v.digest, ruid, "")
 					if err != nil {
 						continue inner
 					}

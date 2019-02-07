@@ -17,35 +17,56 @@
 package main
 
 import (
-	"crypto/md5"
-	crand "crypto/rand"
+	"bytes"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func uploadSpeed(c *cli.Context) error {
-	endpoint := generateEndpoint(scheme, cluster, appName, from)
-	seed := int(time.Now().UnixNano() / 1e6)
-	log.Info("uploading to "+endpoint, "seed", seed)
+func uploadSpeedCmd(ctx *cli.Context, tuid string) error {
+	log.Info("uploading to "+hosts[0], "tuid", tuid, "seed", seed)
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	h := md5.New()
-	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
+	errc := make(chan error)
 
+	go func() {
+		errc <- uploadSpeed(ctx, tuid, randomBytes)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		// trigger debug functionality on randomBytes
+
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+func uploadSpeed(c *cli.Context, tuid string, data []byte) error {
 	t1 := time.Now()
-	hash, err := upload(r, filesize*1000, endpoint)
+	hash, err := upload(data, hosts[0])
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 	metrics.GetOrRegisterCounter("upload-speed.upload-time", nil).Inc(int64(time.Since(t1)))
 
-	fhash := h.Sum(nil)
+	fhash, err := digest(bytes.NewReader(data))
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 	return nil
