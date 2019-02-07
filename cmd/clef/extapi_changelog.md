@@ -1,5 +1,10 @@
 ### Changelog for external API
 
+### 6.0.0
+
+* `New` was changed to deliver only an address, not the full `Account` data
+* `Export` was moved from External API to the UI Server API
+
 #### 5.0.0
 
 * The external `account_EcRecover`-method was reimplemented.

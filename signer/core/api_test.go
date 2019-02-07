@@ -47,6 +47,9 @@ func (ui *HeadlessUI) OnInputRequired(info UserInputRequest) (UserInputResponse,
 
 func (ui *HeadlessUI) OnSignerStartup(info StartupInfo) {
 }
+func (ui *HeadlessUI) RegisterUIServer(api *UIServerAPI){
+}
+
 
 func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	fmt.Printf("OnApproved()\n")

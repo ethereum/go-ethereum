@@ -77,6 +77,8 @@ type alwaysDenyUI struct{}
 func (alwaysDenyUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	return core.UserInputResponse{}, nil
 }
+func (alwaysDenyUI) RegisterUIServer(api *UIServerAPI) {
+}
 
 func (alwaysDenyUI) OnSignerStartup(info core.StartupInfo) {
 }
@@ -530,6 +532,8 @@ type dontCallMe struct {
 func (d *dontCallMe) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 	return core.UserInputResponse{}, nil
+}
+func (d *dontCallMe) RegisterUIServer(api *UIServerAPI) {
 }
 
 func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {

@@ -18,9 +18,7 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -40,7 +38,7 @@ func (l *AuditLogger) List(ctx context.Context) ([]common.Address, error) {
 	return res, e
 }
 
-func (l *AuditLogger) New(ctx context.Context) (accounts.Account, error) {
+func (l *AuditLogger) New(ctx context.Context) (common.Address, error) {
 	return l.api.New(ctx)
 }
 
@@ -84,15 +82,6 @@ func (l *AuditLogger) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	b, e := l.api.EcRecover(ctx, data, sig)
 	l.log.Info("EcRecover", "type", "response", "address", b.String(), "error", e)
 	return b, e
-}
-
-func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
-	l.log.Info("Export", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"addr", addr.Hex())
-	j, e := l.api.Export(ctx, addr)
-	// In this case, we don't actually log the json-response, which may be extra sensitive
-	l.log.Info("Export", "type", "response", "json response size", len(j), "error", e)
-	return j, e
 }
 
 func (l *AuditLogger) Version(ctx context.Context) (string, error) {
