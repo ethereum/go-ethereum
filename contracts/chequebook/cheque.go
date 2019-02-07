@@ -109,12 +109,12 @@ type Chequebook struct {
 	log log.Logger // contextual logger with the contract address embedded
 }
 
-func (chbook *Chequebook) String() string {
-	return fmt.Sprintf("contract: %s, owner: %s, balance: %v, signer: %x", chbook.contractAddr.Hex(), chbook.owner.Hex(), chbook.balance, chbook.prvKey.PublicKey)
+func (cb *Chequebook) String() string {
+	return fmt.Sprintf("contract: %s, owner: %s, balance: %v, signer: %x", cb.contractAddr.Hex(), cb.owner.Hex(), cb.balance, cb.prvKey.PublicKey)
 }
 
 // NewChequebook creates a new Chequebook.
-func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
+func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.PrivateKey, backend Backend) (*Chequebook, error) {
 	balance := new(big.Int)
 	sent := make(map[common.Address]*big.Int)
 
@@ -128,7 +128,7 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 		TransactOpts: *transactOpts,
 	}
 
-	self = &Chequebook{
+	cb := &Chequebook{
 		prvKey:       prvKey,
 		balance:      balance,
 		contractAddr: contractAddr,
@@ -140,42 +140,39 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 		session:      session,
 		log:          log.New("contract", contractAddr),
 	}
-
 	if (contractAddr != common.Address{}) {
-		self.setBalanceFromBlockChain()
-		self.log.Trace("New chequebook initialised", "owner", self.owner, "balance", self.balance)
+		cb.setBalanceFromBlockChain()
+		cb.log.Trace("New chequebook initialised", "owner", cb.owner, "balance", cb.balance)
 	}
-	return
+	return cb, nil
 }
 
-func (chbook *Chequebook) setBalanceFromBlockChain() {
-	balance, err := chbook.backend.BalanceAt(context.TODO(), chbook.contractAddr, nil)
+func (cb *Chequebook) setBalanceFromBlockChain() {
+	balance, err := cb.backend.BalanceAt(context.TODO(), cb.contractAddr, nil)
 	if err != nil {
 		log.Error("Failed to retrieve chequebook balance", "err", err)
 	} else {
-		chbook.balance.Set(balance)
+		cb.balance.Set(balance)
 	}
 }
 
 // LoadChequebook loads a chequebook from disk (file path).
-func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, checkBalance bool) (self *Chequebook, err error) {
-	var data []byte
-	data, err = ioutil.ReadFile(path)
-	if err != nil {
-		return
-	}
-	self, _ = NewChequebook(path, common.Address{}, prvKey, backend)
-
-	err = json.Unmarshal(data, self)
+func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, checkBalance bool) (*Chequebook, error) {
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	cb, _ := NewChequebook(path, common.Address{}, prvKey, backend)
+
+	if err = json.Unmarshal(data, cb); err != nil {
+		return nil, err
+	}
 	if checkBalance {
-		self.setBalanceFromBlockChain()
+		cb.setBalanceFromBlockChain()
 	}
 	log.Trace("Loaded chequebook from disk", "path", path)
 
-	return
+	return cb, nil
 }
 
 // chequebookFile is the JSON representation of a chequebook.
@@ -187,19 +184,19 @@ type chequebookFile struct {
 }
 
 // UnmarshalJSON deserialises a chequebook.
-func (chbook *Chequebook) UnmarshalJSON(data []byte) error {
+func (cb *Chequebook) UnmarshalJSON(data []byte) error {
 	var file chequebookFile
 	err := json.Unmarshal(data, &file)
 	if err != nil {
 		return err
 	}
-	_, ok := chbook.balance.SetString(file.Balance, 10)
+	_, ok := cb.balance.SetString(file.Balance, 10)
 	if !ok {
 		return fmt.Errorf("cumulative amount sent: unable to convert string to big integer: %v", file.Balance)
 	}
-	chbook.contractAddr = common.HexToAddress(file.Contract)
+	cb.contractAddr = common.HexToAddress(file.Contract)
 	for addr, sent := range file.Sent {
-		chbook.sent[common.HexToAddress(addr)], ok = new(big.Int).SetString(sent, 10)
+		cb.sent[common.HexToAddress(addr)], ok = new(big.Int).SetString(sent, 10)
 		if !ok {
 			return fmt.Errorf("beneficiary %v cumulative amount sent: unable to convert string to big integer: %v", addr, sent)
 		}
@@ -208,14 +205,14 @@ func (chbook *Chequebook) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON serialises a chequebook.
-func (chbook *Chequebook) MarshalJSON() ([]byte, error) {
+func (cb *Chequebook) MarshalJSON() ([]byte, error) {
 	var file = &chequebookFile{
-		Balance:  chbook.balance.String(),
-		Contract: chbook.contractAddr.Hex(),
-		Owner:    chbook.owner.Hex(),
+		Balance:  cb.balance.String(),
+		Contract: cb.contractAddr.Hex(),
+		Owner:    cb.owner.Hex(),
 		Sent:     make(map[string]string),
 	}
-	for addr, sent := range chbook.sent {
+	for addr, sent := range cb.sent {
 		file.Sent[addr.Hex()] = sent.String()
 	}
 	return json.Marshal(file)
@@ -223,76 +220,78 @@ func (chbook *Chequebook) MarshalJSON() ([]byte, error) {
 
 // Save persists the chequebook on disk, remembering balance, contract address and
 // cumulative amount of funds sent for each beneficiary.
-func (chbook *Chequebook) Save() (err error) {
-	data, err := json.MarshalIndent(chbook, "", " ")
+func (cb *Chequebook) Save() error {
+	data, err := json.MarshalIndent(cb, "", " ")
 	if err != nil {
 		return err
 	}
-	chbook.log.Trace("Saving chequebook to disk", chbook.path)
+	cb.log.Trace("Saving chequebook to disk", cb.path)
 
-	return ioutil.WriteFile(chbook.path, data, os.ModePerm)
+	return ioutil.WriteFile(cb.path, data, os.ModePerm)
 }
 
 // Stop quits the autodeposit go routine to terminate
-func (chbook *Chequebook) Stop() {
-	defer chbook.lock.Unlock()
-	chbook.lock.Lock()
-	if chbook.quit != nil {
-		close(chbook.quit)
-		chbook.quit = nil
+func (cb *Chequebook) Stop() {
+	defer cb.lock.Unlock()
+	cb.lock.Lock()
+	if cb.quit != nil {
+		close(cb.quit)
+		cb.quit = nil
 	}
 }
 
 // Issue creates a cheque signed by the chequebook owner's private key. The
 // signer commits to a contract (one that they own), a beneficiary and amount.
-func (chbook *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *Cheque, err error) {
-	defer chbook.lock.Unlock()
-	chbook.lock.Lock()
+func (cb *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (*Cheque, error) {
+	defer cb.lock.Unlock()
+	cb.lock.Lock()
 
 	if amount.Sign() <= 0 {
 		return nil, fmt.Errorf("amount must be greater than zero (%v)", amount)
 	}
-	if chbook.balance.Cmp(amount) < 0 {
-		err = fmt.Errorf("insufficient funds to issue cheque for amount: %v. balance: %v", amount, chbook.balance)
+	var (
+		ch  *Cheque
+		err error
+	)
+	if cb.balance.Cmp(amount) < 0 {
+		err = fmt.Errorf("insufficient funds to issue cheque for amount: %v. balance: %v", amount, cb.balance)
 	} else {
 		var sig []byte
-		sent, found := chbook.sent[beneficiary]
+		sent, found := cb.sent[beneficiary]
 		if !found {
 			sent = new(big.Int)
-			chbook.sent[beneficiary] = sent
+			cb.sent[beneficiary] = sent
 		}
 		sum := new(big.Int).Set(sent)
 		sum.Add(sum, amount)
 
-		sig, err = crypto.Sign(sigHash(chbook.contractAddr, beneficiary, sum), chbook.prvKey)
+		sig, err = crypto.Sign(sigHash(cb.contractAddr, beneficiary, sum), cb.prvKey)
 		if err == nil {
 			ch = &Cheque{
-				Contract:    chbook.contractAddr,
+				Contract:    cb.contractAddr,
 				Beneficiary: beneficiary,
 				Amount:      sum,
 				Sig:         sig,
 			}
 			sent.Set(sum)
-			chbook.balance.Sub(chbook.balance, amount) // subtract amount from balance
+			cb.balance.Sub(cb.balance, amount) // subtract amount from balance
 		}
 	}
-
 	// auto deposit if threshold is set and balance is less then threshold
 	// note this is called even if issuing cheque fails
 	// so we reattempt depositing
-	if chbook.threshold != nil {
-		if chbook.balance.Cmp(chbook.threshold) < 0 {
-			send := new(big.Int).Sub(chbook.buffer, chbook.balance)
-			chbook.deposit(send)
+	if cb.threshold != nil {
+		if cb.balance.Cmp(cb.threshold) < 0 {
+			send := new(big.Int).Sub(cb.buffer, cb.balance)
+			cb.deposit(send)
 		}
 	}
-
-	return
+	return ch, err
 }
 
 // Cash is a convenience method to cash any cheque.
-func (chbook *Chequebook) Cash(ch *Cheque) (txhash string, err error) {
-	return ch.Cash(chbook.session)
+func (cb *Chequebook) Cash(ch *Cheque) (string, error) {
+	return ch.Cash(cb.session)
 }
 
 // data to sign: contract address, beneficiary, cumulative amount of funds ever sent
@@ -309,73 +308,73 @@ func sigHash(contract, beneficiary common.Address, sum *big.Int) []byte {
 }
 
 // Balance returns the current balance of the chequebook.
-func (chbook *Chequebook) Balance() *big.Int {
-	defer chbook.lock.Unlock()
-	chbook.lock.Lock()
-	return new(big.Int).Set(chbook.balance)
+func (cb *Chequebook) Balance() *big.Int {
+	defer cb.lock.Unlock()
+	cb.lock.Lock()
+	return new(big.Int).Set(cb.balance)
 }
 
 // Owner returns the owner account of the chequebook.
-func (chbook *Chequebook) Owner() common.Address {
-	return chbook.owner
+func (cb *Chequebook) Owner() common.Address {
+	return cb.owner
 }
 
 // Address returns the on-chain contract address of the chequebook.
-func (chbook *Chequebook) Address() common.Address {
-	return chbook.contractAddr
+func (cb *Chequebook) Address() common.Address {
+	return cb.contractAddr
 }
 
 // Deposit deposits money to the chequebook account.
-func (chbook *Chequebook) Deposit(amount *big.Int) (string, error) {
-	defer chbook.lock.Unlock()
-	chbook.lock.Lock()
-	return chbook.deposit(amount)
+func (cb *Chequebook) Deposit(amount *big.Int) (string, error) {
+	defer cb.lock.Unlock()
+	cb.lock.Lock()
+	return cb.deposit(amount)
 }
 
 // deposit deposits amount to the chequebook account.
-// The caller must hold self.lock.
-func (chbook *Chequebook) deposit(amount *big.Int) (string, error) {
+// The caller must hold lock.
+func (cb *Chequebook) deposit(amount *big.Int) (string, error) {
 	// since the amount is variable here, we do not use sessions
-	depositTransactor := bind.NewKeyedTransactor(chbook.prvKey)
+	depositTransactor := bind.NewKeyedTransactor(cb.prvKey)
 	depositTransactor.Value = amount
-	chbookRaw := &contract.ChequebookRaw{Contract: chbook.contract}
+	chbookRaw := &contract.ChequebookRaw{Contract: cb.contract}
 	tx, err := chbookRaw.Transfer(depositTransactor)
 	if err != nil {
-		chbook.log.Warn("Failed to fund chequebook", "amount", amount, "balance", chbook.balance, "target", chbook.buffer, "err", err)
+		cb.log.Warn("Failed to fund chequebook", "amount", amount, "balance", cb.balance, "target", cb.buffer, "err", err)
 		return "", err
 	}
 	// assume that transaction is actually successful, we add the amount to balance right away
-	chbook.balance.Add(chbook.balance, amount)
-	chbook.log.Trace("Deposited funds to chequebook", "amount", amount, "balance", chbook.balance, "target", chbook.buffer)
+	cb.balance.Add(cb.balance, amount)
+	cb.log.Trace("Deposited funds to chequebook", "amount", amount, "balance", cb.balance, "target", cb.buffer)
 	return tx.Hash().Hex(), nil
 }
 
 // AutoDeposit (re)sets interval time and amount which triggers sending funds to the
 // chequebook. Contract backend needs to be set if threshold is not less than buffer, then
 // deposit will be triggered on every new cheque issued.
-func (chbook *Chequebook) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
-	defer chbook.lock.Unlock()
-	chbook.lock.Lock()
-	chbook.threshold = threshold
-	chbook.buffer = buffer
-	chbook.autoDeposit(interval)
+func (cb *Chequebook) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
+	defer cb.lock.Unlock()
+	cb.lock.Lock()
+	cb.threshold = threshold
+	cb.buffer = buffer
+	cb.autoDeposit(interval)
 }
 
 // autoDeposit starts a goroutine that periodically sends funds to the chequebook
 // contract caller holds the lock the go routine terminates if Chequebook.quit is closed.
-func (chbook *Chequebook) autoDeposit(interval time.Duration) {
-	if chbook.quit != nil {
-		close(chbook.quit)
-		chbook.quit = nil
+func (cb *Chequebook) autoDeposit(interval time.Duration) {
+	if cb.quit != nil {
+		close(cb.quit)
+		cb.quit = nil
 	}
 	// if threshold >= balance autodeposit after every cheque issued
-	if interval == time.Duration(0) || chbook.threshold != nil && chbook.buffer != nil && chbook.threshold.Cmp(chbook.buffer) >= 0 {
+	if interval == time.Duration(0) || cb.threshold != nil && cb.buffer != nil && cb.threshold.Cmp(cb.buffer) >= 0 {
 		return
 	}
 
 	ticker := time.NewTicker(interval)
-	chbook.quit = make(chan bool)
-	quit := chbook.quit
+	cb.quit = make(chan bool)
+	quit := cb.quit
 
 	go func() {
 		for {
@@ -383,15 +382,15 @@ func (chbook *Chequebook) autoDeposit(interval time.Duration) {
 			case <-quit:
 				return
 			case <-ticker.C:
-				chbook.lock.Lock()
-				if chbook.balance.Cmp(chbook.buffer) < 0 {
-					amount := new(big.Int).Sub(chbook.buffer, chbook.balance)
-					txhash, err := chbook.deposit(amount)
+				cb.lock.Lock()
+				if cb.balance.Cmp(cb.buffer) < 0 {
+					amount := new(big.Int).Sub(cb.buffer, cb.balance)
+					txhash, err := cb.deposit(amount)
 					if err == nil {
-						chbook.txhash = txhash
+						cb.txhash = txhash
 					}
 				}
-				chbook.lock.Unlock()
+				cb.lock.Unlock()
 			}
 		}
 	}()
@@ -404,8 +403,8 @@ type Outbox struct {
 }
 
 // NewOutbox creates an outbox.
-func NewOutbox(chbook *Chequebook, beneficiary common.Address) *Outbox {
-	return &Outbox{chbook, beneficiary}
+func NewOutbox(cb *Chequebook, beneficiary common.Address) *Outbox {
+	return &Outbox{cb, beneficiary}
 }
 
 // Issue creates cheque.
@@ -445,7 +444,7 @@ type Inbox struct {
 
 // NewInbox creates an Inbox. An Inboxes is not persisted, the cumulative sum is updated
 // from blockchain when first cheque is received.
-func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address, signer *ecdsa.PublicKey, abigen bind.ContractBackend) (self *Inbox, err error) {
+func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address, signer *ecdsa.PublicKey, abigen bind.ContractBackend) (*Inbox, error) {
 	if signer == nil {
 		return nil, fmt.Errorf("signer is null")
 	}
@@ -461,7 +460,7 @@ func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address
 	}
 	sender := transactOpts.From
 
-	self = &Inbox{
+	inbox := &Inbox{
 		contract:    contractAddr,
 		beneficiary: beneficiary,
 		sender:      sender,
@@ -470,8 +469,8 @@ func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address
 		cashed:      new(big.Int).Set(common.Big0),
 		log:         log.New("contract", contractAddr),
 	}
-	self.log.Trace("New chequebook inbox initialized", "beneficiary", self.beneficiary, "signer", hexutil.Bytes(crypto.FromECDSAPub(signer)))
-	return
+	inbox.log.Trace("New chequebook inbox initialized", "beneficiary", inbox.beneficiary, "signer", hexutil.Bytes(crypto.FromECDSAPub(signer)))
+	return inbox, nil
 }
 
 func (i *Inbox) String() string {
@@ -489,13 +488,15 @@ func (i *Inbox) Stop() {
 }
 
 // Cash attempts to cash the current cheque.
-func (i *Inbox) Cash() (txhash string, err error) {
-	if i.cheque != nil {
-		txhash, err = i.cheque.Cash(i.session)
-		i.log.Trace("Cashing in chequebook cheque", "amount", i.cheque.Amount, "beneficiary", i.beneficiary)
-		i.cashed = i.cheque.Amount
+func (i *Inbox) Cash() (string, error) {
+	if i.cheque == nil {
+		return "", nil
 	}
-	return
+	txhash, err := i.cheque.Cash(i.session)
+	i.log.Trace("Cashing in chequebook cheque", "amount", i.cheque.Amount, "beneficiary", i.beneficiary)
+	i.cashed = i.cheque.Amount
+
+	return txhash, err
 }
 
 // AutoCash (re)sets maximum time and amount which triggers cashing of the last uncashed
@@ -509,7 +510,7 @@ func (i *Inbox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int) {
 
 // autoCash starts a loop that periodically clears the last cheque
 // if the peer is trusted. Clearing period could be 24h or a week.
-// The caller must hold self.lock.
+// The caller must hold lock.
 func (i *Inbox) autoCash(cashInterval time.Duration) {
 	if i.quit != nil {
 		close(i.quit)
@@ -632,7 +633,7 @@ func (ch *Cheque) Cash(session *contract.ChequebookSession) (string, error) {
 
 // ValidateCode checks that the on-chain code at address matches the expected chequebook
 // contract code. This is used to detect suicided chequebooks.
-func ValidateCode(ctx context.Context, b Backend, address common.Address) (ok bool, err error) {
+func ValidateCode(ctx context.Context, b Backend, address common.Address) (bool, error) {
 	code, err := b.CodeAt(ctx, address, nil)
 	if err != nil {
 		return false, err
