@@ -71,6 +71,7 @@ type Config struct {
 	SwapAPI              string
 	Cors                 string
 	BzzAccount           string
+	GlobalStoreAPI       string
 	privateKey           *ecdsa.PrivateKey
 }
 

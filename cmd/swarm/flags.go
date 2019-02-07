@@ -176,4 +176,9 @@ var (
 		Name:  "user",
 		Usage: "Indicates the user who updates the feed",
 	}
+	SwarmGlobalStoreAPIFlag = cli.StringFlag{
+		Name:   "globalstore-api",
+		Usage:  "URL of the Global Store API provider (only for testing)",
+		EnvVar: SWARM_GLOBALSTORE_API,
+	}
 )
