@@ -26,11 +26,11 @@ const (
 	feedRandomDataLength = 8
 )
 
-func feedUploadAndSync(ctx *cli.Context, tuid string) error {
+func feedUploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	errc := make(chan error)
 
 	go func() {
-		errc <- fuas(ctx, tuid)
+		errc <- feedUploadAndSync(ctx, tuid)
 	}()
 
 	select {
@@ -46,7 +46,7 @@ func feedUploadAndSync(ctx *cli.Context, tuid string) error {
 	}
 }
 
-func fuas(c *cli.Context, tuid string) error {
+func feedUploadAndSync(c *cli.Context, tuid string) error {
 	log.Info("generating and uploading feeds to " + httpEndpoint(hosts[0]) + " and syncing")
 
 	// create a random private key to sign updates with and derive the address

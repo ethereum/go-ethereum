@@ -35,11 +35,11 @@ type uploadResult struct {
 	digest []byte
 }
 
-func slidingWindow(ctx *cli.Context, tuid string) error {
+func slidingWindowCmd(ctx *cli.Context, tuid string) error {
 	errc := make(chan error)
 
 	go func() {
-		errc <- sl(ctx, tuid)
+		errc <- slidingWindow(ctx, tuid)
 	}()
 
 	select {
@@ -55,7 +55,7 @@ func slidingWindow(ctx *cli.Context, tuid string) error {
 	}
 }
 
-func sl(ctx *cli.Context, tuid string) error {
+func slidingWindow(ctx *cli.Context, tuid string) error {
 	hashes := []uploadResult{} //swarm hashes of the uploads
 	nodes := len(hosts)
 	const iterationTimeout = 30 * time.Second

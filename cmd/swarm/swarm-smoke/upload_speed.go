@@ -28,14 +28,14 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func uploadSpeed(ctx *cli.Context, tuid string) error {
+func uploadSpeedCmd(ctx *cli.Context, tuid string) error {
 	log.Info("uploading to "+hosts[0], "tuid", tuid, "seed", seed)
 	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 	errc := make(chan error)
 
 	go func() {
-		errc <- us(ctx, tuid, randomBytes)
+		errc <- uploadSpeed(ctx, tuid, randomBytes)
 	}()
 
 	select {
@@ -53,7 +53,7 @@ func uploadSpeed(ctx *cli.Context, tuid string) error {
 	}
 }
 
-func us(c *cli.Context, tuid string, data []byte) error {
+func uploadSpeed(c *cli.Context, tuid string, data []byte) error {
 	t1 := time.Now()
 	hash, err := upload(data, hosts[0])
 	if err != nil {

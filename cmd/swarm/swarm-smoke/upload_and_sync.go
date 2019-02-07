@@ -31,13 +31,13 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func uploadAndSync(ctx *cli.Context, tuid string) error {
+func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 	errc := make(chan error)
 
 	go func() {
-		errc <- uas(ctx, randomBytes, tuid)
+		errc <- uplaodAndSync(ctx, randomBytes, tuid)
 	}()
 
 	select {
@@ -55,7 +55,7 @@ func uploadAndSync(ctx *cli.Context, tuid string) error {
 	}
 }
 
-func uas(c *cli.Context, randomBytes []byte, tuid string) error {
+func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
 	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
 
 	t1 := time.Now()
