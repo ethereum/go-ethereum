@@ -17,84 +17,109 @@
 package main
 
 import (
-	"crypto/md5"
-	crand "crypto/rand"
+	"bytes"
 	"fmt"
-	"io"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func uploadAndSync(c *cli.Context) error {
-	generateEndpoints(scheme, cluster, appName, from, to)
-	seed := int(time.Now().UnixNano() / 1e6)
+func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
+	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
-	log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
+	errc := make(chan error)
 
-	h := md5.New()
-	r := io.TeeReader(io.LimitReader(crand.Reader, int64(filesize*1000)), h)
+	go func() {
+		errc <- uplaodAndSync(ctx, randomBytes, tuid)
+	}()
+
+	select {
+	case err := <-errc:
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("%s.fail", commandName), nil).Inc(1)
+		}
+		return err
+	case <-time.After(time.Duration(timeout) * time.Second):
+		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
+
+		// trigger debug functionality on randomBytes
+
+		return fmt.Errorf("timeout after %v sec", timeout)
+	}
+}
+
+func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
+	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "tuid", tuid, "seed", seed)
 
 	t1 := time.Now()
-	hash, err := upload(r, filesize*1000, endpoints[0])
+	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
-	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).UpdateSince(t1)
+	t2 := time.Since(t1)
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 
-	fhash := h.Sum(nil)
+	fhash, err := digest(bytes.NewReader(randomBytes))
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
 
-	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
+	log.Info("uploaded successfully", "tuid", tuid, "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
 	time.Sleep(time.Duration(syncDelay) * time.Second)
 
 	wg := sync.WaitGroup{}
 	if single {
-		rand.Seed(time.Now().UTC().UnixNano())
-		randIndex := 1 + rand.Intn(len(endpoints)-1)
+		randIndex := 1 + rand.Intn(len(hosts)-1)
 		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
 			for {
 				start := time.Now()
-				err := fetch(hash, endpoint, fhash, ruid)
+				err := fetch(hash, endpoint, fhash, ruid, tuid)
 				if err != nil {
 					continue
 				}
+				ended := time.Since(start)
 
-				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).UpdateSince(start)
+				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+				log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
 				wg.Done()
 				return
 			}
-		}(endpoints[randIndex], ruid)
+		}(httpEndpoint(hosts[randIndex]), ruid)
 	} else {
-		for _, endpoint := range endpoints[1:] {
+		for _, endpoint := range hosts[1:] {
 			ruid := uuid.New()[:8]
 			wg.Add(1)
 			go func(endpoint string, ruid string) {
 				for {
 					start := time.Now()
-					err := fetch(hash, endpoint, fhash, ruid)
+					err := fetch(hash, endpoint, fhash, ruid, tuid)
 					if err != nil {
 						continue
 					}
+					ended := time.Since(start)
 
-					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).UpdateSince(start)
+					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).Update(ended)
+					log.Info("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended, "endpoint", endpoint)
 					wg.Done()
 					return
 				}
-			}(endpoint, ruid)
+			}(httpEndpoint(endpoint), ruid)
 		}
 	}
 	wg.Wait()
-	log.Info("all endpoints synced random file successfully")
+	log.Info("all hosts synced random file successfully")
 
 	return nil
 }

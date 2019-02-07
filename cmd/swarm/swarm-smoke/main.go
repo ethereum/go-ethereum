@@ -37,18 +37,15 @@ var (
 )
 
 var (
-	endpoints        []string
-	includeLocalhost bool
-	cluster          string
-	appName          string
-	scheme           string
-	filesize         int
-	syncDelay        int
-	from             int
-	to               int
-	verbosity        int
-	timeout          int
-	single           bool
+	allhosts  string
+	hosts     []string
+	filesize  int
+	syncDelay int
+	httpPort  int
+	wsPort    int
+	verbosity int
+	timeout   int
+	single    bool
 )
 
 func main() {
@@ -59,39 +56,22 @@ func main() {
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:        "cluster-endpoint",
-			Value:       "prod",
-			Usage:       "cluster to point to (prod or a given namespace)",
-			Destination: &cluster,
-		},
-		cli.StringFlag{
-			Name:        "app",
-			Value:       "swarm",
-			Usage:       "application to point to (swarm or swarm-private)",
-			Destination: &appName,
+			Name:        "hosts",
+			Value:       "",
+			Usage:       "comma-separated list of swarm hosts",
+			Destination: &allhosts,
 		},
 		cli.IntFlag{
-			Name:        "cluster-from",
-			Value:       8501,
-			Usage:       "swarm node (from)",
-			Destination: &from,
+			Name:        "http-port",
+			Value:       80,
+			Usage:       "http port",
+			Destination: &httpPort,
 		},
 		cli.IntFlag{
-			Name:        "cluster-to",
-			Value:       8512,
-			Usage:       "swarm node (to)",
-			Destination: &to,
-		},
-		cli.StringFlag{
-			Name:        "cluster-scheme",
-			Value:       "http",
-			Usage:       "http or https",
-			Destination: &scheme,
-		},
-		cli.BoolFlag{
-			Name:        "include-localhost",
-			Usage:       "whether to include localhost:8500 as an endpoint",
-			Destination: &includeLocalhost,
+			Name:        "ws-port",
+			Value:       8546,
+			Usage:       "ws port",
+			Destination: &wsPort,
 		},
 		cli.IntFlag{
 			Name:        "filesize",
@@ -140,25 +120,25 @@ func main() {
 			Name:    "upload_and_sync",
 			Aliases: []string{"c"},
 			Usage:   "upload and sync",
-			Action:  wrapCliCommand("upload-and-sync", true, uploadAndSync),
+			Action:  wrapCliCommand("upload-and-sync", uploadAndSyncCmd),
 		},
 		{
 			Name:    "feed_sync",
 			Aliases: []string{"f"},
 			Usage:   "feed update generate, upload and sync",
-			Action:  wrapCliCommand("feed-and-sync", true, feedUploadAndSync),
+			Action:  wrapCliCommand("feed-and-sync", feedUploadAndSyncCmd),
 		},
 		{
 			Name:    "upload_speed",
 			Aliases: []string{"u"},
 			Usage:   "measure upload speed",
-			Action:  wrapCliCommand("upload-speed", true, uploadSpeed),
+			Action:  wrapCliCommand("upload-speed", uploadSpeedCmd),
 		},
 		{
 			Name:    "sliding_window",
 			Aliases: []string{"s"},
 			Usage:   "measure network aggregate capacity",
-			Action:  wrapCliCommand("sliding-window", false, slidingWindow),
+			Action:  wrapCliCommand("sliding-window", slidingWindowCmd),
 		},
 	}
 
