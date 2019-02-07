@@ -21,6 +21,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 
@@ -64,7 +65,7 @@ func (s *GlobalStore) NewNodeStore(addr common.Address) *mock.NodeStore {
 // Get returns chunk data if the chunk with key exists for node
 // on address addr.
 func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err error) {
-	has, err := s.db.Has(nodeDBKey(addr, key), nil)
+	has, err := s.db.Has(dbKeyNodes(addr, key), nil)
 	if err != nil {
 		return nil, mock.ErrNotFound
 	}
@@ -81,7 +82,8 @@ func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err err
 // Put saves the chunk data for node with address addr.
 func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 	batch := new(leveldb.Batch)
-	batch.Put(nodeDBKey(addr, key), nil)
+	batch.Put(dbKeyNodes(addr, key), nil)
+	batch.Put(dbKeyKeys(addr, key), nil)
 	batch.Put(dataDBKey(key), data)
 	return s.db.Write(batch, nil)
 }
@@ -89,17 +91,38 @@ func (s *GlobalStore) Put(addr common.Address, key []byte, data []byte) error {
 // Delete removes the chunk reference to node with address addr.
 func (s *GlobalStore) Delete(addr common.Address, key []byte) error {
 	batch := new(leveldb.Batch)
-	batch.Delete(nodeDBKey(addr, key))
+	batch.Delete(dbKeyNodes(addr, key))
+	batch.Delete(dbKeyKeys(addr, key))
 	return s.db.Write(batch, nil)
 }
 
 // HasKey returns whether a node with addr contains the key.
 func (s *GlobalStore) HasKey(addr common.Address, key []byte) bool {
-	has, err := s.db.Has(nodeDBKey(addr, key), nil)
+	has, err := s.db.Has(dbKeyNodes(addr, key), nil)
 	if err != nil {
 		has = false
 	}
 	return has
+}
+
+func (s *GlobalStore) Keys(startKey []byte, limit int) (keys mock.Keys, err error) {
+	// TODO: implement
+	return keys, errors.New("not implemented")
+}
+
+func (s *GlobalStore) Nodes(startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
+	// TODO: implement
+	return nodes, errors.New("not implemented")
+}
+
+func (s *GlobalStore) NodeKeys(addr common.Address, startKey []byte, limit int) (keys mock.Keys, err error) {
+	// TODO: implement
+	return keys, errors.New("not implemented")
+}
+
+func (s *GlobalStore) KeyNodes(key []byte, startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
+	// TODO: implement
+	return nodes, errors.New("not implemented")
 }
 
 // Import reads tar archive from a reader that contains exported chunk data.
@@ -128,7 +151,7 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 
 		batch := new(leveldb.Batch)
 		for _, addr := range c.Addrs {
-			batch.Put(nodeDBKeyHex(addr, hdr.Name), nil)
+			batch.Put(dbKeyNodesHex(addr, hdr.Name), nil)
 		}
 
 		batch.Put(dataDBKey(common.Hex2Bytes(hdr.Name)), c.Data)
@@ -150,7 +173,7 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 1024))
 	encoder := json.NewEncoder(buf)
 
-	iter := s.db.NewIterator(util.BytesPrefix(nodeKeyPrefix), nil)
+	iter := s.db.NewIterator(util.BytesPrefix(nodesPrefix), nil)
 	defer iter.Release()
 
 	var currentKey string
@@ -189,7 +212,7 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	}
 
 	for iter.Next() {
-		k := bytes.TrimPrefix(iter.Key(), nodeKeyPrefix)
+		k := bytes.TrimPrefix(iter.Key(), nodesPrefix)
 		i := bytes.Index(k, []byte("-"))
 		if i < 0 {
 			continue
@@ -222,22 +245,31 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 }
 
 var (
-	nodeKeyPrefix = []byte("node-")
-	dataKeyPrefix = []byte("data-")
+	nodesPrefix = []byte("nodes-")
+	keysPrefix  = []byte("keys-")
+	dataPrefix  = []byte("data-")
 )
 
-// nodeDBKey constructs a database key for key/node mappings.
-func nodeDBKey(addr common.Address, key []byte) []byte {
-	return nodeDBKeyHex(addr, common.Bytes2Hex(key))
+// dbKeyNodes constructs a database key for key/node mappings.
+func dbKeyNodes(addr common.Address, key []byte) []byte {
+	return dbKeyNodesHex(addr, common.Bytes2Hex(key))
 }
 
-// nodeDBKeyHex constructs a database key for key/node mappings
+// dbKeyNodesHex constructs a database key for key/node mappings
 // using the hexadecimal string representation of the key.
-func nodeDBKeyHex(addr common.Address, hexKey string) []byte {
-	return append(append(nodeKeyPrefix, []byte(hexKey+"-")...), addr[:]...)
+func dbKeyNodesHex(addr common.Address, hexKey string) []byte {
+	return append(append(nodesPrefix, []byte(hexKey+"-")...), addr[:]...)
+}
+
+func dbKeyKeys(addr common.Address, key []byte) []byte {
+	return dbKeyKeysHex(addr, common.Bytes2Hex(key))
+}
+
+func dbKeyKeysHex(addr common.Address, hexKey string) []byte {
+	return append(append(keysPrefix, []byte(addr.Hex()+"-")...), hexKey[:]...)
 }
 
 // dataDBkey constructs a database key for key/data storage.
 func dataDBKey(key []byte) []byte {
-	return append(dataKeyPrefix, key...)
+	return append(dataPrefix, key...)
 }

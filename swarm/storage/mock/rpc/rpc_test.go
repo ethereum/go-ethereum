@@ -39,3 +39,17 @@ func TestRPCStore(t *testing.T) {
 
 	test.MockStore(t, store, 30)
 }
+
+func TestGlobalStoreListings(t *testing.T) {
+	serverStore := mem.NewGlobalStore()
+
+	server := rpc.NewServer()
+	if err := server.RegisterName("mockStore", serverStore); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewGlobalStore(rpc.DialInProc(server))
+	defer store.Close()
+
+	test.MockStoreListings(t, store, 1000)
+}

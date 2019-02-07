@@ -28,6 +28,10 @@ func TestGlobalStore(t *testing.T) {
 	test.MockStore(t, NewGlobalStore(), 100)
 }
 
+func TestGlobalStoreListings(t *testing.T) {
+	test.MockStoreListings(t, NewGlobalStore(), 1000)
+}
+
 // TestImportExport is running tests for importing and
 // exporting data between two GlobalStores
 // using test.ImportExport function.
