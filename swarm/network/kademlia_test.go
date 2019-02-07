@@ -168,6 +168,46 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
+// TestHighMinBinSize tests that the saturation function also works
+// if MinBinSize is > 2, the connection count is < k.MinBinSize
+// and there are more peers available than connected
+func TestHighMinBinSize(t *testing.T) {
+	// a function to test for different MinBinSize values
+	testKad := func(minBinSize int) {
+		// create a test kademlia
+		tk := newTestKademlia(t, "11111111")
+		// set its MinBinSize to desired value
+		tk.KadParams.MinBinSize = minBinSize
+
+		// add a couple of peers (so we have NN and depth)
+		tk.On("00000000") // bin 0
+		tk.On("11100000") // bin 3
+		tk.On("11110000") // bin 4
+
+		first := "10000000" // add a first peer at bin 1
+		tk.Register(first)  // register it
+		// we now have one registered peer at bin 1;
+		// iterate and connect one peer at each iteration;
+		// should be unhealthy until at minBinSize - 1
+		// we connect the unconnected but registered peer
+		for i := 1; i < minBinSize; i++ {
+			peer := fmt.Sprintf("1000%b", 8|i)
+			tk.On(peer)
+			if i == minBinSize-1 {
+				tk.On(first)
+				tk.checkHealth(true)
+				return
+			}
+			tk.checkHealth(false)
+		}
+	}
+	// test MinBinSizes of 3 to 5
+	testMinBinSizes := []int{3, 4, 5}
+	for _, k := range testMinBinSizes {
+		testKad(k)
+	}
+}
+
 // TestHealthStrict tests the simplest definition of health
 // Which means whether we are connected to all neighbors we know of
 func TestHealthStrict(t *testing.T) {
@@ -295,13 +335,13 @@ func (tk *testKademlia) checkHealth(expectHealthy bool) {
 	})
 
 	pp := NewPeerPotMap(tk.NeighbourhoodSize, addrs)
-	healthParams := tk.Healthy(pp[kid])
+	healthParams := tk.GetHealthInfo(pp[kid])
 
 	// definition of health, all conditions but be true:
 	// - we at least know one peer
 	// - we know all neighbors
 	// - we are connected to all known neighbors
-	health := healthParams.IsHealthyStrict()
+	health := healthParams.Healthy()
 	if expectHealthy != health {
 		tk.t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, tk.String())
 	}
