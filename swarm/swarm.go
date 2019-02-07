@@ -496,7 +496,7 @@ func (self *Swarm) APIs() []rpc.API {
 		},
 		{
 			Namespace: "swarmfs",
-			Version:   fuse.Swarmfs_Version,
+			Version:   fuse.SwarmfsVersion,
 			Service:   self.sfs,
 			Public:    false,
 		},

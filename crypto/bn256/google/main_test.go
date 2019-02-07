@@ -40,21 +40,21 @@ func TestPairings(t *testing.T) {
 		t.Error("MultiAte check gave false negative!")
 	}
 	p0 := new(GT).Add(p1, pn1)
-	p0_2 := Pair(a1, b0)
-	if p0.String() != p0_2.String() {
+	p02 := Pair(a1, b0)
+	if p0.String() != p02.String() {
 		t.Error("Pairing mismatch: e(a, b) * e(a, -b) != 1")
 	}
-	p0_3 := new(GT).ScalarMult(p1, bigFromBase10("21888242871839275222246405745257275088548364400416034343698204186575808495617"))
-	if p0.String() != p0_3.String() {
+	p03 := new(GT).ScalarMult(p1, bigFromBase10("21888242871839275222246405745257275088548364400416034343698204186575808495617"))
+	if p0.String() != p03.String() {
 		t.Error("Pairing mismatch: e(a, b) has wrong order")
 	}
 	p2 := Pair(a2, b1)
-	p2_2 := Pair(a1, b2)
-	p2_3 := new(GT).ScalarMult(p1, bigFromBase10("2"))
-	if p2.String() != p2_2.String() {
+	p22 := Pair(a1, b2)
+	p23 := new(GT).ScalarMult(p1, bigFromBase10("2"))
+	if p2.String() != p22.String() {
 		t.Error("Pairing mismatch: e(a, b * 2) != e(a * 2, b)")
 	}
-	if p2.String() != p2_3.String() {
+	if p2.String() != p23.String() {
 		t.Error("Pairing mismatch: e(a, b * 2) != e(a, b) ** 2")
 	}
 	if p2.String() == p1.String() {
@@ -64,8 +64,8 @@ func TestPairings(t *testing.T) {
 		t.Error("MultiAte check gave false positive!")
 	}
 	p999 := Pair(a37, b27)
-	p999_2 := Pair(a1, b999)
-	if p999.String() != p999_2.String() {
+	p9992 := Pair(a1, b999)
+	if p999.String() != p9992.String() {
 		t.Error("Pairing mismatch: e(a * 37, b * 27) != e(a, b * 999)")
 	}
 }

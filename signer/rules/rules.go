@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	BigNumber_JS = deps.MustAsset("bignumber.js")
+	BignumberJs = deps.MustAsset("bignumber.js")
 )
 
 // consoleOutput is an override for the console.log and console.error methods to
@@ -81,7 +81,7 @@ func (r *rulesetUI) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 	vm.Set("storage", r.storage)
 
 	// Load bootstrap libraries
-	script, err := vm.Compile("bignumber.js", BigNumber_JS)
+	script, err := vm.Compile("bignumber.js", BignumberJs)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
 		return otto.UndefinedValue(), err
