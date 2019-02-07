@@ -184,6 +184,7 @@ func init() {
 		logLevelFlag,
 		keystoreFlag,
 		configdirFlag,
+		chainIdFlag,
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.RPCListenAddrFlag,
