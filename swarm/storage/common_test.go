@@ -267,6 +267,15 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	return chunk, nil
 }
 
+// Need to implement Has from SyncChunkStore
+func (m *MapChunkStore) Has(ctx context.Context, ref Address) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, has := m.chunks[ref.Hex()]
+	return has
+}
+
 func (m *MapChunkStore) Close() {
 }
 

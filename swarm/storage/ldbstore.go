@@ -969,6 +969,18 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 	return s.get(addr)
 }
 
+// Has queries the underlying DB if a chunk with the given address is stored
+// Returns true if the chunk is found, false if not
+func (s *LDBStore) Has(_ context.Context, addr Address) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	ikey := getIndexKey(addr)
+	_, err := s.db.Get(ikey)
+
+	return err == nil
+}
+
 // TODO: To conform with other private methods of this object indices should not be updated
 func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 	if s.closed {

@@ -214,6 +214,11 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
+// not used in this context, only to fulfill ChunkStore interface
+func (rrs *roundRobinStore) Has(ctx context.Context, addr storage.Address) bool {
+	panic("RoundRobinStor doesn't support HasChunk")
+}
+
 func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
