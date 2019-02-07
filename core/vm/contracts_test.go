@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"testing"
@@ -350,11 +351,138 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	})
 }
 
+var (
+	ecRecoverAddr = common.HexToAddress("01")
+	ripeMdAddr    = common.HexToAddress("03")
+	expModAddr    = common.HexToAddress("05")
+)
+
+type ewasmPrecompileTest struct {
+	name     string
+	input    []byte
+	err      error
+	addr     common.Address
+	expected []byte
+}
+
+var ewasmPrecompileTests = []ewasmPrecompileTest{
+	{
+		name:     "EmptyEcRecover",
+		input:    []byte{},
+		addr:     ecRecoverAddr,
+		expected: []byte{},
+	},
+	{
+		name:     "SimpleEcRecover",
+		input:    common.Hex2Bytes("38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"),
+		addr:     ecRecoverAddr,
+		expected: common.Hex2Bytes("000000000000000000000000ceaccac640adf55b2028469bd36ba501f28b699d"),
+	},
+	{
+		name:     "RipeMdPadding",
+		input:    []byte{178, 121, 24, 45, 153, 230, 87, 3, 240, 7, 110, 72, 18, 101, 58, 171, 133, 252, 160, 240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 136, 23, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 89, 155, 67, 62},
+		addr:     ecRecoverAddr,
+		expected: []byte{},
+	},
+	{
+		name:     "EmptyModExp",
+		input:    []byte{},
+		addr:     ecRecoverAddr,
+		expected: []byte{},
+	},
+	{
+		name: "SimpleModExp",
+		input: []byte{
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 105, 244, 148, 17, 230, 162, 38, 226, 21, 123, 99, 173, 92, 154, 225, 98, 221, 178, 13, 54, 142, 147, 227, 219, 150, 131, 6, 199, 20, 249, 189, 163, 10, 56, 142, 74, 160, 10, 23, 22, 133, 219, 196, 237, 209, 230, 181, 148, 170, 136, 152, 109, 145, 62, 113, 35, 177, 70, 90, 254, 242, 241, 37, 193, 137, 34, 80, 63, 201, 219, 98, 68, 242, 229, 107, 41, 194, 61, 241, 15, 186, 12, 61, 121, 166, 99, 226, 51, 245, 19, 98, 0, 231, 66, 220, 25, 113, 116, 46, 94, 215, 214, 68, 212, 24, 96, 201, 47, 67, 161, 233, 119, 20, 115, 28, 119, 60, 46, 206, 8, 59, 243, 245, 178, 177, 123, 131, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 132, 63, 73, 203, 78, 27, 50, 102, 66, 138, 185, 34, 220, 161, 134, 52, 173, 16, 83, 166, 181, 82, 151, 245, 166, 158, 136, 110, 61, 191, 138, 213, 72, 170, 180, 26, 170, 159, 62, 89, 236, 155, 217, 242, 130, 160, 23, 193, 205, 210, 69, 52, 141, 166, 173, 203, 220, 93, 101, 86, 158, 107, 181, 184, 207, 171, 57, 103, 67, 243, 102, 12, 159, 44, 122, 105, 76, 152, 164, 7, 96, 175, 192, 144, 139, 76, 117, 90, 26, 188, 138, 149, 200, 175, 108, 201, 17, 211, 247, 177, 92, 214, 65, 243, 35, 10, 106, 79, 218, 176, 18, 106, 2, 71, 3, 174, 218, 178, 16, 244, 244, 89, 165, 195, 179, 247, 120, 47,
+		},
+		addr:     expModAddr,
+		expected: []byte{0, 1, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32, 152, 203, 93, 245, 45, 169, 18, 4, 171, 193, 131, 35, 108, 212, 190, 245, 181, 170, 134, 108, 120, 170, 237, 179, 241, 226, 128, 212, 149, 52, 51, 151},
+	},
+	{
+		name:     "IncompleteInputModExp",
+		input:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		addr:     expModAddr,
+		expected: []byte{},
+	},
+	{
+		name:     "PaddingExpMod",
+		input:    []byte{32},
+		addr:     expModAddr,
+		expected: []byte{},
+	},
+}
+
+func testEwasmPrecompiled(test ewasmPrecompileTest, t *testing.T) {
+	ref := PrecompiledContractsByzantium[test.addr]
+	p := PrecompiledContractsEWASM[test.addr]
+	input := test.input
+	contract := NewContract(AccountRef(common.HexToAddress("1337")),
+		nil, new(big.Int), ref.RequiredGas(input))
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
+		res, err := p.Run(input, contract)
+		refRes, refErr := ref.Run(input, contract)
+		if err != refErr {
+			t.Fatalf("Expected error %v, got %v", test.err, err)
+		} else {
+			if bytes.Compare(refRes, res) != 0 {
+				t.Fatalf("Expected result to be %v, got %v", refRes, res)
+			}
+		}
+	})
+}
+
+func TestEwasmPrecompiles(t *testing.T) {
+	for _, test := range ewasmPrecompileTests {
+		testEwasmPrecompiled(test, t)
+	}
+}
+
+func TestExpModEwasmPadding(t *testing.T) {
+	ecRecoverAddr := common.HexToAddress("05")
+	p := PrecompiledContractsEWASM[ecRecoverAddr]
+	input := []byte{32}
+	reqGas := PrecompiledContractsByzantium[ecRecoverAddr].RequiredGas(input)
+	contract := NewContract(AccountRef(common.HexToAddress("1337")),
+		nil, new(big.Int), reqGas)
+	fmt.Println(contract.Gas)
+	res, err := RunPrecompiledContract(p, input, contract)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	expected, _ := PrecompiledContractsByzantium[ecRecoverAddr].Run(input, contract)
+	fmt.Println(expected, res)
+	if bytes.Compare(res, expected) != 0 {
+		t.Errorf("Expected %v, got %v", expected, res)
+	}
+	if bytes.Compare(res, []byte{}) == 0 {
+		t.Error("Result should not be empty")
+	}
+}
+
+func TestOutOfBoundsEwasm(t *testing.T) {
+	for i := 0; i < 4000; i++ {
+		p := PrecompiledContractsEWASM[common.HexToAddress("02")]
+		input := []byte{1, 4, 8, 156, 149, 204, 68, 56, 9, 182, 75, 13, 33, 153, 31, 97, 58, 45, 60, 242, 214, 14, 44, 150, 23, 112, 129, 74, 183, 21, 241, 39, 61, 172, 144, 133, 93, 5, 217, 174, 157, 25, 62, 127, 95, 122, 213, 55, 21, 235, 57, 238, 102, 222, 98, 244, 67, 189, 66, 161, 183, 59, 94, 234, 248, 227, 253, 148, 250, 113, 188, 11, 161, 13, 57, 212, 100, 208, 216, 244, 101, 239, 238, 240, 162, 118, 78, 56, 135, 252, 201, 223, 65, 222, 210, 15, 80, 92}
+		reqGas := PrecompiledContractsByzantium[common.HexToAddress("02")].RequiredGas(input)
+		contract := NewContract(AccountRef(common.HexToAddress("1337")),
+			nil, new(big.Int), reqGas)
+		fmt.Println("req gas:", reqGas)
+		res, err := RunPrecompiledContract(p, input, contract)
+		if err != nil {
+			t.Errorf("%v", err)
+		}
+		expected, _ := PrecompiledContractsByzantium[common.HexToAddress("02")].Run(input, contract)
+		if bytes.Compare(res, expected) != 0 {
+			t.Errorf("Expected %v, got %v", expected, res)
+		}
+	}
+}
+
 func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.noBenchmark {
 		return
 	}
-	p := PrecompiledContractsByzantium[common.HexToAddress(addr)]
+	p := PrecompiledContractsEWASM[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
 	contract := NewContract(AccountRef(common.HexToAddress("1337")),
