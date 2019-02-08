@@ -182,7 +182,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 	}
 	protocolTester := p2ptest.NewProtocolTester(addr.ID(), 1, streamer.runProtocol)
 
-	err = waitForPeers(streamer, 1*time.Second, 1)
+	err = waitForPeers(streamer, 10*time.Second, 1)
 	if err != nil {
 		teardown()
 		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
