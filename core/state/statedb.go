@@ -24,6 +24,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -636,7 +637,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().DiskDB().(ethdb.Database).Put(stateObject.CodeHash(), stateObject.code)
+				rawdb.WriteCode(s.db.TrieDB().DiskDB().(ethdb.Database), common.BytesToHash(stateObject.CodeHash()), stateObject.code)
+				//s.db.TrieDB().DiskDB().(ethdb.Database).Put(stateObject.CodeHash(), stateObject.code)
 				stateObject.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.

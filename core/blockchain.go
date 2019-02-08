@@ -694,7 +694,15 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 // TrieNode retrieves a blob of data associated with a trie node (or code hash)
 // either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
-	return bc.stateCache.TrieDB().Node(common.Hash{}, hash) // TODO(karalabe): make this work again
+	// Attempt to satisfy this request with a trie node
+	if blob, err := bc.stateCache.TrieDB().Node(hash); blob != nil && err == nil {
+		return blob, nil
+	}
+	// Trie node not found, it may be a bytecode
+	if blob := rawdb.ReadCode(bc.db, hash); blob != nil {
+		return blob, nil
+	}
+	return nil, errors.New("not found")
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress

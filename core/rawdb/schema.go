@@ -53,6 +53,8 @@ var (
 	txLookupPrefix  = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 
+	codePrefix = []byte("c") // codePrefix + hash -> bytecode
+
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
 
@@ -121,6 +123,11 @@ func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 	binary.BigEndian.PutUint64(key[3:], section)
 
 	return key
+}
+
+// codeKey = codePrefix + hash
+func codeKey(hash common.Hash) []byte {
+	return append(codePrefix, hash.Bytes()...)
 }
 
 // preimageKey = preimagePrefix + hash

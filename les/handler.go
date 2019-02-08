@@ -631,7 +631,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					if err != nil {
 						continue
 					}
-					code, _ := statedb.Database().TrieDB().Node(common.Hash{}, common.BytesToHash(account.CodeHash)) // TODO(karalabe): make this work again
+					code := rawdb.ReadCode(pm.chainDb, common.BytesToHash(account.CodeHash))
 
 					data = append(data, code)
 					if bytes += len(code); bytes >= softResponseLimit {

@@ -74,7 +74,7 @@ func makeNodeKey(owner common.Hash, hash common.Hash) string {
 	if owner == (common.Hash{}) {
 		return string(hash[:])
 	}
-	return string(append(owner[:], hash[:]...))
+	return string(append(hash[:], owner[:]...))
 }
 
 // splitNodeKey returns the composing hashes of a trie node key.
@@ -87,7 +87,7 @@ func splitNodeKey(key string) (common.Hash, common.Hash) {
 		return common.Hash{}, common.BytesToHash([]byte(key))
 
 	case 2 * common.HashLength:
-		return common.BytesToHash([]byte(key[:common.HashLength])), common.BytesToHash([]byte(key[common.HashLength:]))
+		return common.BytesToHash([]byte(key[common.HashLength:])), common.BytesToHash([]byte(key[:common.HashLength]))
 
 	default:
 		panic(fmt.Sprintf("invalid node key: %s", key))
@@ -432,18 +432,6 @@ func (db *Database) DiskDB() DatabaseReader {
 	return db.diskdb
 }
 
-// InsertBlob writes a new reference tracked blob to the memory database if it's
-// yet unknown. This method should only be used for non-trie nodes that require
-// reference counting, since trie nodes are garbage collected directly through
-// their embedded children.
-func (db *Database) InsertBlob(owner common.Hash, hash common.Hash, blob []byte) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	db.DiskDB().(ethdb.Database).Put([]byte(makeNodeKey(owner, hash)), blob)
-	//db.insert(owner, hash, blob, rawNode(blob))
-}
-
 // insert inserts a collapsed trie node into the memory database. This method is
 // a more generic version of InsertBlob, supporting both raw blob insertions as
 // well ex trie node insertions. The blob must always be specified to allow proper
@@ -526,9 +514,7 @@ func (db *Database) node(owner common.Hash, hash common.Hash, cachegen uint16) n
 
 // Node retrieves an encoded cached trie node from memory. If it cannot be found
 // cached, the method queries the persistent database for the content.
-func (db *Database) Node(owner common.Hash, hash common.Hash) ([]byte, error) {
-	key := makeNodeKey(owner, hash)
-
+func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from the clean cache if available
 	if db.cleans != nil {
 		if enc, err := db.cleans.Get(string(hash[:])); err == nil && enc != nil {
@@ -537,24 +523,34 @@ func (db *Database) Node(owner common.Hash, hash common.Hash) ([]byte, error) {
 			return enc, nil
 		}
 	}
-	// Retrieve the node from the dirty cache if available
-	db.lock.RLock()
-	dirty := db.dirties[key]
-	db.lock.RUnlock()
+	// TODO(karalabe): We need 2 new retrieval mechanisms:
+	//   - We need to retrieve from the dirty cache, needs some data struct extension (no owner)
+	//   - We need to retrieve from the database, needs prefix iteration support (just needs the interface ext)
+	//
+	// The code below is what's needed to work, just without the 'owner' being available
+	/*
+		// Retrieve the node from the dirty cache if available
+		key := makeNodeKey(owner, hash)
 
-	if dirty != nil {
-		return dirty.rlp(), nil
-	}
-	// Content unavailable in memory, attempt to retrieve from disk
-	enc, err := db.diskdb.Get([]byte(key))
-	if err == nil && enc != nil {
-		if db.cleans != nil {
-			db.cleans.Set(string(hash[:]), enc)
-			memcacheCleanMissMeter.Mark(1)
-			memcacheCleanWriteMeter.Mark(int64(len(enc)))
+		db.lock.RLock()
+		dirty := db.dirties[key]
+		db.lock.RUnlock()
+
+		if dirty != nil {
+			return dirty.rlp(), nil
 		}
-	}
-	return enc, err
+		// Content unavailable in memory, attempt to retrieve from disk
+		enc, err := db.diskdb.Get([]byte(key))
+		if err == nil && enc != nil {
+			if db.cleans != nil {
+				db.cleans.Set(string(hash[:]), enc)
+				memcacheCleanMissMeter.Mark(1)
+				memcacheCleanWriteMeter.Mark(int64(len(enc)))
+			}
+		}
+		return enc, err
+	*/
+	return nil, nil
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
