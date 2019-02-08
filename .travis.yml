@@ -53,7 +53,7 @@ matrix:
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA upload
-    - if: type = push
+    - if: repo = ethereum/go-ethereum AND type = push
       os: linux
       dist: trusty
       go: 1.11.x
