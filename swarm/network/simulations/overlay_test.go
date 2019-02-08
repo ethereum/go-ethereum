@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	nodeCount = 16
+	nodeCount = 10
 )
 
 //This test is used to test the overlay simulation.
