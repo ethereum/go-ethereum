@@ -1293,7 +1293,9 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			t.Fatal("Context timed out")
 		}
 
+		lock.RLock()
 		log.Debug("Expected message count: ", "expectedMsgCount", expectedMsgCount)
+		lock.RUnlock()
 		//now iterate again, this time we call each node via RPC to get its subscriptions
 		realCount := 0
 		for _, node := range nodes {
@@ -1324,8 +1326,11 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			}
 		}
 		// every node is mutually subscribed to each other, so the actual count is half of it
-		if realCount/2 != expectedMsgCount {
-			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, expectedMsgCount)
+		lock.RLock()
+		emc := expectedMsgCount
+		lock.RUnlock()
+		if realCount/2 != emc {
+			return fmt.Errorf("Real subscriptions and expected amount don't match; real: %d, expected: %d", realCount/2, emc)
 		}
 		return nil
 	})
