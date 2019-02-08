@@ -1290,7 +1290,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 		select {
 		case <-allSubscriptionsDone:
 		case <-ctx.Done():
-			t.Fatal("Context timed out")
+			return errors.New("Context timed out")
 		}
 
 		lock.RLock()
@@ -1302,14 +1302,14 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 			//create rpc client
 			client, err := node.Client()
 			if err != nil {
-				t.Fatalf("create node 1 rpc client fail: %v", err)
+				return fmt.Errorf("create node 1 rpc client fail: %v", err)
 			}
 
 			//ask it for subscriptions
 			pstreams := make(map[string][]string)
 			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
 			if err != nil {
-				t.Fatal(err)
+				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 			}
 			//length of the subscriptions can not be smaller than number of peers
 			log.Debug("node subscriptions", "node", node.String())

@@ -589,7 +589,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 			return fmt.Errorf("Test failed, chunks not available on all nodes")
 		}
 		if err := <-retErrC; err != nil {
-			t.Fatalf("requesting chunks: %v", err)
+			return fmt.Errorf("requesting chunks: %v", err)
 		}
 		log.Debug("Test terminated successfully")
 		return nil
@@ -664,14 +664,14 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 
 		item, ok := sim.NodeItem(node, bucketKeyFileStore)
 		if !ok {
-			b.Fatal("No filestore")
+			return errors.New("No filestore")
 		}
 		remoteFileStore := item.(*storage.FileStore)
 
 		pivotNode := nodeIDs[0]
 		item, ok = sim.NodeItem(pivotNode, bucketKeyNetStore)
 		if !ok {
-			b.Fatal("No filestore")
+			return errors.New("No filestore")
 		}
 		netStore := item.(*storage.NetStore)
 
@@ -713,12 +713,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 				ctx := context.TODO()
 				hash, wait, err := remoteFileStore.Store(ctx, testutil.RandomReader(i, chunkSize), int64(chunkSize), false)
 				if err != nil {
-					b.Fatalf("expected no error. got %v", err)
+					return fmt.Errorf("store: %v", err)
 				}
 				// wait until all chunks stored
 				err = wait(ctx)
 				if err != nil {
-					b.Fatalf("expected no error. got %v", err)
+					return fmt.Errorf("wait store: %v", err)
 				}
 				// collect the hashes
 				hashes[i] = hash
@@ -754,10 +754,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 				break Loop
 			}
 		}
-		if err != nil {
-			b.Fatal(err)
-		}
-		return nil
+		return err
 	})
 	if result.Error != nil {
 		b.Fatal(result.Error)

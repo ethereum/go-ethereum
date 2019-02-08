@@ -142,7 +142,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			id := nodeIDs[j]
 			client, err := sim.Net.GetNode(id).Client()
 			if err != nil {
-				t.Fatal(err)
+				return fmt.Errorf("node %s client: %v", id, err)
 			}
 			sid := nodeIDs[j+1]
 			client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", FormatSyncBinKey(1), false), NewRange(0, 0), Top)
@@ -158,7 +158,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 				size := chunkCount * chunkSize
 				_, wait, err := fileStore.Store(ctx, testutil.RandomReader(j, size), int64(size), false)
 				if err != nil {
-					t.Fatal(err.Error())
+					return fmt.Errorf("fileStore.Store: %v", err)
 				}
 				wait(ctx)
 			}
@@ -273,7 +273,7 @@ func TestSameVersionID(t *testing.T) {
 
 		//the peers should connect, thus getting the peer should not return nil
 		if registry.getPeer(nodes[1]) == nil {
-			t.Fatal("Expected the peer to not be nil, but it is")
+			return errors.New("Expected the peer to not be nil, but it is")
 		}
 		return nil
 	})
@@ -338,7 +338,7 @@ func TestDifferentVersionID(t *testing.T) {
 
 		//getting the other peer should fail due to the different version numbers
 		if registry.getPeer(nodes[1]) != nil {
-			t.Fatal("Expected the peer to be nil, but it is not")
+			return errors.New("Expected the peer to be nil, but it is not")
 		}
 		return nil
 	})

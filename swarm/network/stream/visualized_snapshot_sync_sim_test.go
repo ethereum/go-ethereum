@@ -114,7 +114,7 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 		id := sim.Net.GetRandomUpNode().ID()
 		item, ok := sim.NodeItem(id, bucketKeyFileStore)
 		if !ok {
-			t.Fatalf("No filestore")
+			return errors.New("No filestore")
 		}
 		fileStore := item.(*storage.FileStore)
 		//create a bogus hash

@@ -118,13 +118,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
-			log.Error("Store error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("store: %v", err)
 		}
 		err = wait(ctx)
 		if err != nil {
-			log.Error("Wait error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("wait store: %v", err)
 		}
 
 		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
