@@ -250,7 +250,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 				message := []*NameValueType{
 					{
 						Name:  "message",
-						Typ:   "text/plain",
+						Typ:   accounts.MimetypeTextPlain,
 						Value: msg,
 					},
 				}
