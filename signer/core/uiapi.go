@@ -56,9 +56,7 @@ func NewUIServerAPI(extapi *SignerAPI) *UIServerAPI {
 func (s *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, error) {
 	var accs []accounts.Account
 	for _, wallet := range s.am.Wallets() {
-		for _, acc := range wallet.Accounts() {
-			accs = append(accs, acc)
-		}
+		accs = append(accs, wallet.Accounts()...)
 	}
 	return accs, nil
 }
