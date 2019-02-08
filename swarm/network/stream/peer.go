@@ -88,11 +88,11 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		defer p.spans.Delete(wmsg.Context)
-		sp, ok := p.spans.Load(wmsg.Context)
-		if ok {
-			defer sp.(opentracing.Span).Finish()
-		}
+		//		defer p.spans.Delete(wmsg.Context)
+		//		sp, ok := p.spans.Load(wmsg.Context)
+		//		if ok {
+		//			defer sp.(opentracing.Span).Finish()
+		//		}
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
 			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
@@ -158,7 +158,8 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 		spanName += ".retrieval"
 	}
 
-	return p.SendPriority(ctx, msg, priority, spanName)
+	//return p.SendPriority(ctx, msg, priority, spanName)
+	return p.SendPriority(ctx, msg, priority, "")
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
@@ -171,7 +172,7 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 			ctx,
 			traceId,
 		)
-		p.spans.Store(ctx, sp)
+		p.spans.Store(traceId, sp)
 	}
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
@@ -190,7 +191,8 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
-		"send.offered.hashes")
+		"",
+	)
 	defer sp.Finish()
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)

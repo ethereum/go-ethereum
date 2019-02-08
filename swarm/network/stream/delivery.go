@@ -209,15 +209,22 @@ type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // TODO: Fix context SNAFU
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
-	var osp opentracing.Span
-	ctx, osp = spancontext.StartSpan(
-		ctx,
-		"chunk.delivery")
+	//	var osp opentracing.Span
+	//	ctx, osp = spancontext.StartSpan(
+	//		ctx,
+	//		"chunk.delivery")
+
+	spanId := fmt.Sprintf("request.%v.%v", sp.ID(), req.Addr)
+	span, spanOk := sp.spans.Load(spanId)
+	sp.spans.Delete(spanId)
 
 	processReceivedChunksCount.Inc(1)
 
 	go func() {
-		defer osp.Finish()
+		//defer osp.Finish()
+		if spanOk {
+			defer span.(opentracing.Span).Finish()
+		}
 
 		req.peer = sp
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
@@ -272,7 +279,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
 		HopCount:  req.HopCount,
-	}, Top, "request.from.peers")
+	}, Top, fmt.Sprintf("request.%v.%v", sp.ID(), req.Addr))
 	if err != nil {
 		return nil, nil, err
 	}
