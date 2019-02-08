@@ -166,7 +166,8 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
 	if traceId != "" {
-		ctx, sp := spancontext.StartSpan(
+		var sp opentracing.Span
+		ctx, sp = spancontext.StartSpan(
 			ctx,
 			traceId,
 		)
