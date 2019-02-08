@@ -34,8 +34,8 @@ type (
 )
 
 type NetFetcher interface {
-	Request(ctx context.Context, hopCount uint8)
-	Offer(ctx context.Context, source *enode.ID)
+	Request(hopCount uint8)
+	Offer(source *enode.ID)
 }
 
 // NetStore is an extension of local storage
@@ -150,7 +150,7 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 		}
 		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
 		// if it doesn't exist yet
-		f := n.getOrCreateFetcher(ref)
+		f := n.getOrCreateFetcher(ctx, ref)
 		// If the caller needs the chunk, it has to use the returned fetch function to get it
 		return nil, f.Fetch, nil
 	}
@@ -168,7 +168,7 @@ func (n *NetStore) Has(ctx context.Context, ref Address) bool {
 // getOrCreateFetcher attempts at retrieving an existing fetchers
 // if none exists, creates one and saves it in the fetchers cache
 // caller must hold the lock
-func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
+func (n *NetStore) getOrCreateFetcher(ctx context.Context, ref Address) *fetcher {
 	if f := n.getFetcher(ref); f != nil {
 		return f
 	}
@@ -176,7 +176,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// no fetcher for the given address, we have to create a new one
 	key := hex.EncodeToString(ref)
 	// create the context during which fetching is kept alive
-	ctx, cancel := context.WithTimeout(context.Background(), fetcherTimeout)
+	cctx, cancel := context.WithTimeout(ctx, fetcherTimeout)
 	// destroy is called when all requests finish
 	destroy := func() {
 		// remove fetcher from fetchers
@@ -190,7 +190,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// the peers which requested the chunk should not be requested to deliver it.
 	peers := &sync.Map{}
 
-	fetcher := newFetcher(ref, n.NewNetFetcherFunc(ctx, ref, peers), destroy, peers, n.closeC)
+	fetcher := newFetcher(ref, n.NewNetFetcherFunc(cctx, ref, peers), destroy, peers, n.closeC)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
@@ -278,9 +278,9 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
 			return nil, err
 		}
-		f.netFetcher.Offer(rctx, &source)
+		f.netFetcher.Offer(&source)
 	} else {
-		f.netFetcher.Request(rctx, hopCount)
+		f.netFetcher.Request(hopCount)
 	}
 
 	// wait until either the chunk is delivered or the context is done
