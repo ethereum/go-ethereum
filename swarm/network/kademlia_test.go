@@ -241,7 +241,7 @@ func TestHealthStrict(t *testing.T) {
 	// know three peers, connected to the two deepest
 	// healthy
 	tk.Register("00000000")
-	tk.checkHealth(true)
+	tk.checkHealth(false)
 
 	// know three peers, connected to all three
 	// healthy
@@ -279,9 +279,9 @@ func TestHealthStrict(t *testing.T) {
 	tk.checkHealth(true)
 
 	// add peer in bin 1
-	// healthy, as it is known but not connected
+	// unhealthy, as it is known but not connected
 	tk.Register("10000000")
-	tk.checkHealth(true)
+	tk.checkHealth(false)
 
 	// connect  peer in bin 1
 	// depth change, is now 1
@@ -305,9 +305,9 @@ func TestHealthStrict(t *testing.T) {
 	tk.checkHealth(true)
 
 	// add peer in bin 2
-	// healthy, no depth change
+	// unhealthy, no depth change
 	tk.Register("11000000")
-	tk.checkHealth(true)
+	tk.checkHealth(false)
 
 	// connect peer in bin 2
 	// depth change - as we already have peers in bin 3 and 4,
