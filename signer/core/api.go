@@ -112,6 +112,37 @@ type Metadata struct {
 	Origin    string `json:"Origin"`
 }
 
+func StartClefAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.Manager {
+	var (
+		backends []accounts.Backend
+		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
+	)
+	if lightKDF {
+		n, p = keystore.LightScryptN, keystore.LightScryptP
+	}
+	// support password based accounts
+	if len(ksLocation) > 0 {
+		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
+	}
+	if !nousb {
+		// Start a USB hub for Ledger hardware wallets
+		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+		} else {
+			backends = append(backends, ledgerhub)
+			log.Debug("Ledger support enabled")
+		}
+		// Start a USB hub for Trezor hardware wallets
+		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+		} else {
+			backends = append(backends, trezorhub)
+			log.Debug("Trezor support enabled")
+		}
+	}
+	return accounts.NewManager(backends...)
+}
+
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
 	m := Metadata{"NA", "NA", "NA", "", ""} // batman

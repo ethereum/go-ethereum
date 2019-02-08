@@ -40,7 +40,7 @@ func NewStdIOUI() *StdIOUI {
 	return ui
 }
 
-func (ui *StdIOUI) RegisterUIServer(api *UIServerAPI){
+func (ui *StdIOUI) RegisterUIServer(api *UIServerAPI) {
 	ui.client.RegisterName("clef", api)
 }
 

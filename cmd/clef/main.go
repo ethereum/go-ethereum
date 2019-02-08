@@ -341,37 +341,6 @@ func initialize(c *cli.Context) error {
 	return nil
 }
 
-func startAccountManager(ksLocation string, nousb, lightKDF bool) *accounts.Manager {
-	var (
-		backends []accounts.Backend
-		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
-	)
-	if lightKDF {
-		n, p = keystore.LightScryptN, keystore.LightScryptP
-	}
-	// support password based accounts
-	if len(ksLocation) > 0 {
-		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
-	}
-	if !nousb {
-		// Start a USB hub for Ledger hardware wallets
-		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
-		} else {
-			backends = append(backends, ledgerhub)
-			log.Debug("Ledger support enabled")
-		}
-		// Start a USB hub for Trezor hardware wallets
-		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
-		} else {
-			backends = append(backends, trezorhub)
-			log.Debug("Trezor support enabled")
-		}
-	}
-	return accounts.NewManager(backends...)
-}
-
 func signer(c *cli.Context) error {
 	if err := initialize(c); err != nil {
 		return err
@@ -450,7 +419,7 @@ func signer(c *cli.Context) error {
 	)
 	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
 		"light-kdf", lightKdf, "advanced", advanced)
-	am := startAccountManager(ksLoc, nousb, lightKdf)
+	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf)
 	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced)
 
 	// Establish the bidirectional communication, by creating a new UI backend and registering

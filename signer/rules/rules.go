@@ -65,7 +65,7 @@ func NewRuleEvaluator(next core.UIClientAPI, jsbackend, credentialsBackend stora
 
 	return c, nil
 }
-func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI){
+func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
 	// TODO, make it possible to query from js
 }
 
