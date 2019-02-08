@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"sort"
+	"sync"
 )
 
 /*
@@ -104,6 +105,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 	putter := &HashExplorer{
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
 		References:  make([]Reference, 0),
+		lock:        &sync.RWMutex{},
 	}
 	// do the actual splitting anyway, no way around it
 	_, _, err = PyramidSplit(ctx, data, putter, putter)
@@ -123,6 +125,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 type HashExplorer struct {
 	*hasherStore
 	References []Reference
+	lock       *sync.RWMutex
 }
 
 // HashExplorer's Put will add just the chunk hashes to its `References`
@@ -133,6 +136,8 @@ func (he *HashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference
 		return nil, err
 	}
 	// internally store the reference
+	he.lock.Lock()
 	he.References = append(he.References, ref)
+	he.lock.Unlock()
 	return ref, nil
 }
