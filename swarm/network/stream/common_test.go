@@ -151,7 +151,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 	// temp datadir
 	datadir, err := ioutil.TempDir("", "streamer")
 	if err != nil {
-		return nil, nil, nil, func() {}, err
+		return nil, nil, nil, nil, err
 	}
 	removeDataDir := func() {
 		os.RemoveAll(datadir)
@@ -163,12 +163,14 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 
 	localStore, err := storage.NewTestLocalStoreForAddr(params)
 	if err != nil {
-		return nil, nil, nil, removeDataDir, err
+		removeDataDir()
+		return nil, nil, nil, nil, err
 	}
 
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
-		return nil, nil, nil, removeDataDir, err
+		removeDataDir()
+		return nil, nil, nil, nil, err
 	}
 
 	delivery := NewDelivery(to, netStore)
@@ -182,6 +184,7 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 
 	err = waitForPeers(streamer, 1*time.Second, 1)
 	if err != nil {
+		teardown()
 		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
 	}
 

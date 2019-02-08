@@ -41,10 +41,10 @@ import (
 
 func TestStreamerSubscribe(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 	err = streamer.Subscribe(tester.Nodes[0].ID(), stream, NewRange(0, 0), Top)
@@ -55,10 +55,10 @@ func TestStreamerSubscribe(t *testing.T) {
 
 func TestStreamerRequestSubscription(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", false)
 	err = streamer.RequestSubscription(tester.Nodes[0].ID(), stream, &Range{}, Top)
@@ -146,10 +146,10 @@ func (self *testServer) Close() {
 
 func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterClientFunc("foo", func(p *Peer, t string, live bool) (Client, error) {
 		return newTestClient(t), nil
@@ -239,10 +239,10 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 
 func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", false)
 
@@ -306,10 +306,10 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 
 func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -372,10 +372,10 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchangeLive(t *testing.T) {
 
 func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -416,10 +416,10 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 
 func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -479,10 +479,10 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 
 func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -544,10 +544,10 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	stream := NewStream("foo", "", true)
 
@@ -643,10 +643,10 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 
 func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(nil)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 10), nil
@@ -780,10 +780,10 @@ func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 		Syncing:        SyncingDisabled,
 		MaxPeerServers: maxPeerServers,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -854,10 +854,10 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
 		MaxPeerServers: maxPeerServers,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterServerFunc("foo", func(p *Peer, t string, live bool) (Server, error) {
 		return newTestServer(t, 0), nil
@@ -940,10 +940,10 @@ func TestHasPriceImplementation(t *testing.T) {
 		Retrieval: RetrievalDisabled,
 		Syncing:   SyncingDisabled,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	if r.prices == nil {
 		t.Fatal("No prices implementation available for the stream protocol")

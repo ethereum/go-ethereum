@@ -48,10 +48,10 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 		Syncing:   SyncingDisabled,
 	}
 	tester, streamer, _, teardown, err := newStreamerTester(regOpts)
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -100,10 +100,10 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 		Retrieval: RetrievalEnabled,
 		Syncing:   SyncingDisabled, //do no syncing
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -172,10 +172,10 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 		Retrieval: RetrievalEnabled,
 		Syncing:   SyncingDisabled,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	node := tester.Nodes[0]
 
@@ -362,10 +362,10 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		Retrieval: RetrievalDisabled,
 		Syncing:   SyncingDisabled,
 	})
-	defer teardown()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer teardown()
 
 	streamer.RegisterClientFunc("foo", func(p *Peer, t string, live bool) (Client, error) {
 		return &testClient{
