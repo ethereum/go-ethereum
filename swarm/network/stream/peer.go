@@ -186,6 +186,11 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
+	var sp opentracing.Span
+	ctx, sp := spancontext.StartSpan(
+		context.TODO(),
+		"send.offered.hashes")
+	defer sp.Finish()
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
@@ -209,7 +214,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	return p.SendPriority(context.TODO(), msg, s.priority, "")
+	return p.SendPriority(ctx, msg, s.priority, "")
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {
