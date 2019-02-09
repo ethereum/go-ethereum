@@ -135,8 +135,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	head := header.Number.Uint64()
 
+	begin := uint64(f.begin)
 	if f.begin == -1 {
-		f.begin = int64(head)
+		begin = head
 	}
 	end := uint64(f.end)
 	if f.end == -1 {
@@ -145,31 +146,57 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
 		logs []*types.Log
+		rest []*types.Log
 		err  error
 	)
 	size, sections := f.backend.BloomStatus()
-	if indexed := sections * size; indexed > uint64(f.begin) {
-		if indexed > end {
-			logs, err = f.indexedLogs(ctx, end)
-		} else {
-			logs, err = f.indexedLogs(ctx, indexed-1)
+
+	indexed := sections * size
+	if begin > end {
+		rest, err = f.unindexedLogs(ctx, begin, indexed)
+		if err != nil {
+			return rest, err
+		}
+	}
+	if indexed > begin || indexed > end {
+		if indexed > begin && indexed > end {
+			logs, err = f.indexedLogs(ctx, begin, end)
+		} else if begin < end && end >= indexed {
+			logs, err = f.indexedLogs(ctx, begin, indexed-1)
+		} else if begin > end && begin >= indexed {
+			logs, err = f.indexedLogs(ctx, indexed-1, end)
 		}
 		if err != nil {
+			if len(rest) > 0 {
+				logs = append(rest, logs...)
+			}
 			return logs, err
 		}
 	}
-	rest, err := f.unindexedLogs(ctx, end)
-	logs = append(logs, rest...)
+
+	if end >= begin {
+		rest, err = f.unindexedLogs(ctx, uint64(f.begin), end)
+		logs = append(logs, rest...)
+	} else {
+		logs = append(rest, logs...)
+	}
 	return logs, err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) indexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
-	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
+	start := int64(begin)
+	stop := int64(end)
+	inc := int64(1)
+	if start > stop {
+		inc = -1
+	}
+
+	session, err := f.matcher.Start(ctx, uint64(start), uint64(stop), matches)
 	if err != nil {
 		return nil, err
 	}
@@ -187,11 +214,11 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			if !ok {
 				err := session.Error()
 				if err == nil {
-					f.begin = int64(end) + 1
+					f.begin = stop + inc
 				}
 				return logs, err
 			}
-			f.begin = int64(number) + 1
+			f.begin = int64(number) + inc
 
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
@@ -212,11 +239,18 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 
 // indexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
 	var logs []*types.Log
 
-	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
+	start := int64(begin)
+	stop := int64(end)
+	inc := int64(1)
+	if start > stop {
+		inc = -1
+	}
+
+	for ; start != stop; start += inc {
+		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(start))
 		if header == nil || err != nil {
 			return logs, err
 		}

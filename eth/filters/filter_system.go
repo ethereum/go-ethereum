@@ -194,7 +194,7 @@ func (es *EventSystem) subscribe(sub *subscription) *Subscription {
 
 // SubscribeLogs creates a subscription that will write all logs matching the
 // given criteria to the given logs channel. Default value for the from and to
-// block is "latest". If the fromBlock > toBlock an error is returned.
+// block is "latest".
 func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*types.Log) (*Subscription, error) {
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
@@ -217,7 +217,7 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		return es.subscribeLogs(crit, logs), nil
 	}
 	// only interested in mined logs within a specific block range
-	if from >= 0 && to >= 0 && to >= from {
+	if from >= 0 && to >= 0 {
 		return es.subscribeLogs(crit, logs), nil
 	}
 	// interested in mined logs from a specific block number, new logs and pending logs
@@ -228,7 +228,10 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	if from >= 0 && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil
 	}
-	return nil, fmt.Errorf("invalid from and to block combination: from > to")
+	if to >= 0 && from == rpc.LatestBlockNumber {
+		return es.subscribeLogs(crit, logs), nil
+	}
+	return nil, fmt.Errorf("invalid from and to block combination")
 }
 
 // subscribeMinedPendingLogs creates a subscription that returned mined and

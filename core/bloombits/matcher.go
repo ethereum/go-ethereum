@@ -163,6 +163,12 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	}
 	sink := m.run(begin, end, cap(results), session)
 
+	start := begin
+	stop := end
+	if start > stop {
+		start, stop = stop, start
+	}
+
 	// Read the output from the result sink and deliver to the user
 	session.pend.Add(1)
 	go func() {
@@ -183,13 +189,14 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 				sectionStart := res.section * m.sectionSize
 
 				first := sectionStart
-				if begin > first {
-					first = begin
+				if start > first {
+					first = start
 				}
 				last := sectionStart + m.sectionSize - 1
-				if end < last {
-					last = end
+				if stop < last {
+					last = stop
 				}
+
 				// Iterate over all the blocks in the section and return the matching ones
 				for i := first; i <= last; i++ {
 					// Skip the entire byte if no matches are found inside (and we're processing an entire byte!)
@@ -231,12 +238,23 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 		defer session.pend.Done()
 		defer close(source)
 
-		for i := begin / m.sectionSize; i <= end/m.sectionSize; i++ {
+		inc := int64(1)
+		if begin > end {
+			inc = -1
+		}
+
+		i := int64(begin / m.sectionSize)
+		for ; i != int64(end/m.sectionSize); i += inc {
 			select {
 			case <-session.quit:
 				return
-			case source <- &partialMatches{i, bytes.Repeat([]byte{0xff}, int(m.sectionSize/8))}:
+			case source <- &partialMatches{uint64(i), bytes.Repeat([]byte{0xff}, int(m.sectionSize/8))}:
 			}
+		}
+		select {
+		case <-session.quit:
+			return
+		case source <- &partialMatches{uint64(i), bytes.Repeat([]byte{0xff}, int(m.sectionSize/8))}:
 		}
 	}()
 	// Assemble the daisy-chained filtering pipeline
