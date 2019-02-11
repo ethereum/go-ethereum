@@ -102,33 +102,38 @@ func (f *FileStore) HashSize() int {
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
-	putter := &HashExplorer{
+	putter := &hashExplorer{
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
-		References:  make([]Reference, 0),
+		references:  make([]Reference, 0),
 	}
 	// do the actual splitting anyway, no way around it
-	_, _, err = PyramidSplit(ctx, data, putter, putter)
+	_, wait, err = PyramidSplit(ctx, data, putter, putter)
+	if err != nil {
+		return nil, err
+	}
+	// wait for splitting to be complete and all chunks processed
+	err = wait(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// collect all references
 	addrs = NewAddressCollection(0)
-	for _, ref := range putter.References {
+	for _, ref := range putter.references {
 		addrs = append(addrs, Address(ref))
 	}
 	sort.Sort(addrs)
 	return addrs, nil
 }
 
-// HashExplorer is a special kind of putter which will only store chunk references
-type HashExplorer struct {
+// hashExplorer is a special kind of putter which will only store chunk references
+type hashExplorer struct {
 	*hasherStore
-	References []Reference
-	lock       sync.RWMutex
+	references []Reference
+	lock       sync.Mutex
 }
 
 // HashExplorer's Put will add just the chunk hashes to its `References`
-func (he *HashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
+func (he *hashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
 	// Need to do the actual Put, which returns the references
 	ref, err := he.hasherStore.Put(ctx, chunkData)
 	if err != nil {
@@ -136,7 +141,7 @@ func (he *HashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference
 	}
 	// internally store the reference
 	he.lock.Lock()
-	he.References = append(he.References, ref)
+	he.references = append(he.references, ref)
 	he.lock.Unlock()
 	return ref, nil
 }
