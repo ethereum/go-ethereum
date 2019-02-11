@@ -175,7 +175,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
-		"",
+		"send.offered.hashes",
 	)
 	defer sp.Finish()
 
