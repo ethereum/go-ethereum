@@ -164,9 +164,16 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 	var disconnected atomic.Value
 	go func() {
-		for d := range disconnections {
-			if d.Error != nil {
-				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case d := <-disconnections:
+				if d.Error != nil {
+					log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
+				} else {
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				}
 				disconnected.Store(true)
 			}
 		}

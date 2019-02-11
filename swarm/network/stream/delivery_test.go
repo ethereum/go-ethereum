@@ -485,7 +485,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 	}
 
 	log.Info("Starting simulation")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		//determine the pivot node to be the first node of the simulation
@@ -557,9 +558,16 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 
 		var disconnected atomic.Value
 		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case d := <-disconnections:
+					if d.Error != nil {
+						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
+					} else {
+						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+					}
 					disconnected.Store(true)
 				}
 			}
@@ -657,7 +665,8 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 		b.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
 		node := nodeIDs[len(nodeIDs)-1]
@@ -687,9 +696,16 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 
 		var disconnected atomic.Value
 		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case d := <-disconnections:
+					if d.Error != nil {
+						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
+					} else {
+						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+					}
 					disconnected.Store(true)
 				}
 			}

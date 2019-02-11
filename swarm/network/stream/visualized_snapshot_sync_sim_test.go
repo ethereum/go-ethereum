@@ -81,10 +81,19 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 	)
 
 	go func() {
-		for d := range disconnections {
-			log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-			panic("unexpected disconnect")
-			cancelSimRun()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case d := <-disconnections:
+				if d.Error != nil {
+					log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
+				} else {
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				}
+				panic("unexpected disconnect")
+				cancelSimRun()
+			}
 		}
 	}()
 
