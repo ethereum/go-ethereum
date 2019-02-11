@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build linux netbsd openbsd solaris
+// +build darwin
 
 package fdlimit
 
@@ -32,6 +32,16 @@ func Raise(max uint64) error {
 	limit.Cur = limit.Max
 	if limit.Cur > max {
 		limit.Cur = max
+	}
+	// https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/getrlimit.2.html
+	//
+	// setrlimit() now returns with errno set to EINVAL in places that histori-cally historically
+	// cally succeeded.  It no longer accepts "rlim_cur = RLIM_INFINITY" for
+	// RLIM_NOFILE.  Use "rlim_cur = min(OPEN_MAX, rlim_max)".
+	//
+	// OPEN_MAX is 10240
+	if limit.Cur > 10240 {
+		limit.Cur = 10240
 	}
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return err
