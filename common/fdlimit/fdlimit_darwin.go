@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build darwin
-
 package fdlimit
 
 import "syscall"
@@ -65,6 +63,9 @@ func Maximum() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
+	}
+	if limit.Max > 10240 { // OPEN_MAX is 10240
+		return 10240, nil
 	}
 	return int(limit.Max), nil
 }
