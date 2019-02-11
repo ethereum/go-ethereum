@@ -50,6 +50,9 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
 
 		// trigger debug functionality on randomBytes
+		// get all references
+		//httpEndpoint(hosts[0])
+		// has-chunks
 
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
