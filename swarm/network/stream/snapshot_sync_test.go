@@ -18,6 +18,7 @@ package stream
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"sync"
@@ -92,6 +93,15 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		if *longrunning {
 			chnkCnt = []int{1, 8, 32, 256, 1024}
 			nodeCnt = []int{16, 32, 64, 128, 256}
+		} else if raceTest {
+			// TestSyncingViaGlobalSync allocates a lot of memory
+			// with race detector. By reducing the number of chunks
+			// and nodes, memory consumption is lower and data races
+			// are still checked, while correctness of syncing is
+			// tested with more chunks and nodes in regular (!race)
+			// tests.
+			chnkCnt = []int{4}
+			nodeCnt = []int{16}
 		} else {
 			//default test
 			chnkCnt = []int{4, 32}
@@ -113,7 +123,23 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 			return nil, nil, err
 		}
 
-		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+		var dir string
+		var store *state.DBStore
+		if raceTest {
+			// Use on-disk DBStore to reduce memory consumption in race tests.
+			dir, err = ioutil.TempDir("", "swarm-stream-")
+			if err != nil {
+				return nil, nil, err
+			}
+			store, err = state.NewDBStore(dir)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			store = state.NewInmemoryStore()
+		}
+
+		r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 			Retrieval:       RetrievalDisabled,
 			Syncing:         SyncingAutoSubscribe,
 			SyncUpdateDelay: 3 * time.Second,
