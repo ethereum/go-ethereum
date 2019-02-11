@@ -107,7 +107,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 		references:  make([]Reference, 0),
 	}
 	// do the actual splitting anyway, no way around it
-	_, wait, err = PyramidSplit(ctx, data, putter, putter)
+	_, wait, err := PyramidSplit(ctx, data, putter, putter)
 	if err != nil {
 		return nil, err
 	}
