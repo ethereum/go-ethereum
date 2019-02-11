@@ -461,7 +461,7 @@ func (net *Network) getRandomNode(ids []enode.ID, excludeIDs []enode.ID) *Node {
 	if l == 0 {
 		return nil
 	}
-	return net.GetNode(filtered[rand.Intn(l)])
+	return net.getNode(filtered[rand.Intn(l)])
 }
 
 func filterIDs(ids []enode.ID, excludeIDs []enode.ID) []enode.ID {
