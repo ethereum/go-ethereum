@@ -213,8 +213,6 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	processReceivedChunksCount.Inc(1)
 
 	go func() {
-		//defer osp.Finish()
-
 		req.peer = sp
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
@@ -268,7 +266,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
 		HopCount:  req.HopCount,
-	}, Top, fmt.Sprintf("request.%v.%v", sp.ID(), req.Addr))
+	}, Top)
 	if err != nil {
 		return nil, nil, err
 	}
