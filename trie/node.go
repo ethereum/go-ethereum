@@ -120,7 +120,7 @@ func (n valueNode) fstring(ind string) string {
 func mustDecodeNode(hash, buf []byte, cachegen uint16) node {
 	n, err := decodeNode(hash, buf, cachegen)
 	if err != nil {
-		panic(fmt.Sprintf("node %x: %v", hash, err))
+		panic(fmt.Sprintf("node %x (%x): %v", hash, buf, err))
 	}
 	return n
 }
