@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -83,16 +84,11 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		clients:      make(map[Stream]*client),
 		clientParams: make(map[Stream]*clientParams),
 		quit:         make(chan struct{}),
-		spans:        sync.Map{},
+		//spans:        sync.Map{},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		//		defer p.spans.Delete(wmsg.Context)
-		//		sp, ok := p.spans.Load(wmsg.Context)
-		//		if ok {
-		//			defer sp.(opentracing.Span).Finish()
-		//		}
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
 			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
@@ -129,6 +125,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 	go func() {
 		<-p.quit
+
 		cancel()
 	}()
 	return p
@@ -165,21 +162,8 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 // SendPriority sends message to the peer using the outgoing priority queue
 func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8) error {
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
+	tracing.StartSaveSpan(ctx)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
-	traceId := ctx.Value("stream_send_tag")
-	if traceId != nil {
-		traceStr := traceId.(string)
-		var sp opentracing.Span
-		ctx, sp = spancontext.StartSpan(
-			ctx,
-			traceStr,
-		)
-		traceMeta := ctx.Value("stream_send_meta")
-		if traceMeta != nil {
-			traceStr = traceStr + "." + traceMeta.(string)
-		}
-		p.spans.Store(traceId, sp)
-	}
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
 		Msg:     msg,
@@ -197,7 +181,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
-		"",
+		"send.offered.hashes",
 	)
 	defer sp.Finish()
 

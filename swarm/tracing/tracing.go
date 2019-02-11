@@ -1,18 +1,26 @@
 package tracing
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+
+	opentracing "github.com/opentracing/opentracing-go"
 	jaeger "github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-var Enabled bool = false
+var (
+	Enabled bool = false
+	store        = spanStore{}
+)
 
 // TracingEnabledFlag is the CLI flag name to use to enable trace collections.
 const TracingEnabledFlag = "tracing"
@@ -99,4 +107,48 @@ func initTracer(endpoint, svc string) (closer io.Closer) {
 	}
 
 	return closer
+}
+
+type spanStore struct {
+	spans sync.Map
+}
+
+func StartSaveSpan(ctx context.Context) context.Context {
+	if !Enabled {
+		return ctx
+	}
+	traceId := ctx.Value("span_save_id")
+	if traceId != nil {
+		traceStr := traceId.(string)
+		var sp opentracing.Span
+		ctx, sp = spancontext.StartSpan(
+			ctx,
+			traceStr,
+		)
+		traceMeta := ctx.Value("span_save_meta")
+		if traceMeta != nil {
+			traceStr = traceStr + "." + traceMeta.(string)
+		}
+		store.spans.Store(traceId, sp)
+	}
+	return ctx
+}
+
+func ShiftSpanByKey(k string) opentracing.Span {
+	if !Enabled {
+		return nil
+	}
+	span, spanOk := store.spans.Load(k)
+	if !spanOk {
+		return nil
+	}
+	store.spans.Delete(k)
+	return span.(opentracing.Span)
+}
+
+func FinishSpans() {
+	store.spans.Range(func(k, v interface{}) bool {
+		v.(opentracing.Span).Finish()
+		return true
+	})
 }

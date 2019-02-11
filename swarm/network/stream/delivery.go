@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
@@ -214,11 +215,10 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 
 	// retrieve the span for the originating retrieverequest
 	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
-	span, spanOk := sp.spans.Load(spanId)
-	sp.spans.Delete(spanId)
+	span := tracing.ShiftSpanByKey(spanId)
 
 	go func() {
-		if spanOk {
+		if span != nil {
 			defer span.(opentracing.Span).Finish()
 		}
 

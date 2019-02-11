@@ -426,6 +426,7 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 func (s *Swarm) Stop() error {
 	if s.tracerClose != nil {
 		err := s.tracerClose.Close()
+		tracing.FinishSpans()
 		if err != nil {
 			return err
 		}
