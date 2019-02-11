@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ func Raise(max uint64) error {
 	//
 	// OPEN_MAX is 10240
 	if limit.Cur > 10240 {
-		limit.Cur = 10240
+		return errors.New("darwin only allows OPEN_MAX (10240) open files")
 	}
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return err
