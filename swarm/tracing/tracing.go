@@ -23,7 +23,11 @@ var (
 )
 
 // TracingEnabledFlag is the CLI flag name to use to enable trace collections.
-const TracingEnabledFlag = "tracing"
+const (
+	TracingEnabledFlag = "tracing"
+	StoreLabelId       = "span_save_id"
+	StoreLabelMeta     = "span_save_meta"
+)
 
 var (
 	Closer io.Closer
@@ -117,7 +121,8 @@ func StartSaveSpan(ctx context.Context) context.Context {
 	if !Enabled {
 		return ctx
 	}
-	traceId := ctx.Value("span_save_id")
+	traceId := ctx.Value(StoreLabelId)
+
 	if traceId != nil {
 		traceStr := traceId.(string)
 		var sp opentracing.Span
@@ -125,11 +130,11 @@ func StartSaveSpan(ctx context.Context) context.Context {
 			ctx,
 			traceStr,
 		)
-		traceMeta := ctx.Value("span_save_meta")
+		traceMeta := ctx.Value(StoreLabelMeta)
 		if traceMeta != nil {
 			traceStr = traceStr + "." + traceMeta.(string)
 		}
-		store.spans.Store(traceId, sp)
+		store.spans.Store(traceStr, sp)
 	}
 	return ctx
 }

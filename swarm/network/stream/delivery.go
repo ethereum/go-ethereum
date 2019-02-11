@@ -275,8 +275,8 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
-	ctx = context.WithValue(ctx, "stream_send_tag", "stream.send.request")
-	ctx = context.WithValue(ctx, "stream_send_meta", fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
+	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
+	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
