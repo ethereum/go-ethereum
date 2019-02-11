@@ -16,7 +16,10 @@
 
 package fdlimit
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+)
 
 // Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
