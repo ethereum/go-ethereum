@@ -836,7 +836,7 @@ func (k *Kademlia) GetHealthInfo(pp *PeerPot) *Health {
 
 	// check saturation
 	unsaturatedBins := k.getUnsaturatedBins(pp.PeersPerBin, depth)
-	saturated := len(unsaturatedBins) == 0 && depth == len(pp.PeersPerBin)
+	saturated := depth == len(pp.PeersPerBin) && len(unsaturatedBins) == 0
 
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
