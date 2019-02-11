@@ -596,7 +596,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	return nil
 }
 
-func (req *ping) name() string { return "XDC/v4" }
+func (req *ping) name() string { return "PING XDC/v4" }
 
 func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
