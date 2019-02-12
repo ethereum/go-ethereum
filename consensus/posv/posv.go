@@ -307,6 +307,9 @@ func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
+	if common.IsTestnet {
+		fullVerify = false
+	}
 	if header.Number == nil {
 		return errUnknownBlock
 	}

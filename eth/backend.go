@@ -580,6 +580,19 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	} else {
 		return false, fmt.Errorf("Only verify masternode permission in PoSV protocol")
 	}
+	if common.IsTestnet {
+		masternodes := []common.Address{
+			common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
+			common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
+			common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+		}
+		for _, m := range masternodes {
+			if m == eb {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
 	return true, nil
 }
 
