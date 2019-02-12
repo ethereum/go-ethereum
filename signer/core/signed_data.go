@@ -121,8 +121,8 @@ var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 // sign receives a request and produces a signature
 
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
-func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest) (hexutil.Bytes, error) {
+// where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
+func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
 
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
@@ -140,11 +140,13 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest) (
 		return nil, err
 	}
 	// Sign the data with the wallet
-	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Hash)
+	signature, err := wallet.SignDataWithPassphrase(account, res.Password, req.ContentType, req.Rawdata)
 	if err != nil {
 		return nil, err
 	}
-	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	if legacyV {
+		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	}
 	return signature, nil
 }
 
@@ -153,17 +155,16 @@ func (api *SignerAPI) sign(addr common.MixedcaseAddress, req *SignDataRequest) (
 //
 // Different types of validation occur.
 func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (hexutil.Bytes, error) {
-	var req, err = api.determineSignatureFormat(ctx, contentType, addr, data)
+	var req, transformV, err = api.determineSignatureFormat(ctx, contentType, addr, data)
 	if err != nil {
 		return nil, err
 	}
 
-	signature, err := api.sign(addr, req)
+	signature, err := api.sign(addr, req, transformV)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
 	}
-
 	return signature, nil
 }
 
@@ -173,12 +174,14 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 // charset, ok := params["charset"]
 // As it is now, we accept any charset and just treat it as 'raw'.
 // This method returns the mimetype for signing along with the request
-func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (*SignDataRequest, error) {
-	var req *SignDataRequest
-
+func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType string, addr common.MixedcaseAddress, data interface{}) (*SignDataRequest, bool, error) {
+	var (
+		req          *SignDataRequest
+		useEthereumV = true // Default to use V = 27 or 28, the legacy Ethereum format
+	)
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		return nil, err
+		return nil, useEthereumV, err
 	}
 
 	switch mediaType {
@@ -186,7 +189,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Data with an intended validator
 		validatorData, err := UnmarshalValidatorData(data)
 		if err != nil {
-			return nil, err
+			return nil, useEthereumV, err
 		}
 		sighash, msg := SignTextValidator(validatorData)
 		message := []*NameValueType{
@@ -201,55 +204,63 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		// Clique is the Ethereum PoA standard
 		stringData, ok := data.(string)
 		if !ok {
-			return nil, fmt.Errorf("input for %v plain must be an hex-encoded string", ApplicationClique.Mime)
+			return nil, useEthereumV, fmt.Errorf("input for %v must be an hex-encoded string", ApplicationClique.Mime)
 		}
 		cliqueData, err := hexutil.Decode(stringData)
 		if err != nil {
-			return nil, err
+			return nil, useEthereumV, err
 		}
 		header := &types.Header{}
 		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
-			return nil, err
+			return nil, useEthereumV, err
+		}
+		// The incoming clique header is already truncated, sent to us with a extradata already shortened
+		if len(header.Extra) < 65 {
+			// Need to add it back, to get a suitable length for hashing
+			newExtra := make([]byte, len(header.Extra)+65)
+			copy(newExtra, header.Extra)
+			header.Extra = newExtra
 		}
 		// Get back the rlp data, encoded by us
-		cliqueData = clique.CliqueRLP(header)
-		sighash, err := SignCliqueHeader(header)
+		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
 		if err != nil {
-			return nil, err
+			return nil, useEthereumV, err
 		}
 		message := []*NameValueType{
 			{
-				Name:  "Clique block",
+				Name:  "Clique header",
 				Typ:   "clique",
-				Value: fmt.Sprintf("clique block %d [0x%x]", header.Number, header.Hash()),
+				Value: fmt.Sprintf("clique header %d [0x%x]", header.Number, header.Hash()),
 			},
 		}
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueData, Message: message, Hash: sighash}
+		// Clique uses V on the form 0 or 1
+		useEthereumV = false
+		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Message: message, Hash: sighash}
 	default: // also case TextPlain.Mime:
 		// Calculates an Ethereum ECDSA signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 		// We expect it to be a string
-		stringData, ok := data.(string)
-		if !ok {
-			return nil, fmt.Errorf("input for text/plain must be a string")
+		if stringData, ok := data.(string); !ok {
+			return nil, useEthereumV, fmt.Errorf("input for text/plain must be an hex-encoded string")
+		} else {
+			if textData, err := hexutil.Decode(stringData); err != nil {
+				return nil, useEthereumV, err
+			} else {
+				sighash, msg := accounts.TextAndHash(textData)
+				message := []*NameValueType{
+					{
+						Name:  "message",
+						Typ:   "text/plain",
+						Value: msg,
+					},
+				}
+				req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
+			}
 		}
-		//plainData, err := hexutil.Decode(stringdata)
-		//if err != nil {
-		//	return nil, err
-		//}
-		sighash, msg := accounts.TextAndHash([]byte(stringData))
-		message := []*NameValueType{
-			{
-				Name:  "message",
-				Typ:   "text/plain",
-				Value: msg,
-			},
-		}
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Message: message, Hash: sighash}
 	}
 	req.Address = addr
 	req.Meta = MetadataFromContext(ctx)
-	return req, nil
+	return req, useEthereumV, nil
 
 }
 
@@ -262,20 +273,21 @@ func SignTextValidator(validatorData ValidatorData) (hexutil.Bytes, string) {
 	return crypto.Keccak256([]byte(msg)), msg
 }
 
-// SignCliqueHeader returns the hash which is used as input for the proof-of-authority
+// cliqueHeaderHashAndRlp returns the hash which is used as input for the proof-of-authority
 // signing. It is the hash of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
 // The method requires the extra data to be at least 65 bytes -- the original implementation
 // in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
 // and simply return an error instead
-func SignCliqueHeader(header *types.Header) (hexutil.Bytes, error) {
-	//hash := common.Hash{}
+func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
 	if len(header.Extra) < 65 {
-		return nil, fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
+		return
 	}
-	hash := clique.SealHash(header)
-	return hash.Bytes(), nil
+	rlp = clique.CliqueRLP(header)
+	hash = clique.SealHash(header).Bytes()
+	return hash, rlp, err
 }
 
 // SignTypedData signs EIP-712 conformant typed data
@@ -293,7 +305,7 @@ func (api *SignerAPI) SignTypedData(ctx context.Context, addr common.MixedcaseAd
 	sighash := crypto.Keccak256(rawData)
 	message := typedData.Format()
 	req := &SignDataRequest{ContentType: DataTyped.Mime, Rawdata: rawData, Message: message, Hash: sighash}
-	signature, err := api.sign(addr, req)
+	signature, err := api.sign(addr, req, true)
 	if err != nil {
 		api.UI.ShowError(err.Error())
 		return nil, err
@@ -722,7 +734,7 @@ func (nvt *NameValueType) Pprint(depth int) string {
 			output.WriteString(sublevel)
 		}
 	} else {
-		output.WriteString(fmt.Sprintf("%s\n", nvt.Value))
+		output.WriteString(fmt.Sprintf("%q\n", nvt.Value))
 	}
 	return output.String()
 }

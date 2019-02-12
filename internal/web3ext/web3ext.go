@@ -232,6 +232,12 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'testSignCliqueBlock',
+			call: 'debug_testSignCliqueBlock',
+			params: 2, 
+			inputFormatters: [web3._extend.formatters.inputAddressFormatter, null],
+		}),
+		new web3._extend.Method({
 			name: 'setHead',
 			call: 'debug_setHead',
 			params: 1
