@@ -46,16 +46,16 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 	return otto.Value{}
 }
 
-// rulesetUI provides an implementation of SignerUI that evaluates a javascript
+// rulesetUI provides an implementation of UIClientAPI that evaluates a javascript
 // file for each defined UI-method
 type rulesetUI struct {
-	next        core.SignerUI // The next handler, for manual processing
+	next        core.UIClientAPI // The next handler, for manual processing
 	storage     storage.Storage
 	credentials storage.Storage
 	jsRules     string // The rules to use
 }
 
-func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.Storage) (*rulesetUI, error) {
+func NewRuleEvaluator(next core.UIClientAPI, jsbackend, credentialsBackend storage.Storage) (*rulesetUI, error) {
 	c := &rulesetUI{
 		next:        next,
 		storage:     jsbackend,
@@ -64,6 +64,9 @@ func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.
 	}
 
 	return c, nil
+}
+func (r *rulesetUI) RegisterUIServer(api *core.UIServerAPI) {
+	// TODO, make it possible to query from js
 }
 
 func (r *rulesetUI) Init(javascriptRules string) error {

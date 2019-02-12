@@ -39,6 +39,10 @@ func NewCommandlineUI() *CommandlineUI {
 	return &CommandlineUI{in: bufio.NewReader(os.Stdin)}
 }
 
+func (ui *CommandlineUI) RegisterUIServer(api *UIServerAPI) {
+	// noop
+}
+
 // readString reads a single line from stdin, trimming if from spaces, enforcing
 // non-emptyness.
 func (ui *CommandlineUI) readString() string {
@@ -223,7 +227,6 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	for _, account := range request.Accounts {
 		fmt.Printf("  [x] %v\n", account.Address.Hex())
 		fmt.Printf("    URL: %v\n", account.URL)
-		fmt.Printf("    Type: %v\n", account.Typ)
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

@@ -1,5 +1,29 @@
 ### Changelog for internal API (ui-api)
 
+### 4.0.0
+
+* Bidirectional communication implemented, so the UI can query `clef` via the stdin/stdout RPC channel. Methods implemented are:
+  - `clef_listWallets` 
+  - `clef_listAccounts`
+  - `clef_listWallets`
+  - `clef_deriveAccount`
+  - `clef_importRawKey`
+  - `clef_openWallet`
+  - `clef_chainId`
+  - `clef_setChainId`
+  - `clef_export`
+  - `clef_import`
+ 
+* The type `Account` was modified (the json-field `type` was removed), to consist of 
+
+```golang
+type Account struct {
+	Address common.Address `json:"address"` // Ethereum account address derived from the key
+	URL     URL            `json:"url"`     // Optional resource locator within a backend
+}
+```
+
+
 ### 3.2.0
 
 * Make `ShowError`, `OnApprovedTx`, `OnSignerStartup` be json-rpc [notifications](https://www.jsonrpc.org/specification#notification):

@@ -32,12 +32,16 @@ type StdIOUI struct {
 }
 
 func NewStdIOUI() *StdIOUI {
-	log.Info("NewStdIOUI")
 	client, err := rpc.DialContext(context.Background(), "stdio://")
 	if err != nil {
 		log.Crit("Could not create stdio client", "err", err)
 	}
-	return &StdIOUI{client: *client}
+	ui := &StdIOUI{client: *client}
+	return ui
+}
+
+func (ui *StdIOUI) RegisterUIServer(api *UIServerAPI) {
+	ui.client.RegisterName("clef", api)
 }
 
 // dispatch sends a request over the stdio
