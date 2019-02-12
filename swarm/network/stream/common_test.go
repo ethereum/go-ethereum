@@ -326,7 +326,7 @@ func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.Ch
 func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disconnected atomic.Value) {
 	log.Debug("Watching for disconnections")
 	disconnections := sim.PeerEvents(
-		context.Background(),
+		ctx,
 		sim.NodeIDs(),
 		simulation.NewPeerEventsFilter().Drop(),
 	)
