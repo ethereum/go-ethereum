@@ -71,7 +71,7 @@ matrix:
             - python-bzrlib
             - python-paramiko
       script:
-        - go run build/ci.go debsrc -upload ppa:ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
+        - go run build/ci.go debsrc -upload ethereum/ethereum -sftp-user geth-ci -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>"
 
     # This builder does the Linux Azure uploads
     - if: type = push
