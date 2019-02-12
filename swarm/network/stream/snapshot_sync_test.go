@@ -195,10 +195,8 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
-			if err != nil {
-				if yes, ok := disconnected.Load().(bool); ok && yes {
-					err = errors.New("disconnect events received")
-				}
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
 			}
 		}()
 

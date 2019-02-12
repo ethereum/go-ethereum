@@ -323,13 +323,14 @@ func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.Ch
 
 // watchDisconnections receives simulation peer events in a new goroutine and sets atomic value
 // disconnected to true in case of a disconnect event.
-func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disconnected atomic.Value) {
+func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disconnected *boolean) {
 	log.Debug("Watching for disconnections")
 	disconnections := sim.PeerEvents(
 		ctx,
 		sim.NodeIDs(),
 		simulation.NewPeerEventsFilter().Drop(),
 	)
+	disconnected = new(boolean)
 	go func() {
 		for {
 			select {
@@ -341,9 +342,32 @@ func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disco
 				} else {
 					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
 				}
-				disconnected.Store(true)
+				disconnected.set(true)
 			}
 		}
 	}()
 	return disconnected
+}
+
+// boolean is used to concurrently set
+// and read a boolean value.
+type boolean struct {
+	v  bool
+	mu sync.RWMutex
+}
+
+// set sets the value.
+func (b *boolean) set(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.v = v
+}
+
+// bool reads the value.
+func (b *boolean) bool() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	return b.v
 }
