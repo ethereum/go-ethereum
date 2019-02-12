@@ -3840,6 +3840,22 @@ var outputBlockFormatter = function(block) {
 
     return block;
 };
+/**
+ * Formats the output of a blockSigner list
+ *
+ * @method outputBlockFormatter
+ * @param {Object} blockSigners
+ * @returns {Object}
+ */
+var outputBlockSignersFormatter = function(blockSigners) {
+  if (utils.isArray(blockSigners)) {
+    blockSigners.forEach(function(item){
+      if(!utils.isString(item))
+        return formatOutputAddress(item);
+    });
+  }
+  return blockSigners;
+};
 
 /**
  * Formats the output of a log
@@ -3958,6 +3974,7 @@ module.exports = {
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
+    outputBlockSignersFormatter: outputBlockSignersFormatter,
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter
@@ -5210,6 +5227,14 @@ var blockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockByHash" : "eth_getBlockByNumber";
 };
 
+var blockSignersCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockSignersByHash" : "eth_getBlockSignersByNumber";
+};
+
+var blockFinalityCall = function (args) {
+  return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? "eth_getBlockFinalityByHash" : "eth_getBlockFinalityByNumber";
+};
+
 var transactionFromBlockCall = function (args) {
     return (utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTransactionByBlockHashAndIndex' : 'eth_getTransactionByBlockNumberAndIndex';
 };
@@ -5295,6 +5320,22 @@ var methods = function () {
         params: 2,
         inputFormatter: [formatters.inputBlockNumberFormatter, function (val) { return !!val; }],
         outputFormatter: formatters.outputBlockFormatter
+    });
+
+    var getBlockSigners = new Method({
+      name: 'getBlockSigners',
+      call: blockSignersCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.outputBlockSignersFormatter
+    });
+
+    var getBlockFinality = new Method({
+      name: 'getBlockFinality',
+      call: blockFinalityCall,
+      params: 1,
+      inputFormatter: [formatters.inputBlockNumberFormatter],
+      outputFormatter: formatters.formatOutputInt
     });
 
     var getUncle = new Method({
@@ -5436,6 +5477,8 @@ var methods = function () {
         getStorageAt,
         getCode,
         getBlock,
+        getBlockSigners,
+        getBlockFinality,
         getUncle,
         getCompilers,
         getBlockTransactionCount,
