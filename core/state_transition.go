@@ -229,15 +229,22 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// error.
 		vmerr error
 	)
+	// for debugging purpose
+	// TODO: clean it after fixing the issue https://github.com/tomochain/tomochain/issues/401
+	var contractAction string
+	nonce := uint64(1)
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		contractAction = "contract creation"
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(sender.Address(), st.state.GetNonce(sender.Address())+1)
+		nonce = st.state.GetNonce(sender.Address())+1
+		st.state.SetNonce(sender.Address(), nonce)
 		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
+		contractAction = "contract call"
 	}
 	if vmerr != nil {
-		log.Debug("VM returned with error", "err", vmerr)
+		log.Debug("VM returned with error", "action", contractAction, "contract address", st.to().Address(), "gas", st.gas, "gasPrice", st.gasPrice, "nonce", nonce, "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
