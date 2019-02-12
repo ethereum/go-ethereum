@@ -21,7 +21,6 @@ const (
 )
 
 var TIP2019Block = big.NewInt(1050000)
-var TestnetHF1 = uint64(909000)
 var IsTestnet = false
 var StoreRewardFolder string
 var RollbackHash Hash
