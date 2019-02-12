@@ -2,7 +2,7 @@
 
 ### 3.2.0
 
-* Make `ShowError`, `OnApprovedTx`, `OnSignerStartup` be json-rpc [notification](https://www.jsonrpc.org/specification#notification):
+* Make `ShowError`, `OnApprovedTx`, `OnSignerStartup` be json-rpc [notifications](https://www.jsonrpc.org/specification#notification):
 
 > A Notification is a Request object without an "id" member. A Request object that is a Notification signifies the Client's lack of interest in the corresponding Response object, and as such no Response object needs to be returned to the client. The Server MUST NOT reply to a Notification, including those that are within a batch request.
 > 
