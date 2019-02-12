@@ -441,11 +441,8 @@ func archiveBasename(arch string, archiveVersion string) string {
 func archiveUpload(archive string, blobstore string, signer string) error {
 	// If signing was requested, generate the signature files
 	if signer != "" {
-		pgpkey, err := base64.StdEncoding.DecodeString(os.Getenv(signer))
-		if err != nil {
-			return fmt.Errorf("invalid base64 %s", signer)
-		}
-		if err := build.PGPSignFile(archive, archive+".asc", string(pgpkey)); err != nil {
+		key := getenvBase64(signer)
+		if err := build.PGPSignFile(archive, archive+".asc", string(key)); err != nil {
 			return err
 		}
 	}
@@ -489,6 +486,7 @@ func doDebianSource(cmdline []string) {
 	var (
 		signer  = flag.String("signer", "", `Signing key name, also used as package author`)
 		upload  = flag.String("upload", "", `Where to upload the source package (usually "ppa:ethereum/ethereum")`)
+		sshUser = flag.String("sftp-user", "", `Username for SFTP upload (usually "geth-ci")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 		now     = time.Now()
 	)
@@ -498,11 +496,7 @@ func doDebianSource(cmdline []string) {
 	maybeSkipArchive(env)
 
 	// Import the signing key.
-	if b64key := os.Getenv("PPA_SIGNING_KEY"); b64key != "" {
-		key, err := base64.StdEncoding.DecodeString(b64key)
-		if err != nil {
-			log.Fatal("invalid base64 PPA_SIGNING_KEY")
-		}
+	if key := getenvBase64("PPA_SIGNING_KEY"); len(key) > 0 {
 		gpg := exec.Command("gpg", "--import")
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
@@ -523,10 +517,43 @@ func doDebianSource(cmdline []string) {
 				build.MustRunCommand("debsign", changes)
 			}
 			if *upload != "" {
-				build.MustRunCommand("dput", "--passive", "--no-upload-log", *upload, changes)
+				uploadDebianSource(*workdir, *upload, *sshUser, changes)
 			}
 		}
 	}
+}
+
+func uploadDebianSource(workdir, ppa, sshUser, changes string) {
+	// Create the dput config file.
+	dputConfig := filepath.Join(workdir, "dput.cf")
+	p := strings.Split(ppa, "/")
+	if len(p) != 2 {
+		log.Fatal("-upload PPA name must contain single /")
+	}
+	templateData := map[string]string{
+		"LaunchpadUser": p[0],
+		"LaunchpadPPA":  p[1],
+		"LaunchpadSSH":  sshUser,
+	}
+	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
+		idfile := filepath.Join(workdir, "sshkey")
+		ioutil.WriteFile(idfile, sshkey, 0600)
+		templateData["IdentityFile"] = idfile
+	}
+	build.Render("build/dput-launchpad.cf", dputConfig, 0644, templateData)
+
+	// Run dput to do the upload.
+	dput := exec.Command("dput", "-c", dputConfig, "--no-upload-log", ppa, changes)
+	dput.Stdin = strings.NewReader("Yes\n") // accept SSH host key
+	build.MustRun(dput)
+}
+
+func getenvBase64(variable string) []byte {
+	dec, err := base64.StdEncoding.DecodeString(os.Getenv(variable))
+	if err != nil {
+		log.Fatal("invalid base64 " + variable)
+	}
+	return []byte(dec)
 }
 
 func makeWorkdir(wdflag string) string {
@@ -800,15 +827,10 @@ func doAndroidArchive(cmdline []string) {
 	os.Rename(archive, meta.Package+".aar")
 	if *signer != "" && *deploy != "" {
 		// Import the signing key into the local GPG instance
-		b64key := os.Getenv(*signer)
-		key, err := base64.StdEncoding.DecodeString(b64key)
-		if err != nil {
-			log.Fatalf("invalid base64 %s", *signer)
-		}
+		key := getenvBase64(*signer)
 		gpg := exec.Command("gpg", "--import")
 		gpg.Stdin = bytes.NewReader(key)
 		build.MustRun(gpg)
-
 		keyID, err := build.PGPKeyID(string(key))
 		if err != nil {
 			log.Fatal(err)
