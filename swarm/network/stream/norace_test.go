@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build race
+// +build !race
 
 package stream
 
-// Reduce the scope of some tests when running with race detector,
-// as it raises the memory consumption significantly.
-var raceTest = true
+// Provide a flag to reduce the scope of tests when running them
+// with race detector. Some of the tests are doing a lot of allocations
+// on the heap, and race detector uses much more memory to track them.
+const raceTest = false
