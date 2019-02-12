@@ -18,13 +18,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"github.com/pborman/uuid"
 
@@ -50,12 +56,67 @@ func uploadAndSyncCmd(ctx *cli.Context, tuid string) error {
 		metrics.GetOrRegisterCounter(fmt.Sprintf("%s.timeout", commandName), nil).Inc(1)
 
 		// trigger debug functionality on randomBytes
-		// get all references
-		//httpEndpoint(hosts[0])
-		// has-chunks
+		err := triggerChunkDebug(randomBytes)
+		if err != nil {
+			log.Error("test timed out and triggerChunkDebug also produced error", "err", err)
+		}
 
 		return fmt.Errorf("timeout after %v sec", timeout)
 	}
+}
+
+func triggerChunkDebug(testData []byte) error {
+	log.Warn("Test timed out; running chunk debug sequence")
+
+	addrs, err := getAllRefs(testData)
+	if err != nil {
+		return err
+	}
+
+	// has-chunks
+	for _, host := range hosts {
+		rpcClient, err := rpc.Dial(host + ":8545")
+		if err != nil {
+			return err
+		}
+		var hasInfo []api.HasInfo
+		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
+		if err != nil {
+			return err
+		}
+		count := 0
+		for _, info := range hasInfo {
+			if !info.Has {
+				count++
+				log.Error("Host does not have chunk", "host", host, "chunk", info.Addr)
+			}
+		}
+		if count == 0 {
+			log.Info("Host reported to have all chunks", "host", host)
+		}
+	}
+	return nil
+}
+
+func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	reader := bytes.NewReader(testData)
+	addrs, err := fileStore.GetAllReferences(ctx, reader, false)
+	if err != nil {
+		return nil, err
+	}
+	return addrs, err
 }
 
 func uplaodAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
