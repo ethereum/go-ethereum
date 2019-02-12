@@ -24,7 +24,6 @@ import (
 	"math"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,7 +46,7 @@ func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
 	// This test uses much more memory when running with
 	// race detector. Allow it to finish successfully by
-	// reducing it s scope, and still check for data races
+	// reducing its scope, and still check for data races
 	// with the smallest number of nodes.
 	if !raceTest {
 		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
@@ -140,28 +139,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			nodeIndex[id] = i
 		}
 
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
-		var disconnected atomic.Value
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case d := <-disconnections:
-					if d.Error != nil {
-						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
-					} else {
-						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					}
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
 			if err != nil {
 				if yes, ok := disconnected.Load().(bool); ok && yes {

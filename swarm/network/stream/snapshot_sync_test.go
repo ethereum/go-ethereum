@@ -22,7 +22,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,28 +181,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		t.Fatal(err)
 	}
 
-	disconnections := sim.PeerEvents(
-		context.Background(),
-		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Drop(),
-	)
-
-	var disconnected atomic.Value
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case d := <-disconnections:
-				if d.Error != nil {
-					log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
-				} else {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-				}
-				disconnected.Store(true)
-			}
-		}
-	}()
+	disconnected := watchDisconnections(ctx, sim)
 
 	result := runSim(conf, ctx, sim, chunkCount)
 

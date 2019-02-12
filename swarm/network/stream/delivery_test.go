@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -549,29 +548,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 			retErrC <- err
 		}()
 
-		log.Debug("Watching for disconnections")
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
-		var disconnected atomic.Value
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case d := <-disconnections:
-					if d.Error != nil {
-						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
-					} else {
-						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					}
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
 			if err != nil {
 				if yes, ok := disconnected.Load().(bool); ok && yes {
@@ -688,28 +665,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			return err
 		}
 
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
-		var disconnected atomic.Value
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case d := <-disconnections:
-					if d.Error != nil {
-						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
-					} else {
-						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					}
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
 			if err != nil {
 				if yes, ok := disconnected.Load().(bool); ok && yes {

@@ -320,3 +320,30 @@ func createTestLocalStorageForID(id enode.ID, addr *network.BzzAddr) (storage.Ch
 	}
 	return store, datadir, nil
 }
+
+// watchDisconnections receives simulation peer events in a new goroutine and sets atomic value
+// disconnected to true in case of a disconnect event.
+func watchDisconnections(ctx context.Context, sim *simulation.Simulation) (disconnected atomic.Value) {
+	log.Debug("Watching for disconnections")
+	disconnections := sim.PeerEvents(
+		context.Background(),
+		sim.NodeIDs(),
+		simulation.NewPeerEventsFilter().Drop(),
+	)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case d := <-disconnections:
+				if d.Error != nil {
+					log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", d.Error)
+				} else {
+					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
+				}
+				disconnected.Store(true)
+			}
+		}
+	}()
+	return disconnected
+}

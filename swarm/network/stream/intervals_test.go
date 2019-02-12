@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -134,34 +133,12 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		log.Debug("Watching for disconnections")
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
 		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
 		if err != nil {
 			return err
 		}
 
-		var disconnected atomic.Value
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case d := <-disconnections:
-					if d.Error != nil {
-						log.Error("peer drop event error", "node", d.NodeID, "peer", d.PeerID, "err", err)
-					} else {
-						log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					}
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
 			if err != nil {
 				if yes, ok := disconnected.Load().(bool); ok && yes {
