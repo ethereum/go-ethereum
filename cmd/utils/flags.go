@@ -950,10 +950,11 @@ func makeDatabaseHandles() int {
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if err := fdlimit.Raise(uint64(limit)); err != nil {
+	raised, err := fdlimit.Raise(uint64(limit))
+	if err != nil {
 		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
-	return limit / 2 // Leave half for networking and other stuff
+	return int(raised / 2) // Leave half for networking and other stuff
 }
 
 // MakeAddress converts an account specified directly as a hex encoded string or
