@@ -20,7 +20,7 @@ import "errors"
 
 // Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func Raise(max uint64) error {
+func Raise(max uint64) (uint64, error) {
 	// This method is NOP by design:
 	//  * Linux/Darwin counterparts need to manually increase per process limits
 	//  * On Windows Go uses the CreateFile API, which is limited to 16K files, non
@@ -30,7 +30,7 @@ func Raise(max uint64) error {
 	if max > 16384 {
 		return errors.New("file descriptor limit (16384) reached")
 	}
-	return nil
+	return max, nil
 }
 
 // Current retrieves the number of file descriptors allowed to be opened by this
