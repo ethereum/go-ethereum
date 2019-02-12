@@ -489,10 +489,13 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 
 	if common.IsTestnet {
 		// Only three mns hard code for tomo testnet.
-		masternodes = []common.Address{
-			common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
-			common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
-			common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+		masternodes = masternodes[:3]
+		if parent.Number.Uint64() >= 909000 {
+			masternodes = []common.Address{
+				common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
+				common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
+				common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+			}
 		}
 	}
 
