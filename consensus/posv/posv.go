@@ -307,7 +307,7 @@ func (c *Posv) verifyHeaderWithCache(chain consensus.ChainReader, header *types.
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *Posv) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
-	if common.IsTestnet {
+	if common.IsTestnet && header.Number.Uint64() >= common.TestnetHF1 {
 		fullVerify = false
 	}
 	if header.Number == nil {
@@ -490,7 +490,7 @@ func (c *Posv) YourTurn(chain consensus.ChainReader, parent *types.Header, signe
 	if common.IsTestnet {
 		// Only three mns hard code for tomo testnet.
 		masternodes = masternodes[:3]
-		if parent.Number.Uint64() >= 909000 {
+		if parent.Number.Uint64() >= common.TestnetHF1 {
 			masternodes = []common.Address{
 				common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
 				common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
