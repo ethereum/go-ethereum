@@ -17,6 +17,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -181,22 +182,26 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		t.Fatal(err)
 	}
 
-	disconnected := watchDisconnections(ctx, sim)
-
 	result := runSim(conf, ctx, sim, chunkCount)
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
-	}
-	if yes, ok := disconnected.Load().(bool); ok && yes {
-		t.Fatal("disconnect events received")
 	}
 	log.Info("Simulation ended")
 }
 
 func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulation, chunkCount int) simulation.Result {
 
-	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil {
+				if yes, ok := disconnected.Load().(bool); ok && yes {
+					err = errors.New("disconnect events received")
+				}
+			}
+		}()
+
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
