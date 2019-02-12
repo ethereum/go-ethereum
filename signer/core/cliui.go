@@ -183,37 +183,6 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	return SignDataResponse{true, ui.readPassword()}, nil
 }
 
-// ApproveExport prompt the user for confirmation to export encrypted Account json
-func (ui *CommandlineUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
-	ui.mu.Lock()
-	defer ui.mu.Unlock()
-
-	fmt.Printf("-------- Export Account request--------------\n")
-	fmt.Printf("A request has been made to export the (encrypted) keyfile\n")
-	fmt.Printf("Approving this operation means that the caller obtains the (encrypted) contents\n")
-	fmt.Printf("\n")
-	fmt.Printf("Account:  %x\n", request.Address)
-	//fmt.Printf("keyfile:  \n%v\n", request.file)
-	fmt.Printf("-------------------------------------------\n")
-	showMetadata(request.Meta)
-	return ExportResponse{ui.confirm()}, nil
-}
-
-// ApproveImport prompt the user for confirmation to import Account json
-func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
-	ui.mu.Lock()
-	defer ui.mu.Unlock()
-
-	fmt.Printf("-------- Import Account request--------------\n")
-	fmt.Printf("A request has been made to import an encrypted keyfile\n")
-	fmt.Printf("-------------------------------------------\n")
-	showMetadata(request.Meta)
-	if !ui.confirm() {
-		return ImportResponse{false, "", ""}, nil
-	}
-	return ImportResponse{true, ui.readPasswordText("Old password"), ui.readPasswordText("New password")}, nil
-}
-
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {

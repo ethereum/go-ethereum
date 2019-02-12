@@ -178,25 +178,6 @@ func (r *rulesetUI) ApproveSignData(request *core.SignDataRequest) (core.SignDat
 	return core.SignDataResponse{Approved: false, Password: ""}, err
 }
 
-func (r *rulesetUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	jsonreq, err := json.Marshal(request)
-	approved, err := r.checkApproval("ApproveExport", jsonreq, err)
-	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", err)
-		return r.next.ApproveExport(request)
-	}
-	if approved {
-		return core.ExportResponse{Approved: true}, nil
-	}
-	return core.ExportResponse{Approved: false}, err
-}
-
-func (r *rulesetUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	// This cannot be handled by rules, requires setting a password
-	// dispatch to next
-	return r.next.ApproveImport(request)
-}
-
 // OnInputRequired not handled by rules
 func (r *rulesetUI) OnInputRequired(info core.UserInputRequest) (core.UserInputResponse, error) {
 	return r.next.OnInputRequired(info)

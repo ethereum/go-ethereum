@@ -1,5 +1,22 @@
 ### Changelog for internal API (ui-api)
 
+### 5.0.0 
+
+Changed the namespace format to adhere to the legacy ethereum format: `name_methodName`. Changes:
+
+* `ApproveTx` -> `ui_approveTx`
+* `ApproveSignData` -> `ui_approveSignData`
+* `ApproveExport` -> `removed`
+* `ApproveImport`  -> `removed`
+* `ApproveListing`  -> `ui_approveListing`
+* `ApproveNewAccount`  -> `ui_approveNewAccount`
+* `ShowError` -> `ui_showError`
+* `ShowInfo` -> `ui_showInfo`
+* `OnApprovedTx` -> `ui_onApprovedTx`
+* `OnSignerStartup` -> `ui_onSignerStartup`
+* `OnInputRequired` -> `ui_onInputRequired`
+
+
 ### 4.0.0
 
 * Bidirectional communication implemented, so the UI can query `clef` via the stdin/stdout RPC channel. Methods implemented are:

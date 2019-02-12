@@ -77,18 +77,6 @@ func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest) (SignDataRespons
 	return SignDataResponse{false, ""}, nil
 }
 
-func (ui *HeadlessUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
-	return ExportResponse{<-ui.controller == "Y"}, nil
-
-}
-
-func (ui *HeadlessUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
-	if "Y" == <-ui.controller {
-		return ImportResponse{true, <-ui.controller, <-ui.controller}, nil
-	}
-	return ImportResponse{false, "", ""}, nil
-}
-
 func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 	switch <-ui.controller {
 	case "A":

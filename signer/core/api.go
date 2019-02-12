@@ -68,10 +68,6 @@ type UIClientAPI interface {
 	ApproveTx(request *SignTxRequest) (SignTxResponse, error)
 	// ApproveSignData prompt the user for confirmation to request to sign data
 	ApproveSignData(request *SignDataRequest) (SignDataResponse, error)
-	// ApproveExport prompt the user for confirmation to export encrypted Account json
-	ApproveExport(request *ExportRequest) (ExportResponse, error)
-	// ApproveImport prompt the user for confirmation to import Account json
-	ApproveImport(request *ImportRequest) (ImportResponse, error)
 	// ApproveListing prompt the user for confirmation to list accounts
 	// the list of accounts to list can be modified by the UI
 	ApproveListing(request *ListRequest) (ListResponse, error)
@@ -188,24 +184,6 @@ type (
 		Transaction SendTxArgs `json:"transaction"`
 		Approved    bool       `json:"approved"`
 		Password    string     `json:"password"`
-	}
-	// ExportRequest info about query to export accounts
-	ExportRequest struct {
-		Address common.Address `json:"address"`
-		Meta    Metadata       `json:"meta"`
-	}
-	// ExportResponse response to export-request
-	ExportResponse struct {
-		Approved bool `json:"approved"`
-	}
-	// ImportRequest info about request to import an Account
-	ImportRequest struct {
-		Meta Metadata `json:"meta"`
-	}
-	ImportResponse struct {
-		Approved    bool   `json:"approved"`
-		OldPassword string `json:"old_password"`
-		NewPassword string `json:"new_password"`
 	}
 	SignDataRequest struct {
 		ContentType string                  `json:"content_type"`

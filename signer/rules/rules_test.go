@@ -91,14 +91,6 @@ func (alwaysDenyUI) ApproveSignData(request *core.SignDataRequest) (core.SignDat
 	return core.SignDataResponse{Approved: false, Password: ""}, nil
 }
 
-func (alwaysDenyUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	return core.ExportResponse{Approved: false}, nil
-}
-
-func (alwaysDenyUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	return core.ImportResponse{Approved: false, OldPassword: "", NewPassword: ""}, nil
-}
-
 func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	return core.ListResponse{Accounts: nil}, nil
 }
@@ -225,16 +217,6 @@ func (d *dummyUI) ApproveSignData(request *core.SignDataRequest) (core.SignDataR
 	return core.SignDataResponse{}, core.ErrRequestDenied
 }
 
-func (d *dummyUI) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	d.calls = append(d.calls, "ApproveExport")
-	return core.ExportResponse{}, core.ErrRequestDenied
-}
-
-func (d *dummyUI) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	d.calls = append(d.calls, "ApproveImport")
-	return core.ImportResponse{}, core.ErrRequestDenied
-}
-
 func (d *dummyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	d.calls = append(d.calls, "ApproveListing")
 	return core.ListResponse{}, core.ErrRequestDenied
@@ -276,17 +258,15 @@ func TestForwarding(t *testing.T) {
 	}
 	r.ApproveSignData(nil)
 	r.ApproveTx(nil)
-	r.ApproveImport(nil)
 	r.ApproveNewAccount(nil)
 	r.ApproveListing(nil)
-	r.ApproveExport(nil)
 	r.ShowError("test")
 	r.ShowInfo("test")
 
 	//This one is not forwarded
 	r.OnApprovedTx(ethapi.SignTransactionResult{})
 
-	expCalls := 8
+	expCalls := 6
 	if len(ui.calls) != expCalls {
 
 		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
@@ -543,16 +523,6 @@ func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse
 func (d *dontCallMe) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 	return core.SignDataResponse{}, core.ErrRequestDenied
-}
-
-func (d *dontCallMe) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ExportResponse{}, core.ErrRequestDenied
-}
-
-func (d *dontCallMe) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ImportResponse{}, core.ErrRequestDenied
 }
 
 func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
