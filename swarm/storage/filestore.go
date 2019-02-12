@@ -104,7 +104,6 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
-		references:  make([]Reference, 0),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter)
