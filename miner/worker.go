@@ -585,10 +585,10 @@ func (self *worker) commitNewWork() {
 	}
 	// won't grasp txs at checkpoint
 	var (
-		txs *types.TransactionsByPriceAndNonce
+		txs        *types.TransactionsByPriceAndNonce
 		specialTxs types.Transactions
 	)
-	if self.config.Posv != nil && header.Number.Uint64() % self.config.Posv.Epoch != 0 {
+	if self.config.Posv != nil && header.Number.Uint64()%self.config.Posv.Epoch != 0 {
 		pending, err := self.eth.TxPool().Pending()
 		if err != nil {
 			log.Error("Failed to fetch pending transactions", "err", err)
@@ -597,7 +597,6 @@ func (self *worker) commitNewWork() {
 		txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers)
 	}
 	work.commitTransactions(self.mux, txs, specialTxs, self.chain, self.coinbase)
-
 
 	// compute uncles for the new block.
 	var (
