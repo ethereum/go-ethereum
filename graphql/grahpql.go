@@ -127,7 +127,7 @@ func (l *Log) Data(ctx context.Context) hexutil.Bytes {
 	return hexutil.Bytes(l.log.Data)
 }
 
-// Transactionn represents an Ethereum transaction.
+// Transaction represents an Ethereum transaction.
 // backend and hash are mandatory; all others will be fetched when required.
 type Transaction struct {
 	backend *eth.EthAPIBackend
@@ -916,7 +916,7 @@ func (r *Resolver) EstimateGas(ctx context.Context, args struct {
 	return gas, err
 }
 
-// FilterCritera encapsulates the arguments to `logs` on the root resolver object.
+// FilterCriteria encapsulates the arguments to `logs` on the root resolver object.
 type FilterCriteria struct {
 	FromBlock *hexutil.Uint64   // beginning of the queried range, nil means genesis block
 	ToBlock   *hexutil.Uint64   // end of the range, nil means latest block
