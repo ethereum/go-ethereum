@@ -701,13 +701,14 @@ func (k *Kademlia) saturation() int {
 	return prev
 }
 
-// getUnsaturatedBins returns an array of ints; each item in that array corresponds
+// isSaturated returns true if the kademlia is considered saturated, or false if not.
+// It checks this by checking an array of ints called unsaturatedBins; each item in that array corresponds
 // to the bin which is unsaturated (number of connections < k.MinBinSize).
 // The bin is considered unsaturated only if there are actual peers in that PeerPot's bin (peersPerBin)
 // (if there is no peer for a given bin, then no connection could ever be established;
 // in a God's view this is relevant as no more peers will ever appear on that bin)
-func (k *Kademlia) getUnsaturatedBins(peersPerBin []int, depth int) []int {
-	// depth could be calculated from k but as this is called from `Healthy()`,
+func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
+	// depth could be calculated from k but as this is called from `GetHealthInfo()`,
 	// the depth has already been calculated so we can require it as a parameter
 	unsaturatedBins := make([]int, 0)
 	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
@@ -725,7 +726,11 @@ func (k *Kademlia) getUnsaturatedBins(peersPerBin []int, depth int) []int {
 	})
 
 	log.Trace("list of unsaturated bins", "unsaturatedBins", unsaturatedBins)
-	return unsaturatedBins
+	// early check for depth
+	if depth != len(peersPerBin) {
+		return false
+	}
+	return len(unsaturatedBins) == 0
 }
 
 // knowNeighbours tests if all neighbours in the peerpot
@@ -835,8 +840,7 @@ func (k *Kademlia) GetHealthInfo(pp *PeerPot) *Health {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 
 	// check saturation
-	unsaturatedBins := k.getUnsaturatedBins(pp.PeersPerBin, depth)
-	saturated := depth == len(pp.PeersPerBin) && len(unsaturatedBins) == 0
+	saturated := k.isSaturated(pp.PeersPerBin, depth)
 
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
