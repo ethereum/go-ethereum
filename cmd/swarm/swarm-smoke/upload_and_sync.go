@@ -75,7 +75,8 @@ func triggerChunkDebug(testData []byte) error {
 
 	// has-chunks
 	for _, host := range hosts {
-		rpcClient, err := rpc.Dial(host + ":8545")
+		httpHost := fmt.Sprintf("http://%s:%d", host, 8545)
+		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
 			return err
 		}
@@ -88,11 +89,11 @@ func triggerChunkDebug(testData []byte) error {
 		for _, info := range hasInfo {
 			if !info.Has {
 				count++
-				log.Error("Host does not have chunk", "host", host, "chunk", info.Addr)
+				log.Error("Host does not have chunk", "host", httpHost, "chunk", info.Addr)
 			}
 		}
 		if count == 0 {
-			log.Info("Host reported to have all chunks", "host", host)
+			log.Info("Host reported to have all chunks", "host", httpHost)
 		}
 	}
 	return nil
