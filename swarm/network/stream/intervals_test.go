@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -118,13 +117,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
-			log.Error("Store error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("store: %v", err)
 		}
 		err = wait(ctx)
 		if err != nil {
-			log.Error("Wait error: %v", "err", err)
-			t.Fatal(err)
+			return fmt.Errorf("wait store: %v", err)
 		}
 
 		item, ok = sim.NodeItem(checker, bucketKeyRegistry)
@@ -136,32 +133,15 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		log.Debug("Watching for disconnections")
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
 		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
 		if err != nil {
 			return err
 		}
 
-		var disconnected atomic.Value
-		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
-			if err != nil {
-				if yes, ok := disconnected.Load().(bool); ok && yes {
-					err = errors.New("disconnect events received")
-				}
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
 			}
 		}()
 
