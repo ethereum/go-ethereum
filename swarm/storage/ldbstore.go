@@ -1049,7 +1049,6 @@ func (s *LDBStore) Close() {
 	s.lock.Unlock()
 	// force writing out current batch
 	s.writeCurrentBatch()
-	close(s.batchesC)
 	s.db.Close()
 }
 

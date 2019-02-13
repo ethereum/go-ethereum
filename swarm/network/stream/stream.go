@@ -939,16 +939,22 @@ It returns a map of node IDs with an array of string representations of Stream o
 func (api *API) GetPeerSubscriptions() map[string][]string {
 	//create the empty map
 	pstreams := make(map[string][]string)
+
 	//iterate all streamer peers
+	api.streamer.peersMu.RLock()
+	defer api.streamer.peersMu.RUnlock()
+
 	for id, p := range api.streamer.peers {
 		var streams []string
 		//every peer has a map of stream servers
 		//every stream server represents a subscription
+		p.serverMu.RLock()
 		for s := range p.servers {
 			//append the string representation of the stream
 			//to the list for this peer
 			streams = append(streams, s.String())
 		}
+		p.serverMu.RUnlock()
 		//set the array of stream servers to the map
 		pstreams[id.String()] = streams
 	}

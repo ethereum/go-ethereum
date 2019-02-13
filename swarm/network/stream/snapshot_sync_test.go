@@ -17,11 +17,12 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,6 +93,15 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 		if *longrunning {
 			chnkCnt = []int{1, 8, 32, 256, 1024}
 			nodeCnt = []int{16, 32, 64, 128, 256}
+		} else if raceTest {
+			// TestSyncingViaGlobalSync allocates a lot of memory
+			// with race detector. By reducing the number of chunks
+			// and nodes, memory consumption is lower and data races
+			// are still checked, while correctness of syncing is
+			// tested with more chunks and nodes in regular (!race)
+			// tests.
+			chnkCnt = []int{4}
+			nodeCnt = []int{16}
 		} else {
 			//default test
 			chnkCnt = []int{4, 32}
@@ -113,7 +123,23 @@ var simServiceMap = map[string]simulation.ServiceFunc{
 			return nil, nil, err
 		}
 
-		r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+		var dir string
+		var store *state.DBStore
+		if raceTest {
+			// Use on-disk DBStore to reduce memory consumption in race tests.
+			dir, err = ioutil.TempDir("", "swarm-stream-")
+			if err != nil {
+				return nil, nil, err
+			}
+			store, err = state.NewDBStore(dir)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			store = state.NewInmemoryStore()
+		}
+
+		r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 			Retrieval:       RetrievalDisabled,
 			Syncing:         SyncingAutoSubscribe,
 			SyncUpdateDelay: 3 * time.Second,
@@ -156,36 +182,24 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		t.Fatal(err)
 	}
 
-	disconnections := sim.PeerEvents(
-		context.Background(),
-		sim.NodeIDs(),
-		simulation.NewPeerEventsFilter().Drop(),
-	)
-
-	var disconnected atomic.Value
-	go func() {
-		for d := range disconnections {
-			if d.Error != nil {
-				log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-				disconnected.Store(true)
-			}
-		}
-	}()
-
 	result := runSim(conf, ctx, sim, chunkCount)
 
 	if result.Error != nil {
 		t.Fatal(result.Error)
-	}
-	if yes, ok := disconnected.Load().(bool); ok && yes {
-		t.Fatal("disconnect events received")
 	}
 	log.Info("Simulation ended")
 }
 
 func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulation, chunkCount int) simulation.Result {
 
-	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+	return sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
 		nodeIDs := sim.UpNodeIDs()
 		for _, n := range nodeIDs {
 			//get the kademlia overlay address from this ID
