@@ -31,8 +31,8 @@ COMMANDS:
    
 GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
-   --keystore value        Directory for the keystore (default: "/home/user/.ethereum/keystore")
-   --configdir value       Directory for Clef configuration (default: "/home/user/.clef")
+   --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
+   --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
    --chainid value         Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets

@@ -776,8 +776,8 @@ func GenDoc(ctx *cli.Context) {
 	)
 
 	{ // Sign plain text request
-		desc := "SignDataRequest contains information about a pending request to sign some data." +
-			"The data to be  signed can be of various types, defined by content-type. Clef has done most" +
+		desc := "SignDataRequest contains information about a pending request to sign some data. " +
+			"The data to be signed can be of various types, defined by content-type. Clef has done most " +
 			"of the work in canonicalizing and making sense of the data, and it's up to the UI to present" +
 			"the user with the contents of the `message`"
 		sighash, msg := accounts.TextAndHash([]byte("hello world"))
@@ -798,8 +798,8 @@ func GenDoc(ctx *cli.Context) {
 			&core.SignDataResponse{})
 	}
 	{ // Sign transaction request
-		desc := "SignTxRequest contains information about a pending request to sign a transaction." +
-			"Aside from the transaction itself, there is also a call_info-struct. That struct contains" +
+		desc := "SignTxRequest contains information about a pending request to sign a transaction. " +
+			"Aside from the transaction itself, there is also a `call_info`-struct. That struct contains " +
 			"messages of various types, that the user should be informed of." +
 			"\n\n" +
 			"As in any request, it's important to consider that the `meta` info also contains untrusted data." +
@@ -856,7 +856,7 @@ func GenDoc(ctx *cli.Context) {
 			"interface. By hooking into this methods, the ruleset can maintain track of that count." +
 			"\n\n" +
 			"**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time" +
-			" (e.g through a backup), he can reset such windows, even if he is unable to decrypt the content. " +
+			" (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. " +
 			"\n\n" +
 			"The `OnApproved` method cannot be responded to, it's purely informative"
 
@@ -883,7 +883,7 @@ func GenDoc(ctx *cli.Context) {
 					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
 			})
 
-		add("UserInputResponse", "Response to list request. The response contains a list of all addresses to show the caller. "+
+		add("UserInputResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
 			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
 			&core.ListResponse{
 				Accounts: []accounts.Account{
@@ -894,8 +894,7 @@ func GenDoc(ctx *cli.Context) {
 
 	fmt.Println(`## UI Client interface
 
-These data types are defined in the channel between clef and the UI
-`)
+These data types are defined in the channel between clef and the UI`)
 	for _, elem := range output {
 		fmt.Println(elem)
 	}

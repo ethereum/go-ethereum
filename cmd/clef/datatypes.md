@@ -1,10 +1,9 @@
 ## UI Client interface
 
 These data types are defined in the channel between clef and the UI
-
 ### SignDataRequest
 
-SignDataRequest contains information about a pending request to sign some data.The data to be  signed can be of various types, defined by content-type. Clef has done mostof the work in canonicalizing and making sense of the data, and it's up to the UI to presentthe user with the contents of the `message`
+SignDataRequest contains information about a pending request to sign some data. The data to be signed can be of various types, defined by content-type. Clef has done most of the work in canonicalizing and making sense of the data, and it's up to the UI to presentthe user with the contents of the `message`
 
 Example:
 ```json
@@ -31,7 +30,7 @@ Example:
 ```
 ### SignDataResponse - approve
 
-Reponse to SignDataRequest
+Response to SignDataRequest
 
 Example:
 ```json
@@ -42,7 +41,7 @@ Example:
 ```
 ### SignDataResponse - deny
 
-Reponse to SignDataRequest
+Response to SignDataRequest
 
 Example:
 ```json
@@ -53,7 +52,7 @@ Example:
 ```
 ### SignTxRequest
 
-SignTxRequest contains information about a pending request to sign a transaction.Aside from the transaction itself, there is also a call_info-struct. That struct containsmessages of various types, that the user should be informed of.
+SignTxRequest contains information about a pending request to sign a transaction. Aside from the transaction itself, there is also a `call_info`-struct. That struct contains messages of various types, that the user should be informed of.
 
 As in any request, it's important to consider that the `meta` info also contains untrusted data.
 
@@ -92,7 +91,7 @@ Example:
 ```
 ### SignDataResponse - approve
 
-Reponse to SignDataRequest. This response needs to contain the `transaction`, because the UI is free to make modifications to the transaction.
+Response to SignDataRequest. This response needs to contain the `transaction`, because the UI is free to make modifications to the transaction.
 
 Example:
 ```json
@@ -112,7 +111,7 @@ Example:
 ```
 ### SignDataResponse - deny
 
-Reponse to SignDataRequest. When denying a request, there's no need to provide the transaction in return
+Response to SignDataRequest. When denying a request, there's no need to provide the transaction in return
 
 Example:
 ```json
@@ -125,11 +124,11 @@ Example:
 
 SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`
 
-This occurs _after_ successfull completion of the entire signing procedure, but right before the signed transaction is passed to the external caller. This method (and data) can be used by the UI to signal to the user that the transaction was signed, but it is primarily useful for ruleset implementations.
+This occurs _after_ successful completion of the entire signing procedure, but right before the signed transaction is passed to the external caller. This method (and data) can be used by the UI to signal to the user that the transaction was signed, but it is primarily useful for ruleset implementations.
 
 A ruleset that implements a rate limitation needs to know what transactions are sent out to the external interface. By hooking into this methods, the ruleset can maintain track of that count.
 
-**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), he can reset such windows, even if he is unable to decrypt the content. 
+**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. 
 
 The `OnApproved` method cannot be responded to, it's purely informative
 
@@ -165,7 +164,7 @@ Example:
 ```
 ### UserInputResponse
 
-Reponse to SignDataRequest
+Response to SignDataRequest
 
 Example:
 ```json
@@ -201,7 +200,7 @@ Example:
 ```
 ### UserInputResponse
 
-Reponse to list request. The response contains a list of all addresses to show the caller. Note: the UI is free to respond with any address the caller, regardless of whether it exists or not
+Response to list request. The response contains a list of all addresses to show to the caller. Note: the UI is free to respond with any address the caller, regardless of whether it exists or not
 
 Example:
 ```json
