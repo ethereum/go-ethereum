@@ -54,6 +54,11 @@ const (
 	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
 	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
 	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
+
+	// Discovery packets are defined to be no larger than 1280 bytes.
+	// Packets larger than this size will be cut at the end and treated
+	// as invalid because their hash won't match.
+	maxPacketSize = 1280
 )
 
 // RPC packet types
@@ -496,7 +501,7 @@ var (
 	headSpace = make([]byte, headSize)
 
 	// Neighbors replies are sent across multiple packets to
-	// stay below the 1280 byte limit. We compute the maximum number
+	// stay below the packet size limit. We compute the maximum number
 	// of entries by stuffing a packet until it grows too large.
 	maxNeighbors int
 )
@@ -511,7 +516,7 @@ func init() {
 			// If this ever happens, it will be caught by the unit tests.
 			panic("cannot encode: " + err.Error())
 		}
-		if headSize+size+1 >= 1280 {
+		if headSize+size+1 >= maxPacketSize {
 			maxNeighbors = n
 			break
 		}
@@ -562,10 +567,7 @@ func (t *udp) readLoop(unhandled chan<- ReadPacket) {
 		defer close(unhandled)
 	}
 
-	// Discovery packets are defined to be no larger than 1280 bytes.
-	// Packets larger than this size will be cut at the end and treated
-	// as invalid because their hash won't match.
-	buf := make([]byte, 1280)
+	buf := make([]byte, maxPacketSize)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if netutil.IsTemporaryError(err) {
@@ -715,7 +717,7 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID enode.ID, mac []by
 	t.tab.mutex.Unlock()
 
 	// Send neighbors in chunks with at most maxNeighbors per packet
-	// to stay below the 1280 byte limit.
+	// to stay below the packet size limit.
 	p := neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
 	for _, n := range closest {
