@@ -213,6 +213,7 @@ func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error
 		handshake.err = err
 		return err
 	}
+	log.Warn("have hs", "remote", p.RemoteAddr(), "hs", rsh.(*HandshakeMsg).Addr)
 	handshake.peerAddr = rsh.(*HandshakeMsg).Addr
 	handshake.LightNode = rsh.(*HandshakeMsg).LightNode
 	return nil
