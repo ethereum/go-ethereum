@@ -236,12 +236,6 @@ type (
 	Message struct {
 		Text string `json:"text"`
 	}
-	PasswordRequest struct {
-		Prompt string `json:"prompt"`
-	}
-	PasswordResponse struct {
-		Password string `json:"password"`
-	}
 	StartupInfo struct {
 		Info map[string]interface{} `json:"info"`
 	}

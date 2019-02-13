@@ -36,12 +36,15 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -171,10 +174,16 @@ Clef that the file is 'safe' to execute.`,
 			signerSecretFlag,
 		},
 		Description: `
-		The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
+The setpw command stores a password for a given address (keyfile). If you enter a blank passphrase, it will 
 remove any stored credential for that address (keyfile)
-`,
-	}
+`}
+	gendocCommand = cli.Command{
+		Action: GenDoc,
+		Name:   "gendoc",
+		Usage:  "Generate documentation about json-rpc format",
+		Description: `
+The gendoc generates example structures of the json-rpc communication types.
+`}
 )
 
 func init() {
@@ -203,7 +212,7 @@ func init() {
 		advancedMode,
 	}
 	app.Action = signer
-	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand}
+	app.Commands = []cli.Command{initCommand, attestCommand, setCredentialCommand, gendocCommand}
 
 }
 func main() {
@@ -741,6 +750,154 @@ func decryptSeed(keyjson []byte, auth string) ([]byte, error) {
 		return nil, err
 	}
 	return seed, err
+}
+
+// GenDoc outputs examples of all structures used in json-rpc communication
+func GenDoc(ctx *cli.Context) {
+
+	var (
+		a    = common.HexToAddress("0xdeadbeef000000000000000000000000deadbeef")
+		b    = common.HexToAddress("0x1111111122222222222233333333334444444444")
+		meta = core.Metadata{
+			Scheme:    "http",
+			Local:     "localhost:8545",
+			Origin:    "www.malicious.ru",
+			Remote:    "localhost:9999",
+			UserAgent: "Firefox 3.2",
+		}
+		output []string
+		add    = func(name, desc string, v interface{}) {
+			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
+				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
+			} else {
+				log.Error("Error generating output", err)
+			}
+		}
+	)
+
+	{ // Sign plain text request
+		desc := "SignDataRequest contains information about a pending request to sign some data. " +
+			"The data to be signed can be of various types, defined by content-type. Clef has done most " +
+			"of the work in canonicalizing and making sense of the data, and it's up to the UI to present" +
+			"the user with the contents of the `message`"
+		sighash, msg := accounts.TextAndHash([]byte("hello world"))
+		message := []*core.NameValueType{{"message", msg, accounts.MimetypeTextPlain}}
+
+		add("SignDataRequest", desc, &core.SignDataRequest{
+			Address:     common.NewMixedcaseAddress(a),
+			Meta:        meta,
+			ContentType: accounts.MimetypeTextPlain,
+			Rawdata:     []byte(msg),
+			Message:     message,
+			Hash:        sighash})
+	}
+	{ // Sign plain text response
+		add("SignDataResponse - approve", "Response to SignDataRequest",
+			&core.SignDataResponse{Password: "apassword", Approved: true})
+		add("SignDataResponse - deny", "Response to SignDataRequest",
+			&core.SignDataResponse{})
+	}
+	{ // Sign transaction request
+		desc := "SignTxRequest contains information about a pending request to sign a transaction. " +
+			"Aside from the transaction itself, there is also a `call_info`-struct. That struct contains " +
+			"messages of various types, that the user should be informed of." +
+			"\n\n" +
+			"As in any request, it's important to consider that the `meta` info also contains untrusted data." +
+			"\n\n" +
+			"The `transaction` (on input into clef) can have either `data` or `input` -- if both are set, " +
+			"they must be identical, otherwise an error is generated. " +
+			"However, Clef will always use `data` when passing this struct on (if Clef does otherwise, please file a ticket)"
+
+		data := hexutil.Bytes([]byte{0x01, 0x02, 0x03, 0x04})
+		add("SignTxRequest", desc, &core.SignTxRequest{
+			Meta: meta,
+			Callinfo: []core.ValidationInfo{
+				{"Warning", "Something looks odd, show this message as a warning"},
+				{"Info", "User should see this aswell"},
+			},
+			Transaction: core.SendTxArgs{
+				Data:     &data,
+				Nonce:    0x1,
+				Value:    hexutil.Big(*big.NewInt(6)),
+				From:     common.NewMixedcaseAddress(a),
+				To:       nil,
+				GasPrice: hexutil.Big(*big.NewInt(5)),
+				Gas:      1000,
+				Input:    nil,
+			}})
+	}
+	{ // Sign tx response
+		data := hexutil.Bytes([]byte{0x04, 0x03, 0x02, 0x01})
+		add("SignDataResponse - approve", "Response to SignDataRequest. This response needs to contain the `transaction`"+
+			", because the UI is free to make modifications to the transaction.",
+			&core.SignTxResponse{Password: "apassword", Approved: true,
+				Transaction: core.SendTxArgs{
+					Data:     &data,
+					Nonce:    0x4,
+					Value:    hexutil.Big(*big.NewInt(6)),
+					From:     common.NewMixedcaseAddress(a),
+					To:       nil,
+					GasPrice: hexutil.Big(*big.NewInt(5)),
+					Gas:      1000,
+					Input:    nil,
+				}})
+		add("SignDataResponse - deny", "Response to SignDataRequest. When denying a request, there's no need to "+
+			"provide the transaction in return",
+			&core.SignDataResponse{})
+	}
+	{ // WHen a signed tx is ready to go out
+		desc := "SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`" +
+			"\n\n" +
+			"This occurs _after_ successful completion of the entire signing procedure, but right before the signed " +
+			"transaction is passed to the external caller. This method (and data) can be used by the UI to signal " +
+			"to the user that the transaction was signed, but it is primarily useful for ruleset implementations." +
+			"\n\n" +
+			"A ruleset that implements a rate limitation needs to know what transactions are sent out to the external " +
+			"interface. By hooking into this methods, the ruleset can maintain track of that count." +
+			"\n\n" +
+			"**OBS:** Note that if an attacker can restore your `clef` data to a previous point in time" +
+			" (e.g through a backup), the attacker can reset such windows, even if he/she is unable to decrypt the content. " +
+			"\n\n" +
+			"The `OnApproved` method cannot be responded to, it's purely informative"
+
+		rlpdata := common.FromHex("0xf85d640101948a8eafb1cf62bfbeb1741769dae1a9dd47996192018026a0716bd90515acb1e68e5ac5867aa11a1e65399c3349d479f5fb698554ebc6f293a04e8a4ebfff434e971e0ef12c5bf3a881b06fd04fc3f8b8a7291fb67a26a1d4ed")
+		var tx types.Transaction
+		rlp.DecodeBytes(rlpdata, &tx)
+		add("OnApproved - SignTransactionResult", desc, &ethapi.SignTransactionResult{Raw: rlpdata, Tx: &tx})
+
+	}
+	{ // User input
+		add("UserInputRequest", "Sent when clef needs the user to provide data. If 'password' is true, the input field should be treated accordingly (echo-free)",
+			&core.UserInputRequest{IsPassword: true, Title: "The title here", Prompt: "The question to ask the user"})
+		add("UserInputResponse", "Response to SignDataRequest",
+			&core.UserInputResponse{Text: "The textual response from user"})
+	}
+	{ // List request
+		add("ListRequest", "Sent when a request has been made to list addresses. The UI is provided with the "+
+			"full `account`s, including local directory names. Note: this information is not passed back to the external caller, "+
+			"who only sees the `address`es. ",
+			&core.ListRequest{
+				Meta: meta,
+				Accounts: []accounts.Account{
+					{a, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/a"}},
+					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
+			})
+
+		add("UserInputResponse", "Response to list request. The response contains a list of all addresses to show to the caller. "+
+			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
+			&core.ListResponse{
+				Accounts: []accounts.Account{
+					{common.HexToAddress("0xcowbeef000000cowbeef00000000000000000c0w"), accounts.URL{Path: ".. ignored .."}},
+					{common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff"), accounts.URL{}},
+				}})
+	}
+
+	fmt.Println(`## UI Client interface
+
+These data types are defined in the channel between clef and the UI`)
+	for _, elem := range output {
+		fmt.Println(elem)
+	}
 }
 
 /**
