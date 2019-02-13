@@ -193,7 +193,7 @@ func testIterator(t *testing.T, mock bool) {
 	var i int
 	var poc uint
 	chunkkeys := NewAddressCollection(chunkcount)
-	chunkkeys_results := NewAddressCollection(chunkcount)
+	chunkkeysResults := NewAddressCollection(chunkcount)
 
 	db, cleanup, err := newTestDbStore(mock, false)
 	defer cleanup()
@@ -218,7 +218,7 @@ func testIterator(t *testing.T, mock bool) {
 	for poc = 0; poc <= 255; poc++ {
 		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
-			chunkkeys_results[n] = k
+			chunkkeysResults[n] = k
 			i++
 			return true
 		})
@@ -228,8 +228,8 @@ func testIterator(t *testing.T, mock bool) {
 	}
 
 	for i = 0; i < chunkcount; i++ {
-		if !bytes.Equal(chunkkeys[i], chunkkeys_results[i]) {
-			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeys_results[i])
+		if !bytes.Equal(chunkkeys[i], chunkkeysResults[i]) {
+			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeysResults[i])
 		}
 	}
 
