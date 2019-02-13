@@ -608,6 +608,88 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	return res[:], state.Error()
 }
 
+func (s *PublicBlockChainAPI) GetBlockSignersByHash(ctx context.Context, blockHash common.Hash) ([]common.Address, error) {
+	block, err := s.b.GetBlock(ctx, blockHash)
+	if err != nil || block == nil {
+		return []common.Address{}, err
+	}
+	masternodes, err := s.GetMasternodes(block, ctx)
+	if err != nil || len(masternodes) == 0 {
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return []common.Address{}, err
+	}
+	return s.rpcOutputBlockSigners(block, ctx, masternodes)
+}
+
+func (s *PublicBlockChainAPI) GetBlockSignersByNumber(ctx context.Context, blockNumber rpc.BlockNumber) ([]common.Address, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNumber)
+	if err != nil || block == nil {
+		return []common.Address{}, err
+	}
+	masternodes, err := s.GetMasternodes(block, ctx)
+	if err != nil || len(masternodes) == 0 {
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return []common.Address{}, err
+	}
+	return s.rpcOutputBlockSigners(block, ctx, masternodes)
+}
+
+func (s *PublicBlockChainAPI) GetBlockFinalityByHash(ctx context.Context, blockHash common.Hash) (int32, error) {
+	block, err := s.b.GetBlock(ctx, blockHash)
+	if err != nil || block == nil {
+		return int32(0), err
+	}
+	masternodes, err := s.GetMasternodes(block, ctx)
+	if err != nil || len(masternodes) == 0 {
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return int32(0), err
+	}
+	blockSigners, err := s.rpcOutputBlockSigners(block, ctx, masternodes)
+	if err != nil {
+		return int32(0), err
+	}
+	return int32(100 * len(blockSigners) / len(masternodes)), err
+}
+
+func (s *PublicBlockChainAPI) GetBlockFinalityByNumber(ctx context.Context, blockNumber rpc.BlockNumber) (int32, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNumber)
+	if err != nil || block == nil {
+		return int32(0), err
+	}
+	masternodes, err := s.GetMasternodes(block, ctx)
+	if err != nil || len(masternodes) == 0 {
+		log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes))
+		return int32(0), err
+	}
+	blockSigners, err := s.rpcOutputBlockSigners(block, ctx, masternodes)
+	if err != nil {
+		return int32(0), err
+	}
+	return int32(100 * len(blockSigners) / len(masternodes)), err
+}
+func (s *PublicBlockChainAPI) GetMasternodes(b *types.Block, ctx context.Context) ([]common.Address, error) {
+	var masternodes []common.Address
+	if b.Number().Int64() > 0 {
+		curBlockNumber := b.Number().Uint64()
+		prevBlockNumber := curBlockNumber + (common.MergeSignRange - (curBlockNumber % common.MergeSignRange))
+		latestBlockNumber := s.b.CurrentBlock().Number().Uint64()
+		if prevBlockNumber >= latestBlockNumber || !s.b.ChainConfig().IsTIP2019(b.Number()) {
+			prevBlockNumber = curBlockNumber
+		}
+		if engine, ok := s.b.GetEngine().(*posv.Posv); ok {
+			// Get block epoc latest.
+			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().Posv.Epoch)
+			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
+			if prevCheckpointBlock != nil {
+				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().Posv.Epoch)
+			}
+		}  else {
+			log.Error("Undefined POSV consensus engine")
+		}
+	}
+	return masternodes, nil
+}
+
 // CallArgs represents the arguments for a call.
 type CallArgs struct {
 	From     common.Address  `json:"from"`
@@ -854,16 +936,19 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
+	return fields, nil
+}
 
+func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.Context, masternodes []common.Address) ([]common.Address, error) {
 	// Get signers for block.
 	client, err := s.b.GetIPCClient()
 	if err != nil {
 		log.Error("Fail to connect IPC client for block status", "error", err)
+		return []common.Address{}, err
 	}
 
 	var signers []common.Address
 	var filterSigners []common.Address
-	finality := int32(0)
 	if b.Number().Int64() > 0 {
 		curBlockNumber := b.Number().Uint64()
 		prevBlockNumber := curBlockNumber + (common.MergeSignRange - (curBlockNumber % common.MergeSignRange))
@@ -872,40 +957,34 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 			prevBlockNumber = curBlockNumber
 		}
 		if engine, ok := s.b.GetEngine().(*posv.Posv); ok {
-			prevBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(prevBlockNumber))
+			prevBlock, err := s.b.BlockByNumber(ctx, rpc.BlockNumber(prevBlockNumber))
+			if err != nil {
+				log.Error("Fail to get previous block", "error", err)
+				return []common.Address{}, err
+			}
 			addrBlockSigner := common.HexToAddress(common.BlockSigners)
 			signers, err = contracts.GetSignersByExecutingEVM(addrBlockSigner, client, prevBlock.Hash())
 			if err != nil {
 				log.Error("Fail to get signers from block signer SC.", "error", err)
-				return nil, err
+				return []common.Address{}, err
 			}
 			validator, _ := engine.RecoverValidator(b.Header())
 			creator, _ := engine.RecoverSigner(b.Header())
 			signers = append(signers, validator)
 			signers = append(signers, creator)
-			// Get block epoc latest.
-			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().Posv.Epoch)
-			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
-			if prevCheckpointBlock != nil {
-				masternodes := engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().Posv.Epoch)
-				countFinality := 0
-				for _, masternode := range masternodes {
-					for _, signer := range signers {
-						if signer == masternode {
-							countFinality++
-							filterSigners = append(filterSigners, masternode)
-							break
-						}
+			for _, masternode := range masternodes {
+				for _, signer := range signers {
+					if signer == masternode {
+						filterSigners = append(filterSigners, masternode)
+						break
 					}
 				}
-				finality = int32(countFinality * 100 / len(masternodes))
 			}
+		}  else {
+			log.Error("Undefined POSV consensus engine")
 		}
 	}
-	fields["signers"] = filterSigners
-	fields["finality"] = finality
-
-	return fields, nil
+	return filterSigners, nil
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
