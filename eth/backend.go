@@ -212,7 +212,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if err != nil {
 				return fmt.Errorf("Can't verify masternode permission: %v", err)
 			}
-			if !ok && !common.IsTestnet {
+			if !ok {
 				// silently return as this node doesn't have masternode permission to sign block
 				return nil
 			}
@@ -580,20 +580,29 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	} else {
 		return false, fmt.Errorf("Only verify masternode permission in PoSV protocol")
 	}
-	if common.IsTestnet {
-		masternodes := []common.Address{
-			common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
-			common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
-			common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
-		}
-		for _, m := range masternodes {
-			if m == eb {
-				return true, nil
-			}
-		}
-		return false, nil
-	}
 	return true, nil
+}
+
+// ValidateMasternodeTestNet checks if node's address is in set of masternodes in Testnet
+func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
+	eb, err := s.Etherbase()
+	if err != nil {
+		return false, err
+	}
+	if s.chainConfig.Posv == nil {
+		return false, fmt.Errorf("Only verify masternode permission in PoSV protocol")
+	}
+	masternodes := []common.Address{
+		common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
+		common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
+		common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+	}
+	for _, m := range masternodes {
+		if m == eb {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *Ethereum) StartStaking(local bool) error {
