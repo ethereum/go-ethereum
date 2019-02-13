@@ -805,12 +805,12 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	gcIdxKey := getGCIdxKey(&index)
 	gcIdxData := getGCIdxValue(&index, po, chunk.Address())
 	s.batch.Put(gcIdxKey, gcIdxData)
+	s.lock.Unlock()
 
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-	s.lock.Unlock()
 
 	select {
 	case <-batch.c:
@@ -1049,9 +1049,6 @@ func (s *LDBStore) Close() {
 	s.lock.Unlock()
 	// force writing out current batch
 	s.writeCurrentBatch()
-	s.lock.Lock()
-	close(s.batchesC)
-	s.lock.Unlock()
 	s.db.Close()
 }
 
