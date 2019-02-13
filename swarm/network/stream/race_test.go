@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,21 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package api
+// +build race
 
-import (
-	"github.com/ethereum/go-ethereum/swarm/network"
-)
+package stream
 
-type Control struct {
-	api  *API
-	hive *network.Hive
-}
-
-func NewControl(api *API, hive *network.Hive) *Control {
-	return &Control{api, hive}
-}
-
-func (c *Control) Hive() string {
-	return c.hive.String()
-}
+// Reduce the scope of some tests when running with race detector,
+// as it raises the memory consumption significantly.
+const raceTest = true

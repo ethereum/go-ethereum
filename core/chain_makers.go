@@ -149,7 +149,7 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // associated difficulty. It's useful to test scenarios where forking is not
 // tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
-	b.header.Time.Add(b.header.Time, new(big.Int).SetInt64(seconds))
+	b.header.Time.Add(b.header.Time, big.NewInt(seconds))
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}

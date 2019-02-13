@@ -38,7 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -686,7 +686,7 @@ func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, 
 		if err != nil {
 			continue
 		}
-		if !recvmsg.Validate() {
+		if !recvmsg.ValidateAndParse() {
 			return nil, "", nil, fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
 		}
 		p.symKeyPoolMu.Lock()
@@ -713,7 +713,7 @@ func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage,
 		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
 	// check signature (if signed), strip padding
-	if !recvmsg.Validate() {
+	if !recvmsg.ValidateAndParse() {
 		return nil, "", nil, fmt.Errorf("invalid message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))

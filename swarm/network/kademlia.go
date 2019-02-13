@@ -353,6 +353,9 @@ func (k *Kademlia) sendNeighbourhoodDepthChange() {
 // Not receiving from the returned channel will block Register function
 // when address count value changes.
 func (k *Kademlia) AddrCountC() <-chan int {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+
 	if k.addrCountC == nil {
 		k.addrCountC = make(chan int)
 	}

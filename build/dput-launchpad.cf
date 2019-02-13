@@ -1,0 +1,8 @@
+[{{.LaunchpadUser}}/{{.LaunchpadPPA}}]
+fqdn = ppa.launchpad.net
+method = sftp
+incoming = ~{{.LaunchpadUser}}/ubuntu/{{.LaunchpadPPA}}/
+login = {{.LaunchpadSSH}}
+{{ if .IdentityFile }}
+  ssh_options = IdentityFile {{.IdentityFile}}
+{{ end }}

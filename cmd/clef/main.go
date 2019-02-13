@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/signer/core"
@@ -82,6 +83,11 @@ var (
 		Name:  "configdir",
 		Value: DefaultConfigDir(),
 		Usage: "Directory for Clef configuration",
+	}
+	chainIdFlag = cli.Int64Flag{
+		Name:  "chainid",
+		Value: params.MainnetChainConfig.ChainID.Int64(),
+		Usage: "Chain id to use for signing (1=mainnet, 3=ropsten, 4=rinkeby, 5=Goerli)",
 	}
 	rpcPortFlag = cli.IntFlag{
 		Name:  "rpcport",
@@ -178,7 +184,7 @@ func init() {
 		logLevelFlag,
 		keystoreFlag,
 		configdirFlag,
-		utils.NetworkIdFlag,
+		chainIdFlag,
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.RPCListenAddrFlag,
@@ -338,7 +344,7 @@ func signer(c *cli.Context) error {
 		return err
 	}
 	var (
-		ui core.SignerUI
+		ui core.UIClientAPI
 	)
 	if c.GlobalBool(stdiouiFlag.Name) {
 		log.Info("Using stdin/stdout as UI-channel")
@@ -402,14 +408,21 @@ func signer(c *cli.Context) error {
 			}
 		}
 	}
+	var (
+		chainId  = c.GlobalInt64(chainIdFlag.Name)
+		ksLoc    = c.GlobalString(keystoreFlag.Name)
+		lightKdf = c.GlobalBool(utils.LightKDFFlag.Name)
+		advanced = c.GlobalBool(advancedMode.Name)
+		nousb    = c.GlobalBool(utils.NoUSBFlag.Name)
+	)
+	log.Info("Starting signer", "chainid", chainId, "keystore", ksLoc,
+		"light-kdf", lightKdf, "advanced", advanced)
+	am := core.StartClefAccountManager(ksLoc, nousb, lightKdf)
+	apiImpl := core.NewSignerAPI(am, chainId, nousb, ui, db, advanced)
 
-	apiImpl := core.NewSignerAPI(
-		c.GlobalInt64(utils.NetworkIdFlag.Name),
-		c.GlobalString(keystoreFlag.Name),
-		c.GlobalBool(utils.NoUSBFlag.Name),
-		ui, db,
-		c.GlobalBool(utils.LightKDFFlag.Name),
-		c.GlobalBool(advancedMode.Name))
+	// Establish the bidirectional communication, by creating a new UI backend and registering
+	// it with the UI.
+	ui.RegisterUIServer(core.NewUIServerAPI(apiImpl))
 	api = apiImpl
 	// Audit logging
 	if logfile := c.GlobalString(auditLogFlag.Name); logfile != "" {
@@ -529,7 +542,7 @@ func homeDir() string {
 	}
 	return ""
 }
-func readMasterKey(ctx *cli.Context, ui core.SignerUI) ([]byte, error) {
+func readMasterKey(ctx *cli.Context, ui core.UIClientAPI) ([]byte, error) {
 	var (
 		file      string
 		configDir = ctx.GlobalString(configdirFlag.Name)
@@ -664,10 +677,6 @@ func testExternalUI(api *core.SignerAPI) {
 	checkErr("List", err)
 	_, err = api.New(ctx)
 	checkErr("New", err)
-	_, err = api.Export(ctx, common.Address{})
-	checkErr("Export", err)
-	_, err = api.Import(ctx, json.RawMessage{})
-	checkErr("Import", err)
 
 	api.UI.ShowInfo("Tests completed")
 

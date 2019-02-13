@@ -82,6 +82,7 @@ const (
 	SWARM_ENV_BOOTNODE_MODE           = "SWARM_BOOTNODE_MODE"
 	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
 	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
+	SWARM_GLOBALSTORE_API             = "SWARM_GLOBALSTORE_API"
 	GETH_ENV_DATADIR                  = "GETH_DATADIR"
 )
 
@@ -262,6 +263,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {
+		currentConfig.GlobalStoreAPI = ctx.GlobalString(SwarmGlobalStoreAPIFlag.Name)
+	}
+
 	return currentConfig
 
 }
@@ -373,6 +378,10 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 			utils.Fatalf("invalid environment variable %s: %v", SWARM_ENV_BOOTNODE_MODE, err)
 		}
 		currentConfig.BootnodeMode = bootnodeMode
+	}
+
+	if api := os.Getenv(SWARM_GLOBALSTORE_API); api != "" {
+		currentConfig.GlobalStoreAPI = api
 	}
 
 	return currentConfig

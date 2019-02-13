@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,9 +44,15 @@ const dataChunkCount = 200
 
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
-	testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
+	// This test uses much more memory when running with
+	// race detector. Allow it to finish successfully by
+	// reducing its scope, and still check for data races
+	// with the smallest number of nodes.
+	if !raceTest {
+		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
+		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
+		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
+	}
 }
 
 func createMockStore(globalStore mock.GlobalStorer, id enode.ID, addr *network.BzzAddr) (lstore storage.ChunkStore, datadir string, err error) {
@@ -80,7 +86,23 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 				return nil, nil, err
 			}
 
-			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+			var dir string
+			var store *state.DBStore
+			if raceTest {
+				// Use on-disk DBStore to reduce memory consumption in race tests.
+				dir, err = ioutil.TempDir("", "swarm-stream-")
+				if err != nil {
+					return nil, nil, err
+				}
+				store, err = state.NewDBStore(dir)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				store = state.NewInmemoryStore()
+			}
+
+			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 				Retrieval: RetrievalDisabled,
 				Syncing:   SyncingAutoSubscribe,
 				SkipCheck: skipCheck,
@@ -89,6 +111,9 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			cleanup = func() {
 				r.Close()
 				clean()
+				if dir != "" {
+					os.RemoveAll(dir)
+				}
 			}
 
 			return r, cleanup, nil
@@ -114,26 +139,10 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			nodeIndex[id] = i
 		}
 
-		disconnections := sim.PeerEvents(
-			context.Background(),
-			sim.NodeIDs(),
-			simulation.NewPeerEventsFilter().Drop(),
-		)
-
-		var disconnected atomic.Value
-		go func() {
-			for d := range disconnections {
-				if d.Error != nil {
-					log.Error("peer drop", "node", d.NodeID, "peer", d.PeerID)
-					disconnected.Store(true)
-				}
-			}
-		}()
+		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
-			if err != nil {
-				if yes, ok := disconnected.Load().(bool); ok && yes {
-					err = errors.New("disconnect events received")
-				}
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
 			}
 		}()
 
@@ -142,7 +151,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			id := nodeIDs[j]
 			client, err := sim.Net.GetNode(id).Client()
 			if err != nil {
-				t.Fatal(err)
+				return fmt.Errorf("node %s client: %v", id, err)
 			}
 			sid := nodeIDs[j+1]
 			client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", FormatSyncBinKey(1), false), NewRange(0, 0), Top)
@@ -158,7 +167,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 				size := chunkCount * chunkSize
 				_, wait, err := fileStore.Store(ctx, testutil.RandomReader(j, size), int64(size), false)
 				if err != nil {
-					t.Fatal(err.Error())
+					return fmt.Errorf("fileStore.Store: %v", err)
 				}
 				wait(ctx)
 			}
@@ -273,7 +282,7 @@ func TestSameVersionID(t *testing.T) {
 
 		//the peers should connect, thus getting the peer should not return nil
 		if registry.getPeer(nodes[1]) == nil {
-			t.Fatal("Expected the peer to not be nil, but it is")
+			return errors.New("Expected the peer to not be nil, but it is")
 		}
 		return nil
 	})
@@ -338,7 +347,7 @@ func TestDifferentVersionID(t *testing.T) {
 
 		//getting the other peer should fail due to the different version numbers
 		if registry.getPeer(nodes[1]) != nil {
-			t.Fatal("Expected the peer to be nil, but it is not")
+			return errors.New("Expected the peer to be nil, but it is not")
 		}
 		return nil
 	})

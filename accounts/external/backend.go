@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -154,13 +153,31 @@ func (api *ExternalSigner) signHash(account accounts.Account, hash []byte) ([]by
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
-	// TODO! Replace this with a call to clef SignData with correct mime-type for Clique, once we
-	// have that in place
-	return api.signHash(account, crypto.Keccak256(data))
+	var res hexutil.Bytes
+	var signAddress = common.NewMixedcaseAddress(account.Address)
+	if err := api.client.Call(&res, "account_signData",
+		mimeType,
+		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
+		hexutil.Encode(data)); err != nil {
+		return nil, err
+	}
+	// If V is on 27/28-form, convert to to 0/1 for Clique
+	if mimeType == accounts.MimetypeClique && (res[64] == 27 || res[64] == 28) {
+		res[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
+	}
+	return res, nil
 }
 
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
-	return api.signHash(account, accounts.TextHash(text))
+	var res hexutil.Bytes
+	var signAddress = common.NewMixedcaseAddress(account.Address)
+	if err := api.client.Call(&res, "account_signData",
+		accounts.MimetypeTextPlain,
+		&signAddress, // Need to use the pointer here, because of how MarshalJSON is defined
+		hexutil.Encode(text)); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
@@ -200,18 +217,6 @@ func (api *ExternalSigner) listAccounts() ([]common.Address, error) {
 		return nil, err
 	}
 	return res, nil
-}
-
-func (api *ExternalSigner) signCliqueBlock(a common.Address, rlpBlock hexutil.Bytes) (hexutil.Bytes, error) {
-	var sig hexutil.Bytes
-	if err := api.client.Call(&sig, "account_signData", core.ApplicationClique.Mime, a, rlpBlock); err != nil {
-		return nil, err
-	}
-	if sig[64] != 27 && sig[64] != 28 {
-		return nil, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
-	}
-	sig[64] -= 27 // Transform V from 27/28 to 0/1 for Clique use
-	return sig, nil
 }
 
 func (api *ExternalSigner) pingVersion() (string, error) {
