@@ -36,6 +36,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -791,9 +792,9 @@ func GenDoc(ctx *cli.Context) {
 			Hash:        sighash})
 	}
 	{ // Sign plain text response
-		add("SignDataResponse - approve", "Reponse to SignDataRequest",
+		add("SignDataResponse - approve", "Response to SignDataRequest",
 			&core.SignDataResponse{Password: "apassword", Approved: true})
-		add("SignDataResponse - deny", "Reponse to SignDataRequest",
+		add("SignDataResponse - deny", "Response to SignDataRequest",
 			&core.SignDataResponse{})
 	}
 	{ // Sign transaction request
@@ -827,7 +828,7 @@ func GenDoc(ctx *cli.Context) {
 	}
 	{ // Sign tx response
 		data := hexutil.Bytes([]byte{0x04, 0x03, 0x02, 0x01})
-		add("SignDataResponse - approve", "Reponse to SignDataRequest. This response needs to contain the `transaction`"+
+		add("SignDataResponse - approve", "Response to SignDataRequest. This response needs to contain the `transaction`"+
 			", because the UI is free to make modifications to the transaction.",
 			&core.SignTxResponse{Password: "apassword", Approved: true,
 				Transaction: core.SendTxArgs{
@@ -840,14 +841,14 @@ func GenDoc(ctx *cli.Context) {
 					Gas:      1000,
 					Input:    nil,
 				}})
-		add("SignDataResponse - deny", "Reponse to SignDataRequest. When denying a request, there's no need to "+
+		add("SignDataResponse - deny", "Response to SignDataRequest. When denying a request, there's no need to "+
 			"provide the transaction in return",
 			&core.SignDataResponse{})
 	}
 	{ // WHen a signed tx is ready to go out
 		desc := "SignTransactionResult is used in the call `clef` -> `OnApprovedTx(result)`" +
 			"\n\n" +
-			"This occurs _after_ successfull completion of the entire signing procedure, but right before the signed " +
+			"This occurs _after_ successful completion of the entire signing procedure, but right before the signed " +
 			"transaction is passed to the external caller. This method (and data) can be used by the UI to signal " +
 			"to the user that the transaction was signed, but it is primarily useful for ruleset implementations." +
 			"\n\n" +
@@ -868,7 +869,7 @@ func GenDoc(ctx *cli.Context) {
 	{ // User input
 		add("UserInputRequest", "Sent when clef needs the user to provide data. If 'password' is true, the input field should be treated accordingly (echo-free)",
 			&core.UserInputRequest{IsPassword: true, Title: "The title here", Prompt: "The question to ask the user"})
-		add("UserInputResponse", "Reponse to SignDataRequest",
+		add("UserInputResponse", "Response to SignDataRequest",
 			&core.UserInputResponse{Text: "The textual response from user"})
 	}
 	{ // List request
@@ -882,7 +883,7 @@ func GenDoc(ctx *cli.Context) {
 					{b, accounts.URL{Scheme: "keystore", Path: "/path/to/keyfile/b"}}},
 			})
 
-		add("UserInputResponse", "Reponse to list request. The response contains a list of all addresses to show the caller. "+
+		add("UserInputResponse", "Response to list request. The response contains a list of all addresses to show the caller. "+
 			"Note: the UI is free to respond with any address the caller, regardless of whether it exists or not",
 			&core.ListResponse{
 				Accounts: []accounts.Account{
