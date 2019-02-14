@@ -75,8 +75,7 @@ func triggerChunkDebug(testData []byte) error {
 
 	// has-chunks
 	for _, host := range hosts {
-		//httpHost := fmt.Sprintf("http://%s:%d", host, 8545)
-		httpHost := host
+		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
 		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
 			return err
