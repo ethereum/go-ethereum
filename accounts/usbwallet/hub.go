@@ -150,8 +150,10 @@ func (hub *Hub) refreshWallets() {
 	// Transform the current list of wallets into the new one
 	hub.stateLock.Lock()
 
-	wallets := make([]accounts.Wallet, 0, len(devices))
-	events := []accounts.WalletEvent{}
+	var (
+		wallets = make([]accounts.Wallet, 0, len(devices))
+		events  []accounts.WalletEvent
+	)
 
 	for _, device := range devices {
 		url := accounts.URL{Scheme: hub.scheme, Path: device.Path}
