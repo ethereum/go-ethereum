@@ -28,7 +28,9 @@ import Typography from '@material-ui/core/Typography';
 import AreaChart from 'recharts/es6/chart/AreaChart';
 import Tooltip from 'recharts/es6/component/Tooltip';
 import Area from 'recharts/es6/cartesian/Area';
-import {Icon as FontAwesome} from 'react-fa';
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
+import {faCircle as fasCircle} from '@fortawesome/free-solid-svg-icons';
+import {faCircle as farCircle, faCopy} from '@fortawesome/free-regular-svg-icons';
 
 import CustomTooltip, {bytePlotter, multiplier} from 'CustomTooltip';
 import type {Network as NetworkType, PeerEvent} from '../types/content';
@@ -208,11 +210,14 @@ class Network extends Component<Props, State> {
 	peerTableRow = (ip, id, bundle, peer) => (
 		<TableRow key={`known_${ip}_${id}`} style={styles.tableRow}>
 			<TableCell style={styles.tableCell}>
-				<FontAwesome name='circle' style={{color: peer.active ? 'green' : 'red'}} />
+				{peer.active
+					? <FontAwesomeIcon icon={fasCircle} color='green' />
+					: <FontAwesomeIcon icon={farCircle} style={commonStyles.light} />
+				}
 			</TableCell>
 			<TableCell style={{fontFamily: 'monospace', ...styles.tableCell}}>
 				{id.substring(0, 10) + ' '}
-				<FontAwesome name='copy' style={commonStyles.light} onClick={this.copyToClipboard(id)} />
+				<FontAwesomeIcon icon={faCopy} style={commonStyles.light} onClick={this.copyToClipboard(id)} />
 			</TableCell>
 			<TableCell style={styles.tableCell}>
 				{bundle.location ? (() => {

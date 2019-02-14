@@ -25,7 +25,7 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import Icon from '@material-ui/core/Icon';
 import Transition from 'react-transition-group/Transition';
-import {Icon as FontAwesome} from 'react-fa';
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 
 import {MENU, DURATION} from '../common';
 
@@ -84,7 +84,7 @@ class SideBar extends Component<Props, State> {
 				<ListItem button key={menu.id} onClick={this.clickOn(menu.id)} className={classes.listItem}>
 					<ListItemIcon>
 						<Icon className={classes.icon}>
-							<FontAwesome name={menu.icon} />
+							<FontAwesomeIcon icon={menu.icon} />
 						</Icon>
 					</ListItemIcon>
 					<ListItemText

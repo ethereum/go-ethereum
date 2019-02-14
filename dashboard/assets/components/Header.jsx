@@ -22,8 +22,8 @@ import withStyles from '@material-ui/core/styles/withStyles';
 import AppBar from '@material-ui/core/AppBar';
 import Toolbar from '@material-ui/core/Toolbar';
 import IconButton from '@material-ui/core/IconButton';
-import Icon from '@material-ui/core/Icon';
-import MenuIcon from '@material-ui/icons/Menu';
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
+import {faBars} from '@fortawesome/free-solid-svg-icons';
 import Typography from '@material-ui/core/Typography';
 
 // styles contains the constant styles of the component.
@@ -67,9 +67,7 @@ class Header extends Component<Props> {
 			<AppBar position='static' className={classes.header} style={styles.header}>
 				<Toolbar className={classes.toolbar} style={styles.toolbar}>
 					<IconButton onClick={this.props.switchSideBar}>
-						<Icon>
-							<MenuIcon />
-						</Icon>
+						<FontAwesomeIcon icon={faBars} />
 					</IconButton>
 					<Typography type='title' color='inherit' noWrap className={classes.title}>
 						Go Ethereum Dashboard
