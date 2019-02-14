@@ -76,15 +76,20 @@ func triggerChunkDebug(testData []byte) error {
 	// has-chunks
 	for _, host := range hosts {
 		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
+		log.Trace("Calling `Has` on host", "httpHost", httpHost)
 		rpcClient, err := rpc.Dial(httpHost)
 		if err != nil {
+			log.Trace("Error dialing host", "err", err)
 			return err
 		}
+		log.Trace("rpc dial ok")
 		var hasInfo []api.HasInfo
 		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
 		if err != nil {
+			log.Trace("Error calling host", "err", err)
 			return err
 		}
+		log.Trace("rpc call ok")
 		count := 0
 		for _, info := range hasInfo {
 			if !info.Has {
@@ -100,6 +105,7 @@ func triggerChunkDebug(testData []byte) error {
 }
 
 func getAllRefs(testData []byte) (storage.AddressCollection, error) {
+	log.Trace("Getting all references for given root hash")
 	datadir, err := ioutil.TempDir("", "chunk-debug")
 	if err != nil {
 		return nil, fmt.Errorf("unable to create temp dir: %v", err)
@@ -117,6 +123,7 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Trace("All references retrieved")
 	return addrs, err
 }
 
