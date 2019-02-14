@@ -267,7 +267,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 		}
 
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Debug(fmt.Sprintf("node %4s healthy: connected nearest neighbours: %v, know nearest neighbours: %v,\n\n%v", id, healthy.ConnectNN, healthy.KnowNN, healthy.Hive))
@@ -352,7 +352,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				healthy := &network.Health{}
 				addr := id.String()
 				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
-				if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+				if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
@@ -422,7 +422,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		healthy := &network.Health{}
 		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
 
-		if err := client.Call(&healthy, "hive_healthy", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
+		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))
