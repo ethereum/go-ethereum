@@ -171,6 +171,9 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 	})
 }
 
+// MockStoreListings tests global store methods Keys, Nodes, NodeKeys and KeyNodes.
+// It uses a provided globalstore to put chunks for n number of node addresses
+// and to validate that methods are returning the right responses.
 func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 	addrs := make([]common.Address, n)
 	for i := 0; i < n; i++ {
@@ -188,9 +191,12 @@ func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 		keys[i] = b
 	}
 
+	// keep track of keys on every node
 	nodeKeys := make(map[common.Address][][]byte)
+	// keep track of nodes that store particular key
 	keyNodes := make(map[string][]common.Address)
 	for i := 0; i < chunksPerNode; i++ {
+		// put chunks for every address
 		for j := 0; j < n; j++ {
 			addr := addrs[j]
 			key := keys[(i*n)+j]
@@ -202,6 +208,7 @@ func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 			keyNodes[string(key)] = append(keyNodes[string(key)], addr)
 		}
 
+		// test Keys method
 		var startKey []byte
 		var gotKeys [][]byte
 		for {
@@ -220,6 +227,7 @@ func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 			t.Fatalf("got #%v keys %v, want %v", i+1, gotKeys, wantKeys)
 		}
 
+		// test Nodes method
 		var startNode *common.Address
 		var gotNodes []common.Address
 		for {
@@ -238,6 +246,7 @@ func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 			t.Fatalf("got #%v nodes %v, want %v", i+1, gotNodes, wantNodes)
 		}
 
+		// test NodeKeys method
 		for addr, wantKeys := range nodeKeys {
 			var startKey []byte
 			var gotKeys [][]byte
@@ -257,6 +266,7 @@ func MockStoreListings(t *testing.T, globalStore mock.GlobalStorer, n int) {
 			}
 		}
 
+		// test KeyNodes method
 		for key, wantNodes := range keyNodes {
 			var startNode *common.Address
 			var gotNodes []common.Address
