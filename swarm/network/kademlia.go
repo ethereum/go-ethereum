@@ -710,6 +710,11 @@ func (k *Kademlia) saturation() int {
 func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
 	// depth could be calculated from k but as this is called from `GetHealthInfo()`,
 	// the depth has already been calculated so we can require it as a parameter
+
+	// early check for depth
+	if depth != len(peersPerBin) {
+		return false
+	}
 	unsaturatedBins := make([]int, 0)
 	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val) bool) bool) bool {
 
@@ -726,10 +731,6 @@ func (k *Kademlia) isSaturated(peersPerBin []int, depth int) bool {
 	})
 
 	log.Trace("list of unsaturated bins", "unsaturatedBins", unsaturatedBins)
-	// early check for depth
-	if depth != len(peersPerBin) {
-		return false
-	}
 	return len(unsaturatedBins) == 0
 }
 
