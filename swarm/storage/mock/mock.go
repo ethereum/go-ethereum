@@ -40,8 +40,14 @@ import (
 )
 
 const (
+	// DefaultLimit should be used as default limit for
+	// Keys, Nodes, NodeKeys and KeyNodes GlobarStorer
+	// methids implementations.
 	DefaultLimit = 100
-	MaxLimit     = 1000
+	// MaxLimit should be used as the maximal returned number
+	// of items for Keys, Nodes, NodeKeys and KeyNodes GlobarStorer
+	// methids implementations, regardless of provided limit.
+	MaxLimit = 1000
 )
 
 // ErrNotFound indicates that the chunk is not found.
@@ -104,11 +110,13 @@ type GlobalStorer interface {
 	NewNodeStore(addr common.Address) *NodeStore
 }
 
+// Keys are returned results by Keys and NodeKeys GlobalStorer methods.
 type Keys struct {
 	Keys [][]byte
 	Next []byte
 }
 
+// Nodes are returned results by Nodes and KeyNodes GlobalStorer methods.
 type Nodes struct {
 	Addrs []common.Address
 	Next  *common.Address
