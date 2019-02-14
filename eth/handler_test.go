@@ -203,7 +203,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
 		// Collect the headers to expect in the response
-		headers := []*types.Header{}
+		var headers []*types.Header
 		for _, hash := range tt.expect {
 			headers = append(headers, pm.blockchain.GetBlockByHash(hash).Header())
 		}
@@ -265,8 +265,9 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 	// Run each of the tests and verify the results against the chain
 	for i, tt := range tests {
 		// Collect the hashes to request, and the response to expect
-		hashes, seen := []common.Hash{}, make(map[int64]bool)
-		bodies := []*blockBody{}
+		var hashes []common.Hash
+		seen := make(map[int64]bool)
+		var bodies []*blockBody
 
 		for j := 0; j < tt.random; j++ {
 			for {
@@ -343,7 +344,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	defer peer.close()
 
 	// Fetch for now the entire chain db
-	hashes := []common.Hash{}
+	var hashes []common.Hash
 	for _, key := range db.Keys() {
 		if len(key) == len(common.Hash{}) {
 			hashes = append(hashes, common.BytesToHash(key))
@@ -435,7 +436,8 @@ func testGetReceipt(t *testing.T, protocol int) {
 	defer peer.close()
 
 	// Collect the hashes to request, and the response to expect
-	hashes, receipts := []common.Hash{}, []types.Receipts{}
+	var receipts []types.Receipts
+	var hashes []common.Hash
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
 		block := pm.blockchain.GetBlockByNumber(i)
 

@@ -160,17 +160,17 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux         = new(event.TypeMux)
-		db          = ethdb.NewMemDatabase()
-		txFeed      = new(event.Feed)
-		rmLogsFeed  = new(event.Feed)
-		logsFeed    = new(event.Feed)
-		chainFeed   = new(event.Feed)
-		backend     = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api         = NewPublicFilterAPI(backend, false)
-		genesis     = new(core.Genesis).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
-		chainEvents = []core.ChainEvent{}
+		mux                  = new(event.TypeMux)
+		db                    = ethdb.NewMemDatabase()
+		txFeed            = new(event.Feed)
+		rmLogsFeed    = new(event.Feed)
+		logsFeed        = new(event.Feed)
+		chainFeed      = new(event.Feed)
+		backend          = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api                  = NewPublicFilterAPI(backend, false)
+		genesis          = new(core.Genesis).MustCommit(db)
+		chain, _        = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
+		chainEvents []core.ChainEvent
 	)
 
 	for _, blk := range chain {

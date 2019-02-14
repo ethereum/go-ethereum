@@ -439,7 +439,9 @@ func (f *Fetcher) loop() {
 
 			// Split the batch of headers into unknown ones (to return to the caller),
 			// known incomplete ones (requiring body retrievals) and completed blocks.
-			unknown, incomplete, complete := []*types.Header{}, []*announce{}, []*types.Block{}
+			var complete []*types.Block
+			var incomplete []*announce
+			var unknown []*types.Header
 			for _, header := range task.headers {
 				hash := header.Hash()
 
@@ -513,7 +515,7 @@ func (f *Fetcher) loop() {
 			}
 			bodyFilterInMeter.Mark(int64(len(task.transactions)))
 
-			blocks := []*types.Block{}
+			var blocks []*types.Block
 			for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
 				// Match up a body to any possible completion request
 				matched := false

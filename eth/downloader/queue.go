@@ -423,7 +423,8 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		return nil
 	}
 	// Retrieve a batch of hashes, skipping previously failed ones
-	send, skip := uint64(0), []uint64{}
+	var skip []uint64
+	send := uint64(0)
 	for send == 0 && !q.headerTaskQueue.Empty() {
 		from, _ := q.headerTaskQueue.Pop()
 		if q.headerPeerMiss[p.id] != nil {
