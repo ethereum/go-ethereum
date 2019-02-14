@@ -42,7 +42,7 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
-	accounts := []*testAccount{}
+	var accounts []*testAccount
 	for i := byte(0); i < 96; i++ {
 		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
@@ -298,7 +298,7 @@ func TestIncompleteStateSync(t *testing.T) {
 	dstDb := ethdb.NewMemDatabase()
 	sched := NewStateSync(srcRoot, dstDb)
 
-	added := []common.Hash{}
+	var added []common.Hash
 	queue := append([]common.Hash{}, sched.Missing(1)...)
 	for len(queue) > 0 {
 		// Fetch a batch of state nodes

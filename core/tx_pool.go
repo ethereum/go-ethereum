@@ -1015,7 +1015,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 			}
 		}
 		// Gradually drop transactions from offenders
-		offenders := []common.Address{}
+		var offenders []common.Address
 		for pending > pool.config.GlobalSlots && !spammers.Empty() {
 			// Retrieve the next offender if not local address
 			offender, _ := spammers.Pop()

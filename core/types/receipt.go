@@ -30,7 +30,7 @@ import (
 //go:generate gencodec -type Receipt -field-override receiptMarshaling -out gen_receipt_json.go
 
 var (
-	receiptStatusFailedRLP     = []byte{}
+	receiptStatusFailedRLP     []byte
 	receiptStatusSuccessfulRLP = []byte{0x01}
 )
 

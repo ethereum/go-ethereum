@@ -571,7 +571,7 @@ func TestTransactionPostponing(t *testing.T) {
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(50100))
 	}
 	// Add a batch consecutive pending transactions for validation
-	txs := []*types.Transaction{}
+	var txs []*types.Transaction
 	for i, key := range keys {
 
 		for j := 0; j < 100; j++ {
@@ -980,7 +980,7 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	account2, _ := deriveSender(transaction(0, 0, key2))
 	pool2.currentState.AddBalance(account2, big.NewInt(1000000))
 
-	txs := []*types.Transaction{}
+	var txs []*types.Transaction
 	for i := uint64(0); i < testTxPoolConfig.AccountQueue+5; i++ {
 		txs = append(txs, transaction(origin+i, 100000, key2))
 	}

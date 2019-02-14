@@ -702,7 +702,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), nil)
 
 	// Configure a subchain to roll back
-	remove := []common.Hash{}
+	var remove []common.Hash
 	for _, block := range blocks[height/2:] {
 		remove = append(remove, block.Hash())
 	}
