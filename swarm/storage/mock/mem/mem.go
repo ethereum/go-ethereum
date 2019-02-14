@@ -23,7 +23,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
 	"sort"
@@ -155,6 +154,7 @@ func (s *GlobalStore) HasKey(addr common.Address, key []byte) (yes bool) {
 	return yes
 }
 
+// keyIndex returns the index of a key in keys slice.
 func (s *GlobalStore) keyIndex(key []byte) (index int, found bool) {
 	l := len(s.keys)
 	index = sort.Search(l, func(i int) bool {
@@ -164,6 +164,7 @@ func (s *GlobalStore) keyIndex(key []byte) (index int, found bool) {
 	return index, found
 }
 
+// nodeIndex returns the index of a node address in nodes slice.
 func (s *GlobalStore) nodeIndex(addr common.Address) (index int, found bool) {
 	l := len(s.nodes)
 	index = sort.Search(l, func(i int) bool {
@@ -173,6 +174,7 @@ func (s *GlobalStore) nodeIndex(addr common.Address) (index int, found bool) {
 	return index, found
 }
 
+// nodeKeyIndex returns the index of a key in nodeKeys slice.
 func (s *GlobalStore) nodeKeyIndex(addr common.Address, key []byte) (index int, found bool) {
 	l := len(s.nodeKeys[addr])
 	index = sort.Search(l, func(i int) bool {
@@ -182,6 +184,7 @@ func (s *GlobalStore) nodeKeyIndex(addr common.Address, key []byte) (index int, 
 	return index, found
 }
 
+// keyNodeIndex returns the index of a node address in keyNodes slice.
 func (s *GlobalStore) keyNodeIndex(key []byte, addr common.Address) (index int, found bool) {
 	k := string(key)
 	l := len(s.keyNodes[k])
@@ -192,19 +195,15 @@ func (s *GlobalStore) keyNodeIndex(key []byte, addr common.Address) (index int, 
 	return index, found
 }
 
+// Keys returns a paginated list of keys on all nodes.
 func (s *GlobalStore) Keys(startKey []byte, limit int) (keys mock.Keys, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var i int
 	if startKey != nil {
-		var found bool
-		i, found = s.keyIndex(startKey)
-		if !found {
-			return keys, errors.New("start key not found")
-		}
+		i, _ = s.keyIndex(startKey)
 	}
-
 	total := len(s.keys)
 	max := maxIndex(i, limit, total)
 	keys.Keys = make([][]byte, 0, max-i)
@@ -217,17 +216,14 @@ func (s *GlobalStore) Keys(startKey []byte, limit int) (keys mock.Keys, err erro
 	return keys, nil
 }
 
+// Nodes returns a paginated list of all known nodes.
 func (s *GlobalStore) Nodes(startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var i int
 	if startAddr != nil {
-		var found bool
-		i, found = s.nodeIndex(*startAddr)
-		if !found {
-			return nodes, errors.New("start address not found")
-		}
+		i, _ = s.nodeIndex(*startAddr)
 	}
 	total := len(s.nodes)
 	max := maxIndex(i, limit, total)
@@ -241,17 +237,14 @@ func (s *GlobalStore) Nodes(startAddr *common.Address, limit int) (nodes mock.No
 	return nodes, nil
 }
 
+// NodeKeys returns a paginated list of keys on a node with provided address.
 func (s *GlobalStore) NodeKeys(addr common.Address, startKey []byte, limit int) (keys mock.Keys, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var i int
 	if startKey != nil {
-		var found bool
-		i, found = s.nodeKeyIndex(addr, startKey)
-		if !found {
-			return keys, errors.New("start key not found")
-		}
+		i, _ = s.nodeKeyIndex(addr, startKey)
 	}
 	total := len(s.nodeKeys[addr])
 	max := maxIndex(i, limit, total)
@@ -265,17 +258,14 @@ func (s *GlobalStore) NodeKeys(addr common.Address, startKey []byte, limit int) 
 	return keys, nil
 }
 
+// KeyNodes returns a paginated list of nodes that contain a particular key.
 func (s *GlobalStore) KeyNodes(key []byte, startAddr *common.Address, limit int) (nodes mock.Nodes, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var i int
 	if startAddr != nil {
-		var found bool
-		i, found = s.keyNodeIndex(key, *startAddr)
-		if !found {
-			return nodes, errors.New("start address not found")
-		}
+		i, _ = s.keyNodeIndex(key, *startAddr)
 	}
 	total := len(s.keyNodes[string(key)])
 	max := maxIndex(i, limit, total)
@@ -289,6 +279,8 @@ func (s *GlobalStore) KeyNodes(key []byte, startAddr *common.Address, limit int)
 	return nodes, nil
 }
 
+// maxIndex returns the end index for one page listing
+// based on the start index, limit and total number of elements.
 func maxIndex(start, limit, total int) (max int) {
 	if limit <= 0 {
 		limit = mock.DefaultLimit
