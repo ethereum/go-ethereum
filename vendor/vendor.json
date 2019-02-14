@@ -785,22 +785,22 @@
 			"revisionTime": "2017-05-17T20:25:26Z"
 		},
 		{
-			"checksumSHA1": "REkmyB368pIiip76LiqMLspgCRk=",
+			"checksumSHA1": "1CmUDjhZlyKZcbLYlWI7cRzK3fI=",
 			"path": "golang.org/x/sys/cpu",
-			"revision": "904bdc257025c7b3f43c19360ad3ab85783fad78",
-			"revisionTime": "2018-08-08T08:17:46Z"
+			"revision": "983097b1a8a340cd1cc7df17d735154d89e10b1a",
+			"revisionTime": "2019-02-13T08:58:22Z"
 		},
 		{
-			"checksumSHA1": "r1jWq0V3AI5DLN0aCnXXMH/is9Q=",
+			"checksumSHA1": "k8nyiVwbKd7N/Lo9z85y6v/03NE=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
-			"revisionTime": "2017-11-09T13:50:42Z"
+			"revision": "983097b1a8a340cd1cc7df17d735154d89e10b1a",
+			"revisionTime": "2019-02-13T08:58:22Z"
 		},
 		{
-			"checksumSHA1": "ck5uxoEeMDUL/QqPvGvBmcbsJzg=",
+			"checksumSHA1": "IwB9A6UjgGYrHIBFJEamnrXPeNo=",
 			"path": "golang.org/x/sys/windows",
-			"revision": "1e2299c37cc91a509f1b12369872d27be0ce98a6",
-			"revisionTime": "2017-11-09T13:50:42Z"
+			"revision": "983097b1a8a340cd1cc7df17d735154d89e10b1a",
+			"revisionTime": "2019-02-13T08:58:22Z"
 		},
 		{
 			"checksumSHA1": "Mr4ur60bgQJnQFfJY0dGtwWwMPE=",
