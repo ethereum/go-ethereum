@@ -174,6 +174,10 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 	return b.eth.txPool.Get(hash)
 }
 
+func (b *EthAPIBackend) GetTransactionWithOdr(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	return nil, common.Hash{}, 0, 0, nil
+}
+
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return b.eth.txPool.State().GetNonce(addr), nil
 }

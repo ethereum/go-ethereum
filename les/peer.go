@@ -317,7 +317,7 @@ func (p *peer) ReplyHelperTrieProofs(reqID uint64, resp HelperTrieResps) *reply 
 }
 
 // ReplyTxStatus creates a reply with a batch of transaction status records, corresponding to the ones requested.
-func (p *peer) ReplyTxStatus(reqID uint64, stats []txStatus) *reply {
+func (p *peer) ReplyTxStatus(reqID uint64, stats []light.TxStatus) *reply {
 	data, _ := rlp.EncodeToBytes(stats)
 	return &reply{p.rw, TxStatusMsg, reqID, data}
 }

@@ -979,7 +979,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		go func() {
-			stats := make([]txStatus, len(req.Txs))
+			stats := make([]light.TxStatus, len(req.Txs))
 			for i, tx := range req.Txs {
 				if i != 0 && !task.waitOrStop() {
 					return
@@ -1014,7 +1014,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 		go func() {
-			stats := make([]txStatus, len(req.Hashes))
+			stats := make([]light.TxStatus, len(req.Hashes))
 			for i, hash := range req.Hashes {
 				if i != 0 && !task.waitOrStop() {
 					return
@@ -1032,13 +1032,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
-			Status    []txStatus
+			Status    []light.TxStatus
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 
 		p.fcServer.ReceivedReply(resp.ReqID, resp.BV)
+
+		p.Log().Trace("Received helper trie proof response")
+		deliverMsg = &Msg{
+			MsgType: MsgTxStatus,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Status,
+		}
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1097,8 +1104,8 @@ func (pm *ProtocolManager) getHelperTrieAuxData(req HelperTrieReq) []byte {
 	return nil
 }
 
-func (pm *ProtocolManager) txStatus(hash common.Hash) txStatus {
-	var stat txStatus
+func (pm *ProtocolManager) txStatus(hash common.Hash) light.TxStatus {
+	var stat light.TxStatus
 	stat.Status = pm.txpool.Status([]common.Hash{hash})[0]
 	// If the transaction is unknown to the pool, try looking it up locally
 	if stat.Status == core.TxStatusUnknown {

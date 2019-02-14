@@ -1157,10 +1157,14 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	if tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash); tx != nil {
 		return newRPCTransaction(tx, blockHash, blockNumber, index)
 	}
+	if tx, blockHash, blockNumber, index, err := s.b.GetTransactionWithOdr(ctx, hash); tx != nil && err == nil {
+		return newRPCTransaction(tx, blockHash, blockNumber, index)
+	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
 		return newRPCPendingTransaction(tx)
 	}
+
 	// Transaction unknown, return as such
 	return nil
 }
@@ -1172,8 +1176,11 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	// Retrieve a finalized transaction, or a pooled otherwise
 	if tx, _, _, _ = rawdb.ReadTransaction(s.b.ChainDb(), hash); tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
-			// Transaction not found anywhere, abort
-			return nil, nil
+			var err error
+			if tx, _, _, _, err = s.b.GetTransactionWithOdr(ctx, hash); tx == nil || err != nil {
+				// Transaction not found anywhere, abort
+				return nil, err
+			}
 		}
 	}
 	// Serialize to RLP and return
